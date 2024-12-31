@@ -62,10 +62,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
                     Some(TokenKind::SYNTAX) | Some(TokenKind::AST) => {
-                        let pretty_stmt =
-                            pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
-                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
-                            })?;
+                        let pretty_stmt = statement.stmt.to_string();
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,

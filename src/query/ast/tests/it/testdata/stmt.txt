@@ -2,8 +2,6 @@
 show databases
 ---------- Output ---------
 SHOW DATABASES
----------- Pretty ---------
-SHOW DATABASES
 ---------- AST ------------
 ShowDatabases(
     ShowDatabasesStmt {
@@ -18,8 +16,6 @@ ShowDatabases(
 show drop databases
 ---------- Output ---------
 SHOW DROP DATABASES
----------- Pretty ---------
-SHOW DROP DATABASES
 ---------- AST ------------
 ShowDropDatabases(
     ShowDropDatabasesStmt {
@@ -32,8 +28,6 @@ ShowDropDatabases(
 ---------- Input ----------
 show drop databases like 'db%'
 ---------- Output ---------
-SHOW DROP DATABASES LIKE 'db%'
----------- Pretty ---------
 SHOW DROP DATABASES LIKE 'db%'
 ---------- AST ------------
 ShowDropDatabases(
@@ -51,8 +45,6 @@ ShowDropDatabases(
 ---------- Input ----------
 show databases format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
-SHOW DATABASES
----------- Pretty ---------
 SHOW DATABASES
 ---------- AST ------------
 ShowDatabases(
@@ -72,8 +64,6 @@ Some(
 show tables
 ---------- Output ---------
 SHOW TABLES
----------- Pretty ---------
-SHOW TABLES
 ---------- AST ------------
 ShowTables(
     ShowTablesStmt {
@@ -90,8 +80,6 @@ ShowTables(
 show drop tables
 ---------- Output ---------
 SHOW DROP TABLES
----------- Pretty ---------
-SHOW DROP TABLES
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -104,8 +92,6 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables like 't%'
 ---------- Output ---------
-SHOW DROP TABLES LIKE 't%'
----------- Pretty ---------
 SHOW DROP TABLES LIKE 't%'
 ---------- AST ------------
 ShowDropTables(
@@ -123,8 +109,6 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables where name='t'
 ---------- Output ---------
-SHOW DROP TABLES WHERE name = 't'
----------- Pretty ---------
 SHOW DROP TABLES WHERE name = 't'
 ---------- AST ------------
 ShowDropTables(
@@ -175,8 +159,6 @@ ShowDropTables(
 show tables format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
 SHOW TABLES
----------- Pretty ---------
-SHOW TABLES
 ---------- AST ------------
 ShowTables(
     ShowTablesStmt {
@@ -196,8 +178,6 @@ Some(
 ---------- Input ----------
 describe "name""with""quote";
 ---------- Output ---------
-DESCRIBE "name""with""quote"
----------- Pretty ---------
 DESCRIBE "name""with""quote"
 ---------- AST ------------
 DescribeTable(
@@ -222,8 +202,6 @@ DescribeTable(
 describe "name""""with""""quote";
 ---------- Output ---------
 DESCRIBE "name""""with""""quote"
----------- Pretty ---------
-DESCRIBE "name""""with""""quote"
 ---------- AST ------------
 DescribeTable(
     DescribeTableStmt {
@@ -247,8 +225,6 @@ DescribeTable(
 show full tables
 ---------- Output ---------
 SHOW FULL TABLES
----------- Pretty ---------
-SHOW FULL TABLES
 ---------- AST ------------
 ShowTables(
     ShowTablesStmt {
@@ -264,8 +240,6 @@ ShowTables(
 ---------- Input ----------
 show full tables from db
 ---------- Output ---------
-SHOW FULL TABLES FROM db
----------- Pretty ---------
 SHOW FULL TABLES FROM db
 ---------- AST ------------
 ShowTables(
@@ -291,8 +265,6 @@ ShowTables(
 ---------- Input ----------
 show full tables from ctl.db
 ---------- Output ---------
-SHOW FULL TABLES FROM ctl.db
----------- Pretty ---------
 SHOW FULL TABLES FROM ctl.db
 ---------- AST ------------
 ShowTables(
@@ -328,8 +300,6 @@ ShowTables(
 show full columns in t in db
 ---------- Output ---------
 SHOW FULL COLUMNS FROM t FROM db
----------- Pretty ---------
-SHOW FULL COLUMNS FROM t FROM db
 ---------- AST ------------
 ShowColumns(
     ShowColumnsStmt {
@@ -361,8 +331,6 @@ ShowColumns(
 ---------- Input ----------
 show columns in t from ctl.db
 ---------- Output ---------
-SHOW COLUMNS FROM t FROM ctl.db
----------- Pretty ---------
 SHOW COLUMNS FROM t FROM ctl.db
 ---------- AST ------------
 ShowColumns(
@@ -405,8 +373,6 @@ ShowColumns(
 show full columns from t from db like 'id%'
 ---------- Output ---------
 SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
----------- Pretty ---------
-SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
 ---------- AST ------------
 ShowColumns(
     ShowColumnsStmt {
@@ -443,8 +409,6 @@ ShowColumns(
 show processlist like 't%' limit 2;
 ---------- Output ---------
 SHOW PROCESSLIST LIKE 't%' LIMIT 2
----------- Pretty ---------
-SHOW PROCESSLIST LIKE 't%' LIMIT 2
 ---------- AST ------------
 ShowProcessList {
     show_options: Some(
@@ -465,8 +429,6 @@ ShowProcessList {
 ---------- Input ----------
 show processlist where database='default' limit 2;
 ---------- Output ---------
-SHOW PROCESSLIST WHERE database = 'default' LIMIT 2
----------- Pretty ---------
 SHOW PROCESSLIST WHERE database = 'default' LIMIT 2
 ---------- AST ------------
 ShowProcessList {
@@ -521,8 +483,6 @@ ShowProcessList {
 show create table a.b;
 ---------- Output ---------
 SHOW CREATE TABLE a.b
----------- Pretty ---------
-SHOW CREATE TABLE a.b
 ---------- AST ------------
 ShowCreateTable(
     ShowCreateTableStmt {
@@ -552,8 +512,6 @@ ShowCreateTable(
 ---------- Input ----------
 show create table a.b format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
-SHOW CREATE TABLE a.b
----------- Pretty ---------
 SHOW CREATE TABLE a.b
 ---------- AST ------------
 ShowCreateTable(
@@ -588,8 +546,6 @@ Some(
 ---------- Input ----------
 replace into test on(c) select sum(c) as c from source group by v;
 ---------- Output ---------
-REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
----------- Pretty ---------
 REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
 ---------- AST ------------
 Replace(
@@ -753,8 +709,6 @@ Replace(
 explain pipeline select a from b;
 ---------- Output ---------
 EXPLAIN PIPELINE SELECT a FROM b
----------- Pretty ---------
-EXPLAIN PIPELINE SELECT a FROM b
 ---------- AST ------------
 Explain {
     kind: Pipeline,
@@ -839,8 +793,6 @@ Explain {
 ---------- Input ----------
 explain replace into test on(c) select sum(c) as c from source group by v;
 ---------- Output ---------
-EXPLAIN REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
----------- Pretty ---------
 EXPLAIN REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP BY v
 ---------- AST ------------
 Explain {
@@ -1008,8 +960,6 @@ Explain {
 explain pipeline select a from t1 ignore_result;
 ---------- Output ---------
 EXPLAIN PIPELINE SELECT a FROM t1 IGNORE_RESULT
----------- Pretty ---------
-EXPLAIN PIPELINE SELECT a FROM t1 IGNORE_RESULT
 ---------- AST ------------
 Explain {
     kind: Pipeline,
@@ -1094,8 +1044,6 @@ Explain {
 ---------- Input ----------
 explain(verbose, logical, optimized) select * from t where a = 1
 ---------- Output ---------
-EXPLAIN(VERBOSE, LOGICAL, OPTIMIZED) SELECT * FROM t WHERE a = 1
----------- Pretty ---------
 EXPLAIN(VERBOSE, LOGICAL, OPTIMIZED) SELECT * FROM t WHERE a = 1
 ---------- AST ------------
 Explain {
@@ -1208,8 +1156,6 @@ Explain {
 describe a;
 ---------- Output ---------
 DESCRIBE a
----------- Pretty ---------
-DESCRIBE a
 ---------- AST ------------
 DescribeTable(
     DescribeTableStmt {
@@ -1230,8 +1176,6 @@ DescribeTable(
 ---------- Input ----------
 describe a format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
-DESCRIBE a
----------- Pretty ---------
 DESCRIBE a
 ---------- AST ------------
 DescribeTable(
@@ -1257,8 +1201,6 @@ Some(
 ---------- Input ----------
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
 ---------- Output ---------
-CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
----------- Pretty ---------
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 ---------- AST ------------
 CreateIndex(
@@ -1455,8 +1397,6 @@ CreateIndex(
 CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b;
 ---------- Output ---------
 CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
----------- Pretty ---------
-CREATE OR REPLACE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 ---------- AST ------------
 CreateIndex(
     CreateIndexStmt {
@@ -1652,8 +1592,6 @@ CreateIndex(
 CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b);
 ---------- Output ---------
 CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b)
----------- Pretty ---------
-CREATE OR REPLACE INVERTED INDEX idx2 ON t1 (a, b)
 ---------- AST ------------
 CreateInvertedIndex(
     CreateInvertedIndexStmt {
@@ -1703,8 +1641,6 @@ CreateInvertedIndex(
 ---------- Input ----------
 create table a (c decimal(38, 0))
 ---------- Output ---------
-CREATE TABLE a (c Decimal(38, 0))
----------- Pretty ---------
 CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
@@ -1757,8 +1693,6 @@ CreateTable(
 create table a (c decimal(38))
 ---------- Output ---------
 CREATE TABLE a (c Decimal(38, 0))
----------- Pretty ---------
-CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1809,8 +1743,6 @@ CreateTable(
 ---------- Input ----------
 create or replace table a (c decimal(38))
 ---------- Output ---------
-CREATE OR REPLACE TABLE a (c Decimal(38, 0))
----------- Pretty ---------
 CREATE OR REPLACE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
@@ -1863,8 +1795,6 @@ CreateTable(
 create or replace table a (c int(10) unsigned)
 ---------- Output ---------
 CREATE OR REPLACE TABLE a (c UInt32)
----------- Pretty ---------
-CREATE OR REPLACE TABLE a (c UInt32)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1912,8 +1842,6 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING)
----------- Pretty ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING)
 ---------- AST ------------
 CreateTable(
@@ -1998,10 +1926,6 @@ CreateTable(
 create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING) AS SELECT * FROM t
----------- Pretty ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING)
-AS
-    SELECT * FROM t
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2146,10 +2070,6 @@ CreateTable(
 create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (c TUPLE(m Int32, n STRING), d TUPLE(Int32, STRING))
----------- Pretty ---------
-CREATE TABLE IF NOT EXISTS a.b (
-    c TUPLE(m Int32, n STRING), d TUPLE(Int32, STRING)
-)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2251,8 +2171,6 @@ CreateTable(
 create table a (b tuple("c-1" int, "c-2" uint64));
 ---------- Output ---------
 CREATE TABLE a (b TUPLE("c-1" Int32, "c-2" UInt64))
----------- Pretty ---------
-CREATE TABLE a (b TUPLE("c-1" Int32, "c-2" UInt64))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2330,10 +2248,6 @@ CreateTable(
 create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (a STRING, b STRING, c STRING AS (concat(a, ' ', b)) STORED)
----------- Pretty ---------
-CREATE TABLE IF NOT EXISTS a.b (
-    a STRING, b STRING, c STRING AS (concat(a, ' ', b)) STORED
-)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2487,8 +2401,6 @@ CreateTable(
 create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (a Int32, b Int32, c Int32 AS (a + b) VIRTUAL)
----------- Pretty ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32, b Int32, c Int32 AS (a + b) VIRTUAL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2619,10 +2531,6 @@ CreateTable(
 create table if not exists a.b (a string, b string, inverted index idx1 (a,b) tokenizer='chinese');
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (a STRING, b STRING, INVERTED INDEX idx1 (a, b) tokenizer = 'chinese')
----------- Pretty ---------
-CREATE TABLE IF NOT EXISTS a.b (
-    a STRING, b STRING, INVERTED INDEX idx1 (a, b) tokenizer = 'chinese'
-)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2728,8 +2636,6 @@ CreateTable(
 create table a.b like c.d;
 ---------- Output ---------
 CREATE TABLE a.b LIKE c.d
----------- Pretty ---------
-CREATE TABLE a.b LIKE c.d
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2790,8 +2696,6 @@ CreateTable(
 create table t like t2 engine = memory;
 ---------- Output ---------
 CREATE TABLE t LIKE t2 ENGINE = MEMORY
----------- Pretty ---------
-CREATE TABLE t LIKE t2 ENGINE = MEMORY
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2836,10 +2740,6 @@ CreateTable(
 create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 ---------- Output ---------
 CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' )
----------- Pretty ---------
-CREATE TABLE IF NOT EXISTS a.b (
-    a Int32
-) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2911,8 +2811,6 @@ CreateTable(
 truncate table a;
 ---------- Output ---------
 TRUNCATE TABLE a
----------- Pretty ---------
-TRUNCATE TABLE a
 ---------- AST ------------
 TruncateTable(
     TruncateTableStmt {
@@ -2933,8 +2831,6 @@ TruncateTable(
 ---------- Input ----------
 truncate table "a".b;
 ---------- Output ---------
-TRUNCATE TABLE "a".b
----------- Pretty ---------
 TRUNCATE TABLE "a".b
 ---------- AST ------------
 TruncateTable(
@@ -2968,8 +2864,6 @@ TruncateTable(
 drop table a;
 ---------- Output ---------
 DROP TABLE a
----------- Pretty ---------
-DROP TABLE a
 ---------- AST ------------
 DropTable(
     DropTableStmt {
@@ -2992,8 +2886,6 @@ DropTable(
 ---------- Input ----------
 drop table if exists a."b";
 ---------- Output ---------
-DROP TABLE IF EXISTS a."b"
----------- Pretty ---------
 DROP TABLE IF EXISTS a."b"
 ---------- AST ------------
 DropTable(
@@ -3029,8 +2921,6 @@ DropTable(
 use "a";
 ---------- Output ---------
 USE "a"
----------- Pretty ---------
-USE "a"
 ---------- AST ------------
 UseDatabase {
     database: Identifier {
@@ -3050,8 +2940,6 @@ UseDatabase {
 create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
 ---------- Output ---------
 CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>' )
----------- Pretty ---------
-CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>' )
 ---------- AST ------------
 CreateCatalog(
     CreateCatalogStmt {
@@ -3069,8 +2957,6 @@ CreateCatalog(
 ---------- Input ----------
 select current_catalog();
 ---------- Output ---------
-SELECT current_catalog()
----------- Pretty ---------
 SELECT current_catalog()
 ---------- AST ------------
 Query(
@@ -3132,8 +3018,6 @@ Query(
 use catalog ctl;
 ---------- Output ---------
 USE CATALOG ctl
----------- Pretty ---------
-USE CATALOG ctl
 ---------- AST ------------
 UseCatalog {
     catalog: Identifier {
@@ -3150,8 +3034,6 @@ UseCatalog {
 ---------- Input ----------
 create database if not exists a;
 ---------- Output ---------
-CREATE DATABASE IF NOT EXISTS a
----------- Pretty ---------
 CREATE DATABASE IF NOT EXISTS a
 ---------- AST ------------
 CreateDatabase(
@@ -3177,8 +3059,6 @@ CreateDatabase(
 ---------- Input ----------
 create database ctl.t engine = Default;
 ---------- Output ---------
-CREATE DATABASE ctl.t ENGINE = DEFAULT
----------- Pretty ---------
 CREATE DATABASE ctl.t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
@@ -3216,8 +3096,6 @@ CreateDatabase(
 create database t engine = Default;
 ---------- Output ---------
 CREATE DATABASE t ENGINE = DEFAULT
----------- Pretty ---------
-CREATE DATABASE t ENGINE = DEFAULT
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -3245,11 +3123,6 @@ CreateDatabase(
 CREATE TABLE `t3`(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native';
 ---------- Output ---------
 CREATE TABLE `t3` (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL) bloom_index_columns = 'a,b,c' compression = 'zstd' storage_format = 'native'
----------- Pretty ---------
-CREATE TABLE `t3` (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL)
-bloom_index_columns = 'a,b,c' 
-compression = 'zstd' 
-storage_format = 'native'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -3336,8 +3209,6 @@ CreateTable(
 create or replace database a;
 ---------- Output ---------
 CREATE OR REPLACE DATABASE a
----------- Pretty ---------
-CREATE OR REPLACE DATABASE a
 ---------- AST ------------
 CreateDatabase(
     CreateDatabaseStmt {
@@ -3362,8 +3233,6 @@ CreateDatabase(
 ---------- Input ----------
 drop database ctl.t;
 ---------- Output ---------
-DROP DATABASE ctl.t
----------- Pretty ---------
 DROP DATABASE ctl.t
 ---------- AST ------------
 DropDatabase(
@@ -3395,8 +3264,6 @@ DropDatabase(
 drop database if exists t;
 ---------- Output ---------
 DROP DATABASE IF EXISTS t
----------- Pretty ---------
-DROP DATABASE IF EXISTS t
 ---------- AST ------------
 DropDatabase(
     DropDatabaseStmt {
@@ -3417,8 +3284,6 @@ DropDatabase(
 ---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
-CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP)
----------- Pretty ---------
 CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP)
 ---------- AST ------------
 CreateTable(
@@ -3483,10 +3348,6 @@ CreateTable(
 create view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
 CREATE VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
----------- Pretty ---------
-CREATE VIEW v
-AS
-    SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -3611,10 +3472,6 @@ CreateView(
 alter view v as select number % 3 as a from numbers(1000);
 ---------- Output ---------
 ALTER VIEW v AS SELECT number % 3 AS a FROM numbers(1000)
----------- Pretty ---------
-ALTER VIEW v
-AS
-    SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 AlterView(
     AlterViewStmt {
@@ -3738,8 +3595,6 @@ AlterView(
 drop view v;
 ---------- Output ---------
 DROP VIEW v
----------- Pretty ---------
-DROP VIEW v
 ---------- AST ------------
 DropView(
     DropViewStmt {
@@ -3762,10 +3617,6 @@ DropView(
 create view v1(c1) as select number % 3 as a from numbers(1000);
 ---------- Output ---------
 CREATE VIEW v1 (c1) AS SELECT number % 3 AS a FROM numbers(1000)
----------- Pretty ---------
-CREATE VIEW v1 (c1)
-AS
-    SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -3899,10 +3750,6 @@ CreateView(
 create or replace view v1(c1) as select number % 3 as a from numbers(1000);
 ---------- Output ---------
 CREATE OR REPLACE VIEW v1 (c1) AS SELECT number % 3 AS a FROM numbers(1000)
----------- Pretty ---------
-CREATE OR REPLACE VIEW v1 (c1)
-AS
-    SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 CreateView(
     CreateViewStmt {
@@ -4036,10 +3883,6 @@ CreateView(
 alter view v1(c2) as select number % 3 as a from numbers(1000);
 ---------- Output ---------
 ALTER VIEW v1 (c2) AS SELECT number % 3 AS a FROM numbers(1000)
----------- Pretty ---------
-ALTER VIEW v1 (c2)
-AS
-    SELECT number % 3 AS a FROM numbers(1000)
 ---------- AST ------------
 AlterView(
     AlterViewStmt {
@@ -4172,8 +4015,6 @@ AlterView(
 show views
 ---------- Output ---------
 SHOW VIEWS
----------- Pretty ---------
-SHOW VIEWS
 ---------- AST ------------
 ShowViews(
     ShowViewsStmt {
@@ -4189,8 +4030,6 @@ ShowViews(
 ---------- Input ----------
 show views format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
-SHOW VIEWS
----------- Pretty ---------
 SHOW VIEWS
 ---------- AST ------------
 ShowViews(
@@ -4212,8 +4051,6 @@ Some(
 show full views
 ---------- Output ---------
 SHOW FULL VIEWS
----------- Pretty ---------
-SHOW FULL VIEWS
 ---------- AST ------------
 ShowViews(
     ShowViewsStmt {
@@ -4229,8 +4066,6 @@ ShowViews(
 ---------- Input ----------
 show full views from db
 ---------- Output ---------
-SHOW FULL VIEWS FROM db
----------- Pretty ---------
 SHOW FULL VIEWS FROM db
 ---------- AST ------------
 ShowViews(
@@ -4256,8 +4091,6 @@ ShowViews(
 ---------- Input ----------
 show full views from ctl.db
 ---------- Output ---------
-SHOW FULL VIEWS FROM ctl.db
----------- Pretty ---------
 SHOW FULL VIEWS FROM ctl.db
 ---------- AST ------------
 ShowViews(
@@ -4292,8 +4125,6 @@ ShowViews(
 ---------- Input ----------
 create stream test2.s1 on table test.t append_only = false;
 ---------- Output ---------
-CREATE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
----------- Pretty ---------
 CREATE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
 ---------- AST ------------
 CreateStream(
@@ -4347,8 +4178,6 @@ CreateStream(
 create stream if not exists test2.s2 on table test.t at (stream => test1.s1) comment = 'this is a stream';
 ---------- Output ---------
 CREATE STREAM IF NOT EXISTS test2.s2 ON TABLE test.t AT (STREAM => test1.s1) COMMENT = 'this is a stream'
----------- Pretty ---------
-CREATE STREAM IF NOT EXISTS test2.s2 ON TABLE test.t AT (STREAM =>  test1.s1) COMMENT = 'this is a stream'
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
@@ -4425,8 +4254,6 @@ CreateStream(
 create stream if not exists test2.s3 on table test.t at (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) append_only = false;
 ---------- Output ---------
 CREATE STREAM IF NOT EXISTS test2.s3 ON TABLE test.t AT (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) APPEND_ONLY = false
----------- Pretty ---------
-CREATE STREAM IF NOT EXISTS test2.s3 ON TABLE test.t AT (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) APPEND_ONLY = false
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
@@ -4497,8 +4324,6 @@ CreateStream(
 create stream if not exists test2.s3 on table test.t at (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') append_only = true;
 ---------- Output ---------
 CREATE STREAM IF NOT EXISTS test2.s3 ON TABLE test.t AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5')
----------- Pretty ---------
-CREATE STREAM IF NOT EXISTS test2.s3 ON TABLE test.t AT (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5')
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
@@ -4555,8 +4380,6 @@ CreateStream(
 create or replace stream test2.s1 on table test.t append_only = false;
 ---------- Output ---------
 CREATE OR REPLACE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
----------- Pretty ---------
-CREATE OR REPLACE STREAM test2.s1 ON TABLE test.t APPEND_ONLY = false
 ---------- AST ------------
 CreateStream(
     CreateStreamStmt {
@@ -4609,8 +4432,6 @@ CreateStream(
 show full streams from default.test2 like 's%';
 ---------- Output ---------
 SHOW FULL STREAMS FROM default.test2 LIKE 's%'
----------- Pretty ---------
-SHOW FULL STREAMS FROM default.test2 LIKE 's%'
 ---------- AST ------------
 ShowStreams(
     ShowStreamsStmt {
@@ -4648,8 +4469,6 @@ ShowStreams(
 describe stream test2.s2;
 ---------- Output ---------
 DESCRIBE STREAM test2.s2
----------- Pretty ---------
-DESCRIBE STREAM test2.s2
 ---------- AST ------------
 DescribeStream(
     DescribeStreamStmt {
@@ -4679,8 +4498,6 @@ DescribeStream(
 ---------- Input ----------
 drop stream if exists test2.s2;
 ---------- Output ---------
-DROP STREAM IF EXISTS test2.s2
----------- Pretty ---------
 DROP STREAM IF EXISTS test2.s2
 ---------- AST ------------
 DropStream(
@@ -4712,8 +4529,6 @@ DropStream(
 ---------- Input ----------
 rename table d.t to e.s;
 ---------- Output ---------
-RENAME TABLE d.t TO e.s
----------- Pretty ---------
 RENAME TABLE d.t TO e.s
 ---------- AST ------------
 RenameTable(
@@ -4765,8 +4580,6 @@ RenameTable(
 truncate table test;
 ---------- Output ---------
 TRUNCATE TABLE test
----------- Pretty ---------
-TRUNCATE TABLE test
 ---------- AST ------------
 TruncateTable(
     TruncateTableStmt {
@@ -4787,8 +4600,6 @@ TruncateTable(
 ---------- Input ----------
 truncate table test_db.test;
 ---------- Output ---------
-TRUNCATE TABLE test_db.test
----------- Pretty ---------
 TRUNCATE TABLE test_db.test
 ---------- AST ------------
 TruncateTable(
@@ -4820,8 +4631,6 @@ TruncateTable(
 DROP table table1;
 ---------- Output ---------
 DROP TABLE table1
----------- Pretty ---------
-DROP TABLE table1
 ---------- AST ------------
 DropTable(
     DropTableStmt {
@@ -4845,8 +4654,6 @@ DropTable(
 DROP table IF EXISTS table1;
 ---------- Output ---------
 DROP TABLE IF EXISTS table1
----------- Pretty ---------
-DROP TABLE IF EXISTS table1
 ---------- AST ------------
 DropTable(
     DropTableStmt {
@@ -4869,8 +4676,6 @@ DropTable(
 ---------- Input ----------
 CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);
 ---------- Output ---------
-CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
----------- Pretty ---------
 CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
 ---------- AST ------------
 CreateTable(
@@ -4952,8 +4757,6 @@ CreateTable(
 CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);
 ---------- Output ---------
 CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
----------- Pretty ---------
-CREATE TABLE t (c1 Int32 NOT NULL, c2 Int64 NOT NULL, c3 STRING NOT NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -5034,8 +4837,6 @@ CreateTable(
 CREATE TABLE t(c1 varbinary, c2 binary(10));
 ---------- Output ---------
 CREATE TABLE t (c1 BINARY, c2 BINARY)
----------- Pretty ---------
-CREATE TABLE t (c1 BINARY, c2 BINARY)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -5097,8 +4898,6 @@ CreateTable(
 CREATE TABLE t(c1 int default 1);
 ---------- Output ---------
 CREATE TABLE t (c1 Int32 DEFAULT 1)
----------- Pretty ---------
-CREATE TABLE t (c1 Int32 DEFAULT 1)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -5158,10 +4957,6 @@ CreateTable(
 create table abc as (select * from xyz limit 10)
 ---------- Output ---------
 CREATE TABLE abc AS SELECT * FROM xyz LIMIT 10
----------- Pretty ---------
-CREATE TABLE abc
-AS
-    SELECT * FROM xyz LIMIT 10
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -5261,8 +5056,6 @@ CreateTable(
 ALTER USER u1 IDENTIFIED BY '123456';
 ---------- Output ---------
 ALTER USER 'u1'@'%' IDENTIFIED BY '123456'
----------- Pretty ---------
-ALTER USER 'u1'@'%' IDENTIFIED BY '123456'
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -5289,8 +5082,6 @@ AlterUser(
 ALTER USER u1 WITH disabled = false;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH DISABLED = false
----------- Pretty ---------
-ALTER USER 'u1'@'%' WITH DISABLED = false
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -5314,8 +5105,6 @@ AlterUser(
 ALTER USER u1 WITH default_role = role1;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
----------- Pretty ---------
-ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1'
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -5338,8 +5127,6 @@ AlterUser(
 ---------- Input ----------
 ALTER USER u1 WITH DEFAULT_ROLE = role1, DISABLED=true, TENANTSETTING;
 ---------- Output ---------
-ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1', DISABLED = true, TENANTSETTING
----------- Pretty ---------
 ALTER USER 'u1'@'%' WITH DEFAULT_ROLE = 'role1', DISABLED = true, TENANTSETTING
 ---------- AST ------------
 AlterUser(
@@ -5370,8 +5157,6 @@ AlterUser(
 ALTER USER u1 WITH SET NETWORK POLICY = 'policy1';
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH SET NETWORK POLICY = 'policy1'
----------- Pretty ---------
-ALTER USER 'u1'@'%' WITH SET NETWORK POLICY = 'policy1'
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -5395,8 +5180,6 @@ AlterUser(
 ALTER USER u1 WITH UNSET NETWORK POLICY;
 ---------- Output ---------
 ALTER USER 'u1'@'%' WITH UNSET NETWORK POLICY
----------- Pretty ---------
-ALTER USER 'u1'@'%' WITH UNSET NETWORK POLICY
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
@@ -5417,8 +5200,6 @@ AlterUser(
 ---------- Input ----------
 CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
 ---------- Output ---------
-CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123', TENANTSETTING
----------- Pretty ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123', TENANTSETTING
 ---------- AST ------------
 CreateUser(
@@ -5450,8 +5231,6 @@ CreateUser(
 CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='policy1'
 ---------- Output ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
----------- Pretty ---------
-CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH SET NETWORK POLICY = 'policy1'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
@@ -5478,8 +5257,6 @@ CreateUser(
 ---------- Input ----------
 CREATE USER u1 IDENTIFIED BY '123456' WITH disabled=true
 ---------- Output ---------
-CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DISABLED = true
----------- Pretty ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DISABLED = true
 ---------- AST ------------
 CreateUser(
@@ -5508,8 +5285,6 @@ CreateUser(
 DROP database if exists db1;
 ---------- Output ---------
 DROP DATABASE IF EXISTS db1
----------- Pretty ---------
-DROP DATABASE IF EXISTS db1
 ---------- AST ------------
 DropDatabase(
     DropDatabaseStmt {
@@ -5531,16 +5306,6 @@ DropDatabase(
 select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;
 ---------- Output ---------
 SELECT DISTINCT a, COUNT(*) FROM t WHERE a = 1 AND b - 1 < a GROUP BY a HAVING a = 1
----------- Pretty ---------
-SELECT DISTINCT
-    a, COUNT(*)
-FROM
-    t
-WHERE
-    a = 1 AND b - 1 < a
-GROUP BY a
-HAVING
-    a = 1
 ---------- AST ------------
 Query(
     Query {
@@ -5787,8 +5552,6 @@ Query(
 select * from t4;
 ---------- Output ---------
 SELECT * FROM t4
----------- Pretty ---------
-SELECT * FROM t4
 ---------- AST ------------
 Query(
     Query {
@@ -5857,8 +5620,6 @@ Query(
 ---------- Input ----------
 select top 2 * from t4;
 ---------- Output ---------
-SELECT TOP 2 * FROM t4
----------- Pretty ---------
 SELECT TOP 2 * FROM t4
 ---------- AST ------------
 Query(
@@ -5930,8 +5691,6 @@ Query(
 ---------- Input ----------
 select * from aa.bb;
 ---------- Output ---------
-SELECT * FROM aa.bb
----------- Pretty ---------
 SELECT * FROM aa.bb
 ---------- AST ------------
 Query(
@@ -6010,8 +5769,6 @@ Query(
 ---------- Input ----------
 select * from a, b, c;
 ---------- Output ---------
-SELECT * FROM a, b, c
----------- Pretty ---------
 SELECT * FROM a, b, c
 ---------- AST ------------
 Query(
@@ -6123,8 +5880,6 @@ Query(
 ---------- Input ----------
 select * from a, b, c order by "db"."a"."c1";
 ---------- Output ---------
-SELECT * FROM a, b, c ORDER BY "db"."a"."c1"
----------- Pretty ---------
 SELECT * FROM a, b, c ORDER BY "db"."a"."c1"
 ---------- AST ------------
 Query(
@@ -6284,8 +6039,6 @@ Query(
 ---------- Input ----------
 select * from a join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON a.a = b.a
----------- Pretty ---------
 SELECT * FROM a INNER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
@@ -6449,8 +6202,6 @@ Query(
 select * from a left outer join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a
----------- Pretty ---------
-SELECT * FROM a LEFT OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6612,8 +6363,6 @@ Query(
 ---------- Input ----------
 select * from a right outer join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT OUTER JOIN b ON a.a = b.a
----------- Pretty ---------
 SELECT * FROM a RIGHT OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
@@ -6777,8 +6526,6 @@ Query(
 select * from a left semi join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
----------- Pretty ---------
-SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -6940,8 +6687,6 @@ Query(
 ---------- Input ----------
 select * from a semi join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
----------- Pretty ---------
 SELECT * FROM a LEFT SEMI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
@@ -7105,8 +6850,6 @@ Query(
 select * from a left anti join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
----------- Pretty ---------
-SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -7268,8 +7011,6 @@ Query(
 ---------- Input ----------
 select * from a anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
----------- Pretty ---------
 SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
@@ -7433,8 +7174,6 @@ Query(
 SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;
 ---------- Output ---------
 SETTINGS (max_thread = 1, timezone = 'Asia/Shanghai') SELECT 1
----------- Pretty ---------
-SETTINGS (max_thread = 1, timezone = 'Asia/Shanghai') SELECT 1
 ---------- AST ------------
 StatementWithSettings {
     settings: Some(
@@ -7527,8 +7266,6 @@ StatementWithSettings {
 ---------- Input ----------
 SETTINGS (max_thread=1) select * from a anti join b on a.a = b.a;
 ---------- Output ---------
-SETTINGS (max_thread = 1) SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
----------- Pretty ---------
 SETTINGS (max_thread = 1) SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 StatementWithSettings {
@@ -7721,8 +7458,6 @@ StatementWithSettings {
 select * from a right semi join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a
----------- Pretty ---------
-SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -7884,8 +7619,6 @@ Query(
 ---------- Input ----------
 select * from a right anti join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a RIGHT ANTI JOIN b ON a.a = b.a
----------- Pretty ---------
 SELECT * FROM a RIGHT ANTI JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
@@ -8049,8 +7782,6 @@ Query(
 select * from a full outer join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a
----------- Pretty ---------
-SELECT * FROM a FULL OUTER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
     Query {
@@ -8210,10 +7941,77 @@ Query(
 
 
 ---------- Input ----------
+select * FROM fuse_compat_table ignore_result;
+---------- Output ---------
+SELECT * FROM fuse_compat_table IGNORE_RESULT
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..31,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..31,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..31,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..31,
+                            ),
+                            name: "fuse_compat_table",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: true,
+    },
+)
+
+
+---------- Input ----------
 select * from a inner join b on a.a = b.a;
 ---------- Output ---------
-SELECT * FROM a INNER JOIN b ON a.a = b.a
----------- Pretty ---------
 SELECT * FROM a INNER JOIN b ON a.a = b.a
 ---------- AST ------------
 Query(
@@ -8377,8 +8175,6 @@ Query(
 select * from a left outer join b using(a);
 ---------- Output ---------
 SELECT * FROM a LEFT OUTER JOIN b USING(a)
----------- Pretty ---------
-SELECT * FROM a LEFT OUTER JOIN b USING(a)
 ---------- AST ------------
 Query(
     Query {
@@ -8488,8 +8284,6 @@ Query(
 ---------- Input ----------
 select * from a right outer join b using(a);
 ---------- Output ---------
-SELECT * FROM a RIGHT OUTER JOIN b USING(a)
----------- Pretty ---------
 SELECT * FROM a RIGHT OUTER JOIN b USING(a)
 ---------- AST ------------
 Query(
@@ -8601,8 +8395,6 @@ Query(
 select * from a full outer join b using(a);
 ---------- Output ---------
 SELECT * FROM a FULL OUTER JOIN b USING(a)
----------- Pretty ---------
-SELECT * FROM a FULL OUTER JOIN b USING(a)
 ---------- AST ------------
 Query(
     Query {
@@ -8713,8 +8505,6 @@ Query(
 select * from a inner join b using(a);
 ---------- Output ---------
 SELECT * FROM a INNER JOIN b USING(a)
----------- Pretty ---------
-SELECT * FROM a INNER JOIN b USING(a)
 ---------- AST ------------
 Query(
     Query {
@@ -8824,8 +8614,6 @@ Query(
 ---------- Input ----------
 select * from a where a.a = any (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = ANY (SELECT b.a FROM b)
----------- Pretty ---------
 SELECT * FROM a WHERE a.a = ANY (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
@@ -9020,8 +8808,6 @@ Query(
 select * from a where a.a = all (select b.a from b);
 ---------- Output ---------
 SELECT * FROM a WHERE a.a = ALL (SELECT b.a FROM b)
----------- Pretty ---------
-SELECT * FROM a WHERE a.a = ALL (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -9214,8 +9000,6 @@ Query(
 ---------- Input ----------
 select * from a where a.a = some (select b.a from b);
 ---------- Output ---------
-SELECT * FROM a WHERE a.a = SOME (SELECT b.a FROM b)
----------- Pretty ---------
 SELECT * FROM a WHERE a.a = SOME (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
@@ -9410,8 +9194,6 @@ Query(
 select * from a where a.a > (select b.a from b);
 ---------- Output ---------
 SELECT * FROM a WHERE a.a > (SELECT b.a FROM b)
----------- Pretty ---------
-SELECT * FROM a WHERE a.a > (SELECT b.a FROM b)
 ---------- AST ------------
 Query(
     Query {
@@ -9603,8 +9385,6 @@ Query(
 select 1 from numbers(1) where ((1 = 1) or 1)
 ---------- Output ---------
 SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
----------- Pretty ---------
-SELECT 1 FROM numbers(1) WHERE 1 = 1 OR 1
 ---------- AST ------------
 Query(
     Query {
@@ -9718,10 +9498,6 @@ Query(
 select * from read_parquet('p1', 'p2', 'p3', prune_page => true, refresh_meta_cache => true);
 ---------- Output ---------
 SELECT * FROM read_parquet('p1', 'p2', 'p3',prune_page=>TRUE,refresh_meta_cache=>TRUE)
----------- Pretty ---------
-SELECT *
-FROM
-    read_parquet('p1', 'p2', 'p3', prune_page=>TRUE, refresh_meta_cache=>TRUE)
 ---------- AST ------------
 Query(
     Query {
@@ -9850,8 +9626,6 @@ Query(
 select * from @foo (pattern=>'[.]*parquet' file_format=>'tsv');
 ---------- Output ---------
 SELECT * FROM '@foo' ( FILE_FORMAT => 'tsv', PATTERN => '[.]*parquet', )
----------- Pretty ---------
-SELECT * FROM '@foo' ( FILE_FORMAT => 'tsv', PATTERN => '[.]*parquet', )
 ---------- AST ------------
 Query(
     Query {
@@ -9922,8 +9696,6 @@ Query(
 select 'stringwith''quote'''
 ---------- Output ---------
 SELECT 'stringwith\'quote\''
----------- Pretty ---------
-SELECT 'stringwith\'quote\''
 ---------- AST ------------
 Query(
     Query {
@@ -9971,8 +9743,6 @@ Query(
 ---------- Input ----------
 select 'stringwith"doublequote'
 ---------- Output ---------
-SELECT 'stringwith"doublequote'
----------- Pretty ---------
 SELECT 'stringwith"doublequote'
 ---------- AST ------------
 Query(
@@ -10022,8 +9792,6 @@ Query(
 select '🦈'
 ---------- Output ---------
 SELECT '🦈'
----------- Pretty ---------
-SELECT '🦈'
 ---------- AST ------------
 Query(
     Query {
@@ -10071,8 +9839,6 @@ Query(
 ---------- Input ----------
 select * FROM t where ((a));
 ---------- Output ---------
-SELECT * FROM t WHERE a
----------- Pretty ---------
 SELECT * FROM t WHERE a
 ---------- AST ------------
 Query(
@@ -10162,8 +9928,6 @@ Query(
 ---------- Input ----------
 select * FROM t where ((select 1) > 1);
 ---------- Output ---------
-SELECT * FROM t WHERE (SELECT 1) > 1
----------- Pretty ---------
 SELECT * FROM t WHERE (SELECT 1) > 1
 ---------- AST ------------
 Query(
@@ -10293,8 +10057,6 @@ Query(
 ---------- Input ----------
 select ((t1.a)>=(((((t2.b)<=(t3.c))) IS NOT NULL)::INTEGER));
 ---------- Output ---------
-SELECT t1.a >= (t2.b <= t3.c IS NOT NULL)::Int32
----------- Pretty ---------
 SELECT t1.a >= (t2.b <= t3.c IS NOT NULL)::Int32
 ---------- AST ------------
 Query(
@@ -10445,8 +10207,6 @@ Query(
 select * from t sample row (99);
 ---------- Output ---------
 SELECT * FROM t SAMPLE ROW (99)
----------- Pretty ---------
-SELECT * FROM t SAMPLE ROW (99)
 ---------- AST ------------
 Query(
     Query {
@@ -10525,8 +10285,6 @@ Query(
 select * from t sample block (99);
 ---------- Output ---------
 SELECT * FROM t SAMPLE BLOCK (99) 
----------- Pretty ---------
-SELECT * FROM t SAMPLE BLOCK (99) 
 ---------- AST ------------
 Query(
     Query {
@@ -10602,8 +10360,6 @@ Query(
 ---------- Input ----------
 select * from t sample row (10 rows);
 ---------- Output ---------
-SELECT * FROM t SAMPLE ROW (10 ROWS)
----------- Pretty ---------
 SELECT * FROM t SAMPLE ROW (10 ROWS)
 ---------- AST ------------
 Query(
@@ -10682,8 +10438,6 @@ Query(
 ---------- Input ----------
 select * from numbers(1000) sample row (99);
 ---------- Output ---------
-SELECT * FROM numbers(1000) SAMPLE ROW (99)
----------- Pretty ---------
 SELECT * FROM numbers(1000) SAMPLE ROW (99)
 ---------- AST ------------
 Query(
@@ -10769,8 +10523,6 @@ Query(
 select * from numbers(1000) sample block (99);
 ---------- Output ---------
 SELECT * FROM numbers(1000) SAMPLE BLOCK (99) 
----------- Pretty ---------
-SELECT * FROM numbers(1000) SAMPLE BLOCK (99) 
 ---------- AST ------------
 Query(
     Query {
@@ -10852,8 +10604,6 @@ Query(
 ---------- Input ----------
 select * from numbers(1000) sample row (10 rows);
 ---------- Output ---------
-SELECT * FROM numbers(1000) SAMPLE ROW (10 ROWS)
----------- Pretty ---------
 SELECT * FROM numbers(1000) SAMPLE ROW (10 ROWS)
 ---------- AST ------------
 Query(
@@ -10938,8 +10688,6 @@ Query(
 ---------- Input ----------
 select * from numbers(1000) sample block (99) row (10 rows);
 ---------- Output ---------
-SELECT * FROM numbers(1000) SAMPLE BLOCK (99) ROW (10 ROWS)
----------- Pretty ---------
 SELECT * FROM numbers(1000) SAMPLE BLOCK (99) ROW (10 ROWS)
 ---------- AST ------------
 Query(
@@ -11027,8 +10775,6 @@ Query(
 select * from numbers(1000) sample block (99) row (10);
 ---------- Output ---------
 SELECT * FROM numbers(1000) SAMPLE BLOCK (99) ROW (10)
----------- Pretty ---------
-SELECT * FROM numbers(1000) SAMPLE BLOCK (99) ROW (10)
 ---------- AST ------------
 Query(
     Query {
@@ -11115,11 +10861,6 @@ Query(
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
----------- Pretty ---------
-INSERT INTO
-    t (c1, c2)
-VALUES
-    (1, 2), (3, 4)
 ---------- AST ------------
 Insert(
     InsertStmt {
@@ -11202,11 +10943,6 @@ Insert(
 insert into t (c1, c2) values (1, 2);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2)
----------- Pretty ---------
-INSERT INTO
-    t (c1, c2)
-VALUES
-    (1, 2)
 ---------- AST ------------
 Insert(
     InsertStmt {
@@ -11271,10 +11007,6 @@ Insert(
 insert into table t select * from t2;
 ---------- Output ---------
 INSERT INTO t SELECT * FROM t2
----------- Pretty ---------
-INSERT INTO
-    t
-SELECT * FROM t2
 ---------- AST ------------
 Insert(
     InsertStmt {
@@ -11361,8 +11093,6 @@ Insert(
 ---------- Input ----------
 select parse_json('{"k1": [0, 1, 2]}').k1[0];
 ---------- Output ---------
-SELECT parse_json('{"k1": [0, 1, 2]}'):k1[0]
----------- Pretty ---------
 SELECT parse_json('{"k1": [0, 1, 2]}'):k1[0]
 ---------- AST ------------
 Query(
@@ -11462,8 +11192,6 @@ Query(
 ---------- Input ----------
 SELECT avg((number > 314)::UInt32);
 ---------- Output ---------
-SELECT avg((number > 314)::UInt32)
----------- Pretty ---------
 SELECT avg((number > 314)::UInt32)
 ---------- AST ------------
 Query(
@@ -11566,8 +11294,6 @@ Query(
 SELECT 1 - (2 + 3);
 ---------- Output ---------
 SELECT 1 - (2 + 3)
----------- Pretty ---------
-SELECT 1 - (2 + 3)
 ---------- AST ------------
 Query(
     Query {
@@ -11644,8 +11370,6 @@ Query(
 CREATE STAGE ~
 ---------- Output ---------
 CREATE STAGE ~
----------- Pretty ---------
-CREATE STAGE ~
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -11663,8 +11387,6 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
----------- Pretty ---------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
 CreateStage(
@@ -11707,8 +11429,6 @@ CreateStage(
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' connection=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
----------- Pretty ---------
-CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '1a2b3c', aws_secret_key = '4x5y6z' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -11749,8 +11469,6 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '4x5y6z', account_name = '1a2b3c' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
----------- Pretty ---------
 CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '4x5y6z', account_name = '1a2b3c' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
 CreateStage(
@@ -11793,8 +11511,6 @@ CreateStage(
 CREATE OR REPLACE STAGE test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE OR REPLACE STAGE test_stage 'azblob://load/files/' CONNECTION = ( account_key = '4x5y6z', account_name = '1a2b3c' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
----------- Pretty ---------
-CREATE OR REPLACE STAGE test_stage 'azblob://load/files/' CONNECTION = ( account_key = '4x5y6z', account_name = '1a2b3c' ) FILE_FORMAT = (compression = GZIP, record_delimiter = ',', type = CSV)
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -11836,8 +11552,6 @@ CreateStage(
 DROP STAGE abc
 ---------- Output ---------
 DROP STAGE abc
----------- Pretty ---------
-DROP STAGE abc
 ---------- AST ------------
 DropStage {
     if_exists: false,
@@ -11848,8 +11562,6 @@ DropStage {
 ---------- Input ----------
 DROP STAGE ~
 ---------- Output ---------
-DROP STAGE ~
----------- Pretty ---------
 DROP STAGE ~
 ---------- AST ------------
 DropStage {
@@ -11862,8 +11574,6 @@ DropStage {
 list @stage_a;
 ---------- Output ---------
 LIST @stage_a
----------- Pretty ---------
-LIST @stage_a
 ---------- AST ------------
 ListStage {
     location: "stage_a",
@@ -11875,8 +11585,6 @@ ListStage {
 list @~;
 ---------- Output ---------
 LIST @~
----------- Pretty ---------
-LIST @~
 ---------- AST ------------
 ListStage {
     location: "~",
@@ -11887,8 +11595,6 @@ ListStage {
 ---------- Input ----------
 create user 'test-e' identified by 'password';
 ---------- Output ---------
-CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
----------- Pretty ---------
 CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
 CreateUser(
@@ -11913,8 +11619,6 @@ CreateUser(
 drop user if exists 'test-j';
 ---------- Output ---------
 DROP USER IF EXISTS 'test-j'@'%'
----------- Pretty ---------
-DROP USER IF EXISTS 'test-j'@'%'
 ---------- AST ------------
 DropUser {
     if_exists: true,
@@ -11928,8 +11632,6 @@ DropUser {
 ---------- Input ----------
 alter user 'test-e' identified by 'new-password';
 ---------- Output ---------
-ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password'
----------- Pretty ---------
 ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password'
 ---------- AST ------------
 AlterUser(
@@ -11957,8 +11659,6 @@ AlterUser(
 create role test
 ---------- Output ---------
 CREATE ROLE 'test'
----------- Pretty ---------
-CREATE ROLE 'test'
 ---------- AST ------------
 CreateRole {
     if_not_exists: false,
@@ -11969,8 +11669,6 @@ CreateRole {
 ---------- Input ----------
 create role 'test'
 ---------- Output ---------
-CREATE ROLE 'test'
----------- Pretty ---------
 CREATE ROLE 'test'
 ---------- AST ------------
 CreateRole {
@@ -11983,8 +11681,6 @@ CreateRole {
 create role `a"a`
 ---------- Output ---------
 CREATE ROLE 'a"a'
----------- Pretty ---------
-CREATE ROLE 'a"a'
 ---------- AST ------------
 CreateRole {
     if_not_exists: false,
@@ -11996,8 +11692,6 @@ CreateRole {
 create role `a'a`
 ---------- Output ---------
 CREATE ROLE 'a\'a'
----------- Pretty ---------
-CREATE ROLE 'a\'a'
 ---------- AST ------------
 CreateRole {
     if_not_exists: false,
@@ -12008,8 +11702,6 @@ CreateRole {
 ---------- Input ----------
 create user `a'a` identified by '123'
 ---------- Output ---------
-CREATE USER 'a\'a'@'%' IDENTIFIED BY '123'
----------- Pretty ---------
 CREATE USER 'a\'a'@'%' IDENTIFIED BY '123'
 ---------- AST ------------
 CreateUser(
@@ -12034,8 +11726,6 @@ CreateUser(
 drop role if exists test
 ---------- Output ---------
 DROP ROLE IF EXISTS 'test'
----------- Pretty ---------
-DROP ROLE IF EXISTS 'test'
 ---------- AST ------------
 DropRole {
     if_exists: true,
@@ -12047,8 +11737,6 @@ DropRole {
 drop role if exists 'test'
 ---------- Output ---------
 DROP ROLE IF EXISTS 'test'
----------- Pretty ---------
-DROP ROLE IF EXISTS 'test'
 ---------- AST ------------
 DropRole {
     if_exists: true,
@@ -12059,8 +11747,6 @@ DropRole {
 ---------- Input ----------
 OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
----------- Pretty ---------
 OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
 ---------- AST ------------
 OptimizeTable(
@@ -12089,8 +11775,6 @@ OptimizeTable(
 OPTIMIZE TABLE t COMPACT LIMIT 10;
 ---------- Output ---------
 OPTIMIZE TABLE t COMPACT LIMIT 10
----------- Pretty ---------
-OPTIMIZE TABLE t COMPACT LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
@@ -12117,8 +11801,6 @@ OptimizeTable(
 ---------- Input ----------
 OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10
----------- Pretty ---------
 OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10
 ---------- AST ------------
 OptimizeTable(
@@ -12150,8 +11832,6 @@ OptimizeTable(
 ---------- Input ----------
 OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;
 ---------- Output ---------
-OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
----------- Pretty ---------
 OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
 ---------- AST ------------
 OptimizeTable(
@@ -12198,9 +11878,6 @@ OptimizeTable(
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
 ALTER TABLE t CLUSTER BY LINEAR(c1)
----------- Pretty ---------
-ALTER TABLE t
-CLUSTER BY LINEAR(c1)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12260,9 +11937,6 @@ AlterTable(
 ALTER TABLE t COMMENT='t1-commnet';
 ---------- Output ---------
 ALTER TABLE t COMMENT='t1-commnet'
----------- Pretty ---------
-ALTER TABLE t
-COMMENT='t1-commnet'
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12299,9 +11973,6 @@ AlterTable(
 ALTER TABLE t DROP CLUSTER KEY;
 ---------- Output ---------
 ALTER TABLE t DROP CLUSTER KEY
----------- Pretty ---------
-ALTER TABLE t
-DROP CLUSTER KEY
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12336,9 +12007,6 @@ AlterTable(
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
 ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
----------- Pretty ---------
-ALTER TABLE t
-RECLUSTER FINAL WHERE c1 > 0 LIMIT 10
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12413,9 +12081,6 @@ AlterTable(
 ALTER TABLE t ADD c int null;
 ---------- Output ---------
 ALTER TABLE t ADD COLUMN c Int32 NULL
----------- Pretty ---------
-ALTER TABLE t
-ADD COLUMN c Int32 NULL
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12467,9 +12132,6 @@ AlterTable(
 ALTER TABLE t ADD COLUMN c int null;
 ---------- Output ---------
 ALTER TABLE t ADD COLUMN c Int32 NULL
----------- Pretty ---------
-ALTER TABLE t
-ADD COLUMN c Int32 NULL
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12521,9 +12183,6 @@ AlterTable(
 ALTER TABLE t ADD COLUMN a float default 1.1 COMMENT 'hello' FIRST;
 ---------- Output ---------
 ALTER TABLE t ADD COLUMN a Float32 DEFAULT 1.1 COMMENT 'hello' FIRST
----------- Pretty ---------
-ALTER TABLE t
-ADD COLUMN a Float32 DEFAULT 1.1 COMMENT 'hello' FIRST
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12588,9 +12247,6 @@ AlterTable(
 ALTER TABLE t ADD COLUMN b string default 'b' AFTER a;
 ---------- Output ---------
 ALTER TABLE t ADD COLUMN b STRING DEFAULT 'b' AFTER a
----------- Pretty ---------
-ALTER TABLE t
-ADD COLUMN b STRING DEFAULT 'b' AFTER a
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12660,9 +12316,6 @@ AlterTable(
 ALTER TABLE t RENAME COLUMN a TO b;
 ---------- Output ---------
 ALTER TABLE t RENAME COLUMN a TO b
----------- Pretty ---------
-ALTER TABLE t
-RENAME COLUMN a TO b
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12714,9 +12367,6 @@ AlterTable(
 ALTER TABLE t DROP COLUMN b;
 ---------- Output ---------
 ALTER TABLE t DROP COLUMN b
----------- Pretty ---------
-ALTER TABLE t
-DROP COLUMN b
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12760,9 +12410,6 @@ AlterTable(
 ALTER TABLE t DROP b;
 ---------- Output ---------
 ALTER TABLE t DROP COLUMN b
----------- Pretty ---------
-ALTER TABLE t
-DROP COLUMN b
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12806,9 +12453,6 @@ AlterTable(
 ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask
----------- Pretty ---------
-ALTER TABLE t
-MODIFY COLUMN b SET MASKING POLICY mask
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12855,9 +12499,6 @@ AlterTable(
 ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY
----------- Pretty ---------
-ALTER TABLE t
-MODIFY COLUMN b UNSET MASKING POLICY
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12903,9 +12544,6 @@ AlterTable(
 ALTER TABLE t MODIFY COLUMN a int DEFAULT 1, COLUMN b float;
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN a Int32 DEFAULT 1, b Float32
----------- Pretty ---------
-ALTER TABLE t
-MODIFY COLUMN a Int32 DEFAULT 1, b Float32
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12982,9 +12620,6 @@ AlterTable(
 ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, b Float32 NOT NULL COMMENT 'column b'
----------- Pretty ---------
-ALTER TABLE t
-MODIFY COLUMN a Int32 NULL DEFAULT 1, b Float32 NOT NULL COMMENT 'column b'
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -13067,9 +12702,6 @@ AlterTable(
 ALTER TABLE t MODIFY COLUMN a int;
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN a Int32
----------- Pretty ---------
-ALTER TABLE t
-MODIFY COLUMN a Int32
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -13122,9 +12754,6 @@ AlterTable(
 ALTER TABLE t MODIFY a int;
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN a Int32
----------- Pretty ---------
-ALTER TABLE t
-MODIFY COLUMN a Int32
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -13177,9 +12806,6 @@ AlterTable(
 ALTER TABLE t MODIFY COLUMN a DROP STORED;
 ---------- Output ---------
 ALTER TABLE t MODIFY COLUMN a DROP STORED
----------- Pretty ---------
-ALTER TABLE t
-MODIFY COLUMN a DROP STORED
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -13225,9 +12851,6 @@ AlterTable(
 ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);
 ---------- Output ---------
 ALTER TABLE t SET OPTIONS (block_per_segment = '500', snapshot_location = '1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk')
----------- Pretty ---------
-ALTER TABLE t
-SET OPTIONS (block_per_segment = '500', snapshot_location = '1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk')
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -13266,8 +12889,6 @@ AlterTable(
 ---------- Input ----------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a;
 ---------- Output ---------
-ALTER DATABASE IF EXISTS ctl.c RENAME TO a
----------- Pretty ---------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a
 ---------- AST ------------
 AlterDatabase(
@@ -13309,8 +12930,6 @@ AlterDatabase(
 ALTER DATABASE c RENAME TO a;
 ---------- Output ---------
 ALTER DATABASE c RENAME TO a
----------- Pretty ---------
-ALTER DATABASE c RENAME TO a
 ---------- AST ------------
 AlterDatabase(
     AlterDatabaseStmt {
@@ -13341,8 +12960,6 @@ AlterDatabase(
 ---------- Input ----------
 ALTER DATABASE ctl.c RENAME TO a;
 ---------- Output ---------
-ALTER DATABASE ctl.c RENAME TO a
----------- Pretty ---------
 ALTER DATABASE ctl.c RENAME TO a
 ---------- AST ------------
 AlterDatabase(
@@ -13384,8 +13001,6 @@ AlterDatabase(
 VACUUM TABLE t;
 ---------- Output ---------
 VACUUM TABLE t 
----------- Pretty ---------
-VACUUM TABLE t 
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -13409,8 +13024,6 @@ VacuumTable(
 ---------- Input ----------
 VACUUM TABLE t DRY RUN;
 ---------- Output ---------
-VACUUM TABLE t DRY RUN
----------- Pretty ---------
 VACUUM TABLE t DRY RUN
 ---------- AST ------------
 VacuumTable(
@@ -13438,8 +13051,6 @@ VacuumTable(
 VACUUM TABLE t DRY RUN SUMMARY;
 ---------- Output ---------
 VACUUM TABLE t DRY RUN SUMMARY
----------- Pretty ---------
-VACUUM TABLE t DRY RUN SUMMARY
 ---------- AST ------------
 VacuumTable(
     VacuumTableStmt {
@@ -13466,8 +13077,6 @@ VacuumTable(
 VACUUM DROP TABLE;
 ---------- Output ---------
 VACUUM DROP TABLE 
----------- Pretty ---------
-VACUUM DROP TABLE 
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -13484,8 +13093,6 @@ VacuumDropTable(
 ---------- Input ----------
 VACUUM DROP TABLE DRY RUN;
 ---------- Output ---------
-VACUUM DROP TABLE DRY RUN
----------- Pretty ---------
 VACUUM DROP TABLE DRY RUN
 ---------- AST ------------
 VacuumDropTable(
@@ -13506,8 +13113,6 @@ VacuumDropTable(
 VACUUM DROP TABLE DRY RUN SUMMARY;
 ---------- Output ---------
 VACUUM DROP TABLE DRY RUN SUMMARY
----------- Pretty ---------
-VACUUM DROP TABLE DRY RUN SUMMARY
 ---------- AST ------------
 VacuumDropTable(
     VacuumDropTableStmt {
@@ -13526,8 +13131,6 @@ VacuumDropTable(
 ---------- Input ----------
 VACUUM DROP TABLE FROM db;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db 
----------- Pretty ---------
 VACUUM DROP TABLE FROM db 
 ---------- AST ------------
 VacuumDropTable(
@@ -13554,8 +13157,6 @@ VacuumDropTable(
 ---------- Input ----------
 VACUUM DROP TABLE FROM db LIMIT 10;
 ---------- Output ---------
-VACUUM DROP TABLE FROM db  LIMIT 10
----------- Pretty ---------
 VACUUM DROP TABLE FROM db  LIMIT 10
 ---------- AST ------------
 VacuumDropTable(
@@ -13584,8 +13185,6 @@ VacuumDropTable(
 ---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
 ---------- Output ---------
-CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'table comment'
----------- Pretty ---------
 CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'table comment'
 ---------- AST ------------
 CreateTable(
@@ -13636,10 +13235,58 @@ CreateTable(
 
 
 ---------- Input ----------
+CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')
+---------- Output ---------
+CREATE TEMPORARY  TABLE t (a Int32 COMMENT 'col comment')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                23..24,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                26..27,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: Some(
+                            "col comment",
+                        ),
+                    },
+                ],
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        as_query: None,
+        table_type: Temporary,
+    },
+)
+
+
+---------- Input ----------
 GRANT CREATE, CREATE USER ON * TO 'test-grant';
 ---------- Output ---------
-GRANT CREATE, CREATE USER ON  * TO USER 'test-grant'@'%'
----------- Pretty ---------
 GRANT CREATE, CREATE USER ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
@@ -13667,8 +13314,6 @@ Grant(
 GRANT SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
 GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
----------- Pretty ---------
-GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -13695,8 +13340,6 @@ Grant(
 GRANT SELECT, CREATE ON *.* TO 'test-grant';
 ---------- Output ---------
 GRANT SELECT, CREATE ON  *.* TO USER 'test-grant'@'%'
----------- Pretty ---------
-GRANT SELECT, CREATE ON  *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -13720,8 +13363,6 @@ Grant(
 ---------- Input ----------
 GRANT SELECT, CREATE ON * TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
----------- Pretty ---------
 GRANT SELECT, CREATE ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
@@ -13749,8 +13390,6 @@ Grant(
 GRANT SELECT, CREATE ON * TO ROLE role1;
 ---------- Output ---------
 GRANT SELECT, CREATE ON  * TO ROLE 'role1'
----------- Pretty ---------
-GRANT SELECT, CREATE ON  * TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -13774,8 +13413,6 @@ Grant(
 GRANT ALL ON *.* TO 'test-grant';
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON  *.* TO USER 'test-grant'@'%'
----------- Pretty ---------
-GRANT ALL PRIVILEGES ON  *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -13796,8 +13433,6 @@ Grant(
 GRANT ALL ON *.* TO ROLE role2;
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON  *.* TO ROLE 'role2'
----------- Pretty ---------
-GRANT ALL PRIVILEGES ON  *.* TO ROLE 'role2'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -13814,8 +13449,6 @@ Grant(
 ---------- Input ----------
 GRANT ALL PRIVILEGES ON * TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON  * TO USER 'test-grant'@'%'
----------- Pretty ---------
 GRANT ALL PRIVILEGES ON  * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
@@ -13839,8 +13472,6 @@ Grant(
 GRANT ALL PRIVILEGES ON * TO ROLE role3;
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON  * TO ROLE 'role3'
----------- Pretty ---------
-GRANT ALL PRIVILEGES ON  * TO ROLE 'role3'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -13859,8 +13490,6 @@ Grant(
 ---------- Input ----------
 GRANT ROLE test TO 'test-user';
 ---------- Output ---------
-GRANT ROLE 'test' TO USER 'test-user'@'%'
----------- Pretty ---------
 GRANT ROLE 'test' TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
@@ -13882,8 +13511,6 @@ Grant(
 GRANT ROLE test TO USER 'test-user';
 ---------- Output ---------
 GRANT ROLE 'test' TO USER 'test-user'@'%'
----------- Pretty ---------
-GRANT ROLE 'test' TO USER 'test-user'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -13904,8 +13531,6 @@ Grant(
 GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
 GRANT ROLE 'test' TO ROLE 'test-user'
----------- Pretty ---------
-GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -13922,8 +13547,6 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON  db01.* TO USER 'test-grant'@'%'
----------- Pretty ---------
 GRANT SELECT ON  db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
@@ -13952,8 +13575,6 @@ Grant(
 GRANT SELECT ON db01.* TO USER 'test-grant';
 ---------- Output ---------
 GRANT SELECT ON  db01.* TO USER 'test-grant'@'%'
----------- Pretty ---------
-GRANT SELECT ON  db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -13981,8 +13602,6 @@ Grant(
 GRANT SELECT ON db01.* TO ROLE role1
 ---------- Output ---------
 GRANT SELECT ON  db01.* TO ROLE 'role1'
----------- Pretty ---------
-GRANT SELECT ON  db01.* TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14006,8 +13625,6 @@ Grant(
 ---------- Input ----------
 GRANT SELECT ON db01.tb1 TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON  db01.tb1 TO USER 'test-grant'@'%'
----------- Pretty ---------
 GRANT SELECT ON  db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
@@ -14037,8 +13654,6 @@ Grant(
 GRANT SELECT ON db01.tb1 TO USER 'test-grant';
 ---------- Output ---------
 GRANT SELECT ON  db01.tb1 TO USER 'test-grant'@'%'
----------- Pretty ---------
-GRANT SELECT ON  db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14067,8 +13682,6 @@ Grant(
 GRANT SELECT ON db01.tb1 TO ROLE role1;
 ---------- Output ---------
 GRANT SELECT ON  db01.tb1 TO ROLE 'role1'
----------- Pretty ---------
-GRANT SELECT ON  db01.tb1 TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14094,8 +13707,6 @@ Grant(
 GRANT SELECT ON tb1 TO ROLE role1;
 ---------- Output ---------
 GRANT SELECT ON  tb1 TO ROLE 'role1'
----------- Pretty ---------
-GRANT SELECT ON  tb1 TO ROLE 'role1'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14118,8 +13729,6 @@ Grant(
 ---------- Input ----------
 GRANT ALL ON tb1 TO 'u1';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON  tb1 TO USER 'u1'@'%'
----------- Pretty ---------
 GRANT ALL PRIVILEGES ON  tb1 TO USER 'u1'@'%'
 ---------- AST ------------
 Grant(
@@ -14144,8 +13753,6 @@ Grant(
 SHOW GRANTS;
 ---------- Output ---------
 SHOW GRANTS 
----------- Pretty ---------
-SHOW GRANTS 
 ---------- AST ------------
 ShowGrants {
     principal: None,
@@ -14161,8 +13768,6 @@ ShowGrants {
 ---------- Input ----------
 SHOW GRANTS FOR 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'%' 
----------- Pretty ---------
 SHOW GRANTS FOR USER 'test-grant'@'%' 
 ---------- AST ------------
 ShowGrants {
@@ -14187,8 +13792,6 @@ ShowGrants {
 SHOW GRANTS FOR USER 'test-grant';
 ---------- Output ---------
 SHOW GRANTS FOR USER 'test-grant'@'%' 
----------- Pretty ---------
-SHOW GRANTS FOR USER 'test-grant'@'%' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -14212,8 +13815,6 @@ ShowGrants {
 SHOW GRANTS FOR ROLE role1;
 ---------- Output ---------
 SHOW GRANTS FOR ROLE 'role1' 
----------- Pretty ---------
-SHOW GRANTS FOR ROLE 'role1' 
 ---------- AST ------------
 ShowGrants {
     principal: Some(
@@ -14233,8 +13834,6 @@ ShowGrants {
 ---------- Input ----------
 SHOW GRANTS FOR ROLE 'role1';
 ---------- Output ---------
-SHOW GRANTS FOR ROLE 'role1' 
----------- Pretty ---------
 SHOW GRANTS FOR ROLE 'role1' 
 ---------- AST ------------
 ShowGrants {
@@ -14256,8 +13855,6 @@ ShowGrants {
 SHOW GRANTS ON TABLE t;
 ---------- Output ---------
 SHOW GRANTS ON TABLE t 
----------- Pretty ---------
-SHOW GRANTS ON TABLE t 
 ---------- AST ------------
 ShowObjectPrivileges(
     ShowObjectPrivilegesStmt {
@@ -14278,8 +13875,6 @@ ShowObjectPrivileges(
 ---------- Input ----------
 REVOKE SELECT, CREATE ON * FROM 'test-grant';
 ---------- Output ---------
-REVOKE SELECT, CREATE ON  * FROM USER 'test-grant'@'%'
----------- Pretty ---------
 REVOKE SELECT, CREATE ON  * FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
@@ -14307,8 +13902,6 @@ Revoke(
 REVOKE SELECT ON tb1 FROM ROLE role1;
 ---------- Output ---------
 REVOKE SELECT ON  tb1 FROM ROLE 'role1'
----------- Pretty ---------
-REVOKE SELECT ON  tb1 FROM ROLE 'role1'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -14331,8 +13924,6 @@ Revoke(
 ---------- Input ----------
 REVOKE SELECT ON tb1 FROM ROLE 'role1';
 ---------- Output ---------
-REVOKE SELECT ON  tb1 FROM ROLE 'role1'
----------- Pretty ---------
 REVOKE SELECT ON  tb1 FROM ROLE 'role1'
 ---------- AST ------------
 Revoke(
@@ -14357,8 +13948,6 @@ Revoke(
 drop role 'role1';
 ---------- Output ---------
 DROP ROLE 'role1'
----------- Pretty ---------
-DROP ROLE 'role1'
 ---------- AST ------------
 DropRole {
     if_exists: false,
@@ -14369,8 +13958,6 @@ DropRole {
 ---------- Input ----------
 GRANT ROLE test TO ROLE 'test-user';
 ---------- Output ---------
-GRANT ROLE 'test' TO ROLE 'test-user'
----------- Pretty ---------
 GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
@@ -14389,8 +13976,6 @@ Grant(
 GRANT ROLE test TO ROLE `test-user`;
 ---------- Output ---------
 GRANT ROLE 'test' TO ROLE 'test-user'
----------- Pretty ---------
-GRANT ROLE 'test' TO ROLE 'test-user'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -14408,8 +13993,6 @@ Grant(
 SET ROLE `test-user`;
 ---------- Output ---------
 SET ROLE 'test-user'
----------- Pretty ---------
-SET ROLE 'test-user'
 ---------- AST ------------
 SetRole {
     is_default: false,
@@ -14420,8 +14003,6 @@ SetRole {
 ---------- Input ----------
 SET ROLE 'test-user';
 ---------- Output ---------
-SET ROLE 'test-user'
----------- Pretty ---------
 SET ROLE 'test-user'
 ---------- AST ------------
 SetRole {
@@ -14434,8 +14015,6 @@ SetRole {
 SET ROLE ROLE1;
 ---------- Output ---------
 SET ROLE 'ROLE1'
----------- Pretty ---------
-SET ROLE 'ROLE1'
 ---------- AST ------------
 SetRole {
     is_default: false,
@@ -14446,8 +14025,6 @@ SetRole {
 ---------- Input ----------
 REVOKE ALL ON tb1 FROM 'u1';
 ---------- Output ---------
-REVOKE ALL PRIVILEGES ON  tb1 FROM USER 'u1'@'%'
----------- Pretty ---------
 REVOKE ALL PRIVILEGES ON  tb1 FROM USER 'u1'@'%'
 ---------- AST ------------
 Revoke(
@@ -14473,8 +14050,6 @@ COPY INTO mytable
     FROM '@~/mybucket/my data.csv'
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/my data.csv'  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 COPY INTO mytable FROM '@~/mybucket/my data.csv'  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
@@ -14534,8 +14109,6 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
@@ -14609,8 +14182,6 @@ COPY INTO mytable
     size_limit=10
     max_files=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
@@ -14692,8 +14263,6 @@ COPY INTO mytable
     size_limit=10
     max_files=3000;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
@@ -14778,8 +14347,6 @@ COPY INTO mytable
     size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14865,8 +14432,6 @@ COPY INTO mytable
     );
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14942,8 +14507,6 @@ COPY INTO mytable
     FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
 COPY INTO mytable FROM 'https://127.0.0.1:9900/'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -15003,8 +14566,6 @@ CopyIntoTable(
 COPY INTO mytable
     FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 COPY INTO mytable FROM 'https://127.0.0.1/'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
@@ -15073,8 +14634,6 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
@@ -15150,8 +14709,6 @@ COPY INTO 's3://mybucket/data.csv'
     )
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
----------- Pretty ---------
-COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -15216,8 +14773,6 @@ COPY INTO '@my_stage/my data'
     FROM mytable;
 ---------- Output ---------
 COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
----------- Pretty ---------
-COPY INTO '@my_stage/my data' FROM mytable SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -15266,8 +14821,6 @@ COPY INTO @my_stage
         skip_header = 1
     );
 ---------- Output ---------
-COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
----------- Pretty ---------
 COPY INTO '@my_stage' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
 ---------- AST ------------
 CopyIntoLocation(
@@ -15335,8 +14888,6 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
@@ -15421,8 +14972,6 @@ COPY INTO mytable
     size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -15494,8 +15043,6 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
@@ -15569,8 +15116,6 @@ COPY INTO mytable
     force=true;
 ---------- Output ---------
 COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -15643,8 +15188,6 @@ COPY INTO mytable
     size_limit=10
     disable_variant_check=true;
 ---------- Output ---------
-COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
@@ -15725,8 +15268,6 @@ COPY INTO books FROM 's3://databend/books.csv'
     FILE_FORMAT = (type = CSV);
 ---------- Output ---------
 COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
-COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -15795,8 +15336,6 @@ CopyIntoTable(
 CALL system$test(a)
 ---------- Output ---------
 CALL system$test('a')
----------- Pretty ---------
-CALL system$test('a')
 ---------- AST ------------
 Call(
     CallStmt {
@@ -15811,8 +15350,6 @@ Call(
 ---------- Input ----------
 CALL system$test('a')
 ---------- Output ---------
-CALL system$test('a')
----------- Pretty ---------
 CALL system$test('a')
 ---------- AST ------------
 Call(
@@ -15828,8 +15365,6 @@ Call(
 ---------- Input ----------
 show settings like 'enable%' limit 1
 ---------- Output ---------
-SHOW SETTINGS LIKE 'enable%' LIMIT 1
----------- Pretty ---------
 SHOW SETTINGS LIKE 'enable%' LIMIT 1
 ---------- AST ------------
 ShowSettings {
@@ -15851,8 +15386,6 @@ ShowSettings {
 ---------- Input ----------
 show settings where name='max_memory_usage' limit 1
 ---------- Output ---------
-SHOW SETTINGS WHERE name = 'max_memory_usage' LIMIT 1
----------- Pretty ---------
 SHOW SETTINGS WHERE name = 'max_memory_usage' LIMIT 1
 ---------- AST ------------
 ShowSettings {
@@ -15907,8 +15440,6 @@ ShowSettings {
 show functions like 'today%' limit 1
 ---------- Output ---------
 SHOW FUNCTIONS LIKE 'today%' LIMIT 1
----------- Pretty ---------
-SHOW FUNCTIONS LIKE 'today%' LIMIT 1
 ---------- AST ------------
 ShowFunctions {
     show_options: Some(
@@ -15929,8 +15460,6 @@ ShowFunctions {
 ---------- Input ----------
 show functions where name='to_day_of_year' limit 1
 ---------- Output ---------
-SHOW FUNCTIONS WHERE name = 'to_day_of_year' LIMIT 1
----------- Pretty ---------
 SHOW FUNCTIONS WHERE name = 'to_day_of_year' LIMIT 1
 ---------- AST ------------
 ShowFunctions {
@@ -15985,8 +15514,6 @@ ShowFunctions {
 show engines like 'FU%' limit 1
 ---------- Output ---------
 SHOW ENGINES LIKE 'FU%' LIMIT 1
----------- Pretty ---------
-SHOW ENGINES LIKE 'FU%' LIMIT 1
 ---------- AST ------------
 ShowEngines {
     show_options: Some(
@@ -16007,8 +15534,6 @@ ShowEngines {
 ---------- Input ----------
 show engines where engine='MEMORY' limit 1
 ---------- Output ---------
-SHOW ENGINES WHERE engine = 'MEMORY' LIMIT 1
----------- Pretty ---------
 SHOW ENGINES WHERE engine = 'MEMORY' LIMIT 1
 ---------- AST ------------
 ShowEngines {
@@ -16063,8 +15588,6 @@ ShowEngines {
 show metrics like '%parse%' limit 1
 ---------- Output ---------
 SHOW METRICS LIKE '%parse%' LIMIT 1
----------- Pretty ---------
-SHOW METRICS LIKE '%parse%' LIMIT 1
 ---------- AST ------------
 ShowMetrics {
     show_options: Some(
@@ -16085,8 +15608,6 @@ ShowMetrics {
 ---------- Input ----------
 show metrics where metric='session_connect_numbers' limit 1
 ---------- Output ---------
-SHOW METRICS WHERE metric = 'session_connect_numbers' LIMIT 1
----------- Pretty ---------
 SHOW METRICS WHERE metric = 'session_connect_numbers' LIMIT 1
 ---------- AST ------------
 ShowMetrics {
@@ -16141,8 +15662,6 @@ ShowMetrics {
 show table_functions like 'fuse%' limit 1
 ---------- Output ---------
 SHOW TABLE_FUNCTIONS LIKE 'fuse%' LIMIT 1
----------- Pretty ---------
-SHOW TABLE_FUNCTIONS LIKE 'fuse%' LIMIT 1
 ---------- AST ------------
 ShowTableFunctions {
     show_options: Some(
@@ -16163,8 +15682,6 @@ ShowTableFunctions {
 ---------- Input ----------
 show table_functions where name='fuse_snapshot' limit 1
 ---------- Output ---------
-SHOW TABLE_FUNCTIONS WHERE name = 'fuse_snapshot' LIMIT 1
----------- Pretty ---------
 SHOW TABLE_FUNCTIONS WHERE name = 'fuse_snapshot' LIMIT 1
 ---------- AST ------------
 ShowTableFunctions {
@@ -16219,8 +15736,6 @@ ShowTableFunctions {
 show indexes like 'test%' limit 1
 ---------- Output ---------
 SHOW INDEXES LIKE 'test%' LIMIT 1
----------- Pretty ---------
-SHOW INDEXES LIKE 'test%' LIMIT 1
 ---------- AST ------------
 ShowIndexes {
     show_options: Some(
@@ -16241,8 +15756,6 @@ ShowIndexes {
 ---------- Input ----------
 show indexes where name='test_idx' limit 1
 ---------- Output ---------
-SHOW INDEXES WHERE name = 'test_idx' LIMIT 1
----------- Pretty ---------
 SHOW INDEXES WHERE name = 'test_idx' LIMIT 1
 ---------- AST ------------
 ShowIndexes {
@@ -16297,8 +15810,6 @@ ShowIndexes {
 PRESIGN @my_stage
 ---------- Output ---------
 PRESIGN DOWNLOAD @my_stage EXPIRE = 3600
----------- Pretty ---------
-PRESIGN DOWNLOAD @my_stage EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -16315,8 +15826,6 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/path/to/dir/
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/path/to/dir/ EXPIRE = 3600
----------- Pretty ---------
 PRESIGN DOWNLOAD @my_stage/path/to/dir/ EXPIRE = 3600
 ---------- AST ------------
 Presign(
@@ -16335,8 +15844,6 @@ Presign(
 PRESIGN @my_stage/path/to/file
 ---------- Output ---------
 PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
----------- Pretty ---------
-PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -16353,8 +15860,6 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/my\ file.csv
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/my\ file.csv EXPIRE = 3600
----------- Pretty ---------
 PRESIGN DOWNLOAD @my_stage/my\ file.csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
@@ -16373,8 +15878,6 @@ Presign(
 PRESIGN @my_stage/\"file\".csv
 ---------- Output ---------
 PRESIGN DOWNLOAD @my_stage/\"file\".csv EXPIRE = 3600
----------- Pretty ---------
-PRESIGN DOWNLOAD @my_stage/\"file\".csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -16391,8 +15894,6 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/\'file\'.csv
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/\'file\'.csv EXPIRE = 3600
----------- Pretty ---------
 PRESIGN DOWNLOAD @my_stage/\'file\'.csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
@@ -16411,8 +15912,6 @@ Presign(
 PRESIGN @my_stage/\\file\\.csv
 ---------- Output ---------
 PRESIGN DOWNLOAD @my_stage/\\file\\.csv EXPIRE = 3600
----------- Pretty ---------
-PRESIGN DOWNLOAD @my_stage/\\file\\.csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -16429,8 +15928,6 @@ Presign(
 ---------- Input ----------
 PRESIGN DOWNLOAD @my_stage/path/to/file
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
----------- Pretty ---------
 PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
 ---------- AST ------------
 Presign(
@@ -16449,8 +15946,6 @@ Presign(
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200
 ---------- Output ---------
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200
----------- Pretty ---------
-PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -16467,8 +15962,6 @@ Presign(
 ---------- Input ----------
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'
 ---------- Output ---------
-PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
----------- Pretty ---------
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
 ---------- AST ------------
 Presign(
@@ -16489,8 +15982,6 @@ Presign(
 PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200
 ---------- Output ---------
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
----------- Pretty ---------
-PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
 ---------- AST ------------
 Presign(
     PresignStmt {
@@ -16509,8 +16000,6 @@ Presign(
 ---------- Input ----------
 GRANT all ON stage s1 TO a;
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON  STAGE s1 TO USER 'a'@'%'
----------- Pretty ---------
 GRANT ALL PRIVILEGES ON  STAGE s1 TO USER 'a'@'%'
 ---------- AST ------------
 Grant(
@@ -16533,8 +16022,6 @@ Grant(
 ---------- Input ----------
 GRANT read ON stage s1 TO a;
 ---------- Output ---------
-GRANT Read ON  STAGE s1 TO USER 'a'@'%'
----------- Pretty ---------
 GRANT Read ON  STAGE s1 TO USER 'a'@'%'
 ---------- AST ------------
 Grant(
@@ -16561,8 +16048,6 @@ Grant(
 GRANT write ON stage s1 TO a;
 ---------- Output ---------
 GRANT Write ON  STAGE s1 TO USER 'a'@'%'
----------- Pretty ---------
-GRANT Write ON  STAGE s1 TO USER 'a'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -16587,8 +16072,6 @@ Grant(
 ---------- Input ----------
 REVOKE write ON stage s1 FROM a;
 ---------- Output ---------
-REVOKE Write ON  STAGE s1 FROM USER 'a'@'%'
----------- Pretty ---------
 REVOKE Write ON  STAGE s1 FROM USER 'a'@'%'
 ---------- AST ------------
 Revoke(
@@ -16615,8 +16098,6 @@ Revoke(
 GRANT all ON UDF a TO 'test-grant';
 ---------- Output ---------
 GRANT USAGE ON  UDF a TO USER 'test-grant'@'%'
----------- Pretty ---------
-GRANT USAGE ON  UDF a TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -16641,8 +16122,6 @@ Grant(
 ---------- Input ----------
 GRANT usage ON UDF a TO 'test-grant';
 ---------- Output ---------
-GRANT USAGE ON  UDF a TO USER 'test-grant'@'%'
----------- Pretty ---------
 GRANT USAGE ON  UDF a TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
@@ -16669,8 +16148,6 @@ Grant(
 REVOKE usage ON UDF a FROM 'test-grant';
 ---------- Output ---------
 REVOKE USAGE ON  UDF a FROM USER 'test-grant'@'%'
----------- Pretty ---------
-REVOKE USAGE ON  UDF a FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -16695,8 +16172,6 @@ Revoke(
 ---------- Input ----------
 REVOKE all ON UDF a FROM 'test-grant';
 ---------- Output ---------
-REVOKE USAGE ON  UDF a FROM USER 'test-grant'@'%'
----------- Pretty ---------
 REVOKE USAGE ON  UDF a FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
@@ -16723,8 +16198,6 @@ Revoke(
 GRANT all ON warehouse a TO role 'test-grant';
 ---------- Output ---------
 GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
----------- Pretty ---------
-GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -16746,8 +16219,6 @@ Grant(
 ---------- Input ----------
 GRANT usage ON warehouse a TO role 'test-grant';
 ---------- Output ---------
-GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
----------- Pretty ---------
 GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
 ---------- AST ------------
 Grant(
@@ -16771,8 +16242,6 @@ Grant(
 REVOKE usage ON warehouse a FROM role 'test-grant';
 ---------- Output ---------
 REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
----------- Pretty ---------
-REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -16795,8 +16264,6 @@ Revoke(
 REVOKE all ON warehouse a FROM role 'test-grant';
 ---------- Output ---------
 REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
----------- Pretty ---------
-REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -16818,8 +16285,6 @@ Revoke(
 ---------- Input ----------
 SHOW GRANTS ON TABLE db1.tb1;
 ---------- Output ---------
-SHOW GRANTS ON TABLE db1.tb1 
----------- Pretty ---------
 SHOW GRANTS ON TABLE db1.tb1 
 ---------- AST ------------
 ShowObjectPrivileges(
@@ -16844,8 +16309,6 @@ ShowObjectPrivileges(
 SHOW GRANTS ON DATABASE db;
 ---------- Output ---------
 SHOW GRANTS ON DATABASE db 
----------- Pretty ---------
-SHOW GRANTS ON DATABASE db 
 ---------- AST ------------
 ShowObjectPrivileges(
     ShowObjectPrivilegesStmt {
@@ -16866,13 +16329,6 @@ ShowObjectPrivileges(
 UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;
 ---------- Output ---------
 UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
----------- Pretty ---------
-UPDATE
-    db1.tb1
-SET
-    a = a + 1, b = 2
-WHERE
-    c > 3
 ---------- AST ------------
 Update(
     UpdateStmt {
@@ -17014,8 +16470,6 @@ Update(
 select $abc + 3
 ---------- Output ---------
 SELECT getvariable('abc') + 3
----------- Pretty ---------
-SELECT getvariable('abc') + 3
 ---------- AST ------------
 Query(
     Query {
@@ -17099,8 +16553,6 @@ Query(
 select IDENTIFIER($abc)
 ---------- Output ---------
 SELECT IDENTIFIER($abc)
----------- Pretty ---------
-SELECT IDENTIFIER($abc)
 ---------- AST ------------
 Query(
     Query {
@@ -17160,8 +16612,6 @@ Query(
 SET max_threads = 10;
 ---------- Output ---------
 SET SESSION max_threads = 10
----------- Pretty ---------
-SET SESSION max_threads = 10
 ---------- AST ------------
 SetStmt {
     settings: Settings {
@@ -17195,8 +16645,6 @@ SetStmt {
 ---------- Input ----------
 SET max_threads = 10*2;
 ---------- Output ---------
-SET SESSION max_threads = 10 * 2
----------- Pretty ---------
 SET SESSION max_threads = 10 * 2
 ---------- AST ------------
 SetStmt {
@@ -17245,8 +16693,6 @@ SetStmt {
 ---------- Input ----------
 SET global (max_threads, max_memory_usage) = (10*2, 10*4);
 ---------- Output ---------
-SET GLOBAL (max_threads, max_memory_usage) = (10 * 2, 10 * 4)
----------- Pretty ---------
 SET GLOBAL (max_threads, max_memory_usage) = (10 * 2, 10 * 4)
 ---------- AST ------------
 SetStmt {
@@ -17326,8 +16772,6 @@ SetStmt {
 UNSET max_threads;
 ---------- Output ---------
 UNSET SESSION max_threads
----------- Pretty ---------
-UNSET SESSION max_threads
 ---------- AST ------------
 UnSetStmt {
     settings: Settings {
@@ -17351,8 +16795,6 @@ UnSetStmt {
 UNSET session max_threads;
 ---------- Output ---------
 UNSET SESSION max_threads
----------- Pretty ---------
-UNSET SESSION max_threads
 ---------- AST ------------
 UnSetStmt {
     settings: Settings {
@@ -17375,8 +16817,6 @@ UnSetStmt {
 ---------- Input ----------
 UNSET (max_threads, sql_dialect);
 ---------- Output ---------
-UNSET SESSION (max_threads, sql_dialect)
----------- Pretty ---------
 UNSET SESSION (max_threads, sql_dialect)
 ---------- AST ------------
 UnSetStmt {
@@ -17409,8 +16849,6 @@ UnSetStmt {
 UNSET session (max_threads, sql_dialect);
 ---------- Output ---------
 UNSET SESSION (max_threads, sql_dialect)
----------- Pretty ---------
-UNSET SESSION (max_threads, sql_dialect)
 ---------- AST ------------
 UnSetStmt {
     settings: Settings {
@@ -17441,8 +16879,6 @@ UnSetStmt {
 ---------- Input ----------
 SET variable a = 3
 ---------- Output ---------
-SET VARIABLE a = 3
----------- Pretty ---------
 SET VARIABLE a = 3
 ---------- AST ------------
 SetStmt {
@@ -17478,8 +16914,6 @@ SetStmt {
 show variables
 ---------- Output ---------
 SHOW VARIABLES 
----------- Pretty ---------
-SHOW VARIABLES 
 ---------- AST ------------
 ShowVariables {
     show_options: Some(
@@ -17494,8 +16928,6 @@ ShowVariables {
 ---------- Input ----------
 show variables like 'v%'
 ---------- Output ---------
-SHOW VARIABLES LIKE 'v%'
----------- Pretty ---------
 SHOW VARIABLES LIKE 'v%'
 ---------- AST ------------
 ShowVariables {
@@ -17515,8 +16947,6 @@ ShowVariables {
 ---------- Input ----------
 SET variable a = select 3
 ---------- Output ---------
-SET VARIABLE a = SELECT 3
----------- Pretty ---------
 SET VARIABLE a = SELECT 3
 ---------- AST ------------
 SetStmt {
@@ -17580,8 +17010,6 @@ SetStmt {
 ---------- Input ----------
 SET variable a = (select max(number) from numbers(10))
 ---------- Output ---------
-SET VARIABLE a = (SELECT max(number) FROM numbers(10))
----------- Pretty ---------
 SET VARIABLE a = (SELECT max(number) FROM numbers(10))
 ---------- AST ------------
 SetStmt {
@@ -17714,8 +17142,6 @@ SetStmt {
 select $1 FROM '@my_stage/my data/'
 ---------- Output ---------
 SELECT $1 FROM '@my_stage/my data/'
----------- Pretty ---------
-SELECT $1 FROM '@my_stage/my data/' ( )
 ---------- AST ------------
 Query(
     Query {
@@ -17792,10 +17218,6 @@ SELECT t.c1 FROM @stage1/dir/file
     ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;
 ---------- Output ---------
 SELECT t.c1 FROM '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'PARQUET', ) AS t
----------- Pretty ---------
-SELECT t.c1
-FROM
-    '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'PARQUET', ) AS t
 ---------- AST ------------
 Query(
     Query {
@@ -17902,12 +17324,6 @@ select table0.c1, table1.c2 from
     left join table1;
 ---------- Output ---------
 SELECT table0.c1, table1.c2 FROM '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'parquet', ) AS table0 LEFT OUTER JOIN table1
----------- Pretty ---------
-SELECT
-    table0.c1, table1.c2
-FROM
-    '@stage1/dir/file' ( FILES => ('file1', 'file2'), FILE_FORMAT => 'parquet', ) AS table0
-    LEFT OUTER JOIN table1
 ---------- AST ------------
 Query(
     Query {
@@ -18073,10 +17489,6 @@ Query(
 SELECT c1 FROM 's3://test/bucket' (PATTERN => '*.parquet', connection => (ENDPOINT_URL = 'xxx')) t;
 ---------- Output ---------
 SELECT c1 FROM 's3://test/bucket' ( PATTERN => '*.parquet', CONNECTION => (endpoint_url = 'xxx' ) ) AS t
----------- Pretty ---------
-SELECT c1
-FROM
-    's3://test/bucket' ( PATTERN => '*.parquet', CONNECTION => (endpoint_url = 'xxx' ) ) AS t
 ---------- AST ------------
 Query(
     Query {
@@ -18180,8 +17592,6 @@ CREATE FILE FORMAT my_csv
     type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
 ---------- Output ---------
 CREATE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
----------- Pretty ---------
-CREATE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
 ---------- AST ------------
 CreateFileFormat {
     create_option: Create,
@@ -18210,8 +17620,6 @@ CREATE OR REPLACE FILE FORMAT my_csv
     type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
 ---------- Output ---------
 CREATE OR REPLACE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
----------- Pretty ---------
-CREATE OR REPLACE FILE FORMAT my_csv field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV
 ---------- AST ------------
 CreateFileFormat {
     create_option: CreateOrReplace,
@@ -18239,8 +17647,6 @@ CreateFileFormat {
 SHOW FILE FORMATS
 ---------- Output ---------
 SHOW FILE FORMATS
----------- Pretty ---------
-SHOW FILE FORMATS
 ---------- AST ------------
 ShowFileFormats
 
@@ -18248,8 +17654,6 @@ ShowFileFormats
 ---------- Input ----------
 DROP FILE FORMAT my_csv
 ---------- Output ---------
-DROP FILE FORMAT my_csv
----------- Pretty ---------
 DROP FILE FORMAT my_csv
 ---------- AST ------------
 DropFileFormat {
@@ -18261,8 +17665,6 @@ DropFileFormat {
 ---------- Input ----------
 SELECT * FROM t GROUP BY all
 ---------- Output ---------
-SELECT * FROM t GROUP BY ALL
----------- Pretty ---------
 SELECT * FROM t GROUP BY ALL
 ---------- AST ------------
 Query(
@@ -18334,8 +17736,6 @@ Query(
 ---------- Input ----------
 SELECT * FROM t GROUP BY a, b, c, d
 ---------- Output ---------
-SELECT * FROM t GROUP BY a, b, c, d
----------- Pretty ---------
 SELECT * FROM t GROUP BY a, b, c, d
 ---------- AST ------------
 Query(
@@ -18487,8 +17887,6 @@ Query(
 SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)
 ---------- Output ---------
 SELECT * FROM t GROUP BY GROUPING SETS ((a), (b), (c), (d))
----------- Pretty ---------
-SELECT * FROM t GROUP BY GROUPING SETS ( (a), (b), (c), (d) )
 ---------- AST ------------
 Query(
     Query {
@@ -18647,8 +18045,6 @@ Query(
 SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))
 ---------- Output ---------
 SELECT * FROM t GROUP BY GROUPING SETS ((a), (b), (c, d))
----------- Pretty ---------
-SELECT * FROM t GROUP BY GROUPING SETS ( (a), (b), (c, d) )
 ---------- AST ------------
 Query(
     Query {
@@ -18805,8 +18201,6 @@ Query(
 SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))
 ---------- Output ---------
 SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))
----------- Pretty ---------
-SELECT * FROM t GROUP BY GROUPING SETS ( (a, b), (c), (d, e) )
 ---------- AST ------------
 Query(
     Query {
@@ -18982,8 +18376,6 @@ Query(
 SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))
 ---------- Output ---------
 SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))
----------- Pretty ---------
-SELECT * FROM t GROUP BY GROUPING SETS ( (a, b), (), (d, e) )
 ---------- AST ------------
 Query(
     Query {
@@ -19139,8 +18531,6 @@ Query(
 SELECT * FROM t GROUP BY CUBE (a, b, c)
 ---------- Output ---------
 SELECT * FROM t GROUP BY CUBE (a, b, c)
----------- Pretty ---------
-SELECT * FROM t GROUP BY CUBE ( a, b, c )
 ---------- AST ------------
 Query(
     Query {
@@ -19272,8 +18662,6 @@ Query(
 SELECT * FROM t GROUP BY ROLLUP (a, b, c)
 ---------- Output ---------
 SELECT * FROM t GROUP BY ROLLUP (a, b, c)
----------- Pretty ---------
-SELECT * FROM t GROUP BY ROLLUP ( a, b, c )
 ---------- AST ------------
 Query(
     Query {
@@ -19405,8 +18793,6 @@ Query(
 SELECT * FROM t GROUP BY a, ROLLUP (b, c)
 ---------- Output ---------
 SELECT * FROM t GROUP BY a, ROLLUP (b, c)
----------- Pretty ---------
-SELECT * FROM t GROUP BY  a, ROLLUP (b, c) 
 ---------- AST ------------
 Query(
     Query {
@@ -19546,8 +18932,6 @@ Query(
 SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)
 ---------- Output ---------
 SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)
----------- Pretty ---------
-SELECT * FROM t GROUP BY  GROUPING SETS ((a, b)), a, ROLLUP (b, c) 
 ---------- AST ------------
 Query(
     Query {
@@ -19731,8 +19115,6 @@ Query(
 CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
 ---------- Output ---------
 CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
----------- Pretty ---------
-CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
 ---------- AST ------------
 CreateDatamaskPolicy(
     CreateDatamaskPolicyStmt {
@@ -19832,8 +19214,6 @@ CreateDatamaskPolicy(
 ---------- Input ----------
 CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
 ---------- Output ---------
-CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
----------- Pretty ---------
 CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
 ---------- AST ------------
 CreateDatamaskPolicy(
@@ -19935,8 +19315,6 @@ CreateDatamaskPolicy(
 DESC MASKING POLICY email_mask
 ---------- Output ---------
 DESCRIBE MASKING POLICY email_mask
----------- Pretty ---------
-DESCRIBE MASKING POLICY email_mask
 ---------- AST ------------
 DescDatamaskPolicy(
     DescDatamaskPolicyStmt {
@@ -19948,8 +19326,6 @@ DescDatamaskPolicy(
 ---------- Input ----------
 DROP MASKING POLICY IF EXISTS email_mask
 ---------- Output ---------
-DROP MASKING POLICY IF EXISTS email_mask
----------- Pretty ---------
 DROP MASKING POLICY IF EXISTS email_mask
 ---------- AST ------------
 DropDatamaskPolicy(
@@ -19963,8 +19339,6 @@ DropDatamaskPolicy(
 ---------- Input ----------
 CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- Output ---------
-CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
----------- Pretty ---------
 CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
@@ -20088,8 +19462,6 @@ CreateVirtualColumn(
 CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- Output ---------
 CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
----------- Pretty ---------
-CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
@@ -20211,8 +19583,6 @@ CreateVirtualColumn(
 ---------- Input ----------
 ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- Output ---------
-ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
----------- Pretty ---------
 ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
 ---------- AST ------------
 AlterVirtualColumn(
@@ -20336,8 +19706,6 @@ AlterVirtualColumn(
 DROP VIRTUAL COLUMN FOR t
 ---------- Output ---------
 DROP VIRTUAL COLUMN FOR t
----------- Pretty ---------
-DROP VIRTUAL COLUMN FOR t
 ---------- AST ------------
 DropVirtualColumn(
     DropVirtualColumnStmt {
@@ -20360,8 +19728,6 @@ DropVirtualColumn(
 REFRESH VIRTUAL COLUMN FOR t
 ---------- Output ---------
 REFRESH VIRTUAL COLUMN FOR t
----------- Pretty ---------
-REFRESH VIRTUAL COLUMN FOR t
 ---------- AST ------------
 RefreshVirtualColumn(
     RefreshVirtualColumnStmt {
@@ -20382,8 +19748,6 @@ RefreshVirtualColumn(
 ---------- Input ----------
 CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
 ---------- Output ---------
-CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
----------- Pretty ---------
 CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
 ---------- AST ------------
 CreateNetworkPolicy(
@@ -20409,8 +19773,6 @@ CreateNetworkPolicy(
 CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'
 ---------- Output ---------
 CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
----------- Pretty ---------
-CREATE OR REPLACE NETWORK POLICY mypolicy ALLOWED_IP_LIST = ('192.168.10.0/24') BLOCKED_IP_LIST = ('192.168.10.99') COMMENT = 'test'
 ---------- AST ------------
 CreateNetworkPolicy(
     CreateNetworkPolicyStmt {
@@ -20434,8 +19796,6 @@ CreateNetworkPolicy(
 ---------- Input ----------
 ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'
 ---------- Output ---------
-ALTER NETWORK POLICY mypolicy SET  ALLOWED_IP_LIST = ('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST = ('192.168.1.99') COMMENT = 'test'
----------- Pretty ---------
 ALTER NETWORK POLICY mypolicy SET  ALLOWED_IP_LIST = ('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST = ('192.168.1.99') COMMENT = 'test'
 ---------- AST ------------
 AlterNetworkPolicy(
@@ -20470,8 +19830,6 @@ CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t
 AS
     SELECT * FROM t
 ---------- Output ---------
-CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t TARGET_LAG = 10 SECOND WAREHOUSE = 'MyWarehouse' REFRESH_MODE = FULL INITIALIZE = ON_CREATE comment = 'This is test dynamic table' AS SELECT * FROM t
----------- Pretty ---------
 CREATE OR REPLACE DYNAMIC TABLE db.MyDynamic LIKE t TARGET_LAG = 10 SECOND WAREHOUSE = 'MyWarehouse' REFRESH_MODE = FULL INITIALIZE = ON_CREATE comment = 'This is test dynamic table' AS SELECT * FROM t
 ---------- AST ------------
 CreateDynamicTable(
@@ -20599,8 +19957,6 @@ CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a int, b string)
 AS
     SELECT * FROM t
 ---------- Output ---------
-CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a Int32, b STRING) TARGET_LAG = 600 SECOND WAREHOUSE = 'MyWarehouse' REFRESH_MODE = INCREMENTAL INITIALIZE = ON_SCHEDULE comment = 'This is test dynamic table' AS SELECT * FROM t
----------- Pretty ---------
 CREATE DYNAMIC TABLE IF NOT EXISTS db.MyDynamic (a Int32, b STRING) TARGET_LAG = 600 SECOND WAREHOUSE = 'MyWarehouse' REFRESH_MODE = INCREMENTAL INITIALIZE = ON_SCHEDULE comment = 'This is test dynamic table' AS SELECT * FROM t
 ---------- AST ------------
 CreateDynamicTable(
@@ -20747,8 +20103,6 @@ CREATE DYNAMIC TABLE db.MyDynamic (a int, b string)
 AS
     SELECT c, d FROM t
 ---------- Output ---------
-CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
----------- Pretty ---------
 CREATE DYNAMIC TABLE db.MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 36000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE comment = 'This is test dynamic table' storage_format = 'native' AS SELECT c, d FROM t
 ---------- AST ------------
 CreateDynamicTable(
@@ -20950,8 +20304,6 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
----------- Pretty ---------
 CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = 864000 SECOND REFRESH_MODE = AUTO INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
@@ -21187,8 +20539,6 @@ CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a int, b string)
 AS
     SELECT avg(a), d FROM db.t GROUP BY d
 ---------- Output ---------
-CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
----------- Pretty ---------
 CREATE TRANSIENT DYNAMIC TABLE IF NOT EXISTS MyDynamic (a Int32, b STRING) CLUSTER BY LINEAR(a) TARGET_LAG = DOWNSTREAM REFRESH_MODE = INCREMENTAL INITIALIZE = ON_CREATE AS SELECT avg(a), d FROM db.t GROUP BY d
 ---------- AST ------------
 CreateDynamicTable(
@@ -21427,8 +20777,6 @@ CreateDynamicTable(
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENT = 'This is test task 1' DATABASE = 'target', TIMEZONE = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 900 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENTS = 'This is test task 1' database = 'target', timezone = 'America/Los Angeles' AS SELECT * FROM MyTable1
----------- Pretty ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 900 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 ERROR_INTEGRATION = 'notification_name' COMMENTS = 'This is test task 1' database = 'target', timezone = 'America/Los Angeles' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -21471,8 +20819,6 @@ CreateTask(
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
----------- Pretty ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -21509,8 +20855,6 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
----------- Pretty ---------
 CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENTS = 'This is test task 1' AS SELECT * FROM MyTable1
 ---------- AST ------------
 CreateTask(
@@ -21549,8 +20893,6 @@ CreateTask(
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
----------- Pretty ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -21586,8 +20928,6 @@ CreateTask(
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET)  PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET)  PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -21619,8 +20959,6 @@ CreateTask(
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
----------- Pretty ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET) SINGLE = false MAX_FILE_SIZE = 0 DETAILED_OUTPUT = false INCLUDE_QUERY_ID = true USE_RAW_PATH = false OVERWRITE = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -21651,8 +20989,6 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t 
----------- Pretty ---------
 CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t 
 ---------- AST ------------
 CreateTask(
@@ -21727,8 +21063,6 @@ CreateTask(
 CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS VACUUM TABLE t 
----------- Pretty ---------
-CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS VACUUM TABLE t 
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -21765,15 +21099,6 @@ CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los A
     commit;
     END
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS BEGIN
-BEGIN;
-INSERT INTO t VALUES ('a;');
-DELETE FROM t WHERE c = ';';
-VACUUM TABLE t ;
-MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
-COMMIT;
-END;
----------- Pretty ---------
 CREATE TASK IF NOT EXISTS MyTask1 database = 'target', timezone = 'America/Los Angeles' AS BEGIN
 BEGIN;
 INSERT INTO t VALUES ('a;');
@@ -21829,10 +21154,6 @@ END
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
 MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *;
 END;
----------- Pretty ---------
-CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
-MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT *;
-END;
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -21878,10 +21199,6 @@ END
 CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
 MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, "str");
 END;
----------- Pretty ---------
-CREATE TASK IF NOT EXISTS merge_task WAREHOUSE = 'test-parser' SCHEDULE = 1 SECOND AS BEGIN
-MERGE INTO t USING s ON t.c = s.c WHEN MATCHED THEN UPDATE * WHEN NOT MATCHED THEN INSERT VALUES('a;', 1, "str");
-END;
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -21917,8 +21234,6 @@ CreateTask(
 ALTER TASK MyTask1 RESUME
 ---------- Output ---------
 ALTER TASK MyTask1 RESUME
----------- Pretty ---------
-ALTER TASK MyTask1 RESUME
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -21933,8 +21248,6 @@ AlterTask(
 ALTER TASK MyTask1 SUSPEND
 ---------- Output ---------
 ALTER TASK MyTask1 SUSPEND
----------- Pretty ---------
-ALTER TASK MyTask1 SUSPEND
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -21948,8 +21261,6 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'
 ---------- Output ---------
-ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'
----------- Pretty ---------
 ALTER TASK MyTask1 ADD AFTER 'task2', 'task3'
 ---------- AST ------------
 AlterTask(
@@ -21970,8 +21281,6 @@ AlterTask(
 ALTER TASK MyTask1 REMOVE AFTER 'task2'
 ---------- Output ---------
 ALTER TASK MyTask1 REMOVE AFTER 'task2'
----------- Pretty ---------
-ALTER TASK MyTask1 REMOVE AFTER 'task2'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -21989,8 +21298,6 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron'
 ---------- Output ---------
-ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron'
----------- Pretty ---------
 ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron'
 ---------- AST ------------
 AlterTask(
@@ -22024,8 +21331,6 @@ AlterTask(
 ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 13 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- Output ---------
 ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = 780 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
----------- Pretty ---------
-ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = 780 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -22057,8 +21362,6 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- Output ---------
-ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
----------- Pretty ---------
 ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- AST ------------
 AlterTask(
@@ -22092,8 +21395,6 @@ AlterTask(
 ALTER TASK MyTask1 SET DATABASE='newDB', TIMEZONE='America/Los_Angeles'
 ---------- Output ---------
 ALTER TASK MyTask1 SET database = 'newDB', timezone = 'America/Los_Angeles'
----------- Pretty ---------
-ALTER TASK MyTask1 SET database = 'newDB', timezone = 'America/Los_Angeles'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -22120,8 +21421,6 @@ AlterTask(
 ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'
 ---------- Output ---------
 ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'
----------- Pretty ---------
-ALTER TASK MyTask1 SET ERROR_INTEGRATION = 'candidate_notifictaion'
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -22144,8 +21443,6 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()
 ---------- Output ---------
-ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()
----------- Pretty ---------
 ALTER TASK MyTask2 MODIFY AS SELECT CURRENT_VERSION()
 ---------- AST ------------
 AlterTask(
@@ -22180,15 +21477,6 @@ VACUUM TABLE t ;
 MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
 COMMIT;
 END;
----------- Pretty ---------
-ALTER TASK MyTask2 MODIFY AS BEGIN
-BEGIN;
-INSERT INTO t VALUES ('a;');
-DELETE FROM t WHERE c = ';';
-VACUUM TABLE t ;
-MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE *;
-COMMIT;
-END;
 ---------- AST ------------
 AlterTask(
     AlterTaskStmt {
@@ -22213,8 +21501,6 @@ AlterTask(
 ---------- Input ----------
 ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION'
 ---------- Output ---------
-ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION'
----------- Pretty ---------
 ALTER TASK MyTask1 MODIFY WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION'
 ---------- AST ------------
 AlterTask(
@@ -22274,8 +21560,6 @@ AlterTask(
 DROP TASK MyTask1
 ---------- Output ---------
 DROP TASK MyTask1
----------- Pretty ---------
-DROP TASK MyTask1
 ---------- AST ------------
 DropTask(
     DropTaskStmt {
@@ -22289,8 +21573,6 @@ DropTask(
 SHOW TASKS
 ---------- Output ---------
 SHOW TASKS
----------- Pretty ---------
-SHOW TASKS
 ---------- AST ------------
 ShowTasks(
     ShowTasksStmt {
@@ -22302,8 +21584,6 @@ ShowTasks(
 ---------- Input ----------
 EXECUTE TASK MyTask
 ---------- Output ---------
-EXECUTE TASK MyTask
----------- Pretty ---------
 EXECUTE TASK MyTask
 ---------- AST ------------
 ExecuteTask(
@@ -22317,8 +21597,6 @@ ExecuteTask(
 DESC TASK MyTask
 ---------- Output ---------
 DESCRIBE TASK MyTask
----------- Pretty ---------
-DESCRIBE TASK MyTask
 ---------- AST ------------
 DescribeTask(
     DescribeTaskStmt {
@@ -22330,8 +21608,6 @@ DescribeTask(
 ---------- Input ----------
 CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3'
 ---------- Output ---------
-CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = 's3'
----------- Pretty ---------
 CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = 's3'
 ---------- AST ------------
 CreateConnection(
@@ -22354,8 +21630,6 @@ CreateConnection(
 ---------- Input ----------
 CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE='s3' any_arg='any_value'
 ---------- Output ---------
-CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = 's3' any_arg = 'any_value'
----------- Pretty ---------
 CREATE CONNECTION IF NOT EXISTS my_conn STORAGE_TYPE = 's3' any_arg = 'any_value'
 ---------- AST ------------
 CreateConnection(
@@ -22381,8 +21655,6 @@ CreateConnection(
 CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE='s3' any_arg='any_value'
 ---------- Output ---------
 CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE = 's3' any_arg = 'any_value'
----------- Pretty ---------
-CREATE OR REPLACE CONNECTION my_conn STORAGE_TYPE = 's3' any_arg = 'any_value'
 ---------- AST ------------
 CreateConnection(
     CreateConnectionStmt {
@@ -22407,8 +21679,6 @@ CreateConnection(
 DROP CONNECTION IF EXISTS my_conn;
 ---------- Output ---------
 DROP CONNECTION IF EXISTS my_conn 
----------- Pretty ---------
-DROP CONNECTION IF EXISTS my_conn 
 ---------- AST ------------
 DropConnection(
     DropConnectionStmt {
@@ -22429,8 +21699,6 @@ DropConnection(
 DESC CONNECTION my_conn;
 ---------- Output ---------
 DESCRIBE CONNECTION my_conn 
----------- Pretty ---------
-DESCRIBE CONNECTION my_conn 
 ---------- AST ------------
 DescribeConnection(
     DescribeConnectionStmt {
@@ -22450,8 +21718,6 @@ DescribeConnection(
 SHOW CONNECTIONS;
 ---------- Output ---------
 SHOW CONNECTIONS
----------- Pretty ---------
-SHOW CONNECTIONS
 ---------- AST ------------
 ShowConnections(
     ShowConnectionsStmt,
@@ -22461,8 +21727,6 @@ ShowConnections(
 ---------- Input ----------
 SHOW LOCKS IN ACCOUNT
 ---------- Output ---------
-SHOW LOCKS IN ACCOUNT
----------- Pretty ---------
 SHOW LOCKS IN ACCOUNT
 ---------- AST ------------
 ShowLocks(
@@ -22476,8 +21740,6 @@ ShowLocks(
 ---------- Input ----------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
 ---------- Output ---------
-CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV')  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV')  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
@@ -22539,8 +21801,6 @@ CreatePipe(
 ---------- Input ----------
 CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv
 ---------- Output ---------
-CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
----------- Pretty ---------
 CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
@@ -22608,8 +21868,6 @@ CreatePipe(
 ALTER PIPE mypipe REFRESH
 ---------- Output ---------
 ALTER PIPE mypipe REFRESH
----------- Pretty ---------
-ALTER PIPE mypipe REFRESH
 ---------- AST ------------
 AlterPipe(
     AlterPipeStmt {
@@ -22626,8 +21884,6 @@ AlterPipe(
 ---------- Input ----------
 ALTER PIPE mypipe REFRESH PREFIX='d1/'
 ---------- Output ---------
-ALTER PIPE mypipe REFRESH PREFIX = 'd1/'
----------- Pretty ---------
 ALTER PIPE mypipe REFRESH PREFIX = 'd1/'
 ---------- AST ------------
 AlterPipe(
@@ -22647,8 +21903,6 @@ AlterPipe(
 ---------- Input ----------
 ALTER PIPE mypipe REFRESH PREFIX='d1/' MODIFIED_AFTER='2018-07-30T13:56:46-07:00'
 ---------- Output ---------
-ALTER PIPE mypipe REFRESH PREFIX = 'd1/' MODIFIED_AFTER = '2018-07-30T13:56:46-07:00'
----------- Pretty ---------
 ALTER PIPE mypipe REFRESH PREFIX = 'd1/' MODIFIED_AFTER = '2018-07-30T13:56:46-07:00'
 ---------- AST ------------
 AlterPipe(
@@ -22671,8 +21925,6 @@ AlterPipe(
 ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true
 ---------- Output ---------
 ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true
----------- Pretty ---------
-ALTER PIPE mypipe SET PIPE_EXECUTION_PAUSED = true
 ---------- AST ------------
 AlterPipe(
     AlterPipeStmt {
@@ -22692,8 +21944,6 @@ AlterPipe(
 DROP PIPE mypipe
 ---------- Output ---------
 DROP PIPE mypipe
----------- Pretty ---------
-DROP PIPE mypipe
 ---------- AST ------------
 DropPipe(
     DropPipeStmt {
@@ -22707,8 +21957,6 @@ DropPipe(
 DESC PIPE mypipe
 ---------- Output ---------
 DESCRIBE PIPE mypipe
----------- Pretty ---------
-DESCRIBE PIPE mypipe
 ---------- AST ------------
 DescribePipe(
     DescribePipeStmt {
@@ -22720,8 +21968,6 @@ DescribePipe(
 ---------- Input ----------
 CREATE NOTIFICATION INTEGRATION IF NOT EXISTS SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com', method = 'GET', authorization_header = 'bearer auth')
 ---------- Output ---------
-CREATE NOTIFICATION INTEGRATION IF NOT EXISTS SampleNotification TYPE = webhook ENABLED = true WEBHOOK = ( URL = 'https://example.com' METHOD = 'GET' AUTHORIZATION_HEADER = 'bearer auth' )
----------- Pretty ---------
 CREATE NOTIFICATION INTEGRATION IF NOT EXISTS SampleNotification TYPE = webhook ENABLED = true WEBHOOK = ( URL = 'https://example.com' METHOD = 'GET' AUTHORIZATION_HEADER = 'bearer auth' )
 ---------- AST ------------
 CreateNotification(
@@ -22752,8 +21998,6 @@ CreateNotification(
 CREATE NOTIFICATION INTEGRATION SampleNotification type = webhook enabled = true webhook = (url = 'https://example.com') COMMENT = 'notify'
 ---------- Output ---------
 CREATE NOTIFICATION INTEGRATION SampleNotification TYPE = webhook ENABLED = true WEBHOOK = ( URL = 'https://example.com' ) COMMENTS = 'notify'
----------- Pretty ---------
-CREATE NOTIFICATION INTEGRATION SampleNotification TYPE = webhook ENABLED = true WEBHOOK = ( URL = 'https://example.com' ) COMMENTS = 'notify'
 ---------- AST ------------
 CreateNotification(
     CreateNotificationStmt {
@@ -22781,8 +22025,6 @@ CreateNotification(
 ALTER NOTIFICATION INTEGRATION SampleNotification SET enabled = true
 ---------- Output ---------
 ALTER NOTIFICATION INTEGRATION SampleNotification SET ENABLED = true
----------- Pretty ---------
-ALTER NOTIFICATION INTEGRATION SampleNotification SET ENABLED = true
 ---------- AST ------------
 AlterNotification(
     AlterNotificationStmt {
@@ -22804,8 +22046,6 @@ AlterNotification(
 ---------- Input ----------
 ALTER NOTIFICATION INTEGRATION SampleNotification SET webhook = (url = 'https://example.com')
 ---------- Output ---------
-ALTER NOTIFICATION INTEGRATION SampleNotification SET  WEBHOOK = ( URL = 'https://example.com' )
----------- Pretty ---------
 ALTER NOTIFICATION INTEGRATION SampleNotification SET  WEBHOOK = ( URL = 'https://example.com' )
 ---------- AST ------------
 AlterNotification(
@@ -22835,8 +22075,6 @@ AlterNotification(
 ALTER NOTIFICATION INTEGRATION SampleNotification SET comment = '1'
 ---------- Output ---------
 ALTER NOTIFICATION INTEGRATION SampleNotification SET  COMMENTS = '1'
----------- Pretty ---------
-ALTER NOTIFICATION INTEGRATION SampleNotification SET  COMMENTS = '1'
 ---------- AST ------------
 AlterNotification(
     AlterNotificationStmt {
@@ -22859,8 +22097,6 @@ AlterNotification(
 DROP NOTIFICATION INTEGRATION SampleNotification
 ---------- Output ---------
 DROP NOTIFICATION INTEGRATION SampleNotification
----------- Pretty ---------
-DROP NOTIFICATION INTEGRATION SampleNotification
 ---------- AST ------------
 DropNotification(
     DropNotificationStmt {
@@ -22874,8 +22110,6 @@ DropNotification(
 DESC NOTIFICATION INTEGRATION SampleNotification
 ---------- Output ---------
 DESCRIBE NOTIFICATION INTEGRATION SampleNotification
----------- Pretty ---------
-DESCRIBE NOTIFICATION INTEGRATION SampleNotification
 ---------- AST ------------
 DescribeNotification(
     DescribeNotificationStmt {
@@ -22888,8 +22122,6 @@ DescribeNotification(
 --各环节转各环节转各环节转各环节转各
 select 34343
 ---------- Output ---------
-SELECT 34343
----------- Pretty ---------
 SELECT 34343
 ---------- AST ------------
 Query(
@@ -22940,8 +22172,6 @@ Query(
 select 34343
 ---------- Output ---------
 SELECT 34343
----------- Pretty ---------
-SELECT 34343
 ---------- AST ------------
 Query(
     Query {
@@ -22991,8 +22221,6 @@ Query(
 select 34343;
 ---------- Output ---------
 SELECT 34343
----------- Pretty ---------
-SELECT 34343
 ---------- AST ------------
 Query(
     Query {
@@ -23041,8 +22269,6 @@ Query(
 REMOVE @t;
 ---------- Output ---------
 REMOVE @t
----------- Pretty ---------
-REMOVE @t
 ---------- AST ------------
 RemoveStage {
     location: "t",
@@ -23053,8 +22279,6 @@ RemoveStage {
 ---------- Input ----------
 SELECT sum(d) OVER (w) FROM e;
 ---------- Output ---------
-SELECT sum(d) OVER (w) FROM e
----------- Pretty ---------
 SELECT sum(d) OVER (w) FROM e
 ---------- AST ------------
 Query(
@@ -23179,8 +22403,6 @@ Query(
 SELECT first_value(d) OVER (w) FROM e;
 ---------- Output ---------
 SELECT first_value(d) OVER (w) FROM e
----------- Pretty ---------
-SELECT first_value(d) OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -23303,8 +22525,6 @@ Query(
 ---------- Input ----------
 SELECT first_value(d) ignore nulls OVER (w) FROM e;
 ---------- Output ---------
-SELECT first_value(d) IGNORE NULLS OVER (w) FROM e
----------- Pretty ---------
 SELECT first_value(d) IGNORE NULLS OVER (w) FROM e
 ---------- AST ------------
 Query(
@@ -23431,8 +22651,6 @@ Query(
 SELECT first_value(d) respect nulls OVER (w) FROM e;
 ---------- Output ---------
 SELECT first_value(d) RESPECT NULLS OVER (w) FROM e
----------- Pretty ---------
-SELECT first_value(d) RESPECT NULLS OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -23558,8 +22776,6 @@ Query(
 SELECT sum(d) IGNORE NULLS OVER (w) FROM e;
 ---------- Output ---------
 SELECT sum(d) IGNORE NULLS OVER (w) FROM e
----------- Pretty ---------
-SELECT sum(d) IGNORE NULLS OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -23684,8 +22900,6 @@ Query(
 ---------- Input ----------
 SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);
 ---------- Output ---------
-SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g)
----------- Pretty ---------
 SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g)
 ---------- AST ------------
 Query(
@@ -23869,13 +23083,6 @@ SELECT number, rank() OVER ( PARTITION BY number % 3 ORDER BY number )
 FROM numbers(10) where number > 10 and number > 9 and number > 8;
 ---------- Output ---------
 SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number) FROM numbers(10) WHERE number > 10 AND number > 9 AND number > 8
----------- Pretty ---------
-SELECT
-    number, rank() OVER (PARTITION BY number % 3 ORDER BY number)
-FROM
-    numbers(10)
-WHERE
-    number > 10 AND number > 9 AND number > 8
 ---------- AST ------------
 Query(
     Query {
@@ -24168,8 +23375,6 @@ Query(
 GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';
 ---------- Output ---------
 GRANT OWNERSHIP ON  d20_0014.* TO ROLE 'd20_0015_owner'
----------- Pretty ---------
-GRANT OWNERSHIP ON  d20_0014.* TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -24193,8 +23398,6 @@ Grant(
 ---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';
 ---------- Output ---------
-GRANT OWNERSHIP ON  d20_0014.t TO ROLE 'd20_0015_owner'
----------- Pretty ---------
 GRANT OWNERSHIP ON  d20_0014.t TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
@@ -24221,8 +23424,6 @@ Grant(
 GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
 GRANT OWNERSHIP ON  STAGE s1 TO ROLE 'd20_0015_owner'
----------- Pretty ---------
-GRANT OWNERSHIP ON  STAGE s1 TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -24245,8 +23446,6 @@ Grant(
 GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
 GRANT OWNERSHIP ON  UDF f1 TO ROLE 'd20_0015_owner'
----------- Pretty ---------
-GRANT OWNERSHIP ON  UDF f1 TO ROLE 'd20_0015_owner'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -24268,8 +23467,6 @@ Grant(
 ---------- Input ----------
 attach table t 's3://a' connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')
 ---------- Output ---------
-ATTACH TABLE t 's3://a/' CONNECTION = ( access_key_id = 'x', endpoint_url = 'http://127.0.0.1:9900', secret_access_key = 'y' )
----------- Pretty ---------
 ATTACH TABLE t 's3://a/' CONNECTION = ( access_key_id = 'x', endpoint_url = 'http://127.0.0.1:9900', secret_access_key = 'y' )
 ---------- AST ------------
 AttachTable(
@@ -24304,8 +23501,6 @@ AttachTable(
 ---------- Input ----------
 CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));
 ---------- Output ---------
-CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> NOT is_null(p)
----------- Pretty ---------
 CREATE FUNCTION IF NOT EXISTS isnotempty AS (p) -> NOT is_null(p)
 ---------- AST ------------
 CreateUDF(
@@ -24385,8 +23580,6 @@ CreateUDF(
 ---------- Input ----------
 CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> NOT is_null(p) DESC = 'This is a description'
----------- Pretty ---------
 CREATE OR REPLACE FUNCTION isnotempty_test_replace AS (p) -> NOT is_null(p) DESC = 'This is a description'
 ---------- AST ------------
 CreateUDF(
@@ -24469,8 +23662,6 @@ CreateUDF(
 CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
 CREATE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
----------- Pretty ---------
-CREATE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -24501,8 +23692,6 @@ CreateUDF(
 ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
 ALTER FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
----------- Pretty ---------
-ALTER FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 AlterUDF(
     AlterUDFStmt {
@@ -24531,8 +23720,6 @@ AlterUDF(
 ---------- Input ----------
 CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
----------- Pretty ---------
 CREATE OR REPLACE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
@@ -24564,8 +23751,6 @@ CreateUDF(
 CREATE file format my_orc type = orc
 ---------- Output ---------
 CREATE FILE FORMAT my_orc type = orc
----------- Pretty ---------
-CREATE FILE FORMAT my_orc type = orc
 ---------- AST ------------
 CreateFileFormat {
     create_option: Create,
@@ -24583,8 +23768,6 @@ CreateFileFormat {
 ---------- Input ----------
 CREATE file format my_orc type = orc missing_field_as=field_default
 ---------- Output ---------
-CREATE FILE FORMAT my_orc missing_field_as = field_default, type = orc
----------- Pretty ---------
 CREATE FILE FORMAT my_orc missing_field_as = field_default, type = orc
 ---------- AST ------------
 CreateFileFormat {
@@ -24607,8 +23790,6 @@ CreateFileFormat {
 CREATE file format my_orc type = orc missing_field_as='field_default'
 ---------- Output ---------
 CREATE FILE FORMAT my_orc missing_field_as = 'field_default', type = orc
----------- Pretty ---------
-CREATE FILE FORMAT my_orc missing_field_as = 'field_default', type = orc
 ---------- AST ------------
 CreateFileFormat {
     create_option: Create,
@@ -24629,8 +23810,6 @@ CreateFileFormat {
 ---------- Input ----------
 CREATE STAGE s file_format=(record_delimiter='\n' escape='\\');
 ---------- Output ---------
-CREATE STAGE s FILE_FORMAT = (escape = '\\', record_delimiter = '\n')
----------- Pretty ---------
 CREATE STAGE s FILE_FORMAT = (escape = '\\', record_delimiter = '\n')
 ---------- AST ------------
 CreateStage(
@@ -24664,11 +23843,6 @@ def addone_py(i):
 return i+1
 $$;
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
-def addone_py(i):
-return i+1
-$$
----------- Pretty ---------
 CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
 def addone_py(i):
 return i+1
@@ -24710,10 +23884,6 @@ as '@data/abc/a.py';
 CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
 @data/abc/a.py
 $$
----------- Pretty ---------
-CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
-@data/abc/a.py
-$$
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -24745,8 +23915,6 @@ CreateUDF(
 DROP FUNCTION binary_reverse;
 ---------- Output ---------
 DROP FUNCTION binary_reverse
----------- Pretty ---------
-DROP FUNCTION binary_reverse
 ---------- AST ------------
 DropUDF {
     if_exists: false,
@@ -24765,8 +23933,6 @@ DropUDF {
 DROP FUNCTION isnotempty;
 ---------- Output ---------
 DROP FUNCTION isnotempty
----------- Pretty ---------
-DROP FUNCTION isnotempty
 ---------- AST ------------
 DropUDF {
     if_exists: false,
@@ -24784,8 +23950,6 @@ DropUDF {
 ---------- Input ----------
 CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
----------- Pretty ---------
 CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
@@ -24828,10 +23992,6 @@ CreateUDF(
 ---------- Input ----------
 CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
 ---------- Output ---------
-CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS $$
-some code
-$$
----------- Pretty ---------
 CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS $$
 some code
 $$
@@ -24893,10 +24053,6 @@ ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascri
 ALTER FUNCTION my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS $$
 some code
 $$
----------- Pretty ---------
-ALTER FUNCTION my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS $$
-some code
-$$
 ---------- AST ------------
 AlterUDF(
     AlterUDFStmt {
@@ -24952,14 +24108,6 @@ BEGIN
     END LOOP;
 END;
 $$
----------- Pretty ---------
-EXECUTE IMMEDIATE $$
-BEGIN
-    LOOP
-        RETURN 1;
-    END LOOP;
-END;
-$$
 ---------- AST ------------
 ExecuteImmediate(
     ExecuteImmediateStmt {
@@ -24981,18 +24129,6 @@ abc as (
 select * from abc;
 ---------- Output ---------
 WITH abc AS (SELECT id, uid, eid, match_id, created_at, updated_at FROM (SELECT * FROM ddd.ccc WHERE score > 0 LIMIT 10) QUALIFY row_number() OVER (PARTITION BY uid, eid ORDER BY updated_at DESC) = 1) SELECT * FROM abc
----------- Pretty ---------
-WITH
-    abc AS  (
-        SELECT
-            id, uid, eid, match_id, created_at, updated_at
-        FROM
-            (SELECT * FROM ddd.ccc WHERE score > 0 LIMIT 10)
-        QUALIFY row_number() OVER (PARTITION BY uid, eid ORDER BY updated_at DESC) = 1
-    )
-SELECT *
-FROM
-    abc
 ---------- AST ------------
 Query(
     Query {
@@ -25489,13 +24625,6 @@ SOURCE (mysql(host='localhost' username='root' password='1234'))
 COMMENT 'This is a comment';
 ---------- Output ---------
 CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary(user_name STRING, age Int16)PRIMARY KEY username SOURCE(mysql( host = 'localhost' password = '1234' username = 'root'))COMMENT 'This is a comment' 
----------- Pretty ---------
-CREATE OR REPLACE DICTIONARY my_catalog.my_database.my_dictionary(
-    user_name STRING, age Int16
-)
-PRIMARY KEY username SOURCE (
-    mysql( host = 'localhost'  password = '1234'  username = 'root')
-) COMMENT 'This is a comment'
 ---------- AST ------------
 CreateDictionary(
     CreateDictionaryStmt {
@@ -25590,8 +24719,6 @@ CreateDictionary(
 describe PROCEDURE p1()
 ---------- Output ---------
 DESCRIBE PROCEDURE p1()
----------- Pretty ---------
-DESCRIBE PROCEDURE p1()
 ---------- AST ------------
 DescProcedure(
     DescProcedureStmt {
@@ -25604,8 +24731,6 @@ DescProcedure(
 ---------- Input ----------
 describe PROCEDURE p1(string, timestamp)
 ---------- Output ---------
-DESCRIBE PROCEDURE p1(STRING, TIMESTAMP)
----------- Pretty ---------
 DESCRIBE PROCEDURE p1(STRING, TIMESTAMP)
 ---------- AST ------------
 DescProcedure(
@@ -25623,8 +24748,6 @@ DescProcedure(
 drop PROCEDURE p1()
 ---------- Output ---------
 DROP PROCEDURE p1()
----------- Pretty ---------
-DROP PROCEDURE p1()
 ---------- AST ------------
 DropProcedure(
     DropProcedureStmt {
@@ -25640,8 +24763,6 @@ DropProcedure(
 ---------- Input ----------
 drop PROCEDURE if exists p1()
 ---------- Output ---------
-DROP PROCEDURE IF EXISTS p1()
----------- Pretty ---------
 DROP PROCEDURE IF EXISTS p1()
 ---------- AST ------------
 DropProcedure(
@@ -25659,8 +24780,6 @@ DropProcedure(
 drop PROCEDURE p1(int, string)
 ---------- Output ---------
 DROP PROCEDURE p1(Int32,STRING)
----------- Pretty ---------
-DROP PROCEDURE p1(Int32,STRING)
 ---------- AST ------------
 DropProcedure(
     DropProcedureStmt {
@@ -25677,8 +24796,6 @@ DropProcedure(
 call PROCEDURE p1()
 ---------- Output ---------
 CALL PROCEDURE p1()
----------- Pretty ---------
-CALL PROCEDURE p1()
 ---------- AST ------------
 CallProcedure(
     CallProcedureStmt {
@@ -25691,8 +24808,6 @@ CallProcedure(
 ---------- Input ----------
 call PROCEDURE p1(1, 'x', '2022-02-02'::Date)
 ---------- Output ---------
-CALL PROCEDURE p1(1, 'x', '2022-02-02'::DATE)
----------- Pretty ---------
 CALL PROCEDURE p1(1, 'x', '2022-02-02'::DATE)
 ---------- AST ------------
 CallProcedure(
@@ -25739,8 +24854,6 @@ CallProcedure(
 show PROCEDURES like 'p1%'
 ---------- Output ---------
 SHOW PROCEDURES LIKE 'p1%'
----------- Pretty ---------
-SHOW PROCEDURES LIKE 'p1%'
 ---------- AST ------------
 ShowProcedures {
     show_options: Some(
@@ -25767,16 +24880,6 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE OR REPLACE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
-BEGIN
-    LET sum := 0;
-    FOR x IN SELECT * FROM numbers(100) DO
-        sum := sum + x.number;
-    END FOR;
-    RETURN sum;
-END;
-$$
----------- Pretty ---------
 CREATE OR REPLACE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
@@ -25832,16 +24935,6 @@ BEGIN
     RETURN sum;
 END;
 $$
----------- Pretty ---------
-CREATE PROCEDURE IF NOT EXISTS p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
-BEGIN
-    LET sum := 0;
-    FOR x IN SELECT * FROM numbers(100) DO
-        sum := sum + x.number;
-    END FOR;
-    RETURN sum;
-END;
-$$
 ---------- AST ------------
 CreateProcedure(
     CreateProcedureStmt {
@@ -25888,16 +24981,6 @@ BEGIN
     RETURN sum;
 END;
 $$
----------- Pretty ---------
-CREATE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
-BEGIN
-    LET sum := 0;
-    FOR x IN SELECT * FROM numbers(100) DO
-        sum := sum + x.number;
-    END FOR;
-    RETURN sum;
-END;
-$$
 ---------- AST ------------
 CreateProcedure(
     CreateProcedureStmt {
@@ -25935,16 +25018,6 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE p1(a Int32, b STRING) RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
-BEGIN
-    LET sum := 0;
-    FOR x IN SELECT * FROM numbers(100) DO
-        sum := sum + x.number;
-    END FOR;
-    RETURN sum;
-END;
-$$
----------- Pretty ---------
 CREATE PROCEDURE p1(a Int32, b STRING) RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
@@ -26006,16 +25079,6 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE p1() RETURNS TABLE(a STRING NOT NULL, b Int32 NULL) LANGUAGE SQL  COMMENT='test' AS $$
-BEGIN
-    LET sum := 0;
-    FOR x IN SELECT * FROM numbers(100) DO
-        sum := sum + x.number;
-    END FOR;
-    RETURN sum;
-END;
-$$
----------- Pretty ---------
 CREATE PROCEDURE p1() RETURNS TABLE(a STRING NOT NULL, b Int32 NULL) LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;

@@ -198,8 +198,8 @@ impl Display for CreateTableStmt {
         }
         match self.table_type {
             TableType::Normal => {}
-            TableType::Transient => write!(f, "TRANSIENT ")?,
-            TableType::Temporary => write!(f, "TEMPORARY ")?,
+            TableType::Transient => write!(f, " TRANSIENT ")?,
+            TableType::Temporary => write!(f, " TEMPORARY ")?,
         };
         write!(f, " TABLE")?;
         if let CreateOption::CreateIfNotExists = self.create_option {

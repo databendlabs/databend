@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::io::Write;
 
-use databend_common_ast::ast::pretty_statement;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::parser::expr::*;
@@ -206,6 +205,7 @@ fn test_statement() {
         r#"select * from a right semi join b on a.a = b.a;"#,
         r#"select * from a right anti join b on a.a = b.a;"#,
         r#"select * from a full outer join b on a.a = b.a;"#,
+        r#"select * FROM fuse_compat_table ignore_result;"#,
         r#"select * from a inner join b on a.a = b.a;"#,
         r#"select * from a left outer join b using(a);"#,
         r#"select * from a right outer join b using(a);"#,
@@ -292,6 +292,7 @@ fn test_statement() {
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON *.* TO 'test-grant';"#,
@@ -901,8 +902,6 @@ fn test_statement() {
         writeln!(file, "{}", src).unwrap();
         writeln!(file, "---------- Output ---------").unwrap();
         writeln!(file, "{}", stmt).unwrap();
-        writeln!(file, "---------- Pretty ---------").unwrap();
-        writeln!(file, "{}", pretty_statement(stmt.clone(), 80).unwrap()).unwrap();
         writeln!(file, "---------- AST ------------").unwrap();
         writeln!(file, "{:#?}", stmt).unwrap();
         writeln!(file, "\n").unwrap();
