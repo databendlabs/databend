@@ -157,7 +157,7 @@ pub enum AggrStateLoc {
     Custom(usize, usize), // index,offset
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct StatesLayout {
     pub layout: Layout,
     pub loc: Vec<Box<[AggrStateLoc]>>,
