@@ -104,7 +104,7 @@ pub fn register_to_decimal(registry: &mut FunctionRegistry) {
     });
 }
 
-pub(crate) fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegistry) {
+pub fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegistry) {
     let data_type = NumberType::<T>::data_type();
     debug_assert!(data_type.is_floating());
 
@@ -198,7 +198,7 @@ pub(crate) fn register_decimal_to_float<T: Number>(registry: &mut FunctionRegist
     });
 }
 
-pub(crate) fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
+pub fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
     if T::data_type().is_float() {
         return;
     }
@@ -265,7 +265,7 @@ pub(crate) fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry
     });
 }
 
-pub(crate) fn register_decimal_to_string(registry: &mut FunctionRegistry) {
+pub fn register_decimal_to_string(registry: &mut FunctionRegistry) {
     // decimal to string
     let factory = |_params: &[Scalar], args_type: &[DataType]| {
         if args_type.len() != 1 {
