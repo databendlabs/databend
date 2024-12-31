@@ -1183,10 +1183,8 @@ impl Binder {
                     ) \
                     SELECT \
                         * EXCLUDE(_hilbert_index) \
-                    FROM \
-                        _source_data \
-                    ORDER BY \
-                        _hilbert_index"
+                    FROM _source_data \
+                    ORDER BY _hilbert_index"
                 );
                 let tokens = tokenize_sql(query.as_str())?;
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;

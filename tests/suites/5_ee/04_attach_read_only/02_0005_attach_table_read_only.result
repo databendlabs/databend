@@ -42,7 +42,7 @@ Error: APIError: QueryFailed: [3905]Modification not permitted: Table 'attach_re
 alter table flashback not allowed
 Error: APIError: QueryFailed: [3905]Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 alter table recluster not allowed
-Error: APIError: QueryFailed: [3905]Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
+Error: APIError: QueryFailed: [1118]Unclustered table 'default.attach_read_only'
 analyze table not allowed
 Error: APIError: QueryFailed: [3905]Modification not permitted: Table 'attach_read_only' is READ ONLY, preventing any changes or updates.
 optimize table
