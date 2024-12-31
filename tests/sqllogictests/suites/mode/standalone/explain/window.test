@@ -189,7 +189,7 @@ Filter
 ├── filters: [t2.rank (#6) = 1, is_true(t2.k (#4) = 12)]
 ├── estimated rows: 0.00
 └── Window
-    ├── output columns: [k (#4), v (#5), rank() OVER ( ORDER BY v DESC) (#6)]
+    ├── output columns: [k (#4), v (#5), rank() OVER (ORDER BY v DESC) (#6)]
     ├── aggregate function: [rank]
     ├── partition by: []
     ├── order by: [v]
@@ -270,7 +270,7 @@ query T
 explain select b, row_number() over (order by b) from tbpush where b > 3;
 ----
 Window
-├── output columns: [tbpush.b (#0), row_number() OVER ( ORDER BY b) (#1)]
+├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
 ├── aggregate function: [row_number]
 ├── partition by: []
 ├── order by: [b]
@@ -324,11 +324,11 @@ query T
 explain select * from (select b, row_number() over (order by b) from tbpush) where b > 3;
 ----
 Filter
-├── output columns: [tbpush.b (#0), row_number() OVER ( ORDER BY b) (#1)]
+├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
 ├── filters: [is_true(tbpush.b (#0) > 3)]
 ├── estimated rows: 0.00
 └── Window
-    ├── output columns: [tbpush.b (#0), row_number() OVER ( ORDER BY b) (#1)]
+    ├── output columns: [tbpush.b (#0), row_number() OVER (ORDER BY b) (#1)]
     ├── aggregate function: [row_number]
     ├── partition by: []
     ├── order by: [b]
