@@ -24,6 +24,7 @@ use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrState;
+use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -196,17 +197,19 @@ pub fn simulate_two_groups_group_by(
 
     // init state for two groups
     let addr1 = arena.alloc_layout(func.state_layout()).into();
-    let state1 = AggrState::new(addr1);
+    let state1 = AggrState::new(addr1, 0);
     func.init_state(&state1);
     let addr2 = arena.alloc_layout(func.state_layout()).into();
-    let state2 = AggrState::new(addr2);
+    let state2 = AggrState::new(addr2, 0);
     func.init_state(&state2);
 
     let places = (0..rows)
         .map(|i| if i % 2 == 0 { addr1 } else { addr2 })
         .collect::<Vec<_>>();
 
-    func.accumulate_keys(&places, 0, columns.into(), rows)?;
+    let loc = vec![AggrStateLoc::Custom(0, 0)].into_boxed_slice();
+
+    func.accumulate_keys(&places, loc, columns.into(), rows)?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(&state1, &mut builder)?;

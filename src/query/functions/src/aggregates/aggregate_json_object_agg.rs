@@ -41,6 +41,7 @@ use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 
 pub trait BinaryScalarStateFunc<V: ValueType>:
@@ -235,7 +236,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -247,8 +248,7 @@ where
             for (k, (v, (valid, place))) in
                 key_column_iter.zip(val_column_iter.zip(validity.iter().zip(places.iter())))
             {
-                let addr = place.next(offset);
-                let state = addr.get::<State>();
+                let state = AggrState::with_loc(*place, loc.clone()).get::<State>();
                 if valid {
                     state.add(Some((k, v.clone())))?;
                 } else {
@@ -257,8 +257,7 @@ where
             }
         } else {
             for (k, (v, place)) in key_column_iter.zip(val_column_iter.zip(places.iter())) {
-                let addr = place.next(offset);
-                let state = addr.get::<State>();
+                let state = AggrState::with_loc(*place, loc.clone()).get::<State>();
                 state.add(Some((k, v.clone())))?;
             }
         }

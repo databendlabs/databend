@@ -40,6 +40,7 @@ use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_binary_arguments;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 
@@ -198,7 +199,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -207,8 +208,8 @@ where
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
             |((left_val, right_val), place)| {
-                let place = place.next(offset);
-                let state = place.get::<AggregateCovarianceState>();
+                let state =
+                    AggrState::with_loc(*place, loc.clone()).get::<AggregateCovarianceState>();
                 state.add(left_val.as_(), right_val.as_());
             },
         );

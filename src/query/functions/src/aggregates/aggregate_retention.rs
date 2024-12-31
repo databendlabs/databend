@@ -37,6 +37,7 @@ use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 struct AggregateRetentionState {
@@ -104,7 +105,7 @@ impl AggregateFunction for AggregateRetentionFunction {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -113,8 +114,7 @@ impl AggregateFunction for AggregateRetentionFunction {
             .map(|col| BooleanType::try_downcast_column(col).unwrap())
             .collect::<Vec<_>>();
         for (row, place) in places.iter().enumerate() {
-            let place = place.next(offset);
-            let state = place.get::<AggregateRetentionState>();
+            let state = AggrState::with_loc(*place, loc.clone()).get::<AggregateRetentionState>();
             for j in 0..self.events_size {
                 if new_columns[j as usize].get_bit(row) {
                     state.add(j);

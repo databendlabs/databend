@@ -33,6 +33,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 
 pub trait UnaryState<T, R>:
     Send + Sync + Default + borsh::BorshSerialize + borsh::BorshDeserialize
@@ -236,14 +237,14 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = T::try_downcast_column(&columns[0]).unwrap();
 
         for (i, place) in places.iter().enumerate() {
-            let state: &mut S = place.next(offset).get::<S>();
+            let state: &mut S = AggrState::with_loc(*place, loc.clone()).get::<S>();
             state.add(
                 T::index_column(&column, i).unwrap(),
                 self.function_data.as_deref(),
@@ -278,11 +279,11 @@ where
     fn batch_merge_result(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         for place in places {
-            let state: &mut S = place.next(offset).get::<S>();
+            let state: &mut S = AggrState::with_loc(*place, loc.clone()).get::<S>();
             self.do_merge_result(state, builder)?;
         }
         Ok(())

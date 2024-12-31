@@ -31,6 +31,7 @@ use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::aggregate_function_factory::CombinatorDescription;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddrs;
@@ -126,7 +127,7 @@ impl AggregateFunction for AggregateIfCombinator {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -138,7 +139,7 @@ impl AggregateFunction for AggregateIfCombinator {
 
         let new_places_slice = new_places.as_slice();
         self.nested
-            .accumulate_keys(new_places_slice, offset, (&columns).into(), row_size)
+            .accumulate_keys(new_places_slice, loc, (&columns).into(), row_size)
     }
 
     fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {

@@ -25,9 +25,10 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 
+use super::get_state_layout;
+use super::AggrState;
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
-use crate::aggregates::AggrState;
 
 pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
@@ -108,19 +109,27 @@ pub fn assert_variadic_arguments<D: Display>(
 }
 
 struct EvalAggr {
-    addr: AggrState,
+    state: AggrState,
     _arena: Bump,
     func: AggregateFunctionRef,
 }
 
 impl EvalAggr {
     fn new(func: AggregateFunctionRef) -> Self {
-        let _arena = Bump::new();
-        let place = _arena.alloc_layout(func.state_layout());
-        let addr = AggrState::new(place.into());
-        func.init_state(&addr);
+        let funcs = [func];
+        let state_layout = get_state_layout(&funcs).unwrap();
 
-        Self { _arena, func, addr }
+        let _arena = Bump::new();
+        let place = _arena.alloc_layout(state_layout.layout);
+        let state = AggrState::with_loc(place.into(), state_layout.loc[0].clone());
+
+        let [func] = funcs;
+        func.init_state(&state);
+        Self {
+            _arena,
+            func,
+            state,
+        }
     }
 }
 
@@ -129,7 +138,7 @@ impl Drop for EvalAggr {
         drop_guard(move || {
             if self.func.need_manual_drop_state() {
                 unsafe {
-                    self.func.drop_state(&self.addr);
+                    self.func.drop_state(&self.state);
                 }
             }
         })
@@ -149,9 +158,9 @@ pub fn eval_aggr(
     let data_type = func.return_type()?;
 
     let eval = EvalAggr::new(func.clone());
-    func.accumulate(&eval.addr, columns.into(), None, rows)?;
+    func.accumulate(&eval.state, columns.into(), None, rows)?;
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(&eval.addr, &mut builder)?;
+    func.merge_result(&eval.state, &mut builder)?;
     Ok((builder.build(), data_type))
 }
 

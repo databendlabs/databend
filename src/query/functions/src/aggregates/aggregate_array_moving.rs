@@ -57,6 +57,7 @@ use crate::aggregates::aggregate_sum::SumState;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::assert_variadic_params;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::BUILTIN_FUNCTIONS;
 
 #[derive(Default, Debug, BorshDeserialize, BorshSerialize)]
@@ -115,7 +116,11 @@ where
         Ok(())
     }
 
-    fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()> {
+    fn accumulate_keys(
+        places: &[StateAddr],
+        loc: Box<[AggrStateLoc]>,
+        columns: &Column,
+    ) -> Result<()> {
         let buffer = match columns {
             Column::Null { len } => Buffer::from(vec![T::default(); *len]),
             Column::Nullable(box nullable_column) => {
@@ -124,8 +129,7 @@ where
             _ => NumberType::<T>::try_downcast_column(columns).unwrap(),
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let place = place.next(offset);
-            let state = place.get::<Self>();
+            let state = AggrState::with_loc(*place, loc.clone()).get::<Self>();
             state.values.push(*c);
         });
         Ok(())
@@ -282,7 +286,11 @@ where T: Decimal
         Ok(())
     }
 
-    fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()> {
+    fn accumulate_keys(
+        places: &[StateAddr],
+        loc: Box<[AggrStateLoc]>,
+        columns: &Column,
+    ) -> Result<()> {
         let buffer = match columns {
             Column::Null { len } => Buffer::from(vec![T::default(); *len]),
             Column::Nullable(box nullable_column) => {
@@ -291,8 +299,7 @@ where T: Decimal
             _ => T::try_downcast_column(columns).unwrap().0,
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let place = place.next(offset);
-            let state = place.get::<Self>();
+            let state = AggrState::with_loc(*place, loc.clone()).get::<Self>();
             state.values.push(*c);
         });
         Ok(())
@@ -426,11 +433,11 @@ where State: SumState
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
-        State::accumulate_keys(places, offset, &columns[0])
+        State::accumulate_keys(places, loc.clone(), &columns[0])
     }
 
     fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
@@ -620,11 +627,11 @@ where State: SumState
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
-        State::accumulate_keys(places, offset, &columns[0])
+        State::accumulate_keys(places, loc.clone(), &columns[0])
     }
 
     fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {

@@ -28,6 +28,7 @@ use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::aggregate_function_factory::CombinatorDescription;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 
@@ -96,12 +97,12 @@ impl AggregateFunction for AggregateStateCombinator {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
         self.nested
-            .accumulate_keys(places, offset, columns, input_rows)
+            .accumulate_keys(places, loc.clone(), columns, input_rows)
     }
 
     fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {

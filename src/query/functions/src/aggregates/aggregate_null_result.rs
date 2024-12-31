@@ -27,6 +27,7 @@ use databend_common_expression::InputColumns;
 use super::aggregate_function::AggregateFunction;
 use super::StateAddr;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 
 #[derive(Clone)]
 pub struct AggregateNullResultFunction {
@@ -67,7 +68,7 @@ impl AggregateFunction for AggregateNullResultFunction {
     fn accumulate_keys(
         &self,
         _places: &[StateAddr],
-        _offset: usize,
+        _loc: Box<[AggrStateLoc]>,
         _columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {

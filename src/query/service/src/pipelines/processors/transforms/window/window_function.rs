@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
+use databend_common_expression::get_state_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::AggrState;
@@ -23,7 +24,6 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::InputColumns;
-use databend_common_functions::aggregates::get_layout_offsets;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_sql::executor::physical_plans::LagLeadDefault;
@@ -233,10 +233,12 @@ impl WindowFunctionImpl {
         Ok(match window {
             WindowFunctionInfo::Aggregate(agg, args) => {
                 let arena = Arena::new();
-                let mut state_offset = Vec::with_capacity(1);
-                let layout = get_layout_offsets(&[agg.clone()], &mut state_offset)?;
-                let place =
-                    AggrState::with_offset(arena.alloc_layout(layout).into(), state_offset[0]);
+
+                let state_layout = get_state_layout(&[agg.clone()])?;
+                let place = AggrState::with_loc(
+                    arena.alloc_layout(state_layout.layout).into(),
+                    state_layout.loc[0].clone(),
+                );
                 let agg = WindowFuncAggImpl {
                     _arena: arena,
                     agg,

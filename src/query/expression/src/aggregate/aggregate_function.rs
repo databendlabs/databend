@@ -18,10 +18,9 @@ use std::sync::Arc;
 
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
-use enum_as_inner::EnumAsInner;
 
+use super::AggrStateLoc;
 use super::StateAddr;
-use crate::types::binary::BinaryColumnBuilder;
 use crate::types::DataType;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -62,12 +61,12 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         for (row, place) in places.iter().enumerate() {
-            self.accumulate_row(&AggrState::with_offset(*place, offset), columns, row)?;
+            self.accumulate_row(&AggrState::with_loc(*place, loc.clone()), columns, row)?;
         }
         Ok(())
     }
@@ -75,21 +74,19 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // Used in aggregate_null_adaptor
     fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()>;
 
-    // serialize  the state into binary array
-    fn batch_serialize(
-        &self,
-        places: &[StateAddr],
-        offset: usize,
-        builder: &mut BinaryColumnBuilder,
-    ) -> Result<()> {
-        for place in places {
-            self.serialize(&AggrState::with_offset(*place, offset), &mut builder.data)?;
-            builder.commit_row();
-        }
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()>;
+
+    fn serialize_builder(&self, place: &AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        let idx = *place.loc[0].as_custom().unwrap().0;
+        let builder = builders[idx].as_binary_mut().unwrap();
+        let mut buffer = Vec::new();
+        self.serialize(place, &mut buffer)?;
+
+        builder.put(&buffer);
+        builder.commit_row();
+
         Ok(())
     }
-
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()>;
 
     fn serialize_size_per_row(&self) -> Option<usize> {
         None
@@ -98,17 +95,23 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()>;
 
     /// Batch merge and deserialize the state from binary array
-    fn batch_merge(&self, places: &[StateAddr], offset: usize, column: &Column) -> Result<()> {
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: Box<[AggrStateLoc]>,
+        column: &Column,
+    ) -> Result<()> {
         let c = column.as_binary().unwrap();
         for (place, mut data) in places.iter().zip(c.iter()) {
-            self.merge(&AggrState::with_offset(*place, offset), &mut data)?;
+            self.merge(&AggrState::with_loc(*place, loc.clone()), &mut data)?;
         }
 
         Ok(())
     }
 
-    fn batch_merge_single(&self, place: &AggrState, column: &Column) -> Result<()> {
-        let c = column.as_binary().unwrap();
+    fn batch_merge_single(&self, place: &AggrState, states: InputColumns) -> Result<()> {
+        let idx = *place.loc[0].as_custom().unwrap().0;
+        let c = states[idx].as_binary().unwrap();
 
         for mut data in c.iter() {
             self.merge(place, &mut data)?;
@@ -120,12 +123,12 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         places: &[StateAddr],
         rhses: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
     ) -> Result<()> {
         for (place, rhs) in places.iter().zip(rhses.iter()) {
             self.merge_states(
-                &AggrState::with_offset(*place, offset),
-                &AggrState::with_offset(*rhs, offset),
+                &AggrState::with_loc(*place, loc.clone()),
+                &AggrState::with_loc(*rhs, loc.clone()),
             )?;
         }
         Ok(())
@@ -136,11 +139,11 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn batch_merge_result(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         for place in places {
-            self.merge_result(&AggrState::with_offset(*place, offset), builder)?;
+            self.merge_result(&AggrState::with_loc(*place, loc.clone()), builder)?;
         }
         Ok(())
     }
@@ -176,52 +179,49 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AggrState {
     addr: StateAddr,
     loc: Box<[AggrStateLoc]>,
 }
 
 impl AggrState {
-    pub fn new(addr: StateAddr) -> Self {
+    pub fn new(addr: StateAddr, index: usize) -> Self {
         Self {
             addr,
-            loc: vec![AggrStateLoc::Custom(0)].into_boxed_slice(),
+            loc: vec![AggrStateLoc::Custom(index, 0)].into_boxed_slice(),
         }
     }
 
-    pub fn with_offset(addr: StateAddr, offset: usize) -> Self {
-        Self {
-            addr,
-            loc: vec![AggrStateLoc::Custom(offset)].into_boxed_slice(),
-        }
+    pub fn with_loc(addr: StateAddr, loc: Box<[AggrStateLoc]>) -> Self {
+        Self { addr, loc }
     }
 
     pub fn get<'a, T>(&self) -> &'a mut T {
         self.addr
-            .next(self.loc[0].into_custom().unwrap())
+            .next(self.loc[0].into_custom().unwrap().1)
             .get::<T>()
     }
 
     pub fn write<T, F>(&self, f: F)
     where F: FnOnce() -> T {
-        self.addr.next(self.loc[0].into_custom().unwrap()).write(f);
+        self.addr
+            .next(self.loc[0].into_custom().unwrap().1)
+            .write(f);
     }
 
     pub fn write_state<T>(&self, state: T) {
         self.addr
-            .next(self.loc[0].into_custom().unwrap())
+            .next(self.loc[0].into_custom().unwrap().1)
             .write_state(state);
     }
 
     pub fn next(&self, offset: usize) -> AggrState {
-        AggrState {
-            addr: self.addr,
-            loc: vec![AggrStateLoc::Custom(
-                self.loc[0].into_custom().unwrap() + offset,
-            )]
-            .into_boxed_slice(),
-        }
+        let (index, old) = self.loc[0].into_custom().unwrap();
+        Self::with_loc(
+            self.addr,
+            vec![AggrStateLoc::Custom(index, old + offset)].into_boxed_slice(),
+        )
     }
 }
 
@@ -256,10 +256,4 @@ impl Default for AggrStateRegister {
 pub enum AggrStateType {
     Bool,
     Custom(Layout),
-}
-
-#[derive(Debug, Clone, Copy, EnumAsInner)]
-pub enum AggrStateLoc {
-    Bool(usize),
-    Custom(usize),
 }

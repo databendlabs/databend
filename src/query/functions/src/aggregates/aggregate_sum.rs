@@ -36,6 +36,7 @@ use super::assert_unary_arguments;
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_unary::UnaryState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateUnaryFunction;
 
 pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 'static {
@@ -47,7 +48,11 @@ pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 
     fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()>;
 
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()>;
-    fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()>;
+    fn accumulate_keys(
+        places: &[StateAddr],
+        loc: Box<[AggrStateLoc]>,
+        columns: &Column,
+    ) -> Result<()>;
 
     fn merge_result(
         &mut self,

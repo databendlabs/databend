@@ -43,6 +43,7 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
@@ -347,14 +348,13 @@ where T: Number + AsPrimitive<f64>
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         column.iter().zip(places.iter()).for_each(|(v, place)| {
-            let addr = place.next(offset);
-            let state = addr.get::<QuantileTDigestState>();
+            let state = AggrState::with_loc(*place, loc.clone()).get::<QuantileTDigestState>();
             state.add(v.as_(), None)
         });
         Ok(())

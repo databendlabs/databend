@@ -26,6 +26,7 @@ use databend_common_io::prelude::BinaryWrite;
 
 use crate::aggregates::aggregate_function_factory::AggregateFunctionFeatures;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
@@ -134,12 +135,12 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
         self.inner
-            .accumulate_keys(places, offset, columns, input_rows)?;
+            .accumulate_keys(places, loc.clone(), columns, input_rows)?;
         let if_cond = self.inner.get_if_condition(columns);
 
         match if_cond {
@@ -151,13 +152,13 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
                 for (&addr, valid) in places.iter().zip(v.iter()) {
                     if valid {
-                        self.set_flag(&AggrState::with_offset(addr, offset), 1);
+                        self.set_flag(&AggrState::with_loc(addr, loc.clone()), 1);
                     }
                 }
             }
             _ => {
                 for &addr in places {
-                    self.set_flag(&AggrState::with_offset(addr, offset), 1);
+                    self.set_flag(&AggrState::with_loc(addr, loc.clone()), 1);
                 }
             }
         }

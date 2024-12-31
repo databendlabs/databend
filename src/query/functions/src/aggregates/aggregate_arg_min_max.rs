@@ -43,6 +43,7 @@ use super::AggregateFunctionRef;
 use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::with_compare_mapped_type;
 use crate::with_simple_no_number_mapped_type;
@@ -241,7 +242,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -251,10 +252,9 @@ where
 
         val_col_iter
             .enumerate()
-            .zip(places.iter())
-            .for_each(|((row, val), place)| {
-                let addr = place.next(offset);
-                let state = addr.get::<State>();
+            .zip(places.iter().cloned())
+            .for_each(|((row, val), addr)| {
+                let state = AggrState::with_loc(addr, loc.clone()).get::<State>();
                 if state.change(&val) {
                     state.update(val, A::index_column(&arg_col, row).unwrap())
                 }

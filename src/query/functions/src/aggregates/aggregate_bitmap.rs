@@ -46,6 +46,7 @@ use crate::aggregates::assert_arguments;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::assert_variadic_params;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::with_simple_no_number_mapped_type;
 use crate::BUILTIN_FUNCTIONS;
@@ -262,15 +263,14 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
 
-        for (data, place) in column.iter().zip(places.iter()) {
-            let addr = place.next(offset);
-            let state = addr.get::<BitmapAggState>();
+        for (data, addr) in column.iter().zip(places.iter().cloned()) {
+            let state = AggrState::with_loc(addr, loc.clone()).get::<BitmapAggState>();
             let rb = deserialize_bitmap(data)?;
             state.add::<OP>(rb);
         }
@@ -460,7 +460,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -473,7 +473,7 @@ where
 
         let input = [column];
         self.inner
-            .accumulate_keys(new_places_slice, offset, input.as_slice().into(), row_size)
+            .accumulate_keys(new_places_slice, loc, input.as_slice().into(), row_size)
     }
 
     fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {

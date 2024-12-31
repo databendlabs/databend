@@ -42,6 +42,7 @@ use crate::aggregates::aggregate_quantile_tdigest::QUANTILE;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::assert_params;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
@@ -126,7 +127,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -137,8 +138,7 @@ where
             .zip(weighted.iter())
             .zip(places.iter())
             .for_each(|((value, weight), place)| {
-                let addr = place.next(offset);
-                let state = addr.get::<QuantileTDigestState>();
+                let state = AggrState::with_loc(*place, loc.clone()).get::<QuantileTDigestState>();
                 state.add(value.as_(), Some(weight.as_()))
             });
         Ok(())

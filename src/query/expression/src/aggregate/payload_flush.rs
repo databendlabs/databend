@@ -128,42 +128,36 @@ impl Payload {
     }
 
     pub fn aggregate_flush(&self, state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
-        if self.flush(state) {
-            let row_count = state.row_count;
-
-            let mut state_builders: Vec<BinaryColumnBuilder> = self
-                .aggrs
-                .iter()
-                .map(|_| BinaryColumnBuilder::with_capacity(row_count, row_count * 4))
-                .collect();
-
-            for place in state.state_places.as_slice()[0..row_count].iter() {
-                for (idx, (addr_offset, aggr)) in self
-                    .state_addr_offsets
-                    .iter()
-                    .zip(self.aggrs.iter())
-                    .enumerate()
-                {
-                    aggr.serialize(
-                        &AggrState::with_offset(*place, *addr_offset),
-                        &mut state_builders[idx].data,
-                    )
-                    .unwrap();
-                    state_builders[idx].commit_row();
-                }
-            }
-
-            let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
-            for builder in state_builders.into_iter() {
-                let col = Column::Binary(builder.build());
-                cols.push(col);
-            }
-
-            cols.extend_from_slice(&state.take_group_columns());
-            return Ok(Some(DataBlock::new_from_columns(cols)));
+        if !self.flush(state) {
+            return Ok(None);
         }
 
-        Ok(None)
+        let row_count = state.row_count;
+
+        let state_layout = self.states_layout.as_ref().unwrap();
+
+        let mut state_builders = state_layout.serialize_builders(row_count);
+
+        for place in state.state_places.as_slice()[0..row_count].iter() {
+            for (loc, func) in state_layout.loc.iter().zip(self.aggrs.iter()) {
+                {
+                    func.serialize_builder(
+                        &AggrState::with_loc(*place, loc.clone()),
+                        &mut state_builders,
+                    )
+                    .unwrap();
+                }
+            }
+        }
+
+        let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
+        for builder in state_builders.into_iter() {
+            let col = builder.build();
+            cols.push(col);
+        }
+
+        cols.extend_from_slice(&state.take_group_columns());
+        Ok(Some(DataBlock::new_from_columns(cols)))
     }
 
     pub fn group_by_flush_all(&self) -> Result<DataBlock> {

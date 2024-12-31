@@ -25,6 +25,7 @@ use databend_common_expression::InputColumns;
 use databend_common_io::prelude::BinaryWrite;
 
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
@@ -139,7 +140,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
@@ -159,7 +160,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
                 }
                 for (valid, (row, addr)) in v.iter().zip(places.iter().copied().enumerate()) {
                     if valid {
-                        let place = AggrState::with_offset(addr, offset);
+                        let place = AggrState::with_loc(addr, loc.clone());
                         self.set_flag(&place, 1);
                         self.nested.accumulate_row(&place, not_null_columns, row)?;
                     }
@@ -167,11 +168,11 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
             }
             _ => {
                 self.nested
-                    .accumulate_keys(places, offset, not_null_columns, input_rows)?;
+                    .accumulate_keys(places, loc.clone(), not_null_columns, input_rows)?;
                 places
                     .iter()
                     .copied()
-                    .map(|addr| AggrState::with_offset(addr, offset))
+                    .map(|addr| AggrState::with_loc(addr, loc.clone()))
                     .for_each(|place| self.set_flag(&place, 1));
             }
         }

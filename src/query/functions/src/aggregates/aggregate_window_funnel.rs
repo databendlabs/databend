@@ -52,6 +52,7 @@ use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_params;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::BUILTIN_FUNCTIONS;
 
@@ -236,7 +237,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -249,7 +250,8 @@ where
         let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
 
         for ((row, timestamp), place) in T::iter_column(&tcolumn).enumerate().zip(places.iter()) {
-            let state = (place.next(offset)).get::<AggregateWindowFunnelState<T::Scalar>>();
+            let state = AggrState::with_loc(*place, loc.clone())
+                .get::<AggregateWindowFunnelState<T::Scalar>>();
             let timestamp = T::to_owned_scalar(timestamp);
             for (i, filter) in dcolumns.iter().enumerate() {
                 if filter.get_bit(row) {

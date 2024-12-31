@@ -34,6 +34,7 @@ use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
@@ -97,15 +98,14 @@ impl AggregateFunction for AggregateStringAggFunction {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
         let column_iter = StringType::iter_column(&column);
         column_iter.zip(places.iter()).for_each(|(v, place)| {
-            let addr = place.next(offset);
-            let state = addr.get::<StringAggState>();
+            let state = AggrState::with_loc(*place, loc.clone()).get::<StringAggState>();
             state.values.push_str(v);
             state.values.push_str(&self.delimiter);
         });
