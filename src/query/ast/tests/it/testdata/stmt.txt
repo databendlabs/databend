@@ -23079,7 +23079,7 @@ Query(
 
 
 ---------- Input ----------
-SELECT number, rank() OVER ( PARTITION BY number % 3 ORDER BY number )
+SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number)
 FROM numbers(10) where number > 10 and number > 9 and number > 8;
 ---------- Output ---------
 SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number) FROM numbers(10) WHERE number > 10 AND number > 9 AND number > 8
@@ -23087,13 +23087,13 @@ SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number) FROM number
 Query(
     Query {
         span: Some(
-            0..135,
+            0..133,
         ),
         with: None,
         body: Select(
             SelectStmt {
                 span: Some(
-                    0..135,
+                    0..133,
                 ),
                 hints: None,
                 distinct: false,
@@ -23124,7 +23124,7 @@ Query(
                     AliasedExpr {
                         expr: FunctionCall {
                             span: Some(
-                                15..70,
+                                15..68,
                             ),
                             func: FunctionCall {
                                 distinct: false,
@@ -23147,12 +23147,12 @@ Query(
                                                 partition_by: [
                                                     BinaryOp {
                                                         span: Some(
-                                                            49..50,
+                                                            48..49,
                                                         ),
                                                         op: Modulo,
                                                         left: ColumnRef {
                                                             span: Some(
-                                                                42..48,
+                                                                41..47,
                                                             ),
                                                             column: ColumnRef {
                                                                 database: None,
@@ -23160,7 +23160,7 @@ Query(
                                                                 column: Name(
                                                                     Identifier {
                                                                         span: Some(
-                                                                            42..48,
+                                                                            41..47,
                                                                         ),
                                                                         name: "number",
                                                                         quote: None,
@@ -23171,7 +23171,7 @@ Query(
                                                         },
                                                         right: Literal {
                                                             span: Some(
-                                                                51..52,
+                                                                50..51,
                                                             ),
                                                             value: UInt64(
                                                                 3,
@@ -23183,7 +23183,7 @@ Query(
                                                     OrderByExpr {
                                                         expr: ColumnRef {
                                                             span: Some(
-                                                                62..68,
+                                                                61..67,
                                                             ),
                                                             column: ColumnRef {
                                                                 database: None,
@@ -23191,7 +23191,7 @@ Query(
                                                                 column: Name(
                                                                     Identifier {
                                                                         span: Some(
-                                                                            62..68,
+                                                                            61..67,
                                                                         ),
                                                                         name: "number",
                                                                         quote: None,
@@ -23218,12 +23218,12 @@ Query(
                 from: [
                     TableFunction {
                         span: Some(
-                            76..87,
+                            74..85,
                         ),
                         lateral: false,
                         name: Identifier {
                             span: Some(
-                                76..83,
+                                74..81,
                             ),
                             name: "numbers",
                             quote: None,
@@ -23232,7 +23232,7 @@ Query(
                         params: [
                             Literal {
                                 span: Some(
-                                    84..86,
+                                    82..84,
                                 ),
                                 value: UInt64(
                                     10,
@@ -23247,22 +23247,22 @@ Query(
                 selection: Some(
                     BinaryOp {
                         span: Some(
-                            121..124,
+                            119..122,
                         ),
                         op: And,
                         left: BinaryOp {
                             span: Some(
-                                106..109,
+                                104..107,
                             ),
                             op: And,
                             left: BinaryOp {
                                 span: Some(
-                                    101..102,
+                                    99..100,
                                 ),
                                 op: Gt,
                                 left: ColumnRef {
                                     span: Some(
-                                        94..100,
+                                        92..98,
                                     ),
                                     column: ColumnRef {
                                         database: None,
@@ -23270,7 +23270,7 @@ Query(
                                         column: Name(
                                             Identifier {
                                                 span: Some(
-                                                    94..100,
+                                                    92..98,
                                                 ),
                                                 name: "number",
                                                 quote: None,
@@ -23281,7 +23281,7 @@ Query(
                                 },
                                 right: Literal {
                                     span: Some(
-                                        103..105,
+                                        101..103,
                                     ),
                                     value: UInt64(
                                         10,
@@ -23290,12 +23290,12 @@ Query(
                             },
                             right: BinaryOp {
                                 span: Some(
-                                    117..118,
+                                    115..116,
                                 ),
                                 op: Gt,
                                 left: ColumnRef {
                                     span: Some(
-                                        110..116,
+                                        108..114,
                                     ),
                                     column: ColumnRef {
                                         database: None,
@@ -23303,7 +23303,7 @@ Query(
                                         column: Name(
                                             Identifier {
                                                 span: Some(
-                                                    110..116,
+                                                    108..114,
                                                 ),
                                                 name: "number",
                                                 quote: None,
@@ -23314,7 +23314,7 @@ Query(
                                 },
                                 right: Literal {
                                     span: Some(
-                                        119..120,
+                                        117..118,
                                     ),
                                     value: UInt64(
                                         9,
@@ -23324,12 +23324,12 @@ Query(
                         },
                         right: BinaryOp {
                             span: Some(
-                                132..133,
+                                130..131,
                             ),
                             op: Gt,
                             left: ColumnRef {
                                 span: Some(
-                                    125..131,
+                                    123..129,
                                 ),
                                 column: ColumnRef {
                                     database: None,
@@ -23337,7 +23337,7 @@ Query(
                                     column: Name(
                                         Identifier {
                                             span: Some(
-                                                125..131,
+                                                123..129,
                                             ),
                                             name: "number",
                                             quote: None,
@@ -23348,7 +23348,7 @@ Query(
                             },
                             right: Literal {
                                 span: Some(
-                                    134..135,
+                                    132..133,
                                 ),
                                 value: UInt64(
                                     8,
