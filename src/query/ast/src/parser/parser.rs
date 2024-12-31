@@ -154,7 +154,7 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
     let new_sql = stmt.to_string();
 
     for (index, s) in [new_sql, pretty_sql].iter().enumerate() {
-        let new_tokens = crate::parser::tokenize_sql(&s).unwrap();
+        let new_tokens = crate::parser::tokenize_sql(s).unwrap();
         let new_stmt = run_parser(
             &new_tokens,
             Dialect::PostgreSQL,
