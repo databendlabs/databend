@@ -1868,10 +1868,10 @@ impl ExprReplacer {
                             self.replace_expr(expr);
                         }
                         SelectTarget::StarColumns { column_filter, .. } => {
-                            if let Some(column_filter) = column_filter
-                                && let ColumnFilter::Lambda(lambda) = column_filter
-                            {
-                                self.replace_expr(&mut lambda.expr);
+                            if let Some(column_filter) = column_filter {
+                                if let ColumnFilter::Lambda(lambda) = column_filter {
+                                    self.replace_expr(&mut lambda.expr);
+                                }
                             }
                         }
                     }
@@ -2006,10 +2006,10 @@ impl ExprReplacer {
                 }
             }
             Expr::CountAll { window, .. } => {
-                if let Some(window) = window
-                    && let Window::WindowSpec(window_spec) = window
-                {
-                    self.replace_window_spec(window_spec);
+                if let Some(window) = window {
+                    if let Window::WindowSpec(window_spec) = window {
+                        self.replace_window_spec(window_spec);
+                    }
                 }
             }
             Expr::Tuple { exprs, .. } => {
@@ -2024,10 +2024,10 @@ impl ExprReplacer {
                 for param in func.params.iter_mut() {
                     self.replace_expr(param);
                 }
-                if let Some(window_desc) = &mut func.window
-                    && let Window::WindowSpec(window_spec) = &mut window_desc.window
-                {
-                    self.replace_window_spec(window_spec);
+                if let Some(window_desc) = &mut func.window {
+                    if let Window::WindowSpec(window_spec) = &mut window_desc.window {
+                        self.replace_window_spec(window_spec);
+                    }
                 }
                 if let Some(lambda) = &mut func.lambda {
                     self.replace_expr(&mut lambda.expr);
