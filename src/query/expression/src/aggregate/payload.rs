@@ -412,11 +412,11 @@ impl Drop for Payload {
                 return;
             }
 
-            for (aggr, loc) in self
-                .aggrs
-                .iter()
-                .zip(self.states_layout.as_ref().unwrap().loc.iter().cloned())
-            {
+            let Some(states_layout) = self.states_layout.as_ref() else {
+                return;
+            };
+
+            for (aggr, loc) in self.aggrs.iter().zip(states_layout.loc.iter().cloned()) {
                 if !aggr.need_manual_drop_state() {
                     continue;
                 }

@@ -134,26 +134,22 @@ impl Payload {
 
         let row_count = state.row_count;
 
-        let state_layout = self.states_layout.as_ref().unwrap();
+        let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
+        if let Some(state_layout) = self.states_layout.as_ref() {
+            let mut state_builders = state_layout.serialize_builders(row_count);
 
-        let mut state_builders = state_layout.serialize_builders(row_count);
-
-        for place in state.state_places.as_slice()[0..row_count].iter() {
-            for (loc, func) in state_layout.loc.iter().zip(self.aggrs.iter()) {
-                {
-                    func.serialize_builder(
-                        &AggrState::with_loc(*place, loc.clone()),
-                        &mut state_builders,
-                    )
-                    .unwrap();
+            for place in state.state_places.as_slice()[0..row_count].iter() {
+                for (loc, func) in state_layout.loc.iter().zip(self.aggrs.iter()) {
+                    {
+                        func.serialize_builder(
+                            &AggrState::with_loc(*place, loc.to_owned()),
+                            &mut state_builders,
+                        )?;
+                    }
                 }
             }
-        }
 
-        let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
-        for builder in state_builders.into_iter() {
-            let col = builder.build();
-            cols.push(col);
+            cols.extend(state_builders.into_iter().map(|builder| builder.build()));
         }
 
         cols.extend_from_slice(&state.take_group_columns());
