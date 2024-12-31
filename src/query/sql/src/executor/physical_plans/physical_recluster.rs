@@ -17,7 +17,6 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
@@ -31,8 +30,9 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MutationKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::ColumnSet;
-use crate::optimizer::SExpr;
+use crate::plans::set_update_stream_columns;
+use crate::plans::Plan;
+use crate::Planner;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Recluster {
@@ -51,9 +51,7 @@ pub struct HilbertSerialize {
 impl PhysicalPlanBuilder {
     pub async fn build_recluster(
         &mut self,
-        s_expr: &SExpr,
         recluster: &crate::plans::Recluster,
-        required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         let crate::plans::Recluster {
             catalog,
@@ -61,23 +59,17 @@ impl PhysicalPlanBuilder {
             table,
             filters,
             limit,
-            cluster_type,
-            ..
+            hilbert_stmt,
         } = recluster;
 
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(catalog).await?;
-        let tbl = catalog.get_table(&tenant, database, table).await?;
-        // check mutability
-        tbl.check_mutable()?;
+        let tbl = self.ctx.get_table(catalog, database, table).await?;
         let push_downs = filters.clone().map(|v| PushDownInfo {
             filters: Some(v),
             ..PushDownInfo::default()
         });
         let table_info = tbl.get_table_info().clone();
-
-        let mut plan = match cluster_type {
-            ClusterType::Hilbert => {
+        let mut plan = match hilbert_stmt {
+            Some(stmt) => {
                 let handler = get_hilbert_clustering_handler();
                 let Some((recluster_info, snapshot)) = handler
                     .do_hilbert_clustering(tbl.clone(), self.ctx.clone(), push_downs)
@@ -87,7 +79,23 @@ impl PhysicalPlanBuilder {
                         "No need to do recluster for '{database}'.'{table}'"
                     )));
                 };
-                let plan = self.build(s_expr.child(0)?, required).await?;
+
+                let mut planner = Planner::new(self.ctx.clone());
+                let plan = planner.plan_stmt(stmt).await?;
+                let (mut s_expr, metadata, bind_context) = match plan {
+                    Plan::Query {
+                        s_expr,
+                        metadata,
+                        bind_context,
+                        ..
+                    } => (s_expr, metadata, bind_context),
+                    v => unreachable!("Input plan must be Query, but it's {}", v),
+                };
+                self.set_metadata(metadata);
+                if tbl.change_tracking_enabled() {
+                    *s_expr = set_update_stream_columns(&s_expr)?;
+                }
+                let plan = self.build(&s_expr, bind_context.column_set()).await?;
 
                 let plan = PhysicalPlan::HilbertSerialize(Box::new(HilbertSerialize {
                     plan_id: 0,
@@ -106,7 +114,7 @@ impl PhysicalPlanBuilder {
                     recluster_info: Some(recluster_info),
                 }))
             }
-            ClusterType::Linear => {
+            None => {
                 let Some((parts, snapshot)) =
                     tbl.recluster(self.ctx.clone(), push_downs, *limit).await?
                 else {

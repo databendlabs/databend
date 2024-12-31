@@ -1158,6 +1158,13 @@ impl DefaultSettings {
                     scope: SettingScope::Session,
                     range: None,
                 }),
+                ("hilbert_num_range_ids", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Specifies the domain of range IDs in Hilbert clustering. A larger value provides finer granularity, but may incur a performance cost.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=65535)),
+                }),
                 ("hilbert_sample_size_per_block", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Specifies the number of sample points per block used in Hilbert clustering.",

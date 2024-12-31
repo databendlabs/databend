@@ -63,6 +63,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::CompactionLimits;
+use databend_common_catalog::table::TableExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -1080,6 +1081,8 @@ impl Binder {
         is_final: bool,
     ) -> Result<Plan> {
         let tbl = self.ctx.get_table(&catalog, &database, &table).await?;
+        // check mutability
+        tbl.check_mutable()?;
         let Some(cluster_type) = tbl.cluster_type() else {
             return Err(ErrorCode::UnclusteredTable(format!(
                 "Unclustered table '{}.{}'",
@@ -1117,60 +1120,44 @@ impl Binder {
             None
         };
 
-        let s_expr = match cluster_type {
-            ClusterType::Linear => {
-                let recluster = RelOperator::Recluster(Recluster {
-                    catalog,
-                    database,
-                    table,
-                    limit,
-                    filters,
-                    cluster_type: ClusterType::Linear,
-                    metadata: self.metadata.clone(),
-                    bind_context: Default::default(),
-                });
-                SExpr::create_leaf(Arc::new(recluster))
-            }
-            ClusterType::Hilbert => {
-                LicenseManagerSwitch::instance().check_enterprise_enabled(
-                    self.ctx.get_license_key(),
-                    Feature::HilbertClustering,
-                )?;
-                let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
-                let cluster_keys_len = ast_exprs.len();
-                let settings = self.ctx.get_settings();
-                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-                let cluster_key_strs = ast_exprs.into_iter().fold(
-                    Vec::with_capacity(cluster_keys_len),
-                    |mut acc, mut ast| {
-                        let mut normalizer = IdentifierNormalizer {
-                            ctx: &name_resolution_ctx,
-                        };
-                        ast.drive_mut(&mut normalizer);
-                        acc.push(format!("{:#}", &ast));
-                        acc
-                    },
-                );
+        let hilbert_stmt = if matches!(cluster_type, ClusterType::Hilbert) {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
+            let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
+            let cluster_keys_len = ast_exprs.len();
+            let settings = self.ctx.get_settings();
+            let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+            let cluster_key_strs = ast_exprs.into_iter().fold(
+                Vec::with_capacity(cluster_keys_len),
+                |mut acc, mut ast| {
+                    let mut normalizer = IdentifierNormalizer {
+                        ctx: &name_resolution_ctx,
+                    };
+                    ast.drive_mut(&mut normalizer);
+                    acc.push(format!("{:#}", &ast));
+                    acc
+                },
+            );
 
-                let partitions = settings.get_hilbert_num_range_ids()?;
-                let sample_size = settings.get_hilbert_sample_size_per_block()?;
-                let keys_bounds_str = cluster_key_strs
-                    .iter()
-                    .map(|s| format!("range_bound({partitions}, {sample_size})({s}) AS {s}_bound"))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let hilbert_keys_str = cluster_key_strs
-                    .iter()
-                    .map(|s| {
-                        format!(
-                            "hilbert_key(cast(ifnull(range_partition_id({table}.{s}, _keys_bound.{s}_bound), {}) as uint16))",
-                            partitions - 1
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let query = format!(
-                    "WITH _keys_bound AS ( \
+            let partitions = settings.get_hilbert_num_range_ids()?;
+            let sample_size = settings.get_hilbert_sample_size_per_block()?;
+            let keys_bounds_str = cluster_key_strs
+                .iter()
+                .map(|s| format!("range_bound({partitions}, {sample_size})({s}) AS {s}_bound"))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let hilbert_keys_str = cluster_key_strs
+                .iter()
+                .map(|s| {
+                    format!(
+                        "hilbert_key(cast(ifnull(range_partition_id({table}.{s}, _keys_bound.{s}_bound), {}) as uint16))",
+                        partitions
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let query = format!(
+                "WITH _keys_bound AS ( \
                         SELECT \
                             {keys_bounds_str} \
                         FROM {database}.{table} \
@@ -1185,35 +1172,25 @@ impl Binder {
                         * EXCLUDE(_hilbert_index) \
                     FROM _source_data \
                     ORDER BY _hilbert_index"
-                );
-                let tokens = tokenize_sql(query.as_str())?;
-                let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                let Statement::Query(query) = &stmt else {
-                    unreachable!()
-                };
-                let mut bind_context = BindContext::new();
-                let (mut s_expr, new_bind_context) = self.bind_query(&mut bind_context, query)?;
-                if tbl.change_tracking_enabled() {
-                    s_expr = set_update_stream_columns(&s_expr)?;
-                }
-                SExpr::create_unary(
-                    Arc::new(RelOperator::Recluster(Recluster {
-                        catalog,
-                        database,
-                        table,
-                        limit,
-                        filters,
-                        cluster_type: ClusterType::Hilbert,
-                        metadata: self.metadata.clone(),
-                        bind_context: Box::new(new_bind_context),
-                    })),
-                    Arc::new(s_expr),
-                )
-            }
+            );
+            let tokens = tokenize_sql(query.as_str())?;
+            let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+            Some(stmt)
+        } else {
+            None
         };
 
+        let recluster = RelOperator::Recluster(Recluster {
+            catalog,
+            database,
+            table,
+            limit,
+            filters,
+            hilbert_stmt,
+        });
+
         Ok(Plan::ReclusterTable {
-            s_expr: Box::new(s_expr),
+            s_expr: Box::new(SExpr::create_leaf(Arc::new(recluster))),
             is_final,
         })
     }
@@ -1857,24 +1834,6 @@ impl Binder {
             .get_settings()
             .get_ddl_column_type_nullable()
             .unwrap_or(true)
-    }
-}
-
-fn set_update_stream_columns(s_expr: &SExpr) -> Result<SExpr> {
-    match s_expr.plan() {
-        RelOperator::Scan(scan) if scan.table_index == 0 => {
-            let mut scan = scan.clone();
-            scan.set_update_stream_columns(true);
-            Ok(SExpr::create_leaf(Arc::new(scan.into())))
-        }
-        _ => {
-            let mut children = Vec::with_capacity(s_expr.arity());
-            for child in s_expr.children() {
-                let child = set_update_stream_columns(child)?;
-                children.push(Arc::new(child));
-            }
-            Ok(s_expr.replace_children(children))
-        }
     }
 }
 

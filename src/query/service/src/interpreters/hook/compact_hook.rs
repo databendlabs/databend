@@ -197,15 +197,19 @@ async fn compact_table(
         // do recluster.
         if let Some(cluster_type) = table.cluster_type() {
             if cluster_type == ClusterType::Linear {
+                // evict the table from cache
+                ctx.evict_table_from_cache(
+                    &compact_target.catalog,
+                    &compact_target.database,
+                    &compact_target.table,
+                )?;
                 let recluster = RelOperator::Recluster(Recluster {
                     catalog: compact_target.catalog,
                     database: compact_target.database,
                     table: compact_target.table,
-                    filters: None,
                     limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
-                    cluster_type: ClusterType::Linear,
-                    metadata: Default::default(),
-                    bind_context: Default::default(),
+                    filters: None,
+                    hilbert_stmt: None,
                 });
                 let s_expr = SExpr::create_leaf(Arc::new(recluster));
                 let recluster_interpreter =
@@ -213,7 +217,7 @@ async fn compact_table(
                 // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
                 // we do not need to use `PipelineCompleteExecutor` to execute it.
                 let build_res = recluster_interpreter.execute2().await?;
-                assert!(build_res.main_pipeline.is_empty());
+                debug_assert!(build_res.main_pipeline.is_empty());
             }
         }
     }
