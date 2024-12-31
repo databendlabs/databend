@@ -27,6 +27,7 @@ use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -53,7 +54,11 @@ impl RealFailSafeHandler {}
 
 #[async_trait::async_trait]
 impl FailSafeHandler for RealFailSafeHandler {
-    async fn recover_table_data(&self, table_info: TableInfo) -> Result<()> {
+    async fn recover_table_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        table_info: TableInfo,
+    ) -> Result<()> {
         let storage_params = match &table_info.meta.storage_params {
             // External or attached table.
             Some(sp) => sp.clone(),
@@ -66,7 +71,7 @@ impl FailSafeHandler for RealFailSafeHandler {
 
         let fuse_table = FuseTable::do_create(table_info)?;
 
-        let amender = Amender::try_new(storage_params).await?;
+        let amender = Amender::try_new(ctx, storage_params).await?;
 
         amender.recover_snapshot(fuse_table).await?;
 
@@ -90,7 +95,7 @@ struct Amender {
 }
 
 impl Amender {
-    async fn try_new(storage_param: StorageParams) -> Result<Self> {
+    async fn try_new(ctx: Arc<dyn TableContext>, storage_param: StorageParams) -> Result<Self> {
         // TODO
         // - replace client with opendal operator
         // - supports other storage types
@@ -120,11 +125,20 @@ impl Amender {
                 .connect_timeout(Duration::from_secs(3))
                 .build();
 
-            let tls_connector = hyper_tls::native_tls::TlsConnector::builder()
-                .danger_accept_invalid_certs(true)
-                .danger_accept_invalid_hostnames(true)
-                .build()
-                .unwrap_or_else(|e| panic!("error while creating TLS connector: {}", e));
+            let tls_connector = {
+                let mut builder = hyper_tls::native_tls::TlsConnector::builder();
+                let allow_invalid_cert = ctx
+                    .get_settings()
+                    .get_premise_deploy_danger_amend_accept_invalid_cert()?;
+                if allow_invalid_cert {
+                    info!("allows invalid cert, and accepts invalid hostnames in cert validation");
+                    builder.danger_accept_invalid_certs(true);
+                    builder.danger_accept_invalid_hostnames(true);
+                };
+                builder
+                    .build()
+                    .unwrap_or_else(|e| panic!("error while creating TLS connector: {}", e))
+            };
 
             let mut http = hyper_v014::client::HttpConnector::new_with_resolver(DNSService {});
             // also allows http connection
@@ -148,8 +162,11 @@ impl Amender {
                 .load()
                 .await;
 
+            let force_path_style = ctx
+                .get_settings()
+                .get_premise_deploy_amend_force_path_style()?;
             let sdk_config = aws_sdk_s3::config::Builder::from(&config)
-                .force_path_style(true)
+                .force_path_style(force_path_style)
                 .build();
 
             let root = s3_config.root;

@@ -4671,6 +4671,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "databend-common-base",
+ "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
 ]
