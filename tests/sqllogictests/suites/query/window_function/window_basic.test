@@ -798,7 +798,7 @@ with results_rollup AS
   (
          select sum(number) gross_margin, 2 as lochierarchy   from numbers(1000000) group by number % 4
    )
-SELECT gross_margin, rank() OVER ( PARTITION BY lochierarchy
+SELECT gross_margin, rank() OVER (PARTITION BY lochierarchy
                     ORDER BY gross_margin ASC) AS rank_within_parent
 FROM results_rollup order by 1,2;
 ----
@@ -812,7 +812,7 @@ with results_rollup AS
   (
          select sum(number) gross_margin, 2 as lochierarchy   from numbers(1000000)
    )
-SELECT gross_margin, rank() OVER ( PARTITION BY lochierarchy
+SELECT gross_margin, rank() OVER (PARTITION BY lochierarchy
                     ORDER BY gross_margin ASC) AS rank_within_parent
 FROM results_rollup order by 1,2;
 ----

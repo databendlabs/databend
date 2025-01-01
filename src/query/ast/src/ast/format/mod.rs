@@ -14,11 +14,8 @@
 
 mod indent_format;
 mod pretty_format;
-mod syntax;
 
 use std::fmt::Display;
-
-pub use syntax::pretty_statement;
 
 #[derive(Clone)]
 pub struct FormatTreeNode<T: Display + Clone = String> {
