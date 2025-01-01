@@ -10,7 +10,7 @@ cd "$SCRIPT_PATH/../.." || exit
 echo "Building docs"
 cd website
 
-# NOET: for aarch64 macos
+# NOTE: for aarch64 macos
 # arch -x86_64 zsh
 
 mkdir -p ~/.nvm

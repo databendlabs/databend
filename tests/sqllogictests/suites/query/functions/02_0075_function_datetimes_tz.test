@@ -759,7 +759,7 @@ query T
 SELECT substr(DATE_ADD(month, 1, now())::String, 6, 2) =
 CASE
    WHEN substr(now()::String, 6, 2) = '12' THEN '01'
-   ELSE (substr(now()::String, 6, 2)::int + 1)::String
+   ELSE LPAD((substr(now()::String, 6, 2)::int + 1)::String, 2, '0')
 END;
 ----
 1
@@ -769,7 +769,7 @@ query T
 SELECT substr(DATE_ADD(month, 1, now())::String, 1, 4) =
 CASE
    WHEN substr(now()::String, 6, 2) = '12' THEN (substr(now()::String, 1,4)::int+1)::String
-   ELSE (substr(now()::String, 6, 2)::int + 1)::String
+   ELSE (substr(now()::String, 1,4)::int)::String
 END;
 ----
 1
