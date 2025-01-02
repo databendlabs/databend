@@ -19,6 +19,9 @@ use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DropTableStmt;
+use databend_common_ast::parser::parse_sql;
+use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::parser::Dialect;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -31,6 +34,7 @@ use rand::SeedableRng;
 
 use crate::http_client::HttpClient;
 use crate::http_client::QueryResponse;
+use crate::query_fuzzer::QueryFuzzer;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
@@ -203,7 +207,24 @@ impl Runner {
         }
     }
 
+    pub async fn run_fuzz(&mut self) -> Result<()> {
+        let sqls = vec!["select 1, 'a'", "select 2, 'b'"];
+        let mut query_fuzzer = QueryFuzzer::new();
+        for sql in sqls {
+            let tokens = tokenize_sql(sql).unwrap();
+            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+            let fuzz_stmt = query_fuzzer.fuzz(stmt);
+            let fuzz_sql = format!("{}", fuzz_stmt);
+            // todo
+            println!("fuzz_sql={:?}", fuzz_sql)
+        }
+
+        Ok(())
+    }
+
     pub async fn run(&mut self) -> Result<()> {
+        self.run_fuzz().await?;
+
         let create_db_sql = format!("CREATE OR REPLACE database {}", self.db);
         let _ = self.client.query(&create_db_sql).await?;
         let use_db_sql = format!("USE {}", self.db);

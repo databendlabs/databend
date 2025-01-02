@@ -15,6 +15,7 @@
 #![feature(box_patterns)]
 
 mod http_client;
+mod query_fuzzer;
 mod reducer;
 mod runner;
 mod sql_gen;
