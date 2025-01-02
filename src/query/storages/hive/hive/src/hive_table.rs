@@ -59,7 +59,6 @@ use futures::TryStreamExt;
 use log::info;
 use log::trace;
 use opendal::EntryMode;
-use opendal::Metakey;
 use opendal::Operator;
 
 use super::hive_catalog::HiveCatalog;
@@ -600,10 +599,7 @@ async fn do_list_files_from_dir(
     sem: Arc<Semaphore>,
 ) -> Result<(Vec<HivePartInfo>, Vec<String>)> {
     let _a = sem.acquire().await.unwrap();
-    let mut m = operator
-        .lister_with(&location)
-        .metakey(Metakey::Mode | Metakey::ContentLength)
-        .await?;
+    let mut m = operator.lister_with(&location).await?;
 
     let mut all_files = vec![];
     let mut all_dirs = vec![];
@@ -622,6 +618,7 @@ async fn do_list_files_from_dir(
 
         match meta.mode() {
             EntryMode::FILE => {
+                let meta = operator.stat(path).await?;
                 let location = path.to_string();
                 let length = meta.content_length();
                 all_files.push(HivePartInfo::create(location, vec![], length));

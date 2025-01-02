@@ -27,7 +27,6 @@ use futures_util::TryStreamExt;
 use log::error;
 use log::info;
 use opendal::EntryMode;
-use opendal::Metakey;
 use opendal::Operator;
 #[async_backtrace::framed]
 pub async fn do_vacuum_drop_table(
@@ -80,12 +79,7 @@ async fn vacuum_drop_single_table(
             result?;
         }
         Some(dry_run_limit) => {
-            let mut ds = operator
-                .lister_with(&dir)
-                .recursive(true)
-                .metakey(Metakey::Mode)
-                .metakey(Metakey::ContentLength)
-                .await?;
+            let mut ds = operator.lister_with(&dir).recursive(true).await?;
 
             loop {
                 let entry = ds.try_next().await;

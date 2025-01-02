@@ -30,7 +30,6 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::EntryMode;
 use opendal::Metadata;
-use opendal::Metakey;
 use opendal::Operator;
 use regex::Regex;
 
@@ -65,11 +64,6 @@ impl StageFileInfo {
             status: StageFileStatus::NeedCopy,
             creator: None,
         }
-    }
-
-    /// NOTE: update this query when add new meta
-    pub fn meta_query() -> flagset::FlagSet<Metakey> {
-        Metakey::ContentLength | Metakey::ContentMd5 | Metakey::LastModified | Metakey::Etag
     }
 }
 
@@ -278,11 +272,7 @@ impl StageFilesInfo {
         };
         let file_exact_stream = stream::iter(file_exact.clone().into_iter());
 
-        let lister = operator
-            .lister_with(path)
-            .recursive(true)
-            .metakey(StageFileInfo::meta_query())
-            .await?;
+        let lister = operator.lister_with(path).recursive(true).await?;
 
         let pattern = Arc::new(pattern);
         let files_with_prefix = lister.filter_map(move |result| {
@@ -389,11 +379,7 @@ fn blocking_list_files_with_pattern(
         _ => {}
     };
     let prefix_len = if path == "/" { 0 } else { path.len() };
-    let list = operator
-        .lister_with(path)
-        .recursive(true)
-        .metakey(StageFileInfo::meta_query())
-        .call()?;
+    let list = operator.lister_with(path).recursive(true).call()?;
     if files.len() == max_files {
         return Ok(files);
     }

@@ -29,7 +29,6 @@ use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
-use opendal::Metakey;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -75,7 +74,6 @@ impl VacuumTableInterpreter {
         for (dir_prefix, stat) in prefix_with_stats {
             for entry in operator
                 .list_with(&format!("{}/{}/", table_data_prefix, dir_prefix))
-                .metakey(Metakey::ContentLength)
                 .await?
             {
                 if entry.metadata().is_file() {

@@ -30,7 +30,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
 use log::warn;
 use opendal::EntryMode;
-use opendal::Metakey;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
@@ -362,10 +361,7 @@ impl FuseTable {
     where F: FnMut(String, DateTime<Utc>) -> bool {
         let mut file_list = vec![];
         let op = self.operator.clone();
-        let mut ds = op
-            .lister_with(&prefix)
-            .metakey(Metakey::Mode | Metakey::LastModified)
-            .await?;
+        let mut ds = op.lister_with(&prefix).await?;
         while let Some(de) = ds.try_next().await? {
             let meta = de.metadata();
             match meta.mode() {

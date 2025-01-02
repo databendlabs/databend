@@ -37,7 +37,6 @@ use futures_util::TryStreamExt;
 use log::info;
 use log::warn;
 use opendal::EntryMode;
-use opendal::Metakey;
 use opendal::Operator;
 
 use crate::io::MetaReaders;
@@ -360,10 +359,7 @@ impl SnapshotsIO {
         exclude_file: Option<&str>,
     ) -> Result<Vec<String>> {
         let mut file_list = vec![];
-        let mut ds = op
-            .lister_with(prefix)
-            .metakey(Metakey::Mode | Metakey::LastModified)
-            .await?;
+        let mut ds = op.lister_with(prefix).await?;
         while let Some(de) = ds.try_next().await? {
             let meta = de.metadata();
             match meta.mode() {

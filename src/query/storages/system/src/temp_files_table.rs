@@ -54,7 +54,6 @@ use futures::StreamExt;
 use opendal::operator_futures::FutureLister;
 use opendal::Entry;
 use opendal::Lister;
-use opendal::Metakey;
 
 use crate::table::SystemTablePart;
 
@@ -155,10 +154,7 @@ impl TempFilesTable {
         let limit = push_downs.as_ref().and_then(|x| x.limit);
 
         let operator = DataOperator::instance().operator();
-        let lister = operator
-            .lister_with(&location_prefix)
-            .recursive(true)
-            .metakey(Metakey::LastModified | Metakey::ContentLength);
+        let lister = operator.lister_with(&location_prefix).recursive(true);
 
         let stream = {
             let prefix = location_prefix.clone();

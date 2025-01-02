@@ -32,7 +32,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use futures_util::TryStreamExt;
 use log::info;
-use opendal::Metakey;
 use opendal::Operator;
 
 use super::parse_opt_opt_args;
@@ -197,11 +196,7 @@ impl SimpleArgFunc for FuseTimeTravelSize {
 }
 
 async fn get_time_travel_size(storage_prefix: &str, op: &Operator) -> Result<u64> {
-    let mut lister = op
-        .lister_with(storage_prefix)
-        .recursive(true)
-        .metakey(Metakey::ContentLength)
-        .await?;
+    let mut lister = op.lister_with(storage_prefix).recursive(true).await?;
     let mut size = 0;
     while let Some(entry) = lister.try_next().await? {
         size += entry.metadata().content_length();
