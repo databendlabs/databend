@@ -4068,7 +4068,6 @@ dependencies = [
  "databend-common-metrics",
  "databend-common-native",
  "databend-enterprise-storage-encryption",
- "flagset",
  "futures",
  "http 1.1.0",
  "log",

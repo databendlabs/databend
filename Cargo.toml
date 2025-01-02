@@ -291,7 +291,6 @@ ethnum = { version = "1.5.0" }
 fallible-streaming-iterator = "0.1"
 faststr = "0.2"
 feature-set = { version = "0.1.1" }
-flagset = "0.4"
 flatbuffers = "24" # Must use the same version with arrow-ipc
 flate2 = "1"
 foreign_vec = "0.1.0"
