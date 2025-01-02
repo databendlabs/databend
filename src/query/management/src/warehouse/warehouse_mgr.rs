@@ -112,16 +112,16 @@ fn map_condition(k: &str, seq: MatchSeq) -> TxnCondition {
     }
 }
 
-struct ConsistentNodeInfo {
+struct NodeInfoSnapshot {
     node_seq: u64,
     cluster_seq: u64,
     node_info: NodeInfo,
 }
 
-struct ConsistentWarehouseInfo {
+struct WarehouseSnapshot {
     info_seq: u64,
     warehouse_info: WarehouseInfo,
-    consistent_nodes: Vec<ConsistentNodeInfo>,
+    snapshot_nodes: Vec<NodeInfoSnapshot>,
 }
 
 impl WarehouseMgr {
@@ -458,7 +458,7 @@ impl WarehouseMgr {
         }
     }
 
-    async fn consistent_warehouse_info(&self, id: &str) -> Result<ConsistentWarehouseInfo> {
+    async fn warehouse_snapshot(&self, id: &str) -> Result<WarehouseSnapshot> {
         // Obtain a consistent snapshot of the warehouse nodes using 3 RPC calls
         // TODO: meta does not support using list within transactions, which will be optimized in later version
         let warehouse_info_key = self.warehouse_info_key(id)?;
@@ -503,7 +503,7 @@ impl WarehouseMgr {
                 continue 'get_warehouse_snapshot;
             }
 
-            let mut consistent_nodes = Vec::with_capacity(txn_reply.responses.len());
+            let mut snapshot_nodes = Vec::with_capacity(txn_reply.responses.len());
             for (idx, response) in txn_reply.responses.into_iter().enumerate() {
                 let get_node_info = response.as_get();
 
@@ -517,17 +517,17 @@ impl WarehouseMgr {
                 assert_eq!(node_info.warehouse_id, id);
                 assert!(!node_info.cluster_id.is_empty());
 
-                consistent_nodes.push(ConsistentNodeInfo {
+                snapshot_nodes.push(NodeInfoSnapshot {
                     node_seq: seq_v.seq,
                     cluster_seq: cluster_node_seq[idx],
                     node_info,
                 });
             }
 
-            return Ok(ConsistentWarehouseInfo {
+            return Ok(WarehouseSnapshot {
                 info_seq: before_info.seq,
                 warehouse_info: serde_json::from_slice(&before_info.data)?,
-                consistent_nodes,
+                snapshot_nodes,
             });
         }
 
@@ -538,34 +538,34 @@ impl WarehouseMgr {
 
     async fn shutdown_self_managed_node(&self, node_info: &NodeInfo) -> Result<()> {
         for _idx in 0..10 {
-            let consistent_info = self
-                .consistent_warehouse_info(&node_info.warehouse_id)
-                .await?;
+            let warehouse_snapshot = self.warehouse_snapshot(&node_info.warehouse_id).await?;
 
             let mut txn = TxnRequest::default();
 
             let node_key = self.node_key(node_info)?;
             let cluster_node_key = self.cluster_node_key(node_info)?;
 
-            if consistent_info.consistent_nodes.len() == 1
-                && consistent_info.consistent_nodes[0].node_info.id == node_info.id
+            // Attempt to delete the warehouse info if the last node is shutting down.
+            if warehouse_snapshot.snapshot_nodes.len() == 1
+                && warehouse_snapshot.snapshot_nodes[0].node_info.id == node_info.id
             {
                 let warehouse_info_key = self.warehouse_info_key(&node_info.warehouse_id)?;
 
                 txn.condition.push(map_condition(
                     &warehouse_info_key,
-                    MatchSeq::Exact(consistent_info.info_seq),
+                    MatchSeq::Exact(warehouse_snapshot.info_seq),
                 ));
                 txn.if_then.push(TxnOp::delete(warehouse_info_key));
 
-                for consistent_node in consistent_info.consistent_nodes {
+                for node_info_snapshot in warehouse_snapshot.snapshot_nodes {
                     txn.condition.push(map_condition(
                         &node_key,
-                        MatchSeq::Exact(consistent_node.node_seq),
+                        MatchSeq::Exact(node_info_snapshot.node_seq),
                     ));
+
                     txn.condition.push(map_condition(
                         &cluster_node_key,
-                        MatchSeq::Exact(consistent_node.cluster_seq),
+                        MatchSeq::Exact(node_info_snapshot.cluster_seq),
                     ));
                 }
             }
@@ -608,18 +608,18 @@ impl WarehouseMgr {
     async fn pick_assign_warehouse_node(
         &self,
         warehouse: &str,
-        nodes: &HashMap<String, Vec<SelectedNode>>,
+        warehouse_nodes_matcher: &HashMap<String, Vec<SelectedNode>>,
     ) -> Result<HashMap<String, Vec<(u64, NodeInfo)>>> {
-        let mut selected_nodes = HashMap::with_capacity(nodes.len());
+        let mut selected_nodes = HashMap::with_capacity(warehouse_nodes_matcher.len());
 
         let mut grouped_nodes = self.unassigned_nodes().await?;
 
         let mut after_assign_node = HashMap::new();
 
-        for (cluster, cluster_node_selector) in nodes {
-            let mut cluster_selected_nodes = Vec::with_capacity(cluster_node_selector.len());
-            for node_selector in cluster_node_selector {
-                match node_selector {
+        for (cluster, cluster_node_matcher) in warehouse_nodes_matcher {
+            let mut cluster_selected_nodes = Vec::with_capacity(cluster_node_matcher.len());
+            for selected_node in cluster_node_matcher {
+                match selected_node {
                     SelectedNode::Random(None) => {
                         let Some(nodes_list) = grouped_nodes.get_mut(&None) else {
                             match after_assign_node.entry(cluster.clone()) {
@@ -822,9 +822,9 @@ impl WarehouseApi for WarehouseMgr {
         }
 
         for _idx in 0..10 {
-            let consistent_info = self.consistent_warehouse_info(&warehouse).await?;
+            let warehouse_snapshot = self.warehouse_snapshot(&warehouse).await?;
 
-            if let WarehouseInfo::SelfManaged(_) = consistent_info.warehouse_info {
+            if let WarehouseInfo::SelfManaged(_) = warehouse_snapshot.warehouse_info {
                 return Err(ErrorCode::InvalidWarehouse(
                     "Cannot drop self-managed warehouse",
                 ));
@@ -836,28 +836,28 @@ impl WarehouseApi for WarehouseMgr {
 
             delete_txn.condition.push(map_condition(
                 &warehouse_info_key,
-                MatchSeq::Exact(consistent_info.info_seq),
+                MatchSeq::Exact(warehouse_snapshot.info_seq),
             ));
             delete_txn.if_then.push(TxnOp::delete(warehouse_info_key));
 
-            for mut consistent_node in consistent_info.consistent_nodes {
-                let node_key = self.node_key(&consistent_node.node_info)?;
-                let cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+            for mut node_snapshot in warehouse_snapshot.snapshot_nodes {
+                let node_key = self.node_key(&node_snapshot.node_info)?;
+                let cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
                 delete_txn.condition.push(map_condition(
                     &node_key,
-                    MatchSeq::Exact(consistent_node.node_seq),
+                    MatchSeq::Exact(node_snapshot.node_seq),
                 ));
                 delete_txn.condition.push(map_condition(
                     &cluster_node_key,
-                    MatchSeq::Exact(consistent_node.cluster_seq),
+                    MatchSeq::Exact(node_snapshot.cluster_seq),
                 ));
 
                 delete_txn.if_then.push(TxnOp::delete(cluster_node_key));
-                self.unload_warehouse_info(&mut consistent_node.node_info);
+                self.unload_warehouse_info(&mut node_snapshot.node_info);
                 delete_txn.if_then.push(TxnOp::put_with_ttl(
                     node_key,
-                    serde_json::to_vec(&consistent_node.node_info)?,
+                    serde_json::to_vec(&node_snapshot.node_info)?,
                     Some(self.lift_time * 4),
                 ));
             }
@@ -965,7 +965,7 @@ impl WarehouseApi for WarehouseMgr {
         }
 
         for _idx in 0..10 {
-            let mut warehouse_info = self.consistent_warehouse_info(&warehouse).await?;
+            let mut warehouse_info = self.warehouse_snapshot(&warehouse).await?;
 
             let mut need_schedule_cluster = HashMap::new();
             warehouse_info.warehouse_info = match warehouse_info.warehouse_info {
@@ -1079,9 +1079,9 @@ impl WarehouseApi for WarehouseMgr {
         }
 
         for _idx in 0..10 {
-            let mut consistent_info = self.consistent_warehouse_info(&warehouse).await?;
+            let mut warehouse_snapshot = self.warehouse_snapshot(&warehouse).await?;
 
-            consistent_info.warehouse_info = match consistent_info.warehouse_info {
+            warehouse_snapshot.warehouse_info = match warehouse_snapshot.warehouse_info {
                 WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(
                     "Cannot suspend self-managed warehouse",
                 )),
@@ -1105,31 +1105,31 @@ impl WarehouseApi for WarehouseMgr {
 
             suspend_txn.condition.push(map_condition(
                 &warehouse_info_key,
-                MatchSeq::Exact(consistent_info.info_seq),
+                MatchSeq::Exact(warehouse_snapshot.info_seq),
             ));
             suspend_txn.if_then.push(TxnOp::put(
                 warehouse_info_key,
-                serde_json::to_vec(&consistent_info.warehouse_info)?,
+                serde_json::to_vec(&warehouse_snapshot.warehouse_info)?,
             ));
 
-            for mut consistent_node in consistent_info.consistent_nodes {
-                let node_key = self.node_key(&consistent_node.node_info)?;
-                let cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+            for mut node_snapshot in warehouse_snapshot.snapshot_nodes {
+                let node_key = self.node_key(&node_snapshot.node_info)?;
+                let cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
                 suspend_txn.condition.push(map_condition(
                     &node_key,
-                    MatchSeq::Exact(consistent_node.node_seq),
+                    MatchSeq::Exact(node_snapshot.node_seq),
                 ));
                 suspend_txn.condition.push(map_condition(
                     &cluster_node_key,
-                    MatchSeq::Exact(consistent_node.cluster_seq),
+                    MatchSeq::Exact(node_snapshot.cluster_seq),
                 ));
 
                 suspend_txn.if_then.push(TxnOp::delete(cluster_node_key));
-                self.unload_warehouse_info(&mut consistent_node.node_info);
+                self.unload_warehouse_info(&mut node_snapshot.node_info);
                 suspend_txn.if_then.push(TxnOp::put_with_ttl(
                     node_key,
-                    serde_json::to_vec(&consistent_node.node_info)?,
+                    serde_json::to_vec(&node_snapshot.node_info)?,
                     Some(self.lift_time * 4),
                 ));
             }
@@ -1168,9 +1168,9 @@ impl WarehouseApi for WarehouseMgr {
         }
 
         for _idx in 0..10 {
-            let mut consistent_info = self.consistent_warehouse_info(&current).await?;
+            let mut warehouse_snapshot = self.warehouse_snapshot(&current).await?;
 
-            consistent_info.warehouse_info = match consistent_info.warehouse_info {
+            warehouse_snapshot.warehouse_info = match warehouse_snapshot.warehouse_info {
                 WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(
                     "Cannot rename self-managed warehouse",
                 )),
@@ -1188,7 +1188,7 @@ impl WarehouseApi for WarehouseMgr {
 
             rename_txn.condition.push(map_condition(
                 &old_warehouse_info_key,
-                MatchSeq::Exact(consistent_info.info_seq),
+                MatchSeq::Exact(warehouse_snapshot.info_seq),
             ));
 
             rename_txn
@@ -1203,24 +1203,24 @@ impl WarehouseApi for WarehouseMgr {
                 .push(TxnOp::delete(old_warehouse_info_key));
             rename_txn.if_then.push(TxnOp::put(
                 new_warehouse_info_key,
-                serde_json::to_vec(&consistent_info.warehouse_info)?,
+                serde_json::to_vec(&warehouse_snapshot.warehouse_info)?,
             ));
 
-            for mut consistent_node in consistent_info.consistent_nodes {
-                let node_key = self.node_key(&consistent_node.node_info)?;
-                let old_cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+            for mut node_snapshot in warehouse_snapshot.snapshot_nodes {
+                let node_key = self.node_key(&node_snapshot.node_info)?;
+                let old_cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
-                consistent_node.node_info.warehouse_id = to.clone();
+                node_snapshot.node_info.warehouse_id = to.clone();
 
-                let new_cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+                let new_cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
                 rename_txn.condition.push(map_condition(
                     &node_key,
-                    MatchSeq::Exact(consistent_node.node_seq),
+                    MatchSeq::Exact(node_snapshot.node_seq),
                 ));
                 rename_txn.condition.push(map_condition(
                     &old_cluster_node_key,
-                    MatchSeq::Exact(consistent_node.cluster_seq),
+                    MatchSeq::Exact(node_snapshot.cluster_seq),
                 ));
 
                 rename_txn
@@ -1229,14 +1229,14 @@ impl WarehouseApi for WarehouseMgr {
 
                 rename_txn.if_then.push(TxnOp::put_with_ttl(
                     node_key,
-                    serde_json::to_vec(&consistent_node.node_info)?,
+                    serde_json::to_vec(&node_snapshot.node_info)?,
                     Some(self.lift_time * 4),
                 ));
-                self.unload_warehouse_info(&mut consistent_node.node_info);
+                self.unload_warehouse_info(&mut node_snapshot.node_info);
                 rename_txn.if_then.push(TxnOp::delete(old_cluster_node_key));
                 rename_txn.if_then.push(TxnOp::put_with_ttl(
                     new_cluster_node_key.clone(),
-                    serde_json::to_vec(&consistent_node.node_info)?,
+                    serde_json::to_vec(&node_snapshot.node_info)?,
                     Some(self.lift_time * 4),
                 ));
             }
@@ -1267,10 +1267,10 @@ impl WarehouseApi for WarehouseMgr {
             return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
         }
 
-        let consistent_info = self.consistent_warehouse_info(&warehouse).await?;
+        let warehouse_snapshot = self.warehouse_snapshot(&warehouse).await?;
 
-        Ok(consistent_info
-            .consistent_nodes
+        Ok(warehouse_snapshot
+            .snapshot_nodes
             .into_iter()
             .map(|x| x.node_info)
             .collect())
@@ -1308,9 +1308,9 @@ impl WarehouseApi for WarehouseMgr {
 
             let mut create_cluster_txn = TxnRequest::default();
 
-            let mut consistent_info = self.consistent_warehouse_info(&warehouse).await?;
+            let mut warehouse_snapshot = self.warehouse_snapshot(&warehouse).await?;
 
-            consistent_info.warehouse_info = match consistent_info.warehouse_info {
+            warehouse_snapshot.warehouse_info = match warehouse_snapshot.warehouse_info {
                 WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(format!(
                     "Cannot add cluster for warehouse {:?}, because it's self-managed warehouse.",
                     warehouse
@@ -1340,26 +1340,26 @@ impl WarehouseApi for WarehouseMgr {
 
             create_cluster_txn.condition.push(map_condition(
                 &warehouse_info_key,
-                MatchSeq::Exact(consistent_info.info_seq),
+                MatchSeq::Exact(warehouse_snapshot.info_seq),
             ));
 
             create_cluster_txn.if_then.push(TxnOp::put(
                 warehouse_info_key.clone(),
-                serde_json::to_vec(&consistent_info.warehouse_info)?,
+                serde_json::to_vec(&warehouse_snapshot.warehouse_info)?,
             ));
 
             // lock all cluster state
-            for consistent_node in consistent_info.consistent_nodes {
-                let node_key = self.node_key(&consistent_node.node_info)?;
-                let cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+            for node_snapshot in warehouse_snapshot.snapshot_nodes {
+                let node_key = self.node_key(&node_snapshot.node_info)?;
+                let cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
                 create_cluster_txn.condition.push(map_condition(
                     &node_key,
-                    MatchSeq::Exact(consistent_node.node_seq),
+                    MatchSeq::Exact(node_snapshot.node_seq),
                 ));
                 create_cluster_txn.condition.push(map_condition(
                     &cluster_node_key,
-                    MatchSeq::Exact(consistent_node.cluster_seq),
+                    MatchSeq::Exact(node_snapshot.cluster_seq),
                 ));
             }
 
@@ -1414,9 +1414,9 @@ impl WarehouseApi for WarehouseMgr {
         for _idx in 0..10 {
             let mut drop_cluster_txn = TxnRequest::default();
 
-            let mut consistent_info = self.consistent_warehouse_info(&warehouse).await?;
+            let mut warehouse_snapshot = self.warehouse_snapshot(&warehouse).await?;
 
-            consistent_info.warehouse_info = match consistent_info.warehouse_info {
+            warehouse_snapshot.warehouse_info = match warehouse_snapshot.warehouse_info {
                 WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(format!(
                     "Cannot add cluster for warehouse {:?}, because it's self-managed warehouse.",
                     warehouse
@@ -1450,38 +1450,38 @@ impl WarehouseApi for WarehouseMgr {
 
             drop_cluster_txn.condition.push(map_condition(
                 &warehouse_info_key,
-                MatchSeq::Exact(consistent_info.info_seq),
+                MatchSeq::Exact(warehouse_snapshot.info_seq),
             ));
 
             drop_cluster_txn.if_then.push(TxnOp::put(
                 warehouse_info_key.clone(),
-                serde_json::to_vec(&consistent_info.warehouse_info)?,
+                serde_json::to_vec(&warehouse_snapshot.warehouse_info)?,
             ));
 
             // lock all cluster state
-            for mut consistent_node in consistent_info.consistent_nodes {
-                let node_key = self.node_key(&consistent_node.node_info)?;
-                let cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+            for mut node_snapshot in warehouse_snapshot.snapshot_nodes {
+                let node_key = self.node_key(&node_snapshot.node_info)?;
+                let cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
                 drop_cluster_txn.condition.push(map_condition(
                     &node_key,
-                    MatchSeq::Exact(consistent_node.node_seq),
+                    MatchSeq::Exact(node_snapshot.node_seq),
                 ));
                 drop_cluster_txn.condition.push(map_condition(
                     &cluster_node_key,
-                    MatchSeq::Exact(consistent_node.cluster_seq),
+                    MatchSeq::Exact(node_snapshot.cluster_seq),
                 ));
 
-                if consistent_node.node_info.cluster_id == cluster {
+                if node_snapshot.node_info.cluster_id == cluster {
                     // Remove node
-                    self.unload_warehouse_info(&mut consistent_node.node_info);
+                    self.unload_warehouse_info(&mut node_snapshot.node_info);
 
                     drop_cluster_txn
                         .if_then
                         .push(TxnOp::delete(cluster_node_key));
                     drop_cluster_txn.if_then.push(TxnOp::put_with_ttl(
                         node_key,
-                        serde_json::to_vec(&consistent_node.node_info)?,
+                        serde_json::to_vec(&node_snapshot.node_info)?,
                         Some(self.lift_time * 4),
                     ))
                 }
@@ -1525,9 +1525,9 @@ impl WarehouseApi for WarehouseMgr {
         for _idx in 0..10 {
             let mut rename_cluster_txn = TxnRequest::default();
 
-            let mut consistent_info = self.consistent_warehouse_info(&warehouse).await?;
+            let mut warehouse_snapshot = self.warehouse_snapshot(&warehouse).await?;
 
-            consistent_info.warehouse_info = match consistent_info.warehouse_info {
+            warehouse_snapshot.warehouse_info = match warehouse_snapshot.warehouse_info {
                 WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(format!("Cannot rename cluster for warehouse {:?}, because it's self-managed warehouse.", warehouse))),
                 WarehouseInfo::SystemManaged(mut info) => match info.clusters.contains_key(&cur) {
                     false => Err(ErrorCode::WarehouseClusterNotExists(format!("Warehouse cluster {:?}.{:?} not exists", warehouse, cur))),
@@ -1551,40 +1551,40 @@ impl WarehouseApi for WarehouseMgr {
 
             rename_cluster_txn.condition.push(map_condition(
                 &warehouse_info_key,
-                MatchSeq::Exact(consistent_info.info_seq),
+                MatchSeq::Exact(warehouse_snapshot.info_seq),
             ));
 
             rename_cluster_txn.if_then.push(TxnOp::put(
                 warehouse_info_key.clone(),
-                serde_json::to_vec(&consistent_info.warehouse_info)?,
+                serde_json::to_vec(&warehouse_snapshot.warehouse_info)?,
             ));
 
             // lock all cluster state
-            for mut consistent_node in consistent_info.consistent_nodes {
-                let node_key = self.node_key(&consistent_node.node_info)?;
-                let old_cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+            for mut node_snapshot in warehouse_snapshot.snapshot_nodes {
+                let node_key = self.node_key(&node_snapshot.node_info)?;
+                let old_cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
                 rename_cluster_txn.condition.push(map_condition(
                     &node_key,
-                    MatchSeq::Exact(consistent_node.node_seq),
+                    MatchSeq::Exact(node_snapshot.node_seq),
                 ));
                 rename_cluster_txn.condition.push(map_condition(
                     &old_cluster_node_key,
-                    MatchSeq::Exact(consistent_node.cluster_seq),
+                    MatchSeq::Exact(node_snapshot.cluster_seq),
                 ));
 
-                if consistent_node.node_info.cluster_id == cur {
+                if node_snapshot.node_info.cluster_id == cur {
                     // rename node
-                    consistent_node.node_info.cluster_id = to.clone();
-                    let new_cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+                    node_snapshot.node_info.cluster_id = to.clone();
+                    let new_cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
                     rename_cluster_txn.if_then.push(TxnOp::put_with_ttl(
                         node_key,
-                        serde_json::to_vec(&consistent_node.node_info)?,
+                        serde_json::to_vec(&node_snapshot.node_info)?,
                         Some(self.lift_time * 4),
                     ));
 
-                    consistent_node.node_info.cluster_id = String::new();
+                    node_snapshot.node_info.cluster_id = String::new();
                     rename_cluster_txn
                         .condition
                         .push(map_condition(&new_cluster_node_key, MatchSeq::Exact(0)));
@@ -1593,7 +1593,7 @@ impl WarehouseApi for WarehouseMgr {
                         .push(TxnOp::delete(old_cluster_node_key));
                     rename_cluster_txn.if_then.push(TxnOp::put_with_ttl(
                         new_cluster_node_key,
-                        serde_json::to_vec(&consistent_node.node_info)?,
+                        serde_json::to_vec(&node_snapshot.node_info)?,
                         Some(self.lift_time * 4),
                     ));
                 }
@@ -1632,9 +1632,9 @@ impl WarehouseApi for WarehouseMgr {
 
             let mut add_cluster_node_txn = TxnRequest::default();
 
-            let mut consistent_info = self.consistent_warehouse_info(&warehouse).await?;
+            let mut warehouse_snapshot = self.warehouse_snapshot(&warehouse).await?;
 
-            consistent_info.warehouse_info = match consistent_info.warehouse_info {
+            warehouse_snapshot.warehouse_info = match warehouse_snapshot.warehouse_info {
                 WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(format!(
                     "Cannot assign nodes for warehouse {:?}, because it's self-managed warehouse.",
                     warehouse
@@ -1664,26 +1664,26 @@ impl WarehouseApi for WarehouseMgr {
 
             add_cluster_node_txn.condition.push(map_condition(
                 &warehouse_info_key,
-                MatchSeq::Exact(consistent_info.info_seq),
+                MatchSeq::Exact(warehouse_snapshot.info_seq),
             ));
 
             add_cluster_node_txn.if_then.push(TxnOp::put(
                 warehouse_info_key.clone(),
-                serde_json::to_vec(&consistent_info.warehouse_info)?,
+                serde_json::to_vec(&warehouse_snapshot.warehouse_info)?,
             ));
 
             // lock all cluster state
-            for consistent_node in consistent_info.consistent_nodes {
-                let node_key = self.node_key(&consistent_node.node_info)?;
-                let cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+            for node_snapshot in warehouse_snapshot.snapshot_nodes {
+                let node_key = self.node_key(&node_snapshot.node_info)?;
+                let cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
                 add_cluster_node_txn.condition.push(map_condition(
                     &node_key,
-                    MatchSeq::Exact(consistent_node.node_seq),
+                    MatchSeq::Exact(node_snapshot.node_seq),
                 ));
                 add_cluster_node_txn.condition.push(map_condition(
                     &cluster_node_key,
-                    MatchSeq::Exact(consistent_node.cluster_seq),
+                    MatchSeq::Exact(node_snapshot.cluster_seq),
                 ));
             }
 
@@ -1739,9 +1739,9 @@ impl WarehouseApi for WarehouseMgr {
             let mut nodes = nodes.clone();
             let mut drop_cluster_node_txn = TxnRequest::default();
 
-            let mut consistent_info = self.consistent_warehouse_info(warehouse).await?;
+            let mut warehouse_snapshot = self.warehouse_snapshot(warehouse).await?;
 
-            consistent_info.warehouse_info = match consistent_info.warehouse_info {
+            warehouse_snapshot.warehouse_info = match warehouse_snapshot.warehouse_info {
                 WarehouseInfo::SelfManaged(_) => Err(ErrorCode::InvalidWarehouse(format!(
                     "Cannot unassign nodes for warehouse {:?}, because it's self-managed warehouse.",
                     warehouse
@@ -1786,41 +1786,41 @@ impl WarehouseApi for WarehouseMgr {
 
             drop_cluster_node_txn.condition.push(map_condition(
                 &warehouse_info_key,
-                MatchSeq::Exact(consistent_info.info_seq),
+                MatchSeq::Exact(warehouse_snapshot.info_seq),
             ));
 
             drop_cluster_node_txn.if_then.push(TxnOp::put(
                 warehouse_info_key.clone(),
-                serde_json::to_vec(&consistent_info.warehouse_info)?,
+                serde_json::to_vec(&warehouse_snapshot.warehouse_info)?,
             ));
 
             // lock all cluster state
-            for mut consistent_node in consistent_info.consistent_nodes {
-                let node_key = self.node_key(&consistent_node.node_info)?;
-                let cluster_node_key = self.cluster_node_key(&consistent_node.node_info)?;
+            for mut node_snapshot in warehouse_snapshot.snapshot_nodes {
+                let node_key = self.node_key(&node_snapshot.node_info)?;
+                let cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
                 drop_cluster_node_txn.condition.push(map_condition(
                     &node_key,
-                    MatchSeq::Exact(consistent_node.node_seq),
+                    MatchSeq::Exact(node_snapshot.node_seq),
                 ));
                 drop_cluster_node_txn.condition.push(map_condition(
                     &cluster_node_key,
-                    MatchSeq::Exact(consistent_node.cluster_seq),
+                    MatchSeq::Exact(node_snapshot.cluster_seq),
                 ));
 
-                if let Some(v) = nodes.get_mut(&consistent_node.node_info.cluster_id) {
+                if let Some(v) = nodes.get_mut(&node_snapshot.node_info.cluster_id) {
                     if let Some(remove_node) = v.pop() {
                         let SelectedNode::Random(node_group) = remove_node;
-                        if consistent_node.node_info.runtime_node_group == node_group {
-                            self.unload_warehouse_info(&mut consistent_node.node_info);
-                            consistent_node.node_info.runtime_node_group = None;
+                        if node_snapshot.node_info.runtime_node_group == node_group {
+                            self.unload_warehouse_info(&mut node_snapshot.node_info);
+                            node_snapshot.node_info.runtime_node_group = None;
 
                             drop_cluster_node_txn
                                 .if_then
                                 .push(TxnOp::delete(cluster_node_key));
                             drop_cluster_node_txn.if_then.push(TxnOp::put_with_ttl(
                                 node_key,
-                                serde_json::to_vec(&consistent_node.node_info)?,
+                                serde_json::to_vec(&node_snapshot.node_info)?,
                                 Some(self.lift_time * 4),
                             ))
                         }
