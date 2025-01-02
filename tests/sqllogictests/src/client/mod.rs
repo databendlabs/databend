@@ -29,10 +29,11 @@ use sqllogictest::DefaultColumnType;
 
 use crate::error::Result;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum ClientType {
     MySQL,
     Http,
+    Hybird(Vec<(Box<ClientType>, usize)>),
 }
 
 impl fmt::Display for ClientType {

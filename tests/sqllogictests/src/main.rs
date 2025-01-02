@@ -22,6 +22,7 @@ use databend_sqllogictests::mock_source::run_mysql_source;
 use databend_sqllogictests::mock_source::run_redis_source;
 use futures_util::stream;
 use futures_util::StreamExt;
+use rand::Rng;
 use sqllogictest::default_column_validator;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
@@ -96,6 +97,29 @@ pub async fn main() -> Result<()> {
             HANDLER_HTTP => {
                 run_http_client().await?;
             }
+            // format: h:mysql=2|http=8
+            h if h.starts_with("h:") => {
+                let h = &h[2..];
+                let mut ts = vec![];
+                for t in h.split("|") {
+                    let mut tt = t.split("=");
+                    let handler = tt.next().unwrap();
+                    let score: usize = tt.next().unwrap().parse().unwrap();
+
+                    match handler {
+                        HANDLER_MYSQL => {
+                            ts.push((Box::new(ClientType::MySQL), score));
+                        }
+                        HANDLER_HTTP => {
+                            ts.push((Box::new(ClientType::Http), score));
+                        }
+                        _ => {
+                            return Err(format!("Unknown test handler: {handler}").into());
+                        }
+                    }
+                }
+                run_hybird_client(ClientType::Hybird(ts)).await?;
+            }
             _ => {
                 return Err(format!("Unknown test handler: {handler}").into());
             }
@@ -138,7 +162,19 @@ async fn run_http_client() -> Result<()> {
     Ok(())
 }
 
+async fn run_hybird_client(client: ClientType) -> Result<()> {
+    println!(
+        "Hybird client starts to run with: {:?}",
+        SqlLogicTestArgs::parse()
+    );
+    let suits = SqlLogicTestArgs::parse().suites;
+    let suits = std::fs::read_dir(suits).unwrap();
+    run_suits(suits, client).await?;
+    Ok(())
+}
+
 // Create new databend with client type
+#[async_recursion::async_recursion(#[recursive::recursive])]
 async fn create_databend(client_type: &ClientType) -> Result<Databend> {
     let mut client: Client;
     let args = SqlLogicTestArgs::parse();
@@ -152,6 +188,20 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
         }
         ClientType::Http => {
             client = Client::Http(HttpClient::create().await?);
+        }
+
+        ClientType::Hybird(ts) => {
+            let totals: usize = ts.iter().map(|t| t.1).sum();
+            let r = rand::thread_rng().gen_range(0..totals);
+
+            let mut acc = 0;
+            for (t, s) in ts.iter() {
+                acc += s;
+                if acc >= r {
+                    return create_databend(t.as_ref()).await;
+                }
+            }
+            unreachable!()
         }
     }
     if args.enable_sandbox {
@@ -217,6 +267,7 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     .await
                     .unwrap();
             } else {
+                let client_type = client_type.clone();
                 tasks.push(async move { run_file_async(&client_type, file.unwrap().path()).await });
             }
         }
