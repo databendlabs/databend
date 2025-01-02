@@ -14,8 +14,14 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
+use databend_common_meta_app::schema::UpdateTableMetaReq;
+use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::DropTableClusterKeyPlan;
+use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -52,8 +58,24 @@ impl Interpreter for DropTableClusterKeyInterpreter {
         let table = catalog
             .get_table(&tenant, &plan.database, &plan.table)
             .await?;
+        if table.cluster_key_meta().is_none() {
+            return Ok(PipelineBuildResult::create());
+        }
+        // check mutability
+        table.check_mutable()?;
 
-        table.drop_table_cluster_keys(self.ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let table_info = fuse_table.get_table_info();
+        let mut new_table_meta = table_info.meta.clone();
+        new_table_meta.cluster_key = None;
+        new_table_meta.options.remove(OPT_KEY_CLUSTER_TYPE);
+
+        let req = UpdateTableMetaReq {
+            table_id: table_info.ident.table_id,
+            seq: MatchSeq::Exact(table_info.ident.seq),
+            new_table_meta,
+        };
+        catalog.update_single_table_meta(req, table_info).await?;
 
         Ok(PipelineBuildResult::create())
     }

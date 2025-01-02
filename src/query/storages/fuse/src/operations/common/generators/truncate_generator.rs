@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
-use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
@@ -57,7 +56,7 @@ impl SnapshotGenerator for TruncateGenerator {
     fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
-        cluster_key_meta: Option<ClusterKey>,
+        _cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
         _table_name: &str,
@@ -79,7 +78,6 @@ impl SnapshotGenerator for TruncateGenerator {
             schema,
             Default::default(),
             vec![],
-            cluster_key_meta,
             None,
         );
         Ok(new_snapshot)

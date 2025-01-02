@@ -100,4 +100,25 @@ select * from t_11882 where substr(b,1,1)='b' limit 2
 3 bbb
 
 statement ok
+create or replace table t_17146(
+        data variant,
+        user_id int,
+        created_at timestamp
+);
+
+statement ok
+SELECT     data,
+          user_id,
+          created_at
+FROM      t_17146
+WHERE     data::STRING LIKE '%xxx%' QUALIFY row_number() OVER (
+          PARTITION BY user_id
+          ORDER BY  created_at DESC
+          )=1
+LIMIT     1;
+
+statement ok
 drop table t_11882
+
+statement ok
+drop table t_17146

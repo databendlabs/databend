@@ -48,7 +48,6 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
 use opendal::Operator;
@@ -62,10 +61,12 @@ use crate::pruning::table_sample;
 use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
+use crate::pruning::SegmentPruner;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ExtractSegmentTransform;
-use crate::pruning_pipeline::PrunedSegmentReceiverSource;
+use crate::pruning_pipeline::LazySegmentReceiverSource;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
+use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
 use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
@@ -241,13 +242,11 @@ impl FuseTable {
             // We cannot use the runtime associated with the query to avoid increasing its lifetime.
             GlobalIORuntime::instance().spawn(async move {
                 // avoid block global io runtime
-                let runtime = Runtime::with_worker_threads(2, Some("prune-seg".to_string()))?;
+                let runtime = Runtime::with_worker_threads(2, Some("prune-pipeline".to_string()))?;
                 let join_handler = runtime.spawn(async move {
-                    let segment_pruned_result =
-                        pruner.clone().segment_pruning(lazy_init_segments).await?;
-                    for segment in segment_pruned_result {
+                    for segment in lazy_init_segments {
                         // the sql may be killed or early stop, ignore the error
-                        if let Err(_e) = segment_tx.send(Ok(segment)).await {
+                        if let Err(_e) = segment_tx.send(segment).await {
                             break;
                         }
                     }
@@ -341,15 +340,27 @@ impl FuseTable {
         pruner: Arc<FusePruner>,
         prune_pipeline: &mut Pipeline,
         ctx: Arc<dyn TableContext>,
-        segment_rx: Receiver<Result<(SegmentLocation, Arc<CompactSegmentInfo>)>>,
+        segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
-            |output| PrunedSegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
+            |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
             max_threads,
         )?;
+        let segment_pruner =
+            SegmentPruner::create(pruner.pruning_ctx.clone(), pruner.table_schema.clone())?;
+
+        prune_pipeline.add_transform(|input, output| {
+            SegmentPruneTransform::create(
+                input,
+                output,
+                segment_pruner.clone(),
+                pruner.pruning_ctx.clone(),
+            )
+        })?;
+
         prune_pipeline
             .add_transform(|input, output| ExtractSegmentTransform::create(input, output, true))?;
         let sample_probability = table_sample(&pruner.push_down)?;

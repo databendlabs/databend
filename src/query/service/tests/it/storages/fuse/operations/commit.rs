@@ -288,7 +288,6 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 Statistics::default(),
                 new_segments,
                 None,
-                None,
             );
 
             let faked_catalog = FakedCatalog {

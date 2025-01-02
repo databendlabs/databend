@@ -62,10 +62,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
                     Some(TokenKind::SYNTAX) | Some(TokenKind::AST) => {
-                        let pretty_stmt =
-                            pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
-                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
-                            })?;
+                        let pretty_stmt = statement.stmt.to_string();
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
@@ -3777,12 +3774,11 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)? ~ FORCE?
+            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(opt_dry_run, opt_limit, opt_force)| VacuumDropTableOption {
+        |(opt_dry_run, opt_limit)| VacuumDropTableOption {
             dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
             limit: opt_limit.map(|(_, limit)| limit as usize),
-            force: opt_force.is_some(),
         },
     ),))(i)
 }

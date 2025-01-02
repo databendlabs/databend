@@ -203,7 +203,7 @@ SELECT
 FROM
     (
         SELECT
-            id, kind, ntile(10) OVER ( ORDER BY per ASC ) AS quantile
+            id, kind, ntile(10) OVER (ORDER BY per ASC ) AS quantile
         FROM
             (SELECT * FROM t)
     )
@@ -231,7 +231,7 @@ FROM
         SELECT
             id,
             kind,
-            ntile(10) OVER ( PARTITION BY id, kind ORDER BY per ASC ) AS quantile
+            ntile(10) OVER (PARTITION BY id, kind ORDER BY per ASC) AS quantile
         FROM
             (SELECT * FROM t)
     )

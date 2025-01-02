@@ -160,11 +160,16 @@ impl Interpreter for AnalyzeTableInterpreter {
                 )
             };
 
+            let quote = self
+                .ctx
+                .get_settings()
+                .get_sql_dialect()?
+                .default_ident_quote();
             let index_cols: Vec<(u32, String)> = schema
                 .fields()
                 .iter()
                 .filter(|f| RangeIndex::supported_type(&f.data_type().into()))
-                .map(|f| (f.column_id(), f.name.clone()))
+                .map(|f| (f.column_id(), format!("{quote}{}{quote}", f.name)))
                 .collect();
 
             // 0.01625 --> 12 buckets --> 4K size per column

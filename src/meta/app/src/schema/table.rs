@@ -260,12 +260,12 @@ pub struct TableMeta {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: BTreeMap<String, String>,
-    // The default cluster key.
-    pub default_cluster_key: Option<String>,
-    // All cluster keys that have been defined.
-    pub cluster_keys: Vec<String>,
-    // The sequence number of default_cluster_key in cluster_keys.
-    pub default_cluster_key_id: Option<u32>,
+    pub cluster_key: Option<String>,
+    /// A sequential number that uniquely identifies changes to the cluster key.
+    /// This value increments by 1 each time the cluster key is created or modified,
+    /// ensuring a unique identifier for each version of the cluster key.
+    /// It remains unchanged when the cluster key is dropped.
+    pub cluster_key_seq: u32,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
     pub comment: String,
@@ -407,6 +407,13 @@ impl TableInfo {
         self.meta.schema = schema;
         self
     }
+
+    pub fn cluster_key(&self) -> Option<(u32, String)> {
+        self.meta
+            .cluster_key
+            .clone()
+            .map(|k| (self.meta.cluster_key_seq, k))
+    }
 }
 
 impl Default for TableMeta {
@@ -418,9 +425,8 @@ impl Default for TableMeta {
             storage_params: None,
             part_prefix: "".to_string(),
             options: BTreeMap::new(),
-            default_cluster_key: None,
-            cluster_keys: vec![],
-            default_cluster_key_id: None,
+            cluster_key: None,
+            cluster_key_seq: 0,
             created_on: Utc::now(),
             updated_on: Utc::now(),
             comment: "".to_string(),
@@ -431,20 +437,6 @@ impl Default for TableMeta {
             column_mask_policy: None,
             indexes: BTreeMap::new(),
         }
-    }
-}
-
-impl TableMeta {
-    pub fn push_cluster_key(mut self, cluster_key: String) -> Self {
-        self.cluster_keys.push(cluster_key.clone());
-        self.default_cluster_key = Some(cluster_key);
-        self.default_cluster_key_id = Some(self.cluster_keys.len() as u32 - 1);
-        self
-    }
-
-    pub fn cluster_key(&self) -> Option<(u32, String)> {
-        self.default_cluster_key_id
-            .zip(self.default_cluster_key.clone())
     }
 }
 

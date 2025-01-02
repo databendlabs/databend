@@ -176,6 +176,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn empty_with_rows(rows: usize) -> Self {
+        DataBlock::new(vec![], rows)
+    }
+
+    #[inline]
     pub fn empty_with_schema(schema: DataSchemaRef) -> Self {
         let columns = schema
             .fields()
