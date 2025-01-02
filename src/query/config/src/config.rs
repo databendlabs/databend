@@ -341,7 +341,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             webhdfs: Default::default(),
             cos: Default::default(),
             spill: StorageSpillConfig {
-                bucket: inner.spill_bucket.unwrap_or_default(),
+                spill_bucket: inner.spill_bucket.unwrap_or_default(),
             },
 
             // Deprecated fields
@@ -415,10 +415,10 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
-            spill_bucket: if self.spill.bucket.is_empty() {
+            spill_bucket: if self.spill.spill_bucket.is_empty() {
                 None
             } else {
-                Some(self.spill.bucket)
+                Some(self.spill.spill_bucket)
             },
             params: {
                 match self.typ.as_str() {
@@ -1326,13 +1326,14 @@ impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Args)]
 pub struct StorageSpillConfig {
     #[clap(long = "storage-spill-bucket", value_name = "VALUE", default_value_t)]
-    pub bucket: String,
+    #[serde(rename = "bucket")]
+    pub spill_bucket: String,
 }
 
 impl Default for StorageSpillConfig {
     fn default() -> Self {
         Self {
-            bucket: InnerStorageConfig::default()
+            spill_bucket: InnerStorageConfig::default()
                 .spill_bucket
                 .unwrap_or_default(),
         }
