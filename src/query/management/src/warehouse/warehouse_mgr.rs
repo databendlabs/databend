@@ -102,6 +102,32 @@ impl WarehouseMgr {
             ),
         })
     }
+
+    async fn shutdown_system_managed(&self, node_info: &NodeInfo) -> Result<()> {
+        let node_key = self.node_key(&node_info)?;
+
+        let mut txn = TxnRequest::default();
+
+        txn.if_then.push(TxnOp::delete(node_key));
+
+        if node_info.assigned_warehouse() {
+            txn.if_then.push(TxnOp::delete(format!(
+                "{}/{}/{}/{}",
+                self.cluster_node_key_prefix,
+                escape_for_key(&node_info.warehouse_id)?,
+                escape_for_key(&node_info.cluster_id)?,
+                escape_for_key(&node_info.id)?
+            )));
+        }
+
+        match self.metastore.transaction(txn).await?.success {
+            true => Ok(()),
+            false => Err(ErrorCode::ClusterUnknownNode(format!(
+                "Node with ID '{}' does not exist in the cluster.",
+                node_info.id
+            ))),
+        }
+    }
 }
 
 fn map_condition(k: &str, seq: MatchSeq) -> TxnCondition {
@@ -585,13 +611,13 @@ impl WarehouseMgr {
 
     async fn unassigned_nodes(&self) -> Result<HashMap<Option<String>, Vec<(u64, NodeInfo)>>> {
         let online_nodes = self.metastore.prefix_list_kv(&self.node_key_prefix).await?;
-        let mut group_nodes = HashMap::with_capacity(online_nodes.len());
+        let mut unassigned_nodes = HashMap::with_capacity(online_nodes.len());
 
         for (_, seq_data) in online_nodes {
             let node_info = serde_json::from_slice::<NodeInfo>(&seq_data.data)?;
 
-            if node_info.cluster_id.is_empty() && node_info.warehouse_id.is_empty() {
-                match group_nodes.entry(node_info.node_group.clone()) {
+            if !node_info.assigned_warehouse() {
+                match unassigned_nodes.entry(node_info.node_group.clone()) {
                     Entry::Vacant(v) => {
                         v.insert(vec![(seq_data.seq, node_info)]);
                     }
@@ -602,7 +628,7 @@ impl WarehouseMgr {
             }
         }
 
-        Ok(group_nodes)
+        Ok(unassigned_nodes)
     }
 
     async fn pick_assign_warehouse_node(
@@ -753,29 +779,7 @@ impl WarehouseApi for WarehouseMgr {
 
             return match node_info.node_type {
                 NodeType::SelfManaged => self.shutdown_self_managed_node(&node_info).await,
-                NodeType::SystemManaged => {
-                    let mut txn = TxnRequest::default();
-
-                    txn.if_then.push(TxnOp::delete(node_key));
-
-                    if !node_info.cluster_id.is_empty() && !node_info.warehouse_id.is_empty() {
-                        txn.if_then.push(TxnOp::delete(format!(
-                            "{}/{}/{}/{}",
-                            self.cluster_node_key_prefix,
-                            escape_for_key(&node_info.warehouse_id)?,
-                            escape_for_key(&node_info.cluster_id)?,
-                            escape_for_key(&node_info.id)?
-                        )));
-                    }
-
-                    match self.metastore.transaction(txn).await?.success {
-                        true => Ok(()),
-                        false => Err(ErrorCode::ClusterUnknownNode(format!(
-                            "Node with ID '{}' does not exist in the cluster.",
-                            node_id
-                        ))),
-                    }
-                }
+                NodeType::SystemManaged => self.shutdown_system_managed(&node_info).await,
             };
         }
 
@@ -786,7 +790,6 @@ impl WarehouseApi for WarehouseMgr {
     }
 
     async fn heartbeat_node(&self, node: &mut NodeInfo, exact: u64) -> Result<u64> {
-        // let exact = MatchSeq::Exact(seq);
         let heartbeat_reply = match node.node_type {
             NodeType::SelfManaged => {
                 assert!(!node.cluster_id.is_empty());
@@ -999,7 +1002,7 @@ impl WarehouseApi for WarehouseMgr {
             for (_key, v) in online_nodes {
                 let node_info = serde_json::from_slice::<NodeInfo>(&v.data)?;
 
-                if node_info.warehouse_id.is_empty() && node_info.cluster_id.is_empty() {
+                if !node_info.assigned_warehouse() {
                     assert_eq!(node_info.node_type, NodeType::SystemManaged);
                     unassign_online_nodes.push((v.seq, node_info));
                 }
@@ -1892,7 +1895,7 @@ impl WarehouseApi for WarehouseMgr {
 
         let node = serde_json::from_slice::<NodeInfo>(&seq.data)?;
 
-        if node.warehouse_id.is_empty() && node.cluster_id.is_empty() {
+        if !node.assigned_warehouse() {
             return Ok((false, vec![node]));
         }
 
