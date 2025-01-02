@@ -947,7 +947,7 @@ spill_local_disk_path = "/data/spill"
         || {
             let cfg = InnerConfig::load_for_test().expect("config load failed");
 
-            assert_eq!(cfg.spill.path, "/data/spill");
+            assert_eq!(cfg.spill.local_path(), Some(("/data/spill".into(), true)));
             assert_eq!(cfg.spill.reserved_disk_ratio, 0.3);
         },
     );

@@ -17,6 +17,7 @@ use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -66,7 +67,7 @@ pub struct InnerConfig {
     pub cache: CacheConfig,
 
     // Spill Config
-    pub spill: SpillConfig,
+    pub spill: LocalSpillConfig,
 
     // Background Config
     pub background: InnerBackgroundConfig,
@@ -716,9 +717,9 @@ impl Default for CacheConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SpillConfig {
-    /// Path of spill to local disk. disable if it's empty.
-    pub path: String,
+pub struct LocalSpillConfig {
+    pub(crate) local_writeable_root: Option<String>,
+    pub(crate) path: String,
 
     /// Ratio of the reserve of the disk space.
     pub reserved_disk_ratio: OrderedFloat<f64>,
@@ -727,9 +728,39 @@ pub struct SpillConfig {
     pub global_bytes_limit: u64,
 }
 
-impl Default for SpillConfig {
+impl LocalSpillConfig {
+    /// Path of spill to local disk.
+    /// return path, is_strict
+    pub fn local_path(&self) -> Option<(PathBuf, bool)> {
+        if self.global_bytes_limit == 0 {
+            return None;
+        }
+
+        if !self.path.is_empty() {
+            return Some((self.path.clone().into(), true));
+        }
+
+        if let Some(root) = &self.local_writeable_root {
+            return Some((PathBuf::from(root).join("temp/_query_spill"), false));
+        }
+
+        None
+    }
+
+    pub fn new_for_test(path: String, reserved_disk_ratio: f64, global_bytes_limit: u64) -> Self {
+        Self {
+            local_writeable_root: None,
+            path,
+            reserved_disk_ratio: OrderedFloat(reserved_disk_ratio),
+            global_bytes_limit,
+        }
+    }
+}
+
+impl Default for LocalSpillConfig {
     fn default() -> Self {
         Self {
+            local_writeable_root: None,
             path: "".to_string(),
             reserved_disk_ratio: OrderedFloat(0.3),
             global_bytes_limit: u64::MAX,

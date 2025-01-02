@@ -404,7 +404,9 @@ impl RetryInterceptor for DatabendRetryInterceptor {
 #[derive(Clone, Debug)]
 pub struct DataOperator {
     operator: Operator,
+    spill_operator: Option<Operator>,
     params: StorageParams,
+    spill_bucket: Option<String>,
 }
 
 impl DataOperator {
@@ -413,60 +415,69 @@ impl DataOperator {
         self.operator.clone()
     }
 
+    pub fn spill_operator(&self) -> Operator {
+        match &self.spill_operator {
+            Some(op) => op.clone(),
+            None => self.operator.clone(),
+        }
+    }
+
+    pub fn spill_bucket(&self) -> Option<&String> {
+        self.spill_bucket.as_ref()
+    }
+
     pub fn params(&self) -> StorageParams {
         self.params.clone()
     }
 
     #[async_backtrace::framed]
     pub async fn init(conf: &StorageConfig) -> databend_common_exception::Result<()> {
-        GlobalInstance::set(Self::try_create(&conf.params).await?);
+        GlobalInstance::set(Self::try_create(conf).await?);
 
         Ok(())
     }
 
     /// Create a new data operator without check.
-    pub fn try_new(sp: &StorageParams) -> databend_common_exception::Result<DataOperator> {
-        let operator = init_operator(sp)?;
+    pub fn try_new(conf: &StorageConfig) -> databend_common_exception::Result<DataOperator> {
+        let operator = init_operator(&conf.params)?;
+
+        let (spill_operator, spill_bucket) = match Self::spill_params(conf) {
+            Some(params) => {
+                let op = init_operator(&params)?;
+                (Some(op), conf.spill_bucket.clone())
+            }
+            None => (None, None),
+        };
 
         Ok(DataOperator {
             operator,
-            params: sp.clone(),
+            params: conf.params.clone(),
+            spill_operator,
+            spill_bucket,
         })
     }
 
     #[async_backtrace::framed]
-    pub async fn try_create(sp: &StorageParams) -> databend_common_exception::Result<DataOperator> {
-        let sp = sp.clone();
+    pub async fn try_create(
+        conf: &StorageConfig,
+    ) -> databend_common_exception::Result<DataOperator> {
+        let operator = init_operator(&conf.params)?;
+        check_operator(&operator, &conf.params).await?;
 
-        let operator = init_operator(&sp)?;
-
-        // OpenDAL will send a real request to underlying storage to check whether it works or not.
-        // If this check failed, it's highly possible that the users have configured it wrongly.
-        //
-        // Make sure the check is called inside GlobalIORuntime to prevent
-        // IO hang on reuse connection.
-        let op = operator.clone();
-        if let Err(cause) = GlobalIORuntime::instance()
-            .spawn(async move {
-                let res = op.stat("/").await;
-                match res {
-                    Ok(_) => Ok(()),
-                    Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
-                    Err(e) => Err(e),
-                }
-            })
-            .await
-            .expect("join must succeed")
-        {
-            return Err(ErrorCode::StorageUnavailable(format!(
-                "current configured storage is not available: config: {:?}, cause: {cause}",
-                sp
-            )));
-        }
+        let (spill_operator, spill_bucket) = match Self::spill_params(conf) {
+            Some(params) => {
+                let op = init_operator(&params)?;
+                check_operator(&op, &params).await?;
+                (Some(op), conf.spill_bucket.clone())
+            }
+            None => (None, None),
+        };
 
         Ok(DataOperator {
             operator,
-            params: sp.clone(),
+            params: conf.params.clone(),
+            spill_operator,
+            spill_bucket,
         })
     }
 
@@ -481,4 +492,66 @@ impl DataOperator {
     pub fn instance() -> DataOperator {
         GlobalInstance::get()
     }
+
+    fn spill_params(conf: &StorageConfig) -> Option<StorageParams> {
+        let bucket = conf.spill_bucket.clone()?;
+
+        match &conf.params {
+            StorageParams::Azblob(c) => Some(StorageParams::Azblob(StorageAzblobConfig {
+                container: bucket,
+                ..c.clone()
+            })),
+            StorageParams::Gcs(c) => Some(StorageParams::Gcs(StorageGcsConfig {
+                bucket,
+                ..c.clone()
+            })),
+            StorageParams::Obs(c) => Some(StorageParams::Obs(StorageObsConfig {
+                bucket,
+                ..c.clone()
+            })),
+            StorageParams::Oss(c) => Some(StorageParams::Oss(StorageOssConfig {
+                bucket,
+                ..c.clone()
+            })),
+            StorageParams::S3(c) => Some(StorageParams::S3(StorageS3Config {
+                bucket,
+                ..c.clone()
+            })),
+            StorageParams::Cos(c) => Some(StorageParams::Cos(StorageCosConfig {
+                bucket,
+                ..c.clone()
+            })),
+            _ => None,
+        }
+    }
+}
+
+pub async fn check_operator(
+    operator: &Operator,
+    params: &StorageParams,
+) -> databend_common_exception::Result<()> {
+    // OpenDAL will send a real request to underlying storage to check whether it works or not.
+    // If this check failed, it's highly possible that the users have configured it wrongly.
+    //
+    // Make sure the check is called inside GlobalIORuntime to prevent
+    // IO hang on reuse connection.
+    let op = operator.clone();
+
+    GlobalIORuntime::instance()
+        .spawn(async move {
+            let res = op.stat("/").await;
+            match res {
+                Ok(_) => Ok(()),
+                Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(e),
+            }
+        })
+        .await
+        .expect("join must succeed")
+        .map_err(|cause| {
+            ErrorCode::StorageUnavailable(format!(
+                "current configured storage is not available: config: {:?}, cause: {cause}",
+                params
+            ))
+        })
 }

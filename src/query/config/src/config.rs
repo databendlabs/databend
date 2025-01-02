@@ -309,6 +309,10 @@ pub struct StorageConfig {
     // COS storage backend config
     #[clap(flatten)]
     pub cos: CosStorageConfig,
+
+    // Spill config for any storage backend
+    #[clap(flatten)]
+    pub spill: StorageSpillConfig,
 }
 
 impl Default for StorageConfig {
@@ -336,6 +340,9 @@ impl From<InnerStorageConfig> for StorageConfig {
             obs: Default::default(),
             webhdfs: Default::default(),
             cos: Default::default(),
+            spill: StorageSpillConfig {
+                bucket: inner.spill_bucket.unwrap_or_default(),
+            },
 
             // Deprecated fields
             storage_type: None,
@@ -408,6 +415,11 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
+            spill_bucket: if self.spill.bucket.is_empty() {
+                None
+            } else {
+                Some(self.spill.bucket)
+            },
             params: {
                 match self.typ.as_str() {
                     "azblob" => StorageParams::Azblob(self.azblob.try_into()?),
@@ -1308,6 +1320,22 @@ impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
             endpoint_url: value.cos_endpoint_url,
             root: value.cos_root,
         })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Args)]
+pub struct StorageSpillConfig {
+    #[clap(long = "storage-spill-bucket", value_name = "VALUE", default_value_t)]
+    pub bucket: String,
+}
+
+impl Default for StorageSpillConfig {
+    fn default() -> Self {
+        Self {
+            bucket: InnerStorageConfig::default()
+                .spill_bucket
+                .unwrap_or_default(),
+        }
     }
 }
 
@@ -2976,7 +3004,7 @@ pub struct SpillConfig {
 
 impl Default for SpillConfig {
     fn default() -> Self {
-        inner::SpillConfig::default().into()
+        inner::LocalSpillConfig::default().into()
     }
 }
 
@@ -3024,7 +3052,7 @@ mod cache_config_converters {
                 storage,
                 catalog,
                 cache,
-                mut spill,
+                spill,
                 background,
                 catalogs: input_catalogs,
                 ..
@@ -3044,18 +3072,7 @@ mod cache_config_converters {
                 catalogs.insert(CATALOG_HIVE.to_string(), catalog);
             }
 
-            // Trick for cloud, perhaps we should introduce a new configuration for the local writeable root.
-            if cache.disk_cache_config.path != inner::DiskCacheConfig::default().path
-                && spill.spill_local_disk_path == inner::SpillConfig::default().path
-            {
-                spill.spill_local_disk_path = PathBuf::from(&cache.disk_cache_config.path)
-                    .join("temp/_query_spill")
-                    .into_os_string()
-                    .into_string()
-                    .map_err(|s| {
-                        ErrorCode::Internal(format!("failed to convert os string to string: {s:?}"))
-                    })?
-            };
+            let spill = convert_local_spill_config(spill, &cache.disk_cache_config)?;
 
             Ok(InnerConfig {
                 subcommand,
@@ -3066,7 +3083,7 @@ mod cache_config_converters {
                 storage: storage.try_into()?,
                 catalogs,
                 cache: cache.try_into()?,
-                spill: spill.try_into()?,
+                spill,
                 background: background.try_into()?,
             })
         }
@@ -3129,33 +3146,29 @@ mod cache_config_converters {
         }
     }
 
-    impl TryFrom<SpillConfig> for inner::SpillConfig {
-        type Error = ErrorCode;
+    fn convert_local_spill_config(
+        spill: SpillConfig,
+        cache: &DiskCacheConfig,
+    ) -> Result<inner::LocalSpillConfig> {
+        // Trick for cloud, perhaps we should introduce a new configuration for the local writeable root.
+        let local_writeable_root = if cache.path != DiskCacheConfig::default().path
+            && spill.spill_local_disk_path.is_empty()
+        {
+            Some(cache.path.clone())
+        } else {
+            None
+        };
 
-        fn try_from(value: SpillConfig) -> std::result::Result<Self, Self::Error> {
-            let SpillConfig {
-                spill_local_disk_path,
-                spill_local_disk_reserved_space_percentage: reserved,
-                spill_local_disk_max_bytes,
-            } = value;
-            if !reserved.is_normal()
-                || reserved.is_sign_negative()
-                || reserved > OrderedFloat(100.0)
-            {
-                Err(ErrorCode::InvalidArgument(format!(
-                    "invalid spill_local_disk_reserved_space_percentage: {reserved}"
-                )))?;
-            }
-            Ok(Self {
-                path: spill_local_disk_path,
-                reserved_disk_ratio: reserved / 100.0,
-                global_bytes_limit: spill_local_disk_max_bytes,
-            })
-        }
+        Ok(inner::LocalSpillConfig {
+            local_writeable_root,
+            path: spill.spill_local_disk_path,
+            reserved_disk_ratio: spill.spill_local_disk_reserved_space_percentage / 100.0,
+            global_bytes_limit: spill.spill_local_disk_max_bytes,
+        })
     }
 
-    impl From<inner::SpillConfig> for SpillConfig {
-        fn from(value: inner::SpillConfig) -> Self {
+    impl From<inner::LocalSpillConfig> for SpillConfig {
+        fn from(value: inner::LocalSpillConfig) -> Self {
             Self {
                 spill_local_disk_path: value.path,
                 spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,

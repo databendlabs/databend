@@ -15,15 +15,12 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::fs::create_dir;
-use std::fs::create_dir_all;
-use std::fs::remove_dir_all;
+use std::fs;
 use std::hash::Hash;
 use std::io::ErrorKind;
 use std::ops::Deref;
 use std::ops::Drop;
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -33,7 +30,7 @@ use std::sync::Once;
 use databend_common_base::base::Alignment;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::GlobalUniqName;
-use databend_common_config::SpillConfig;
+use databend_common_config::LocalSpillConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use rustix::fs::statvfs;
@@ -51,35 +48,44 @@ pub struct TempDirManager {
 }
 
 impl TempDirManager {
-    pub fn init(config: &SpillConfig, tenant_id: &str) -> Result<()> {
-        let (root, reserved, alignment) = if config.path.is_empty() {
-            (None, 0, Alignment::MIN)
-        } else {
-            let path = PathBuf::from(&config.path)
-                .join(tenant_id)
-                .into_boxed_path();
-
-            if let Err(e) = remove_dir_all(&path) {
-                if !matches!(e.kind(), ErrorKind::NotFound) {
-                    return Err(ErrorCode::StorageUnavailable(format!(
-                        "can't clean temp dir {path:?}: {e}",
-                    )));
+    pub fn init(config: &LocalSpillConfig, tenant_id: &str) -> Result<()> {
+        let (root, reserved, alignment) = match config.local_path() {
+            None => (None, 0, Alignment::MIN),
+            Some((path, strict)) => {
+                if strict {
+                    fs::read_dir(&path).map_err(|e| {
+                        ErrorCode::StorageUnavailable(format!("can't read temp dir {path:?}: {e}"))
+                    })?;
                 }
-            }
 
-            if create_dir_all(&path).is_err() {
-                (None, 0, Alignment::MIN)
-            } else {
-                let path = path.canonicalize()?.into_boxed_path();
+                let path = path.join(tenant_id);
+                if let Err(e) = fs::remove_dir_all(&path) {
+                    if !matches!(e.kind(), ErrorKind::NotFound) {
+                        Err(ErrorCode::StorageUnavailable(format!(
+                            "can't clean temp dir {path:?}: {e}",
+                        )))?
+                    }
+                }
 
-                let stat =
-                    statvfs(path.as_ref()).map_err(|e| ErrorCode::StorageOther(e.to_string()))?;
+                match fs::create_dir_all(&path) {
+                    Err(e) if strict => Err(ErrorCode::StorageUnavailable(format!(
+                        "can't init temp dir {path:?}: {e}"
+                    )))?,
+                    Err(_) => (None, 0, Alignment::MIN),
+                    Ok(_) => {
+                        let stat = statvfs(&path).map_err(|e| {
+                            ErrorCode::StorageUnavailable(format!(
+                                "can't stat temp dir {path:?}: {e}",
+                            ))
+                        })?;
 
-                (
-                    Some(path),
-                    (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64,
-                    Alignment::new(stat.f_bsize.max(512) as usize).unwrap(),
-                )
+                        (
+                            Some(path.canonicalize()?.into_boxed_path()),
+                            (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64,
+                            Alignment::new(stat.f_bsize.max(512) as usize).unwrap(),
+                        )
+                    }
+                }
             }
         };
 
@@ -142,7 +148,7 @@ impl TempDirManager {
 
         let mut group = self.group.lock().unwrap();
         if group.dirs.remove(&path).is_some() {
-            match remove_dir_all(&path) {
+            match fs::remove_dir_all(&path) {
                 Ok(_) => return Ok(true),
                 Err(e) if matches!(e.kind(), ErrorKind::NotFound) => {}
                 res => res?,
@@ -158,7 +164,7 @@ impl TempDirManager {
         match self.root.as_ref() {
             None => Ok(vec![]),
             Some(root) => {
-                let read_dir = std::fs::read_dir(root)?;
+                let read_dir = fs::read_dir(root)?;
                 let group = self.group.lock().unwrap();
                 let to_delete = read_dir
                     .filter_map(|entry| match entry {
@@ -176,7 +182,7 @@ impl TempDirManager {
                     .collect::<Vec<_>>();
                 drop(group);
                 for path in &to_delete {
-                    remove_dir_all(path)?;
+                    fs::remove_dir_all(path)?;
                 }
                 Ok(to_delete)
             }
@@ -250,7 +256,7 @@ impl TempDir {
     fn init_dir(&self) -> Result<()> {
         let mut rt = Ok(());
         self.dir_info.inited.call_once(|| {
-            if let Err(e) = create_dir(&self.path) {
+            if let Err(e) = fs::create_dir(&self.path) {
                 if !matches!(e.kind(), ErrorKind::AlreadyExists) {
                     rt = Err(e);
                 }
@@ -373,7 +379,6 @@ impl Drop for InnerPath {
 #[cfg(test)]
 mod tests {
     use std::assert_matches::assert_matches;
-    use std::fs;
     use std::sync::atomic::Ordering;
 
     use super::*;
@@ -383,15 +388,13 @@ mod tests {
         let thread = std::thread::current();
         GlobalInstance::init_testing(thread.name().unwrap());
 
-        let config = SpillConfig {
-            path: "test_data".to_string(),
-            reserved_disk_ratio: 0.01.into(),
-            global_bytes_limit: 1 << 30,
-        };
+        fs::create_dir("test_data")?;
+
+        let config = LocalSpillConfig::new_for_test("test_data".to_string(), 0.01, 1 << 30);
 
         TempDirManager::init(&config, "test_tenant")?;
 
-        let mgr = TempDirManager::instance();
+        let mgr: Arc<TempDirManager> = TempDirManager::instance();
         let dir = mgr.get_disk_spill_dir(1 << 30, "some_query").unwrap();
         let mut path = dir.new_file_with_size(110)?.unwrap();
 
@@ -413,7 +416,7 @@ mod tests {
 
         mgr.drop_disk_spill_dir("some_query")?;
 
-        remove_dir_all("test_data")?;
+        fs::remove_dir_all("test_data")?;
 
         Ok(())
     }
@@ -423,19 +426,17 @@ mod tests {
         let thread = std::thread::current();
         GlobalInstance::init_testing(thread.name().unwrap());
 
-        let config = SpillConfig {
-            path: "test_data2".to_string(),
-            reserved_disk_ratio: 0.99.into(),
-            global_bytes_limit: 1 << 30,
-        };
+        fs::create_dir("test_data2")?;
+
+        let config = LocalSpillConfig::new_for_test("test_data2".to_string(), 0.99, 1 << 30);
 
         TempDirManager::init(&config, "test_tenant")?;
 
         let mgr = TempDirManager::instance();
         mgr.get_disk_spill_dir(1 << 30, "some_query").unwrap();
 
-        create_dir("test_data2/test_tenant/unknown_query1")?;
-        create_dir("test_data2/test_tenant/unknown_query2")?;
+        fs::create_dir("test_data2/test_tenant/unknown_query1")?;
+        fs::create_dir("test_data2/test_tenant/unknown_query2")?;
 
         let mut deleted = mgr.drop_disk_spill_dir_unknown(10)?;
 
@@ -452,7 +453,7 @@ mod tests {
             deleted
         );
 
-        remove_dir_all("test_data2")?;
+        fs::remove_dir_all("test_data2")?;
 
         Ok(())
     }
