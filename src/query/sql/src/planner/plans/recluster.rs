@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::ast::Statement;
 use databend_common_catalog::plan::Filters;
 use educe::Educe;
 
@@ -33,8 +32,6 @@ pub struct Recluster {
     pub limit: Option<usize>,
     #[educe(Hash(ignore))]
     pub filters: Option<Filters>,
-    #[educe(Eq(ignore), Hash(ignore))]
-    pub hilbert_stmt: Option<Statement>,
 }
 
 impl Operator for Recluster {
@@ -43,9 +40,7 @@ impl Operator for Recluster {
     }
 }
 
-pub(crate) fn set_update_stream_columns(
-    s_expr: &SExpr,
-) -> databend_common_exception::Result<SExpr> {
+pub fn set_update_stream_columns(s_expr: &SExpr) -> databend_common_exception::Result<SExpr> {
     match s_expr.plan() {
         RelOperator::Scan(scan) if scan.table_index == 0 => {
             let mut scan = scan.clone();

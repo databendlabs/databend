@@ -209,11 +209,15 @@ async fn compact_table(
                     table: compact_target.table,
                     limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
                     filters: None,
-                    hilbert_stmt: None,
                 });
                 let s_expr = SExpr::create_leaf(Arc::new(recluster));
-                let recluster_interpreter =
-                    ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
+                let recluster_interpreter = ReclusterTableInterpreter::try_create(
+                    ctx.clone(),
+                    s_expr,
+                    None,
+                    lock_opt,
+                    false,
+                )?;
                 // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
                 // we do not need to use `PipelineCompleteExecutor` to execute it.
                 let build_res = recluster_interpreter.execute2().await?;
