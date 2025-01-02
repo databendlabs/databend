@@ -159,7 +159,7 @@ impl WarehouseMgr {
         node.warehouse_id = String::new();
     }
 
-    async fn start_self_managed(&self, node: NodeInfo) -> Result<TxnReply> {
+    async fn start_self_managed(&self, mut node: NodeInfo) -> Result<TxnReply> {
         if node.warehouse_id.is_empty() || node.cluster_id.is_empty() {
             return Err(ErrorCode::InvalidWarehouse(
                 "The warehouse_id and cluster_id for self managed node must not be empty.",
@@ -269,7 +269,7 @@ impl WarehouseMgr {
         )))
     }
 
-    async fn heartbeat_self_managed(&self, node: NodeInfo, seq: MatchSeq) -> Result<TxnReply> {
+    async fn heartbeat_self_managed(&self, mut node: NodeInfo, seq: u64) -> Result<TxnReply> {
         let node_with_wh = node.clone();
         self.unload_warehouse_info(&mut node);
         let node_without_wh = node;
@@ -281,7 +281,8 @@ impl WarehouseMgr {
 
         let mut txn = TxnRequest::default();
 
-        txn.condition.push(map_condition(&node_key, seq));
+        txn.condition
+            .push(map_condition(&node_key, MatchSeq::Exact(seq)));
 
         let ttl = Some(self.lift_time);
         txn.if_then = vec![
@@ -297,7 +298,7 @@ impl WarehouseMgr {
 
         txn.else_then = vec![TxnOp::get(&node_key), TxnOp::get(&warehouse_key)];
 
-        let txn_reply = self.metastore.transaction(txn).await?;
+        let mut txn_reply = self.metastore.transaction(txn).await?;
 
         if !txn_reply.success {
             // txn_reply includes: 1. get node response 2. get warehouse response
@@ -357,11 +358,12 @@ impl WarehouseMgr {
         Ok(self.metastore.transaction(txn).await?)
     }
 
-    async fn heartbeat_system_managed(&self, node: NodeInfo, seq: MatchSeq) -> Result<TxnReply> {
+    async fn heartbeat_system_managed(&self, mut node: NodeInfo, seq: u64) -> Result<TxnReply> {
         let mut txn = TxnRequest::default();
         let node_key = self.node_key(&node)?;
 
-        txn.condition.push(map_condition(&node_key, seq));
+        txn.condition
+            .push(map_condition(&node_key, MatchSeq::Exact(seq)));
 
         txn.if_then.push(TxnOp::put_with_ttl(
             node_key.clone(),
@@ -390,7 +392,7 @@ impl WarehouseMgr {
         let leave_node = node_info.leave_warehouse();
 
         let reply = self
-            .heartbeat_system_managed(leave_node, MatchSeq::Exact(seq))
+            .heartbeat_system_managed(leave_node.clone(), seq)
             .await?;
 
         if !reply.success {
@@ -415,9 +417,7 @@ impl WarehouseMgr {
     }
 
     async fn join_warehouse(&self, node_info: NodeInfo, seq: u64) -> Result<u64> {
-        let reply = self
-            .heartbeat_system_managed(node_info.clone(), MatchSeq::Exact(seq))
-            .await?;
+        let reply = self.heartbeat_system_managed(node_info, seq).await?;
 
         if !reply.success {
             return Err(ErrorCode::WarehouseOperateConflict(
@@ -439,30 +439,26 @@ impl WarehouseMgr {
     }
 
     async fn resolve_conflicts(&self, reply: TxnReply, node: &mut NodeInfo) -> Result<u64> {
-        match reply.responses.first() {
+        // system-managed heartbeat_node reply include 'get node response' at last response
+        let get_node_response = reply.responses.last();
+        let get_node_response = get_node_response.and_then(TxnOpResponse::try_as_get);
+
+        match get_node_response {
             None => self.leave_warehouse(node, 0).await,
-            Some(TxnOpResponse {
-                response: Some(Response::Get(res)),
-            }) => match &res.value {
-                None => self.leave_warehouse(node, 0).await,
-                Some(value) => {
-                    // node info from meta service
-                    let node_from_meta = serde_json::from_slice::<NodeInfo>(&value.data)?;
+            Some(TxnGetResponse { value: None, .. }) => self.leave_warehouse(node, 0).await,
+            Some(TxnGetResponse { value: Some(v), .. }) => {
+                let node_from_meta = serde_json::from_slice::<NodeInfo>(&v.data)?;
 
-                    // Removed this node from the cluster in other nodes
-                    if node.assigned_warehouse() && !node_from_meta.assigned_warehouse() {
-                        return self.leave_warehouse(node, value.seq).await;
-                    }
-
-                    // Move this node to new warehouse and cluster
-                    let seq = self
-                        .join_warehouse(node_from_meta.clone(), value.seq)
-                        .await?;
-                    *node = node_from_meta;
-                    Ok(seq)
+                // Removed this node from the cluster in other nodes
+                if node.assigned_warehouse() && !node_from_meta.assigned_warehouse() {
+                    return self.leave_warehouse(node, v.seq).await;
                 }
-            },
-            _ => Err(ErrorCode::Internal("Miss type while in meta response")),
+
+                // Move this node to new warehouse and cluster
+                let seq = self.join_warehouse(node_from_meta.clone(), v.seq).await?;
+                *node = node_from_meta;
+                Ok(seq)
+            }
         }
     }
 
@@ -737,8 +733,8 @@ impl WarehouseApi for WarehouseMgr {
     #[fastrace::trace]
     async fn start_node(&self, node: NodeInfo) -> Result<u64> {
         let start_reply = match node.node_type {
-            NodeType::SelfManaged => self.start_self_managed(node).await?,
-            NodeType::SystemManaged => self.start_system_managed(node).await?,
+            NodeType::SelfManaged => self.start_self_managed(node.clone()).await?,
+            NodeType::SystemManaged => self.start_system_managed(node.clone()).await?,
         };
 
         if !start_reply.success {
@@ -801,8 +797,8 @@ impl WarehouseApi for WarehouseMgr {
         )))
     }
 
-    async fn heartbeat_node(&self, node: &mut NodeInfo, seq: u64) -> Result<u64> {
-        let exact = MatchSeq::Exact(seq);
+    async fn heartbeat_node(&self, node: &mut NodeInfo, exact: u64) -> Result<u64> {
+        // let exact = MatchSeq::Exact(seq);
         let heartbeat_reply = match node.node_type {
             NodeType::SelfManaged => {
                 assert!(!node.cluster_id.is_empty());
