@@ -78,6 +78,9 @@ impl Databend {
     pub fn create(client: Client) -> Self {
         Databend { client }
     }
+    pub fn client_name(&self) -> &str {
+        self.client.engine_name()
+    }
 }
 
 #[async_trait::async_trait]
@@ -178,7 +181,6 @@ async fn run_hybrid_client(cs: &mut Vec<ContainerAsync<GenericImage>>) -> Result
             ClientType::MySQL | ClientType::Http => {}
             ClientType::TTC(image, _) => {
                 use testcontainers::core::IntoContainerPort;
-                use testcontainers::core::WaitFor;
                 use testcontainers::runners::AsyncRunner;
                 use testcontainers::GenericImage;
                 use testcontainers::ImageExt;
@@ -190,7 +192,6 @@ async fn run_hybrid_client(cs: &mut Vec<ContainerAsync<GenericImage>>) -> Result
                 println!("Start to pull image {image}:{tag}");
                 let container = GenericImage::new(image, tag)
                     .with_exposed_port(port_start.tcp())
-                    .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
                     .with_network("host")
                     .with_env_var(
                         "DATABEND_DSN",
@@ -393,6 +394,7 @@ async fn run_file_async(
         true => "✅",
         false => "❌",
     };
+
     if !SqlLogicTestArgs::parse().bench {
         println!(
             "Completed {} test for file: {} {} ({:?})",
