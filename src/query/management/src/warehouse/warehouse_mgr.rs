@@ -159,27 +159,12 @@ impl WarehouseMgr {
         node.warehouse_id = String::new();
     }
 
-    async fn upsert_self_managed(&self, mut node: NodeInfo, seq: MatchSeq) -> Result<TxnReply> {
+    async fn start_self_managed(&self, node: NodeInfo) -> Result<TxnReply> {
         if node.warehouse_id.is_empty() || node.cluster_id.is_empty() {
             return Err(ErrorCode::InvalidWarehouse(
                 "The warehouse_id and cluster_id for self managed node must not be empty.",
             ));
         }
-
-        // It's a many-to-one map from `node` to `warehouse`.
-        //
-        // In insert mode, there may not be any node registered in the self-managed warehouse,
-        // thus we need to asset either the warehouse does not exist,
-        // or the warehouse is a self-managed warehouse.
-        // Otherwise(warehouse is found a system-managed), return an error immediately.
-        //
-        // In update mode(`!insert`), we already assert the seq of node_key,
-        // and `node` and `warehouse` are always updated together,
-        // so we can be sure that the warehouse is always a self-managed
-        // and is safe to update in this transaction.
-        // If the node changed(node seq does not match),
-        // just ignore, and no retry is required.
-        let is_insert = seq == MatchSeq::Exact(0);
 
         let node_with_wh = node.clone();
         self.unload_warehouse_info(&mut node);
@@ -192,7 +177,8 @@ impl WarehouseMgr {
 
         let mut txn = TxnRequest::default();
 
-        txn.condition.push(map_condition(&node_key, seq));
+        txn.condition
+            .push(map_condition(&node_key, MatchSeq::Exact(0)));
 
         let ttl = Some(self.lift_time);
         txn.if_then = vec![
@@ -206,11 +192,7 @@ impl WarehouseMgr {
             TxnOp::get(&node_key),
         ];
 
-        txn.else_then.push(TxnOp::get(&node_key));
-
-        if !is_insert {
-            return Ok(self.metastore.transaction(txn).await?);
-        }
+        txn.else_then = vec![TxnOp::get(&node_key), TxnOp::get(&warehouse_key)];
 
         let mut wh_seq = 0;
         let max_retry = 20;
@@ -222,7 +204,6 @@ impl WarehouseMgr {
             warehouse_txn
                 .condition
                 .push(TxnCondition::eq_seq(&warehouse_key, wh_seq));
-            warehouse_txn.else_then.push(TxnOp::get(&warehouse_key));
 
             let mut txn_reply = self.metastore.transaction(warehouse_txn).await?;
 
@@ -239,7 +220,8 @@ impl WarehouseMgr {
                 let node_get_resp = first.map(|r| r.as_get());
                 let node_get_resp = node_get_resp.ok_or_else(|| invalid_get_resp(first))?;
 
-                if seq.match_seq(&node_get_resp.value).is_err() {
+                let exact_seq = MatchSeq::Exact(0);
+                if exact_seq.match_seq(&node_get_resp.value).is_err() {
                     // Node changed, no more retry is needed.
                     return Ok(txn_reply);
                 }
@@ -287,7 +269,95 @@ impl WarehouseMgr {
         )))
     }
 
-    async fn upsert_system_managed(&self, mut node: NodeInfo, seq: MatchSeq) -> Result<TxnReply> {
+    async fn heartbeat_self_managed(&self, node: NodeInfo, seq: MatchSeq) -> Result<TxnReply> {
+        let node_with_wh = node.clone();
+        self.unload_warehouse_info(&mut node);
+        let node_without_wh = node;
+
+        let node_key = self.node_key(&node_with_wh)?;
+        let cluster_node_key = self.cluster_node_key(&node_with_wh)?;
+        let warehouse_key = self.warehouse_info_key(&node_with_wh.warehouse_id)?;
+        let warehouse = WarehouseInfo::SelfManaged(node_with_wh.warehouse_id.clone());
+
+        let mut txn = TxnRequest::default();
+
+        txn.condition.push(map_condition(&node_key, seq));
+
+        let ttl = Some(self.lift_time);
+        txn.if_then = vec![
+            TxnOp::put_with_ttl(&node_key, serde_json::to_vec(&node_with_wh)?, ttl),
+            TxnOp::put_with_ttl(
+                &cluster_node_key,
+                serde_json::to_vec(&node_without_wh)?,
+                ttl,
+            ),
+            TxnOp::put_with_ttl(&warehouse_key, serde_json::to_vec(&warehouse)?, ttl),
+            TxnOp::get(&node_key),
+        ];
+
+        txn.else_then = vec![TxnOp::get(&node_key), TxnOp::get(&warehouse_key)];
+
+        let txn_reply = self.metastore.transaction(txn).await?;
+
+        if !txn_reply.success {
+            // txn_reply includes: 1. get node response 2. get warehouse response
+
+            // Check warehouse state
+            {
+                // The last response is not meant to be returned.
+                let last = txn_reply.responses.pop();
+
+                let wh_get_resp = last.as_ref().and_then(|r| r.try_as_get());
+                let wh_get_resp = wh_get_resp.ok_or_else(|| invalid_get_resp(last.as_ref()))?;
+
+                if let Some(wh_seqv) = &wh_get_resp.value {
+                    let wh: WarehouseInfo = serde_json::from_slice(&wh_seqv.data)?;
+
+                    if let WarehouseInfo::SystemManaged(_) = wh {
+                        // an unknown error caused all nodes of the warehouse to fail the heartbeat with the meta service. If someone creates a warehouse with the same name during this period.
+                        return Err(ErrorCode::WarehouseAlreadyExists(
+                            "Already exists same name system-managed warehouse.",
+                        ));
+                    }
+                };
+            }
+        }
+
+        Ok(txn_reply)
+    }
+
+    async fn start_system_managed(&self, mut node: NodeInfo) -> Result<TxnReply> {
+        // TODO: find attach warehouse
+        let mut txn = TxnRequest::default();
+        let node_key = self.node_key(&node)?;
+
+        txn.condition
+            .push(map_condition(&node_key, MatchSeq::Exact(0)));
+
+        txn.if_then.push(TxnOp::put_with_ttl(
+            node_key.clone(),
+            serde_json::to_vec(&node)?,
+            Some(self.lift_time),
+        ));
+
+        // If the warehouse has already been assigned.
+        if !node.cluster_id.is_empty() && !node.warehouse_id.is_empty() {
+            let cluster_node_key = self.cluster_node_key(&node)?;
+
+            self.unload_warehouse_info(&mut node);
+            txn.if_then.push(TxnOp::put_with_ttl(
+                cluster_node_key,
+                serde_json::to_vec(&node)?,
+                Some(self.lift_time),
+            ));
+        }
+
+        txn.if_then.push(TxnOp::get(node_key.clone()));
+        txn.else_then.push(TxnOp::get(node_key.clone()));
+        Ok(self.metastore.transaction(txn).await?)
+    }
+
+    async fn heartbeat_system_managed(&self, node: NodeInfo, seq: MatchSeq) -> Result<TxnReply> {
         let mut txn = TxnRequest::default();
         let node_key = self.node_key(&node)?;
 
@@ -316,23 +386,14 @@ impl WarehouseMgr {
         Ok(self.metastore.transaction(txn).await?)
     }
 
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    async fn upsert_node(&self, node: NodeInfo, seq: MatchSeq) -> Result<TxnReply> {
-        match node.node_type {
-            NodeType::SelfManaged => self.upsert_self_managed(node, seq).await,
-            NodeType::SystemManaged => self.upsert_system_managed(node, seq).await,
-        }
-    }
-
-    async fn leave_cluster(&self, node_info: &mut NodeInfo, seq: u64) -> Result<u64> {
+    async fn leave_warehouse(&self, node_info: &mut NodeInfo, seq: u64) -> Result<u64> {
         let leave_node = node_info.leave_warehouse();
 
-        let response = self
-            .upsert_node(leave_node.clone(), MatchSeq::Exact(seq))
+        let reply = self
+            .heartbeat_system_managed(leave_node, MatchSeq::Exact(seq))
             .await?;
 
-        if !response.success {
+        if !reply.success {
             return Err(ErrorCode::WarehouseOperateConflict(
                 "Node's status changed while in leave cluster.",
             ));
@@ -340,7 +401,7 @@ impl WarehouseMgr {
 
         *node_info = leave_node;
 
-        match response.responses.last() {
+        match reply.responses.last() {
             Some(TxnOpResponse {
                 response:
                     Some(Response::Get(TxnGetResponse {
@@ -353,18 +414,18 @@ impl WarehouseMgr {
         }
     }
 
-    async fn join_cluster(&self, node_info: NodeInfo, seq: u64) -> Result<u64> {
-        let response = self
-            .upsert_node(node_info.clone(), MatchSeq::Exact(seq))
+    async fn join_warehouse(&self, node_info: NodeInfo, seq: u64) -> Result<u64> {
+        let reply = self
+            .heartbeat_system_managed(node_info.clone(), MatchSeq::Exact(seq))
             .await?;
 
-        if !response.success {
+        if !reply.success {
             return Err(ErrorCode::WarehouseOperateConflict(
                 "Node's status changed while in join cluster.",
             ));
         }
 
-        match response.responses.last() {
+        match reply.responses.last() {
             Some(TxnOpResponse {
                 response:
                     Some(Response::Get(TxnGetResponse {
@@ -379,22 +440,24 @@ impl WarehouseMgr {
 
     async fn resolve_conflicts(&self, reply: TxnReply, node: &mut NodeInfo) -> Result<u64> {
         match reply.responses.first() {
-            None => self.leave_cluster(node, 0).await,
+            None => self.leave_warehouse(node, 0).await,
             Some(TxnOpResponse {
                 response: Some(Response::Get(res)),
             }) => match &res.value {
-                None => self.leave_cluster(node, 0).await,
+                None => self.leave_warehouse(node, 0).await,
                 Some(value) => {
                     // node info from meta service
                     let node_from_meta = serde_json::from_slice::<NodeInfo>(&value.data)?;
 
                     // Removed this node from the cluster in other nodes
                     if node.assigned_warehouse() && !node_from_meta.assigned_warehouse() {
-                        return self.leave_cluster(node, value.seq).await;
+                        return self.leave_warehouse(node, value.seq).await;
                     }
 
-                    // Move this node to new cluster
-                    let seq = self.join_cluster(node_from_meta.clone(), value.seq).await?;
+                    // Move this node to new warehouse and cluster
+                    let seq = self
+                        .join_warehouse(node_from_meta.clone(), value.seq)
+                        .await?;
                     *node = node_from_meta;
                     Ok(seq)
                 }
@@ -673,28 +736,27 @@ impl WarehouseApi for WarehouseMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
     async fn start_node(&self, node: NodeInfo) -> Result<u64> {
-        let upsert_reply = self.upsert_node(node.clone(), MatchSeq::Exact(0)).await?;
+        let start_reply = match node.node_type {
+            NodeType::SelfManaged => self.start_self_managed(node).await?,
+            NodeType::SystemManaged => self.start_system_managed(node).await?,
+        };
 
-        if upsert_reply.success {
-            let Some(Response::Get(response)) = upsert_reply
-                .responses
-                .last()
-                .and_then(|x| x.response.as_ref())
-            else {
-                return Err(ErrorCode::Internal("Unknown get response"));
-            };
-
-            let Some(node_info) = &response.value else {
-                return Err(ErrorCode::MetaServiceError("Add node info failure."));
-            };
-
-            return Ok(node_info.seq);
+        if !start_reply.success {
+            return Err(ErrorCode::ClusterNodeAlreadyExists(format!(
+                "Node with ID '{}' already exists in the cluster.",
+                node.id
+            )));
         }
 
-        Err(ErrorCode::ClusterNodeAlreadyExists(format!(
-            "Node with ID '{}' already exists in the cluster.",
-            node.id
-        )))
+        match start_reply.responses.last() {
+            Some(TxnOpResponse {
+                response:
+                    Some(Response::Get(TxnGetResponse {
+                        value: Some(seq_v), ..
+                    })),
+            }) => Ok(seq_v.seq),
+            _ => Err(ErrorCode::MetaServiceError("Add node info failure.")),
+        }
     }
 
     #[async_backtrace::framed]
@@ -740,28 +802,33 @@ impl WarehouseApi for WarehouseMgr {
     }
 
     async fn heartbeat_node(&self, node: &mut NodeInfo, seq: u64) -> Result<u64> {
-        if node.node_type == NodeType::SelfManaged {
-            assert!(!node.cluster_id.is_empty());
-            assert!(!node.warehouse_id.is_empty());
-        }
+        let exact = MatchSeq::Exact(seq);
+        let heartbeat_reply = match node.node_type {
+            NodeType::SelfManaged => {
+                assert!(!node.cluster_id.is_empty());
+                assert!(!node.warehouse_id.is_empty());
 
-        let res = self.upsert_node(node.clone(), MatchSeq::Exact(seq)).await?;
-
-        match res.success {
-            true => {
-                let Some(Response::Get(response)) =
-                    res.responses.last().and_then(|x| x.response.as_ref())
-                else {
-                    return Err(ErrorCode::Internal("Unknown get response"));
-                };
-
-                let Some(node_info) = &response.value else {
-                    return Err(ErrorCode::MetaServiceError("Add node info failure."));
-                };
-
-                Ok(node_info.seq)
+                self.heartbeat_self_managed(node.clone(), exact).await?
             }
-            false => self.resolve_conflicts(res, node).await,
+            NodeType::SystemManaged => {
+                let reply = self.heartbeat_system_managed(node.clone(), exact).await?;
+
+                if !reply.success {
+                    return self.resolve_conflicts(reply, node).await;
+                }
+
+                reply
+            }
+        };
+
+        match heartbeat_reply.responses.last() {
+            Some(TxnOpResponse {
+                response:
+                    Some(Response::Get(TxnGetResponse {
+                        value: Some(seq_v), ..
+                    })),
+            }) => Ok(seq_v.seq),
+            _ => Err(ErrorCode::MetaServiceError("Heartbeat node info failure.")),
         }
     }
 

@@ -143,7 +143,7 @@ impl NodeInfo {
             id: self.id.clone(),
             secret: self.secret.clone(),
             cpu_nums: self.cpu_nums,
-            version: self.version.clone(),
+            version: self.version,
             http_address: self.http_address.clone(),
             flight_address: self.flight_address.clone(),
             discovery_address: self.discovery_address.clone(),
@@ -153,29 +153,6 @@ impl NodeInfo {
             cluster_id: String::new(),
             warehouse_id: String::new(),
             runtime_node_group: None,
-        }
-    }
-
-    pub fn join_warehouse(
-        &self,
-        warehouse: String,
-        cluster: String,
-        group: Option<String>,
-    ) -> NodeInfo {
-        NodeInfo {
-            id: self.id.clone(),
-            secret: self.secret.clone(),
-            cpu_nums: self.cpu_nums,
-            version: self.version.clone(),
-            http_address: self.http_address.clone(),
-            flight_address: self.flight_address.clone(),
-            discovery_address: self.discovery_address.clone(),
-            binary_version: self.binary_version.clone(),
-            node_type: self.node_type.clone(),
-            node_group: self.node_group.clone(),
-            cluster_id: cluster,
-            warehouse_id: warehouse,
-            runtime_node_group: group,
         }
     }
 }
