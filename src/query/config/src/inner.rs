@@ -730,18 +730,17 @@ pub struct LocalSpillConfig {
 
 impl LocalSpillConfig {
     /// Path of spill to local disk.
-    /// return path, is_strict
-    pub fn local_path(&self) -> Option<(PathBuf, bool)> {
+    pub fn local_path(&self) -> Option<PathBuf> {
         if self.global_bytes_limit == 0 {
             return None;
         }
 
         if !self.path.is_empty() {
-            return Some((self.path.clone().into(), true));
+            return Some(self.path.clone().into());
         }
 
         if let Some(root) = &self.local_writeable_root {
-            return Some((PathBuf::from(root).join("temp/_query_spill"), false));
+            return Some(PathBuf::from(root).join("temp/_query_spill"));
         }
 
         None

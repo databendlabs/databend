@@ -51,13 +51,7 @@ impl TempDirManager {
     pub fn init(config: &LocalSpillConfig, tenant_id: &str) -> Result<()> {
         let (root, reserved, alignment) = match config.local_path() {
             None => (None, 0, Alignment::MIN),
-            Some((path, strict)) => {
-                if strict {
-                    fs::read_dir(&path).map_err(|e| {
-                        ErrorCode::StorageUnavailable(format!("can't read temp dir {path:?}: {e}"))
-                    })?;
-                }
-
+            Some(path) => {
                 let path = path.join(tenant_id);
                 if let Err(e) = fs::remove_dir_all(&path) {
                     if !matches!(e.kind(), ErrorKind::NotFound) {
@@ -68,9 +62,6 @@ impl TempDirManager {
                 }
 
                 match fs::create_dir_all(&path) {
-                    Err(e) if strict => Err(ErrorCode::StorageUnavailable(format!(
-                        "can't init temp dir {path:?}: {e}"
-                    )))?,
                     Err(_) => (None, 0, Alignment::MIN),
                     Ok(_) => {
                         let stat = statvfs(&path).map_err(|e| {

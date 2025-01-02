@@ -31,7 +31,6 @@ sleep 1
 echo 'Start Meta service HA cluster(3 nodes)...'
 
 mkdir -p ./.databend/
-mkdir -p ./.databend/temp/_query_spill
 
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-1.toml >./.databend/meta-1.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9191
