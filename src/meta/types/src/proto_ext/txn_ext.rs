@@ -352,8 +352,12 @@ impl pb::TxnOpResponse {
         }
     }
 
+    pub fn as_get(&self) -> &pb::TxnGetResponse {
+        self.try_as_get().unwrap()
+    }
+
     /// Returns the response as a `Get` response if it is one.
-    pub fn as_get(&self) -> Option<&pb::TxnGetResponse> {
+    pub fn try_as_get(&self) -> Option<&pb::TxnGetResponse> {
         match &self.response {
             Some(pb::txn_op_response::Response::Get(resp)) => Some(resp),
             _ => None,

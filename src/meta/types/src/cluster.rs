@@ -133,6 +133,51 @@ impl NodeInfo {
 
         Ok((addr.ip().to_string(), addr.port()))
     }
+
+    pub fn assigned_warehouse(&self) -> bool {
+        !self.warehouse_id.is_empty() && !self.cluster_id.is_empty()
+    }
+
+    pub fn leave_warehouse(&self) -> NodeInfo {
+        NodeInfo {
+            id: self.id.clone(),
+            secret: self.secret.clone(),
+            cpu_nums: self.cpu_nums,
+            version: self.version.clone(),
+            http_address: self.http_address.clone(),
+            flight_address: self.flight_address.clone(),
+            discovery_address: self.discovery_address.clone(),
+            binary_version: self.binary_version.clone(),
+            node_type: self.node_type.clone(),
+            node_group: self.node_group.clone(),
+            cluster_id: String::new(),
+            warehouse_id: String::new(),
+            runtime_node_group: None,
+        }
+    }
+
+    pub fn join_warehouse(
+        &self,
+        warehouse: String,
+        cluster: String,
+        group: Option<String>,
+    ) -> NodeInfo {
+        NodeInfo {
+            id: self.id.clone(),
+            secret: self.secret.clone(),
+            cpu_nums: self.cpu_nums,
+            version: self.version.clone(),
+            http_address: self.http_address.clone(),
+            flight_address: self.flight_address.clone(),
+            discovery_address: self.discovery_address.clone(),
+            binary_version: self.binary_version.clone(),
+            node_type: self.node_type.clone(),
+            node_group: self.node_group.clone(),
+            cluster_id: cluster,
+            warehouse_id: warehouse,
+            runtime_node_group: group,
+        }
+    }
 }
 
 #[cfg(test)]

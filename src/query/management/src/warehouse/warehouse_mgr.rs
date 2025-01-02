@@ -236,7 +236,7 @@ impl WarehouseMgr {
             {
                 let first = txn_reply.responses.first();
 
-                let node_get_resp = first.and_then(|r| r.as_get());
+                let node_get_resp = first.map(|r| r.as_get());
                 let node_get_resp = node_get_resp.ok_or_else(|| invalid_get_resp(first))?;
 
                 if seq.match_seq(&node_get_resp.value).is_err() {
@@ -250,7 +250,7 @@ impl WarehouseMgr {
                 // The last response is not meant to be returned.
                 let last = txn_reply.responses.pop();
 
-                let wh_get_resp = last.as_ref().and_then(|r| r.as_get());
+                let wh_get_resp = last.as_ref().and_then(|r| r.try_as_get());
                 let wh_get_resp = wh_get_resp.ok_or_else(|| invalid_get_resp(last.as_ref()))?;
 
                 if let Some(wh_seqv) = &wh_get_resp.value {
@@ -326,61 +326,54 @@ impl WarehouseMgr {
     }
 
     async fn leave_cluster(&self, node_info: &mut NodeInfo, seq: u64) -> Result<u64> {
-        let mut cluster_id = String::new();
-        let mut warehouse_id = String::new();
-        let mut runtime_node_group = None;
+        let leave_node = node_info.leave_warehouse();
 
-        std::mem::swap(&mut node_info.cluster_id, &mut cluster_id);
-        std::mem::swap(&mut node_info.warehouse_id, &mut warehouse_id);
-        std::mem::swap(&mut node_info.runtime_node_group, &mut runtime_node_group);
+        let response = self
+            .upsert_node(leave_node.clone(), MatchSeq::Exact(seq))
+            .await?;
 
-        let upsert_node = self.upsert_node(node_info.clone(), MatchSeq::Exact(seq));
-        match upsert_node.await {
-            Err(err) => {
-                // rollback
-                std::mem::swap(&mut node_info.cluster_id, &mut cluster_id);
-                std::mem::swap(&mut node_info.warehouse_id, &mut warehouse_id);
-                std::mem::swap(&mut node_info.runtime_node_group, &mut runtime_node_group);
-                Err(err)
-            }
-            Ok(response) if !response.success => {
-                // rollback
-                std::mem::swap(&mut node_info.cluster_id, &mut cluster_id);
-                std::mem::swap(&mut node_info.warehouse_id, &mut warehouse_id);
-                std::mem::swap(&mut node_info.runtime_node_group, &mut runtime_node_group);
-                Ok(seq)
-            }
-            Ok(response) => match response.responses.last() {
-                Some(TxnOpResponse {
-                    response: Some(Response::Get(TxnGetResponse { value: Some(v), .. })),
-                }) => Ok(v.seq),
-                _ => Err(ErrorCode::MetaServiceError("Meta insert failure.")),
-            },
+        if !response.success {
+            return Err(ErrorCode::WarehouseOperateConflict(
+                "Node's status changed while in leave cluster.",
+            ));
+        }
+
+        *node_info = leave_node;
+
+        match response.responses.last() {
+            Some(TxnOpResponse {
+                response:
+                    Some(Response::Get(TxnGetResponse {
+                        value: Some(seq_v), ..
+                    })),
+            }) => Ok(seq_v.seq),
+            _ => Err(ErrorCode::MetaServiceError(
+                "Invalid response while leave cluster, expect get response",
+            )),
         }
     }
 
-    async fn join_cluster(&self, node_info: &mut NodeInfo, seq: u64) -> Result<u64> {
-        let upsert_node = self.upsert_node(node_info.clone(), MatchSeq::Exact(seq));
+    async fn join_cluster(&self, node_info: NodeInfo, seq: u64) -> Result<u64> {
+        let response = self
+            .upsert_node(node_info.clone(), MatchSeq::Exact(seq))
+            .await?;
 
-        match upsert_node.await {
-            Err(err) => {
-                // rollback
-                // std::mem::swap(&mut node_info.cluster_id, &mut cluster_id);
-                // std::mem::swap(&mut node_info.warehouse_id, &mut warehouse_id);
-                Err(err)
-            }
-            Ok(response) if !response.success => {
-                // rollback
-                // std::mem::swap(&mut node_info.cluster_id, &mut cluster_id);
-                // std::mem::swap(&mut node_info.warehouse_id, &mut warehouse_id);
-                Ok(seq)
-            }
-            Ok(response) => match response.responses.last() {
-                Some(TxnOpResponse {
-                    response: Some(Response::Get(TxnGetResponse { value: Some(v), .. })),
-                }) => Ok(v.seq),
-                _ => Err(ErrorCode::MetaServiceError("Meta insert failure.")),
-            },
+        if !response.success {
+            return Err(ErrorCode::WarehouseOperateConflict(
+                "Node's status changed while in join cluster.",
+            ));
+        }
+
+        match response.responses.last() {
+            Some(TxnOpResponse {
+                response:
+                    Some(Response::Get(TxnGetResponse {
+                        value: Some(seq_v), ..
+                    })),
+            }) => Ok(seq_v.seq),
+            _ => Err(ErrorCode::MetaServiceError(
+                "Invalid response while join cluster, expect get response",
+            )),
         }
     }
 
@@ -392,21 +385,18 @@ impl WarehouseMgr {
             }) => match &res.value {
                 None => self.leave_cluster(node, 0).await,
                 Some(value) => {
-                    let node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
+                    // node info from meta service
+                    let node_from_meta = serde_json::from_slice::<NodeInfo>(&value.data)?;
 
                     // Removed this node from the cluster in other nodes
-                    if !node.cluster_id.is_empty()
-                        && !node.warehouse_id.is_empty()
-                        && node_info.cluster_id.is_empty()
-                        && node_info.warehouse_id.is_empty()
-                    {
+                    if node.assigned_warehouse() && !node_from_meta.assigned_warehouse() {
                         return self.leave_cluster(node, value.seq).await;
                     }
 
-                    // Added this node to the cluster in other nodes
-                    node.cluster_id = node_info.cluster_id;
-                    node.warehouse_id = node_info.warehouse_id;
-                    self.join_cluster(node, value.seq).await
+                    // Move this node to new cluster
+                    let seq = self.join_cluster(node_from_meta.clone(), value.seq).await?;
+                    *node = node_from_meta;
+                    Ok(seq)
                 }
             },
             _ => Err(ErrorCode::Internal("Miss type while in meta response")),
@@ -683,11 +673,13 @@ impl WarehouseApi for WarehouseMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
     async fn start_node(&self, node: NodeInfo) -> Result<u64> {
-        let res = self.upsert_node(node.clone(), MatchSeq::Exact(0)).await?;
+        let upsert_reply = self.upsert_node(node.clone(), MatchSeq::Exact(0)).await?;
 
-        if res.success {
-            let Some(Response::Get(response)) =
-                res.responses.last().and_then(|x| x.response.as_ref())
+        if upsert_reply.success {
+            let Some(Response::Get(response)) = upsert_reply
+                .responses
+                .last()
+                .and_then(|x| x.response.as_ref())
             else {
                 return Err(ErrorCode::Internal("Unknown get response"));
             };
@@ -1839,6 +1831,7 @@ impl WarehouseApi for WarehouseMgr {
 
     async fn discover(&self, node_id: &str) -> Result<(bool, Vec<NodeInfo>)> {
         let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
+
         let Some(seq) = self.metastore.get_kv(&node_key).await? else {
             return Err(ErrorCode::NotFoundClusterNode(format!(
                 "Node {} is offline, Please restart this node.",
@@ -1846,32 +1839,14 @@ impl WarehouseApi for WarehouseMgr {
             )));
         };
 
-        let self_info = serde_json::from_slice::<NodeInfo>(&seq.data)?;
+        let node = serde_json::from_slice::<NodeInfo>(&seq.data)?;
 
-        if self_info.warehouse_id.is_empty() && self_info.cluster_id.is_empty() {
-            return Ok((false, vec![self_info]));
+        if node.warehouse_id.is_empty() && node.cluster_id.is_empty() {
+            return Ok((false, vec![node]));
         }
 
-        let cluster_prefix = format!(
-            "{}/{}/{}/",
-            self.cluster_node_key_prefix,
-            escape_for_key(&self_info.warehouse_id)?,
-            escape_for_key(&self_info.cluster_id)?
-        );
-
-        let values = self.metastore.prefix_list_kv(&cluster_prefix).await?;
-
-        let mut cluster_nodes_info = Vec::with_capacity(values.len());
-        for (node_key, value) in values {
-            let mut cluster_node = serde_json::from_slice::<NodeInfo>(&value.data)?;
-
-            cluster_node.id = unescape_for_key(&node_key[cluster_prefix.len()..])?;
-            cluster_node.cluster_id = self_info.cluster_id.clone();
-            cluster_node.warehouse_id = self_info.warehouse_id.clone();
-            cluster_nodes_info.push(cluster_node);
-        }
-
-        Ok((true, cluster_nodes_info))
+        let list_nodes = self.list_warehouse_cluster_nodes(&node.warehouse_id, &node.cluster_id);
+        Ok((true, list_nodes.await?))
     }
 
     async fn get_node_info(&self, node_id: &str) -> Result<Option<NodeInfo>> {
