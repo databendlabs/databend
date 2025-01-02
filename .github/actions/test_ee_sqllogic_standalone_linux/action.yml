@@ -10,7 +10,7 @@ inputs:
     required: true
     default: ""
   handlers:
-    description: "logic test handlers, mysql,http,hybird"
+    description: "logic test handlers, mysql,http,hybrid"
     required: true
     default: ""
   storage-format:

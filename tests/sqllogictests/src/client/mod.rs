@@ -15,6 +15,7 @@
 mod global_cookie_store;
 mod http_client;
 mod mysql_client;
+mod ttc_client;
 
 use std::borrow::Cow;
 use std::fmt;
@@ -26,6 +27,7 @@ use rand::Rng;
 use regex::Regex;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
+pub use ttc_client::TTCClient;
 
 use crate::error::Result;
 
@@ -33,7 +35,9 @@ use crate::error::Result;
 pub enum ClientType {
     MySQL,
     Http,
-    Hybird(Vec<(Box<ClientType>, usize)>),
+    // Tcp Testing Container
+    TTC(String, u16),
+    Hybird,
 }
 
 impl fmt::Display for ClientType {
@@ -45,6 +49,7 @@ impl fmt::Display for ClientType {
 pub enum Client {
     MySQL(MySQLClient),
     Http(HttpClient),
+    TTC(TTCClient),
 }
 
 impl Client {
@@ -53,6 +58,7 @@ impl Client {
         match self {
             Client::MySQL(client) => client.query(&sql).await,
             Client::Http(client) => client.query(&sql).await,
+            Client::TTC(client) => client.query(&sql).await,
         }
     }
 
@@ -60,6 +66,7 @@ impl Client {
         match self {
             Client::MySQL(client) => client.debug = true,
             Client::Http(client) => client.debug = true,
+            Client::TTC(client) => client.debug = true,
         }
     }
 
@@ -80,6 +87,7 @@ impl Client {
         match self {
             Client::MySQL(_) => "mysql",
             Client::Http(_) => "http",
+            Client::TTC(ttcclient) => ttcclient.image.as_str(),
         }
     }
 }

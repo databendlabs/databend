@@ -14,9 +14,8 @@ version = "0.1.0"
 name = "databend-sqllogictests"
 
 [dependencies]
-async-trait = { workspace = true }
 async-recursion = { workspace = true }
-recursive = { workspace = true }
+async-trait = { workspace = true }
 clap = { workspace = true }
 cookie = { workspace = true }
 databend-common-base = { workspace = true }
@@ -27,12 +26,14 @@ msql-srv = { workspace = true }
 mysql_async = { workspace = true }
 mysql_common = { workspace = true }
 rand = { workspace = true }
+recursive = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["cookies"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqllogictest = { workspace = true }
 sqlparser = { workspace = true }
+testcontainers = { workspace = true }
 thiserror = { workspace = true }
 threadpool = { workspace = true }
 tokio = { workspace = true }

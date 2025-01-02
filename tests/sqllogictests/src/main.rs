@@ -18,6 +18,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use clap::Parser;
+use client::TTCClient;
 use databend_sqllogictests::mock_source::run_mysql_source;
 use databend_sqllogictests::mock_source::run_redis_source;
 use futures_util::stream;
@@ -31,6 +32,8 @@ use sqllogictest::DefaultColumnType;
 use sqllogictest::Record;
 use sqllogictest::Runner;
 use sqllogictest::TestError;
+use testcontainers::ContainerAsync;
+use testcontainers::GenericImage;
 
 use crate::arg::SqlLogicTestArgs;
 use crate::client::Client;
@@ -49,6 +52,23 @@ mod util;
 
 const HANDLER_MYSQL: &str = "mysql";
 const HANDLER_HTTP: &str = "http";
+const HANDLER_HYBRID: &str = "hybrid";
+const TTC_PORT_START: u16 = 9092;
+
+use std::sync::LazyLock;
+
+static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|| {
+    vec![
+        (Box::new(ClientType::MySQL), 5),
+        (
+            Box::new(ClientType::TTC(
+                "sundyli/ttc-rust:latest".to_string(),
+                TTC_PORT_START,
+            )),
+            5,
+        ),
+    ]
+});
 
 pub struct Databend {
     client: Client,
@@ -89,6 +109,7 @@ pub async fn main() -> Result<()> {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
         None => vec![HANDLER_MYSQL, HANDLER_HTTP],
     };
+    let mut containers = vec![];
     for handler in handlers.iter() {
         match *handler {
             HANDLER_MYSQL => {
@@ -97,28 +118,8 @@ pub async fn main() -> Result<()> {
             HANDLER_HTTP => {
                 run_http_client().await?;
             }
-            // format: h:mysql=2|http=8
-            h if h.starts_with("h:") => {
-                let h = &h[2..];
-                let mut ts = vec![];
-                for t in h.split("|") {
-                    let mut tt = t.split("=");
-                    let handler = tt.next().unwrap();
-                    let score: usize = tt.next().unwrap().parse().unwrap();
-
-                    match handler {
-                        HANDLER_MYSQL => {
-                            ts.push((Box::new(ClientType::MySQL), score));
-                        }
-                        HANDLER_HTTP => {
-                            ts.push((Box::new(ClientType::Http), score));
-                        }
-                        _ => {
-                            return Err(format!("Unknown test handler: {handler}").into());
-                        }
-                    }
-                }
-                run_hybird_client(ClientType::Hybird(ts)).await?;
+            HANDLER_HYBRID => {
+                run_hybrid_client(&mut containers).await?;
             }
             _ => {
                 return Err(format!("Unknown test handler: {handler}").into());
@@ -162,14 +163,52 @@ async fn run_http_client() -> Result<()> {
     Ok(())
 }
 
-async fn run_hybird_client(client: ClientType) -> Result<()> {
+async fn run_hybrid_client(cs: &mut Vec<ContainerAsync<GenericImage>>) -> Result<()> {
     println!(
         "Hybird client starts to run with: {:?}",
         SqlLogicTestArgs::parse()
     );
     let suits = SqlLogicTestArgs::parse().suites;
     let suits = std::fs::read_dir(suits).unwrap();
-    run_suits(suits, client).await?;
+
+    // preparse docker envs
+    let mut port_start = TTC_PORT_START;
+    for (c, _) in HYBRID_CONFIGS.iter() {
+        match c.as_ref() {
+            ClientType::MySQL | ClientType::Http => {}
+            ClientType::TTC(image, _) => {
+                use testcontainers::core::IntoContainerPort;
+                use testcontainers::core::WaitFor;
+                use testcontainers::runners::AsyncRunner;
+                use testcontainers::GenericImage;
+                use testcontainers::ImageExt;
+
+                let mut images = image.split(":");
+                let image = images.next().unwrap();
+                let tag = images.next().unwrap_or("latest");
+
+                println!("Start to pull image {image}:{tag}");
+                let container = GenericImage::new(image, tag)
+                    .with_exposed_port(port_start.tcp())
+                    .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
+                    .with_network("host")
+                    .with_env_var(
+                        "DATABEND_DSN",
+                        "databend://default:@127.0.0.1:8000?sslmode=disable",
+                    )
+                    .with_env_var("TTC_PORT", format!("{port_start}"))
+                    .start()
+                    .await
+                    .unwrap();
+                println!("Started container: {}", container.id());
+                cs.push(container);
+                port_start += 1;
+            }
+            ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
+        }
+    }
+
+    run_suits(suits, ClientType::Hybird).await?;
     Ok(())
 }
 
@@ -190,7 +229,14 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
             client = Client::Http(HttpClient::create().await?);
         }
 
-        ClientType::Hybird(ts) => {
+        ClientType::TTC(image, port) => {
+            let conn = format!("127.0.0.1:{port}");
+            client = Client::TTC(TTCClient::create(&image, &conn).await?);
+        }
+
+        ClientType::Hybird => {
+            // pick a random clients
+            let ts = &HYBRID_CONFIGS;
             let totals: usize = ts.iter().map(|t| t.1).sum();
             let r = rand::thread_rng().gen_range(0..totals);
 
