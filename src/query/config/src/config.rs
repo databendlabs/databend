@@ -3009,8 +3009,6 @@ impl Default for SpillConfig {
 }
 
 mod cache_config_converters {
-    use std::path::PathBuf;
-
     use log::warn;
 
     use super::*;
