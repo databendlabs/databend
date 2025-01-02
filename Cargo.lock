@@ -5197,6 +5197,7 @@ dependencies = [
  "databend-common-functions",
  "databend-common-io",
  "databend-common-sql",
+ "derive-visitor",
  "ethnum",
  "itertools 0.13.0",
  "jiff",
