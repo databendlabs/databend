@@ -403,13 +403,11 @@ impl WarehouseMgr {
 
         *node_info = leave_node;
 
-        match reply.responses.last() {
-            Some(TxnOpResponse {
-                response:
-                    Some(Response::Get(TxnGetResponse {
-                        value: Some(seq_v), ..
-                    })),
-            }) => Ok(seq_v.seq),
+        let get_node_response = reply.responses.last();
+        let get_node_response = get_node_response.and_then(TxnOpResponse::try_as_get);
+
+        match get_node_response {
+            Some(TxnGetResponse { value: Some(v), .. }) => Ok(v.seq),
             _ => Err(ErrorCode::MetaServiceError(
                 "Invalid response while leave cluster, expect get response",
             )),
@@ -425,13 +423,11 @@ impl WarehouseMgr {
             ));
         }
 
-        match reply.responses.last() {
-            Some(TxnOpResponse {
-                response:
-                    Some(Response::Get(TxnGetResponse {
-                        value: Some(seq_v), ..
-                    })),
-            }) => Ok(seq_v.seq),
+        let get_node_response = reply.responses.last();
+        let get_node_response = get_node_response.and_then(TxnOpResponse::try_as_get);
+
+        match get_node_response {
+            Some(TxnGetResponse { value: Some(v), .. }) => Ok(v.seq),
             _ => Err(ErrorCode::MetaServiceError(
                 "Invalid response while join cluster, expect get response",
             )),
@@ -463,11 +459,13 @@ impl WarehouseMgr {
     }
 
     async fn consistent_warehouse_info(&self, id: &str) -> Result<ConsistentWarehouseInfo> {
+        // Obtain a consistent snapshot of the warehouse nodes using 3 RPC calls
+        // TODO: meta does not support using list within transactions, which will be optimized in later version
         let warehouse_info_key = self.warehouse_info_key(id)?;
 
         let nodes_prefix = format!("{}/{}/", self.cluster_node_key_prefix, escape_for_key(id)?);
 
-        'retry: for _idx in 0..64 {
+        'get_warehouse_snapshot: for _idx in 0..64 {
             let Some(before_info) = self.metastore.get_kv(&warehouse_info_key).await? else {
                 return Err(ErrorCode::UnknownWarehouse(format!(
                     "Unknown warehouse or self managed warehouse {:?}",
@@ -483,64 +481,54 @@ impl WarehouseMgr {
             for (node_key, value) in values {
                 let suffix = &node_key[nodes_prefix.len()..];
 
-                if let Some((_cluster, node)) = suffix.split_once('/') {
-                    let node_key = format!("{}/{}", self.node_key_prefix, node);
-                    after_txn.if_then.push(TxnOp::get(node_key));
-                    cluster_node_seq.push(value.seq);
-                    continue;
-                }
+                let Some((_cluster, node)) = suffix.split_once('/') else {
+                    return Err(ErrorCode::InvalidWarehouse(format!(
+                        "Node key is invalid {:?}",
+                        node_key
+                    )));
+                };
 
-                return Err(ErrorCode::InvalidWarehouse(format!(
-                    "Node key is invalid {:?}",
-                    node_key
-                )));
+                let node_key = format!("{}/{}", self.node_key_prefix, node);
+                after_txn.if_then.push(TxnOp::get(node_key));
+                cluster_node_seq.push(value.seq);
             }
 
             let condition = map_condition(&warehouse_info_key, MatchSeq::Exact(before_info.seq));
             after_txn.condition.push(condition);
 
-            match self.metastore.transaction(after_txn).await? {
-                response if response.success => {
-                    let mut consistent_nodes = Vec::with_capacity(response.responses.len());
-                    for (idx, response) in response.responses.into_iter().enumerate() {
-                        match response.response {
-                            // TODO: maybe ignore none(not need retry)
-                            Some(Response::Get(response)) => match response.value {
-                                Some(value) => {
-                                    let node_info =
-                                        serde_json::from_slice::<NodeInfo>(&value.data)?;
+            let txn_reply = self.metastore.transaction(after_txn).await?;
 
-                                    assert_eq!(node_info.warehouse_id, id);
-                                    assert!(!node_info.cluster_id.is_empty());
-
-                                    consistent_nodes.push(ConsistentNodeInfo {
-                                        node_seq: value.seq,
-                                        cluster_seq: cluster_node_seq[idx],
-                                        node_info,
-                                    });
-                                }
-                                _ => {
-                                    continue 'retry;
-                                }
-                            },
-                            _ => {
-                                continue 'retry;
-                            }
-                        }
-                    }
-
-                    if consistent_nodes.len() == cluster_node_seq.len() {
-                        return Ok(ConsistentWarehouseInfo {
-                            info_seq: before_info.seq,
-                            warehouse_info: serde_json::from_slice(&before_info.data)?,
-                            consistent_nodes,
-                        });
-                    }
-                }
-                _ => {
-                    continue 'retry;
-                }
+            if !txn_reply.success {
+                // The snapshot version status has changed; need to retry obtaining the snapshot.
+                continue 'get_warehouse_snapshot;
             }
+
+            let mut consistent_nodes = Vec::with_capacity(txn_reply.responses.len());
+            for (idx, response) in txn_reply.responses.into_iter().enumerate() {
+                let get_node_info = response.as_get();
+
+                let Some(seq_v) = get_node_info.value.as_ref() else {
+                    // The node went offline during the get snapshot.
+                    continue 'get_warehouse_snapshot;
+                };
+
+                let node_info = serde_json::from_slice::<NodeInfo>(&seq_v.data)?;
+
+                assert_eq!(node_info.warehouse_id, id);
+                assert!(!node_info.cluster_id.is_empty());
+
+                consistent_nodes.push(ConsistentNodeInfo {
+                    node_seq: seq_v.seq,
+                    cluster_seq: cluster_node_seq[idx],
+                    node_info,
+                });
+            }
+
+            return Ok(ConsistentWarehouseInfo {
+                info_seq: before_info.seq,
+                warehouse_info: serde_json::from_slice(&before_info.data)?,
+                consistent_nodes,
+            });
         }
 
         Err(ErrorCode::Internal(
