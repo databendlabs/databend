@@ -339,14 +339,17 @@ impl InterpreterFactory {
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
-            Plan::ReclusterTable { s_expr, is_final } => {
-                Ok(Arc::new(ReclusterTableInterpreter::try_create(
-                    ctx,
-                    *s_expr.clone(),
-                    LockTableOption::LockWithRetry,
-                    *is_final,
-                )?))
-            }
+            Plan::ReclusterTable {
+                s_expr,
+                hilbert_query,
+                is_final,
+            } => Ok(Arc::new(ReclusterTableInterpreter::try_create(
+                ctx,
+                *s_expr.clone(),
+                hilbert_query.clone(),
+                LockTableOption::LockWithRetry,
+                *is_final,
+            )?)),
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),

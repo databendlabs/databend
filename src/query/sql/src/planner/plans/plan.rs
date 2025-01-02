@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::Query;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -243,6 +244,7 @@ pub enum Plan {
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable {
         s_expr: Box<SExpr>,
+        hilbert_query: Option<Box<Query>>,
         is_final: bool,
     },
     RevertTable(Box<RevertTablePlan>),

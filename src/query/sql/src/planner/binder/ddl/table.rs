@@ -1120,7 +1120,7 @@ impl Binder {
             None
         };
 
-        let hilbert_stmt = if matches!(cluster_type, ClusterType::Hilbert) {
+        let hilbert_query = if matches!(cluster_type, ClusterType::Hilbert) {
             LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
             let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
@@ -1175,7 +1175,10 @@ impl Binder {
             );
             let tokens = tokenize_sql(query.as_str())?;
             let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-            Some(stmt)
+            let Statement::Query(query) = stmt else {
+                unreachable!()
+            };
+            Some(query)
         } else {
             None
         };
@@ -1186,11 +1189,11 @@ impl Binder {
             table,
             limit,
             filters,
-            hilbert_stmt,
         });
 
         Ok(Plan::ReclusterTable {
             s_expr: Box::new(SExpr::create_leaf(Arc::new(recluster))),
+            hilbert_query,
             is_final,
         })
     }

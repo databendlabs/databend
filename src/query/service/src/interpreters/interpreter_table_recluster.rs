@@ -17,13 +17,18 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::Statement;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::set_update_stream_columns;
+use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::Recluster;
 use databend_common_sql::MetadataRef;
+use databend_common_sql::Planner;
 use log::error;
 use log::warn;
 
@@ -41,6 +46,7 @@ use crate::sessions::TableContext;
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
+    hilbert_query: Option<Box<Query>>,
     lock_opt: LockTableOption,
     is_final: bool,
 }
@@ -49,12 +55,14 @@ impl ReclusterTableInterpreter {
     pub fn try_create(
         ctx: Arc<QueryContext>,
         s_expr: SExpr,
+        hilbert_query: Option<Box<Query>>,
         lock_opt: LockTableOption,
         is_final: bool,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
             s_expr,
+            hilbert_query,
             lock_opt,
             is_final,
         })
@@ -146,18 +154,45 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
-    async fn execute_recluster(&self, plan: Recluster) -> Result<bool> {
+    async fn execute_recluster(&self, op: Recluster) -> Result<bool> {
         let start = SystemTime::now();
 
         // try to add lock table.
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(&plan.catalog, &plan.database, &plan.table, &self.lock_opt)
+            .acquire_table_lock(&op.catalog, &op.database, &op.table, &self.lock_opt)
             .await?;
 
-        let mut builder = PhysicalPlanBuilder::new(MetadataRef::default(), self.ctx.clone(), false);
-        let physical_plan = match builder.build(&self.s_expr, HashSet::new()).await {
+        let tbl = self
+            .ctx
+            .get_table(&op.catalog, &op.database, &op.table)
+            .await?;
+        let (s_expr, metadata, required) = if let Some(hilbert) = &self.hilbert_query {
+            let mut planner = Planner::new(self.ctx.clone());
+            let plan = planner
+                .plan_stmt(&Statement::Query(hilbert.clone()), false)
+                .await?;
+            let Plan::Query {
+                mut s_expr,
+                metadata,
+                bind_context,
+                ..
+            } = plan
+            else {
+                unreachable!()
+            };
+            if tbl.change_tracking_enabled() {
+                *s_expr = set_update_stream_columns(&s_expr)?;
+            }
+            let s_expr = self.s_expr.replace_children(vec![Arc::new(*s_expr)]);
+            (s_expr, metadata, bind_context.column_set())
+        } else {
+            (self.s_expr.clone(), MetadataRef::default(), HashSet::new())
+        };
+
+        let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone(), false);
+        let physical_plan = match builder.build(&s_expr, required).await {
             Ok(res) => res,
             Err(e) => {
                 return if e.code() == ErrorCode::NO_NEED_TO_RECLUSTER {
@@ -194,7 +229,7 @@ impl ReclusterTableInterpreter {
         hook_vacuum_temp_files(&self.ctx)?;
         hook_disk_temp_dir(&self.ctx)?;
 
-        InterpreterClusteringHistory::write_log(&self.ctx, start, &plan.database, &plan.table)?;
+        InterpreterClusteringHistory::write_log(&self.ctx, start, &op.database, &op.table)?;
         Ok(false)
     }
 }
