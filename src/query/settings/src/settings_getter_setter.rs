@@ -853,4 +853,12 @@ impl Settings {
     pub unsafe fn set_warehouse(&self, warehouse: String) -> Result<()> {
         self.unchecked_set_setting(String::from("warehouse"), warehouse)
     }
+
+    pub fn get_premise_deploy_danger_amend_accept_invalid_cert(&self) -> Result<bool> {
+        Ok(self.try_get_u64("premise_deploy_danger_amend_accept_invalid_cert")? != 0)
+    }
+
+    pub fn get_premise_deploy_amend_force_path_style(&self) -> Result<bool> {
+        Ok(self.try_get_u64("premise_deploy_amend_force_path_style")? != 0)
+    }
 }

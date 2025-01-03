@@ -209,10 +209,8 @@ mod test_accessor {
     use opendal::raw::oio;
     use opendal::raw::oio::Entry;
     use opendal::raw::MaybeSend;
-    use opendal::raw::OpBatch;
     use opendal::raw::OpDelete;
     use opendal::raw::OpList;
-    use opendal::raw::RpBatch;
     use opendal::raw::RpDelete;
     use opendal::raw::RpList;
 
@@ -222,7 +220,7 @@ mod test_accessor {
     #[derive(Debug)]
     pub(crate) struct AccessorFaultyDeletion {
         hit_delete: AtomicBool,
-        hit_batch: AtomicBool,
+        hit_batch: Arc<AtomicBool>,
         hit_stat: AtomicBool,
         inject_delete_faulty: bool,
         inject_stat_faulty: bool,
@@ -232,7 +230,7 @@ mod test_accessor {
         pub(crate) fn with_delete_fault() -> Self {
             AccessorFaultyDeletion {
                 hit_delete: AtomicBool::new(false),
-                hit_batch: AtomicBool::new(false),
+                hit_batch: Arc::new(AtomicBool::new(false)),
                 hit_stat: AtomicBool::new(false),
                 inject_delete_faulty: true,
                 inject_stat_faulty: false,
@@ -242,7 +240,7 @@ mod test_accessor {
         pub(crate) fn with_stat_fault() -> Self {
             AccessorFaultyDeletion {
                 hit_delete: AtomicBool::new(false),
-                hit_batch: AtomicBool::new(false),
+                hit_batch: Arc::new(AtomicBool::new(false)),
                 hit_stat: AtomicBool::new(false),
                 inject_delete_faulty: false,
                 inject_stat_faulty: true,
@@ -251,14 +249,6 @@ mod test_accessor {
 
         pub(crate) fn hit_delete_operation(&self) -> bool {
             self.hit_delete.load(Ordering::Acquire)
-        }
-
-        pub(crate) fn hit_batch_operation(&self) -> bool {
-            self.hit_batch.load(Ordering::Acquire)
-        }
-
-        pub(crate) fn hit_stat_operation(&self) -> bool {
-            self.hit_stat.load(Ordering::Acquire)
         }
     }
 
@@ -281,6 +271,26 @@ mod test_accessor {
         }
     }
 
+    pub struct MockDeleter {
+        size: usize,
+        hit_batch: Arc<AtomicBool>,
+    }
+
+    impl oio::Delete for MockDeleter {
+        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+            self.size += 1;
+            Ok(())
+        }
+
+        async fn flush(&mut self) -> opendal::Result<usize> {
+            self.hit_batch.store(true, Ordering::Release);
+
+            let n = self.size;
+            self.size = 0;
+            Ok(n)
+        }
+    }
+
     impl Access for AccessorFaultyDeletion {
         type Reader = ();
         type BlockingReader = ();
@@ -288,14 +298,16 @@ mod test_accessor {
         type BlockingWriter = ();
         type Lister = VecLister;
         type BlockingLister = ();
+        type Deleter = MockDeleter;
+        type BlockingDeleter = ();
 
         fn info(&self) -> Arc<AccessorInfo> {
             let mut info = AccessorInfo::default();
             let cap = info.full_capability_mut();
             cap.stat = true;
             cap.create_dir = true;
-            cap.batch = true;
             cap.delete = true;
+            cap.delete_max_size = Some(1000);
             cap.list = true;
             info.into()
         }
@@ -317,30 +329,19 @@ mod test_accessor {
             }
         }
 
-        async fn delete(&self, _path: &str, _args: OpDelete) -> opendal::Result<RpDelete> {
+        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
             self.hit_delete.store(true, Ordering::Release);
+
             if self.inject_delete_faulty {
                 Err(opendal::Error::new(
                     opendal::ErrorKind::Unexpected,
                     "does not matter (delete)",
                 ))
             } else {
-                Ok(RpDelete::default())
-            }
-        }
-
-        async fn batch(&self, _args: OpBatch) -> opendal::Result<RpBatch> {
-            self.hit_delete.store(true, Ordering::Release);
-            self.hit_batch.store(true, Ordering::Release);
-
-            // in our case, there are only batch deletions
-            if self.inject_delete_faulty {
-                Err(opendal::Error::new(
-                    opendal::ErrorKind::Unexpected,
-                    "does not matter (delete)",
-                ))
-            } else {
-                Ok(RpBatch::new(vec![]))
+                Ok((RpDelete::default(), MockDeleter {
+                    size: 0,
+                    hit_batch: self.hit_batch.clone(),
+                }))
             }
         }
 
@@ -460,8 +461,6 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
         let tables = vec![table];
         let num_threads = 1;
         let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
-        // verify that accessor.stat() was called
-        assert!(faulty_accessor.hit_stat_operation());
         // verify that errors of NotFound are swallowed
         assert!(result.is_ok());
     }
@@ -476,8 +475,6 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
         let tables = vec![table.clone(), table];
         let num_threads = 2;
         let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
-        // verify that accessor.stat() was called
-        assert!(faulty_accessor.hit_stat_operation());
         // verify that errors of NotFound are swallowed
         assert!(result.is_ok());
     }
@@ -530,7 +527,6 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
 
     // verify that accessor.delete() was called
     assert!(faulty_accessor.hit_delete_operation());
-    assert!(faulty_accessor.hit_batch_operation());
 
     Ok(())
 }

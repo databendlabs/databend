@@ -17,6 +17,7 @@ databend-common-formats = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-sql = { workspace = true }
+derive-visitor = { workspace = true }
 ethnum = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }

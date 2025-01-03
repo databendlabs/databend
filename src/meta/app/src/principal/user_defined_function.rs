@@ -65,6 +65,35 @@ pub enum UDFDefinition {
     UDAFScript(UDAFScript),
 }
 
+impl UDFDefinition {
+    pub fn category(&self) -> &str {
+        match self {
+            Self::LambdaUDF(_) => "LambdaUDF",
+            Self::UDFServer(_) => "UDFServer",
+            Self::UDFScript(_) => "UDFScript",
+            Self::UDAFScript(_) => "UDAFScript",
+        }
+    }
+
+    pub fn is_aggregate(&self) -> bool {
+        match self {
+            Self::LambdaUDF(_) => false,
+            Self::UDFServer(_) => false,
+            Self::UDFScript(_) => false,
+            Self::UDAFScript(_) => true,
+        }
+    }
+
+    pub fn language(&self) -> &str {
+        match self {
+            Self::LambdaUDF(_) => "SQL",
+            Self::UDFServer(x) => x.language.as_str(),
+            Self::UDFScript(x) => x.language.as_str(),
+            Self::UDAFScript(x) => x.language.as_str(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UserDefinedFunction {
     pub name: String,
