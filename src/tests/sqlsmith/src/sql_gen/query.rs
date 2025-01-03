@@ -304,6 +304,11 @@ impl<R: Rng> SqlGenerator<'_, R> {
         }
         let select_list = self.gen_select_list(&group_by);
         let selection = self.gen_selection();
+
+        let having = self.gen_selection();
+        let window_list = self.gen_window_list();
+        let qualify = self.gen_qualify();
+
         SelectStmt {
             span: None,
             // TODO
@@ -314,9 +319,9 @@ impl<R: Rng> SqlGenerator<'_, R> {
             from,
             selection,
             group_by,
-            having: self.gen_selection(),
-            window_list: self.gen_window_list(),
-            qualify: None, // todo: add qualify.
+            having,
+            window_list,
+            qualify,
         }
     }
 
@@ -333,9 +338,20 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 };
                 res.push(window_def);
             }
-            return Some(res);
+            Some(res)
+        } else {
+            None
         }
-        None
+    }
+
+    fn gen_qualify(&mut self) -> Option<Expr> {
+        if self.rng.gen_bool(0.1) {
+            let ty = self.gen_data_type();
+            let qualify = self.gen_expr(&ty);
+            Some(qualify)
+        } else {
+            None
+        }
     }
 
     fn gen_group_by(&mut self) -> Option<GroupBy> {
