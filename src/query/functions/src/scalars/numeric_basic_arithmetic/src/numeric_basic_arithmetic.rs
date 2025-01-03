@@ -125,12 +125,12 @@ pub fn divide_function<L: AsPrimitive<F64>, R: AsPrimitive<F64>>(
     output: &mut Vec<F64>,
     ctx: &mut EvalContext,
 ) {
-    let b_val: F64 = b.as_();
-    if std::intrinsics::unlikely(b_val == 0.0) {
+    let b: F64 = b.as_();
+    if std::intrinsics::unlikely(b == 0.0) {
         ctx.set_error(output.len(), "divided by zero");
         output.push(F64::default());
     } else {
-        output.push(AsPrimitive::<F64>::as_(a) / b_val);
+        output.push((AsPrimitive::<F64>::as_(a)) / b);
     }
 }
 
@@ -286,6 +286,9 @@ macro_rules! register_basic_arithmetic {
         register_multiply!($lt, $rt, $registry);
     }
     {
+        register_divide!($lt, $rt, $registry);
+    }
+    {
         register_intdiv!($lt, $rt, $registry);
     }
     {
@@ -294,14 +297,6 @@ macro_rules! register_basic_arithmetic {
 }
 
 pub fn register_div_arithmetic(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
-        "divide",
-        |_, _, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>>(
-            |a, b, output, ctx| divide_function(a, b, output, ctx)
-        ),
-    );
-
     registry.register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
         "div0",
         |_, _, _| FunctionDomain::Full,
