@@ -348,17 +348,22 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         }
                     }
                 }
-                if let Err(err) = ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
-                    warn!("Failed to get tables: {}, {}", ctl.name(), err);
-                } else {
-                    let new_tables_names = ctl
-                        .mget_table_names_by_ids(&tenant, &tables_ids)
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .filter(|table| !tables_names.contains(table))
-                        .collect::<Vec<_>>();
-                    tables_names.extend(new_tables_names);
+                match ctl
+                    .mget_table_names_by_ids(&tenant, &tables_ids, false)
+                    .await
+                {
+                    Ok(new_tables) => {
+                        let new_table_names: Vec<_> = new_tables
+                            .into_iter()
+                            .flatten()
+                            .filter(|table| !tables_names.contains(table))
+                            .collect();
+
+                        tables_names.extend(new_table_names);
+                    }
+                    Err(err) => {
+                        warn!("Failed to get tables: {}, {}", ctl.name(), err);
+                    }
                 }
 
                 for table_name in &tables_names {
@@ -430,20 +435,20 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             }
                         }
 
-                        if !WITH_HISTORY {
-                            match ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
-                                Ok(tables) => {
-                                    for table in tables.into_iter().flatten() {
-                                        if !tables_names.contains(&table) {
-                                            tables_names.push(table.clone());
-                                        }
+                        match ctl
+                            .mget_table_names_by_ids(&tenant, &tables_ids, WITH_HISTORY)
+                            .await
+                        {
+                            Ok(tables) => {
+                                for table in tables.into_iter().flatten() {
+                                    if !tables_names.contains(&table) {
+                                        tables_names.push(table.clone());
                                     }
                                 }
-                                Err(err) => {
-                                    let msg =
-                                        format!("Failed to get tables: {}, {}", ctl.name(), err);
-                                    warn!("{}", msg);
-                                }
+                            }
+                            Err(err) => {
+                                let msg = format!("Failed to get tables: {}, {}", ctl.name(), err);
+                                warn!("{}", msg);
                             }
                         }
                     }
