@@ -49,6 +49,7 @@ impl SerializedPayload {
         &self,
         group_types: Vec<DataType>,
         aggrs: Vec<Arc<dyn AggregateFunction>>,
+        num_states: usize,
         radix_bits: u64,
         arena: Arc<Bump>,
         need_init_entry: bool,
@@ -57,7 +58,6 @@ impl SerializedPayload {
         let capacity = AggregateHashTable::get_capacity_for_count(rows_num);
         let config = HashTableConfig::default().with_initial_radix_bits(radix_bits);
         let mut state = ProbeState::default();
-        let agg_len = aggrs.len(); // todo check
         let group_len = group_types.len();
         let mut hashtable = AggregateHashTable::new_directly(
             group_types,
@@ -68,10 +68,10 @@ impl SerializedPayload {
             need_init_entry,
         );
 
-        let states_index: Vec<usize> = (0..agg_len).collect();
+        let states_index: Vec<usize> = (0..num_states).collect();
         let agg_states = InputColumns::new_block_proxy(&states_index, &self.data_block);
 
-        let group_index: Vec<usize> = (agg_len..(agg_len + group_len)).collect();
+        let group_index: Vec<usize> = (num_states..(num_states + group_len)).collect();
         let group_columns = InputColumns::new_block_proxy(&group_index, &self.data_block);
 
         let _ = hashtable.add_groups(
@@ -90,11 +90,18 @@ impl SerializedPayload {
         &self,
         group_types: Vec<DataType>,
         aggrs: Vec<Arc<dyn AggregateFunction>>,
+        num_states: usize,
         radix_bits: u64,
         arena: Arc<Bump>,
     ) -> Result<PartitionedPayload> {
-        let hashtable =
-            self.convert_to_aggregate_table(group_types, aggrs, radix_bits, arena, false)?;
+        let hashtable = self.convert_to_aggregate_table(
+            group_types,
+            aggrs,
+            num_states,
+            radix_bits,
+            arena,
+            false,
+        )?;
         Ok(hashtable.payload)
     }
 }

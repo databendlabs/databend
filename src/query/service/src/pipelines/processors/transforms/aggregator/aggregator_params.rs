@@ -94,4 +94,11 @@ impl AggregatorParams {
             .collect_vec();
         DataBlock::new_from_columns(columns)
     }
+
+    pub fn num_states(&self) -> usize {
+        self.states_layout
+            .as_ref()
+            .map(|layout| layout.num_states())
+            .unwrap_or_default()
+    }
 }
