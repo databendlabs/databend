@@ -54,7 +54,7 @@ mod util;
 const HANDLER_MYSQL: &str = "mysql";
 const HANDLER_HTTP: &str = "http";
 const HANDLER_HYBRID: &str = "hybrid";
-const TTC_PORT_START: u16 = 9092;
+const TTC_PORT_START: u16 = 9902;
 
 use std::sync::LazyLock;
 
