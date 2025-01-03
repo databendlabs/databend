@@ -275,14 +275,23 @@ impl StageFilesInfo {
         let lister = operator.lister_with(path).recursive(true).await?;
 
         let pattern = Arc::new(pattern);
+        let operator = operator.clone();
         let files_with_prefix = lister.filter_map(move |result| {
             let pattern = pattern.clone();
+            let operator = operator.clone();
             async move {
                 match result {
                     Ok(entry) => {
-                        let meta = entry.metadata();
-                        if check_file(&entry.path()[prefix_len..], meta.mode(), &pattern) {
-                            Some(Ok(StageFileInfo::new(entry.path().to_string(), meta)))
+                        let (path, mut meta) = entry.into_parts();
+                        if check_file(&path[prefix_len..], meta.mode(), &pattern) {
+                            if meta.etag().is_none() {
+                                meta = match operator.stat(&path).await {
+                                    Ok(meta) => meta,
+                                    Err(err) => return Some(Err(ErrorCode::from(err))),
+                                }
+                            }
+
+                            Some(Ok(StageFileInfo::new(path, &meta)))
                         } else {
                             None
                         }
