@@ -32,7 +32,7 @@ jobs:
         timeout-minutes: 10
         with:
           dirs: management
-          handlers: http,hybrid
+          handlers: http,mysql
 
   standalone:
     runs-on:
@@ -54,7 +54,7 @@ jobs:
           - { dirs: "tpch", runner: "2c8g" }
           - { dirs: "standalone", runner: "2c8g" }
         handler:
-          - "mysql"
+          - "hybrid"
           - "http"
     steps:
       - uses: actions/checkout@v4
@@ -121,7 +121,7 @@ jobs:
         dirs:
           - "query"
         handler:
-          - "mysql"
+          - "hybrid"
           - "http"
         format:
           - "native"
@@ -179,7 +179,7 @@ jobs:
           - { dirs: "tpch", runner: "2c8g" }
           - { dirs: "cluster", runner: "2c8g" }
         handler:
-          - "mysql"
+          - "hybrid"
           - "http"
     steps:
       - uses: actions/checkout@v4
