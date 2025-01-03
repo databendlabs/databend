@@ -64,7 +64,7 @@ impl TTCClient {
                 if let Some(error) = response.error {
                     // APIError: QueryFailed: [1006]Fields in select statement is not equal
                     // Code: 1006, Text = Fields in select statement is not equal
-                    let re = Regex::new(r".*(QueryFailed|AuthFailure): \[(\d+)\](.*)").unwrap();
+                    let re = Regex::new(r"(?s).*(QueryFailed|AuthFailure): \[(\d+)\](.*)").unwrap();
                     if let Some(captures) = re.captures(&error) {
                         let error_code = captures[2].parse::<i32>().unwrap();
                         let error_text = captures[3].trim();
