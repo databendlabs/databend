@@ -16,6 +16,7 @@ name = "databend-sqllogictests"
 [dependencies]
 async-recursion = { workspace = true }
 async-trait = { workspace = true }
+bollard = { workspace = true }
 clap = { workspace = true }
 cookie = { workspace = true }
 databend-common-base = { workspace = true }

@@ -75,7 +75,7 @@ impl TTCClient {
                         "Running sql with mysql client: [{sql}] ({elapsed:?}); error: ({err:?})"
                     );
                 };
-                return Err(err.into());
+                return Err(err);
             }
         };
 
