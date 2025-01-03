@@ -291,7 +291,6 @@ ethnum = { version = "1.5.0" }
 fallible-streaming-iterator = "0.1"
 faststr = "0.2"
 feature-set = { version = "0.1.1" }
-flagset = "0.4"
 flatbuffers = "24" # Must use the same version with arrow-ipc
 flate2 = "1"
 foreign_vec = "0.1.0"
@@ -363,10 +362,10 @@ num-derive = "0.3.3"
 num-traits = "0.2.19"
 num_cpus = "1.13.1"
 object = "0.36.5"
-object_store_opendal = "0.48.1"
+object_store_opendal = { git = "https://github.com/apache/opendal", package = "object_store_opendal", rev = "f7f9990" }
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
-opendal = { version = "0.50.1", features = [
+opendal = { version = "0.51", git = "https://github.com/apache/opendal", rev = "f7f9990", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",

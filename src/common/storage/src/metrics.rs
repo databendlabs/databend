@@ -25,6 +25,7 @@ use opendal::raw::LayeredAccess;
 use opendal::raw::OpList;
 use opendal::raw::OpRead;
 use opendal::raw::OpWrite;
+use opendal::raw::RpDelete;
 use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpWrite;
@@ -167,6 +168,8 @@ impl<A: Access> LayeredAccess for StorageMetricsAccessor<A> {
     type BlockingWriter = StorageMetricsWrapper<A::BlockingWriter>;
     type Lister = A::Lister;
     type BlockingLister = A::BlockingLister;
+    type Deleter = A::Deleter;
+    type BlockingDeleter = A::BlockingDeleter;
 
     fn inner(&self) -> &Self::Inner {
         &self.inner
@@ -193,6 +196,11 @@ impl<A: Access> LayeredAccess for StorageMetricsAccessor<A> {
         self.inner.list(path, args).await
     }
 
+    #[async_backtrace::framed]
+    async fn delete(&self) -> Result<(RpDelete, Self::Deleter)> {
+        self.inner.delete().await
+    }
+
     fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
         self.inner
             .blocking_read(path, args)
@@ -207,6 +215,10 @@ impl<A: Access> LayeredAccess for StorageMetricsAccessor<A> {
 
     fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingLister)> {
         self.inner.blocking_list(path, args)
+    }
+
+    fn blocking_delete(&self) -> Result<(RpDelete, Self::BlockingDeleter)> {
+        self.inner.blocking_delete()
     }
 }
 
