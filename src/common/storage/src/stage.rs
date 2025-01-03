@@ -394,9 +394,16 @@ fn blocking_list_files_with_pattern(
     }
     for obj in list {
         let obj = obj?;
-        let meta = obj.metadata();
-        if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
-            files.push(StageFileInfo::new(obj.path().to_string(), meta));
+        let (path, mut meta) = obj.into_parts();
+        if check_file(&path[prefix_len..], meta.mode(), &pattern) {
+            if meta.etag().is_none() {
+                meta = match operator.stat(&path) {
+                    Ok(meta) => meta,
+                    Err(err) => return Err(ErrorCode::from(err)),
+                }
+            }
+
+            files.push(StageFileInfo::new(path, &meta));
             if files.len() == max_files {
                 return Ok(files);
             }
