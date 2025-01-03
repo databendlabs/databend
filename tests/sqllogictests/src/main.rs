@@ -62,7 +62,7 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
     vec![
         (Box::new(ClientType::MySQL), 3),
         (
-            Box::new(ClientType::TTC(
+            Box::new(ClientType::Ttc(
                 "sundyli/ttc-rust:latest".to_string(),
                 TTC_PORT_START,
             )),
@@ -183,7 +183,7 @@ async fn run_hybrid_client(cs: &mut Vec<ContainerAsync<GenericImage>>) -> Result
     for (c, _) in HYBRID_CONFIGS.iter() {
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
-            ClientType::TTC(image, _) => {
+            ClientType::Ttc(image, _) => {
                 use testcontainers::core::IntoContainerPort;
                 use testcontainers::core::WaitFor;
                 use testcontainers::runners::AsyncRunner;
@@ -243,9 +243,9 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
             client = Client::Http(HttpClient::create().await?);
         }
 
-        ClientType::TTC(image, port) => {
+        ClientType::Ttc(image, port) => {
             let conn = format!("127.0.0.1:{port}");
-            client = Client::TTC(TTCClient::create(&image, &conn).await?);
+            client = Client::Ttc(TTCClient::create(image, &conn).await?);
         }
 
         ClientType::Hybird => {
@@ -389,7 +389,7 @@ async fn run_file_async(
     let records = parse_file(&filename).unwrap();
     let filename = filename.as_ref().to_str().unwrap();
 
-    let mut runner = Runner::new(|| async { create_databend(&client_type, filename).await });
+    let mut runner = Runner::new(|| async { create_databend(client_type, filename).await });
     for record in records.into_iter() {
         if let Record::Halt { .. } = record {
             break;

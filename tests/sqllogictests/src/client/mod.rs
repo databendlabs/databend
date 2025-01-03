@@ -36,7 +36,7 @@ pub enum ClientType {
     MySQL,
     Http,
     // Tcp Testing Container
-    TTC(String, u16),
+    Ttc(String, u16),
     Hybird,
 }
 
@@ -49,7 +49,7 @@ impl fmt::Display for ClientType {
 pub enum Client {
     MySQL(MySQLClient),
     Http(HttpClient),
-    TTC(TTCClient),
+    Ttc(TTCClient),
 }
 
 impl Client {
@@ -58,7 +58,7 @@ impl Client {
         match self {
             Client::MySQL(client) => client.query(&sql).await,
             Client::Http(client) => client.query(&sql).await,
-            Client::TTC(client) => client.query(&sql).await,
+            Client::Ttc(client) => client.query(&sql).await,
         }
     }
 
@@ -66,7 +66,7 @@ impl Client {
         match self {
             Client::MySQL(client) => client.debug = true,
             Client::Http(client) => client.debug = true,
-            Client::TTC(client) => client.debug = true,
+            Client::Ttc(client) => client.debug = true,
         }
     }
 
@@ -87,7 +87,7 @@ impl Client {
         match self {
             Client::MySQL(_) => "mysql",
             Client::Http(_) => "http",
-            Client::TTC(ttcclient) => ttcclient.image.as_str(),
+            Client::Ttc(ttcclient) => ttcclient.image.as_str(),
         }
     }
 }
