@@ -14,6 +14,7 @@
 
 use std::time::Instant;
 
+use regex::Regex;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
 use tokio::io::AsyncReadExt;
@@ -61,7 +62,16 @@ impl TTCClient {
         let rows: Vec<Vec<Option<String>>> = match res {
             Ok(response) => {
                 if let Some(error) = response.error {
-                    return Err(error.into());
+                    // APIError: QueryFailed: [1006]Fields in select statement is not equal
+                    // Code: 1006, Text = Fields in select statement is not equal
+                    let re = Regex::new(r".*(QueryFailed|AuthFailure): \[(\d+)\](.*)").unwrap();
+                    if let Some(captures) = re.captures(&error) {
+                        let error_code = captures[2].parse::<i32>().unwrap();
+                        let error_text = captures[3].trim();
+                        return Err(format!("Code: {}, Text = {}", error_code, error_text).into());
+                    } else {
+                        return Err(error.into());
+                    }
                 }
 
                 if self.debug {

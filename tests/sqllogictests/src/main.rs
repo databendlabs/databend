@@ -207,7 +207,7 @@ async fn run_hybrid_client(cs: &mut Vec<ContainerAsync<GenericImage>>) -> Result
                     .with_network("host")
                     .with_env_var(
                         "DATABEND_DSN",
-                        "databend://default:@127.0.0.1:8000?sslmode=disable",
+                        "databend://root:@127.0.0.1:8000?sslmode=disable",
                     )
                     .with_env_var("TTC_PORT", format!("{port_start}"))
                     .with_container_name(container_name)
