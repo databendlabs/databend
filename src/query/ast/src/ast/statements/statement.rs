@@ -131,6 +131,7 @@ pub enum Statement {
 
     // Warehouses
     ShowOnlineNodes(ShowOnlineNodesStmt),
+    UseWarehouse(UseWarehouseStmt),
     ShowWarehouses(ShowWarehousesStmt),
     DropWarehouse(DropWarehouseStmt),
     CreateWarehouse(CreateWarehouseStmt),
@@ -557,6 +558,7 @@ impl Statement {
             | Statement::CreateProcedure(..)
             | Statement::DropProcedure(..)
             | Statement::CreateWarehouse(..)
+            | Statement::UseWarehouse(..)
             | Statement::DropWarehouse(..)
             | Statement::RenameWarehouse(..)
             | Statement::AddWarehouseCluster(..)
@@ -979,6 +981,7 @@ impl Display for Statement {
 
             Statement::ShowOnlineNodes(stmt) => write!(f, "{stmt}")?,
             Statement::ShowWarehouses(stmt) => write!(f, "{stmt}")?,
+            Statement::UseWarehouse(stmt) => write!(f, "{stmt}")?,
             Statement::DropWarehouse(stmt) => write!(f, "{stmt}")?,
             Statement::CreateWarehouse(stmt) => write!(f, "{stmt}")?,
             Statement::RenameWarehouse(stmt) => write!(f, "{stmt}")?,

@@ -21,6 +21,11 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct UseWarehousePlan {
+    pub warehouse: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct CreateWarehousePlan {
     pub warehouse: String,
     pub nodes: HashMap<Option<String>, u64>,

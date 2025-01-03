@@ -1264,6 +1264,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::InspectWarehouse(_) => {}
             Plan::DropWarehouseCluster(_) => {}
             Plan::RenameWarehouseCluster(_) => {}
+            Plan::UseWarehouse(_) => {}
             Plan::CreateWarehouse(_) => {}
             Plan::AddWarehouseCluster(_) => {}
             Plan::AssignWarehouseNodes(_) => {}

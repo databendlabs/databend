@@ -83,6 +83,7 @@ use crate::interpreters::interpreter_txn_abort::AbortInterpreter;
 use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
 use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouseNodesInterpreter;
+use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
@@ -120,6 +121,7 @@ impl InterpreterFactory {
         match plan {
             Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create(ctx.clone())?)),
             Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create(ctx.clone())?)),
+            Plan::UseWarehouse(v) => Ok(Arc::new(UseWarehouseInterpreter::try_create(ctx.clone(), *v.clone())?)),
             Plan::CreateWarehouse(v) => Ok(Arc::new(CreateWarehouseInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),

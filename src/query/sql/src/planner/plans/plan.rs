@@ -157,6 +157,7 @@ use crate::plans::UnsetOptionsPlan;
 use crate::plans::UnsetPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
+use crate::plans::UseWarehousePlan;
 use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
@@ -205,6 +206,7 @@ pub enum Plan {
     // Warehouses
     ShowOnlineNodes,
     ShowWarehouses,
+    UseWarehouse(Box<UseWarehousePlan>),
     CreateWarehouse(Box<CreateWarehousePlan>),
     DropWarehouse(Box<DropWarehousePlan>),
     ResumeWarehouse(Box<ResumeWarehousePlan>),

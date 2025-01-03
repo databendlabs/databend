@@ -40,6 +40,17 @@ impl Display for ShowWarehousesStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct UseWarehouseStmt {
+    pub warehouse: Identifier,
+}
+
+impl Display for UseWarehouseStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "USE WAREHOUSE {}", self.warehouse)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateWarehouseStmt {
     pub warehouse: Identifier,
     pub node_list: Vec<(Option<String>, u64)>,

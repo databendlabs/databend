@@ -104,7 +104,7 @@ impl WarehouseMgr {
     }
 
     async fn shutdown_system_managed(&self, node_info: &NodeInfo) -> Result<()> {
-        let node_key = self.node_key(&node_info)?;
+        let node_key = self.node_key(node_info)?;
 
         let mut txn = TxnRequest::default();
 

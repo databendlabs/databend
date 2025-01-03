@@ -658,6 +658,7 @@ impl<'a> Binder {
             }
             Statement::ShowOnlineNodes(v) => self.bind_show_online_nodes(v)?,
             Statement::ShowWarehouses(v) => self.bind_show_warehouses(v)?,
+            Statement::UseWarehouse(v) => self.bind_use_warehouse(v)?,
             Statement::DropWarehouse(v) => self.bind_drop_warehouse(v)?,
             Statement::CreateWarehouse(v) => self.bind_create_warehouse(v)?,
             Statement::RenameWarehouse(v) => self.bind_rename_warehouse(v)?,

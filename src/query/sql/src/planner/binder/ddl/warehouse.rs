@@ -28,6 +28,7 @@ use databend_common_ast::ast::ShowOnlineNodesStmt;
 use databend_common_ast::ast::ShowWarehousesStmt;
 use databend_common_ast::ast::SuspendWarehouseStmt;
 use databend_common_ast::ast::UnassignWarehouseNodesStmt;
+use databend_common_ast::ast::UseWarehouseStmt;
 use databend_common_exception::Result;
 
 use crate::plans::AddWarehouseClusterPlan;
@@ -42,6 +43,7 @@ use crate::plans::RenameWarehousePlan;
 use crate::plans::ResumeWarehousePlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::UnassignWarehouseNodesPlan;
+use crate::plans::UseWarehousePlan;
 use crate::Binder;
 
 impl Binder {
@@ -57,6 +59,15 @@ impl Binder {
         _stmt: &ShowWarehousesStmt,
     ) -> Result<Plan> {
         Ok(Plan::ShowWarehouses)
+    }
+
+    pub(in crate::planner::binder) fn bind_use_warehouse(
+        &mut self,
+        stmt: &UseWarehouseStmt,
+    ) -> Result<Plan> {
+        Ok(Plan::UseWarehouse(Box::new(UseWarehousePlan {
+            warehouse: stmt.warehouse.to_string(),
+        })))
     }
 
     pub(in crate::planner::binder) fn bind_create_warehouse(

@@ -139,6 +139,7 @@ mod interpreter_txn_commit;
 mod interpreter_unassign_warehouse_nodes;
 mod interpreter_unset;
 mod interpreter_use_database;
+mod interpreter_use_warehouse;
 mod interpreter_user_alter;
 mod interpreter_user_create;
 mod interpreter_user_desc;

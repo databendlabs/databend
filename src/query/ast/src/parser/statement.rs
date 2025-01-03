@@ -537,6 +537,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
     );
 
+    let use_warehouse = map(
+        rule! {
+            USE ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::UseWarehouse(UseWarehouseStmt { warehouse }),
+    );
+
     let create_warehouse = map(
         rule! {
             CREATE ~ WAREHOUSE ~ #ident ~ ("(" ~ #assign_nodes_list ~ ")")? ~ (WITH ~ #warehouse_cluster_option)?
@@ -2423,6 +2430,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
             #show_warehouses: "`SHOW WAREHOUSES`"
             | #show_online_nodes: "`SHOW ONLINE NODES`"
+            | #use_warehouse: "`USE WAREHOUSE <warehouse>`"
             | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
             | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
             | #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
