@@ -1146,6 +1146,7 @@ impl Binder {
                 .map(|s| format!("range_bound({partitions}, {sample_size})({s}) AS {s}_bound"))
                 .collect::<Vec<_>>()
                 .join(", ");
+
             let hilbert_keys_str = cluster_key_strs
                 .iter()
                 .map(|s| {
@@ -1156,6 +1157,21 @@ impl Binder {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
+
+            let quote = settings.get_sql_dialect()?.default_ident_quote();
+            let schema = tbl.schema_with_stream();
+            let mut output_with_table = Vec::with_capacity(schema.fields.len());
+            let mut output = Vec::with_capacity(schema.fields.len());
+            for field in &schema.fields {
+                output_with_table.push(format!(
+                    "{quote}{table}{quote}.{quote}{}{quote}",
+                    field.name
+                ));
+                output.push(format!("{quote}{}{quote}", field.name));
+            }
+            let output_with_table_str = output_with_table.join(", ");
+            let output_str = output.join(", ");
+
             let query = format!(
                 "WITH _keys_bound AS ( \
                         SELECT \
@@ -1164,12 +1180,12 @@ impl Binder {
                     ), \
                     _source_data AS ( \
                         SELECT \
-                            {table}.*, \
+                            {output_with_table_str}, \
                             hilbert_index([{hilbert_keys_str}], 2) AS _hilbert_index \
                         FROM {database}.{table}, _keys_bound \
                     ) \
                     SELECT \
-                        * EXCLUDE(_hilbert_index) \
+                        {output_str} \
                     FROM _source_data \
                     ORDER BY _hilbert_index"
             );
