@@ -26,7 +26,6 @@ use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
-use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use num_traits::AsPrimitive;
@@ -117,21 +116,6 @@ macro_rules! register_multiply {
             |a, b, _| (AsPrimitive::<T>::as_(a)) * (AsPrimitive::<T>::as_(b)),
         );
     };
-}
-
-pub fn divide_function<L: AsPrimitive<F64>, R: AsPrimitive<F64>>(
-    a: L,
-    b: R,
-    output: &mut Vec<F64>,
-    ctx: &mut EvalContext,
-) {
-    let b_val: F64 = b.as_();
-    if std::intrinsics::unlikely(b_val == 0.0) {
-        ctx.set_error(output.len(), "divided by zero");
-        output.push(F64::default());
-    } else {
-        output.push(AsPrimitive::<F64>::as_(a) / b_val);
-    }
 }
 
 #[macro_export]
@@ -298,7 +282,15 @@ pub fn register_div_arithmetic(registry: &mut FunctionRegistry) {
         "divide",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>>(
-            |a, b, output, ctx| divide_function(a, b, output, ctx)
+            |a, b, output, ctx| {
+                let b_val: F64 = b.as_();
+                if std::intrinsics::unlikely(b_val == 0.0) {
+                    ctx.set_error(output.len(), "divided by zero");
+                    output.push(F64::default());
+                } else {
+                    output.push(AsPrimitive::<F64>::as_(a) / b_val);
+                }
+            }
         ),
     );
 
