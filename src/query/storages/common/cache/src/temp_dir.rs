@@ -30,7 +30,7 @@ use std::sync::Once;
 use databend_common_base::base::Alignment;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::GlobalUniqName;
-use databend_common_config::LocalSpillConfig;
+use databend_common_config::SpillConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use rustix::fs::statvfs;
@@ -48,7 +48,7 @@ pub struct TempDirManager {
 }
 
 impl TempDirManager {
-    pub fn init(config: &LocalSpillConfig, tenant_id: &str) -> Result<()> {
+    pub fn init(config: &SpillConfig, tenant_id: &str) -> Result<()> {
         let (root, reserved, alignment) = match config.local_path() {
             None => (None, 0, Alignment::MIN),
             Some(path) => {
@@ -381,7 +381,7 @@ mod tests {
 
         fs::create_dir("test_data")?;
 
-        let config = LocalSpillConfig::new_for_test("test_data".to_string(), 0.01, 1 << 30);
+        let config = SpillConfig::new_for_test("test_data".to_string(), 0.01, 1 << 30);
 
         TempDirManager::init(&config, "test_tenant")?;
 
@@ -419,7 +419,7 @@ mod tests {
 
         fs::create_dir("test_data2")?;
 
-        let config = LocalSpillConfig::new_for_test("test_data2".to_string(), 0.99, 1 << 30);
+        let config = SpillConfig::new_for_test("test_data2".to_string(), 0.99, 1 << 30);
 
         TempDirManager::init(&config, "test_tenant")?;
 

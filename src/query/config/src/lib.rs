@@ -51,5 +51,5 @@ pub use inner::CatalogConfig;
 pub use inner::CatalogHiveConfig;
 pub use inner::DiskCacheKeyReloadPolicy;
 pub use inner::InnerConfig;
-pub use inner::LocalSpillConfig;
+pub use inner::SpillConfig;
 pub use inner::ThriftProtocol;

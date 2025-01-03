@@ -309,10 +309,6 @@ pub struct StorageConfig {
     // COS storage backend config
     #[clap(flatten)]
     pub cos: CosStorageConfig,
-
-    // Spill config for any storage backend
-    #[clap(flatten)]
-    pub spill: StorageSpillConfig,
 }
 
 impl Default for StorageConfig {
@@ -340,9 +336,6 @@ impl From<InnerStorageConfig> for StorageConfig {
             obs: Default::default(),
             webhdfs: Default::default(),
             cos: Default::default(),
-            spill: StorageSpillConfig {
-                spill_bucket: inner.spill_bucket.unwrap_or_default(),
-            },
 
             // Deprecated fields
             storage_type: None,
@@ -415,11 +408,6 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
-            spill_bucket: if self.spill.spill_bucket.is_empty() {
-                None
-            } else {
-                Some(self.spill.spill_bucket)
-            },
             params: {
                 match self.typ.as_str() {
                     "azblob" => StorageParams::Azblob(self.azblob.try_into()?),
@@ -1320,23 +1308,6 @@ impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
             endpoint_url: value.cos_endpoint_url,
             root: value.cos_root,
         })
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Args)]
-pub struct StorageSpillConfig {
-    #[clap(long = "storage-spill-bucket", value_name = "VALUE", default_value_t)]
-    #[serde(rename = "bucket")]
-    pub spill_bucket: String,
-}
-
-impl Default for StorageSpillConfig {
-    fn default() -> Self {
-        Self {
-            spill_bucket: InnerStorageConfig::default()
-                .spill_bucket
-                .unwrap_or_default(),
-        }
     }
 }
 
@@ -3001,11 +2972,14 @@ pub struct SpillConfig {
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
+
+    #[clap(skip)]
+    pub storage: Option<StorageConfig>,
 }
 
 impl Default for SpillConfig {
     fn default() -> Self {
-        inner::LocalSpillConfig::default().into()
+        inner::SpillConfig::default().into()
     }
 }
 
@@ -3148,7 +3122,7 @@ mod cache_config_converters {
     fn convert_local_spill_config(
         spill: SpillConfig,
         cache: &DiskCacheConfig,
-    ) -> Result<inner::LocalSpillConfig> {
+    ) -> Result<inner::SpillConfig> {
         // Trick for cloud, perhaps we should introduce a new configuration for the local writeable root.
         let local_writeable_root = if cache.path != DiskCacheConfig::default().path
             && spill.spill_local_disk_path.is_empty()
@@ -3158,20 +3132,38 @@ mod cache_config_converters {
             None
         };
 
-        Ok(inner::LocalSpillConfig {
+        let storage_params = spill
+            .storage
+            .map(|storage| {
+                let storage: InnerStorageConfig = storage.try_into()?;
+                Ok::<_, ErrorCode>(storage.params)
+            })
+            .transpose()?;
+
+        Ok(inner::SpillConfig {
             local_writeable_root,
             path: spill.spill_local_disk_path,
             reserved_disk_ratio: spill.spill_local_disk_reserved_space_percentage / 100.0,
             global_bytes_limit: spill.spill_local_disk_max_bytes,
+            storage_params,
         })
     }
 
-    impl From<inner::LocalSpillConfig> for SpillConfig {
-        fn from(value: inner::LocalSpillConfig) -> Self {
+    impl From<inner::SpillConfig> for SpillConfig {
+        fn from(value: inner::SpillConfig) -> Self {
+            let storage = value.storage_params.map(|params| {
+                InnerStorageConfig {
+                    params,
+                    ..Default::default()
+                }
+                .into()
+            });
+
             Self {
                 spill_local_disk_path: value.path,
                 spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,
                 spill_local_disk_max_bytes: value.global_bytes_limit,
+                storage,
             }
         }
     }

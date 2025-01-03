@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
@@ -67,7 +68,7 @@ pub struct InnerConfig {
     pub cache: CacheConfig,
 
     // Spill Config
-    pub spill: LocalSpillConfig,
+    pub spill: SpillConfig,
 
     // Background Config
     pub background: InnerBackgroundConfig,
@@ -717,7 +718,7 @@ impl Default for CacheConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct LocalSpillConfig {
+pub struct SpillConfig {
     pub(crate) local_writeable_root: Option<String>,
     pub(crate) path: String,
 
@@ -726,9 +727,11 @@ pub struct LocalSpillConfig {
 
     /// Allow bytes use of disk space.
     pub global_bytes_limit: u64,
+
+    pub storage_params: Option<StorageParams>,
 }
 
-impl LocalSpillConfig {
+impl SpillConfig {
     /// Path of spill to local disk.
     pub fn local_path(&self) -> Option<PathBuf> {
         if self.global_bytes_limit == 0 {
@@ -752,17 +755,19 @@ impl LocalSpillConfig {
             path,
             reserved_disk_ratio: OrderedFloat(reserved_disk_ratio),
             global_bytes_limit,
+            storage_params: None,
         }
     }
 }
 
-impl Default for LocalSpillConfig {
+impl Default for SpillConfig {
     fn default() -> Self {
         Self {
             local_writeable_root: None,
             path: "".to_string(),
             reserved_disk_ratio: OrderedFloat(0.3),
             global_bytes_limit: u64::MAX,
+            storage_params: None,
         }
     }
 }

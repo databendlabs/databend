@@ -44,7 +44,6 @@ pub struct StorageConfig {
     pub num_cpus: u64,
     pub allow_insecure: bool,
     pub params: StorageParams,
-    pub spill_bucket: Option<String>,
 }
 
 // TODO: This config should be moved out of common-storage crate.
