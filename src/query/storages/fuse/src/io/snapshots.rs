@@ -366,9 +366,14 @@ impl SnapshotsIO {
                 EntryMode::FILE => match exclude_file {
                     Some(path) if de.path() == path => continue,
                     _ => {
+                        let last_modified = if let Some(last_modified) = meta.last_modified() {
+                            Some(last_modified)
+                        } else {
+                            op.stat(de.path()).await?.last_modified()
+                        };
+
                         let location = de.path().to_string();
-                        let modified = meta.last_modified();
-                        file_list.push((location, modified));
+                        file_list.push((location, last_modified));
                     }
                 },
                 _ => {

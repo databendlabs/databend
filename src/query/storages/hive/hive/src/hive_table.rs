@@ -618,9 +618,11 @@ async fn do_list_files_from_dir(
 
         match meta.mode() {
             EntryMode::FILE => {
-                let meta = operator.stat(path).await?;
+                let mut length = meta.content_length();
+                if length == 0 {
+                    length = operator.stat(path).await?.content_length();
+                }
                 let location = path.to_string();
-                let length = meta.content_length();
                 all_files.push(HivePartInfo::create(location, vec![], length));
             }
             EntryMode::DIR => {

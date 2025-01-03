@@ -87,10 +87,15 @@ async fn vacuum_drop_single_table(
                     Ok(Some(de)) => {
                         let meta = de.metadata();
                         if EntryMode::FILE == meta.mode() {
+                            let mut content_length = meta.content_length();
+                            if content_length == 0 {
+                                content_length = operator.stat(de.path()).await?.content_length();
+                            }
+
                             list_files.push((
                                 table_info.name.clone(),
                                 de.name().to_string(),
-                                meta.content_length(),
+                                content_length,
                             ));
                             if list_files.len() >= dry_run_limit {
                                 break;

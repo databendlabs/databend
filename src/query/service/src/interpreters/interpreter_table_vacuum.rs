@@ -77,8 +77,13 @@ impl VacuumTableInterpreter {
                 .await?
             {
                 if entry.metadata().is_file() {
+                    let mut content_length = entry.metadata().content_length();
+                    if content_length == 0 {
+                        content_length = operator.stat(entry.path()).await?.content_length();
+                    }
+
                     stat.0 += 1;
-                    stat.1 += entry.metadata().content_length();
+                    stat.1 += content_length;
                 }
             }
         }
