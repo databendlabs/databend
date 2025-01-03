@@ -1639,6 +1639,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn mget_table_names_by_ids(
         &self,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>, KVAppError> {
         debug!(req :? =(&table_ids); "SchemaApi: {}", func_name!());
 
@@ -1654,7 +1655,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let seq_metas = self.get_pb_values_vec(id_idents).await?;
         for (i, seq_meta_opt) in seq_metas.iter().enumerate() {
             if let Some(seq_meta) = seq_meta_opt {
-                if seq_meta.data.drop_on.is_some() {
+                if seq_meta.data.drop_on.is_some() && !get_dropped_table {
                     table_names[i] = None;
                 }
             } else {

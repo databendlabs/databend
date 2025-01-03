@@ -447,8 +447,13 @@ impl Catalog for MutableCatalog {
         &self,
         _tenant: &Tenant,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
-        let res = self.ctx.meta.mget_table_names_by_ids(table_ids).await?;
+        let res = self
+            .ctx
+            .meta
+            .mget_table_names_by_ids(table_ids, get_dropped_table)
+            .await?;
         Ok(res)
     }
 
