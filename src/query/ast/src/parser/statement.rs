@@ -2424,13 +2424,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         // use
         rule!(
                 #use_catalog: "`USE CATALOG <catalog>`"
+                | #use_warehouse: "`USE WAREHOUSE <warehouse>`"
                 | #use_database : "`USE <database>`"
         ),
         // warehouse
         rule!(
             #show_warehouses: "`SHOW WAREHOUSES`"
             | #show_online_nodes: "`SHOW ONLINE NODES`"
-            | #use_warehouse: "`USE WAREHOUSE <warehouse>`"
             | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
             | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
             | #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"

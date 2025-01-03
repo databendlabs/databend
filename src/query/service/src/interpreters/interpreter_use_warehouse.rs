@@ -57,6 +57,12 @@ impl Interpreter for UseWarehouseInterpreter {
             .inspect_warehouse(self.plan.warehouse.clone())
             .await?;
 
+        unsafe {
+            self.ctx
+                .get_session_settings()
+                .set_warehouse(self.plan.warehouse.clone())?;
+        }
+
         Ok(PipelineBuildResult::create())
     }
 }
