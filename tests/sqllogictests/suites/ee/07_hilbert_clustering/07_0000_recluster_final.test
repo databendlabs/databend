@@ -19,6 +19,9 @@ statement ok
 USE test_hilbert
 
 statement ok
+set enable_parallel_multi_merge_sort = 0;
+
+statement ok
 create or replace table t(a int, b int) cluster by hilbert(a, b) row_per_block=2 block_per_segment=2;
 
 statement ok
@@ -50,6 +53,27 @@ query II
 select count(a), sum(a) from t;
 ----
 8 28
+
+statement ok
+insert into t values(8, 8);
+
+statement ok
+insert into t values(9, 9);
+
+statement ok
+alter table t recluster final;
+
+query I
+select count() from fuse_snapshot('test_hilbert','t');
+----
+9
+
+query II
+select block_count,row_count from fuse_segment('test_hilbert','t');
+----
+1 2
+2 4
+2 4
 
 statement ok
 drop table t all;
