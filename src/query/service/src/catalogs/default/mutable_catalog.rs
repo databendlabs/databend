@@ -536,7 +536,7 @@ impl Catalog for MutableCatalog {
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.list_tables_history().await
+        db.list_tables_history(false).await
     }
 
     async fn get_drop_table_infos(
