@@ -17,11 +17,14 @@ use std::future::Future;
 use std::path::Path;
 use std::time::Instant;
 
+use bollard::Docker;
 use clap::Parser;
+use client::TTCClient;
 use databend_sqllogictests::mock_source::run_mysql_source;
 use databend_sqllogictests::mock_source::run_redis_source;
 use futures_util::stream;
 use futures_util::StreamExt;
+use rand::Rng;
 use sqllogictest::default_column_validator;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
@@ -30,6 +33,8 @@ use sqllogictest::DefaultColumnType;
 use sqllogictest::Record;
 use sqllogictest::Runner;
 use sqllogictest::TestError;
+use testcontainers::ContainerAsync;
+use testcontainers::GenericImage;
 
 use crate::arg::SqlLogicTestArgs;
 use crate::client::Client;
@@ -48,6 +53,23 @@ mod util;
 
 const HANDLER_MYSQL: &str = "mysql";
 const HANDLER_HTTP: &str = "http";
+const HANDLER_HYBRID: &str = "hybrid";
+const TTC_PORT_START: u16 = 9902;
+
+use std::sync::LazyLock;
+
+static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|| {
+    vec![
+        (Box::new(ClientType::MySQL), 3),
+        (
+            Box::new(ClientType::Ttc(
+                "sundyli/ttc-rust:latest".to_string(),
+                TTC_PORT_START,
+            )),
+            7,
+        ),
+    ]
+});
 
 pub struct Databend {
     client: Client,
@@ -56,6 +78,9 @@ pub struct Databend {
 impl Databend {
     pub fn create(client: Client) -> Self {
         Databend { client }
+    }
+    pub fn client_name(&self) -> &str {
+        self.client.engine_name()
     }
 }
 
@@ -88,6 +113,7 @@ pub async fn main() -> Result<()> {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
         None => vec![HANDLER_MYSQL, HANDLER_HTTP],
     };
+    let mut containers = vec![];
     for handler in handlers.iter() {
         match *handler {
             HANDLER_MYSQL => {
@@ -95,6 +121,9 @@ pub async fn main() -> Result<()> {
             }
             HANDLER_HTTP => {
                 run_http_client().await?;
+            }
+            HANDLER_HYBRID => {
+                run_hybrid_client(&mut containers).await?;
             }
             _ => {
                 return Err(format!("Unknown test handler: {handler}").into());
@@ -138,8 +167,68 @@ async fn run_http_client() -> Result<()> {
     Ok(())
 }
 
+async fn run_hybrid_client(cs: &mut Vec<ContainerAsync<GenericImage>>) -> Result<()> {
+    println!(
+        "Hybird client starts to run with: {:?}",
+        SqlLogicTestArgs::parse()
+    );
+    let suits = SqlLogicTestArgs::parse().suites;
+    let suits = std::fs::read_dir(suits).unwrap();
+
+    // preparse docker envs
+    let mut port_start = TTC_PORT_START;
+
+    let docker = Docker::connect_with_local_defaults().unwrap();
+
+    for (c, _) in HYBRID_CONFIGS.iter() {
+        match c.as_ref() {
+            ClientType::MySQL | ClientType::Http => {}
+            ClientType::Ttc(image, _) => {
+                use testcontainers::core::IntoContainerPort;
+                use testcontainers::core::WaitFor;
+                use testcontainers::runners::AsyncRunner;
+                use testcontainers::GenericImage;
+                use testcontainers::ImageExt;
+
+                let mut images = image.split(":");
+                let image = images.next().unwrap();
+                let tag = images.next().unwrap_or("latest");
+
+                let container_name = format!("databend-ttc-{}", port_start);
+                println!("Start {container_name}");
+
+                // Stop the container
+                let _ = docker.stop_container(&container_name, None).await;
+                let _ = docker.remove_container(&container_name, None).await;
+
+                let container: ContainerAsync<GenericImage> = GenericImage::new(image, tag)
+                    .with_exposed_port(port_start.tcp())
+                    .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
+                    .with_network("host")
+                    .with_env_var(
+                        "DATABEND_DSN",
+                        "databend://root:@127.0.0.1:8000?sslmode=disable",
+                    )
+                    .with_env_var("TTC_PORT", format!("{port_start}"))
+                    .with_container_name(container_name)
+                    .start()
+                    .await
+                    .unwrap();
+                println!("Started container: {}", container.id());
+                cs.push(container);
+                port_start += 1;
+            }
+            ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
+        }
+    }
+
+    run_suits(suits, ClientType::Hybird).await?;
+    Ok(())
+}
+
 // Create new databend with client type
-async fn create_databend(client_type: &ClientType) -> Result<Databend> {
+#[async_recursion::async_recursion(#[recursive::recursive])]
+async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Databend> {
     let mut client: Client;
     let args = SqlLogicTestArgs::parse();
     match client_type {
@@ -153,6 +242,27 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
         ClientType::Http => {
             client = Client::Http(HttpClient::create().await?);
         }
+
+        ClientType::Ttc(image, port) => {
+            let conn = format!("127.0.0.1:{port}");
+            client = Client::Ttc(TTCClient::create(image, &conn).await?);
+        }
+
+        ClientType::Hybird => {
+            let ts = &HYBRID_CONFIGS;
+            let totals: usize = ts.iter().map(|t| t.1).sum();
+            let r = rand::thread_rng().gen_range(0..totals);
+
+            let mut acc = 0;
+            for (t, s) in ts.iter() {
+                acc += s;
+
+                if acc >= r {
+                    return create_databend(t.as_ref(), filename).await;
+                }
+            }
+            unreachable!()
+        }
     }
     if args.enable_sandbox {
         client.create_sandbox().await?;
@@ -160,6 +270,8 @@ async fn create_databend(client_type: &ClientType) -> Result<Databend> {
     if args.debug {
         client.enable_debug();
     }
+
+    println!("Running {} test for file: {} ...", client_type, filename);
     Ok(Databend::create(client))
 }
 
@@ -206,7 +318,8 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                 let col_separator = " ";
                 let validator = default_validator;
                 let column_validator = default_column_validator;
-                let mut runner = Runner::new(|| async { create_databend(&client_type).await });
+                let mut runner =
+                    Runner::new(|| async { create_databend(&client_type, &file_name).await });
                 runner
                     .update_test_file(
                         file.unwrap().path(),
@@ -217,6 +330,7 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     .await
                     .unwrap();
             } else {
+                let client_type = client_type.clone();
                 tasks.push(async move { run_file_async(&client_type, file.unwrap().path()).await });
             }
         }
@@ -270,15 +384,12 @@ async fn run_file_async(
 ) -> std::result::Result<Vec<TestError>, TestError> {
     let start = Instant::now();
 
-    println!(
-        "Running {} test for file: {} ...",
-        client_type,
-        filename.as_ref().display()
-    );
     let mut error_records = vec![];
     let no_fail_fast = SqlLogicTestArgs::parse().no_fail_fast;
     let records = parse_file(&filename).unwrap();
-    let mut runner = Runner::new(|| async { create_databend(client_type).await });
+    let filename = filename.as_ref().to_str().unwrap();
+
+    let mut runner = Runner::new(|| async { create_databend(client_type, filename).await });
     for record in records.into_iter() {
         if let Record::Halt { .. } = record {
             break;
@@ -296,11 +407,12 @@ async fn run_file_async(
         true => "✅",
         false => "❌",
     };
+
     if !SqlLogicTestArgs::parse().bench {
         println!(
             "Completed {} test for file: {} {} ({:?})",
             client_type,
-            filename.as_ref().display(),
+            filename,
             run_file_status,
             start.elapsed(),
         );
