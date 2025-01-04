@@ -517,9 +517,8 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                 .to_string();
             let local_id = GlobalConfig::instance().query.node_id.clone();
             if local_id != sticky_node_id {
-                let config = GlobalConfig::instance();
                 return if let Some(node) = ClusterDiscovery::instance()
-                    .find_node_by_id(&sticky_node_id, &config)
+                    .find_node_by_id(&sticky_node_id)
                     .await
                     .map_err(HttpErrorCode::server_error)?
                 {
@@ -537,6 +536,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                 };
             }
         }
+
         let method = req.method().clone();
         let uri = req.uri().clone();
 

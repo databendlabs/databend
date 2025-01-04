@@ -29,6 +29,7 @@ use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
 use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
+use crate::ast::statements::warehouse::ShowWarehousesStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
@@ -127,6 +128,22 @@ pub enum Statement {
     UseCatalog {
         catalog: Identifier,
     },
+
+    // Warehouses
+    ShowOnlineNodes(ShowOnlineNodesStmt),
+    UseWarehouse(UseWarehouseStmt),
+    ShowWarehouses(ShowWarehousesStmt),
+    DropWarehouse(DropWarehouseStmt),
+    CreateWarehouse(CreateWarehouseStmt),
+    RenameWarehouse(RenameWarehouseStmt),
+    ResumeWarehouse(ResumeWarehouseStmt),
+    SuspendWarehouse(SuspendWarehouseStmt),
+    InspectWarehouse(InspectWarehouseStmt),
+    AddWarehouseCluster(AddWarehouseClusterStmt),
+    DropWarehouseCluster(DropWarehouseClusterStmt),
+    RenameWarehouseCluster(RenameWarehouseClusterStmt),
+    AssignWarehouseNodes(AssignWarehouseNodesStmt),
+    UnassignWarehouseNodes(UnassignWarehouseNodesStmt),
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
@@ -469,7 +486,10 @@ impl Statement {
             | Statement::ExecuteImmediate(..)
             | Statement::ShowProcedures { .. }
             | Statement::DescProcedure(..)
-            | Statement::CallProcedure(..) => true,
+            | Statement::CallProcedure(..)
+            | Statement::ShowWarehouses(..)
+            | Statement::ShowOnlineNodes(..)
+            | Statement::InspectWarehouse(..) => true,
 
             Statement::CreateDatabase(..)
             | Statement::CreateTable(..)
@@ -536,8 +556,18 @@ impl Statement {
             | Statement::AlterNotification(..)
             | Statement::DropNotification(..)
             | Statement::CreateProcedure(..)
-            | Statement::DropProcedure(..) => false,
-
+            | Statement::DropProcedure(..)
+            | Statement::CreateWarehouse(..)
+            | Statement::UseWarehouse(..)
+            | Statement::DropWarehouse(..)
+            | Statement::RenameWarehouse(..)
+            | Statement::AddWarehouseCluster(..)
+            | Statement::DropWarehouseCluster(..)
+            | Statement::RenameWarehouseCluster(..)
+            | Statement::AssignWarehouseNodes(..)
+            | Statement::UnassignWarehouseNodes(..)
+            | Statement::ResumeWarehouse(..)
+            | Statement::SuspendWarehouse(..) => false,
             Statement::StatementWithSettings { stmt, settings: _ } => {
                 stmt.allowed_in_multi_statement()
             }
@@ -948,6 +978,21 @@ impl Display for Statement {
             }
             Statement::System(stmt) => write!(f, "{stmt}")?,
             Statement::CallProcedure(stmt) => write!(f, "{stmt}")?,
+
+            Statement::ShowOnlineNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowWarehouses(stmt) => write!(f, "{stmt}")?,
+            Statement::UseWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::DropWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::ResumeWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::SuspendWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::InspectWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::AddWarehouseCluster(stmt) => write!(f, "{stmt}")?,
+            Statement::DropWarehouseCluster(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameWarehouseCluster(stmt) => write!(f, "{stmt}")?,
+            Statement::AssignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::UnassignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

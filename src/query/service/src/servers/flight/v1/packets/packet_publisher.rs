@@ -93,11 +93,10 @@ impl DataflowDiagramBuilder {
             let source = self
                 .nodes
                 .get(source)
-                .ok_or_else(|| ErrorCode::NotFoundClusterNode(""))?;
-            let destination = self
-                .nodes
-                .get(destination)
-                .ok_or_else(|| ErrorCode::NotFoundClusterNode(""))?;
+                .ok_or_else(|| ErrorCode::NotFoundClusterNode(format!("not found {}", source)))?;
+            let destination = self.nodes.get(destination).ok_or_else(|| {
+                ErrorCode::NotFoundClusterNode(format!("not found {}", destination))
+            })?;
 
             self.graph
                 .add_edge(*source, *destination, Edge::Fragment(v));
@@ -166,6 +165,7 @@ impl QueryEnv {
         )?;
 
         let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
+            unassign: self.cluster.unassign,
             nodes: self.cluster.nodes.clone(),
             local_id: GlobalConfig::instance().query.node_id.clone(),
         }))?;

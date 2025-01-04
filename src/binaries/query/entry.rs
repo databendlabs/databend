@@ -69,7 +69,7 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
     Ok(true)
 }
 
-pub async fn init_services(conf: &InnerConfig) -> Result<(), MainError> {
+pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), MainError> {
     let make_error = || "failed to init services";
 
     let binary_version = DATABEND_COMMIT_VERSION.clone();
@@ -93,7 +93,9 @@ pub async fn init_services(conf: &InnerConfig) -> Result<(), MainError> {
         .with_context(make_error);
     }
     // Make sure global services have been inited.
-    GlobalServices::init(conf).await.with_context(make_error)
+    GlobalServices::init(conf, ee_mode)
+        .await
+        .with_context(make_error)
 }
 
 async fn precheck_services(conf: &InnerConfig) -> Result<(), MainError> {

@@ -73,6 +73,8 @@ pub enum Feature {
     StorageQuota(StorageQuota),
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
     AmendTable,
+    #[serde(alias = "system_management", alias = "SYSTEM_MANAGEMENT")]
+    SystemManagement,
     #[serde(other)]
     Unknown,
 }
@@ -119,6 +121,7 @@ impl fmt::Display for Feature {
                 write!(f, ")")
             }
             Feature::AmendTable => write!(f, "amend_table"),
+            Feature::SystemManagement => write!(f, "system_management"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }

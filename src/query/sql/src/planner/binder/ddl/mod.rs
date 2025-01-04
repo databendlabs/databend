@@ -33,3 +33,4 @@ mod table;
 mod task;
 mod view;
 mod virtual_column;
+mod warehouse;

@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::protobuf as pb;
 use crate::seq_value::SeqV;
 use crate::ConflictSeq;
 
@@ -63,6 +64,13 @@ pub trait MatchSeqExt<T> {
 
 impl<U> MatchSeqExt<&Option<SeqV<U>>> for MatchSeq {
     fn match_seq(&self, sv: &Option<SeqV<U>>) -> Result<(), ConflictSeq> {
+        let seq = sv.as_ref().map_or(0, |sv| sv.seq);
+        self.match_seq(seq)
+    }
+}
+
+impl MatchSeqExt<&Option<pb::SeqV>> for MatchSeq {
+    fn match_seq(&self, sv: &Option<pb::SeqV>) -> Result<(), ConflictSeq> {
         let seq = sv.as_ref().map_or(0, |sv| sv.seq);
         self.match_seq(seq)
     }
