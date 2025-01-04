@@ -1089,7 +1089,7 @@ mod tests {
         let fixture = TestFixture::setup().await?;
         let ctx = fixture.new_query_ctx().await?;
 
-        let op = DataOperator::instance().operator();
+        let op = DataOperator::instance().spill_operator();
         let spill_config = SpillerConfig {
             spiller_type: SpillerType::OrderBy,
             location_prefix: "_spill_test".to_string(),

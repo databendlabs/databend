@@ -484,7 +484,7 @@ mod tests {
         A: SortAlgorithm + 'static,
         A::Rows: 'static,
     {
-        let op = DataOperator::instance().operator();
+        let op = DataOperator::instance().spill_operator();
         let spill_config = SpillerConfig {
             spiller_type: SpillerType::OrderBy,
             location_prefix: "_spill_test".to_string(),

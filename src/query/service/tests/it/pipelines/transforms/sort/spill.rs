@@ -81,7 +81,7 @@ fn create_sort_spill_pipeline(
         disk_spill: None,
         use_parquet: true,
     };
-    let op = DataOperator::instance().operator();
+    let op = DataOperator::instance().spill_operator();
     let spiller = Spiller::create(ctx.clone(), op, spill_config.clone())?;
     pipeline.add_transform(|input, output| {
         Ok(ProcessorPtr::create(create_transform_sort_spill(

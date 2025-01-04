@@ -66,7 +66,7 @@ async fn vacuum_by_duration(
     mut limit: usize,
     duration: &Option<Duration>,
 ) -> Result<usize> {
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
     let start_time = Instant::now();
 
     let expire_time = duration.unwrap_or(DEFAULT_RETAIN_DURATION).as_millis() as i64;
@@ -184,7 +184,7 @@ async fn vacuum_query_hook(
     let metas_f = nodes
         .iter()
         .map(|i| async move {
-            let operator = DataOperator::instance().operator();
+            let operator = DataOperator::instance().spill_operator();
             let meta_file_path =
                 format!("{}/{}_{}{}", temporary_dir, query_id, i, SPILL_META_SUFFIX);
             let buffer = operator.read(&meta_file_path).await?;
@@ -220,7 +220,7 @@ async fn vacuum_by_meta_buffer(
     limit: usize,
     removed_total: &mut usize,
 ) -> Result<usize> {
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
     let start_time = Instant::now();
     let meta = meta.to_bytes();
     let files: Vec<String> = meta.lines().map(|x| Ok(x?)).collect::<Result<Vec<_>>>()?;
@@ -263,7 +263,7 @@ async fn vacuum_by_meta(
     limit: usize,
     removed_total: &mut usize,
 ) -> Result<usize> {
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
     let meta: Buffer;
     let r = operator.read(meta_file_path).await;
     match r {
@@ -280,7 +280,7 @@ async fn vacuum_by_list_dir(
     removed_total: &mut usize,
 ) -> Result<usize> {
     let start_time = Instant::now();
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
     let mut r = operator.lister_with(dir_path).recursive(true).await?;
     let mut batches = vec![];
 

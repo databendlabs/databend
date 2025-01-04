@@ -139,7 +139,7 @@ impl GlobalServices {
 
         RoleCacheManager::init()?;
 
-        DataOperator::init(&config.storage).await?;
+        DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
         ShareTableConfig::init(
             &config.query.share_endpoint_address,
             &config.query.share_endpoint_auth_token_file,

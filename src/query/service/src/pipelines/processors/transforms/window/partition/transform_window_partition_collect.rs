@@ -122,7 +122,7 @@ impl TransformWindowPartitionCollect {
         };
 
         // Create an inner `Spiller` to spill data.
-        let operator = DataOperator::instance().operator();
+        let operator = DataOperator::instance().spill_operator();
         let spiller = Spiller::create(ctx, operator, spill_config)?;
 
         // Create the window partition buffer.
