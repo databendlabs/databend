@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod setting_api;
 mod setting_mgr;
 
-pub use setting_api::SettingApi;
 pub use setting_mgr::SettingMgr;
