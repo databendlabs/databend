@@ -318,9 +318,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             }
                         } else if col_name == "name" {
                             if let Scalar::String(t_name) = scalar {
-                                if !tables_names.contains(t_name) {
-                                    tables_names.insert(t_name.clone());
-                                }
+                                tables_names.insert(t_name.clone());
                             }
                         }
                         Ok(())
@@ -359,6 +357,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         tables_names.extend(new_table_names);
                     }
                     Err(err) => {
+                        // swallow the errors related with mget tables
                         warn!("Failed to get tables: {}, {}", ctl.name(), err);
                     }
                 }
@@ -438,9 +437,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         {
                             Ok(tables) => {
                                 for table in tables.into_iter().flatten() {
-                                    if !tables_names.contains(&table) {
-                                        tables_names.insert(table.clone());
-                                    }
+                                    tables_names.insert(table.clone());
                                 }
                             }
                             Err(err) => {
