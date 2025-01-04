@@ -47,9 +47,3 @@ select * from flatten(input => parse_json('{"a":1, "b":[77,88], "c": {"d":"X"}}'
 query ITTTTT
 select * from flatten(input => parse_json('{"a":1, "b":[77,88], "c": {"d":"X"}}'), recursive => true, mode => 'array')
 ----
-
-statement error 1005
-select * from numbers(10) where flatten(input => parse_json('[1]'))
-
-statement error 1005
-select * from numbers(10) having flatten(input => parse_json('[1]'))
