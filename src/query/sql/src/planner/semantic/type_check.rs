@@ -2603,15 +2603,28 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InSetReturningFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "set-returning functions cannot be nested".to_string(),
-            )
-            .set_span(span));
+        match self.bind_context.expr_context {
+            ExprContext::InSetReturningFunction => {
+                return Err(ErrorCode::SemanticError(
+                    "set-returning functions cannot be nested".to_string(),
+                )
+                .set_span(span));
+            }
+            ExprContext::WhereClause => {
+                return Err(ErrorCode::SemanticError(
+                    "set-returning functions are not allowed in WHERE clause".to_string(),
+                )
+                .set_span(span));
+            }
+            ExprContext::HavingClause => {
+                return Err(ErrorCode::SemanticError(
+                    "set-returning functions cannot be used in HAVING clause".to_string(),
+                )
+                .set_span(span));
+            }
+            _ => {}
         }
+
         if self.in_window_function {
             return Err(ErrorCode::SemanticError(
                 "set-returning functions cannot be used in window spec",

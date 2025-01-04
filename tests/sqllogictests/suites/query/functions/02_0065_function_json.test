@@ -370,6 +370,12 @@ b [1,2,3]
 c true
 d {"k1":1,"k2":2}
 
+statement error 1065
+SELECT * FROM json_each(parse_json('{"a": true}')) WHERE json_each(parse_json('{"a": true}'))
+
+statement error 1065
+SELECT * FROM json_each(parse_json('{"a": true}')) HAVING json_each(parse_json('{"a": true}'))
+
 query T
 SELECT json_array_elements(NULL)
 ----
@@ -419,6 +425,12 @@ SELECT * FROM json_array_elements(parse_json('[1, [1,2,3], true, {"k1": 1, "k2":
 [1,2,3]
 true
 {"k1":1,"k2":2}
+
+statement error 1065
+SELECT * FROM json_array_elements(parse_json('[true]')) WHERE json_array_elements(parse_json('[true]'))
+
+statement error 1065
+SELECT * FROM json_array_elements(parse_json('[true]')) HAVING json_array_elements(parse_json('[true]'))
 
 query T
 select parse_json('["1","2","3"]') ? NULL
@@ -1106,6 +1118,12 @@ ORDER BY jq:key;
 1 {"key":"scores","value":"[85,90,78]"}
 2 {"key":"scores","value":"[92,88,95]"}
 3 {"key":"scores","value":"[76,80,82]"}
+
+statement error 1065
+SELECT * FROM test_data WHERE jq('.scores | min', json_data) > 85
+
+statement error 1065
+SELECT * FROM test_data HAVING jq('.scores | min', json_data) > 85
 
 statement ok
 DROP TABLE test_data;
