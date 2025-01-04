@@ -372,6 +372,7 @@ impl Catalog for HiveCatalog {
         &self,
         _tenant: &Tenant,
         _table_ids: &[MetaId],
+        _get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",

@@ -288,14 +288,15 @@ impl Catalog for DatabaseCatalog {
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
         let sys_table_names = self
             .immutable_catalog
-            .mget_table_names_by_ids(tenant, table_ids)
+            .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
             .await?;
         let mut_table_names = self
             .mutable_catalog
-            .mget_table_names_by_ids(tenant, table_ids)
+            .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
             .await?;
 
         let mut table_names = Vec::with_capacity(table_ids.len());
