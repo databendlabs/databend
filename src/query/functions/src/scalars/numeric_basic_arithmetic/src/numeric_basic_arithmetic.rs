@@ -28,11 +28,11 @@ use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
-use databend_functions_scalar_decimal::register_decimal_arithmetic;
 use num_traits::AsPrimitive;
 
 use crate::arithmetic_modulo::vectorize_modulo;
 
+#[macro_export]
 macro_rules! register_plus {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -59,6 +59,7 @@ macro_rules! register_plus {
     };
 }
 
+#[macro_export]
 macro_rules! register_minus {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -85,6 +86,7 @@ macro_rules! register_minus {
     };
 }
 
+#[macro_export]
 macro_rules! register_multiply {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -116,29 +118,32 @@ macro_rules! register_multiply {
     };
 }
 
+#[macro_export]
 macro_rules! register_divide {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
         type R = $rt;
         type T = F64;
-        $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
+         $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
             "divide",
-
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
-                |a, b, output, ctx| {
-                    let b: T = b.as_();
-                    if std::intrinsics::unlikely(b == 0.0) {
-                        ctx.set_error(output.len(), "divided by zero");
-                        output.push(F64::default());
-                    } else {
-                        output.push(((AsPrimitive::<T>::as_(a)) / b));
-                    }
-                }),
+                |a, b, output, ctx| divide_function(a, b, output, ctx)
+           ),
         );
     };
 }
 
+pub fn div0_function<L: AsPrimitive<F64>, R: AsPrimitive<F64>>(a: L, b: R, output: &mut Vec<F64>) {
+    let b: F64 = b.as_();
+    if std::intrinsics::unlikely(b == 0.0) {
+        output.push(F64::default()); // Push the default value for type T
+    } else {
+        output.push(AsPrimitive::<F64>::as_(a) / b);
+    }
+}
+
+#[macro_export]
 macro_rules! register_div0 {
     ($lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -149,19 +154,22 @@ macro_rules! register_div0 {
             "div0",
             |_, _, _| FunctionDomain::Full,
             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(
-                |a, b, output, _ctx| {
-                    let b: F64 = b.as_();
-                    if std::intrinsics::unlikely(b == 0.0) {
-                        output.push(T::default()); // Push the default value for type T
-                    } else {
-                        output.push(AsPrimitive::<T>::as_(a) / b);
-                    }
-                }
+                |a, b, output, _ctx| div0_function(a, b, output)
             ),
         );
     };
 }
 
+pub fn divnull_function<L: AsPrimitive<F64>, R: AsPrimitive<F64>>(a: L, b: R) -> Option<F64> {
+    let b: F64 = b.as_();
+    if std::intrinsics::unlikely(b == 0.0) {
+        None
+    } else {
+        Some(AsPrimitive::<F64>::as_(a) / b)
+    }
+}
+
+#[macro_export]
 macro_rules! register_divnull {
     ($lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -174,12 +182,7 @@ macro_rules! register_divnull {
             vectorize_2_arg::<NullableType<NumberType<L>>, NullableType<NumberType<R>>, NullableType<NumberType<T>>>(|a, b, _| {
                 match (a, b) {
                     (Some(a), Some(b)) => {
-                        let b: F64 = b.as_();
-                        if std::intrinsics::unlikely(b == 0.0) {
-                            None
-                        } else {
-                            Some(AsPrimitive::<T>::as_(a) / b)
-                        }
+                        divnull_function(a,b)
                     },
                     _ => None,
                 }
@@ -187,6 +190,7 @@ macro_rules! register_divnull {
     }
 }
 
+#[macro_export]
 macro_rules! register_intdiv {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -194,7 +198,6 @@ macro_rules! register_intdiv {
         type T = <(L, R) as ResultTypeOfBinary>::IntDiv;
         $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
             "div",
-
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(
                 |a, b, output, ctx| {
@@ -211,6 +214,7 @@ macro_rules! register_intdiv {
     };
 }
 
+#[macro_export]
 macro_rules! register_modulo {
     ( $lt:ty, $rt:ty, $registry:expr) => {
         type L = $lt;
@@ -254,6 +258,7 @@ macro_rules! register_modulo {
     };
 }
 
+#[macro_export]
 macro_rules! register_basic_arithmetic {
     ( $lt:ty, $rt:ty, $registry:expr) => {{
         register_plus!($lt, $rt, $registry);
@@ -265,38 +270,53 @@ macro_rules! register_basic_arithmetic {
         register_multiply!($lt, $rt, $registry);
     }
     {
-        register_divide!($lt, $rt, $registry);
-    }
-    {
         register_intdiv!($lt, $rt, $registry);
-    }
-    {
-        register_div0!($lt, $rt, $registry);
-    }
-    {
-        register_divnull!($lt, $rt, $registry);
     }
     {
         register_modulo!($lt, $rt, $registry);
     }};
 }
 
-pub fn register_numeric_basic_arithmetic(registry: &mut FunctionRegistry) {
-    register_decimal_arithmetic(registry);
+pub fn register_div_arithmetic(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
+        "divide",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>>(
+            |a, b, output, ctx| {
+                let b_val: F64 = b.as_();
+                if std::intrinsics::unlikely(b_val == 0.0) {
+                    ctx.set_error(output.len(), "divided by zero");
+                    output.push(F64::default());
+                } else {
+                    output.push(AsPrimitive::<F64>::as_(a) / b_val);
+                }
+            }
+        ),
+    );
 
-    for left in ALL_INTEGER_TYPES {
-        for right in ALL_INTEGER_TYPES {
-            with_integer_mapped_type!(|L| match left {
-                NumberDataType::L => with_integer_mapped_type!(|R| match right {
-                    NumberDataType::R => {
-                        register_basic_arithmetic!(L, R, registry);
-                    }
-                    _ => unreachable!(),
-                }),
-                _ => unreachable!(),
-            });
-        }
-    }
+    registry.register_passthrough_nullable_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>, _, _>(
+        "div0",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<NumberType<F64>, NumberType<F64>, NumberType<F64>>(
+            |a, b, output, _ctx| div0_function(a, b, output)
+        ),
+    );
+
+    registry.register_2_arg_core::<NullableType<NumberType<F64>>, NullableType<NumberType<F64>>, NullableType<NumberType<F64>>, _, _>(
+        "divnull",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_2_arg::<NullableType<NumberType<F64>>, NullableType<NumberType<F64>>, NullableType<NumberType<F64>>>(|a, b, _| {
+            match (a, b) {
+                (Some(a), Some(b)) => {
+                    divnull_function(a,b)
+                },
+                _ => None,
+            }
+        }));
+}
+
+pub fn register_numeric_basic_arithmetic(registry: &mut FunctionRegistry) {
+    register_div_arithmetic(registry);
 
     for left in ALL_INTEGER_TYPES {
         for right in ALL_FLOAT_TYPES {

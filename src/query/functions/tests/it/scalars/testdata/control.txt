@@ -63,8 +63,8 @@ output         : NULL
 
 ast            : if(true, 1, 1 / 0)
 raw expr       : if(true, 1, divide(1, 0))
-checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), to_float64<UInt8>(1_u8), divide<UInt8, UInt8>(1_u8, 0_u8))
-optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(true, 1_f64, divide<UInt8, UInt8>(1_u8, 0_u8))
+checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST(true AS Boolean NULL), to_float64<UInt8>(1_u8), divide<Float64, Float64>(to_float64<UInt8>(1_u8), to_float64<UInt8>(0_u8)))
+optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(true, 1_f64, divide<Float64, Float64>(1_f64, 0_f64))
 output type    : Float64
 output domain  : Unknown
 output         : 1
@@ -72,8 +72,8 @@ output         : 1
 
 ast            : if(false, 1 / 0, 1)
 raw expr       : if(false, divide(1, 0), 1)
-checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), divide<UInt8, UInt8>(1_u8, 0_u8), to_float64<UInt8>(1_u8))
-optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(false, divide<UInt8, UInt8>(1_u8, 0_u8), 1_f64)
+checked expr   : if<T0=Float64><Boolean NULL, T0, T0>(CAST(false AS Boolean NULL), divide<Float64, Float64>(to_float64<UInt8>(1_u8), to_float64<UInt8>(0_u8)), to_float64<UInt8>(1_u8))
+optimized expr : if<T0=Float64><Boolean NULL, T0, T0>(false, divide<Float64, Float64>(1_f64, 0_f64), 1_f64)
 output type    : Float64
 output domain  : Unknown
 output         : 1
@@ -83,7 +83,7 @@ error:
   --> SQL:1:16
   |
 1 | if(false, 1, 1 / 0)
-  |                ^ divided by zero while evaluating function `divide(1, 0)` in expr `1 / 0`, during run expr: `if(CAST(false AS Boolean NULL), to_float64(1), 1 / 0)`
+  |                ^ divided by zero while evaluating function `divide(1, 0)` in expr `to_float64(1) / to_float64(0)`, during run expr: `if(CAST(false AS Boolean NULL), to_float64(1), to_float64(1) / to_float64(0))`
 
 
 
@@ -193,8 +193,8 @@ evaluation (internal):
 
 ast            : if(cond_a, 1 / expr_a, expr_else)
 raw expr       : if(cond_a::Boolean, divide(1, expr_a::Int64 NULL), expr_else::Int64)
-checked expr   : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(CAST(1_u8 AS UInt8 NULL), expr_a), CAST(expr_else AS Float64 NULL))
-optimized expr : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<UInt8 NULL, Int64 NULL>(1_u8, expr_a), CAST(expr_else AS Float64 NULL))
+checked expr   : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<Float64 NULL, Float64 NULL>(CAST(1_u8 AS Float64 NULL), CAST(expr_a AS Float64 NULL)), CAST(expr_else AS Float64 NULL))
+optimized expr : if<T0=Float64 NULL><Boolean NULL, T0, T0>(CAST(cond_a AS Boolean NULL), divide<Float64 NULL, Float64 NULL>(1_f64, CAST(expr_a AS Float64 NULL)), CAST(expr_else AS Float64 NULL))
 evaluation:
 +--------+---------------+------------------+-----------+--------------+
 |        | cond_a        | expr_a           | expr_else | Output       |
@@ -221,7 +221,7 @@ error:
   --> SQL:1:14
   |
 1 | if(cond_a, 1 / expr_a, expr_else)
-  |              ^ divided by zero while evaluating function `divide(1, 0)` in expr `1 / expr_a`, during run expr: `if(CAST(cond_a AS Boolean NULL), 1 / expr_a, to_float64(expr_else))`
+  |              ^ divided by zero while evaluating function `divide(1, 0)` in expr `to_float64(1) / to_float64(expr_a)`, during run expr: `if(CAST(cond_a AS Boolean NULL), to_float64(1) / to_float64(expr_a), to_float64(expr_else))`
 
 
 

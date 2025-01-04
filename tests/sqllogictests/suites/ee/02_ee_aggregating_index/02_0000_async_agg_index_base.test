@@ -378,7 +378,7 @@ explain select event_name, user_id, max(user_id), avg(id) from t group by event_
 ----
 EvalScalar
 ├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
-├── expressions: [sum(id) (#4) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS UInt64 NULL)]
+├── expressions: [CAST(sum(id) (#4) AS Float64 NULL) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS Float64 NULL)]
 ├── estimated rows: 8.00
 └── AggregateFinal
     ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), t.event_name (#2), t.user_id (#1)]
