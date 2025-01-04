@@ -40,7 +40,7 @@ impl PipelineBuilder {
             self.main_pipeline.add_async_accumulating_transformer(|| {
                 let base_segments = if matches!(
                     plan.mutation_kind,
-                    MutationKind::Compact | MutationKind::Insert | MutationKind::Recluster
+                    MutationKind::Compact | MutationKind::Insert | MutationKind::Recluster(_)
                 ) {
                     vec![]
                 } else {

@@ -34,12 +34,33 @@ use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
+use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
+    /// The flow of Pipeline is as follows:
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┐
+    // └──────────┘     └───────────────┘     └─────────┘    │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │     ┌──────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┤────►│MultiSortMerge├────►│Resize(N)├───┐
+    // └──────────┘     └───────────────┘     └─────────┘    │     └──────────────┘     └─────────┘   │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │                                        │
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┘                                        │
+    // └──────────┘     └───────────────┘     └─────────┘                                             │
+    // ┌──────────────────────────────────────────────────────────────────────────────────────────────┘
+    // │         ┌──────────────┐
+    // │    ┌───►│SerializeBlock├───┐
+    // │    │    └──────────────┘   │
+    // │    │    ┌──────────────┐   │    ┌─────────┐    ┌────────────────┐     ┌─────────────┐     ┌──────────┐
+    // └───►│───►│SerializeBlock├───┤───►│Resize(1)├───►│SerializeSegment├────►│ReclusterAggr├────►│CommitSink│
+    //      │    └──────────────┘   │    └─────────┘    └────────────────┘     └─────────────┘     └──────────┘
+    //      │    ┌──────────────┐   │
+    //      └───►│SerializeBlock├───┘
+    //           └──────────────┘
     pub(crate) fn build_recluster(&mut self, recluster: &Recluster) -> Result<()> {
         match recluster.tasks.len() {
             0 => self.main_pipeline.add_source(EmptySource::create, 1),
@@ -157,7 +178,7 @@ impl PipelineBuilder {
                             transform_output_port,
                             table,
                             cluster_stats_gen.clone(),
-                            MutationKind::Recluster,
+                            MutationKind::Recluster(ClusterType::Linear),
                         )?;
                         proc.into_processor()
                     })

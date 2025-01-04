@@ -240,7 +240,7 @@ async fn plan_sql(
     let extras = planner.parse_sql(sql)?;
     if !acquire_queue {
         // If queue guard is not required, plan the statement directly.
-        let plan = planner.plan_stmt(&extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, true).await?;
         return Ok((plan, extras, AcquireQueueGuard::create(None)));
     }
 
@@ -251,11 +251,11 @@ async fn plan_sql(
         // See PR https://github.com/databendlabs/databend/pull/16632
         let query_entry = QueryEntry::create_entry(&ctx, &extras, true)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
-        let plan = planner.plan_stmt(&extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, true).await?;
         Ok((plan, extras, guard))
     } else {
         // No lock is needed, plan the statement first, then acquire the queue guard.
-        let plan = planner.plan_stmt(&extras.statement).await?;
+        let plan = planner.plan_stmt(&extras.statement, true).await?;
         let query_entry = QueryEntry::create(&ctx, &plan, &extras)?;
         let guard = QueriesQueueManager::instance().acquire(query_entry).await?;
         Ok((plan, extras, guard))

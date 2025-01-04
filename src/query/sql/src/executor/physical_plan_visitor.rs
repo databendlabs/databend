@@ -17,6 +17,7 @@ use databend_common_exception::Result;
 use super::physical_plans::AddStreamColumn;
 use super::physical_plans::CacheScan;
 use super::physical_plans::ExpressionScan;
+use super::physical_plans::HilbertSerialize;
 use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSplit;
@@ -107,6 +108,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ExpressionScan(plan) => self.replace_expression_scan(plan),
             PhysicalPlan::CacheScan(plan) => self.replace_cache_scan(plan),
             PhysicalPlan::Recluster(plan) => self.replace_recluster(plan),
+            PhysicalPlan::HilbertSerialize(plan) => self.replace_hilbert_serialize(plan),
             PhysicalPlan::Udf(plan) => self.replace_udf(plan),
             PhysicalPlan::AsyncFunction(plan) => self.replace_async_function(plan),
             PhysicalPlan::Duplicate(plan) => self.replace_duplicate(plan),
@@ -123,6 +125,10 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_recluster(&mut self, plan: &Recluster) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::Recluster(Box::new(plan.clone())))
+    }
+
+    fn replace_hilbert_serialize(&mut self, plan: &HilbertSerialize) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::HilbertSerialize(Box::new(plan.clone())))
     }
 
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
@@ -639,6 +645,7 @@ impl PhysicalPlan {
                 | PhysicalPlan::ExpressionScan(_)
                 | PhysicalPlan::CacheScan(_)
                 | PhysicalPlan::Recluster(_)
+                | PhysicalPlan::HilbertSerialize(_)
                 | PhysicalPlan::ExchangeSource(_)
                 | PhysicalPlan::CompactSource(_)
                 | PhysicalPlan::MutationSource(_) => {}
