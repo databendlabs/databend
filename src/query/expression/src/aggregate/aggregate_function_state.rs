@@ -17,8 +17,14 @@ use std::ptr::NonNull;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use enum_as_inner::EnumAsInner;
 
+// use super::AggrStateRegister;
 use super::AggregateFunctionRef;
+use crate::types::binary::BinaryColumnBuilder;
+use crate::types::ArgType;
+use crate::types::BooleanType;
+use crate::ColumnBuilder;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StateAddr {
@@ -110,12 +116,15 @@ impl From<StateAddr> for usize {
     }
 }
 
-pub fn get_layout_offsets(
-    funcs: &[AggregateFunctionRef],
-    offsets: &mut Vec<usize>,
-) -> Result<Layout> {
+fn get_layout_offsets(funcs: &[AggregateFunctionRef], offsets: &mut Vec<usize>) -> Result<Layout> {
     let mut max_align = 0;
     let mut total_size: usize = 0;
+
+    // let mut register = AggrStateRegister::new();
+    // for func in funcs {
+    //     func.register_state(&mut register);
+    //     register.commit();
+    // }
 
     for func in funcs {
         let layout = func.state_layout();
@@ -128,4 +137,49 @@ pub fn get_layout_offsets(
     }
     Layout::from_size_align(total_size, max_align)
         .map_err(|e| ErrorCode::LayoutError(format!("Layout error: {}", e)))
+}
+
+pub fn get_state_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout> {
+    let mut offsets = Vec::with_capacity(funcs.len());
+    let layout = get_layout_offsets(funcs, &mut offsets)?;
+
+    let loc = offsets
+        .into_iter()
+        .enumerate()
+        .map(|(idx, offset)| vec![AggrStateLoc::Custom(idx, offset)].into_boxed_slice())
+        .collect();
+    Ok(StatesLayout { layout, loc })
+}
+
+#[derive(Debug, Clone, Copy, EnumAsInner)]
+pub enum AggrStateLoc {
+    Bool(usize),          // index
+    Custom(usize, usize), // index,offset
+}
+
+#[derive(Debug, Clone)]
+pub struct StatesLayout {
+    pub layout: Layout,
+    pub loc: Vec<Box<[AggrStateLoc]>>,
+}
+
+impl StatesLayout {
+    pub fn serialize_builders(&self, num_rows: usize) -> Vec<ColumnBuilder> {
+        self.loc
+            .iter()
+            .flatten()
+            .map(|loc| match loc {
+                AggrStateLoc::Bool(_) => {
+                    ColumnBuilder::Boolean(BooleanType::create_builder(num_rows, &[]))
+                }
+                AggrStateLoc::Custom(_, _) => {
+                    ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(num_rows, 0))
+                }
+            })
+            .collect()
+    }
+
+    pub fn states_count(&self) -> usize {
+        self.loc.iter().flatten().count()
+    }
 }

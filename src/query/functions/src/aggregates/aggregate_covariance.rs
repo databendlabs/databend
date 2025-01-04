@@ -39,6 +39,8 @@ use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_binary_arguments;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 
@@ -149,7 +151,7 @@ where
         Ok(DataType::Number(NumberDataType::Float64))
     }
 
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: &AggrState) {
         place.write(|| AggregateCovarianceState {
             count: 0,
             left_mean: 0.0,
@@ -164,7 +166,7 @@ where
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: &AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -197,7 +199,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -206,15 +208,15 @@ where
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
             |((left_val, right_val), place)| {
-                let place = place.next(offset);
-                let state = place.get::<AggregateCovarianceState>();
+                let state =
+                    AggrState::with_loc(*place, loc.clone()).get::<AggregateCovarianceState>();
                 state.add(left_val.as_(), right_val.as_());
             },
         );
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let left = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
         let right = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
 
@@ -226,19 +228,19 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         let rhs: AggregateCovarianceState = borsh_deserialize_state(reader)?;
         state.merge(&rhs);
         Ok(())
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         let other = rhs.get::<AggregateCovarianceState>();
         state.merge(other);
@@ -246,7 +248,7 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
         let builder = NumberType::<F64>::try_downcast_builder(builder).unwrap();
         builder.push(R::apply(state).into());

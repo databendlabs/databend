@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -25,6 +24,7 @@ use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::InputColumns;
 use crate::PayloadFlushState;
+use crate::StatesLayout;
 use crate::BATCH_SIZE;
 
 pub struct PartitionedPayload {
@@ -37,8 +37,7 @@ pub struct PartitionedPayload {
     pub validity_offsets: Vec<usize>,
     pub hash_offset: usize,
     pub state_offset: usize,
-    pub state_addr_offsets: Vec<usize>,
-    pub state_layout: Option<Layout>,
+    pub state_layout: Option<StatesLayout>,
 
     pub arenas: Vec<Arc<Bump>>,
 
@@ -69,8 +68,7 @@ impl PartitionedPayload {
         let validity_offsets = payloads[0].validity_offsets.clone();
         let hash_offset = payloads[0].hash_offset;
         let state_offset = payloads[0].state_offset;
-        let state_addr_offsets = payloads[0].state_addr_offsets.clone();
-        let state_layout = payloads[0].state_layout;
+        let state_layout = payloads[0].states_layout.clone();
 
         PartitionedPayload {
             payloads,
@@ -81,7 +79,6 @@ impl PartitionedPayload {
             validity_offsets,
             hash_offset,
             state_offset,
-            state_addr_offsets,
             state_layout,
             partition_count,
 

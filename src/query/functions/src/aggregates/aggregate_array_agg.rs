@@ -41,6 +41,8 @@ use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::with_simple_no_number_mapped_type;
 
@@ -268,7 +270,7 @@ where
         Ok(self.return_type.clone())
     }
 
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: &AggrState) {
         place.write(|| State::new());
     }
 
@@ -278,7 +280,7 @@ where
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: &AggrState,
         columns: InputColumns,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -299,7 +301,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -310,8 +312,7 @@ where
                 column_iter
                     .zip(nullable_column.validity.iter().zip(places.iter()))
                     .for_each(|(v, (valid, place))| {
-                        let addr = place.next(offset);
-                        let state = addr.get::<State>();
+                        let state = AggrState::with_loc(*place, loc.clone()).get::<State>();
                         if valid {
                             state.add(Some(v.clone()))
                         } else {
@@ -323,8 +324,7 @@ where
                 let column = T::try_downcast_column(&columns[0]).unwrap();
                 let column_iter = T::iter_column(&column);
                 column_iter.zip(places.iter()).for_each(|(v, place)| {
-                    let addr = place.next(offset);
-                    let state = addr.get::<State>();
+                    let state = AggrState::with_loc(*place, loc.clone()).get::<State>();
                     state.add(Some(v.clone()))
                 });
             }
@@ -333,7 +333,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<State>();
         match &columns[0] {
             Column::Nullable(box nullable_column) => {
@@ -356,25 +356,25 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
         let rhs: State = borsh_deserialize_state(reader)?;
 
         state.merge(&rhs)
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
         let state = place.get::<State>();
         let other = rhs.get::<State>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
         state.merge_result(builder)
     }
@@ -383,7 +383,7 @@ where
         true
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: &AggrState) {
         let state = place.get::<State>();
         std::ptr::drop_in_place(state);
     }
