@@ -1,1 +1,1 @@
-select (number::string)::Int from numbers(100000000) ignore_result;
+select count() from numbers(100000000);

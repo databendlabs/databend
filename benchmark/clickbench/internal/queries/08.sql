@@ -1,0 +1,1 @@
+select number % 1000 a, min(cast(number as Decimal(15,2))), max(cast(number as Decimal(15,2))), sum(cast(number as Decimal(45,2))) from numbers(100000000) where number % 100 != 0 group by a ignore_result;

@@ -1,0 +1,1 @@
+select number % 300 a, (number % 400)::string b, number % 500 c, min(cast(number as Decimal(15,2))), max(cast(number as Decimal(15,2))), sum(cast(number as Decimal(45,2))) from numbers(100000000) group by a,b,c ignore_result;
