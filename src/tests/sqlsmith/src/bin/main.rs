@@ -48,6 +48,10 @@ pub struct Args {
     /// The number of timeout seconds of one query.
     #[clap(long, default_value = "5")]
     timeout: u64,
+
+    /// The fuzz query test file path.
+    #[clap(long, default_value = "")]
+    fuzz_path: String,
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 5)]
@@ -70,7 +74,12 @@ async fn main() -> Result<()> {
         args.timeout,
     )
     .await?;
-    runner.run().await?;
+
+    if !args.fuzz_path.is_empty() {
+        runner.run_fuzz(&args.fuzz_path).await?;
+    } else {
+        runner.run().await?;
+    }
 
     Ok(())
 }

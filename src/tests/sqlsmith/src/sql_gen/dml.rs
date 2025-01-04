@@ -68,7 +68,6 @@ enum MutTableAction {
 
 impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
     pub(crate) fn gen_insert(&mut self, table: &Table, row_count: usize) -> InsertStmt {
-        let table_name = Identifier::from_name(None, table.name.clone());
         let data_types = table
             .schema
             .fields()
@@ -82,8 +81,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             hints: None,
             with: None,
             catalog: None,
-            database: None,
-            table: table_name,
+            database: table.db_name.clone(),
+            table: table.name.clone(),
             // TODO
             columns: vec![],
             source,
@@ -152,8 +151,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         ReplaceStmt {
             hints,
             catalog: None,
-            database: None,
-            table: Identifier::from_name(None, table.name.clone()),
+            database: table.db_name.clone(),
+            table: table.name.clone(),
             on_conflict_columns,
             columns,
             source,
@@ -261,8 +260,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         MergeIntoStmt {
             hints,
             catalog: None,
-            database: None,
-            table_ident: Identifier::from_name(None, table.name),
+            database: table.db_name.clone(),
+            table_ident: table.name.clone(),
             source,
             target_alias: None,
             join_expr,
@@ -296,8 +295,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         let table_reference = TableReference::Table {
             span: Span::default(),
             catalog: None,
-            database: None,
-            table: Identifier::from_name(None, table.name.clone()),
+            database: table.db_name.clone(),
+            table: table.name.clone(),
             alias: None,
             temporal: None,
             with_options: None,
@@ -350,7 +349,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
     fn mut_table(table: &mut Table, action: MutTableAction) {
         let mut new_schema = table.schema.as_ref().clone();
         match action {
-            MutTableAction::RenameTable(name) => table.name = name,
+            MutTableAction::RenameTable(name) => table.name = Identifier::from_name(None, name),
             MutTableAction::AddColumn((add_column_option, column)) => {
                 let field = Self::from_column_to_field(&column);
 
@@ -476,7 +475,6 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         Self::mut_table(&mut new_table, mut_action);
 
         let insert_stmt_opt = if let Some(new_column) = new_column {
-            let table_name = Identifier::from_name(None, table.name.clone());
             let columns = vec![new_column.name.clone()];
             let data_type = resolve_type_name(&new_column.data_type, true).unwrap();
             let data_types = vec![(&data_type).into()];
@@ -487,8 +485,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 hints: None,
                 with: None,
                 catalog: None,
-                database: None,
-                table: table_name,
+                database: table.db_name.clone(),
+                table: table.name.clone(),
                 columns,
                 source,
                 overwrite: false,
@@ -500,8 +498,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         let table_reference = TableReference::Table {
             span: Span::default(),
             catalog: None,
-            database: None,
-            table: Identifier::from_name(None, table.name.clone()),
+            database: table.db_name.clone(),
+            table: table.name.clone(),
             alias: None,
             temporal: None,
             with_options: None,
@@ -565,6 +563,13 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                             ScalarRef::Binary(v) => {
                                 buf.extend_from_slice("to_binary('".as_bytes());
                                 buf.extend_from_slice(v);
+                                buf.extend_from_slice("')".as_bytes());
+                            }
+                            // TODO: support auto cast to Geography
+                            ScalarRef::Geography(v) => {
+                                buf.extend_from_slice("st_geographyfromewkt('".as_bytes());
+                                let s = v.to_ewkt().unwrap();
+                                buf.extend_from_slice(s.as_bytes());
                                 buf.extend_from_slice("')".as_bytes());
                             }
                             _ => {
