@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -252,7 +253,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let user_api = UserApiProvider::instance();
 
         let mut dbs = Vec::new();
-        let mut tables_names: Vec<String> = Vec::new();
+        let mut tables_names: BTreeSet<String> = BTreeSet::new();
         let mut invalid_tables_ids = false;
         let mut tables_ids: Vec<u64> = Vec::new();
         let mut db_name: Vec<String> = Vec::new();
@@ -318,7 +319,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         } else if col_name == "name" {
                             if let Scalar::String(t_name) = scalar {
                                 if !tables_names.contains(t_name) {
-                                    tables_names.push(t_name.clone());
+                                    tables_names.insert(t_name.clone());
                                 }
                             }
                         }
@@ -353,12 +354,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     .await
                 {
                     Ok(new_tables) => {
-                        let new_table_names: Vec<_> = new_tables
-                            .into_iter()
-                            .flatten()
-                            .filter(|table| !tables_names.contains(table))
-                            .collect();
-
+                        let new_table_names: BTreeSet<_> =
+                            new_tables.into_iter().flatten().collect();
                         tables_names.extend(new_table_names);
                     }
                     Err(err) => {
@@ -442,7 +439,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             Ok(tables) => {
                                 for table in tables.into_iter().flatten() {
                                     if !tables_names.contains(&table) {
-                                        tables_names.push(table.clone());
+                                        tables_names.insert(table.clone());
                                     }
                                 }
                             }
