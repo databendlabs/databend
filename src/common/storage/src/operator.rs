@@ -280,6 +280,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.region("us-east-1");
     }
 
+    // Always enable versioning support.
+    builder = builder.enable_versioning(true);
+
     // Credential.
     builder = builder
         .access_key_id(&cfg.access_key_id)
