@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::ops::RangeInclusive;
@@ -323,6 +324,48 @@ impl ClusterDiscovery {
                 Ok(res)
             }
         }
+    }
+
+    pub async fn find_node_by_warehouse(
+        self: Arc<Self>,
+        warehouse: &str,
+    ) -> Result<Option<Arc<NodeInfo>>> {
+        let nodes = self
+            .warehouse_manager
+            .list_warehouse_nodes(warehouse.to_string())
+            .await?;
+
+        let mut warehouse_clusters_nodes = Vec::new();
+        let mut warehouse_clusters_nodes_index = HashMap::new();
+
+        for node in nodes {
+            match warehouse_clusters_nodes_index
+                .entry((node.version.to_string(), node.cluster_id.clone()))
+            {
+                Entry::Vacant(v) => {
+                    v.insert(warehouse_clusters_nodes.len());
+                    warehouse_clusters_nodes.push(vec![Arc::new(node)]);
+                }
+                Entry::Occupied(v) => {
+                    warehouse_clusters_nodes[*v.get()].push(Arc::new(node));
+                }
+            };
+        }
+
+        if warehouse_clusters_nodes.is_empty() {
+            return Ok(None);
+        }
+
+        let system_time = std::time::SystemTime::now();
+        let system_timestamp = system_time
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("expect time");
+
+        let nanos = system_timestamp.as_nanos();
+        let cluster_idx = (nanos % warehouse_clusters_nodes_index.len() as u128) as usize;
+        let pick_cluster_nodes = &warehouse_clusters_nodes[cluster_idx];
+        let nodes_idx = (nanos % pick_cluster_nodes.len() as u128) as usize;
+        Ok(Some(pick_cluster_nodes[nodes_idx].clone()))
     }
 
     pub async fn find_node_by_id(self: Arc<Self>, id: &str) -> Result<Option<Arc<NodeInfo>>> {

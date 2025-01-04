@@ -1154,7 +1154,7 @@ impl DefaultSettings {
                 ("warehouse", DefaultSettingValue {
                     value: UserSettingValue::String("".to_string()),
                     desc: "Please use the <use warehouse> statement to set the warehouse, this settings is only used to synchronize the warehouse status between the client and the server.",
-                    mode: SettingMode::Read,
+                    mode: SettingMode::Both,
                     scope: SettingScope::Session,
                     range: None,
                 }),
