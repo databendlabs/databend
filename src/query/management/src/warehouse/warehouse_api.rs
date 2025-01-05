@@ -64,7 +64,7 @@ pub struct SystemManagedWarehouse {
 #[async_trait::async_trait]
 pub trait WarehouseApi: Sync + Send {
     /// Start a new node.
-    async fn start_node(&self, node: NodeInfo) -> Result<u64>;
+    async fn start_node(&self, node: NodeInfo) -> Result<(u64, NodeInfo)>;
 
     /// Shutdown the tenant's cluster one node by node.id.
     async fn shutdown_node(&self, node_id: String) -> Result<()>;

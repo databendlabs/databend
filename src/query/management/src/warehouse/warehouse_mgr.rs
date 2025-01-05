@@ -55,6 +55,8 @@ static DEFAULT_CLUSTER_ID: &str = "default";
 pub static WAREHOUSE_API_KEY_PREFIX: &str = "__fd_clusters_v6";
 pub static WAREHOUSE_META_KEY_PREFIX: &str = "__fd_warehouses";
 
+type LostNodes = Vec<SelectedNode>;
+
 // example:
 // __fd_clusters_v6/test_tenant/online_nodes
 //      |- /RUV9DQArNnP4Hej4A74f07: NodeInfo { id: "RUV9DQArNnP4Hej4A74f07", secret: "", cpu_nums: 0, version: 0, http_address: "", flight_address: "", discovery_address: "", binary_version: "", node_type: SystemManaged, node_group: None, cluster_id: "", warehouse_id: "", runtime_node_group: None }
@@ -354,34 +356,210 @@ impl WarehouseMgr {
         Ok(txn_reply)
     }
 
+    // return list of unhealthy warehouse clusters.
+    // return type: HashMap<(WarehouseId, ClusterId), LostNodes>
+    async fn unhealthy_warehouses(&self) -> Result<HashMap<(String, String), LostNodes>> {
+        let online_nodes = self.list_online_nodes().await?;
+        let mut cluster_online_nodes = HashMap::with_capacity(online_nodes.len());
+
+        for node in online_nodes {
+            match cluster_online_nodes.entry((node.warehouse_id.clone(), node.cluster_id.clone())) {
+                Entry::Vacant(v) => {
+                    v.insert(vec![node]);
+                }
+                Entry::Occupied(mut v) => {
+                    v.get_mut().push(node);
+                }
+            }
+        }
+
+        let list_reply = self
+            .metastore
+            .prefix_list_kv(&self.warehouse_info_key_prefix)
+            .await?;
+
+        let mut unhealthy_warehouses = HashMap::with_capacity(list_reply.len());
+
+        for (_key, seq_v) in list_reply {
+            let wh: WarehouseInfo = serde_json::from_slice(&seq_v.data)?;
+
+            // skip if self-managed warehouse
+            let WarehouseInfo::SystemManaged(wh) = wh else {
+                continue;
+            };
+
+            for (cluster_id, cluster) in wh.clusters {
+                let mut lost_nodes = cluster.nodes;
+
+                let key = (wh.display_name.clone(), cluster_id.clone());
+                if let Some(online_nodes) = cluster_online_nodes.remove(&key) {
+                    for online_node in online_nodes {
+                        lost_nodes.remove_first(&SelectedNode::Random(
+                            online_node.runtime_node_group.clone(),
+                        ));
+                    }
+                }
+
+                if !lost_nodes.is_empty() {
+                    unhealthy_warehouses
+                        .insert((wh.display_name.clone(), cluster_id.clone()), lost_nodes);
+                }
+            }
+        }
+
+        Ok(unhealthy_warehouses)
+    }
+
+    async fn recovery_system_managed_warehouse(&self, node: &mut NodeInfo) -> Result<bool> {
+        for retry_count in 0..20 {
+            let unhealthy_warehouses = self.unhealthy_warehouses().await?;
+
+            if unhealthy_warehouses.is_empty() {
+                // All warehouses are healthy.
+                return Ok(false);
+            }
+
+            let mut runtime_node_group = None;
+            let mut warehouse_and_cluster = None;
+            let match_group = SelectedNode::Random(node.node_group.clone());
+            for ((warehouse, cluster), lost_nodes) in unhealthy_warehouses {
+                if lost_nodes.iter().any(|x| x == &match_group) {
+                    runtime_node_group = node.node_group.clone();
+                    warehouse_and_cluster = Some((warehouse, cluster));
+                    break;
+                } else if warehouse_and_cluster.is_none() {
+                    if !lost_nodes.iter().any(|x| x == &SelectedNode::Random(None)) {
+                        continue;
+                    }
+
+                    runtime_node_group = None;
+                    warehouse_and_cluster = Some((warehouse, cluster));
+                }
+            }
+
+            let Some((warehouse, cluster)) = warehouse_and_cluster else {
+                // No warehouse needs to fixed
+                return Ok(false);
+            };
+
+            let Ok(warehouse_snapshot) = self.warehouse_snapshot(&warehouse).await else {
+                // The warehouse may have been dropped.
+                log::warn!("The warehouse {} may have been dropped.", warehouse);
+                continue;
+            };
+
+            let WarehouseInfo::SystemManaged(wh) = warehouse_snapshot.warehouse_info else {
+                // The warehouse may have been dropped and started self-managed warehouse with same name.
+                log::warn!("The warehouse({}) may have been dropped and started self-managed warehouse with same name.", warehouse);
+                continue;
+            };
+
+            let Some(recovery_cluster) = wh.clusters.get(&cluster) else {
+                // The cluster may have been dropped
+                log::warn!(
+                    "The cluster({}/{}) may have been dropped",
+                    warehouse,
+                    cluster
+                );
+                continue;
+            };
+
+            // Check the node list again; if conflicts occur, skip this correction.
+            {
+                let mut lost_nodes = recovery_cluster.nodes.clone();
+
+                for node_snapshot in warehouse_snapshot.snapshot_nodes {
+                    if node_snapshot.node_info.cluster_id != cluster {
+                        continue;
+                    }
+
+                    lost_nodes.remove_first(&SelectedNode::Random(
+                        node_snapshot.node_info.runtime_node_group.clone(),
+                    ));
+                }
+
+                if !lost_nodes
+                    .iter()
+                    .any(|x| x == &SelectedNode::Random(runtime_node_group.clone()))
+                {
+                    continue;
+                }
+            }
+
+            let mut txn = TxnRequest::default();
+
+            let mut node_with_wh = node.clone();
+
+            node_with_wh.cluster_id = cluster.clone();
+            node_with_wh.warehouse_id = warehouse.clone();
+            node.runtime_node_group = runtime_node_group.clone();
+            node_with_wh.runtime_node_group = runtime_node_group;
+
+            let node_key = self.node_key(&node_with_wh)?;
+            let cluster_node_key = self.cluster_node_key(&node_with_wh)?;
+            let warehouse_info_key = self.warehouse_info_key(&warehouse)?;
+
+            txn.condition = vec![
+                map_condition(&node_key, MatchSeq::Exact(0)),
+                map_condition(&cluster_node_key, MatchSeq::Exact(0)),
+                map_condition(
+                    &warehouse_info_key,
+                    MatchSeq::Exact(warehouse_snapshot.info_seq),
+                ),
+            ];
+
+            txn.if_then = vec![
+                TxnOp::put_with_ttl(
+                    node_key,
+                    serde_json::to_vec(&node_with_wh)?,
+                    Some(self.lift_time),
+                ),
+                TxnOp::put_with_ttl(
+                    cluster_node_key,
+                    serde_json::to_vec(&node)?,
+                    Some(self.lift_time),
+                ),
+                TxnOp::put(
+                    warehouse_info_key,
+                    serde_json::to_vec(&WarehouseInfo::SystemManaged(wh))?,
+                ),
+            ];
+
+            if self.metastore.transaction(txn).await?.success {
+                return Ok(true);
+            }
+
+            // upon retry, fallback a little while.
+            tokio::time::sleep(Duration::from_millis(30 * retry_count)).await;
+        }
+
+        Err(ErrorCode::WarehouseOperateConflict(
+            "Warehouse operate conflict(tried 20 times).".to_string(),
+        ))
+    }
+
     async fn start_system_managed(&self, mut node: NodeInfo) -> Result<TxnReply> {
-        // TODO: find attach warehouse
         let mut txn = TxnRequest::default();
         let node_key = self.node_key(&node)?;
 
-        txn.condition
-            .push(map_condition(&node_key, MatchSeq::Exact(0)));
+        if !self.recovery_system_managed_warehouse(&mut node).await? {
+            txn.else_then.push(TxnOp::get(node_key.clone()));
+            txn.condition
+                .push(map_condition(&node_key, MatchSeq::Exact(0)));
 
-        txn.if_then.push(TxnOp::put_with_ttl(
-            node_key.clone(),
-            serde_json::to_vec(&node)?,
-            Some(self.lift_time),
-        ));
+            txn.if_then = vec![
+                TxnOp::put_with_ttl(
+                    node_key.clone(),
+                    serde_json::to_vec(&node)?,
+                    Some(self.lift_time),
+                ),
+                TxnOp::get(node_key.clone()),
+            ];
 
-        // If the warehouse has already been assigned.
-        if !node.cluster_id.is_empty() && !node.warehouse_id.is_empty() {
-            let cluster_node_key = self.cluster_node_key(&node)?;
-
-            self.unload_warehouse_info(&mut node);
-            txn.if_then.push(TxnOp::put_with_ttl(
-                cluster_node_key,
-                serde_json::to_vec(&node)?,
-                Some(self.lift_time),
-            ));
+            return Ok(self.metastore.transaction(txn).await?);
         }
 
-        txn.if_then.push(TxnOp::get(node_key.clone()));
-        txn.else_then.push(TxnOp::get(node_key.clone()));
+        txn.if_then = vec![TxnOp::get(node_key.clone())];
         Ok(self.metastore.transaction(txn).await?)
     }
 
@@ -399,7 +577,7 @@ impl WarehouseMgr {
         ));
 
         // If the warehouse has already been assigned.
-        if !node.cluster_id.is_empty() && !node.warehouse_id.is_empty() {
+        if node.assigned_warehouse() {
             let cluster_node_key = self.cluster_node_key(&node)?;
 
             self.unload_warehouse_info(&mut node);
@@ -746,7 +924,7 @@ impl WarehouseMgr {
 impl WarehouseApi for WarehouseMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
-    async fn start_node(&self, node: NodeInfo) -> Result<u64> {
+    async fn start_node(&self, node: NodeInfo) -> Result<(u64, NodeInfo)> {
         let start_reply = match node.node_type {
             NodeType::SelfManaged => self.start_self_managed(node.clone()).await?,
             NodeType::SystemManaged => self.start_system_managed(node.clone()).await?,
@@ -765,7 +943,7 @@ impl WarehouseApi for WarehouseMgr {
                     Some(Response::Get(TxnGetResponse {
                         value: Some(seq_v), ..
                     })),
-            }) => Ok(seq_v.seq),
+            }) => Ok((seq_v.seq, serde_json::from_slice(&seq_v.data)?)),
             _ => Err(ErrorCode::MetaServiceError("Add node info failure.")),
         }
     }

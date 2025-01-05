@@ -506,8 +506,8 @@ impl ClusterDiscovery {
 
         self.drop_invalid_nodes(&node_info).await?;
 
-        match self.warehouse_manager.start_node(node_info.clone()).await {
-            Ok(seq) => self.start_heartbeat(node_info, seq).await,
+        match self.warehouse_manager.start_node(node_info).await {
+            Ok((seq, node_info)) => self.start_heartbeat(node_info, seq).await,
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }
     }
