@@ -336,7 +336,7 @@ impl Processor for TransformSerializeBlock {
                         }
                     }
 
-                    if matches!(self.kind, MutationKind::Recluster(_)) {
+                    if matches!(self.kind, MutationKind::Recluster) {
                         Self::mutation_logs(MutationLogEntry::ReclusterAppendBlock {
                             block_meta: Arc::new(block_meta),
                         })

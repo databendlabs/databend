@@ -17,7 +17,6 @@ use std::fmt::Formatter;
 
 use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
-use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::plans::UDFField;
 use crate::plans::UDFType;
@@ -71,7 +70,7 @@ pub enum MutationKind {
     Delete,
     Update,
     Replace,
-    Recluster(ClusterType),
+    Recluster,
     Insert,
     Compact,
     MergeInto,
@@ -82,10 +81,7 @@ impl Display for MutationKind {
         match self {
             MutationKind::Delete => write!(f, "Delete"),
             MutationKind::Insert => write!(f, "Insert"),
-            MutationKind::Recluster(cluster_type) => match cluster_type {
-                ClusterType::Linear => write!(f, "Recluster"),
-                ClusterType::Hilbert => write!(f, "Hilbert Recluster"),
-            },
+            MutationKind::Recluster => write!(f, "Recluster"),
             MutationKind::Update => write!(f, "Update"),
             MutationKind::Replace => write!(f, "Replace"),
             MutationKind::Compact => write!(f, "Compact"),

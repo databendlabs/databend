@@ -21,7 +21,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
-use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
@@ -90,7 +89,7 @@ impl PhysicalPlanBuilder {
                 input: Box::new(plan),
                 table_info,
                 snapshot: Some(snapshot),
-                mutation_kind: MutationKind::Recluster(ClusterType::Hilbert),
+                mutation_kind: MutationKind::Recluster,
                 update_stream_meta: vec![],
                 merge_meta: false,
                 deduplicated_label: None,
@@ -139,7 +138,7 @@ impl PhysicalPlanBuilder {
                         input: Box::new(root),
                         table_info,
                         snapshot: Some(snapshot),
-                        mutation_kind: MutationKind::Recluster(ClusterType::Linear),
+                        mutation_kind: MutationKind::Recluster,
                         update_stream_meta: vec![],
                         merge_meta: false,
                         deduplicated_label: None,

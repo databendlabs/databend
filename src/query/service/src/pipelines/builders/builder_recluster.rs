@@ -34,7 +34,6 @@ use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
-use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::processors::TransformAddStreamColumns;
@@ -178,7 +177,7 @@ impl PipelineBuilder {
                             transform_output_port,
                             table,
                             cluster_stats_gen.clone(),
-                            MutationKind::Recluster(ClusterType::Linear),
+                            MutationKind::Recluster,
                         )?;
                         proc.into_processor()
                     })

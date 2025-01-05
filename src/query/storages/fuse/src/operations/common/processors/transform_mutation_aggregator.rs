@@ -63,16 +63,17 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 pub struct TableMutationAggregator {
     ctx: Arc<dyn TableContext>,
     schema: TableSchemaRef,
+    table_id: u64,
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
-
     thresholds: BlockThresholds,
     block_per_seg: usize,
-    default_cluster_key_id: Option<u32>,
 
+    default_cluster_key_id: Option<u32>,
     base_segments: Vec<Location>,
     // Used for recluster.
     recluster_merged_blocks: Vec<Arc<BlockMeta>>,
+    set_hilbert_level: bool,
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     appended_segments: Vec<Location>,
@@ -83,7 +84,6 @@ pub struct TableMutationAggregator {
     kind: MutationKind,
     start_time: Instant,
     finished_tasks: usize,
-    table_id: u64,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -115,7 +115,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
                 },
                 self.schema.clone(),
             )),
-            MutationKind::Recluster(_) => self.apply_recluster(&mut new_segment_locs).await?,
+            MutationKind::Recluster => self.apply_recluster(&mut new_segment_locs).await?,
             _ => self.apply_mutation(&mut new_segment_locs).await?,
         };
 
@@ -137,6 +137,16 @@ impl TableMutationAggregator {
         removed_statistics: Statistics,
         kind: MutationKind,
     ) -> Self {
+        let set_hilbert_level = table
+            .cluster_type()
+            .is_some_and(|v| matches!(v, ClusterType::Hilbert))
+            && matches!(
+                kind,
+                MutationKind::Delete
+                    | MutationKind::MergeInto
+                    | MutationKind::Replace
+                    | MutationKind::Recluster
+            );
         TableMutationAggregator {
             ctx,
             schema: table.schema(),
@@ -144,6 +154,7 @@ impl TableMutationAggregator {
             location_gen: table.meta_location_generator().clone(),
             thresholds: table.get_block_thresholds(),
             default_cluster_key_id: table.cluster_key_id(),
+            set_hilbert_level,
             block_per_seg: table
                 .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT),
             mutations: HashMap::new(),
@@ -262,6 +273,7 @@ impl TableMutationAggregator {
         let default_cluster_key = Some(default_cluster_key_id);
         let thresholds = self.thresholds;
         let block_per_seg = self.block_per_seg;
+        let set_hilbert_level = self.set_hilbert_level;
         let kind = self.kind;
         for chunk in &merged_blocks.into_iter().chunks(chunk_size) {
             let new_blocks = chunk.collect::<Vec<_>>();
@@ -279,6 +291,7 @@ impl TableMutationAggregator {
                     all_perfect,
                     block_per_seg,
                     kind,
+                    set_hilbert_level,
                 )
                 .await
             });
@@ -413,6 +426,8 @@ impl TableMutationAggregator {
         let thresholds = self.thresholds;
         let default_cluster_key_id = self.default_cluster_key_id;
         let block_per_seg = self.block_per_seg;
+        let kind = self.kind;
+        let set_hilbert_level = self.set_hilbert_level;
         let mut tasks = Vec::with_capacity(segment_indices.len());
         for index in segment_indices {
             let segment_mutation = self.mutations.remove(&index).unwrap();
@@ -420,10 +435,10 @@ impl TableMutationAggregator {
             let schema = self.schema.clone();
             let op = self.dal.clone();
             let location_gen = self.location_gen.clone();
-            let kind = self.kind;
 
-            let mut all_perfect = false;
             tasks.push(async move {
+                let mut all_perfect = false;
+                let mut set_level = false;
                 let (new_blocks, origin_summary) = if let Some(loc) = location {
                     // read the old segment
                     let compact_segment_info =
@@ -453,6 +468,12 @@ impl TableMutationAggregator {
 
                     // assign back the mutated blocks to segment
                     let new_blocks = block_editor.into_values().collect::<Vec<_>>();
+                    set_level = set_hilbert_level
+                        && segment_info
+                            .summary
+                            .cluster_stats
+                            .as_ref()
+                            .is_some_and(|v| v.cluster_key_id == default_cluster_key_id.unwrap());
                     (new_blocks, Some(segment_info.summary))
                 } else {
                     // use by compact.
@@ -478,6 +499,7 @@ impl TableMutationAggregator {
                     all_perfect,
                     block_per_seg,
                     kind,
+                    set_level,
                 )
                 .await?;
 
@@ -551,6 +573,7 @@ async fn write_segment(
     all_perfect: bool,
     block_per_seg: usize,
     kind: MutationKind,
+    set_hilbert_level: bool,
 ) -> Result<(String, Statistics)> {
     let location = location_gen.gen_segment_info_location();
     let mut new_summary = reduce_block_metas(&blocks, thresholds, default_cluster_key);
@@ -564,9 +587,13 @@ async fn write_segment(
             new_summary.perfect_block_count = new_summary.block_count;
         }
     }
-    if matches!(kind, MutationKind::Recluster(ClusterType::Hilbert)) {
-        assert!(new_summary.cluster_stats.is_none());
-        let level = if new_summary.block_count >= block_per_seg as u64 {
+    if set_hilbert_level {
+        debug_assert!(new_summary.cluster_stats.is_none());
+        let level = if new_summary.block_count >= block_per_seg as u64
+            && (new_summary.row_count as usize >= block_per_seg * thresholds.min_rows_per_block
+                || new_summary.uncompressed_byte_size as usize
+                    >= block_per_seg * thresholds.max_bytes_per_block)
+        {
             -1
         } else {
             0

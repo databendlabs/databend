@@ -21,7 +21,6 @@ use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
-use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::pipelines::PipelineBuilder;
 
@@ -49,7 +48,7 @@ impl PipelineBuilder {
                     transform_output_port,
                     table,
                     ClusterStatsGenerator::default(),
-                    MutationKind::Recluster(ClusterType::Hilbert),
+                    MutationKind::Recluster,
                 )?;
                 proc.into_processor()
             })
