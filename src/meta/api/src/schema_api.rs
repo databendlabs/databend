@@ -242,6 +242,7 @@ pub trait SchemaApi: Send + Sync {
     async fn mget_table_names_by_ids(
         &self,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>, KVAppError>;
 
     async fn mget_database_names_by_ids(
