@@ -212,7 +212,7 @@ async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
     let (kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let mut node_info = self_managed_node("test_node");
-    let seq = warehouse_manager.start_node(node_info.clone()).await?;
+    let (seq, _node) = warehouse_manager.start_node(node_info.clone()).await?;
 
     let info_key = "__fd_clusters_v6/test%2dtenant%2did/online_nodes/test_node";
     assert_key_value(&kv, info_key, serde_json::to_vec(&node_info)?).await;
