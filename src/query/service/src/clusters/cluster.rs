@@ -78,7 +78,7 @@ pub struct ClusterDiscovery {
 // avoid leak FlightClient to common-xxx
 #[async_trait::async_trait]
 pub trait ClusterHelper {
-    fn create(unassign: bool, nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster>;
+    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster>;
     fn empty() -> Arc<Cluster>;
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
@@ -98,7 +98,8 @@ pub trait ClusterHelper {
 
 #[async_trait::async_trait]
 impl ClusterHelper for Cluster {
-    fn create(unassign: bool, nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
+    fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
+        let unassign = nodes.iter().all(|node| !node.assigned_warehouse());
         Arc::new(Cluster {
             unassign,
             local_id,
@@ -274,11 +275,11 @@ impl ClusterDiscovery {
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         let nodes = match config.query.cluster_id.is_empty() {
             true => self.warehouse_manager.discover(&config.query.node_id).await,
-            false => self
-                .warehouse_manager
-                .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
-                .await
-                .map(|x| (true, x)),
+            false => {
+                self.warehouse_manager
+                    .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
+                    .await
+            }
         };
 
         match nodes {
@@ -292,7 +293,7 @@ impl ClusterDiscovery {
                 );
                 Err(cause.add_message_back("(while cluster api get_nodes)."))
             }
-            Ok((has_cluster, cluster_nodes)) => {
+            Ok(cluster_nodes) => {
                 let mut res = Vec::with_capacity(cluster_nodes.len());
                 for node in &cluster_nodes {
                     if node.id != self.local_id {
@@ -320,7 +321,7 @@ impl ClusterDiscovery {
                     cluster_nodes.len() as f64,
                 );
 
-                let res = Cluster::create(!has_cluster, res, self.local_id.clone());
+                let res = Cluster::create(res, self.local_id.clone());
                 Ok(res)
             }
         }

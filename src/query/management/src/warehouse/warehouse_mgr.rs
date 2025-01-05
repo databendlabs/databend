@@ -21,6 +21,7 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::unescape_for_key;
 use databend_common_base::base::GlobalUniqName;
 use databend_common_base::vec_ext::VecExt;
+use databend_common_base::version::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_kvapi::kvapi::KVApi;
@@ -48,6 +49,8 @@ use crate::warehouse::warehouse_api::SystemManagedCluster;
 use crate::warehouse::warehouse_api::SystemManagedWarehouse;
 use crate::warehouse::warehouse_api::WarehouseInfo;
 use crate::warehouse::WarehouseApi;
+
+static DEFAULT_CLUSTER_ID: &str = "default";
 
 pub static WAREHOUSE_API_KEY_PREFIX: &str = "__fd_clusters_v6";
 pub static WAREHOUSE_META_KEY_PREFIX: &str = "__fd_warehouses";
@@ -330,24 +333,22 @@ impl WarehouseMgr {
             // txn_reply includes: 1. get node response 2. get warehouse response
 
             // Check warehouse state
-            {
-                // The last response is not meant to be returned.
-                let last = txn_reply.responses.pop();
+            // The last response is not meant to be returned.
+            let last = txn_reply.responses.pop();
 
-                let wh_get_resp = last.as_ref().and_then(|r| r.try_as_get());
-                let wh_get_resp = wh_get_resp.ok_or_else(|| invalid_get_resp(last.as_ref()))?;
+            let wh_get_resp = last.as_ref().and_then(|r| r.try_as_get());
+            let wh_get_resp = wh_get_resp.ok_or_else(|| invalid_get_resp(last.as_ref()))?;
 
-                if let Some(wh_seqv) = &wh_get_resp.value {
-                    let wh: WarehouseInfo = serde_json::from_slice(&wh_seqv.data)?;
+            if let Some(wh_seqv) = &wh_get_resp.value {
+                let wh: WarehouseInfo = serde_json::from_slice(&wh_seqv.data)?;
 
-                    if let WarehouseInfo::SystemManaged(_) = wh {
-                        // an unknown error caused all nodes of the warehouse to fail the heartbeat with the meta service. If someone creates a warehouse with the same name during this period.
-                        return Err(ErrorCode::WarehouseAlreadyExists(
-                            "Already exists same name system-managed warehouse.",
-                        ));
-                    }
-                };
-            }
+                if let WarehouseInfo::SystemManaged(_) = wh {
+                    // an unknown error caused all nodes of the warehouse to fail the heartbeat with the meta service. If someone creates a warehouse with the same name during this period.
+                    return Err(ErrorCode::WarehouseAlreadyExists(
+                        "Already exists same name system-managed warehouse.",
+                    ));
+                }
+            };
         }
 
         Ok(txn_reply)
@@ -634,15 +635,15 @@ impl WarehouseMgr {
     async fn pick_assign_warehouse_node(
         &self,
         warehouse: &str,
-        warehouse_nodes_matcher: &HashMap<String, Vec<SelectedNode>>,
+        nodes_matcher: &HashMap<String, Vec<SelectedNode>>,
     ) -> Result<HashMap<String, Vec<(u64, NodeInfo)>>> {
-        let mut selected_nodes = HashMap::with_capacity(warehouse_nodes_matcher.len());
+        let mut selected_nodes = HashMap::with_capacity(nodes_matcher.len());
 
         let mut grouped_nodes = self.unassigned_nodes().await?;
 
         let mut after_assign_node = HashMap::new();
 
-        for (cluster, cluster_node_matcher) in warehouse_nodes_matcher {
+        for (cluster, cluster_node_matcher) in nodes_matcher {
             let mut cluster_selected_nodes = Vec::with_capacity(cluster_node_matcher.len());
             for selected_node in cluster_node_matcher {
                 match selected_node {
@@ -843,7 +844,7 @@ impl WarehouseApi for WarehouseMgr {
             ));
             delete_txn.if_then.push(TxnOp::delete(warehouse_info_key));
 
-            for mut node_snapshot in warehouse_snapshot.snapshot_nodes {
+            for node_snapshot in warehouse_snapshot.snapshot_nodes {
                 let node_key = self.node_key(&node_snapshot.node_info)?;
                 let cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
@@ -857,10 +858,10 @@ impl WarehouseApi for WarehouseMgr {
                 ));
 
                 delete_txn.if_then.push(TxnOp::delete(cluster_node_key));
-                self.unload_warehouse_info(&mut node_snapshot.node_info);
+                let leave_node = node_snapshot.node_info.leave_warehouse();
                 delete_txn.if_then.push(TxnOp::put_with_ttl(
                     node_key,
-                    serde_json::to_vec(&node_snapshot.node_info)?,
+                    serde_json::to_vec(&leave_node)?,
                     Some(self.lift_time * 4),
                 ));
             }
@@ -889,13 +890,13 @@ impl WarehouseApi for WarehouseMgr {
             ));
         }
 
-        let nodes_map = HashMap::from([(String::from("default"), nodes.clone())]);
+        let nodes_map = HashMap::from([(String::from(DEFAULT_CLUSTER_ID), nodes.clone())]);
 
         loop {
             let mut selected_nodes = self
                 .pick_assign_warehouse_node(&warehouse, &nodes_map)
                 .await?;
-            let selected_nodes = selected_nodes.remove("default").unwrap();
+            let selected_nodes = selected_nodes.remove(DEFAULT_CLUSTER_ID).unwrap();
 
             let mut txn = TxnRequest::default();
 
@@ -932,9 +933,12 @@ impl WarehouseApi for WarehouseMgr {
                     id: GlobalUniqName::unique(),
                     status: "Running".to_string(),
                     display_name: warehouse.clone(),
-                    clusters: HashMap::from([(String::from("default"), SystemManagedCluster {
-                        nodes: nodes.clone(),
-                    })]),
+                    clusters: HashMap::from([(
+                        String::from(DEFAULT_CLUSTER_ID),
+                        SystemManagedCluster {
+                            nodes: nodes.clone(),
+                        },
+                    )]),
                 }))?,
             ));
             txn.else_then.push(TxnOp::get(warehouse_info_key));
@@ -1462,7 +1466,7 @@ impl WarehouseApi for WarehouseMgr {
             ));
 
             // lock all cluster state
-            for mut node_snapshot in warehouse_snapshot.snapshot_nodes {
+            for node_snapshot in warehouse_snapshot.snapshot_nodes {
                 let node_key = self.node_key(&node_snapshot.node_info)?;
                 let cluster_node_key = self.cluster_node_key(&node_snapshot.node_info)?;
 
@@ -1476,15 +1480,14 @@ impl WarehouseApi for WarehouseMgr {
                 ));
 
                 if node_snapshot.node_info.cluster_id == cluster {
-                    // Remove node
-                    self.unload_warehouse_info(&mut node_snapshot.node_info);
+                    let leave_node = node_snapshot.node_info.leave_warehouse();
 
                     drop_cluster_txn
                         .if_then
                         .push(TxnOp::delete(cluster_node_key));
                     drop_cluster_txn.if_then.push(TxnOp::put_with_ttl(
                         node_key,
-                        serde_json::to_vec(&node_snapshot.node_info)?,
+                        serde_json::to_vec(&leave_node)?,
                         Some(self.lift_time * 4),
                     ))
                 }
@@ -1883,7 +1886,7 @@ impl WarehouseApi for WarehouseMgr {
         Ok(online_nodes)
     }
 
-    async fn discover(&self, node_id: &str) -> Result<(bool, Vec<NodeInfo>)> {
+    async fn discover(&self, node_id: &str) -> Result<Vec<NodeInfo>> {
         let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
 
         let Some(seq) = self.metastore.get_kv(&node_key).await? else {
@@ -1896,11 +1899,17 @@ impl WarehouseApi for WarehouseMgr {
         let node = serde_json::from_slice::<NodeInfo>(&seq.data)?;
 
         if !node.assigned_warehouse() {
-            return Ok((false, vec![node]));
+            return Ok(vec![node]);
         }
 
-        let list_nodes = self.list_warehouse_cluster_nodes(&node.warehouse_id, &node.cluster_id);
-        Ok((true, list_nodes.await?))
+        let expect_version = DATABEND_COMMIT_VERSION.to_string();
+
+        Ok(self
+            .list_warehouse_cluster_nodes(&node.warehouse_id, &node.cluster_id)
+            .await?
+            .into_iter()
+            .filter(|x| x.binary_version == expect_version)
+            .collect::<Vec<_>>())
     }
 
     async fn get_node_info(&self, node_id: &str) -> Result<Option<NodeInfo>> {
