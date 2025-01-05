@@ -49,7 +49,7 @@ select * from t2 order by a,b,c;
 2 b_7 c_7
 3 b_6 c_6
 
-## test source alias 
+## test source alias
 statement error 1005
 merge into t1 using (select * from t2 ) on t1.a = t2.a  when matched then update set t1.c = t2.c,t1.c = t2.c;
 
@@ -581,8 +581,8 @@ merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1
 5
 
 # By default setting, all rows merged from  `cluster_source` will be resident in a single block of `cluster_target`,
-# as table `cluster_target` is clustered by `(a,b)`,  the rows inside the one block are assumed to be sorted 
-# by `(a, b)`,  consequently, the result of the following query should be ordered by `(a,b)` without an explicit 
+# as table `cluster_target` is clustered by `(a,b)`,  the rows inside the one block are assumed to be sorted
+# by `(a, b)`,  consequently, the result of the following query should be ordered by `(a,b)` without an explicit
 # `order by` clause.
 query TTT
 select * from cluster_target;
@@ -612,53 +612,19 @@ create table source_test(a int,b string,delete_flag bool) cluster by(a,b);
 statement ok
 insert into source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
 
-###############################################################################
-# To avoid flakiness, using different stage names for http and mysql handlers #
-# testing of these 2 handlers may be run concurrently, and conflict with each #
-# other, leading to flaky tests.                                              #
-###############################################################################
 
-onlyif mysql
-statement ok
-drop stage if exists source_parquet;
-
-onlyif mysql
-statement ok
-create stage source_parquet file_format = (type = parquet);
-
-onlyif mysql
-statement ok
-remove @source_parquet;
-
-onlyif mysql
-statement ok
-copy into @source_parquet from (select * from source_test);
-
-onlyif mysql
-query TTT
-merge into `target_test` as tt using (select `a`,`b`,`delete_flag` from @source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
-when matched and ss.`delete_flag` = true then delete when matched then update * when not matched and ss.`delete_flag` = false then insert *;
-----
-1 1 2
-
-
-onlyif http
 statement ok
 drop stage if exists source_parquet_http;
 
-onlyif http
 statement ok
 create stage source_parquet_http file_format = (type = parquet);
 
-onlyif http
 statement ok
 remove @source_parquet_http;
 
-onlyif http
 statement ok
 copy into @source_parquet_http from (select * from source_test);
 
-onlyif http
 query TTT
 merge into `target_test` as tt using (select `a`,`b`,`delete_flag` from @source_parquet_http (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`)
 when matched and ss.`delete_flag` = true then delete when matched then update * when not matched and ss.`delete_flag` = false then insert *;
@@ -682,7 +648,7 @@ statement ok
 create table test_order(id bigint, id1 bigint, id2 bigint, id3 bigint, id4 bigint, id5 bigint, id6 bigint, id7 bigint, s1 varchar, s2 varchar, s3 varchar, s4 varchar, s5 varchar, s6 varchar, s7 varchar, s8 varchar, s9 varchar, s10 varchar, s11 varchar, s12 varchar, s13 varchar, d1 DECIMAL(20, 8), d2 DECIMAL(20, 8), d3 DECIMAL(20, 8), d4 DECIMAL(20, 8), d5 DECIMAL(20, 8), d6 DECIMAL(30, 8), d7 DECIMAL(30, 8), d8 DECIMAL(30, 8), d9 DECIMAL(30, 8), d10 DECIMAL(30, 8),insert_time datetime, insert_time1 datetime, insert_time2 datetime, insert_time3 datetime,i int) CLUSTER BY(to_yyyymmdd(insert_time), id) bloom_index_columns='insert_time,id';
 
 statement ok
-create table random_source(id bigint not null, id1 bigint, id2 bigint, id3 bigint, id4 bigint, id5 bigint, id6 bigint, id7 bigint,s1 varchar, s2 varchar, s3 varchar, s4 varchar, s5 varchar, s6 varchar, s7 varchar, s8 varchar, s9 varchar, s10 varchar, s11 varchar, s12 varchar, s13 varchar,d1 DECIMAL(20, 8), d2 DECIMAL(20, 8), d3 DECIMAL(20, 8), d4 DECIMAL(20, 8), d5 DECIMAL(20, 8), d6 DECIMAL(30, 8), d7 DECIMAL(30, 8), d8 DECIMAL(30, 8), d9 DECIMAL(30, 8), d10 DECIMAL(30, 8),insert_time datetime not null, insert_time1 datetime, insert_time2 datetime, insert_time3 datetime,i int) Engine = Random; 
+create table random_source(id bigint not null, id1 bigint, id2 bigint, id3 bigint, id4 bigint, id5 bigint, id6 bigint, id7 bigint,s1 varchar, s2 varchar, s3 varchar, s4 varchar, s5 varchar, s6 varchar, s7 varchar, s8 varchar, s9 varchar, s10 varchar, s11 varchar, s12 varchar, s13 varchar,d1 DECIMAL(20, 8), d2 DECIMAL(20, 8), d3 DECIMAL(20, 8), d4 DECIMAL(20, 8), d5 DECIMAL(20, 8), d6 DECIMAL(30, 8), d7 DECIMAL(30, 8), d8 DECIMAL(30, 8), d9 DECIMAL(30, 8), d10 DECIMAL(30, 8),insert_time datetime not null, insert_time1 datetime, insert_time2 datetime, insert_time3 datetime,i int) Engine = Random;
 
 statement ok
 merge into test_order as t using (select id,34 as id1,238 as id2, id3, id4, id5, id6, id7,s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13,d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,insert_time,insert_time1,insert_time2,insert_time3,i from random_source limit 1) as s on t.id = s.id and t.insert_time = s.insert_time when matched then update * when not matched then insert *;
@@ -967,7 +933,7 @@ MERGE INTO orders USING
     FROM numbers(5000)
 ) AS source
 ON orders.order_id = source.order_id
-WHEN MATCHED THEN 
+WHEN MATCHED THEN
     UPDATE SET
         orders.user_id = source.user_id,
         orders.order_type = source.order_type,
@@ -977,7 +943,7 @@ WHEN MATCHED THEN
         orders.status = source.status,
         orders.created_at = source.created_at,
         orders.updated_at = source.updated_at
-WHEN NOT MATCHED THEN 
+WHEN NOT MATCHED THEN
     INSERT (order_id, user_id, order_type, asset_type, quantity, price, status, created_at, updated_at)
     VALUES (source.order_id, source.user_id, source.order_type, source.asset_type, source.quantity, source.price, source.status, source.created_at, source.updated_at);
 
@@ -1002,7 +968,7 @@ statement ok
 MERGE INTO orders AS tt USING
 (
     SELECT
-        CASE 
+        CASE
             WHEN number % 2 = 0 THEN (number / 2) % 250000
             ELSE (SELECT MAX(order_id) FROM orders) + number + 1
         END AS order_id,
@@ -1026,10 +992,10 @@ MERGE INTO orders AS tt USING
     FROM numbers(5000)
 ) AS ss
 ON (tt.user_id = ss.user_id AND tt.asset_type = ss.asset_type)
-WHEN MATCHED AND ss.is_delete = true THEN 
+WHEN MATCHED AND ss.is_delete = true THEN
     DELETE
-WHEN MATCHED AND ss.is_delete = false THEN 
-    UPDATE  * WHEN NOT MATCHED THEN 
+WHEN MATCHED AND ss.is_delete = false THEN
+    UPDATE  * WHEN NOT MATCHED THEN
     INSERT *;
 
 ## unsupport complex exprs for now.
@@ -1042,7 +1008,7 @@ MERGE INTO orders USING (
     GROUP BY t.user_id, t.asset_type
     HAVING SUM(t.quantity) > 100
 ) AS synthetic_orders ON orders.user_id = synthetic_orders.user_id AND orders.asset_type = synthetic_orders.asset_type
-WHEN NOT MATCHED THEN 
+WHEN NOT MATCHED THEN
     INSERT (order_id, user_id, order_type, asset_type, quantity, price, status, created_at, updated_at)
     VALUES ((SELECT MAX(order_id) FROM orders) + 1, synthetic_orders.user_id, synthetic_orders.synthetic_order_type, synthetic_orders.asset_type, synthetic_orders.total_quantity, 0, 'pending', synthetic_orders.synthetic_date, synthetic_orders.synthetic_date);
 
@@ -1223,8 +1189,8 @@ statement ok
 insert into source_default_values values(4,'f');
 
 query TTT
-merge into target_default_values as t1 using source_default_values as t2 on t1.a = t2.a when matched and t1.b = 'a' 
-then update set t1.b = t2.b when matched then delete when not matched and t2.b = 'd' then insert (a) values(t2.a) when not matched 
+merge into target_default_values as t1 using source_default_values as t2 on t1.a = t2.a when matched and t1.b = 'a'
+then update set t1.b = t2.b when matched then delete when not matched and t2.b = 'd' then insert (a) values(t2.a) when not matched
 then insert(b) values(t2.b);
 ----
 2 1 1
@@ -1415,15 +1381,15 @@ select count(*) from lineitem_target_origin_400_blocks1;
 
 ## it maybe flaky test, but in most times, it's normal.
 query TT
-MERGE INTO lineitem_target_origin_400_blocks1 as t1 using lineitem_target_origin_200_blocks1 as t2 on      
-t1.l_orderkey = t2.l_orderkey and     
-t1.l_partkey = t2.l_partkey  
-and t1.l_suppkey = t2.l_suppkey and     
-t1.l_linenumber = t2.l_linenumber and      
-t1.l_quantity = t2.l_quantity and      
-t1.l_extendedprice = t2.l_extendedprice and     
-t1.l_discount = t2.l_discount     
-when matched then update *     
+MERGE INTO lineitem_target_origin_400_blocks1 as t1 using lineitem_target_origin_200_blocks1 as t2 on
+t1.l_orderkey = t2.l_orderkey and
+t1.l_partkey = t2.l_partkey
+and t1.l_suppkey = t2.l_suppkey and
+t1.l_linenumber = t2.l_linenumber and
+t1.l_quantity = t2.l_quantity and
+t1.l_extendedprice = t2.l_extendedprice and
+t1.l_discount = t2.l_discount
+when matched then update *
 when not matched then insert *;
 ----
 0 40000

@@ -24,7 +24,6 @@ databend-common-meta-app = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-native = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
-flagset = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }

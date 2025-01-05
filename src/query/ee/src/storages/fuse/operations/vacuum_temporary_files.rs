@@ -23,7 +23,6 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
-use futures_util::stream;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Buffer;
@@ -162,9 +161,7 @@ async fn vacuum_by_duration(
 
     if temp_files.len() <= limit {
         removed_total += temp_files.len();
-        let _ = operator
-            .remove_via(stream::iter(temp_files.into_iter()))
-            .await;
+        let _ = operator.delete_iter(temp_files).await;
     }
 
     // Log for the final total progress
@@ -232,13 +229,14 @@ async fn vacuum_by_meta_buffer(
     let remain = remain.to_vec();
 
     let cur_removed = to_be_removed.len();
-    let remove_temp_files_path = stream::iter(
-        files
-            .into_iter()
-            .filter(|f| f.starts_with(temporary_dir))
-            .take(limit),
-    );
-    let _ = operator.remove_via(remove_temp_files_path).await;
+    let _ = operator
+        .delete_iter(
+            files
+                .into_iter()
+                .filter(|f| f.starts_with(temporary_dir))
+                .take(limit),
+        )
+        .await;
 
     // update unfinished meta file
     if !remain.is_empty() {
@@ -297,9 +295,7 @@ async fn vacuum_by_list_dir(
     batches.push(dir_path.to_owned());
 
     let cur_removed = batches.len().min(limit);
-    let _ = operator
-        .remove_via(stream::iter(batches.into_iter().take(limit)))
-        .await;
+    let _ = operator.delete_iter(batches.into_iter().take(limit)).await;
 
     *removed_total += cur_removed;
     // Log for the current batch

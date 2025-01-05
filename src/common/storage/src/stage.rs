@@ -30,7 +30,6 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use opendal::EntryMode;
 use opendal::Metadata;
-use opendal::Metakey;
 use opendal::Operator;
 use regex::Regex;
 
@@ -65,11 +64,6 @@ impl StageFileInfo {
             status: StageFileStatus::NeedCopy,
             creator: None,
         }
-    }
-
-    /// NOTE: update this query when add new meta
-    pub fn meta_query() -> flagset::FlagSet<Metakey> {
-        Metakey::ContentLength | Metakey::ContentMd5 | Metakey::LastModified | Metakey::Etag
     }
 }
 
@@ -278,21 +272,26 @@ impl StageFilesInfo {
         };
         let file_exact_stream = stream::iter(file_exact.clone().into_iter());
 
-        let lister = operator
-            .lister_with(path)
-            .recursive(true)
-            .metakey(StageFileInfo::meta_query())
-            .await?;
+        let lister = operator.lister_with(path).recursive(true).await?;
 
         let pattern = Arc::new(pattern);
+        let operator = operator.clone();
         let files_with_prefix = lister.filter_map(move |result| {
             let pattern = pattern.clone();
+            let operator = operator.clone();
             async move {
                 match result {
                     Ok(entry) => {
-                        let meta = entry.metadata();
-                        if check_file(&entry.path()[prefix_len..], meta.mode(), &pattern) {
-                            Some(Ok(StageFileInfo::new(entry.path().to_string(), meta)))
+                        let (path, mut meta) = entry.into_parts();
+                        if check_file(&path[prefix_len..], meta.mode(), &pattern) {
+                            if meta.etag().is_none() {
+                                meta = match operator.stat(&path).await {
+                                    Ok(meta) => meta,
+                                    Err(err) => return Some(Err(ErrorCode::from(err))),
+                                }
+                            }
+
+                            Some(Ok(StageFileInfo::new(path, &meta)))
                         } else {
                             None
                         }
@@ -389,19 +388,22 @@ fn blocking_list_files_with_pattern(
         _ => {}
     };
     let prefix_len = if path == "/" { 0 } else { path.len() };
-    let list = operator
-        .lister_with(path)
-        .recursive(true)
-        .metakey(StageFileInfo::meta_query())
-        .call()?;
+    let list = operator.lister_with(path).recursive(true).call()?;
     if files.len() == max_files {
         return Ok(files);
     }
     for obj in list {
         let obj = obj?;
-        let meta = obj.metadata();
-        if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
-            files.push(StageFileInfo::new(obj.path().to_string(), meta));
+        let (path, mut meta) = obj.into_parts();
+        if check_file(&path[prefix_len..], meta.mode(), &pattern) {
+            if meta.etag().is_none() {
+                meta = match operator.stat(&path) {
+                    Ok(meta) => meta,
+                    Err(err) => return Err(ErrorCode::from(err)),
+                }
+            }
+
+            files.push(StageFileInfo::new(path, &meta));
             if files.len() == max_files {
                 return Ok(files);
             }
