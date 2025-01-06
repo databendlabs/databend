@@ -18,7 +18,7 @@ export STORAGE_S3_ACCESS_KEY_ID=minioadmin
 export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
 export STORAGE_ALLOW_INSECURE=true
 
-export SPILL_SPILL_LOCAL_DISK_PATH=''
+export SPILL_SPILL_LOCAL_DISK_MAX_BYTES=0
 config="[spill.storage]
 type = \"s3\"
 
