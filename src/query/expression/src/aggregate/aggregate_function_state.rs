@@ -205,7 +205,7 @@ impl StatesLayout {
             .collect()
     }
 
-    pub fn states_count(&self) -> usize {
+    pub fn num_states(&self) -> usize {
         self.loc.iter().flatten().count()
     }
 }

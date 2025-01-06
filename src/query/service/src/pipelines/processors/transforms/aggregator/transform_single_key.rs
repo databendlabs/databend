@@ -103,7 +103,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 
         if is_agg_index_block {
             // Aggregation states are in the back of the block.
-            let states_indices = (block.num_columns() - self.states_layout.states_count()
+            let states_indices = (block.num_columns() - self.states_layout.num_states()
                 ..block.num_columns())
                 .collect::<Vec<_>>();
             let states = InputColumns::new_block_proxy(&states_indices, &block);
@@ -271,7 +271,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             .map(|f| Ok(ColumnBuilder::with_capacity(&f.return_type()?, 1)))
             .collect::<Result<Vec<_>>>()?;
 
-        let states_indices = (0..self.states_layout.states_count()).collect::<Vec<_>>();
+        let states_indices = (0..self.states_layout.num_states()).collect::<Vec<_>>();
         for ((func, place), builder) in self
             .funcs
             .iter()
