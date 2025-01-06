@@ -101,7 +101,7 @@ impl Binder {
             };
             // If the CTE is materialized, we'll construct a temp table for it.
             if cte.materialized {
-                self.m_cte_to_temp_table(cte)?;
+                self.m_cte_to_temp_table(cte, idx, with.clone())?;
             }
             bind_context
                 .cte_context
@@ -180,7 +180,7 @@ impl Binder {
         ))
     }
 
-    fn m_cte_to_temp_table(&mut self, cte: &CTE) -> Result<()> {
+    fn m_cte_to_temp_table(&mut self, cte: &CTE, cte_index: usize, mut with: With) -> Result<()> {
         let engine = if self.ctx.get_settings().get_persist_materialized_cte()? {
             Engine::Fuse
         } else {
@@ -207,6 +207,12 @@ impl Binder {
 
         let expr_replacer = ExprReplacer::new(database.clone(), self.m_cte_table_name.clone());
         let mut as_query = cte.query.clone();
+        with.ctes.truncate(cte_index);
+        as_query.with = if cte_index > 0 {
+            Some(with)
+        } else {
+            None
+        };
         expr_replacer.replace_query(&mut as_query);
 
         let create_table_stmt = CreateTableStmt {
