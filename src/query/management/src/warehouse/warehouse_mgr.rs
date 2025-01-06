@@ -557,6 +557,36 @@ impl WarehouseMgr {
         Ok(self.metastore.transaction(txn).await?)
     }
 
+    async fn update_system_managed_node(&self, mut node: NodeInfo, seq: u64) -> Result<TxnReply> {
+        let mut txn = TxnRequest::default();
+        let node_key = self.node_key(&node)?;
+
+        txn.condition
+            .push(map_condition(&node_key, MatchSeq::Exact(seq)));
+
+        txn.if_then.push(TxnOp::put_with_ttl(
+            node_key.clone(),
+            serde_json::to_vec(&node)?,
+            Some(self.lift_time),
+        ));
+
+        // If the warehouse has already been assigned.
+        if node.assigned_warehouse() {
+            let cluster_node_key = self.cluster_node_key(&node)?;
+
+            self.unload_warehouse_info(&mut node);
+            txn.if_then.push(TxnOp::put_with_ttl(
+                cluster_node_key,
+                serde_json::to_vec(&node)?,
+                Some(self.lift_time),
+            ));
+        }
+
+        txn.if_then.push(TxnOp::get(node_key.clone()));
+        txn.else_then.push(TxnOp::get(node_key.clone()));
+        Ok(self.metastore.transaction(txn).await?)
+    }
+
     async fn heartbeat_system_managed(&self, mut node: NodeInfo, seq: u64) -> Result<TxnReply> {
         let mut txn = TxnRequest::default();
         let node_key = self.node_key(&node)?;
@@ -591,7 +621,7 @@ impl WarehouseMgr {
         let leave_node = node_info.leave_warehouse();
 
         let reply = self
-            .heartbeat_system_managed(leave_node.clone(), seq)
+            .update_system_managed_node(leave_node.clone(), seq)
             .await?;
 
         if !reply.success {
@@ -614,7 +644,7 @@ impl WarehouseMgr {
     }
 
     async fn join_warehouse(&self, node_info: NodeInfo, seq: u64) -> Result<u64> {
-        let reply = self.heartbeat_system_managed(node_info, seq).await?;
+        let reply = self.update_system_managed_node(node_info, seq).await?;
 
         if !reply.success {
             return Err(ErrorCode::WarehouseOperateConflict(
