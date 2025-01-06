@@ -116,13 +116,8 @@ impl WarehouseMgr {
         txn.if_then.push(TxnOp::delete(node_key));
 
         if node_info.assigned_warehouse() {
-            txn.if_then.push(TxnOp::delete(format!(
-                "{}/{}/{}/{}",
-                self.cluster_node_key_prefix,
-                escape_for_key(&node_info.warehouse_id)?,
-                escape_for_key(&node_info.cluster_id)?,
-                escape_for_key(&node_info.id)?
-            )));
+            let cluster_node_key = self.cluster_node_key(node_info)?;
+            txn.if_then.push(TxnOp::delete(cluster_node_key));
         }
 
         match self.metastore.transaction(txn).await?.success {
@@ -2024,20 +2019,20 @@ impl WarehouseApi for WarehouseMgr {
         warehouse: &str,
         cluster: &str,
     ) -> Result<Vec<NodeInfo>> {
-        let cluster_prefix = format!(
+        let cluster_nodes_prefix = format!(
             "{}/{}/{}/",
             self.cluster_node_key_prefix,
             escape_for_key(warehouse)?,
             escape_for_key(cluster)?
         );
 
-        let values = self.metastore.prefix_list_kv(&cluster_prefix).await?;
+        let values = self.metastore.prefix_list_kv(&cluster_nodes_prefix).await?;
 
         let mut nodes_info = Vec::with_capacity(values.len());
         for (node_key, value) in values {
             let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
 
-            node_info.id = unescape_for_key(&node_key[cluster_prefix.len()..])?;
+            node_info.id = unescape_for_key(&node_key[cluster_nodes_prefix.len()..])?;
             node_info.cluster_id = cluster.to_string();
             node_info.warehouse_id = warehouse.to_string();
             nodes_info.push(node_info);
