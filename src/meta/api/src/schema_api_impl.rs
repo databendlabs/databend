@@ -3546,6 +3546,7 @@ async fn get_history_tables_for_gc(
         };
 
         if !drop_time_range.contains(&seq_meta.data.drop_on) {
+            info!("table {:?} is not in drop_time_range", seq_meta.data);
             continue;
         }
 

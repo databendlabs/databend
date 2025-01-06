@@ -122,8 +122,8 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let retention_time = chrono::Utc::now() - duration;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         info!(
-            "vacuum drop table from db {:?}, retention_time: {:?}",
-            self.plan.database, retention_time
+            "vacuum drop table from db {:?}, duration: {:?}, retention_time: {:?}",
+            self.plan.database, duration, retention_time
         );
         // if database if empty, vacuum all tables
         let database_name = if self.plan.database.is_empty() {
@@ -151,8 +151,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
         }
 
         info!(
-            "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?}, drop_ids: {:?}",
+            "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?},tables.len: {:?}, drop_ids: {:?}",
             self.plan.database,
+            tables,
             tables.len(),
             drop_ids
         );
@@ -168,6 +169,12 @@ impl Interpreter for VacuumDropTablesInterpreter {
             let view_ids = views.into_iter().map(|v| v.get_id()).collect::<Vec<_>>();
             info!("view ids excluded from purging data: {:?}", view_ids);
         }
+
+        info!(
+            "after filter read-only tables: {:?}, tables.len: {:?}",
+            tables,
+            tables.len()
+        );
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
