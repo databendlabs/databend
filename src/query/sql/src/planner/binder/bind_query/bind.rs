@@ -208,6 +208,7 @@ impl Binder {
         let expr_replacer = ExprReplacer::new(database.clone(), self.m_cte_table_name.clone());
         let mut as_query = cte.query.clone();
         with.ctes.truncate(cte_index);
+        with.ctes.retain(|cte| !cte.materialized);
         as_query.with = if cte_index > 0 { Some(with) } else { None };
         expr_replacer.replace_query(&mut as_query);
 
