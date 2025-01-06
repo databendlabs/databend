@@ -41,7 +41,6 @@ use databend_common_hashtable::HashSet as CommonHashSet;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::HashtableLike;
 use databend_common_hashtable::ShortStringHashSet;
-use databend_common_hashtable::StackHashSet;
 use databend_common_io::prelude::*;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
@@ -70,7 +69,6 @@ pub struct AggregateDistinctState {
     set: HashSet<Vec<u8>, RandomState>,
 }
 
-// Tried to use StackHash<T, 4> but performance is improved in Q14 of hits benchmark
 pub struct AggregateDistinctNumberState<T: Number + HashtableKeyable> {
     set: CommonHashSet<T>,
 }
@@ -320,13 +318,13 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
 
 // For count(distinct string) and uniq(string)
 pub struct AggregateUniqStringState {
-    set: StackHashSet<u128, 16>,
+    set: CommonHashSet<u128>,
 }
 
 impl DistinctStateFunc for AggregateUniqStringState {
     fn new() -> Self {
         AggregateUniqStringState {
-            set: StackHashSet::new(),
+            set: CommonHashSet::new(),
         }
     }
 
@@ -340,7 +338,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self> {
         let size = reader.read_uvarint()?;
-        let mut set = StackHashSet::with_capacity(size as usize);
+        let mut set = CommonHashSet::with_capacity(size as usize);
         for _ in 0..size {
             let e = borsh_deserialize_state(reader)?;
             let _ = set.set_insert(e).is_ok();
