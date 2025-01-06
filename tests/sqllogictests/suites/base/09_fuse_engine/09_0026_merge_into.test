@@ -621,47 +621,19 @@ insert into source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',tru
 # other, leading to flaky tests.                                              #
 ###############################################################################
 
-onlyif mysql
-statement ok
-drop stage if exists source_parquet2;
 
-onlyif mysql
-statement ok
-create stage source_parquet2 file_format = (type = parquet);
-
-onlyif mysql
-statement ok
-remove @source_parquet2;
-
-onlyif mysql
-statement ok
-copy into @source_parquet2 from (select * from source_test);
-
-onlyif mysql
-query TTT
-merge into `target_test` as tt using (select `a`,`b`,`delete_flag` from @source_parquet2 (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`)
-when matched and ss.`delete_flag` = true then delete when matched then update * when not matched and ss.`delete_flag` = false then insert *;
-----
-1 1 2
-
-
-onlyif http
 statement ok
 drop stage if exists source_parquet_http2;
 
-onlyif http
 statement ok
 create stage source_parquet_http2 file_format = (type = parquet);
 
-onlyif http
 statement ok
 remove @source_parquet_http2;
 
-onlyif http
 statement ok
 copy into @source_parquet_http2 from (select * from source_test);
 
-onlyif http
 query TTT
 merge into `target_test` as tt using (select `a`,`b`,`delete_flag` from @source_parquet_http2 (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`)
 when matched and ss.`delete_flag` = true then delete when matched then update * when not matched and ss.`delete_flag` = false then insert *;

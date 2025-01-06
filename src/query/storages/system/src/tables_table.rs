@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -252,7 +253,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let user_api = UserApiProvider::instance();
 
         let mut dbs = Vec::new();
-        let mut tables_names: Vec<String> = Vec::new();
+        let mut tables_names: BTreeSet<String> = BTreeSet::new();
         let mut invalid_tables_ids = false;
         let mut tables_ids: Vec<u64> = Vec::new();
         let mut db_name: Vec<String> = Vec::new();
@@ -317,9 +318,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             }
                         } else if col_name == "name" {
                             if let Scalar::String(t_name) = scalar {
-                                if !tables_names.contains(t_name) {
-                                    tables_names.push(t_name.clone());
-                                }
+                                tables_names.insert(t_name.clone());
                             }
                         }
                         Ok(())
@@ -348,17 +347,19 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         }
                     }
                 }
-                if let Err(err) = ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
-                    warn!("Failed to get tables: {}, {}", ctl.name(), err);
-                } else {
-                    let new_tables_names = ctl
-                        .mget_table_names_by_ids(&tenant, &tables_ids)
-                        .await?
-                        .into_iter()
-                        .flatten()
-                        .filter(|table| !tables_names.contains(table))
-                        .collect::<Vec<_>>();
-                    tables_names.extend(new_tables_names);
+                match ctl
+                    .mget_table_names_by_ids(&tenant, &tables_ids, false)
+                    .await
+                {
+                    Ok(new_tables) => {
+                        let new_table_names: BTreeSet<_> =
+                            new_tables.into_iter().flatten().collect();
+                        tables_names.extend(new_table_names);
+                    }
+                    Err(err) => {
+                        // swallow the errors related with mget tables
+                        warn!("Failed to get tables: {}, {}", ctl.name(), err);
+                    }
                 }
 
                 for table_name in &tables_names {
@@ -430,20 +431,18 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             }
                         }
 
-                        if !WITH_HISTORY {
-                            match ctl.mget_table_names_by_ids(&tenant, &tables_ids).await {
-                                Ok(tables) => {
-                                    for table in tables.into_iter().flatten() {
-                                        if !tables_names.contains(&table) {
-                                            tables_names.push(table.clone());
-                                        }
-                                    }
+                        match ctl
+                            .mget_table_names_by_ids(&tenant, &tables_ids, WITH_HISTORY)
+                            .await
+                        {
+                            Ok(tables) => {
+                                for table in tables.into_iter().flatten() {
+                                    tables_names.insert(table.clone());
                                 }
-                                Err(err) => {
-                                    let msg =
-                                        format!("Failed to get tables: {}, {}", ctl.name(), err);
-                                    warn!("{}", msg);
-                                }
+                            }
+                            Err(err) => {
+                                let msg = format!("Failed to get tables: {}, {}", ctl.name(), err);
+                                warn!("{}", msg);
                             }
                         }
                     }
