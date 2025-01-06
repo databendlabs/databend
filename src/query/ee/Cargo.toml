@@ -14,7 +14,6 @@ test = true
 [dependencies]
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
-aws-smithy-runtime = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -26,7 +25,6 @@ databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
-databend-common-grpc = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-license = { workspace = true }
 databend-common-management = { workspace = true }
@@ -65,16 +63,10 @@ databend-storages-common-table-meta = { workspace = true }
 derive-visitor = { workspace = true }
 futures = { workspace = true }
 futures-util = { workspace = true }
-hyper-tls = { workspace = true }
-hyper_v014 = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
 tempfile = { workspace = true }
-
-# aws sdk
-aws-config = { workspace = true }
-aws-sdk-s3 = { workspace = true }
 
 [dev-dependencies]
 jsonb = { workspace = true }

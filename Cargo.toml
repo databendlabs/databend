@@ -238,9 +238,6 @@ async-compression = { git = "https://github.com/datafuse-extras/async-compressio
 async-recursion = "1.1.1"
 async-stream = "0.3.3"
 async-trait = { version = "0.1.77" }
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1.17.0"
-aws-smithy-runtime = { version = "1.6.2", default-features = false }
 backoff = "0.4" # FIXME: use backon to replace this.
 backon = "1"
 backtrace = "0.3.73"
