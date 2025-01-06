@@ -608,9 +608,9 @@ async fn test_list_warehouses() -> Result<()> {
     let WarehouseInfo::SystemManaged(system_managed_info) = &list_warehouses_2[1] else {
         unreachable!();
     };
-    assert!(!system_managed_info.id.is_empty());
+    assert!(!system_managed_info.role_id.is_empty());
     assert_eq!(system_managed_info.status, "Running");
-    assert_eq!(system_managed_info.display_name, "test_warehouse_1");
+    assert_eq!(system_managed_info.id, "test_warehouse_1");
     assert_eq!(
         system_managed_info.clusters,
         HashMap::from([(String::from("default"), SystemManagedCluster {
@@ -650,9 +650,9 @@ async fn test_list_warehouses() -> Result<()> {
     let WarehouseInfo::SystemManaged(system_managed_info) = &list_warehouses_4[3] else {
         unreachable!();
     };
-    assert!(!system_managed_info.id.is_empty());
+    assert!(!system_managed_info.role_id.is_empty());
     assert_eq!(system_managed_info.status, "Running");
-    assert_eq!(system_managed_info.display_name, "test_warehouse_3");
+    assert_eq!(system_managed_info.id, "test_warehouse_3");
     assert_eq!(
         system_managed_info.clusters,
         HashMap::from([(String::from("default"), SystemManagedCluster {
@@ -751,9 +751,9 @@ async fn test_rename_warehouses() -> Result<()> {
         unreachable!();
     };
 
-    assert!(!system_managed_info.id.is_empty());
+    assert!(!system_managed_info.role_id.is_empty());
     assert_eq!(system_managed_info.status, "Running");
-    assert_eq!(system_managed_info.display_name, "test_warehouse");
+    assert_eq!(system_managed_info.id, "test_warehouse");
     assert_eq!(
         system_managed_info.clusters,
         HashMap::from([(String::from("default"), SystemManagedCluster {
@@ -776,9 +776,9 @@ async fn test_rename_warehouses() -> Result<()> {
         unreachable!();
     };
 
-    assert!(!system_managed_info.id.is_empty());
+    assert!(!system_managed_info.role_id.is_empty());
     assert_eq!(system_managed_info.status, "Running");
-    assert_eq!(system_managed_info.display_name, "new_test_warehouse");
+    assert_eq!(system_managed_info.id, "new_test_warehouse");
     assert_eq!(
         system_managed_info.clusters,
         HashMap::from([(String::from("default"), SystemManagedCluster {
@@ -805,9 +805,9 @@ async fn test_rename_warehouses() -> Result<()> {
         unreachable!();
     };
 
-    assert!(!system_managed_info.id.is_empty());
+    assert!(!system_managed_info.role_id.is_empty());
     assert_eq!(system_managed_info.status, "Running");
-    assert_eq!(system_managed_info.display_name, "test_warehouse");
+    assert_eq!(system_managed_info.id, "test_warehouse");
     assert_eq!(
         system_managed_info.clusters,
         HashMap::from([(String::from("default"), SystemManagedCluster {

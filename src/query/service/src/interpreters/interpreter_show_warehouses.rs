@@ -71,7 +71,7 @@ impl Interpreter for ShowWarehousesInterpreter {
                     warehouses_status.push(Scalar::String(String::from("Running")).as_ref());
                 }
                 WarehouseInfo::SystemManaged(v) => {
-                    warehouses_name.push(Scalar::String(v.display_name.clone()).as_ref());
+                    warehouses_name.push(Scalar::String(v.id.clone()).as_ref());
                     warehouses_type.push(Scalar::String(String::from("System-Managed")).as_ref());
                     warehouses_status.push(Scalar::String(v.status.clone()).as_ref());
                 }

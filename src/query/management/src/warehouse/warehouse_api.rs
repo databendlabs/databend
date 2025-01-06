@@ -55,8 +55,8 @@ pub struct SystemManagedCluster {
 #[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug)]
 pub struct SystemManagedWarehouse {
     pub id: String,
+    pub role_id: String,
     pub status: String,
-    pub display_name: String,
     pub clusters: HashMap<String, SystemManagedCluster>,
 }
 

@@ -391,7 +391,7 @@ impl WarehouseMgr {
             for (cluster_id, cluster) in wh.clusters {
                 let mut lost_nodes = cluster.nodes;
 
-                let key = (wh.display_name.clone(), cluster_id.clone());
+                let key = (wh.id.clone(), cluster_id.clone());
                 if let Some(online_nodes) = cluster_online_nodes.remove(&key) {
                     for online_node in online_nodes {
                         lost_nodes.remove_first(&SelectedNode::Random(
@@ -401,8 +401,7 @@ impl WarehouseMgr {
                 }
 
                 if !lost_nodes.is_empty() {
-                    unhealthy_warehouses
-                        .insert((wh.display_name.clone(), cluster_id.clone()), lost_nodes);
+                    unhealthy_warehouses.insert((wh.id.clone(), cluster_id.clone()), lost_nodes);
                 }
             }
         }
@@ -1108,9 +1107,9 @@ impl WarehouseApi for WarehouseMgr {
             txn.if_then.push(TxnOp::put(
                 warehouse_info_key.clone(),
                 serde_json::to_vec(&WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                    id: GlobalUniqName::unique(),
+                    role_id: GlobalUniqName::unique(),
                     status: "Running".to_string(),
-                    display_name: warehouse.clone(),
+                    id: warehouse.clone(),
                     clusters: HashMap::from([(
                         String::from(DEFAULT_CLUSTER_ID),
                         SystemManagedCluster {
@@ -1168,9 +1167,9 @@ impl WarehouseApi for WarehouseMgr {
                     // TODO: support cluster resume?
                     need_schedule_cluster = warehouse.clusters.clone();
                     Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                        id: warehouse.id.clone(),
+                        role_id: warehouse.role_id.clone(),
                         status: "Running".to_string(),
-                        display_name: warehouse.display_name,
+                        id: warehouse.id,
                         clusters: warehouse.clusters,
                     }))
                 }
@@ -1272,13 +1271,13 @@ impl WarehouseApi for WarehouseMgr {
                 )),
                 WarehouseInfo::SystemManaged(warehouse) => {
                     if warehouse.status.to_uppercase() != "RUNNING" {
-                        return Err(ErrorCode::InvalidWarehouse(format!("Cannot suspend warehouse {:?}, because warehouse state is not running.", warehouse.display_name)));
+                        return Err(ErrorCode::InvalidWarehouse(format!("Cannot suspend warehouse {:?}, because warehouse state is not running.", warehouse.id)));
                     }
 
                     Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                        id: warehouse.id.clone(),
+                        role_id: warehouse.role_id.clone(),
                         status: "Suspended".to_string(),
-                        display_name: warehouse.display_name,
+                        id: warehouse.id,
                         clusters: warehouse.clusters,
                     }))
                 }
@@ -1360,7 +1359,7 @@ impl WarehouseApi for WarehouseMgr {
                     "Cannot rename self-managed warehouse",
                 )),
                 WarehouseInfo::SystemManaged(mut info) => {
-                    info.display_name = to.clone();
+                    info.id = to.clone();
                     Ok(WarehouseInfo::SystemManaged(info))
                 }
             }?;
@@ -1511,9 +1510,9 @@ impl WarehouseApi for WarehouseMgr {
                                 nodes: nodes.clone(),
                             });
                             Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                                id: info.id,
+                                role_id: info.role_id,
                                 status: info.status,
-                                display_name: info.display_name,
+                                id: info.id,
                                 clusters: info.clusters,
                             }))
                         }
@@ -1620,9 +1619,9 @@ impl WarehouseApi for WarehouseMgr {
                             false => {
                                 info.clusters.remove(&cluster);
                                 Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                                    id: info.id,
+                                    role_id: info.role_id,
                                     status: info.status,
-                                    display_name: info.display_name,
+                                    id: info.id,
                                     clusters: info.clusters,
                                 }))
                             }
@@ -1721,9 +1720,9 @@ impl WarehouseApi for WarehouseMgr {
                             let cluster_info = info.clusters.remove(&cur);
                             info.clusters.insert(to.clone(), cluster_info.unwrap());
                             Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                                id: info.id,
+                                role_id: info.role_id,
                                 status: info.status,
-                                display_name: info.display_name,
+                                id: info.id,
                                 clusters: info.clusters,
                             }))
                         }
@@ -1836,9 +1835,9 @@ impl WarehouseApi for WarehouseMgr {
                     }
 
                     Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                        id: info.id,
+                        role_id: info.role_id,
                         status: info.status,
-                        display_name: info.display_name,
+                        id: info.id,
                         clusters: info.clusters,
                     }))
                 }
@@ -1958,9 +1957,9 @@ impl WarehouseApi for WarehouseMgr {
 
 
                     Ok(WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                        id: info.id,
+                        role_id: info.role_id,
                         status: info.status,
-                        display_name: info.display_name,
+                        id: info.id,
                         clusters: info.clusters,
                     }))
                 }
