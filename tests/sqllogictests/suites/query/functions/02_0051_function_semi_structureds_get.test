@@ -572,6 +572,12 @@ select id, json_path_query(obj, '$.b?(@.c > 2)') from t2
 statement error 1006
 select id, json_path_query(obj, '--') from t2
 
+statement error 1065
+select id from t2 where json_path_query(obj, '$.a') = 1
+
+statement error 1065
+select id from t2 having json_path_query(obj, '$.a') = 1
+
 query IT
 select id, json_path_query_array(arr, '$[2, 1 to last -1]') from t1
 ----

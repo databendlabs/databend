@@ -143,7 +143,7 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                 }
                 None => {
                     let start = std::time::Instant::now();
-                    let tables = db.list_tables_history().await?;
+                    let tables = db.list_tables_history(true).await?;
                     info!("list_tables cost: {:?}", start.elapsed());
                     tables
                 }

@@ -1551,12 +1551,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             return Ok(vec![]);
         };
 
-        get_retainable_table_metas(self, &Utc::now(), seq_table_id_list.data).await
+        get_history_table_metas(self, false, &Utc::now(), seq_table_id_list.data).await
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn list_retainable_tables(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError> {
+    async fn list_history_tables(
+        &self,
+        include_non_retainable: bool,
+        req: ListTableReq,
+    ) -> Result<Vec<TableNIV>, KVAppError> {
         debug!(req :? =(&req); "SchemaApi: {}", func_name!());
 
         // List tables by tenant, db_id.
@@ -1575,7 +1579,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         for (ident, history) in ident_histories {
             debug!(name :% =(&ident); "get_tables_history");
 
-            let id_metas = get_retainable_table_metas(self, &now, history.data).await?;
+            let id_metas =
+                get_history_table_metas(self, include_non_retainable, &now, history.data).await?;
 
             let table_nivs = id_metas.into_iter().map(|(table_id, seq_meta)| {
                 let name = DBIdTableName::new(ident.database_id, ident.table_name.clone());
@@ -1639,6 +1644,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn mget_table_names_by_ids(
         &self,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>, KVAppError> {
         debug!(req :? =(&table_ids); "SchemaApi: {}", func_name!());
 
@@ -1654,7 +1660,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let seq_metas = self.get_pb_values_vec(id_idents).await?;
         for (i, seq_meta_opt) in seq_metas.iter().enumerate() {
             if let Some(seq_meta) = seq_meta_opt {
-                if seq_meta.data.drop_on.is_some() {
+                if seq_meta.data.drop_on.is_some() && !get_dropped_table {
                     table_names[i] = None;
                 }
             } else {
@@ -3057,8 +3063,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 }
 
-async fn get_retainable_table_metas(
+async fn get_history_table_metas(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    include_non_retainable: bool,
     now: &DateTime<Utc>,
     tb_id_list: TableIdList,
 ) -> Result<Vec<(TableId, SeqV<TableMeta>)>, MetaError> {
@@ -3074,7 +3081,7 @@ async fn get_retainable_table_metas(
             continue;
         };
 
-        if is_drop_time_retainable(table_meta.drop_on, *now) {
+        if include_non_retainable || is_drop_time_retainable(table_meta.drop_on, *now) {
             tb_metas.push((k, table_meta));
         }
     }
