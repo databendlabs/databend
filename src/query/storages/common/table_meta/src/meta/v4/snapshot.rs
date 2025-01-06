@@ -141,7 +141,6 @@ impl TableSnapshot {
             Statistics::default(),
             vec![],
             None,
-            None,
             Default::default(),
         )
         .unwrap()
@@ -159,7 +158,6 @@ impl TableSnapshot {
             previous.schema.clone(),
             previous.summary.clone(),
             previous.segments.clone(),
-            previous.cluster_key_meta.clone(),
             previous.table_statistics_location.clone(),
             table_meta_timestamps,
         )

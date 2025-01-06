@@ -432,7 +432,6 @@ pub async fn generate_snapshot_v4(
         Statistics::default(),
         segments.iter().map(|s| s.0.clone()).collect(),
         None,
-        None,
         Default::default(),
     )?;
     let new_snapshot_location = location_gen
