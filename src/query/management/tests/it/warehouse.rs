@@ -215,7 +215,7 @@ async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
     let (kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
     let mut node_info = self_managed_node("test_node");
-    let (seq, _node) = warehouse_manager.start_node(node_info.clone()).await?;
+    let node = warehouse_manager.start_node(node_info.clone()).await?;
 
     let info_key = "__fd_clusters_v6/test%2dtenant%2did/online_nodes/test_node";
     assert_key_value(&kv, info_key, serde_json::to_vec(&node_info)?).await;
@@ -234,13 +234,13 @@ async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
     assert_key_expire(&kv, warehouse_info_key, Duration::from_mins(50)).await;
 
     warehouse_manager
-        .heartbeat_node(&mut node_info, seq)
+        .heartbeat_node(&mut node_info, node.seq)
         .await?;
     assert_key_value(&kv, warehouse_info_key, info.clone()).await;
     assert_key_value(&kv, info_key, serde_json::to_vec(&node_info)?).await;
     assert_key_value(&kv, warehouse_key, serde_json::to_vec(&warehouse_node)?).await;
-    assert_key_seq(&kv, info_key, MatchSeq::GE(seq + 3)).await;
-    assert_key_seq(&kv, warehouse_key, MatchSeq::GE(seq + 3)).await;
+    assert_key_seq(&kv, info_key, MatchSeq::GE(node.seq + 3)).await;
+    assert_key_seq(&kv, warehouse_key, MatchSeq::GE(node.seq + 3)).await;
     assert_key_expire(&kv, info_key, Duration::from_mins(50)).await;
     assert_key_expire(&kv, warehouse_key, Duration::from_mins(50)).await;
     assert_key_expire(&kv, warehouse_info_key, Duration::from_mins(50)).await;
@@ -653,8 +653,8 @@ async fn test_concurrent_recovery_create_warehouse() -> Result<()> {
                 let node_id = GlobalUniqName::unique();
                 let start_node = warehouse_manager.start_node(system_managed_node(&node_id));
 
-                let (_, node_info) = start_node.await.unwrap();
-                node_info.id
+                let seq_node = start_node.await.unwrap();
+                seq_node.id.clone()
             }
         }));
     }

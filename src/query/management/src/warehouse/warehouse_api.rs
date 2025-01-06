@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_exception::Result;
 use databend_common_meta_types::NodeInfo;
+use databend_common_meta_types::SeqV;
 
 /// Databend-query cluster ID.
 ///
@@ -64,7 +65,7 @@ pub struct SystemManagedWarehouse {
 #[async_trait::async_trait]
 pub trait WarehouseApi: Sync + Send {
     /// Start a new node.
-    async fn start_node(&self, node: NodeInfo) -> Result<(u64, NodeInfo)>;
+    async fn start_node(&self, node: NodeInfo) -> Result<SeqV<NodeInfo>>;
 
     /// Shutdown the tenant's cluster one node by node.id.
     async fn shutdown_node(&self, node_id: String) -> Result<()>;

@@ -138,6 +138,27 @@ impl NodeInfo {
         !self.warehouse_id.is_empty() && !self.cluster_id.is_empty()
     }
 
+    // Unload the warehouse and cluster from the node.
+    // 1. Used when a node is removed from the cluster.
+    // 2. For cluster_node_key: node_info, since its warehouse and cluster are already encoded in the key, we do not need to write the warehouse and cluster into its value again.
+    pub fn unload_warehouse_info(&self) -> NodeInfo {
+        NodeInfo {
+            id: self.id.clone(),
+            secret: self.secret.clone(),
+            cpu_nums: self.cpu_nums,
+            version: self.version,
+            http_address: self.http_address.clone(),
+            flight_address: self.flight_address.clone(),
+            discovery_address: self.discovery_address.clone(),
+            binary_version: self.binary_version.clone(),
+            node_type: self.node_type.clone(),
+            node_group: self.node_group.clone(),
+            cluster_id: String::new(),
+            warehouse_id: String::new(),
+            runtime_node_group: self.runtime_node_group.clone(),
+        }
+    }
+
     pub fn leave_warehouse(&self) -> NodeInfo {
         NodeInfo {
             id: self.id.clone(),
