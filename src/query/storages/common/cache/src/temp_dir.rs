@@ -61,21 +61,18 @@ impl TempDirManager {
                     }
                 }
 
-                match fs::create_dir_all(&path) {
-                    Err(_) => (None, 0, Alignment::MIN),
-                    Ok(_) => {
-                        let stat = statvfs(&path).map_err(|e| {
-                            ErrorCode::StorageUnavailable(format!(
-                                "can't stat temp dir {path:?}: {e}",
-                            ))
-                        })?;
+                if fs::create_dir_all(&path).is_err() {
+                    (None, 0, Alignment::MIN)
+                } else {
+                    let stat = statvfs(&path).map_err(|e| {
+                        ErrorCode::StorageUnavailable(format!("can't stat temp dir {path:?}: {e}",))
+                    })?;
 
-                        (
-                            Some(path.canonicalize()?.into_boxed_path()),
-                            (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64,
-                            Alignment::new(stat.f_bsize.max(512) as usize).unwrap(),
-                        )
-                    }
+                    (
+                        Some(path.canonicalize()?.into_boxed_path()),
+                        (stat.f_blocks as f64 * *config.reserved_disk_ratio) as u64,
+                        Alignment::new(stat.f_bsize.max(512) as usize).unwrap(),
+                    )
                 }
             }
         };
