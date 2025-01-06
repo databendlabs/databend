@@ -17,7 +17,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
+use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_base::base::GlobalUniqName;
+use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
 use databend_common_management::*;
 use databend_common_meta_embedded::MemMeta;
@@ -404,6 +407,44 @@ async fn test_create_system_managed_warehouse_with_online_node() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_concurrent_create_warehouse() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 9).await?;
+
+    let barrier = Arc::new(Barrier::new(10));
+    let warehouse_manager = Arc::new(warehouse_manager);
+
+    let mut runtimes = Vec::with_capacity(10);
+    let mut join_handler = Vec::with_capacity(10);
+    for idx in 0..10 {
+        let runtime = Arc::new(Runtime::with_worker_threads(2, None)?);
+
+        runtimes.push(runtime.clone());
+
+        join_handler.push(runtime.spawn({
+            let barrier = barrier.clone();
+            let warehouse_manager = warehouse_manager.clone();
+            async move {
+                let _ = barrier.wait().await;
+
+                let create_warehouse = warehouse_manager.create_warehouse(
+                    format!("warehouse_{}", idx),
+                    vec![SelectedNode::Random(None); 1],
+                );
+
+                create_warehouse.await.is_ok()
+            }
+        }));
+    }
+
+    let create_res = futures::future::try_join_all(join_handler).await?;
+
+    assert_eq!(create_res.len(), 10);
+    assert_eq!(create_res.iter().filter(|x| **x).count(), 9);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_duplicated_warehouse() -> Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 
@@ -489,6 +530,144 @@ async fn test_create_warehouse_with_no_resources() -> Result<()> {
 
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().code(), 2404);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_recovery_create_warehouse() -> Result<()> {
+    let (_, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
+
+    let create_warehouse = warehouse_manager.create_warehouse(
+        String::from("test_warehouse"),
+        vec![SelectedNode::Random(None); 2],
+    );
+    let _ = create_warehouse.await?;
+
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+
+    assert_eq!(list_warehouse_nodes.await?.len(), 2);
+
+    let shutdown_node = warehouse_manager.shutdown_node(nodes[0].clone());
+    shutdown_node.await?;
+
+    let shutdown_node = warehouse_manager.shutdown_node(nodes[1].clone());
+    shutdown_node.await?;
+
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+
+    assert_eq!(list_warehouse_nodes.await?.len(), 0);
+
+    let node_1 = GlobalUniqName::unique();
+    let start_node_1 = warehouse_manager.start_node(system_managed_node(&node_1));
+    assert!(start_node_1.await.is_ok());
+
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+
+    let nodes = list_warehouse_nodes
+        .await?
+        .into_iter()
+        .map(|x| x.id)
+        .collect::<Vec<_>>();
+    assert_eq!(nodes.len(), 1);
+    assert!(nodes.contains(&node_1));
+
+    let node_2 = GlobalUniqName::unique();
+    let mut node_info_2 = system_managed_node(&node_2);
+    node_info_2.node_group = Some(String::from("test_group"));
+    let start_node_2 = warehouse_manager.start_node(node_info_2);
+    assert!(start_node_2.await.is_ok());
+
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+
+    let nodes = list_warehouse_nodes
+        .await?
+        .into_iter()
+        .map(|x| x.id)
+        .collect::<Vec<_>>();
+    assert_eq!(nodes.len(), 2);
+    assert!(nodes.contains(&node_1));
+    assert!(nodes.contains(&node_2));
+
+    // warehouse is fixed
+    let node_3 = GlobalUniqName::unique();
+    let start_node_3 = warehouse_manager.start_node(system_managed_node(&node_3));
+    assert!(start_node_3.await.is_ok());
+
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+
+    let nodes = list_warehouse_nodes
+        .await?
+        .into_iter()
+        .map(|x| x.id)
+        .collect::<Vec<_>>();
+    assert_eq!(nodes.len(), 2);
+    assert!(nodes.contains(&node_1));
+    assert!(nodes.contains(&node_2));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_concurrent_recovery_create_warehouse() -> Result<()> {
+    let (_, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
+
+    let create_warehouse = warehouse_manager.create_warehouse(
+        String::from("test_warehouse"),
+        vec![SelectedNode::Random(None); 2],
+    );
+    let _ = create_warehouse.await?;
+
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+
+    assert_eq!(list_warehouse_nodes.await?.len(), 2);
+
+    let shutdown_node = warehouse_manager.shutdown_node(nodes[0].clone());
+    shutdown_node.await?;
+
+    let shutdown_node = warehouse_manager.shutdown_node(nodes[1].clone());
+    shutdown_node.await?;
+
+    let barrier = Arc::new(Barrier::new(10));
+    let warehouse_manager = Arc::new(warehouse_manager);
+
+    let mut runtimes = Vec::with_capacity(10);
+    let mut join_handler = Vec::with_capacity(10);
+    for _idx in 0..10 {
+        let runtime = Arc::new(Runtime::with_worker_threads(2, None)?);
+
+        runtimes.push(runtime.clone());
+
+        join_handler.push(runtime.spawn({
+            let barrier = barrier.clone();
+            let warehouse_manager = warehouse_manager.clone();
+            async move {
+                let _ = barrier.wait().await;
+
+                let node_id = GlobalUniqName::unique();
+                let start_node = warehouse_manager.start_node(system_managed_node(&node_id));
+
+                let (_, node_info) = start_node.await.unwrap();
+                node_info.id
+            }
+        }));
+    }
+
+    let start_res = futures::future::try_join_all(join_handler).await?;
+
+    assert_eq!(start_res.len(), 10);
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+    assert_eq!(list_warehouse_nodes.await?.len(), 2);
+
+    let list_online_nodes = warehouse_manager.list_online_nodes();
+    assert_eq!(list_online_nodes.await?.len(), 10);
 
     Ok(())
 }
