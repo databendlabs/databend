@@ -542,7 +542,7 @@ async fn test_recovery_create_warehouse() -> Result<()> {
         String::from("test_warehouse"),
         vec![SelectedNode::Random(None); 2],
     );
-    let _ = create_warehouse.await?;
+    create_warehouse.await?;
 
     let list_warehouse_nodes =
         warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
@@ -621,7 +621,7 @@ async fn test_concurrent_recovery_create_warehouse() -> Result<()> {
         String::from("test_warehouse"),
         vec![SelectedNode::Random(None); 2],
     );
-    let _ = create_warehouse.await?;
+    create_warehouse.await?;
 
     let list_warehouse_nodes =
         warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
@@ -1000,6 +1000,136 @@ async fn test_rename_warehouses() -> Result<()> {
     );
 
     assert_eq!(rename_warehouse.await.unwrap_err().code(), 2405);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_concurrent_rename_to_warehouse() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 9).await?;
+
+    let create_warehouse = warehouse_manager.create_warehouse(
+        String::from("test_warehouse"),
+        vec![SelectedNode::Random(None); 9],
+    );
+    create_warehouse.await?;
+
+    let barrier = Arc::new(Barrier::new(10));
+    let warehouse_manager = Arc::new(warehouse_manager);
+
+    let mut runtimes = Vec::with_capacity(10);
+    let mut join_handler = Vec::with_capacity(10);
+    for idx in 0..10 {
+        let runtime = Arc::new(Runtime::with_worker_threads(2, None)?);
+
+        runtimes.push(runtime.clone());
+
+        join_handler.push(runtime.spawn({
+            let barrier = barrier.clone();
+            let warehouse_manager = warehouse_manager.clone();
+            async move {
+                let _ = barrier.wait().await;
+
+                let rename_warehouse = warehouse_manager.rename_warehouse(
+                    String::from("test_warehouse"),
+                    format!("test_warehouse_{}", idx),
+                );
+
+                rename_warehouse.await.is_ok()
+            }
+        }));
+    }
+
+    let rename_res = futures::future::try_join_all(join_handler).await?;
+
+    assert_eq!(rename_res.len(), 10);
+    assert_eq!(rename_res.iter().filter(|x| **x).count(), 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_concurrent_rename_from_warehouse() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 10).await?;
+
+    let barrier = Arc::new(Barrier::new(10));
+    let warehouse_manager = Arc::new(warehouse_manager);
+
+    let mut runtimes = Vec::with_capacity(10);
+    let mut join_handler = Vec::with_capacity(10);
+    for idx in 0..10 {
+        let runtime = Arc::new(Runtime::with_worker_threads(2, None)?);
+
+        runtimes.push(runtime.clone());
+
+        join_handler.push(runtime.spawn({
+            let barrier = barrier.clone();
+            let warehouse_manager = warehouse_manager.clone();
+            async move {
+                let create_warehouse = warehouse_manager.create_warehouse(
+                    format!("test_warehouse_{}", idx),
+                    vec![SelectedNode::Random(None); 1],
+                );
+                create_warehouse.await.unwrap();
+
+                let _ = barrier.wait().await;
+
+                let rename_warehouse = warehouse_manager.rename_warehouse(
+                    format!("test_warehouse_{}", idx),
+                    String::from("test_warehouse"),
+                );
+
+                rename_warehouse.await.is_ok()
+            }
+        }));
+    }
+
+    let rename_res = futures::future::try_join_all(join_handler).await?;
+
+    assert_eq!(rename_res.len(), 10);
+    assert_eq!(rename_res.iter().filter(|x| **x).count(), 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_concurrent_drop_warehouse() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 9).await?;
+
+    let create_warehouse = warehouse_manager.create_warehouse(
+        String::from("test_warehouse"),
+        vec![SelectedNode::Random(None); 9],
+    );
+    create_warehouse.await?;
+
+    let barrier = Arc::new(Barrier::new(10));
+    let warehouse_manager = Arc::new(warehouse_manager);
+
+    let mut runtimes = Vec::with_capacity(10);
+    let mut join_handler = Vec::with_capacity(10);
+    for _idx in 0..10 {
+        let runtime = Arc::new(Runtime::with_worker_threads(2, None)?);
+
+        runtimes.push(runtime.clone());
+
+        join_handler.push(runtime.spawn({
+            let barrier = barrier.clone();
+            let warehouse_manager = warehouse_manager.clone();
+            async move {
+                let _ = barrier.wait().await;
+
+                let drop_warehouse =
+                    warehouse_manager.drop_warehouse(String::from("test_warehouse"));
+
+                drop_warehouse.await.is_ok()
+            }
+        }));
+    }
+
+    let drop_res = futures::future::try_join_all(join_handler).await?;
+
+    assert_eq!(drop_res.len(), 10);
+    assert_eq!(drop_res.iter().filter(|x| **x).count(), 1);
 
     Ok(())
 }
