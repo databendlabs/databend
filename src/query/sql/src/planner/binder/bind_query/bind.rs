@@ -209,7 +209,7 @@ impl Binder {
         let mut as_query = cte.query.clone();
         with.ctes.truncate(cte_index);
         with.ctes.retain(|cte| !cte.materialized);
-        as_query.with = if cte_index > 0 { Some(with) } else { None };
+        as_query.with = if with.ctes.len() > 0 { Some(with) } else { None };
         expr_replacer.replace_query(&mut as_query);
 
         let create_table_stmt = CreateTableStmt {
