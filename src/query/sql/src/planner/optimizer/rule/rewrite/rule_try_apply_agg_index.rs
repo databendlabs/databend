@@ -131,16 +131,6 @@ impl RuleTryApplyAggIndex {
         vec![
             // Expression
             //     |
-            //    Scan
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Scan,
-                    children: vec![],
-                }],
-            },
-            // Expression
-            //     |
             //   Filter
             //     |
             //    Scan

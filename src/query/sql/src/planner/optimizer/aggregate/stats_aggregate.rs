@@ -20,6 +20,8 @@ use databend_common_expression::types::DataType;
 
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
+use crate::plans::AggregateFunction;
+use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
@@ -28,7 +30,9 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::ColumnBindingBuilder;
 use crate::MetadataRef;
+use crate::Visibility;
 
 // Replace aggregate function with scalar from table's accurate stats function
 pub struct RuleStatsAggregateOptimizer {
@@ -122,27 +126,40 @@ impl RuleStatsAggregateOptimizer {
                     {
                         if let Some((col_id, name)) = need_rewrite_agg {
                             if let Some(stat) = stats.get(col_id) {
-                                if name.eq_ignore_ascii_case("min") && !stat.min.may_be_truncated {
+                                let value_bound = if name.eq_ignore_ascii_case("min") {
+                                    &stat.min
+                                } else {
+                                    &stat.max
+                                };
+                                if !value_bound.may_be_truncated {
                                     eval_scalar_results.push(ScalarItem {
                                         index: agg.index,
                                         scalar: ScalarExpr::ConstantExpr(ConstantExpr {
-                                            value: stat.min.value.clone(),
-                                            span: None,
-                                        }),
-                                    });
-                                    continue;
-                                } else if !stat.max.may_be_truncated {
-                                    eval_scalar_results.push(ScalarItem {
-                                        index: agg.index,
-                                        scalar: ScalarExpr::ConstantExpr(ConstantExpr {
-                                            value: stat.max.value.clone(),
-                                            span: None,
+                                            span: agg.scalar.span(),
+                                            value: value_bound.value.clone(),
                                         }),
                                     });
                                     continue;
                                 }
                             }
                         }
+
+                        // Add other aggregate functions as derived column,
+                        // this will be used in aggregate index rewrite.
+                        let agg_func = AggregateFunction::try_from(agg.scalar.clone())?;
+                        eval_scalar_results.push(ScalarItem {
+                            index: agg.index,
+                            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                span: agg.scalar.span(),
+                                column: ColumnBindingBuilder::new(
+                                    agg_func.display_name.clone(),
+                                    agg.index,
+                                    agg_func.return_type.clone(),
+                                    Visibility::Visible,
+                                )
+                                .build(),
+                            }),
+                        });
                         agg_results.push(agg.clone());
                     }
                 }
