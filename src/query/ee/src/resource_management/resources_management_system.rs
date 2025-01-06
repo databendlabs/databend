@@ -38,6 +38,10 @@ impl SystemResourcesManagement {
 
 #[async_trait::async_trait]
 impl ResourcesManagement for SystemResourcesManagement {
+    fn support_forward_warehouse_request(&self) -> bool {
+        true
+    }
+
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
         assert!(config.query.cluster_id.is_empty());
