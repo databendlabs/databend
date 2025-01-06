@@ -226,24 +226,24 @@ impl AggrState {
 }
 
 pub struct AggrStateRegister {
-    state: Vec<AggrStateType>,
-    offsets: Vec<usize>,
+    pub(super) states: Vec<AggrStateType>,
+    pub(super) offsets: Vec<usize>,
 }
 
 impl AggrStateRegister {
     pub fn new() -> Self {
         Self {
-            state: vec![],
+            states: vec![],
             offsets: vec![0],
         }
     }
 
     pub fn register(&mut self, state: AggrStateType) {
-        self.state.push(state);
+        self.states.push(state);
     }
 
     pub fn commit(&mut self) {
-        self.offsets.push(self.state.len());
+        self.offsets.push(self.states.len());
     }
 }
 
@@ -253,6 +253,7 @@ impl Default for AggrStateRegister {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum AggrStateType {
     Bool,
     Custom(Layout),

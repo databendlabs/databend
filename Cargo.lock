@@ -3260,6 +3260,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "pretty_assertions",
+ "proptest",
  "rand",
  "recursive",
  "roaring",
@@ -4624,7 +4625,6 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "databend-common-base",
- "databend-common-catalog",
  "databend-common-exception",
  "databend-common-meta-app",
 ]
