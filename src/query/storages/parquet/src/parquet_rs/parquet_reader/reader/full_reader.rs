@@ -41,7 +41,9 @@ use parquet::arrow::async_reader::ParquetRecordBatchStream;
 use parquet::arrow::ParquetRecordBatchStreamBuilder;
 use parquet::arrow::ProjectionMask;
 use parquet::file::metadata::ParquetMetaData;
+use parquet::schema::types::SchemaDescPtr;
 
+use crate::parquet_rs::meta::check_parquet_schema;
 use crate::parquet_rs::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_rs::parquet_reader::utils::transform_record_batch;
 use crate::parquet_rs::parquet_reader::utils::transform_record_batch_by_field_paths;
@@ -51,6 +53,7 @@ use crate::ParquetRSPruner;
 /// The reader to read a whole parquet file.
 pub struct ParquetRSFullReader {
     pub(super) op: Operator,
+    pub(super) expect_file_schema: Option<(SchemaDescPtr, String)>,
     pub(super) output_schema: TableSchemaRef,
     pub(super) predicate: Option<Arc<ParquetPredicate>>,
 
@@ -168,7 +171,7 @@ impl ParquetRSFullReader {
     }
 
     /// Read a [`DataBlock`] from bytes.
-    pub fn read_blocks_from_binary(&self, raw: Vec<u8>) -> Result<Vec<DataBlock>> {
+    pub fn read_blocks_from_binary(&self, raw: Vec<u8>, path: &str) -> Result<Vec<DataBlock>> {
         let bytes = Bytes::from(raw);
         let mut builder = ParquetRecordBatchReaderBuilder::try_new_with_options(
             bytes,
@@ -179,6 +182,14 @@ impl ParquetRSFullReader {
 
         // Prune row groups.
         let file_meta = builder.metadata().clone();
+        if let Some((expect_schema, expect_schema_from)) = &self.expect_file_schema {
+            check_parquet_schema(
+                expect_schema,
+                file_meta.file_metadata().schema_descr(),
+                path,
+                expect_schema_from,
+            )?;
+        }
 
         let mut full_match = false;
         if let Some(pruner) = &self.pruner {
