@@ -20,15 +20,15 @@ export STORAGE_ALLOW_INSECURE=true
 
 export SPILL_SPILL_LOCAL_DISK_PATH=''
 config="[spill.storage]
-type=s3
+type = \"s3\"
 
 [spill.storage.s3]
-bucket=spillbucket
-root=admin
-endpoint_url=http://127.0.0.1:9900
-access_key_id=minioadmin
-secret_access_key=minioadmin
-allow_insecure=true"
+bucket = \"spillbucket\"
+root = \"admin\"
+endpoint_url = \"http://127.0.0.1:9900\"
+access_key_id = \"minioadmin\"
+secret_access_key = \"minioadmin\"
+allow_insecure = true"
 
 echo "$config" >> ./scripts/ci/deploy/config/databend-query-node-1.toml
 
