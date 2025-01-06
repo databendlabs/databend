@@ -41,6 +41,10 @@ impl SelfManagedResourcesManagement {
 
 #[async_trait::async_trait]
 impl ResourcesManagement for SelfManagedResourcesManagement {
+    fn support_forward_warehouse_request(&self) -> bool {
+        false
+    }
+
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
         node.cluster_id = config.query.cluster_id.clone();

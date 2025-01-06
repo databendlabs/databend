@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
@@ -30,6 +31,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NodeInfo;
+use databend_enterprise_resources_management::ResourcesManagement;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -537,43 +539,46 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                     };
                 }
             } else if let Some(warehouse) = headers.get(HEADER_WAREHOUSE) {
-                req.headers_mut().remove(HEADER_WAREHOUSE);
+                let resources_management = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+                if resources_management.support_forward_warehouse_request() {
+                    req.headers_mut().remove(HEADER_WAREHOUSE);
 
-                let warehouse = warehouse
-                    .to_str()
-                    .map_err(|e| {
-                        HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
-                            "Invalid Header ({HEADER_WAREHOUSE}: {warehouse:?}): {e}"
-                        )))
-                    })?
-                    .to_string();
+                    let warehouse = warehouse
+                        .to_str()
+                        .map_err(|e| {
+                            HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
+                                "Invalid Header ({HEADER_WAREHOUSE}: {warehouse:?}): {e}"
+                            )))
+                        })?
+                        .to_string();
 
-                let cluster_discovery = ClusterDiscovery::instance();
+                    let cluster_discovery = ClusterDiscovery::instance();
 
-                let forward_node = cluster_discovery.find_node_by_warehouse(&warehouse).await;
+                    let forward_node = cluster_discovery.find_node_by_warehouse(&warehouse).await;
 
-                match forward_node {
-                    Err(error) => {
-                        return Err(HttpErrorCode::server_error(error).into());
-                    }
-                    Ok(None) => {
-                        let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`", warehouse);
-                        warn!("{}", msg);
-                        return Err(Error::from(HttpErrorCode::bad_request(
-                            ErrorCode::UnknownWarehouse(msg),
-                        )));
-                    }
-                    Ok(Some(node)) => {
-                        let local_id = GlobalConfig::instance().query.node_id.clone();
-                        if node.id != local_id {
-                            log::info!(
-                                "forwarding /v1{} from {} to warehouse {}({})",
-                                req.uri(),
-                                local_id,
-                                warehouse,
-                                node.id
-                            );
-                            return forward_request(req, node).await;
+                    match forward_node {
+                        Err(error) => {
+                            return Err(HttpErrorCode::server_error(error).into());
+                        }
+                        Ok(None) => {
+                            let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`", warehouse);
+                            warn!("{}", msg);
+                            return Err(Error::from(HttpErrorCode::bad_request(
+                                ErrorCode::UnknownWarehouse(msg),
+                            )));
+                        }
+                        Ok(Some(node)) => {
+                            let local_id = GlobalConfig::instance().query.node_id.clone();
+                            if node.id != local_id {
+                                log::info!(
+                                    "forwarding /v1{} from {} to warehouse {}({})",
+                                    req.uri(),
+                                    local_id,
+                                    warehouse,
+                                    node.id
+                                );
+                                return forward_request(req, node).await;
+                            }
                         }
                     }
                 }
