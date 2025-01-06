@@ -43,7 +43,7 @@ async fn test_spill_with_partition() -> Result<()> {
         disk_spill: None,
         use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
     };
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
 
     let mut spiller = Spiller::create(ctx, operator, spiller_config)?;
 

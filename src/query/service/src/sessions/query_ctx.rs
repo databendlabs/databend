@@ -485,7 +485,7 @@ impl QueryContext {
             node_idx,
             SPILL_META_SUFFIX
         );
-        let op = DataOperator::instance().operator();
+        let op = DataOperator::instance().spill_operator();
         // append dir and current meta
         remote_spill_files.push(meta_path.clone());
         remote_spill_files.push(format!(
