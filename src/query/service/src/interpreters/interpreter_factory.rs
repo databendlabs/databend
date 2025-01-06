@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
@@ -36,6 +37,8 @@ use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
+use crate::interpreters::interpreter_add_warehouse_cluster::AddWarehouseClusterInterpreter;
+use crate::interpreters::interpreter_assign_warehouse_nodes::AssignWarehouseNodesInterpreter;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
 use crate::interpreters::interpreter_connection_create::CreateConnectionInterpreter;
 use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
@@ -43,9 +46,13 @@ use crate::interpreters::interpreter_connection_drop::DropConnectionInterpreter;
 use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter;
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
+use crate::interpreters::interpreter_create_warehouses::CreateWarehouseInterpreter;
+use crate::interpreters::interpreter_drop_warehouse_cluster::DropWarehouseClusterInterpreter;
+use crate::interpreters::interpreter_drop_warehouses::DropWarehouseInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
+use crate::interpreters::interpreter_inspect_warehouse::InspectWarehouseInterpreter;
 use crate::interpreters::interpreter_notification_alter::AlterNotificationInterpreter;
 use crate::interpreters::interpreter_notification_create::CreateNotificationInterpreter;
 use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
@@ -54,8 +61,14 @@ use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
+use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
+use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
+use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
+use crate::interpreters::interpreter_show_online_nodes::ShowOnlineNodesInterpreter;
+use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
+use crate::interpreters::interpreter_suspend_warehouse::SuspendWarehouseInterpreter;
 use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
@@ -69,6 +82,8 @@ use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::interpreter_txn_abort::AbortInterpreter;
 use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
+use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouseNodesInterpreter;
+use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateStreamInterpreter;
@@ -89,17 +104,85 @@ impl InterpreterFactory {
     pub async fn get(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         // Check the access permission.
         let access_checker = Accessor::create(ctx.clone());
-        access_checker
-            .check(plan)
-            .await
-            .map_err(|e| match e.code() {
-                ErrorCode::PERMISSION_DENIED => {
-                    error!("Access.denied(v2): {:?}", e);
-                    e
+        access_checker.check(plan).await.inspect_err(|e| {
+            if e.code() == ErrorCode::PERMISSION_DENIED {
+                error!("Access.denied(v2): {:?}", e);
+            }
+        })?;
+
+        Self::get_warehouses_interpreter(ctx, plan, Self::get_inner)
+    }
+
+    pub fn get_warehouses_interpreter(
+        ctx: Arc<QueryContext>,
+        plan: &Plan,
+        other: impl FnOnce(Arc<QueryContext>, &Plan) -> Result<InterpreterPtr>,
+    ) -> Result<InterpreterPtr> {
+        match plan {
+            Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create(ctx.clone())?)),
+            Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create(ctx.clone())?)),
+            Plan::UseWarehouse(v) => Ok(Arc::new(UseWarehouseInterpreter::try_create(ctx.clone(), *v.clone())?)),
+            Plan::CreateWarehouse(v) => Ok(Arc::new(CreateWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::DropWarehouse(v) => Ok(Arc::new(DropWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::ResumeWarehouse(v) => Ok(Arc::new(ResumeWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::SuspendWarehouse(v) => Ok(Arc::new(SuspendWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::RenameWarehouse(v) => Ok(Arc::new(RenameWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::InspectWarehouse(v) => Ok(Arc::new(InspectWarehouseInterpreter::try_create(
+                ctx.clone(),
+                *v.clone(),
+            )?)),
+            Plan::AddWarehouseCluster(v) => Ok(Arc::new(
+                AddWarehouseClusterInterpreter::try_create(ctx.clone(), *v.clone())?,
+            )),
+            Plan::DropWarehouseCluster(v) => Ok(Arc::new(
+                DropWarehouseClusterInterpreter::try_create(ctx.clone(), *v.clone())?,
+            )),
+            Plan::RenameWarehouseCluster(v) => Ok(Arc::new(
+                RenameWarehouseClusterInterpreter::try_create(ctx.clone(), *v.clone())?,
+            )),
+            Plan::AssignWarehouseNodes(v) => Ok(Arc::new(
+                AssignWarehouseNodesInterpreter::try_create(ctx.clone(), *v.clone())?,
+            )),
+            Plan::UnassignWarehouseNodes(v) => Ok(Arc::new(
+                UnassignWarehouseNodesInterpreter::try_create(ctx.clone(), *v.clone())?,
+            )),
+            Plan::Query { metadata, .. } => {
+                let read_guard = metadata.read();
+                for table in read_guard.tables() {
+                    let db = table.database();
+                    // System library access is secure
+                    if db != "system" && db != "information_schema" && ctx.get_cluster().unassign {
+                        return Err(ErrorCode::InvalidWarehouse(format!(
+                            "Node {} has not been assigned warehouse, please assign to warehouse before executing SQL on this node.",
+                            ctx.get_cluster().local_id
+                        )));
+                    }
                 }
-                _ => e,
-            })?;
-        Self::get_inner(ctx, plan)
+                other(ctx, plan)
+            }
+            _ => match ctx.get_cluster().unassign {
+                true => Err(ErrorCode::InvalidWarehouse(format!(
+                    "Node {} has not been assigned warehouse, please assign to warehouse before executing SQL on this node.",
+                    ctx.get_cluster().local_id
+                ))),
+                false => other(ctx, plan),
+            },
+        }
     }
 
     pub fn get_inner(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
@@ -631,6 +714,10 @@ impl InterpreterFactory {
             // ctx,
             // p.clone(),
             // )?)),
+            _ => Err(ErrorCode::Unimplemented(format!(
+                "Unimplemented interpreter for {:?} plan",
+                plan
+            ))),
         }
     }
 }

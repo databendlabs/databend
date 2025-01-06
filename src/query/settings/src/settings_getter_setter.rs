@@ -848,4 +848,9 @@ impl Settings {
         let v = self.try_get_u64("stream_consume_batch_size_hint")?;
         Ok(if v == 0 { None } else { Some(v) })
     }
+
+    /// # Safety
+    pub unsafe fn set_warehouse(&self, warehouse: String) -> Result<()> {
+        self.unchecked_set_setting(String::from("warehouse"), warehouse)
+    }
 }

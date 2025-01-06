@@ -1151,6 +1151,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("warehouse", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_string()),
+                    desc: "Please use the <use warehouse> statement to set the warehouse, this settings is only used to synchronize the warehouse status between the client and the server.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

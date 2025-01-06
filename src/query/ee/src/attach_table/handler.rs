@@ -20,7 +20,8 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_sql::plans::CreateTablePlan;
-use databend_common_storage::DataOperator;
+use databend_common_storage::check_operator;
+use databend_common_storage::init_operator;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use databend_enterprise_attach_table::AttachTableHandler;
@@ -41,8 +42,8 @@ impl AttachTableHandler for RealAttachTableHandler {
     ) -> databend_common_exception::Result<CreateTableReq> {
         // Safe to unwrap here, as attach table must have storage params.
         let sp = plan.storage_params.as_ref().unwrap();
-        let operator = DataOperator::try_create(sp).await?;
-        let operator = operator.operator();
+        let operator = init_operator(sp)?;
+        check_operator(&operator, sp).await?;
         let reader = MetaReaders::table_snapshot_reader(operator.clone());
         let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
         let snapshot_loc = operator.read(&hint).await?.to_vec();

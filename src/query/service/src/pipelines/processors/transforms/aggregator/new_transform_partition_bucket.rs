@@ -585,7 +585,7 @@ pub fn build_partition_bucket(
     pipeline.try_resize(input_nums)?;
 
     let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
     pipeline.add_transform(|input, output| {
         let operator = operator.clone();
         TransformAggregateSpillReader::create(input, output, operator, semaphore.clone())

@@ -75,7 +75,7 @@ impl HashJoinSpiller {
             disk_spill: None,
             use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
         };
-        let operator = DataOperator::instance().operator();
+        let operator = DataOperator::instance().spill_operator();
         let spiller = Spiller::create(ctx.clone(), operator, spill_config)?;
 
         let num_partitions = (1 << spill_partition_bits) as usize;

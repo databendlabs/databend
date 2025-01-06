@@ -85,6 +85,7 @@ members = [
     "src/query/ee_features/storage_quota",
     "src/query/ee_features/inverted_index",
     "src/query/ee_features/virtual_column",
+    "src/query/ee_features/resources_management",
     "src/query/service",
     "src/query/ee",
     "src/meta/api",
@@ -185,6 +186,7 @@ databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
 databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }
 databend-enterprise-meta = { path = "src/meta/ee" }
 databend-enterprise-query = { path = "src/query/ee" }
+databend-enterprise-resources-management = { path = "src/query/ee_features/resources_management" }
 databend-enterprise-storage-encryption = { path = "src/query/ee_features/storage_encryption" }
 databend-enterprise-storage-quota = { path = "src/query/ee_features/storage_quota" }
 databend-enterprise-stream-handler = { path = "src/query/ee_features/stream_handler" }

@@ -121,7 +121,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 async fn test_do_vacuum_temporary_files() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
     operator.write("test_dir/test1", vec![1, 2]).await?;
     operator.write("test_dir/test2", vec![1, 2]).await?;
     operator.write("test_dir/test3", vec![1, 2]).await?;
