@@ -848,12 +848,4 @@ impl Settings {
         let v = self.try_get_u64("stream_consume_batch_size_hint")?;
         Ok(if v == 0 { None } else { Some(v) })
     }
-
-    pub fn get_premise_deploy_danger_amend_accept_invalid_cert(&self) -> Result<bool> {
-        Ok(self.try_get_u64("premise_deploy_danger_amend_accept_invalid_cert")? != 0)
-    }
-
-    pub fn get_premise_deploy_amend_force_path_style(&self) -> Result<bool> {
-        Ok(self.try_get_u64("premise_deploy_amend_force_path_style")? != 0)
-    }
 }
