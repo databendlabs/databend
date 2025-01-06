@@ -99,7 +99,7 @@ impl Files {
         info!("deleting files {:?}", &locations);
         let num_of_files = locations.len();
 
-        op.remove(locations).await?;
+        op.delete_iter(locations).await?;
 
         info!(
             "deleted files, number of files {}, time used {:?}",

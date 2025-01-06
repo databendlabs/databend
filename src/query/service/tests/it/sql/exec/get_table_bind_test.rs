@@ -203,8 +203,11 @@ impl Catalog for FakedCatalog {
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
-        self.cat.mget_table_names_by_ids(tenant, table_ids).await
+        self.cat
+            .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
+            .await
     }
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {

@@ -555,7 +555,9 @@ async fn show_account_grants(
             .collect::<HashSet<u64>>();
         let mut table_ids = table_id_set.into_iter().collect::<Vec<u64>>();
         table_ids.sort();
-        let table_names = catalog.mget_table_names_by_ids(&tenant, &table_ids).await?;
+        let table_names = catalog
+            .mget_table_names_by_ids(&tenant, &table_ids, false)
+            .await?;
         let table_map = table_ids
             .into_iter()
             .zip(table_names.into_iter())
