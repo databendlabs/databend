@@ -48,7 +48,7 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
         root: path.join("_data").to_str().unwrap().to_owned(),
     });
 
-    GlobalServices::init(&conf).await?;
+    GlobalServices::init(&conf, false).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string()).unwrap();
 

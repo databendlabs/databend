@@ -4668,6 +4668,7 @@ dependencies = [
  "databend-common-functions",
  "databend-common-io",
  "databend-common-license",
+ "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-store",
@@ -4689,6 +4690,7 @@ dependencies = [
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
  "databend-enterprise-inverted-index",
+ "databend-enterprise-resources-management",
  "databend-enterprise-storage-encryption",
  "databend-enterprise-storage-quota",
  "databend-enterprise-stream-handler",
@@ -4708,6 +4710,18 @@ dependencies = [
  "opendal 0.51.0",
  "tantivy",
  "tempfile",
+]
+
+[[package]]
+name = "databend-enterprise-resources-management"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "databend-common-base",
+ "databend-common-config",
+ "databend-common-exception",
+ "databend-common-management",
+ "databend-common-meta-types",
 ]
 
 [[package]]
@@ -5025,6 +5039,7 @@ dependencies = [
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-inverted-index",
+ "databend-enterprise-resources-management",
  "databend-enterprise-stream-handler",
  "databend-enterprise-vacuum-handler",
  "databend-enterprise-virtual-column",

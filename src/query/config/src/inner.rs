@@ -37,6 +37,7 @@ use databend_common_tracing::Config as LogConfig;
 
 use super::config::Commands;
 use super::config::Config;
+use super::config::ResourcesManagementConfig;
 use crate::background_config::InnerBackgroundConfig;
 use crate::BuiltInConfig;
 
@@ -253,6 +254,7 @@ pub struct QueryConfig {
     pub network_policy_whitelist: Vec<String>,
 
     pub settings: HashMap<String, UserSettingValue>,
+    pub resources_management: Option<ResourcesManagementConfig>,
 }
 
 impl Default for QueryConfig {
@@ -332,6 +334,7 @@ impl Default for QueryConfig {
             max_cached_queries_profiles: 50,
             network_policy_whitelist: Vec::new(),
             settings: HashMap::new(),
+            resources_management: None,
         }
     }
 }

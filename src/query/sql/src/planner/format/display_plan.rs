@@ -213,6 +213,20 @@ impl Plan {
             Plan::DropDictionary(_) => Ok("DropDictionary".to_string()),
             Plan::ShowCreateDictionary(_) => Ok("ShowCreateDictionary".to_string()),
             Plan::RenameDictionary(_) => Ok("RenameDictionary".to_string()),
+            Plan::ShowWarehouses => Ok("ShowWarehouses".to_string()),
+            Plan::ShowOnlineNodes => Ok("ShowOnlineNodes".to_string()),
+            Plan::DropWarehouse(_) => Ok("DropWarehouse".to_string()),
+            Plan::ResumeWarehouse(_) => Ok("ResumeWarehouse".to_string()),
+            Plan::SuspendWarehouse(_) => Ok("SuspendWarehouse".to_string()),
+            Plan::RenameWarehouse(_) => Ok("RenameWarehouse".to_string()),
+            Plan::InspectWarehouse(_) => Ok("InspectWarehouse".to_string()),
+            Plan::DropWarehouseCluster(_) => Ok("DropWarehouseCluster".to_string()),
+            Plan::RenameWarehouseCluster(_) => Ok("RenameWarehouseCluster".to_string()),
+            Plan::CreateWarehouse(_) => Ok("CreateWarehouse".to_string()),
+            Plan::UseWarehouse(_) => Ok("UseWarehouse".to_string()),
+            Plan::AddWarehouseCluster(_) => Ok("AddWarehouseCluster".to_string()),
+            Plan::AssignWarehouseNodes(_) => Ok("AddWarehouseClusterNode".to_string()),
+            Plan::UnassignWarehouseNodes(_) => Ok("DropWarehouseClusterNode".to_string()),
         }
     }
 }
