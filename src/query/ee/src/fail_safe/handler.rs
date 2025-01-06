@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
@@ -41,11 +40,7 @@ impl RealFailSafeHandler {}
 
 #[async_trait::async_trait]
 impl FailSafeHandler for RealFailSafeHandler {
-    async fn recover_table_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        table_info: TableInfo,
-    ) -> Result<()> {
+    async fn recover_table_data(&self, table_info: TableInfo) -> Result<()> {
         let op = match &table_info.meta.storage_params {
             Some(sp) => init_operator(sp)?,
             None => DataOperator::instance().operator(),
@@ -207,7 +202,6 @@ impl Amender {
         // find the latest version
         let latest_version = versions
             .iter()
-            .filter(|v| v.path() == key) // Ensure it matches the specified key
             .filter(|v| v.metadata().version().is_some()) // Ensure the version_id exists
             .filter(|v| !v.metadata().is_deleted()) // Ensure this is not a delete marker
             .max_by(|a, b| {
