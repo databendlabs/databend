@@ -153,7 +153,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
         info!(
             "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?},tables.len: {:?}, drop_ids: {:?}",
             self.plan.database,
-            tables,
+            tables
+                .iter()
+                .map(|t| t.get_table_info())
+                .collect::<Vec<_>>(),
             tables.len(),
             drop_ids
         );
@@ -172,7 +175,10 @@ impl Interpreter for VacuumDropTablesInterpreter {
 
         info!(
             "after filter read-only tables: {:?}, tables.len: {:?}",
-            tables,
+            tables
+                .iter()
+                .map(|t| t.get_table_info())
+                .collect::<Vec<_>>(),
             tables.len()
         );
 
