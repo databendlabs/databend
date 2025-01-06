@@ -2973,6 +2973,7 @@ pub struct SpillConfig {
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
 
+    // TODO: We need to fix StorageConfig so that it supports environment variables and command line injections. 
     #[clap(skip)]
     pub storage: Option<StorageConfig>,
 }
