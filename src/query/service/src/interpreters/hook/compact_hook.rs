@@ -194,7 +194,7 @@ async fn compact_table(
 
     {
         // do recluster.
-        if !table.cluster_keys(ctx.clone()).is_empty() {
+        if table.cluster_key_meta().is_some() {
             let recluster = RelOperator::Recluster(Recluster {
                 catalog: compact_target.catalog,
                 database: compact_target.database,

@@ -139,7 +139,7 @@ use crate::sessions::SessionType;
 use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
-const MYSQL_VERSION: &str = "8.0.26";
+const MYSQL_VERSION: &str = "8.0.90";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
@@ -182,7 +182,7 @@ impl QueryContext {
             fragment_id: Arc::new(AtomicUsize::new(0)),
             inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
             block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
-            m_cte_temp_table: Arc::new(Default::default()),
+            m_cte_temp_table: Default::default(),
         })
     }
 
@@ -320,6 +320,7 @@ impl QueryContext {
 
     pub fn update_init_query_id(&self, id: String) {
         self.shared.spilled_files.write().clear();
+        self.shared.cluster_spill_file_nums.write().clear();
         *self.shared.init_query_id.write() = id;
     }
 
@@ -365,8 +366,31 @@ impl QueryContext {
         location: crate::spillers::Location,
         layout: crate::spillers::Layout,
     ) {
-        let mut w = self.shared.spilled_files.write();
-        w.insert(location, layout);
+        if matches!(location, crate::spillers::Location::Remote(_)) {
+            let current_id = self.get_cluster().local_id();
+            let mut w = self.shared.cluster_spill_file_nums.write();
+            w.entry(current_id).and_modify(|e| *e += 1).or_insert(1);
+        }
+        {
+            let mut w = self.shared.spilled_files.write();
+            w.insert(location, layout);
+        }
+    }
+
+    pub fn set_cluster_spill_file_nums(&self, source_target: &str, num: usize) {
+        if num != 0 {
+            let _ = self
+                .shared
+                .cluster_spill_file_nums
+                .write()
+                .insert(source_target.to_string(), num);
+        }
+    }
+
+    pub fn get_spill_file_nums(&self, node_id: Option<String>) -> usize {
+        let r = self.shared.cluster_spill_file_nums.read();
+        let node_id = node_id.unwrap_or(self.get_cluster().local_id());
+        r.get(&node_id).cloned().unwrap_or(0)
     }
 
     pub fn get_spill_layout(
@@ -432,8 +456,8 @@ impl QueryContext {
 
     pub fn unload_spill_meta(&self) {
         const SPILL_META_SUFFIX: &str = ".list";
-        let mut w = self.shared.spilled_files.write();
-        let mut remote_spill_files = w
+        let r = self.shared.spilled_files.read();
+        let mut remote_spill_files = r
             .iter()
             .map(|(k, _)| k)
             .filter_map(|l| match l {
@@ -442,34 +466,42 @@ impl QueryContext {
             })
             .cloned()
             .collect::<Vec<_>>();
-        w.clear();
 
-        if !remote_spill_files.is_empty() {
-            let location_prefix = self.query_tenant_spill_prefix();
-            let node_idx = self.get_cluster().ordered_index();
-            let meta_path = format!(
-                "{}/{}_{}{}",
-                location_prefix,
-                self.get_id(),
-                node_idx,
-                SPILL_META_SUFFIX
-            );
-            let op = DataOperator::instance().operator();
-            // append dir and current meta
-            remote_spill_files.push(meta_path.clone());
-            remote_spill_files.push(format!(
-                "{}/{}_{}/",
-                location_prefix,
-                self.get_id(),
-                node_idx
-            ));
-            let joined_contents = remote_spill_files.join("\n");
+        drop(r);
 
-            if let Err(e) = GlobalIORuntime::instance().block_on::<(), (), _>(async move {
-                Ok(op.write(&meta_path, joined_contents).await?)
-            }) {
-                log::error!("create spill meta file error: {}", e);
-            }
+        if remote_spill_files.is_empty() {
+            return;
+        }
+
+        {
+            let mut w = self.shared.spilled_files.write();
+            w.clear();
+        }
+
+        let location_prefix = self.query_tenant_spill_prefix();
+        let node_idx = self.get_cluster().ordered_index();
+        let meta_path = format!(
+            "{}/{}_{}{}",
+            location_prefix,
+            self.get_id(),
+            node_idx,
+            SPILL_META_SUFFIX
+        );
+        let op = DataOperator::instance().spill_operator();
+        // append dir and current meta
+        remote_spill_files.push(meta_path.clone());
+        remote_spill_files.push(format!(
+            "{}/{}_{}/",
+            location_prefix,
+            self.get_id(),
+            node_idx
+        ));
+        let joined_contents = remote_spill_files.join("\n");
+
+        if let Err(e) = GlobalIORuntime::instance()
+            .block_on::<(), (), _>(async move { Ok(op.write(&meta_path, joined_contents).await?) })
+        {
+            log::error!("create spill meta file error: {}", e);
         }
     }
 }
@@ -1048,7 +1080,8 @@ impl TableContext for QueryContext {
         database: &str,
         table: &str,
     ) -> Result<Arc<dyn Table>> {
-        self.get_table_from_shared(catalog, database, table, None)
+        let batch_size = self.get_settings().get_stream_consume_batch_size_hint()?;
+        self.get_table_from_shared(catalog, database, table, batch_size)
             .await
     }
 
@@ -1064,6 +1097,23 @@ impl TableContext for QueryContext {
         table: &str,
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
+        let max_batch_size = {
+            match max_batch_size {
+                Some(v) => {
+                    // use the batch size specified in the statement
+                    Some(v)
+                }
+                None => {
+                    if let Some(v) = self.get_settings().get_stream_consume_batch_size_hint()? {
+                        info!("overriding max_batch_size of stream consumption using value specified in setting: {}", v);
+                        Some(v)
+                    } else {
+                        None
+                    }
+                }
+            }
+        };
+
         let table = self
             .get_table_from_shared(catalog, database, table, max_batch_size)
             .await?;
@@ -1072,7 +1122,11 @@ impl TableContext for QueryContext {
             let actual_batch_limit = stream.max_batch_size();
             if actual_batch_limit != max_batch_size {
                 return Err(ErrorCode::StorageUnsupported(
-                    "Within the same transaction, the batch size for a stream must remain consistent",
+                    format!(
+                    "Within the same transaction, the batch size for a stream must remain consistent {:?} {:?}",
+                        actual_batch_limit, max_batch_size
+                    )
+
                 ));
             }
         } else if max_batch_size.is_some() {

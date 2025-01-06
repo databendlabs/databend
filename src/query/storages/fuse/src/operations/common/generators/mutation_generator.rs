@@ -60,13 +60,12 @@ impl SnapshotGenerator for MutationGenerator {
     fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
         _table_name: &str,
     ) -> Result<TableSnapshot> {
-        let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
         match &self.conflict_resolve_ctx {
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
                 if let Some((removed, replaced)) =
@@ -88,7 +87,7 @@ impl SnapshotGenerator for MutationGenerator {
                     let mut new_summary = merge_statistics(
                         previous.summary(),
                         &ctx.merged_statistics,
-                        default_cluster_key_id,
+                        cluster_key_id,
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::try_new(
@@ -97,7 +96,6 @@ impl SnapshotGenerator for MutationGenerator {
                         schema,
                         new_summary,
                         new_segments,
-                        cluster_key_meta,
                         previous.table_statistics_location(),
                         table_meta_timestamps,
                     )?;

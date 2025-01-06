@@ -218,6 +218,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>>;
 
     // Get the db name by meta id.

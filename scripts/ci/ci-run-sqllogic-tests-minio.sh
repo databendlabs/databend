@@ -18,10 +18,25 @@ export STORAGE_S3_ACCESS_KEY_ID=minioadmin
 export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
 export STORAGE_ALLOW_INSECURE=true
 
+export SPILL_SPILL_LOCAL_DISK_PATH=''
+config="[spill.storage]
+type = \"s3\"
+
+[spill.storage.s3]
+bucket = \"spillbucket\"
+root = \"admin\"
+endpoint_url = \"http://127.0.0.1:9900\"
+access_key_id = \"minioadmin\"
+secret_access_key = \"minioadmin\"
+allow_insecure = true"
+
+echo "$config" >> ./scripts/ci/deploy/config/databend-query-node-1.toml
+
 echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone.sh
 
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
+TEST_PARALLEL=${TEST_PARALLEL:-8}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 RUN_DIR=""
@@ -31,4 +46,4 @@ fi
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,explain_native,ee --enable_sandbox --parallel 8
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,explain_native,ee --enable_sandbox --parallel ${TEST_PARALLEL}

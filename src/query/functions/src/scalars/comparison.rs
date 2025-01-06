@@ -28,6 +28,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::EmptyArrayType;
 use databend_common_expression::types::GenericType;
+use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberType;
@@ -50,9 +51,9 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
+use databend_functions_scalar_decimal::register_decimal_compare_op;
 use regex::Regex;
 
-use crate::scalars::decimal::register_decimal_compare_op;
 use crate::scalars::string_multi_args::regexp;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -65,6 +66,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_array_cmp(registry);
     register_tuple_cmp(registry);
     register_like(registry);
+    register_interval_cmp(registry);
 }
 
 pub const ALL_COMP_FUNC_NAMES: &[&str] = &["eq", "noteq", "lt", "lte", "gt", "gte", "contains"];
@@ -224,6 +226,10 @@ fn register_date_cmp(registry: &mut FunctionRegistry) {
 
 fn register_timestamp_cmp(registry: &mut FunctionRegistry) {
     register_simple_domain_type_cmp!(registry, TimestampType);
+}
+
+fn register_interval_cmp(registry: &mut FunctionRegistry) {
+    register_simple_domain_type_cmp!(registry, IntervalType);
 }
 
 fn register_boolean_cmp(registry: &mut FunctionRegistry) {

@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::types::DataType;
+use databend_common_expression::DataField;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LambdaUDF {
@@ -45,10 +46,52 @@ pub struct UDFScript {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UDAFScript {
+    pub code: String,
+    pub language: String,
+    // aggregate function input types
+    pub arg_types: Vec<DataType>,
+    // aggregate function state fields
+    pub state_fields: Vec<DataField>,
+    pub return_type: DataType,
+    pub runtime_version: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UDFDefinition {
     LambdaUDF(LambdaUDF),
     UDFServer(UDFServer),
     UDFScript(UDFScript),
+    UDAFScript(UDAFScript),
+}
+
+impl UDFDefinition {
+    pub fn category(&self) -> &str {
+        match self {
+            Self::LambdaUDF(_) => "LambdaUDF",
+            Self::UDFServer(_) => "UDFServer",
+            Self::UDFScript(_) => "UDFScript",
+            Self::UDAFScript(_) => "UDAFScript",
+        }
+    }
+
+    pub fn is_aggregate(&self) -> bool {
+        match self {
+            Self::LambdaUDF(_) => false,
+            Self::UDFServer(_) => false,
+            Self::UDFScript(_) => false,
+            Self::UDAFScript(_) => true,
+        }
+    }
+
+    pub fn language(&self) -> &str {
+        match self {
+            Self::LambdaUDF(_) => "SQL",
+            Self::UDFServer(x) => x.language.as_str(),
+            Self::UDFScript(x) => x.language.as_str(),
+            Self::UDAFScript(x) => x.language.as_str(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -160,7 +203,6 @@ impl Display for UDFDefinition {
                     ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} ADDRESS = {address}"
                 )?;
             }
-
             UDFDefinition::UDFScript(UDFScript {
                 code,
                 arg_types,
@@ -179,6 +221,29 @@ impl Display for UDFDefinition {
                     f,
                     ") RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} HANDLER = {handler} AS $${code}$$"
                 )?;
+            }
+            UDFDefinition::UDAFScript(UDAFScript {
+                code,
+                arg_types,
+                state_fields,
+                return_type,
+                language,
+                runtime_version,
+            }) => {
+                for (i, item) in arg_types.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{item}")?;
+                }
+                write!(f, ") STATE {{ ")?;
+                for (i, item) in state_fields.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{} {}", item.name(), item.data_type())?;
+                }
+                write!(f, " }} RETURNS {return_type} LANGUAGE {language} RUNTIME_VERSION = {runtime_version} AS $${code}$$")?;
             }
         }
         Ok(())

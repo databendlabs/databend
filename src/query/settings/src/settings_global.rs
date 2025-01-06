@@ -58,7 +58,8 @@ impl Settings {
         });
 
         UserApiProvider::instance()
-            .set_setting(&self.tenant, UserSetting { name: key, value })
+            .setting_api(&self.tenant)
+            .set_setting(UserSetting { name: key, value })
             .await?;
         Ok(())
     }

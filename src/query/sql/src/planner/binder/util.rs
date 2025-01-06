@@ -186,7 +186,7 @@ impl TableIdentifier {
                             QuotedIdent(&database.name, self.dialect.default_ident_quote())
                         )
                     }
-                    Some(NameResolutionSuggest::Unqoted) => {
+                    Some(NameResolutionSuggest::Unquoted) => {
                         format!(
                             "Unknown database {catalog}.{database} (quoted). Did you mean {} (unquoted)?",
                             &database.name
@@ -204,7 +204,7 @@ impl TableIdentifier {
                             QuotedIdent(&table.name, self.dialect.default_ident_quote())
                         )
                     }
-                    Some(NameResolutionSuggest::Unqoted) => {
+                    Some(NameResolutionSuggest::Unquoted) => {
                         format!(
                             "Unknown table {catalog}.{database}.{table} (quoted). Did you mean {} (unquoted)?",
                             &table.name

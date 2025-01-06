@@ -111,15 +111,6 @@ create view tmp_view2(d1, d2) as select * from numbers(3)
 statement ok
 drop view if exists tmp_view
 
-query T
-explain syntax create view test as SELECT * FROM 's3://testbucket/admin/data/tuple.parquet'(files => ('tuple.parquet', 'test.parquet'), pattern => '.*.parquet', FILE_FORMAT => 'parquet',  CONNECTION => (aws_key_id = 'minioadmin',  aws_secret_key = 'minioadmin',  endpoint_url = 'http://127.0.0.1:9900/'))
-----
-CREATE VIEW test
-AS
-    SELECT *
-    FROM
-        's3://testbucket/admin/data/tuple.parquet' ( FILES => ('tuple.parquet', 'test.parquet'), FILE_FORMAT => 'parquet', PATTERN => '.*.parquet', CONNECTION => (aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900/' ) )
-
 statement ok
 drop view if exists loop_view1;
 

@@ -133,7 +133,6 @@ mod tests {
                     Statistics::default(),
                     vec![],
                     None,
-                    None,
                     Default::default(),
                 )
                 .unwrap();
@@ -150,7 +149,6 @@ mod tests {
             TableSchema::default(),
             Statistics::default(),
             vec![],
-            None,
             None,
             Default::default(),
         )

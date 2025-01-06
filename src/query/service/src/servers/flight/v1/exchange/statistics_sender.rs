@@ -230,6 +230,10 @@ impl StatisticsSender {
             progress_info.push(ProgressInfo::ResultProgress(result_progress_values));
         }
 
+        let spill_file_nums = ctx.get_spill_file_nums(None);
+        if spill_file_nums != 0 {
+            progress_info.push(ProgressInfo::SpillTotalFileNums(spill_file_nums));
+        }
         progress_info
     }
 

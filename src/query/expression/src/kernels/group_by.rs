@@ -56,7 +56,7 @@ impl DataBlock {
         for hash_key_type in hash_key_types {
             let not_null_type = hash_key_type.remove_nullable();
 
-            if not_null_type.is_numeric()
+            if not_null_type.is_number()
                 || not_null_type.is_date_or_date_time()
                 || not_null_type.is_decimal()
             {

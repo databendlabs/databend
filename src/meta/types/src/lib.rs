@@ -63,6 +63,7 @@ pub use applied_state::AppliedState;
 pub use change::Change;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
+pub use cluster::NodeType;
 pub use endpoint::Endpoint;
 pub use errors::meta_api_errors::MetaAPIError;
 pub use errors::meta_api_errors::MetaDataError;

@@ -104,6 +104,17 @@ impl SyncSystemTable for ConfigsTable {
             cache_config_value,
         );
 
+        let spill_config = config.spill;
+        let spill_config_value = serde_json::to_value(spill_config)?;
+        ConfigsTable::extract_config(
+            &mut names,
+            &mut values,
+            &mut groups,
+            &mut descs,
+            "spill".to_string(),
+            spill_config_value,
+        );
+
         let storage_config = config.storage;
         let storage_config_value = serde_json::to_value(storage_config)?;
         ConfigsTable::extract_config(

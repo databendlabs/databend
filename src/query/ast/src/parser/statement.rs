@@ -62,10 +62,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
                     Some(TokenKind::SYNTAX) | Some(TokenKind::AST) => {
-                        let pretty_stmt =
-                            pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
-                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
-                            })?;
+                        let pretty_stmt = statement.stmt.to_string();
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
@@ -125,7 +122,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ #warehouse_option
+            ~ #task_warehouse_option
             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
             ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
             ~ ( WHEN ~ #expr )?
@@ -521,6 +518,140 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             USE ~ CATALOG ~ #ident
         },
         |(_, _, catalog)| Statement::UseCatalog { catalog },
+    );
+
+    let show_online_nodes = map(
+        rule! {
+            SHOW ~ ONLINE ~ NODES
+        },
+        |(_, _, _)| Statement::ShowOnlineNodes(ShowOnlineNodesStmt {}),
+    );
+
+    let show_warehouses = map(
+        rule! {
+            SHOW ~ WAREHOUSES
+        },
+        |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
+    );
+
+    let use_warehouse = map(
+        rule! {
+            USE ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::UseWarehouse(UseWarehouseStmt { warehouse }),
+    );
+
+    let create_warehouse = map(
+        rule! {
+            CREATE ~ WAREHOUSE ~ #ident ~ ("(" ~ #assign_nodes_list ~ ")")? ~ (WITH ~ #warehouse_cluster_option)?
+        },
+        |(_, _, warehouse, nodes, options)| {
+            Statement::CreateWarehouse(CreateWarehouseStmt {
+                warehouse,
+                node_list: nodes.map(|(_, nodes, _)| nodes).unwrap_or_else(Vec::new),
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
+    );
+
+    let drop_warehouse = map(
+        rule! {
+            DROP ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::DropWarehouse(DropWarehouseStmt { warehouse }),
+    );
+
+    let rename_warehouse = map(
+        rule! {
+            RENAME ~ WAREHOUSE ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, warehouse, _, new_warehouse)| {
+            Statement::RenameWarehouse(RenameWarehouseStmt {
+                warehouse,
+                new_warehouse,
+            })
+        },
+    );
+
+    let resume_warehouse = map(
+        rule! {
+            RESUME ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::ResumeWarehouse(ResumeWarehouseStmt { warehouse }),
+    );
+
+    let suspend_warehouse = map(
+        rule! {
+            SUSPEND ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::SuspendWarehouse(SuspendWarehouseStmt { warehouse }),
+    );
+
+    let inspect_warehouse = map(
+        rule! {
+            INSPECT ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::InspectWarehouse(InspectWarehouseStmt { warehouse }),
+    );
+
+    let add_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ ADD ~ CLUSTER ~ #ident ~ ("(" ~ #assign_nodes_list ~ ")")? ~ (WITH ~ #warehouse_cluster_option)?
+        },
+        |(_, _, warehouse, _, _, cluster, nodes, options)| {
+            Statement::AddWarehouseCluster(AddWarehouseClusterStmt {
+                warehouse,
+                cluster,
+                node_list: nodes.map(|(_, nodes, _)| nodes).unwrap_or_else(Vec::new),
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
+    );
+
+    let drop_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ DROP ~ CLUSTER ~ #ident
+        },
+        |(_, _, warehouse, _, _, cluster)| {
+            Statement::DropWarehouseCluster(DropWarehouseClusterStmt { warehouse, cluster })
+        },
+    );
+
+    let rename_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ RENAME ~ CLUSTER ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, warehouse, _, _, cluster, _, new_cluster)| {
+            Statement::RenameWarehouseCluster(RenameWarehouseClusterStmt {
+                warehouse,
+                cluster,
+                new_cluster,
+            })
+        },
+    );
+
+    let assign_warehouse_nodes = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ ASSIGN ~ NODES ~ "(" ~ #assign_warehouse_nodes_list ~ ")"
+        },
+        |(_, _, warehouse, _, _, _, nodes, _)| {
+            Statement::AssignWarehouseNodes(AssignWarehouseNodesStmt {
+                warehouse,
+                node_list: nodes,
+            })
+        },
+    );
+
+    let unassign_warehouse_nodes = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ UNASSIGN ~ NODES ~ "(" ~ #unassign_warehouse_nodes_list ~ ")"
+        },
+        |(_, _, warehouse, _, _, _, nodes, _)| {
+            Statement::UnassignWarehouseNodes(UnassignWarehouseNodesStmt {
+                warehouse,
+                node_list: nodes,
+            })
+        },
     );
 
     let show_databases = map(
@@ -2290,7 +2421,24 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         // use
         rule!(
                 #use_catalog: "`USE CATALOG <catalog>`"
+                | #use_warehouse: "`USE WAREHOUSE <warehouse>`"
                 | #use_database : "`USE <database>`"
+        ),
+        // warehouse
+        rule!(
+            #show_warehouses: "`SHOW WAREHOUSES`"
+            | #show_online_nodes: "`SHOW ONLINE NODES`"
+            | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
+            | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
+            | #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
+            | #resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
+            | #suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
+            | #inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
+            | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
+            | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
+            | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
+            | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+            | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
         ),
         // database
         rule!(
@@ -2336,9 +2484,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
+            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
-            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #alter_udf : "`ALTER FUNCTION <udf_name> <udf_definition> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
             | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
@@ -3777,12 +3925,11 @@ pub fn literal_duration(i: Input) -> IResult<Duration> {
 pub fn vacuum_drop_table_option(i: Input) -> IResult<VacuumDropTableOption> {
     alt((map(
         rule! {
-            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)? ~ FORCE?
+            (DRY ~ ^RUN ~ SUMMARY?)? ~ (LIMIT ~ #literal_u64)?
         },
-        |(opt_dry_run, opt_limit, opt_force)| VacuumDropTableOption {
+        |(opt_dry_run, opt_limit)| VacuumDropTableOption {
             dry_run: opt_dry_run.map(|dry_run| dry_run.2.is_some()),
             limit: opt_limit.map(|(_, limit)| limit as usize),
-            force: opt_force.is_some(),
         },
     ),))(i)
 }
@@ -3939,7 +4086,7 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
     )(i)
 }
 
-pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
+pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
             (WAREHOUSE  ~ "=" ~ #literal_string)?
@@ -3952,6 +4099,63 @@ pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
             WarehouseOptions { warehouse }
         },
     ),))(i)
+}
+
+pub fn assign_nodes_list(i: Input) -> IResult<Vec<(Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            ASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)?
+        },
+        |(_, node_size, _, node_group)| (node_group.map(|(_, x)| x), node_size),
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn assign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            ASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)? ~ FOR ~ #ident
+        },
+        |(_, node_size, _, node_group, _, cluster)| {
+            (cluster, node_group.map(|(_, x)| x), node_size)
+        },
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn unassign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            UNASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)? ~ FOR ~ #ident
+        },
+        |(_, node_size, _, node_group, _, cluster)| {
+            (cluster, node_group.map(|(_, x)| x), node_size)
+        },
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn warehouse_cluster_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    let option = map(
+        rule! {
+           #ident ~ "=" ~ #option_to_string
+        },
+        |(k, _, v)| (k, v),
+    );
+    map(comma_separated_list1(option), |opts| {
+        opts.into_iter()
+            .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
+            .collect()
+    })(i)
 }
 
 pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
@@ -4309,15 +4513,35 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     })(i)
 }
 
-pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
+pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
     map(
         rule! {
-            #type_name
+            #ident
+            ~ #type_name
+            : "`<state name> <type>`"
         },
-        |type_name| match type_name {
-            TypeName::Nullable(_) | TypeName::NotNull(_) => type_name,
-            _ => type_name.wrap_nullable(),
+        |(name, type_name)| UDAFStateField { name, type_name },
+    )(i)
+}
+
+pub fn udf_script_or_address(i: Input) -> IResult<(String, bool)> {
+    let script = map(
+        rule! {
+            AS ~ ^(#code_string | #literal_string)
         },
+        |(_, code)| (code, true),
+    );
+
+    let address = map(
+        rule! {
+            ADDRESS ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, address)| (address, false),
+    );
+
+    rule!(
+        #script: "AS <language_codes>"
+        | #address: "ADDRESS=<udf_server_address>"
     )(i)
 }
 
@@ -4333,51 +4557,75 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
-    let udf_server = map(
+    let udf = map(
         rule! {
-            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ RETURNS ~ #udf_arg_type
+            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ ADDRESS ~ ^"=" ~ ^#literal_string
+            ~ #udf_script_or_address
         },
-        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, _, address)| {
-            UDFDefinition::UDFServer {
-                arg_types,
-                return_type,
-                address,
-                handler,
-                language: language.to_string(),
+        |(_, arg_types, _, _, return_type, _, language, _, _, handler, address_or_code)| {
+            if address_or_code.1 {
+                UDFDefinition::UDFScript {
+                    arg_types,
+                    return_type,
+                    code: address_or_code.0,
+                    handler,
+                    language: language.to_string(),
+                    // TODO inject runtime_version by user
+                    // Now we use fixed runtime version
+                    runtime_version: "".to_string(),
+                }
+            } else {
+                UDFDefinition::UDFServer {
+                    arg_types,
+                    return_type,
+                    address: address_or_code.0,
+                    handler,
+                    language: language.to_string(),
+                }
             }
         },
     );
 
-    let udf_script = map(
+    let udaf = map(
         rule! {
-            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ RETURNS ~ #udf_arg_type
+            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
+            ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
-            ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ AS ~ ^(#code_string | #literal_string)
+            ~ #udf_script_or_address
         },
-        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
-            UDFDefinition::UDFScript {
-                arg_types,
-                return_type,
-                code,
-                handler,
-                language: language.to_string(),
-                // TODO inject runtime_version by user
-                // Now we use fixed runtime version
-                runtime_version: "".to_string(),
+        |(_, arg_types, _, _, _, state_types, _, _, return_type, _, language, address_or_code)| {
+            if address_or_code.1 {
+                UDFDefinition::UDAFScript {
+                    arg_types,
+                    state_fields: state_types,
+                    return_type,
+                    code: address_or_code.0,
+                    language: language.to_string(),
+                    // TODO inject runtime_version by user
+                    // Now we use fixed runtime version
+                    runtime_version: "".to_string(),
+                }
+            } else {
+                UDFDefinition::UDAFServer {
+                    arg_types,
+                    state_fields: state_types,
+                    return_type,
+                    address: address_or_code.0,
+                    language: language.to_string(),
+                }
             }
         },
     );
 
     rule!(
-        #udf_server: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
-        | #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
-        | #udf_script: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> AS <language_codes>"
+        #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
+        | #udaf: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+        | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+
     )(i)
 }
 

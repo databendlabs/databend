@@ -695,6 +695,10 @@ impl Settings {
         self.try_get_u64("external_server_request_batch_rows")
     }
 
+    pub fn get_external_server_request_max_threads(&self) -> Result<u64> {
+        self.try_get_u64("external_server_request_max_threads")
+    }
+
     pub fn get_external_server_request_retry_times(&self) -> Result<u64> {
         self.try_get_u64("external_server_request_retry_times")
     }
@@ -854,5 +858,23 @@ impl Settings {
 
     pub fn get_network_policy(&self) -> Result<String> {
         self.try_get_string("network_policy")
+    }
+
+    pub fn get_stream_consume_batch_size_hint(&self) -> Result<Option<u64>> {
+        let v = self.try_get_u64("stream_consume_batch_size_hint")?;
+        Ok(if v == 0 { None } else { Some(v) })
+    }
+
+    /// # Safety
+    pub unsafe fn set_warehouse(&self, warehouse: String) -> Result<()> {
+        self.unchecked_set_setting(String::from("warehouse"), warehouse)
+    }
+
+    pub fn get_premise_deploy_danger_amend_accept_invalid_cert(&self) -> Result<bool> {
+        Ok(self.try_get_u64("premise_deploy_danger_amend_accept_invalid_cert")? != 0)
+    }
+
+    pub fn get_premise_deploy_amend_force_path_style(&self) -> Result<bool> {
+        Ok(self.try_get_u64("premise_deploy_amend_force_path_style")? != 0)
     }
 }

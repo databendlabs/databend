@@ -34,7 +34,6 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -60,7 +59,7 @@ enum State {
     RefreshTable,
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_id: Option<u32>,
         table_info: TableInfo,
     },
     TryCommit {
@@ -261,7 +260,7 @@ where F: SnapshotGenerator + Send + 'static
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSnapshot {
                 previous,
-                cluster_key_meta,
+                cluster_key_id,
                 table_info,
             } => {
                 let change_tracking_enabled_during_commit = {
@@ -295,7 +294,7 @@ where F: SnapshotGenerator + Send + 'static
                 let schema = self.table.schema().as_ref().clone();
                 match self.snapshot_gen.generate_new_snapshot(
                     schema,
-                    cluster_key_meta,
+                    cluster_key_id,
                     previous,
                     Some(table_info.ident.seq),
                     self.ctx.txn_mgr(),
@@ -361,7 +360,7 @@ where F: SnapshotGenerator + Send + 'static
 
                     self.state = State::GenerateSnapshot {
                         previous,
-                        cluster_key_meta: fuse_table.cluster_key_meta.clone(),
+                        cluster_key_id: fuse_table.cluster_key_id(),
                         table_info,
                     };
                 }
@@ -511,10 +510,9 @@ where F: SnapshotGenerator + Send + 'static
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
-                let cluster_key_meta = fuse_table.cluster_key_meta.clone();
                 self.state = State::GenerateSnapshot {
                     previous,
-                    cluster_key_meta,
+                    cluster_key_id: fuse_table.cluster_key_id(),
                     table_info: fuse_table.table_info.clone(),
                 };
             }

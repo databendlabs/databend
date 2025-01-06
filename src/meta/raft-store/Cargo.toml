@@ -50,6 +50,7 @@ serde_json = { workspace = true }
 stream-more = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tonic = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }

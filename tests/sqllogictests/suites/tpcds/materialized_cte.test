@@ -1024,7 +1024,7 @@ SELECT gross_margin,
        i_category,
        i_class,
        lochierarchy,
-       rank() OVER ( PARTITION BY lochierarchy,
+       rank() OVER (PARTITION BY lochierarchy,
                                   CASE
                                       WHEN t_class = 0 THEN i_category
                                   END

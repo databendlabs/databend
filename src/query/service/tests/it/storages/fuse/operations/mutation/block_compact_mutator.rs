@@ -233,7 +233,6 @@ async fn test_safety() -> Result<()> {
             summary,
             locations.clone(),
             None,
-            None,
             Default::default(),
         )?;
 

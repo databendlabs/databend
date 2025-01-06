@@ -45,7 +45,7 @@ use crate::readers::snapshot_reader::TableSnapshotAccessor;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
-    /// format version of TableSnapshot meta data
+    /// format version of TableSnapshot metadata
     ///
     /// Note that:
     ///
@@ -80,13 +80,14 @@ pub struct TableSnapshot {
     /// Summary Statistics
     pub summary: Statistics,
 
-    /// Pointers to SegmentInfos (may be of different format)
+    /// Pointers to SegmentInfos (maybe of different format)
     ///
     /// We rely on background merge tasks to keep merging segments, so that
     /// this the size of this vector could be kept reasonable
     pub segments: Vec<Location>,
 
     /// The metadata of the cluster keys.
+    /// **This field is deprecated and will be removed in the next version.**
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
 }
@@ -99,7 +100,6 @@ impl TableSnapshot {
         schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
-        cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
@@ -127,7 +127,7 @@ impl TableSnapshot {
             schema,
             summary,
             segments,
-            cluster_key_meta,
+            cluster_key_meta: None,
             table_statistics_location,
         })
     }

@@ -212,6 +212,10 @@ build_exceptions! {
     // Geometry errors.
     GeometryError(1801),
     InvalidGeometryFormat(1802),
+
+    // UDF errors.
+    UDFRuntimeError(1810),
+
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),
@@ -294,6 +298,13 @@ build_exceptions! {
     ClusterUnknownNode(2401),
     ClusterNodeAlreadyExists(2402),
     InvalidWarehouse(2403),
+    NoResourcesAvailable(2404),
+    WarehouseAlreadyExists(2405),
+    UnknownWarehouse(2406),
+    WarehouseOperateConflict(2407),
+    EmptyNodesForWarehouse(2408),
+    WarehouseClusterAlreadyExists(2409),
+    WarehouseClusterNotExists(2410),
 
     // Stage error codes.
     UnknownStage(2501),

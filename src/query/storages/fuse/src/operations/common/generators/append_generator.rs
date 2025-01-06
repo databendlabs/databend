@@ -25,7 +25,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_sql::field_default_value;
-use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -116,7 +115,7 @@ impl SnapshotGenerator for AppendGenerator {
     fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
@@ -190,11 +189,7 @@ impl SnapshotGenerator for AppendGenerator {
                     .cloned()
                     .collect();
 
-                merge_statistics_mut(
-                    &mut new_summary,
-                    &summary,
-                    cluster_key_meta.clone().map(|v| v.0),
-                );
+                merge_statistics_mut(&mut new_summary, &summary, cluster_key_id);
             }
         }
 
@@ -230,7 +225,6 @@ impl SnapshotGenerator for AppendGenerator {
             schema,
             new_summary,
             new_segments,
-            cluster_key_meta,
             table_statistics_location,
             table_meta_timestamps,
         )

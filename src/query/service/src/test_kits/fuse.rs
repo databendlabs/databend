@@ -245,7 +245,6 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         Statistics::default(),
         locations,
         None,
-        None,
         Default::default(),
     )?;
     snapshot_1.timestamp = Some(now - Duration::hours(12));

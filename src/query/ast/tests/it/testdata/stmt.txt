@@ -7941,6 +7941,75 @@ Query(
 
 
 ---------- Input ----------
+select * FROM fuse_compat_table ignore_result;
+---------- Output ---------
+SELECT * FROM fuse_compat_table IGNORE_RESULT
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..31,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..31,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..31,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..31,
+                            ),
+                            name: "fuse_compat_table",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: true,
+    },
+)
+
+
+---------- Input ----------
 select * from a inner join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a INNER JOIN b ON a.a = b.a
@@ -11808,7 +11877,7 @@ OptimizeTable(
 ---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
-ALTER TABLE t  CLUSTER BY LINEAR(c1)
+ALTER TABLE t CLUSTER BY LINEAR(c1)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -13016,7 +13085,6 @@ VacuumDropTable(
         option: VacuumDropTableOption {
             dry_run: None,
             limit: None,
-            force: false,
         },
     },
 )
@@ -13036,7 +13104,6 @@ VacuumDropTable(
                 false,
             ),
             limit: None,
-            force: false,
         },
     },
 )
@@ -13056,7 +13123,6 @@ VacuumDropTable(
                 true,
             ),
             limit: None,
-            force: false,
         },
     },
 )
@@ -13083,7 +13149,6 @@ VacuumDropTable(
         option: VacuumDropTableOption {
             dry_run: None,
             limit: None,
-            force: false,
         },
     },
 )
@@ -13112,7 +13177,6 @@ VacuumDropTable(
             limit: Some(
                 10,
             ),
-            force: false,
         },
     },
 )
@@ -13166,6 +13230,56 @@ CreateTable(
         },
         as_query: None,
         table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')
+---------- Output ---------
+CREATE TEMPORARY  TABLE t (a Int32 COMMENT 'col comment')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                23..24,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                26..27,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: Some(
+                            "col comment",
+                        ),
+                    },
+                ],
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        as_query: None,
+        table_type: Temporary,
     },
 )
 
@@ -22165,7 +22279,7 @@ RemoveStage {
 ---------- Input ----------
 SELECT sum(d) OVER (w) FROM e;
 ---------- Output ---------
-SELECT sum(d) OVER ( w ) FROM e
+SELECT sum(d) OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -22288,7 +22402,7 @@ Query(
 ---------- Input ----------
 SELECT first_value(d) OVER (w) FROM e;
 ---------- Output ---------
-SELECT first_value(d) OVER ( w ) FROM e
+SELECT first_value(d) OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -22411,7 +22525,7 @@ Query(
 ---------- Input ----------
 SELECT first_value(d) ignore nulls OVER (w) FROM e;
 ---------- Output ---------
-SELECT first_value(d) IGNORE NULLS OVER ( w ) FROM e
+SELECT first_value(d) IGNORE NULLS OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -22536,7 +22650,7 @@ Query(
 ---------- Input ----------
 SELECT first_value(d) respect nulls OVER (w) FROM e;
 ---------- Output ---------
-SELECT first_value(d) RESPECT NULLS OVER ( w ) FROM e
+SELECT first_value(d) RESPECT NULLS OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -22661,7 +22775,7 @@ Query(
 ---------- Input ----------
 SELECT sum(d) IGNORE NULLS OVER (w) FROM e;
 ---------- Output ---------
-SELECT sum(d) IGNORE NULLS OVER ( w ) FROM e
+SELECT sum(d) IGNORE NULLS OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -22786,7 +22900,7 @@ Query(
 ---------- Input ----------
 SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);
 ---------- Output ---------
-SELECT sum(d) OVER w FROM e WINDOW w AS ( PARTITION BY f ORDER BY g )
+SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g)
 ---------- AST ------------
 Query(
     Query {
@@ -22953,6 +23067,299 @@ Query(
                         },
                     ],
                 ),
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number)
+FROM numbers(10) where number > 10 and number > 9 and number > 8;
+---------- Output ---------
+SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number) FROM numbers(10) WHERE number > 10 AND number > 9 AND number > 8
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..133,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..133,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..13,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            7..13,
+                                        ),
+                                        name: "number",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                15..68,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        15..19,
+                                    ),
+                                    name: "rank",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [],
+                                params: [],
+                                window: Some(
+                                    WindowDesc {
+                                        ignore_nulls: None,
+                                        window: WindowSpec(
+                                            WindowSpec {
+                                                existing_window_name: None,
+                                                partition_by: [
+                                                    BinaryOp {
+                                                        span: Some(
+                                                            48..49,
+                                                        ),
+                                                        op: Modulo,
+                                                        left: ColumnRef {
+                                                            span: Some(
+                                                                41..47,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            41..47,
+                                                                        ),
+                                                                        name: "number",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        right: Literal {
+                                                            span: Some(
+                                                                50..51,
+                                                            ),
+                                                            value: UInt64(
+                                                                3,
+                                                            ),
+                                                        },
+                                                    },
+                                                ],
+                                                order_by: [
+                                                    OrderByExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                61..67,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            61..67,
+                                                                        ),
+                                                                        name: "number",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        asc: None,
+                                                        nulls_first: None,
+                                                    },
+                                                ],
+                                                window_frame: None,
+                                            },
+                                        ),
+                                    },
+                                ),
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            74..85,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                74..81,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    82..84,
+                                ),
+                                value: UInt64(
+                                    10,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: Some(
+                            119..122,
+                        ),
+                        op: And,
+                        left: BinaryOp {
+                            span: Some(
+                                104..107,
+                            ),
+                            op: And,
+                            left: BinaryOp {
+                                span: Some(
+                                    99..100,
+                                ),
+                                op: Gt,
+                                left: ColumnRef {
+                                    span: Some(
+                                        92..98,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    92..98,
+                                                ),
+                                                name: "number",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        101..103,
+                                    ),
+                                    value: UInt64(
+                                        10,
+                                    ),
+                                },
+                            },
+                            right: BinaryOp {
+                                span: Some(
+                                    115..116,
+                                ),
+                                op: Gt,
+                                left: ColumnRef {
+                                    span: Some(
+                                        108..114,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    108..114,
+                                                ),
+                                                name: "number",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        117..118,
+                                    ),
+                                    value: UInt64(
+                                        9,
+                                    ),
+                                },
+                            },
+                        },
+                        right: BinaryOp {
+                            span: Some(
+                                130..131,
+                            ),
+                            op: Gt,
+                            left: ColumnRef {
+                                span: Some(
+                                    123..129,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                123..129,
+                                            ),
+                                            name: "number",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            right: Literal {
+                                span: Some(
+                                    132..133,
+                                ),
+                                value: UInt64(
+                                    8,
+                                ),
+                            },
+                        },
+                    },
+                ),
+                group_by: None,
+                having: None,
+                window_list: None,
                 qualify: None,
             },
         ),
@@ -23254,7 +23661,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+CREATE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -23270,13 +23677,38 @@ CreateUDF(
         description: None,
         definition: UDFServer {
             arg_types: [
-                Nullable(
-                    Binary,
-                ),
-            ],
-            return_type: Nullable(
                 Binary,
+            ],
+            return_type: Binary,
+            address: "http://0.0.0.0:8815",
+            handler: "binary_reverse",
+            language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+ALTER FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+---------- AST ------------
+AlterUDF(
+    AlterUDFStmt {
+        udf_name: Identifier {
+            span: Some(
+                15..29,
             ),
+            name: "binary_reverse",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDFServer {
+            arg_types: [
+                Binary,
+            ],
+            return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
             language: "python",
@@ -23288,7 +23720,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+CREATE OR REPLACE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -23304,13 +23736,9 @@ CreateUDF(
         description: None,
         definition: UDFServer {
             arg_types: [
-                Nullable(
-                    Binary,
-                ),
-            ],
-            return_type: Nullable(
                 Binary,
-            ),
+            ],
+            return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
             language: "python",
@@ -23415,7 +23843,7 @@ def addone_py(i):
 return i+1
 $$;
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
+CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
 def addone_py(i):
 return i+1
 $$
@@ -23434,13 +23862,9 @@ CreateUDF(
         description: None,
         definition: UDFScript {
             arg_types: [
-                Nullable(
-                    Int32,
-                ),
-            ],
-            return_type: Nullable(
                 Int32,
-            ),
+            ],
+            return_type: Int32,
             code: "def addone_py(i):\nreturn i+1",
             handler: "addone_py",
             language: "python",
@@ -23457,7 +23881,7 @@ language python
 handler = 'addone_py'
 as '@data/abc/a.py';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
+CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
 @data/abc/a.py
 $$
 ---------- AST ------------
@@ -23475,13 +23899,9 @@ CreateUDF(
         description: None,
         definition: UDFScript {
             arg_types: [
-                Nullable(
-                    Int32,
-                ),
-            ],
-            return_type: Nullable(
                 Int32,
-            ),
+            ],
+            return_type: Int32,
             code: "@data/abc/a.py",
             handler: "addone_py",
             language: "python",
@@ -23528,6 +23948,150 @@ DropUDF {
 
 
 ---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists,
+        udf_name: Identifier {
+            span: Some(
+                30..36,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFServer {
+            arg_types: [
+                Int32,
+            ],
+            state_fields: [
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            51..52,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
+            ],
+            return_type: Boolean,
+            address: "http://0.0.0.0:8815",
+            language: "javascript",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+---------- Output ---------
+CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS $$
+some code
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists,
+        udf_name: Identifier {
+            span: Some(
+                30..36,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFScript {
+            arg_types: [
+                Int32,
+            ],
+            state_fields: [
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            51..52,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            61..62,
+                        ),
+                        name: "i",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: NotNull(
+                        Int32,
+                    ),
+                },
+            ],
+            return_type: Boolean,
+            code: "some code",
+            language: "javascript",
+            runtime_version: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+---------- Output ---------
+ALTER FUNCTION my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS $$
+some code
+$$
+---------- AST ------------
+AlterUDF(
+    AlterUDFStmt {
+        udf_name: Identifier {
+            span: Some(
+                15..21,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFScript {
+            arg_types: [
+                Int32,
+            ],
+            state_fields: [
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            36..37,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
+            ],
+            return_type: Boolean,
+            code: "some code",
+            language: "javascript",
+            runtime_version: "",
+        },
+    },
+)
+
+
+---------- Input ----------
 EXECUTE IMMEDIATE
 $$
 BEGIN
@@ -23564,7 +24128,7 @@ abc as (
 )
 select * from abc;
 ---------- Output ---------
-WITH abc AS (SELECT id, uid, eid, match_id, created_at, updated_at FROM (SELECT * FROM ddd.ccc WHERE score > 0 LIMIT 10) QUALIFY row_number() OVER ( PARTITION BY uid, eid ORDER BY updated_at DESC ) = 1) SELECT * FROM abc
+WITH abc AS (SELECT id, uid, eid, match_id, created_at, updated_at FROM (SELECT * FROM ddd.ccc WHERE score > 0 LIMIT 10) QUALIFY row_number() OVER (PARTITION BY uid, eid ORDER BY updated_at DESC) = 1) SELECT * FROM abc
 ---------- AST ------------
 Query(
     Query {
@@ -24154,7 +24718,7 @@ CreateDictionary(
 ---------- Input ----------
 describe PROCEDURE p1()
 ---------- Output ---------
-DESCRIBE PROCEDURE p1() 
+DESCRIBE PROCEDURE p1()
 ---------- AST ------------
 DescProcedure(
     DescProcedureStmt {
@@ -24167,7 +24731,7 @@ DescProcedure(
 ---------- Input ----------
 describe PROCEDURE p1(string, timestamp)
 ---------- Output ---------
-DESCRIBE PROCEDURE p1(STRING, TIMESTAMP) 
+DESCRIBE PROCEDURE p1(STRING, TIMESTAMP)
 ---------- AST ------------
 DescProcedure(
     DescProcedureStmt {
@@ -24316,7 +24880,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE OR REPLACE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+CREATE OR REPLACE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO
@@ -24362,7 +24926,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE IF NOT EXISTS p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+CREATE PROCEDURE IF NOT EXISTS p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO
@@ -24408,7 +24972,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+CREATE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO
@@ -24454,7 +25018,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE p1(a Int32, b STRING) RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+CREATE PROCEDURE p1(a Int32, b STRING) RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO
@@ -24515,7 +25079,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE p1() RETURNS TABLE(a STRING NOT NULL, b Int32 NULL) LANGUAGE SQL COMMENT='test' AS $$
+CREATE PROCEDURE p1() RETURNS TABLE(a STRING NOT NULL, b Int32 NULL) LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO

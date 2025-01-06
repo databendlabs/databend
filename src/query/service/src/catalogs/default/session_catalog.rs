@@ -291,8 +291,11 @@ impl Catalog for SessionCatalog {
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
-        self.inner.mget_table_names_by_ids(tenant, table_ids).await
+        self.inner
+            .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
+            .await
     }
 
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {

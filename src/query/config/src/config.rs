@@ -15,7 +15,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::env;
-use std::ffi::OsString;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -1700,6 +1699,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
+
+    #[clap(skip)]
+    pub resources_management: Option<ResourcesManagementConfig>,
 }
 
 impl Default for QueryConfig {
@@ -1795,6 +1797,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            resources_management: self.resources_management,
         })
     }
 }
@@ -1896,6 +1899,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             max_cached_queries_profiles: inner.max_cached_queries_profiles,
             network_policy_whitelist: inner.network_policy_whitelist,
             settings: HashMap::new(),
+            resources_management: None,
         }
     }
 }
@@ -2921,7 +2925,7 @@ impl Default for DiskCacheKeyReloadPolicy {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
@@ -2953,12 +2957,18 @@ pub struct DiskCacheConfig {
     pub sync_data: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+impl Default for DiskCacheConfig {
+    fn default() -> Self {
+        inner::DiskCacheConfig::default().into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
     #[clap(long, value_name = "VALUE", default_value = "")]
-    pub spill_local_disk_path: OsString,
+    pub spill_local_disk_path: String,
 
     #[clap(long, value_name = "VALUE", default_value = "30")]
     /// Percentage of reserve disk space that won't be used for spill to local disk.
@@ -2967,11 +2977,30 @@ pub struct SpillConfig {
     #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
     /// Allow space in bytes to spill to local disk.
     pub spill_local_disk_max_bytes: u64,
+
+    // TODO: We need to fix StorageConfig so that it supports environment variables and command line injections.
+    #[clap(skip)]
+    pub storage: Option<StorageConfig>,
+}
+
+impl Default for SpillConfig {
+    fn default() -> Self {
+        inner::SpillConfig::default().into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct ResourcesManagementConfig {
+    #[clap(long = "type", value_name = "VALUE", default_value = "self_managed")]
+    #[serde(rename = "type")]
+    pub typ: String,
+
+    #[clap(long, value_name = "VALUE")]
+    pub node_group: Option<String>,
 }
 
 mod cache_config_converters {
-    use std::path::PathBuf;
-
     use log::warn;
 
     use super::*;
@@ -3013,7 +3042,7 @@ mod cache_config_converters {
                 storage,
                 catalog,
                 cache,
-                mut spill,
+                spill,
                 background,
                 catalogs: input_catalogs,
                 ..
@@ -3033,14 +3062,7 @@ mod cache_config_converters {
                 catalogs.insert(CATALOG_HIVE.to_string(), catalog);
             }
 
-            // Trick for cloud, perhaps we should introduce a new configuration for the local writeable root.
-            if cache.disk_cache_config.path != inner::DiskCacheConfig::default().path
-                && spill.spill_local_disk_path == inner::SpillConfig::default().path
-            {
-                spill.spill_local_disk_path = PathBuf::from(&cache.disk_cache_config.path)
-                    .join("temp/_query_spill")
-                    .into();
-            };
+            let spill = convert_local_spill_config(spill, &cache.disk_cache_config)?;
 
             Ok(InnerConfig {
                 subcommand,
@@ -3051,7 +3073,7 @@ mod cache_config_converters {
                 storage: storage.try_into()?,
                 catalogs,
                 cache: cache.try_into()?,
-                spill: spill.try_into()?,
+                spill,
                 background: background.try_into()?,
             })
         }
@@ -3114,37 +3136,51 @@ mod cache_config_converters {
         }
     }
 
-    impl TryFrom<SpillConfig> for inner::SpillConfig {
-        type Error = ErrorCode;
+    fn convert_local_spill_config(
+        spill: SpillConfig,
+        cache: &DiskCacheConfig,
+    ) -> Result<inner::SpillConfig> {
+        // Trick for cloud, perhaps we should introduce a new configuration for the local writeable root.
+        let local_writeable_root = if cache.path != DiskCacheConfig::default().path
+            && spill.spill_local_disk_path.is_empty()
+        {
+            Some(cache.path.clone())
+        } else {
+            None
+        };
 
-        fn try_from(value: SpillConfig) -> std::result::Result<Self, Self::Error> {
-            let SpillConfig {
-                spill_local_disk_path,
-                spill_local_disk_reserved_space_percentage: spill_local_disk_max_space_percentage,
-                spill_local_disk_max_bytes,
-            } = value;
-            if !spill_local_disk_max_space_percentage.is_normal()
-                || spill_local_disk_max_space_percentage.is_sign_negative()
-                || spill_local_disk_max_space_percentage > OrderedFloat(100.0)
-            {
-                return Err(ErrorCode::InvalidArgument(
-                    "invalid spill_local_disk_max_space_percentage",
-                ));
-            }
-            Ok(Self {
-                path: spill_local_disk_path,
-                reserved_disk_ratio: spill_local_disk_max_space_percentage / 100.0,
-                global_bytes_limit: spill_local_disk_max_bytes,
+        let storage_params = spill
+            .storage
+            .map(|storage| {
+                let storage: InnerStorageConfig = storage.try_into()?;
+                Ok::<_, ErrorCode>(storage.params)
             })
-        }
+            .transpose()?;
+
+        Ok(inner::SpillConfig {
+            local_writeable_root,
+            path: spill.spill_local_disk_path,
+            reserved_disk_ratio: spill.spill_local_disk_reserved_space_percentage / 100.0,
+            global_bytes_limit: spill.spill_local_disk_max_bytes,
+            storage_params,
+        })
     }
 
     impl From<inner::SpillConfig> for SpillConfig {
         fn from(value: inner::SpillConfig) -> Self {
+            let storage = value.storage_params.map(|params| {
+                InnerStorageConfig {
+                    params,
+                    ..Default::default()
+                }
+                .into()
+            });
+
             Self {
                 spill_local_disk_path: value.path,
                 spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,
                 spill_local_disk_max_bytes: value.global_bytes_limit,
+                storage,
             }
         }
     }

@@ -35,6 +35,7 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::builtin::BuiltIn;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_enterprise_resources_management::DummyResourcesManagement;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TempDirManager;
 
@@ -56,13 +57,13 @@ pub struct GlobalServices;
 
 impl GlobalServices {
     #[async_backtrace::framed]
-    pub async fn init(config: &InnerConfig) -> Result<()> {
+    pub async fn init(config: &InnerConfig, ee_mode: bool) -> Result<()> {
         GlobalInstance::init_production();
-        GlobalServices::init_with(config).await
+        GlobalServices::init_with(config, ee_mode).await
     }
 
     #[async_backtrace::framed]
-    pub async fn init_with(config: &InnerConfig) -> Result<()> {
+    pub async fn init_with(config: &InnerConfig, ee_mode: bool) -> Result<()> {
         StackTrace::pre_load_symbol();
 
         // app name format: node_id[0..7]@cluster_id
@@ -139,7 +140,7 @@ impl GlobalServices {
 
         RoleCacheManager::init()?;
 
-        DataOperator::init(&config.storage).await?;
+        DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
         ShareTableConfig::init(
             &config.query.share_endpoint_address,
             &config.query.share_endpoint_auth_token_file,
@@ -161,6 +162,10 @@ impl GlobalServices {
         #[cfg(feature = "enable_queries_executor")]
         {
             GlobalQueriesExecutor::init()?;
+        }
+
+        if !ee_mode {
+            DummyResourcesManagement::init()?;
         }
 
         Ok(())

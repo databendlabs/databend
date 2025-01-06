@@ -1,0 +1,18 @@
+[package]
+name = "databend-functions-scalar-geo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-io = { workspace = true }
+geo = { workspace = true }
+geohash = { workspace = true }
+geozero = { workspace = true }
+h3o = { workspace = true }
+hex = { workspace = true }
+jsonb = { workspace = true }
+num-traits = { workspace = true }
+once_cell = { workspace = true }
+proj4rs = { workspace = true }

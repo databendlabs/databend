@@ -39,6 +39,9 @@ use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
+use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
@@ -84,6 +87,9 @@ pub static CREATE_RANDOM_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::ne
     let mut r = HashSet::new();
     r.insert(OPT_KEY_ENGINE);
     r.insert(OPT_KEY_RANDOM_SEED);
+    r.insert(OPT_KEY_RANDOM_MIN_STRING_LEN);
+    r.insert(OPT_KEY_RANDOM_MAX_STRING_LEN);
+    r.insert(OPT_KEY_RANDOM_MAX_ARRAY_LEN);
     r
 });
 

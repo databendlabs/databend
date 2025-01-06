@@ -884,6 +884,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("external_server_request_max_threads", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(256),
+                    desc: "Request maximum number of threads to external server",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("external_server_request_retry_times", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8),
                     desc: "Request max retry times to external server",
@@ -1150,6 +1157,34 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Global,
                     range: None,
+                }),
+                ("stream_consume_batch_size_hint", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Hint for batch size during stream consumption. Set it to 0 to disable it. Larger values may improve throughput but could impose greater pressure on stream consumers.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("warehouse", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_string()),
+                    desc: "Please use the <use warehouse> statement to set the warehouse, this settings is only used to synchronize the warehouse status between the client and the server.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: None,
+                }),
+                ("premise_deploy_danger_amend_accept_invalid_cert", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Setting this to a non-zero value will allow `fuse_amend` to accept invalid TLS certificates. For diagnostic purposes only, Be very cautious before setting this to a non-zero value. If you're unsure, leave it unchanged.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("premise_deploy_amend_force_path_style", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Setting this to a non-zero value will let `fuse_amend` use path style uri while accessing s3-compatible storage service.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
             ]);
 

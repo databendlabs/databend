@@ -26,11 +26,13 @@ io-uring = [
 enable_queries_executor = []
 
 [dependencies]
+anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true, features = ["lz4", "zstd"] }
 arrow-schema = { workspace = true }
+arrow-select = { workspace = true }
 arrow-udf-js = { workspace = true }
 arrow-udf-python = { workspace = true, optional = true }
 arrow-udf-wasm = { workspace = true }
@@ -105,6 +107,7 @@ databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
+databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }

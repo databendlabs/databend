@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::convert::TryFrom;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::ops::Neg;
 use std::panic::RefUnwindSafe;
 
@@ -252,11 +255,7 @@ impl NativeType for days_ms {
     Copy,
     Clone,
     Default,
-    PartialEq,
-    PartialOrd,
-    Ord,
     Eq,
-    Hash,
     Zeroable,
     Pod,
     Serialize,
@@ -267,6 +266,33 @@ impl NativeType for days_ms {
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct months_days_micros(pub i128);
+
+const MICROS_PER_DAY: i64 = 24 * 3600 * 1_000_000;
+const MICROS_PER_MONTH: i64 = 30 * MICROS_PER_DAY;
+
+impl Hash for months_days_micros {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.total_micros().hash(state)
+    }
+}
+impl PartialEq for months_days_micros {
+    fn eq(&self, other: &Self) -> bool {
+        self.total_micros() == other.total_micros()
+    }
+}
+impl PartialOrd for months_days_micros {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for months_days_micros {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let total_micros = self.total_micros();
+        let other_micros = other.total_micros();
+        total_micros.cmp(&other_micros)
+    }
+}
 
 impl months_days_micros {
     pub fn new(months: i32, days: i32, microseconds: i64) -> Self {
@@ -291,10 +317,16 @@ impl months_days_micros {
     pub fn microseconds(&self) -> i64 {
         (self.0 & 0xFFFFFFFFFFFFFFFF) as i64
     }
+
+    pub fn total_micros(&self) -> i64 {
+        (self.months() as i64 * MICROS_PER_MONTH)
+            + (self.days() as i64 * MICROS_PER_DAY)
+            + self.microseconds()
+    }
 }
 
 impl NativeType for months_days_micros {
-    const PRIMITIVE: PrimitiveType = PrimitiveType::MonthDayNano;
+    const PRIMITIVE: PrimitiveType = PrimitiveType::MonthDayMicros;
     type Bytes = [u8; 16];
     #[inline]
     fn to_le_bytes(&self) -> Self::Bytes {

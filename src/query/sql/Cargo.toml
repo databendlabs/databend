@@ -64,7 +64,6 @@ num-derive = { workspace = true }
 num-traits = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
-percent-encoding = { workspace = true }
 prqlc = { workspace = true }
 rand = { workspace = true }
 recursive = { workspace = true }
@@ -74,6 +73,7 @@ serde = { workspace = true }
 sha2 = { workspace = true }
 simsearch = { workspace = true }
 tokio = { workspace = true }
+unicase = { workspace = true }
 url = { workspace = true }
 
 [lints]

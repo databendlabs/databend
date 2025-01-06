@@ -70,7 +70,7 @@ async fn main_entrypoint() -> Result<(), MainError> {
         return Ok(());
     }
 
-    init_services(&conf).await?;
+    init_services(&conf, false).await?;
     // init oss license manager
     OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string())
         .with_context(make_error)?;

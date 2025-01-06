@@ -81,6 +81,7 @@ fn run_parser_with_dialect<P, O>(
     }
 }
 
+// UPDATE_GOLDENFILES=1 cargo test --package databend-common-ast --test it -- parser::test_statement
 #[test]
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
@@ -204,6 +205,7 @@ fn test_statement() {
         r#"select * from a right semi join b on a.a = b.a;"#,
         r#"select * from a right anti join b on a.a = b.a;"#,
         r#"select * from a full outer join b on a.a = b.a;"#,
+        r#"select * FROM fuse_compat_table ignore_result;"#,
         r#"select * from a inner join b on a.a = b.a;"#,
         r#"select * from a left outer join b using(a);"#,
         r#"select * from a right outer join b using(a);"#,
@@ -290,6 +292,7 @@ fn test_statement() {
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON *.* TO 'test-grant';"#,
@@ -764,6 +767,8 @@ fn test_statement() {
         r#"SELECT first_value(d) respect nulls OVER (w) FROM e;"#,
         r#"SELECT sum(d) IGNORE NULLS OVER (w) FROM e;"#,
         r#"SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);"#,
+        r#"SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number)
+  FROM numbers(10) where number > 10 and number > 9 and number > 8;"#,
         r#"GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';"#,
@@ -772,6 +777,7 @@ fn test_statement() {
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));"#,
         r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
         r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE file format my_orc type = orc"#,
         r#"CREATE file format my_orc type = orc missing_field_as=field_default"#,
@@ -797,6 +803,9 @@ fn test_statement() {
         "#,
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
+        r#"ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
         r#"
             EXECUTE IMMEDIATE
             $$
@@ -982,6 +991,8 @@ fn test_statement_error() {
         r#"REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;"#,
         r#"GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';"#,
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)"#,
+        r#"CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"drop table :a"#,
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
@@ -1094,7 +1105,17 @@ fn test_query() {
         r#"select * from t1 except select * from t2"#,
         r#"select * from t1 union select * from t2 union select * from t3"#,
         r#"select * from t1 union select * from t2 union all select * from t3"#,
+        r#"select * from (
+                (SELECT f, g FROM union_fuzz_result1
+                EXCEPT
+                SELECT f, g FROM union_fuzz_result2)
+                UNION ALL
+                (SELECT f, g FROM union_fuzz_result2
+                EXCEPT
+                SELECT f, g FROM union_fuzz_result1)
+        )"#,
         r#"select * from t1 union select * from t2 intersect select * from t3"#,
+        r#"(select * from t1 union select * from t2) intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
         r#"SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo"#,
@@ -1237,6 +1258,7 @@ fn test_expr() {
         r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
+        r#"INTERVAL '1 YEAR'"#,
     ];
 
     for case in cases {

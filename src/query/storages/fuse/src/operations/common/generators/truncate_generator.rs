@@ -57,7 +57,7 @@ impl SnapshotGenerator for TruncateGenerator {
     fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
-        cluster_key_meta: Option<ClusterKey>,
+        _cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
         table_meta_timestamps: TableMetaTimestamps,
@@ -69,7 +69,6 @@ impl SnapshotGenerator for TruncateGenerator {
             schema,
             Default::default(),
             vec![],
-            cluster_key_meta,
             None,
             table_meta_timestamps,
         )

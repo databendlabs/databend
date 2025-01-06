@@ -192,19 +192,20 @@ pub enum TableType {
 
 impl Display for CreateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE ")?;
+        write!(f, "CREATE")?;
         if let CreateOption::CreateOrReplace = self.create_option {
-            write!(f, "OR REPLACE ")?;
+            write!(f, " OR REPLACE")?;
         }
         match self.table_type {
             TableType::Normal => {}
-            TableType::Transient => write!(f, "TRANSIENT ")?,
-            TableType::Temporary => write!(f, "TEMPORARY ")?,
+            TableType::Transient => write!(f, " TRANSIENT ")?,
+            TableType::Temporary => write!(f, " TEMPORARY ")?,
         };
-        write!(f, "TABLE ")?;
+        write!(f, " TABLE")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
-            write!(f, "IF NOT EXISTS ")?;
+            write!(f, " IF NOT EXISTS")?;
         }
+        write!(f, " ")?;
         write_dot_separated_list(
             f,
             self.catalog
@@ -380,11 +381,11 @@ pub struct AlterTableStmt {
 
 impl Display for AlterTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ALTER TABLE ")?;
+        write!(f, "ALTER TABLE")?;
         if self.if_exists {
-            write!(f, "IF EXISTS ")?;
+            write!(f, " IF EXISTS")?;
         }
-        write!(f, "{}", self.table_reference)?;
+        write!(f, " {}", self.table_reference)?;
         write!(f, " {}", self.action)
     }
 }
@@ -462,7 +463,7 @@ impl Display for AlterTableAction {
                 write!(f, "DROP COLUMN {column}")?;
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                write!(f, " {cluster_by}")?;
+                write!(f, "{cluster_by}")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;
@@ -789,7 +790,6 @@ pub struct VacuumDropTableOption {
     // Some(true) means dry run with summary option
     pub dry_run: Option<bool>,
     pub limit: Option<usize>,
-    pub force: bool,
 }
 
 impl Display for VacuumDropTableOption {
@@ -802,9 +802,6 @@ impl Display for VacuumDropTableOption {
         }
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {}", limit)?;
-        }
-        if self.force {
-            write!(f, " FORCE")?;
         }
         Ok(())
     }

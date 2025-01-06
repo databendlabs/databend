@@ -21,6 +21,7 @@ use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
+use databend_common_base::headers::HEADER_WAREHOUSE;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_config::DATABEND_SEMVER;
@@ -504,39 +505,81 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         let headers = req.headers().clone();
 
-        if self.endpoint_kind.may_need_sticky()
-            && let Some(sticky_node_id) = headers.get(HEADER_STICKY)
-        {
-            let sticky_node_id = sticky_node_id
-                .to_str()
-                .map_err(|e| {
-                    HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
-                        "Invalid Header ({HEADER_STICKY}: {sticky_node_id:?}): {e}"
-                    )))
-                })?
-                .to_string();
-            let local_id = GlobalConfig::instance().query.node_id.clone();
-            if local_id != sticky_node_id {
-                let config = GlobalConfig::instance();
-                return if let Some(node) = ClusterDiscovery::instance()
-                    .find_node_by_id(&sticky_node_id, &config)
-                    .await
-                    .map_err(HttpErrorCode::server_error)?
-                {
-                    log::info!(
-                        "forwarding /v1{} from {local_id} to {sticky_node_id}",
-                        req.uri()
-                    );
-                    forward_request(req, node).await
-                } else {
-                    let msg = format!("sticky_node_id '{sticky_node_id}' not found in cluster",);
-                    warn!("{}", msg);
-                    Err(Error::from(HttpErrorCode::bad_request(
-                        ErrorCode::BadArguments(msg),
-                    )))
-                };
+        if self.endpoint_kind.may_need_sticky() {
+            if let Some(sticky_node_id) = headers.get(HEADER_STICKY) {
+                let sticky_node_id = sticky_node_id
+                    .to_str()
+                    .map_err(|e| {
+                        HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
+                            "Invalid Header ({HEADER_STICKY}: {sticky_node_id:?}): {e}"
+                        )))
+                    })?
+                    .to_string();
+                let local_id = GlobalConfig::instance().query.node_id.clone();
+                if local_id != sticky_node_id {
+                    return if let Some(node) = ClusterDiscovery::instance()
+                        .find_node_by_id(&sticky_node_id)
+                        .await
+                        .map_err(HttpErrorCode::server_error)?
+                    {
+                        log::info!(
+                            "forwarding /v1{} from {local_id} to {sticky_node_id}",
+                            req.uri()
+                        );
+                        forward_request(req, node).await
+                    } else {
+                        let msg =
+                            format!("sticky_node_id '{sticky_node_id}' not found in cluster",);
+                        warn!("{}", msg);
+                        Err(Error::from(HttpErrorCode::bad_request(
+                            ErrorCode::BadArguments(msg),
+                        )))
+                    };
+                }
+            } else if let Some(warehouse) = headers.get(HEADER_WAREHOUSE) {
+                req.headers_mut().remove(HEADER_WAREHOUSE);
+
+                let warehouse = warehouse
+                    .to_str()
+                    .map_err(|e| {
+                        HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
+                            "Invalid Header ({HEADER_WAREHOUSE}: {warehouse:?}): {e}"
+                        )))
+                    })?
+                    .to_string();
+
+                let cluster_discovery = ClusterDiscovery::instance();
+
+                let forward_node = cluster_discovery.find_node_by_warehouse(&warehouse).await;
+
+                match forward_node {
+                    Err(error) => {
+                        return Err(HttpErrorCode::server_error(error).into());
+                    }
+                    Ok(None) => {
+                        let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`", warehouse);
+                        warn!("{}", msg);
+                        return Err(Error::from(HttpErrorCode::bad_request(
+                            ErrorCode::UnknownWarehouse(msg),
+                        )));
+                    }
+                    Ok(Some(node)) => {
+                        let local_id = GlobalConfig::instance().query.node_id.clone();
+                        if node.id != local_id {
+                            log::info!(
+                                "forwarding /v1{} from {} to warehouse {}({})",
+                                req.uri(),
+                                local_id,
+                                warehouse,
+                                node.id
+                            );
+                            return forward_request(req, node).await;
+                        }
+                    }
+                }
             }
         }
+
         let method = req.method().clone();
         let uri = req.uri().clone();
 

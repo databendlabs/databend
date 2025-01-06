@@ -253,7 +253,7 @@ impl ExchangeInjector for AggregateInjector {
     ) -> Result<()> {
         let params = self.aggregator_params.clone();
 
-        let operator = DataOperator::instance().operator();
+        let operator = DataOperator::instance().spill_operator();
         let location_prefix = self.ctx.query_id_spill_prefix();
 
         pipeline.add_transform(|input, output| {
@@ -281,7 +281,7 @@ impl ExchangeInjector for AggregateInjector {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let params = self.aggregator_params.clone();
-        let operator = DataOperator::instance().operator();
+        let operator = DataOperator::instance().spill_operator();
         let location_prefix = self.ctx.query_id_spill_prefix();
 
         let schema = shuffle_params.schema.clone();

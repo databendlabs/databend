@@ -297,7 +297,9 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
 
             let mut source_tb_ids = source_tb_id_set.into_iter().collect::<Vec<u64>>();
             source_tb_ids.sort();
-            let source_tb_names = ctl.mget_table_names_by_ids(&tenant, &source_tb_ids).await?;
+            let source_tb_names = ctl
+                .mget_table_names_by_ids(&tenant, &source_tb_ids, false)
+                .await?;
             let source_tb_map = source_tb_ids
                 .into_iter()
                 .zip(source_tb_names.into_iter())
