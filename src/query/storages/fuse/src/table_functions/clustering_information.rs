@@ -211,7 +211,7 @@ impl<'a> ClusteringInformation<'a> {
                 .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
             if matches!(typ, ClusterType::Hilbert) {
                 return Err(ErrorCode::UnsupportedClusterType(
-                    "Unsupported 'hilbert' type",
+                    "Unsupported 'hilbert' type, please use `hilbert_clustering_information` instead",
                 ));
             }
         }

@@ -403,10 +403,10 @@ impl FuseTable {
     }
 
     pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        let Some(cluster_type) = self.cluster_type() else {
-            return vec![];
-        };
-        if matches!(cluster_type, ClusterType::Hilbert) {
+        if self
+            .cluster_type()
+            .is_none_or(|v| matches!(v, ClusterType::Hilbert))
+        {
             return vec![];
         }
 

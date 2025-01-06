@@ -41,6 +41,14 @@ select count() from fuse_snapshot('test_hilbert','t');
 ----
 4
 
+statement error 4013
+select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t');
+
+query TTIIII
+select * EXCLUDE(timestamp) from hilbert_clustering_information('test_hilbert','t');
+----
+(a, b) hilbert 4 0 0 4
+
 statement ok
 alter table t recluster final;
 
@@ -62,6 +70,11 @@ insert into t values(9, 9);
 
 statement ok
 alter table t recluster final;
+
+query TTIIII
+select * EXCLUDE(timestamp) from hilbert_clustering_information('test_hilbert','t');
+----
+(a, b) hilbert 3 2 1 0
 
 query I
 select count() from fuse_snapshot('test_hilbert','t');
