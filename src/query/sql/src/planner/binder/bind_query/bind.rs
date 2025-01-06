@@ -209,7 +209,7 @@ impl Binder {
         let mut as_query = cte.query.clone();
         with.ctes.truncate(cte_index);
         with.ctes.retain(|cte| !cte.materialized);
-        as_query.with = if with.ctes.len() > 0 {
+        as_query.with = if !with.ctes.is_empty() {
             Some(with)
         } else {
             None
