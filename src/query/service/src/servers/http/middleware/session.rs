@@ -582,6 +582,8 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         }
                     }
                 }
+
+                log::warn!("Ignore header ({HEADER_WAREHOUSE}: {warehouse:?})");
             }
         }
 
