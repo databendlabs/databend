@@ -106,6 +106,8 @@ pub struct UserFunctionArguments {
     arg_types: Vec<String>,
     #[serde(skip_serializing_if = "std::option::Option::is_none")]
     return_type: Option<String>,
+    #[serde(skip_serializing_if = "std::option::Option::is_none")]
+    server: Option<String>,
     #[serde(skip_serializing_if = "std::vec::Vec::is_empty")]
     parameters: Vec<String>,
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
@@ -118,6 +120,7 @@ pub struct UserFunction {
     is_aggregate: bool,
     description: String,
     language: String,
+    category: String,
     definition: String,
     created_on: DateTime<Utc>,
     arguments: UserFunctionArguments,
@@ -162,43 +165,39 @@ impl UserFunctionsTable {
             .into_iter()
             .map(|user_function| UserFunction {
                 name: user_function.name,
-                is_aggregate: match user_function.definition {
-                    UDFDefinition::LambdaUDF(_) => false,
-                    UDFDefinition::UDFServer(_) | UDFDefinition::UDFScript(_) => false,
-                    UDFDefinition::UDAFScript(_) => true,
-                },
+                is_aggregate: user_function.definition.is_aggregate(),
                 description: user_function.description,
-                language: match &user_function.definition {
-                    UDFDefinition::LambdaUDF(_) => String::from("SQL"),
-                    UDFDefinition::UDFServer(x) => x.language.clone(),
-                    UDFDefinition::UDFScript(x) => x.language.to_string(),
-                    UDFDefinition::UDAFScript(x) => x.language.to_string(),
-                },
+                language: user_function.definition.language().to_string(),
+                category: user_function.definition.category().to_string(),
                 definition: user_function.definition.to_string(),
                 created_on: user_function.created_on,
                 arguments: match &user_function.definition {
                     UDFDefinition::LambdaUDF(x) => UserFunctionArguments {
-                        return_type: None,
                         arg_types: vec![],
+                        return_type: None,
+                        server: None,
                         parameters: x.parameters.clone(),
                         states: BTreeMap::new(),
                     },
                     UDFDefinition::UDFServer(x) => UserFunctionArguments {
-                        parameters: vec![],
-                        return_type: Some(x.return_type.to_string()),
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
+                        return_type: Some(x.return_type.to_string()),
+                        server: Some(x.address.to_string()),
+                        parameters: vec![],
                         states: BTreeMap::new(),
                     },
                     UDFDefinition::UDFScript(x) => UserFunctionArguments {
-                        parameters: vec![],
-                        return_type: Some(x.return_type.to_string()),
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
+                        return_type: Some(x.return_type.to_string()),
+                        server: None,
+                        parameters: vec![],
                         states: BTreeMap::new(),
                     },
                     UDFDefinition::UDAFScript(x) => UserFunctionArguments {
-                        parameters: vec![],
-                        return_type: Some(x.return_type.to_string()),
                         arg_types: x.arg_types.iter().map(ToString::to_string).collect(),
+                        return_type: Some(x.return_type.to_string()),
+                        server: None,
+                        parameters: vec![],
                         states: x
                             .state_fields
                             .iter()

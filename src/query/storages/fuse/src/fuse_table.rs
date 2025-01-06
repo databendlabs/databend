@@ -75,7 +75,6 @@ use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotId;
-use databend_storages_common_table_meta::meta::Statistics as FuseStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -95,7 +94,6 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 use parking_lot::Mutex;
-use uuid::Uuid;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
@@ -166,8 +164,7 @@ impl FuseTable {
         disable_refresh: bool,
     ) -> Result<Box<FuseTable>> {
         let storage_prefix = Self::parse_storage_prefix_from_table_info(&table_info)?;
-        let cluster_key_meta = table_info.meta.cluster_key();
-
+        let cluster_key_meta = table_info.cluster_key();
         let (mut operator, table_type) = match table_info.db_type.clone() {
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
@@ -406,8 +403,28 @@ impl FuseTable {
         self.cluster_key_meta.clone().map(|v| v.0)
     }
 
-    pub fn cluster_key_meta(&self) -> Option<ClusterKey> {
-        self.cluster_key_meta.clone()
+    pub fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
+        let table_meta = Arc::new(self.clone());
+        if let Some((_, order)) = &self.cluster_key_meta {
+            let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+            let cluster_keys = match cluster_type {
+                ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), order),
+                ClusterType::Hilbert => parse_hilbert_cluster_key(ctx, table_meta.clone(), order),
+            }
+            .unwrap();
+
+            let cluster_keys = cluster_keys
+                .iter()
+                .map(|k| {
+                    k.project_column_ref(|index| {
+                        table_meta.schema().field(*index).name().to_string()
+                    })
+                    .as_remote_expr()
+                })
+                .collect();
+            return cluster_keys;
+        }
+        vec![]
     }
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
@@ -626,28 +643,8 @@ impl Table for FuseTable {
         matches!(self.storage_format, FuseStorageFormat::Parquet)
     }
 
-    fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        let table_meta = Arc::new(self.clone());
-        if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
-            let cluster_keys = match cluster_type {
-                ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), order),
-                ClusterType::Hilbert => parse_hilbert_cluster_key(ctx, table_meta.clone(), order),
-            }
-            .unwrap();
-
-            let cluster_keys = cluster_keys
-                .iter()
-                .map(|k| {
-                    k.project_column_ref(|index| {
-                        table_meta.schema().field(*index).name().to_string()
-                    })
-                    .as_remote_expr()
-                })
-                .collect();
-            return cluster_keys;
-        }
-        vec![]
+    fn cluster_key_meta(&self) -> Option<ClusterKey> {
+        self.cluster_key_meta.clone()
     }
 
     fn change_tracking_enabled(&self) -> bool {
@@ -673,130 +670,6 @@ impl Table for FuseTable {
         } else {
             vec![]
         }
-    }
-
-    #[async_backtrace::framed]
-    async fn alter_table_cluster_keys(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        cluster_key_str: String,
-        cluster_type: String,
-    ) -> Result<()> {
-        // if new cluster_key_str is the same with old one,
-        // no need to change
-        if let Some(old_cluster_key_str) = self.cluster_key_str()
-            && *old_cluster_key_str == cluster_key_str
-        {
-            let old_cluster_type = self
-                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear)
-                .to_string()
-                .to_lowercase();
-            if cluster_type == old_cluster_type {
-                return Ok(());
-            }
-        }
-        let mut new_table_meta = self.get_table_info().meta.clone();
-        new_table_meta
-            .options
-            .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), cluster_type);
-        new_table_meta = new_table_meta.push_cluster_key(cluster_key_str);
-        let cluster_key_meta = new_table_meta.cluster_key();
-        let schema = self.schema().as_ref().clone();
-
-        let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None)?;
-        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
-        let prev_statistics_location = prev
-            .as_ref()
-            .and_then(|v| v.table_statistics_location.clone());
-        let (summary, segments) = if let Some(v) = prev {
-            (v.summary.clone(), v.segments.clone())
-        } else {
-            (FuseStatistics::default(), vec![])
-        };
-
-        let table_version = Some(self.get_table_info().ident.seq);
-
-        let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
-            table_version,
-            &prev_timestamp,
-            prev_snapshot_id,
-            schema,
-            summary,
-            segments,
-            cluster_key_meta,
-            prev_statistics_location,
-        );
-
-        let mut table_info = self.table_info.clone();
-        table_info.meta = new_table_meta;
-
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            &table_info,
-            &self.meta_location_generator,
-            new_snapshot,
-            None,
-            &None,
-            &self.operator,
-        )
-        .await
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_table_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        if self.cluster_key_meta.is_none() {
-            return Ok(());
-        }
-
-        let mut new_table_meta = self.get_table_info().meta.clone();
-        new_table_meta.default_cluster_key = None;
-        new_table_meta.default_cluster_key_id = None;
-
-        let schema = self.schema().as_ref().clone();
-
-        let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None)?;
-        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
-        let prev_statistics_location = prev
-            .as_ref()
-            .and_then(|v| v.table_statistics_location.clone());
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
-        let (summary, segments) = if let Some(v) = prev {
-            (v.summary.clone(), v.segments.clone())
-        } else {
-            (FuseStatistics::default(), vec![])
-        };
-
-        let table_version = Some(self.get_table_info().ident.seq);
-
-        let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
-            table_version,
-            &prev_timestamp,
-            prev_snapshot_id,
-            schema,
-            summary,
-            segments,
-            None,
-            prev_statistics_location,
-        );
-
-        let mut table_info = self.table_info.clone();
-        table_info.meta = new_table_meta;
-
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            &table_info,
-            &self.meta_location_generator,
-            new_snapshot,
-            None,
-            &None,
-            &self.operator,
-        )
-        .await
     }
 
     #[fastrace::trace]

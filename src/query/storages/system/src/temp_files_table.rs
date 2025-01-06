@@ -52,9 +52,9 @@ use futures::stream::Chunks;
 use futures::stream::Take;
 use futures::StreamExt;
 use opendal::operator_futures::FutureLister;
-use opendal::Entry;
 use opendal::Lister;
-use opendal::Metakey;
+use opendal::Metadata;
+use opendal::Operator;
 
 use crate::table::SystemTablePart;
 
@@ -154,17 +154,14 @@ impl TempFilesTable {
         let location_prefix = format!("_query_spill/{}/", tenant.tenant_name());
         let limit = push_downs.as_ref().and_then(|x| x.limit);
 
-        let operator = DataOperator::instance().operator();
-        let lister = operator
-            .lister_with(&location_prefix)
-            .recursive(true)
-            .metakey(Metakey::LastModified | Metakey::ContentLength);
+        let operator = DataOperator::instance().spill_operator();
+        let lister = operator.lister_with(&location_prefix).recursive(true);
 
         let stream = {
             let prefix = location_prefix.clone();
             let mut counter = 0;
             let ctx = ctx.clone();
-            let builder = ListerStreamSourceBuilder::with_lister_fut(lister);
+            let builder = ListerStreamSourceBuilder::with_lister_fut(operator, lister);
             builder
                 .limit_opt(limit)
                 .chunk_size(MAX_BATCH_SIZE)
@@ -208,15 +205,17 @@ impl TempFilesTable {
         )
     }
 
-    fn block_from_entries(location_prefix: &str, entries: Vec<Entry>) -> Result<DataBlock> {
+    fn block_from_entries(
+        location_prefix: &str,
+        entries: Vec<(String, Metadata)>,
+    ) -> Result<DataBlock> {
         let num_items = entries.len();
         let mut temp_files_name: Vec<String> = Vec::with_capacity(num_items);
         let mut temp_files_content_length = Vec::with_capacity(num_items);
         let mut temp_files_last_modified = Vec::with_capacity(num_items);
-        for entry in entries {
-            let metadata = entry.metadata();
+        for (path, metadata) in entries {
             if metadata.is_file() {
-                temp_files_name.push(entry.path().trim_start_matches(location_prefix).to_string());
+                temp_files_name.push(path.trim_start_matches(location_prefix).to_string());
 
                 temp_files_last_modified
                     .push(metadata.last_modified().map(|x| x.timestamp_micros()));
@@ -238,6 +237,7 @@ const MAX_BATCH_SIZE: usize = 1000;
 pub struct ListerStreamSourceBuilder<T>
 where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 {
+    op: Operator,
     lister_fut: FutureLister<T>,
     limit: Option<usize>,
     chunk_size: usize,
@@ -246,8 +246,9 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 impl<T> ListerStreamSourceBuilder<T>
 where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 {
-    pub fn with_lister_fut(lister_fut: FutureLister<T>) -> Self {
+    pub fn with_lister_fut(op: Operator, lister_fut: FutureLister<T>) -> Self {
         Self {
+            op,
             lister_fut,
             limit: None,
             chunk_size: MAX_BATCH_SIZE,
@@ -266,9 +267,13 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 
     pub fn build(
         self,
-        block_builder: (impl FnMut(Vec<Entry>) -> Result<DataBlock> + Sync + Send + 'static),
+        block_builder: (impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock>
+             + Sync
+             + Send
+             + 'static),
     ) -> Result<SendableDataBlockStream> {
         stream_source_from_entry_lister_with_chunk_size(
+            self.op.clone(),
             self.lister_fut,
             self.limit,
             self.chunk_size,
@@ -278,10 +283,11 @@ where T: Future<Output = opendal::Result<Lister>> + Send + 'static
 }
 
 fn stream_source_from_entry_lister_with_chunk_size<T>(
+    op: Operator,
     lister_fut: FutureLister<T>,
     limit: Option<usize>,
     chunk_size: usize,
-    block_builder: (impl FnMut(Vec<Entry>) -> Result<DataBlock> + Sync + Send + 'static),
+    block_builder: (impl FnMut(Vec<(String, Metadata)>) -> Result<DataBlock> + Sync + Send + 'static),
 ) -> Result<SendableDataBlockStream>
 where
     T: Future<Output = opendal::Result<Lister>> + Send + 'static,
@@ -293,9 +299,9 @@ where
 
     let state = ListerState::<T>::Uninitialized(lister_fut);
 
-    let stream = stream::try_unfold(
-        (state, block_builder),
-        move |(mut state, mut builder)| async move {
+    let stream = stream::try_unfold((state, block_builder), move |(mut state, mut builder)| {
+        let op = op.clone();
+        async move {
             let mut lister = {
                 match state {
                     ListerState::Uninitialized(fut) => {
@@ -306,15 +312,23 @@ where
                 }
             };
             if let Some(entries) = lister.next().await {
-                let entries = entries.into_iter().collect::<opendal::Result<Vec<_>>>()?;
-                let data_block = builder(entries)?;
+                let mut items = Vec::with_capacity(entries.len());
+                for entry in entries {
+                    let (path, mut metadata) = entry?.into_parts();
+                    if metadata.is_file() && metadata.last_modified().is_none() {
+                        metadata = op.stat(&path).await?;
+                    }
+                    items.push((path, metadata))
+                }
+
+                let data_block = builder(items)?;
                 state = ListerState::Initialized(lister);
                 Ok(Some((data_block, (state, builder))))
             } else {
                 Ok(None)
             }
-        },
-    );
+        }
+    });
 
     Ok(stream.boxed())
 }

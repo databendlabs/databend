@@ -507,6 +507,7 @@ impl Binder {
         if stmt.group_by.is_some()
             || stmt.having.is_some()
             || stmt.distinct
+            || stmt.qualify.is_some()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
         {

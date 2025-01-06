@@ -31,10 +31,8 @@ use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_sql::plans::VacuumDropTablePlan;
-use databend_common_storage::DataOperator;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
-use futures_util::TryStreamExt;
 use log::info;
 
 use crate::interpreters::Interpreter;
@@ -118,19 +116,14 @@ impl Interpreter for VacuumDropTablesInterpreter {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
-        if self.plan.option.force {
-            self.vacuum_drop_tables_force().await?;
-            return Ok(PipelineBuildResult::create());
-        }
-
         let ctx = self.ctx.clone();
         let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
 
         let retention_time = chrono::Utc::now() - duration;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         info!(
-            "vacuum drop table from db {:?}, retention_time: {:?}",
-            self.plan.database, retention_time
+            "vacuum drop table from db {:?}, duration: {:?}, retention_time: {:?}",
+            self.plan.database, duration, retention_time
         );
         // if database if empty, vacuum all tables
         let database_name = if self.plan.database.is_empty() {
@@ -140,7 +133,6 @@ impl Interpreter for VacuumDropTablesInterpreter {
         };
 
         let tenant = self.ctx.get_tenant();
-
         let (tables, drop_ids) = catalog
             .get_drop_table_infos(ListDroppedTableReq::new4(
                 &tenant,
@@ -159,8 +151,12 @@ impl Interpreter for VacuumDropTablesInterpreter {
         }
 
         info!(
-            "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?}, drop_ids: {:?}",
+            "vacuum drop table from db {:?}, get_drop_table_infos return tables: {:?},tables.len: {:?}, drop_ids: {:?}",
             self.plan.database,
+            tables
+                .iter()
+                .map(|t| t.get_table_info())
+                .collect::<Vec<_>>(),
             tables.len(),
             drop_ids
         );
@@ -176,6 +172,15 @@ impl Interpreter for VacuumDropTablesInterpreter {
             let view_ids = views.into_iter().map(|v| v.get_id()).collect::<Vec<_>>();
             info!("view ids excluded from purging data: {:?}", view_ids);
         }
+
+        info!(
+            "after filter read-only tables: {:?}, tables.len: {:?}",
+            tables
+                .iter()
+                .map(|t| t.get_table_info())
+                .collect::<Vec<_>>(),
+            tables.len()
+        );
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
@@ -281,64 +286,5 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 }
             }
         }
-    }
-}
-
-impl VacuumDropTablesInterpreter {
-    async fn vacuum_drop_tables_force(&self) -> Result<()> {
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
-        let op = DataOperator::instance().operator();
-        let databases = match self.plan.database.is_empty() {
-            true => catalog.list_databases(&self.ctx.get_tenant()).await?,
-            false => {
-                let database = catalog
-                    .get_database(&self.ctx.get_tenant(), &self.plan.database)
-                    .await?;
-                vec![database]
-            }
-        };
-
-        for database in databases {
-            if database.name() == "system" || database.name() == "information_schema" {
-                continue;
-            }
-            let db_id = database.get_db_info().database_id.db_id;
-            info!(
-                "vacuum drop table force from db name: {}, id: {}",
-                database.name(),
-                db_id
-            );
-            let mut lister = op.lister_with(&db_id.to_string()).recursive(true).await?;
-            let mut paths = vec![];
-            let mut orphan_paths = vec![];
-            while let Some(entry) = lister.try_next().await? {
-                paths.push(entry.path().to_string());
-            }
-            let tables_in_meta = database.list_tables_history().await?;
-            let table_ids_in_meta = tables_in_meta
-                .iter()
-                .map(|t| t.get_id())
-                .collect::<HashSet<_>>();
-            info!("table_ids_in_meta: {:?}", table_ids_in_meta);
-            for path in paths {
-                let Some(table_id) = path.split('/').nth(1) else {
-                    info!("can not parse table id from path: {}", path);
-                    continue;
-                };
-                info!("split table id:{} from path: {}", table_id, path);
-                let Some(table_id) = table_id.parse::<u64>().ok() else {
-                    info!("can not parse table id from path: {}", path);
-                    continue;
-                };
-                info!("parse table id:{} from path: {}", table_id, path);
-                if !table_ids_in_meta.contains(&table_id) {
-                    orphan_paths.push(path);
-                }
-            }
-            info!("orphan_paths summary: {:?}", orphan_paths);
-            op.remove(orphan_paths).await?;
-        }
-
-        Ok(())
     }
 }

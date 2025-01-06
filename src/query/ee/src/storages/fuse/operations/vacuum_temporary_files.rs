@@ -23,7 +23,6 @@ use databend_common_catalog::table_context::AbortChecker;
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
-use futures_util::stream;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Buffer;
@@ -45,8 +44,15 @@ pub async fn do_vacuum_temporary_files(
     }
 
     match options {
-        VacuumTempOptions::QueryHook(nodes_num, query_id) => {
-            vacuum_query_hook(abort_checker, &temporary_dir, *nodes_num, query_id, limit).await
+        VacuumTempOptions::QueryHook(nodes, query_id) => {
+            vacuum_query_hook(
+                abort_checker,
+                &temporary_dir,
+                nodes.as_slice(),
+                query_id,
+                limit,
+            )
+            .await
         }
         VacuumTempOptions::VacuumCommand(duration) => {
             vacuum_by_duration(abort_checker, &temporary_dir, limit, duration).await
@@ -60,7 +66,7 @@ async fn vacuum_by_duration(
     mut limit: usize,
     duration: &Option<Duration>,
 ) -> Result<usize> {
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
     let start_time = Instant::now();
 
     let expire_time = duration.unwrap_or(DEFAULT_RETAIN_DURATION).as_millis() as i64;
@@ -155,9 +161,7 @@ async fn vacuum_by_duration(
 
     if temp_files.len() <= limit {
         removed_total += temp_files.len();
-        let _ = operator
-            .remove_via(stream::iter(temp_files.into_iter()))
-            .await;
+        let _ = operator.delete_iter(temp_files).await;
     }
 
     // Log for the final total progress
@@ -172,54 +176,67 @@ async fn vacuum_by_duration(
 async fn vacuum_query_hook(
     abort_checker: AbortChecker,
     temporary_dir: &str,
-    nodes_num: usize,
+    nodes: &[usize],
     query_id: &str,
     mut limit: usize,
 ) -> Result<usize> {
     let mut removed_total = 0;
+    let metas_f = nodes
+        .iter()
+        .map(|i| async move {
+            let operator = DataOperator::instance().spill_operator();
+            let meta_file_path =
+                format!("{}/{}_{}{}", temporary_dir, query_id, i, SPILL_META_SUFFIX);
+            let buffer = operator.read(&meta_file_path).await?;
+            std::result::Result::<(String, Buffer), opendal::Error>::Ok((meta_file_path, buffer))
+        })
+        .collect::<Vec<_>>();
 
-    for i in 0..nodes_num {
-        if limit == 0 {
-            break;
-        }
+    let metas = futures_util::future::join_all(metas_f)
+        .await
+        .into_iter()
+        .filter_map(|x| x.is_ok().then(|| x.unwrap()));
+
+    for (meta_file_path, buffer) in metas {
         abort_checker.try_check_aborting()?;
-        let meta_file_path = format!("{}/{}_{}{}", temporary_dir, query_id, i, SPILL_META_SUFFIX);
-        let removed =
-            vacuum_by_meta(temporary_dir, &meta_file_path, limit, &mut removed_total).await?;
+        let removed = vacuum_by_meta_buffer(
+            &meta_file_path,
+            temporary_dir,
+            buffer,
+            limit,
+            &mut removed_total,
+        )
+        .await?;
         limit = limit.saturating_sub(removed);
     }
+
     Ok(removed_total)
 }
 
-async fn vacuum_by_meta(
-    temporary_dir: &str,
+async fn vacuum_by_meta_buffer(
     meta_file_path: &str,
+    temporary_dir: &str,
+    meta: Buffer,
     limit: usize,
     removed_total: &mut usize,
 ) -> Result<usize> {
-    let operator = DataOperator::instance().operator();
-    let meta: Buffer;
-    let r = operator.read(meta_file_path).await;
-    match r {
-        Ok(r) => meta = r,
-        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(0),
-        Err(e) => return Err(e.into()),
-    }
-    let meta = meta.to_bytes();
+    let operator = DataOperator::instance().spill_operator();
     let start_time = Instant::now();
+    let meta = meta.to_bytes();
     let files: Vec<String> = meta.lines().map(|x| Ok(x?)).collect::<Result<Vec<_>>>()?;
 
     let (to_be_removed, remain) = files.split_at(limit.min(files.len()));
     let remain = remain.to_vec();
 
     let cur_removed = to_be_removed.len();
-    let remove_temp_files_path = stream::iter(
-        files
-            .into_iter()
-            .filter(|f| f.starts_with(temporary_dir))
-            .take(limit),
-    );
-    let _ = operator.remove_via(remove_temp_files_path).await;
+    let _ = operator
+        .delete_iter(
+            files
+                .into_iter()
+                .filter(|f| f.starts_with(temporary_dir))
+                .take(limit),
+        )
+        .await;
 
     // update unfinished meta file
     if !remain.is_empty() {
@@ -240,13 +257,30 @@ async fn vacuum_by_meta(
     Ok(cur_removed)
 }
 
+async fn vacuum_by_meta(
+    temporary_dir: &str,
+    meta_file_path: &str,
+    limit: usize,
+    removed_total: &mut usize,
+) -> Result<usize> {
+    let operator = DataOperator::instance().spill_operator();
+    let meta: Buffer;
+    let r = operator.read(meta_file_path).await;
+    match r {
+        Ok(r) => meta = r,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e.into()),
+    }
+    vacuum_by_meta_buffer(meta_file_path, temporary_dir, meta, limit, removed_total).await
+}
+
 async fn vacuum_by_list_dir(
     dir_path: &str,
     limit: usize,
     removed_total: &mut usize,
 ) -> Result<usize> {
     let start_time = Instant::now();
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
     let mut r = operator.lister_with(dir_path).recursive(true).await?;
     let mut batches = vec![];
 
@@ -261,9 +295,7 @@ async fn vacuum_by_list_dir(
     batches.push(dir_path.to_owned());
 
     let cur_removed = batches.len().min(limit);
-    let _ = operator
-        .remove_via(stream::iter(batches.into_iter().take(limit)))
-        .await;
+    let _ = operator.delete_iter(batches.into_iter().take(limit)).await;
 
     *removed_total += cur_removed;
     // Log for the current batch

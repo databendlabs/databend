@@ -143,6 +143,7 @@ pub struct QueryContextShared {
 
     pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
 
+    pub(in crate::sessions) cluster_spill_file_nums: Arc<RwLock<HashMap<String, usize>>>,
     pub(in crate::sessions) spilled_files:
         Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
 }
@@ -180,8 +181,8 @@ impl QueryContextShared {
             finish_time: Default::default(),
             on_error_map: Arc::new(RwLock::new(None)),
             on_error_mode: Arc::new(RwLock::new(None)),
-            copy_status: Arc::new(Default::default()),
-            mutation_status: Arc::new(Default::default()),
+            copy_status: Default::default(),
+            mutation_status: Default::default(),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
@@ -201,6 +202,8 @@ impl QueryContextShared {
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
+
+            cluster_spill_file_nums: Default::default(),
             spilled_files: Default::default(),
         }))
     }

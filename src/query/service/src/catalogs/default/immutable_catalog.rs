@@ -219,6 +219,7 @@ impl Catalog for ImmutableCatalog {
         &self,
         _tenant: &Tenant,
         table_ids: &[MetaId],
+        _get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
         let mut table_name = Vec::with_capacity(table_ids.len());
         for id in table_ids {

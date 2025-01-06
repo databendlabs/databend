@@ -42,7 +42,7 @@ impl<Labels: FamilyLabels> FamilyCounter<Labels> {
         FamilyCounter {
             index,
             labels,
-            value: Arc::new(Default::default()),
+            value: Default::default(),
         }
     }
 

@@ -193,7 +193,10 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables_history(
+        &self,
+        include_non_retainable: bool,
+    ) -> Result<Vec<Arc<dyn Table>>> {
         // `get_table_history` will not fetch the tables that created before the
         // "metasrv time travel functions" is added.
         // thus, only the table-infos of dropped tables are used.
@@ -202,10 +205,10 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .list_retainable_tables(ListTableReq::new(
-                self.get_tenant(),
-                self.db_info.database_id,
-            ))
+            .list_history_tables(
+                include_non_retainable,
+                ListTableReq::new(self.get_tenant(), self.db_info.database_id),
+            )
             .await?
             .into_iter()
             .filter(|i| i.value().drop_on.is_some())

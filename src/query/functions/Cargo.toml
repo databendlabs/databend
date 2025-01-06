@@ -18,7 +18,6 @@ bumpalo = { workspace = true }
 chrono = { workspace = true }
 crc32fast = { workspace = true }
 ctor = { workspace = true }
-
 databend-common-base = { workspace = true }
 databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -27,7 +26,12 @@ databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-openai = { workspace = true }
 databend-common-vector = { workspace = true }
-dtparse = { workspace = true }
+databend-functions-scalar-arithmetic = { workspace = true }
+databend-functions-scalar-datetime = { workspace = true }
+databend-functions-scalar-decimal = { workspace = true }
+databend-functions-scalar-geo = { workspace = true }
+databend-functions-scalar-math = { workspace = true }
+databend-functions-scalar-numeric-basic-arithmetic = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
 geohash = { workspace = true }
@@ -62,6 +66,7 @@ siphasher = { workspace = true }
 strength_reduce = { workspace = true }
 stringslice = { workspace = true }
 twox-hash = { workspace = true }
+unicase = { workspace = true }
 
 [dev-dependencies]
 comfy-table = { workspace = true }

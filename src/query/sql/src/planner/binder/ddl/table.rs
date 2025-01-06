@@ -81,7 +81,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::storage::StorageParams;
-use databend_common_storage::DataOperator;
+use databend_common_storage::check_operator;
+use databend_common_storage::init_operator;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
@@ -471,12 +472,13 @@ impl Binder {
                 .await?;
 
                 // create a temporary op to check if params is correct
-                let data_operator = DataOperator::try_create(&sp).await?;
+                let op = init_operator(&sp)?;
+                check_operator(&op, &sp).await?;
 
                 // Verify essential privileges.
                 // The permission check might fail for reasons other than the permissions themselves,
                 // such as network communication issues.
-                verify_external_location_privileges(data_operator.operator()).await?;
+                verify_external_location_privileges(op).await?;
                 Some(sp)
             }
             (Some(uri), _) => Err(ErrorCode::BadArguments(format!(
@@ -761,7 +763,8 @@ impl Binder {
                 .await?;
 
         // create a temporary op to check if params is correct
-        DataOperator::try_create(&sp).await?;
+        let op = init_operator(&sp)?;
+        check_operator(&op, &sp).await?;
 
         Ok(Plan::CreateTable(Box::new(CreateTablePlan {
             create_option: CreateOption::Create,
@@ -1287,7 +1290,6 @@ impl Binder {
             VacuumDropTableOption {
                 dry_run: option.dry_run,
                 limit: option.limit,
-                force: option.force,
             }
         };
         Ok(Plan::VacuumDropTable(Box::new(VacuumDropTablePlan {

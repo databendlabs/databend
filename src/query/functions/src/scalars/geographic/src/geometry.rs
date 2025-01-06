@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
 use databend_common_expression::types::geometry::GeometryType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
@@ -1675,7 +1674,7 @@ fn st_transform_impl(
     original: &[u8],
     from_srid: i32,
     to_srid: i32,
-) -> databend_common_exception::Result<Vec<u8>> {
+) -> std::result::Result<Vec<u8>, Box<ErrorCode>> {
     let from_proj = Proj::from_epsg_code(
         u16::try_from(from_srid).map_err(|_| ErrorCode::GeometryError("invalid from srid"))?,
     )
@@ -1686,28 +1685,32 @@ fn st_transform_impl(
     .map_err(|_| ErrorCode::GeometryError("invalid to srid"))?;
 
     let old = Ewkb(original.to_vec());
-    Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap())
+    let res = Ewkb(old.to_ewkb(old.dims(), Some(from_srid)).unwrap())
         .to_geo()
-        .map_err(ErrorCode::from)
+        .map_err(Box::new(ErrorCode::from))
         .and_then(|mut geom| {
             // EPSG:4326 WGS84 in proj4rs is in radians, not degrees.
             if from_srid == 4326 {
                 geom.to_radians_in_place();
             }
-            transform(&from_proj, &to_proj, &mut geom).map_err(|_| {
-                ErrorCode::GeometryError(format!(
+            if transform(&from_proj, &to_proj, &mut geom).is_err() {
+                return Err(ErrorCode::GeometryError(format!(
                     "transform from {} to {} failed",
                     from_srid, to_srid
-                ))
-            })?;
+                )));
+            }
             if to_srid == 4326 {
                 geom.to_degrees_in_place();
             }
             let round_geom = round_geometry_coordinates(geom);
             round_geom
                 .to_ewkb(round_geom.dims(), Some(to_srid))
-                .map_err(ErrorCode::from)
-        })
+                .map_err(Box::new(ErrorCode::from))
+        });
+    match res {
+        Ok(r) => Ok(r),
+        Err(e) => Err(Box::new(e)),
+    }
 }
 
 /// The argument str must be a string expression that represents a valid geometric object in one of the following formats:
@@ -1717,28 +1720,34 @@ fn st_transform_impl(
 /// EWKT (extended well-known text).
 /// EWKB (extended well-known binary) in hexadecimal format (without a leading 0x).
 /// GEOJSON
-fn json_to_geometry_impl(binary: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
+fn json_to_geometry_impl(
+    binary: &[u8],
+    srid: Option<i32>,
+) -> std::result::Result<Vec<u8>, Box<ErrorCode>> {
     let s = to_string(binary);
     let json = GeoJson(s.as_str());
     match json.to_ewkb(CoordDimensions::xy(), srid) {
         Ok(data) => Ok(data),
-        Err(e) => Err(ErrorCode::GeometryError(e.to_string())),
+        Err(e) => Err(Box::new(ErrorCode::GeometryError(e.to_string()))),
     }
 }
 
-fn point_to_geohash(geometry: &[u8], precision: Option<i32>) -> Result<String> {
+fn point_to_geohash(
+    geometry: &[u8],
+    precision: Option<i32>,
+) -> std::result::Result<String, Box<ErrorCode>> {
     let point = match Ewkb(geometry).to_geo() {
         Ok(geo) => Point::try_from(geo),
-        Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+        Err(e) => return Err(Box::new(ErrorCode::GeometryError(e.to_string()))),
     };
 
     let hash = match point {
         Ok(point) => encode(point.0, precision.map_or(12, |p| p as usize)),
-        Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+        Err(e) => return Err(Box::new(ErrorCode::GeometryError(e.to_string()))),
     };
     match hash {
         Ok(hash) => Ok(hash),
-        Err(e) => Err(ErrorCode::GeometryError(e.to_string())),
+        Err(e) => Err(Box::new(ErrorCode::GeometryError(e.to_string()))),
     }
 }
 

@@ -10,6 +10,7 @@ echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone.sh
 
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http"}
+TEST_PARALLEL=${TEST_PARALLEL:-8}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
 
 RUN_DIR=""
@@ -20,6 +21,6 @@ echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
 if [ -z "$RUN_DIR" ]; then
-	target/${BUILD_PROFILE}/databend-sqllogictests --run_dir temp_table --enable_sandbox --parallel 8
+	target/${BUILD_PROFILE}/databend-sqllogictests --run_dir temp_table --enable_sandbox --parallel ${TEST_PARALLEL}
 fi
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,explain_native,ee,temp_table --enable_sandbox --parallel 8
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,explain_native,ee,temp_table --enable_sandbox --parallel ${TEST_PARALLEL}

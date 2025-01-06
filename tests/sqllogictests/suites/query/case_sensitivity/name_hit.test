@@ -28,6 +28,9 @@ select * from Student
 statement ok
 set unquoted_ident_case_sensitive = 1
 
+statement ok
+SELECT VERSION()
+
 statement error (?s)1025,.*Unknown table `default`\.`default`\.student \.
 INSERT INTO student VALUES(1)
 

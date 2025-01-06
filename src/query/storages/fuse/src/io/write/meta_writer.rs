@@ -136,7 +136,6 @@ mod tests {
                     Statistics::default(),
                     vec![],
                     None,
-                    None,
                 );
                 snapshot.format_version = v;
                 let _ = snapshot.marshal();
@@ -153,7 +152,6 @@ mod tests {
             TableSchema::default(),
             Statistics::default(),
             vec![],
-            None,
             None,
         );
         snapshot.marshal().unwrap();

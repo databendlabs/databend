@@ -13,24 +13,15 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Duration;
 
-use aws_config::meta::region::RegionProviderChain;
-use aws_config::retry::RetryConfig;
-use aws_config::timeout::TimeoutConfig;
-use aws_sdk_s3::config::Credentials;
-use aws_sdk_s3::config::Region;
-use aws_sdk_s3::config::SharedCredentialsProvider;
-use aws_sdk_s3::Client;
-use databend_common_base::base::tokio::io::AsyncReadExt;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
-use databend_common_meta_app::storage::StorageParams;
+use databend_common_storage::init_operator;
+use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_fail_safe::FailSafeHandler;
@@ -50,22 +41,15 @@ impl RealFailSafeHandler {}
 #[async_trait::async_trait]
 impl FailSafeHandler for RealFailSafeHandler {
     async fn recover_table_data(&self, table_info: TableInfo) -> Result<()> {
-        let storage_params = match &table_info.meta.storage_params {
-            // External or attached table.
-            Some(sp) => sp.clone(),
-            // Normal table.
-            None => {
-                let config = GlobalConfig::instance();
-                config.storage.params.clone()
-            }
+        let op = match &table_info.meta.storage_params {
+            Some(sp) => init_operator(sp)?,
+            None => DataOperator::instance().operator(),
         };
 
         let fuse_table = FuseTable::do_create(table_info)?;
 
-        let amender = Amender::try_new(storage_params).await?;
-
+        let amender = Amender::new(op);
         amender.recover_snapshot(fuse_table).await?;
-
         Ok(())
     }
 }
@@ -80,65 +64,12 @@ impl RealFailSafeHandler {
 }
 
 struct Amender {
-    client: Client,
-    bucket: String,
-    root: String,
+    op: Operator,
 }
 
 impl Amender {
-    async fn try_new(storage_param: StorageParams) -> Result<Self> {
-        // TODO
-        // - replace client with opendal operator
-        // - supports other storage types
-        // when `list_object_versions` or higher level api is supported by opendal
-        if let StorageParams::S3(s3_config) = storage_param {
-            if s3_config.access_key_id.is_empty() {
-                return Err(ErrorCode::StorageOther(
-                    "credentials other than ak/sk are not supported yet",
-                ));
-            }
-
-            let base_credentials = Credentials::new(
-                &s3_config.access_key_id,
-                s3_config.secret_access_key,
-                None,
-                None,
-                "not_secure",
-            );
-
-            let region_provider =
-                RegionProviderChain::first_try(Region::new(s3_config.region)).or_else("us-east-1");
-
-            let retry_config = RetryConfig::standard();
-            let timeout_config = TimeoutConfig::builder()
-                .operation_timeout(Duration::from_secs(30))
-                .operation_attempt_timeout(Duration::from_secs(10))
-                .connect_timeout(Duration::from_secs(3))
-                .build();
-
-            let config = aws_config::from_env()
-                .region(region_provider)
-                .endpoint_url(s3_config.endpoint_url)
-                .credentials_provider(SharedCredentialsProvider::new(base_credentials))
-                .retry_config(retry_config)
-                .timeout_config(timeout_config)
-                .load()
-                .await;
-
-            let root = s3_config.root;
-            let bucket = s3_config.bucket;
-            let client = Client::new(&config);
-
-            Ok(Self {
-                client,
-                bucket,
-                root,
-            })
-        } else {
-            Err(ErrorCode::StorageOther(
-                "object storage other than s3 is not supported yet",
-            ))
-        }
+    fn new(op: Operator) -> Self {
+        Self { op }
     }
 
     async fn recover_snapshot(&self, table: Box<FuseTable>) -> Result<()> {
@@ -251,134 +182,79 @@ impl Amender {
     }
 
     async fn recover_object(&self, key: &str) -> Result<()> {
-        let full_path;
-        let obj_key = {
-            if self.root.is_empty() {
-                key
-            } else {
-                full_path = if self.root.ends_with('/') {
-                    format!("{}{}", self.root, key)
-                } else {
-                    format!("{}/{}", self.root, key)
-                };
-                &full_path
-            }
-        };
+        info!("recovering object, key: {}", key);
 
-        // trim the leading "/"
-        let obj_key = if let Some(stripped) = obj_key.strip_prefix('/') {
-            stripped
-        } else {
-            obj_key
-        };
-
-        info!("recovering object, key: {}", obj_key);
-
-        // list versions of the object.
-        //
-        // the object is not supposed to have too many versions,
-        // we do not bother checking versions beyond 1000.
-        let list_object_versions_output = self
-            .client
-            .list_object_versions()
-            .bucket(self.bucket.as_str())
-            .prefix(obj_key)
-            .send()
+        let mut versions = self
+            .op
+            .list_with(key)
+            .versions(true)
+            .deleted(true)
             .await
-            .map_err(|e| {
-                ErrorCode::StorageOther(format!("failed to list object versions. {}", e))
+            .map_err(|err| {
+                ErrorCode::StorageOther(format!(
+                    "recover object {key} failed, failed to list all versions: {err:?}",
+                ))
             })?;
 
+        // Ensure all versions here are the same key.
+        versions.retain(|v| v.path() == key);
+
         // find the latest version
-        let latest_version = list_object_versions_output
-            .versions()
+        let latest_version = versions
             .iter()
-            .filter(|v| v.key() == Some(obj_key)) // Ensure it matches the specified key
-            .filter(|v| v.version_id().is_some()) // Ensure the version_id exists
-            .max_by(|a, b| a.last_modified.cmp(&b.last_modified));
+            .filter(|v| v.metadata().version().is_some()) // Ensure the version_id exists
+            .filter(|v| !v.metadata().is_deleted()) // Ensure this is not a delete marker
+            .max_by(|a, b| {
+                a.metadata()
+                    .last_modified()
+                    .cmp(&b.metadata().last_modified())
+            });
 
         let Some(latest_version) = latest_version else {
             warn!(
                 "latest version of object {} not found, not recoverable, versions returned {:?}",
-                obj_key,
-                list_object_versions_output.versions(),
+                key, versions,
             );
             return Err(ErrorCode::StorageOther(format!(
-                "recover object {} failed, no version found",
-                obj_key
+                "recover object {key} failed, no version found",
             )));
         };
 
-        let delete_markers = &list_object_versions_output.delete_markers;
-
-        match delete_markers {
-            None => {
-                info!(
-                    "no delete markers there, object {}  no need to recover",
-                    obj_key
-                );
-                return Ok(());
-            }
-            Some(markers) => {
-                // Check if the latest one is DeleteMarker, if it is NOT, do not bother recovering it.
-                //
-                // Examples from aws shows that there might be both "Version" and "DeleteMarker" are "<IsLatest>true</IsLatest>"
-                // https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectVersions.html#API_ListObjectVersions_ResponseElements
-                // , so we cannot check if the latest one is a DeleteMarker by `markers.iter().any(|v| v.is_latest)`
-                let latest_delete_marker = markers
-                    .iter()
-                    .max_by(|a, b| a.last_modified.cmp(&b.last_modified))
-                    .unwrap();
-
-                if latest_delete_marker.last_modified < latest_version.last_modified {
-                    info!(
-                        "the latest one of object {} is not delete-marker, no need to recover (maybe recovered by other ones, concurrently)",
-                        obj_key
-                    );
-                    return Ok(());
-                }
-            }
+        // Find if there is a delete marker that is the latest one
+        if !versions
+            .iter()
+            .any(|v| v.metadata().is_current() == Some(true) && v.metadata().is_deleted())
+        {
+            info!("current version is not a deleter marker, object {key}  no need to recover",);
+            return Ok(());
         }
 
-        // TODO replace with Operator, if "get_object_by_version_id" is supported
         // Get the latest version of the object
-        let latest_version_id = latest_version.version_id().unwrap();
-        let get_object_response = self
-            .client
-            .get_object()
-            .bucket(&self.bucket)
-            .key(obj_key)
-            .version_id(latest_version_id)
-            .send()
-            .await;
+        let latest_version_id = latest_version.metadata().version().unwrap();
+        self.recover_object_inner(key, latest_version_id)
+            .await
+            .map_err(|err| {
+                ErrorCode::StorageOther(format!(
+                    "recover object {} from version {} failed: {:?}",
+                    key, latest_version_id, err
+                ))
+            })?;
 
-        match get_object_response {
-            Ok(output) => {
-                // read the object data
-                let mut body = output.body.into_async_read();
-                let mut data = Vec::new();
-                body.read_to_end(&mut data).await?;
+        info!("object {} restored successfully", key);
+        Ok(())
+    }
 
-                // put the object back to restore it
-                self.client
-                    .put_object()
-                    .bucket(&self.bucket)
-                    .key(obj_key)
-                    .body(data.into())
-                    .send()
-                    .await
-                    .map_err(|e| ErrorCode::StorageOther(format!("blah, {}", e)))?;
+    /// TODO: maybe we can implement this by remove the latest delete marker.
+    ///
+    /// Wait for opendal tp provide better APIs.
+    async fn recover_object_inner(
+        &self,
+        key: &str,
+        latest_version_id: &str,
+    ) -> opendal::Result<()> {
+        let content = self.op.read_with(key).version(latest_version_id).await?;
+        self.op.write(key, content).await?;
 
-                info!("object {} restored successfully", obj_key);
-                Ok(())
-            }
-            Err(e) => {
-                info!("failed to get the object: {}", e);
-                Err(ErrorCode::StorageOther(format!(
-                    "recover object failed. cannot read obj {}, by version {}",
-                    obj_key, latest_version_id
-                )))
-            }
-        }
+        Ok(())
     }
 }

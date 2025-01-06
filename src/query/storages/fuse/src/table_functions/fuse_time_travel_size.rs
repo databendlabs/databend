@@ -32,7 +32,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use futures_util::TryStreamExt;
 use log::info;
-use opendal::Metakey;
 use opendal::Operator;
 
 use super::parse_opt_opt_args;
@@ -144,7 +143,7 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                 }
                 None => {
                     let start = std::time::Instant::now();
-                    let tables = db.list_tables_history().await?;
+                    let tables = db.list_tables_history(true).await?;
                     info!("list_tables cost: {:?}", start.elapsed());
                     tables
                 }
@@ -197,14 +196,18 @@ impl SimpleArgFunc for FuseTimeTravelSize {
 }
 
 async fn get_time_travel_size(storage_prefix: &str, op: &Operator) -> Result<u64> {
-    let mut lister = op
-        .lister_with(storage_prefix)
-        .recursive(true)
-        .metakey(Metakey::ContentLength)
-        .await?;
+    let mut lister = op.lister_with(storage_prefix).recursive(true).await?;
     let mut size = 0;
     while let Some(entry) = lister.try_next().await? {
-        size += entry.metadata().content_length();
+        // Skip directories while calculating size
+        if entry.metadata().is_dir() {
+            continue;
+        }
+        let mut content_length = entry.metadata().content_length();
+        if content_length == 0 {
+            content_length = op.stat(entry.path()).await?.content_length();
+        }
+        size += content_length;
     }
     Ok(size)
 }

@@ -29,7 +29,7 @@ const METRIC_RETRY: &str = "external_retry";
 const METRIC_ERROR: &str = "external_error";
 const METRIC_RUNNING_REQUESTS: &str = "external_running_requests";
 const METRIC_REQUESTS: &str = "external_requests";
-const METRIC_EXTERNAL_BLOCK_ROWS: &str = "external_block_rows";
+const METRIC_EXTERNAL_BATCH_ROWS: &str = "external_batch_rows";
 
 static REQUEST_EXTERNAL_DURATION: LazyLock<FamilyHistogram<VecLabels>> =
     LazyLock::new(|| register_histogram_family_in_milliseconds(METRIC_REQUEST_EXTERNAL_DURATION));
@@ -49,8 +49,8 @@ static RUNNING_REQUESTS_EXTERNAL: LazyLock<FamilyCounter<VecLabels>> =
 static REQUESTS_EXTERNAL_EXTERNAL: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_REQUESTS));
 
-static EXTERNAL_BLOCK_ROWS: LazyLock<FamilyHistogram<VecLabels>> =
-    LazyLock::new(|| register_histogram_family_in_rows(METRIC_EXTERNAL_BLOCK_ROWS));
+static EXTERNAL_BATCH_ROWS: LazyLock<FamilyHistogram<VecLabels>> =
+    LazyLock::new(|| register_histogram_family_in_rows(METRIC_EXTERNAL_BATCH_ROWS));
 
 const LABEL_FUNCTION_NAME: &str = "function_name";
 const LABEL_ERROR_KIND: &str = "error_kind";
@@ -69,9 +69,9 @@ pub fn record_request_external_duration(function_name: impl Into<String>, durati
         .observe(duration.as_millis_f64());
 }
 
-pub fn record_request_external_block_rows(function_name: impl Into<String>, rows: usize) {
+pub fn record_request_external_batch_rows(function_name: impl Into<String>, rows: usize) {
     let labels = &vec![(LABEL_FUNCTION_NAME, function_name.into())];
-    EXTERNAL_BLOCK_ROWS
+    EXTERNAL_BATCH_ROWS
         .get_or_create(labels)
         .observe(rows as f64);
 }

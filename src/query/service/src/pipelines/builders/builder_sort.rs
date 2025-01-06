@@ -288,7 +288,7 @@ impl SortPipelineBuilder {
             let enable_experimental_stream_sort_spilling =
                 settings.get_enable_experimental_stream_sort_spilling()?;
             pipeline.add_transform(|input, output| {
-                let op = DataOperator::instance().operator();
+                let op = DataOperator::instance().spill_operator();
                 let spiller = Spiller::create(self.ctx.clone(), op, config.clone())?;
                 if enable_experimental_stream_sort_spilling {
                     Ok(ProcessorPtr::create(create_transform_stream_sort_spill(

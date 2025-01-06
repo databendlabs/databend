@@ -257,7 +257,6 @@ async fn test_safety_for_recluster() -> Result<()> {
             summary,
             locations.clone(),
             None,
-            None,
         ));
 
         let mut block_ids = HashSet::new();
