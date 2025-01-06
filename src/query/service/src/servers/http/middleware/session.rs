@@ -547,7 +547,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
                         .to_str()
                         .map_err(|e| {
                             HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
-                                "Invalid Header ({HEADER_WAREHOUSE}: {warehouse:?}): {e}"
+                                "Invalid value for header ({HEADER_WAREHOUSE}: {warehouse:?}): {e}"
                             )))
                         })?
                         .to_string();
@@ -558,7 +558,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
                     match forward_node {
                         Err(error) => {
-                            return Err(HttpErrorCode::server_error(error).into());
+                            return Err(HttpErrorCode::server_error(error.add_message_back("(while in warehouse request forward)")).into());
                         }
                         Ok(None) => {
                             let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`", warehouse);
