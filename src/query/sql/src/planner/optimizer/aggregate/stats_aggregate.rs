@@ -145,7 +145,7 @@ impl RuleStatsAggregateOptimizer {
                         }
 
                         // Add other aggregate functions as derived column,
-                        // this will be used in aggregate index rewrite.
+                        // this will be used in aggregating index rewrite.
                         let agg_func = AggregateFunction::try_from(agg.scalar.clone())?;
                         eval_scalar_results.push(ScalarItem {
                             index: agg.index,

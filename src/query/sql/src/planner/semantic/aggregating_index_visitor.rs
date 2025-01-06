@@ -206,9 +206,8 @@ pub struct AggregatingIndexChecker {
 
 impl AggregatingIndexChecker {
     pub fn is_supported(&self) -> bool {
-        // Must have aggregation function, group by, or selection.
-        // A simple `select ... from ...` index does not make sense,
-        // do not need support
+        // Must have at least one of aggregate function, group by, or selection.
+        // An aggregating index like `select a + 1 from t` are useless and take up extra storage space.
         !self.not_support && (self.has_agg_function || self.has_group_by || self.has_selection)
     }
 
@@ -239,7 +238,7 @@ impl AggregatingIndexChecker {
                 self.not_support = true;
             }
         } else {
-            // Functions other than Aggregate and Scalar are not supported, such as Window, UDF, etc.
+            // Functions other than aggregate and scalar are not supported, such as window, UDF, etc.
             self.not_support = true;
         }
     }
