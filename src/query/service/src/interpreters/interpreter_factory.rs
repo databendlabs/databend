@@ -161,6 +161,11 @@ impl InterpreterFactory {
             Plan::UnassignWarehouseNodes(v) => Ok(Arc::new(
                 UnassignWarehouseNodesInterpreter::try_create(ctx.clone(), *v.clone())?,
             )),
+            // We allow the execution of SET statements because this could be SET GLOBAL enterprise_license.
+            Plan::Set(set_variable) => Ok(Arc::new(SetInterpreter::try_create(
+                ctx,
+                *set_variable.clone(),
+            )?)),
             Plan::Query { metadata, .. } => {
                 let read_guard = metadata.read();
                 for table in read_guard.tables() {

@@ -535,6 +535,48 @@ async fn test_create_warehouse_with_no_resources() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_recovery_with_suspended_warehouse() -> Result<()> {
+    let (_, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
+
+    let create_warehouse = warehouse_manager.create_warehouse(
+        String::from("test_warehouse"),
+        vec![SelectedNode::Random(None); 2],
+    );
+    create_warehouse.await?;
+
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+
+    assert_eq!(list_warehouse_nodes.await?.len(), 2);
+
+    warehouse_manager
+        .suspend_warehouse(String::from("test_warehouse"))
+        .await?;
+
+    let shutdown_node = warehouse_manager.shutdown_node(nodes[0].clone());
+    shutdown_node.await?;
+
+    let shutdown_node = warehouse_manager.shutdown_node(nodes[1].clone());
+    shutdown_node.await?;
+
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+
+    assert_eq!(list_warehouse_nodes.await?.len(), 0);
+
+    let node_1 = GlobalUniqName::unique();
+    let start_node_1 = warehouse_manager.start_node(system_managed_node(&node_1));
+    assert!(start_node_1.await.is_ok());
+
+    let list_warehouse_nodes =
+        warehouse_manager.list_warehouse_nodes(String::from("test_warehouse"));
+
+    let nodes = list_warehouse_nodes.await?;
+    assert_eq!(nodes.len(), 0);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_recovery_create_warehouse() -> Result<()> {
     let (_, warehouse_manager, nodes) = nodes(Duration::from_mins(30), 2).await?;
 

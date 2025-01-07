@@ -373,6 +373,10 @@ impl WarehouseMgr {
                 continue;
             };
 
+            if wh.status.to_uppercase() != "RUNNING" {
+                continue;
+            }
+
             for (cluster_id, cluster) in wh.clusters {
                 let mut lost_nodes = cluster.nodes;
 
