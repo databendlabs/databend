@@ -614,6 +614,44 @@ async fn test_recovery_create_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_assign_nodes_for_invalid_warehouse() -> Result<()> {
+    let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
+
+    let assign_warehouse_nodes =
+        warehouse_manager.assign_warehouse_nodes(String::from(""), HashMap::new());
+
+    assert_eq!(assign_warehouse_nodes.await.unwrap_err().code(), 2403);
+
+    let assign_warehouse_nodes =
+        warehouse_manager.assign_warehouse_nodes(String::from("test_warehouse"), HashMap::new());
+
+    assert_eq!(assign_warehouse_nodes.await.unwrap_err().code(), 2408);
+
+    let assign_warehouse_nodes = warehouse_manager.assign_warehouse_nodes(
+        String::from("test_warehouse"),
+        HashMap::from([(String::new(), vec![])]),
+    );
+
+    assert_eq!(assign_warehouse_nodes.await.unwrap_err().code(), 1006);
+
+    let assign_warehouse_nodes = warehouse_manager.assign_warehouse_nodes(
+        String::from("test_warehouse"),
+        HashMap::from([(String::from("test"), vec![])]),
+    );
+
+    assert_eq!(assign_warehouse_nodes.await.unwrap_err().code(), 1006);
+
+    let assign_warehouse_nodes = warehouse_manager.assign_warehouse_nodes(
+        String::from("test_warehouse"),
+        HashMap::from([(String::from("test"), vec![SelectedNode::Random(None)])]),
+    );
+
+    assert_eq!(assign_warehouse_nodes.await.unwrap_err().code(), 2406);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_unassign_nodes_for_invalid_warehouse() -> Result<()> {
     let (_, warehouse_manager, _nodes) = nodes(Duration::from_mins(30), 2).await?;
 

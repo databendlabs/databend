@@ -1829,6 +1829,16 @@ impl WarehouseApi for WarehouseMgr {
             ));
         }
 
+        if nodes.iter().any(|(name, _)| name.is_empty()) {
+            return Err(ErrorCode::BadArguments("Assign cluster name is empty."));
+        }
+
+        if nodes.iter().any(|(_, list)| list.is_empty()) {
+            return Err(ErrorCode::BadArguments(
+                "Assign cluster nodes list is empty.",
+            ));
+        }
+
         for _idx in 0..10 {
             let selected_nodes = self.pick_assign_warehouse_node(&warehouse, &nodes).await?;
 
