@@ -6,6 +6,8 @@ module.exports = async ({ github, context, core }) => {
   }
 
   const { STABLE, TAG } = process.env;
+
+  // trigger by release event
   if (context.ref.startsWith("refs/tags/")) {
     let tag = context.ref.replace("refs/tags/", "");
     core.setOutput("tag", tag);
@@ -13,6 +15,8 @@ module.exports = async ({ github, context, core }) => {
     core.info(`Tag event triggered by ${tag}.`);
     return;
   }
+
+  // trigger by schedule or workflow_dispatch event
   if (STABLE == "true") {
     if (TAG) {
       // trigger stable release by workflow_dispatch with a tag
