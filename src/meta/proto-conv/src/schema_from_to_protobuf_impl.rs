@@ -78,8 +78,8 @@ impl FromToProto for ex::TableField {
 
         let v = ex::TableField::new_from_column_id(
             &p.name,
-            ex::TableDataType::from_pb(p.data_type.ok_or_else(|| Incompatible {
-                reason: "DataField.data_type can not be None".to_string(),
+            ex::TableDataType::from_pb(p.data_type.ok_or_else(|| {
+                Incompatible::new("DataField.data_type can not be None".to_string())
             })?)?,
             p.column_id,
         )
@@ -116,8 +116,8 @@ impl FromToProto for ex::ComputedExpr {
     fn from_pb(p: pb::ComputedExpr) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let computed_expr = p.computed_expr.ok_or_else(|| Incompatible {
-            reason: "Invalid ComputedExpr: .computed_expr can not be None".to_string(),
+        let computed_expr = p.computed_expr.ok_or_else(|| {
+            Incompatible::new("Invalid ComputedExpr: .computed_expr can not be None".to_string())
         })?;
 
         let x = match computed_expr {
@@ -153,9 +153,9 @@ impl FromToProto for ex::TableDataType {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         match (&p.dt, &p.dt24) {
-            (None, None) => Err(Incompatible {
-                reason: "DataType .dt and .dt24 are both None".to_string(),
-            }),
+            (None, None) => Err(Incompatible::new(
+                "DataType .dt and .dt24 are both None".to_string(),
+            )),
             (Some(_), None) => {
                 // Convert from version 23 or lower:
                 let x = match p.dt.unwrap() {
@@ -165,8 +165,8 @@ impl FromToProto for ex::TableDataType {
                         reader_check_msg(nullable_type.ver, nullable_type.min_reader_ver)?;
 
                         let inner = Box::into_inner(nullable_type).inner;
-                        let inner = inner.ok_or_else(|| Incompatible {
-                            reason: "NullableType.inner can not be None".to_string(),
+                        let inner = inner.ok_or_else(|| {
+                            Incompatible::new("NullableType.inner can not be None".to_string())
                         })?;
                         let inner = Box::into_inner(inner);
                         ex::TableDataType::Nullable(Box::new(ex::TableDataType::from_pb(inner)?))
@@ -203,8 +203,8 @@ impl FromToProto for ex::TableDataType {
                         reader_check_msg(a.ver, a.min_reader_ver)?;
 
                         let inner = Box::into_inner(a).inner;
-                        let inner = inner.ok_or_else(|| Incompatible {
-                            reason: "Array.inner can not be None".to_string(),
+                        let inner = inner.ok_or_else(|| {
+                            Incompatible::new("Array.inner can not be None".to_string())
                         })?;
                         let inner = Box::into_inner(inner);
                         ex::TableDataType::Array(Box::new(ex::TableDataType::from_pb(inner)?))
@@ -267,10 +267,9 @@ impl FromToProto for ex::TableDataType {
                 };
                 Ok(x)
             }
-            (Some(_), Some(_)) => Err(Incompatible {
-                reason: "Invalid DataType: at most only one of .dt and .dt23 can be Some"
-                    .to_string(),
-            }),
+            (Some(_), Some(_)) => Err(Incompatible::new(
+                "Invalid DataType: at most only one of .dt and .dt23 can be Some".to_string(),
+            )),
         }
     }
 
@@ -343,9 +342,9 @@ impl FromToProto for ex::types::NumberDataType {
     fn from_pb(p: pb::Number) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let num = p.num.ok_or_else(|| Incompatible {
-            reason: "Invalid Number: .num can not be None".to_string(),
-        })?;
+        let num = p
+            .num
+            .ok_or_else(|| Incompatible::new("Invalid Number: .num can not be None".to_string()))?;
 
         let x = match num {
             Num::Uint8Type(_) => Self::UInt8,
@@ -394,8 +393,8 @@ impl FromToProto for ex::types::DecimalDataType {
     fn from_pb(p: pb::Decimal) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let num = p.decimal.ok_or_else(|| Incompatible {
-            reason: "Invalid Decimal: .decimal can not be None".to_string(),
+        let num = p.decimal.ok_or_else(|| {
+            Incompatible::new("Invalid Decimal: .decimal can not be None".to_string())
         })?;
 
         let x = match num {

@@ -30,9 +30,8 @@ impl FromToProto for DateTime<Utc> {
     }
 
     fn from_pb(p: String) -> Result<Self, Incompatible> {
-        let v = DateTime::<Utc>::from_str(&p).map_err(|e| Incompatible {
-            reason: format!("DateTime error: {}", e),
-        })?;
+        let v = DateTime::<Utc>::from_str(&p)
+            .map_err(|e| Incompatible::new(format!("DateTime error: {}", e)))?;
         Ok(v)
     }
 

@@ -42,12 +42,10 @@ impl FromToProto for mt::background::BackgroundTaskInfo {
             last_updated: p
                 .last_updated
                 .and_then(|t| DateTime::<Utc>::from_pb(t).ok()),
-            task_type: FromPrimitive::from_i32(p.task_type).ok_or_else(|| Incompatible {
-                reason: format!("invalid TaskType: {}", p.task_type),
-            })?,
-            task_state: FromPrimitive::from_i32(p.task_state).ok_or_else(|| Incompatible {
-                reason: format!("invalid TaskState: {}", p.task_state),
-            })?,
+            task_type: FromPrimitive::from_i32(p.task_type)
+                .ok_or_else(|| Incompatible::new(format!("invalid TaskType: {}", p.task_type)))?,
+            task_state: FromPrimitive::from_i32(p.task_state)
+                .ok_or_else(|| Incompatible::new(format!("invalid TaskState: {}", p.task_state)))?,
             message: p.message,
             compaction_task_stats: p
                 .compaction_task_stats
