@@ -5153,7 +5153,6 @@ dependencies = [
  "bollard",
  "clap",
  "cookie",
- "databend-common-base",
  "databend-common-exception",
  "env_logger 0.11.5",
  "futures-util",
