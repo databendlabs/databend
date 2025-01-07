@@ -48,10 +48,10 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
 
         let mut node_files = HashMap::new();
         for node in cluster.nodes.iter() {
-            let num = query_ctx.get_spill_file_nums(Some(node.id.clone()));
-            if num != 0 {
+            let stats = query_ctx.get_spill_file_stats(Some(node.id.clone()));
+            if stats.file_nums != 0 {
                 if let Some(index) = cluster.index_of_nodeid(&node.id) {
-                    node_files.insert(index, num);
+                    node_files.insert(index, stats.file_nums);
                 }
             }
         }

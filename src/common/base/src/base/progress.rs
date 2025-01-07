@@ -62,3 +62,20 @@ impl Progress {
         ProgressValues { rows, bytes }
     }
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct SpillProgress {
+    pub file_nums: usize,
+    pub bytes: usize,
+}
+
+impl SpillProgress {
+    pub fn new(file_nums: usize, bytes: usize) -> Self {
+        Self { file_nums, bytes }
+    }
+
+    pub fn incr(&mut self, other: &SpillProgress) {
+        self.file_nums += other.file_nums;
+        self.bytes += other.bytes;
+    }
+}
