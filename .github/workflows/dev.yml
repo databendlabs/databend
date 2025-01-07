@@ -8,6 +8,7 @@ on:
       - reopened
     branches:
       - main
+      - backport/*
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
