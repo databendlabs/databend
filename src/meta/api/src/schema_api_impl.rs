@@ -1551,12 +1551,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             return Ok(vec![]);
         };
 
-        get_retainable_table_metas(self, false, &Utc::now(), seq_table_id_list.data).await
+        get_history_table_metas(self, false, &Utc::now(), seq_table_id_list.data).await
     }
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn list_retainable_tables(
+    async fn list_history_tables(
         &self,
         include_non_retainable: bool,
         req: ListTableReq,
@@ -1580,8 +1580,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             debug!(name :% =(&ident); "get_tables_history");
 
             let id_metas =
-                get_retainable_table_metas(self, include_non_retainable, &now, history.data)
-                    .await?;
+                get_history_table_metas(self, include_non_retainable, &now, history.data).await?;
 
             let table_nivs = id_metas.into_iter().map(|(table_id, seq_meta)| {
                 let name = DBIdTableName::new(ident.database_id, ident.table_name.clone());
@@ -3064,7 +3063,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     }
 }
 
-async fn get_retainable_table_metas(
+async fn get_history_table_metas(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     include_non_retainable: bool,
     now: &DateTime<Utc>,

@@ -205,7 +205,7 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .list_retainable_tables(
+            .list_history_tables(
                 include_non_retainable,
                 ListTableReq::new(self.get_tenant(), self.db_info.database_id),
             )

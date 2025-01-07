@@ -223,7 +223,7 @@ pub trait SchemaApi: Send + Sync {
 
     /// Get history of all tables in the specified database,
     /// that are dropped after retention boundary time, i.e., the tables that can be undropped.
-    async fn list_retainable_tables(
+    async fn list_history_tables(
         &self,
         include_non_retainable: bool,
         req: ListTableReq,
