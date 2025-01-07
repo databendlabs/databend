@@ -122,7 +122,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ #warehouse_option
+            ~ #task_warehouse_option
             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
             ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
             ~ ( WHEN ~ #expr )?
@@ -518,6 +518,140 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             USE ~ CATALOG ~ #ident
         },
         |(_, _, catalog)| Statement::UseCatalog { catalog },
+    );
+
+    let show_online_nodes = map(
+        rule! {
+            SHOW ~ ONLINE ~ NODES
+        },
+        |(_, _, _)| Statement::ShowOnlineNodes(ShowOnlineNodesStmt {}),
+    );
+
+    let show_warehouses = map(
+        rule! {
+            SHOW ~ WAREHOUSES
+        },
+        |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
+    );
+
+    let use_warehouse = map(
+        rule! {
+            USE ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::UseWarehouse(UseWarehouseStmt { warehouse }),
+    );
+
+    let create_warehouse = map(
+        rule! {
+            CREATE ~ WAREHOUSE ~ #ident ~ ("(" ~ #assign_nodes_list ~ ")")? ~ (WITH ~ #warehouse_cluster_option)?
+        },
+        |(_, _, warehouse, nodes, options)| {
+            Statement::CreateWarehouse(CreateWarehouseStmt {
+                warehouse,
+                node_list: nodes.map(|(_, nodes, _)| nodes).unwrap_or_else(Vec::new),
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
+    );
+
+    let drop_warehouse = map(
+        rule! {
+            DROP ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::DropWarehouse(DropWarehouseStmt { warehouse }),
+    );
+
+    let rename_warehouse = map(
+        rule! {
+            RENAME ~ WAREHOUSE ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, warehouse, _, new_warehouse)| {
+            Statement::RenameWarehouse(RenameWarehouseStmt {
+                warehouse,
+                new_warehouse,
+            })
+        },
+    );
+
+    let resume_warehouse = map(
+        rule! {
+            RESUME ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::ResumeWarehouse(ResumeWarehouseStmt { warehouse }),
+    );
+
+    let suspend_warehouse = map(
+        rule! {
+            SUSPEND ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::SuspendWarehouse(SuspendWarehouseStmt { warehouse }),
+    );
+
+    let inspect_warehouse = map(
+        rule! {
+            INSPECT ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::InspectWarehouse(InspectWarehouseStmt { warehouse }),
+    );
+
+    let add_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ ADD ~ CLUSTER ~ #ident ~ ("(" ~ #assign_nodes_list ~ ")")? ~ (WITH ~ #warehouse_cluster_option)?
+        },
+        |(_, _, warehouse, _, _, cluster, nodes, options)| {
+            Statement::AddWarehouseCluster(AddWarehouseClusterStmt {
+                warehouse,
+                cluster,
+                node_list: nodes.map(|(_, nodes, _)| nodes).unwrap_or_else(Vec::new),
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
+    );
+
+    let drop_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ DROP ~ CLUSTER ~ #ident
+        },
+        |(_, _, warehouse, _, _, cluster)| {
+            Statement::DropWarehouseCluster(DropWarehouseClusterStmt { warehouse, cluster })
+        },
+    );
+
+    let rename_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ RENAME ~ CLUSTER ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, warehouse, _, _, cluster, _, new_cluster)| {
+            Statement::RenameWarehouseCluster(RenameWarehouseClusterStmt {
+                warehouse,
+                cluster,
+                new_cluster,
+            })
+        },
+    );
+
+    let assign_warehouse_nodes = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ ASSIGN ~ NODES ~ "(" ~ #assign_warehouse_nodes_list ~ ")"
+        },
+        |(_, _, warehouse, _, _, _, nodes, _)| {
+            Statement::AssignWarehouseNodes(AssignWarehouseNodesStmt {
+                warehouse,
+                node_list: nodes,
+            })
+        },
+    );
+
+    let unassign_warehouse_nodes = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ UNASSIGN ~ NODES ~ "(" ~ #unassign_warehouse_nodes_list ~ ")"
+        },
+        |(_, _, warehouse, _, _, _, nodes, _)| {
+            Statement::UnassignWarehouseNodes(UnassignWarehouseNodesStmt {
+                warehouse,
+                node_list: nodes,
+            })
+        },
     );
 
     let show_databases = map(
@@ -2287,7 +2421,24 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         // use
         rule!(
                 #use_catalog: "`USE CATALOG <catalog>`"
+                | #use_warehouse: "`USE WAREHOUSE <warehouse>`"
                 | #use_database : "`USE <database>`"
+        ),
+        // warehouse
+        rule!(
+            #show_warehouses: "`SHOW WAREHOUSES`"
+            | #show_online_nodes: "`SHOW ONLINE NODES`"
+            | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
+            | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
+            | #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
+            | #resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
+            | #suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
+            | #inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
+            | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
+            | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
+            | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
+            | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+            | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
         ),
         // database
         rule!(
@@ -3935,7 +4086,7 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
     )(i)
 }
 
-pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
+pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
             (WAREHOUSE  ~ "=" ~ #literal_string)?
@@ -3948,6 +4099,63 @@ pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
             WarehouseOptions { warehouse }
         },
     ),))(i)
+}
+
+pub fn assign_nodes_list(i: Input) -> IResult<Vec<(Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            ASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)?
+        },
+        |(_, node_size, _, node_group)| (node_group.map(|(_, x)| x), node_size),
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn assign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            ASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)? ~ FOR ~ #ident
+        },
+        |(_, node_size, _, node_group, _, cluster)| {
+            (cluster, node_group.map(|(_, x)| x), node_size)
+        },
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn unassign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            UNASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)? ~ FOR ~ #ident
+        },
+        |(_, node_size, _, node_group, _, cluster)| {
+            (cluster, node_group.map(|(_, x)| x), node_size)
+        },
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn warehouse_cluster_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    let option = map(
+        rule! {
+           #ident ~ "=" ~ #option_to_string
+        },
+        |(k, _, v)| (k, v),
+    );
+    map(comma_separated_list1(option), |opts| {
+        opts.into_iter()
+            .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
+            .collect()
+    })(i)
 }
 
 pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {

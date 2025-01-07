@@ -422,13 +422,20 @@ impl Drop for Payload {
                 }
 
                 for page in self.pages.iter() {
-                    for row in 0..page.rows {
+                    'PAGE_END: for row in 0..page.rows {
+                        let ptr = self.data_ptr(page, row);
                         unsafe {
-                            let state_place = StateAddr::new(read::<u64>(
-                                self.data_ptr(page, row).add(self.state_offset) as _,
-                            )
-                                as usize);
-                            aggr.drop_state(&AggrState::with_loc(state_place, loc.clone()));
+                            let state_addr = read::<u64>(ptr.add(self.state_offset) as _) as usize;
+
+                            // row is reserved, but not written (maybe throw by oom error)
+                            if state_addr == 0 {
+                                break 'PAGE_END;
+                            }
+
+                            aggr.drop_state(&AggrState::with_loc(
+                                StateAddr::new(state_addr),
+                                loc.clone(),
+                            ));
                         }
                     }
                 }

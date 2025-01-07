@@ -101,7 +101,7 @@ pub async fn read_metas_in_parallel(
     Ok(metas)
 }
 
-fn check_parquet_schema(
+pub(crate) fn check_parquet_schema(
     expect: &SchemaDescriptor,
     actual: &SchemaDescriptor,
     path: &str,

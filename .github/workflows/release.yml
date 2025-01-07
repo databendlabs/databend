@@ -13,6 +13,9 @@ on:
         description: Make a stable release
         required: false
         type: boolean
+  release:
+    types:
+      - published
 
 permissions:
   id-token: write
@@ -47,6 +50,7 @@ jobs:
             const script = require('./.github/scripts/bump_version.js')
             await script({ github, context, core })
       - name: Create release
+        if: github.event_name == 'workflow_dispatch'
         env:
           # we need workflow:write permission to create release if there were any workflow changes
           # which is not possible for github actions token
@@ -54,12 +58,12 @@ jobs:
         run: |
           echo "Creating release ${{ steps.bump.outputs.tag }} from ${{ steps.bump.outputs.sha }}"
           if [[ "${{ inputs.stable }}" == "true" ]]; then
-            echo "Stable release"
             previous=$(gh release list --limit 1 --exclude-pre-releases | cut -f 1)
+            echo "Stable release with previous release: $previous"
             gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --latest --draft
           else
-            echo "Nightly release"
-            previous=$(gh release list --limit 1 | cut -f 1)
+            previous=$(gh release list --limit 10 | grep nightly | head -n 1 | cut -f 1)
+            echo "Nightly release with previous release: $previous"
             gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --prerelease --draft
           fi
 

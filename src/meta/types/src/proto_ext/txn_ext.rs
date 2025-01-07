@@ -343,6 +343,26 @@ impl pb::TxnOpResponse {
             })),
         }
     }
+
+    /// Consumes and returns the response as a `Get` response if it is one.
+    pub fn into_get(self) -> Option<pb::TxnGetResponse> {
+        match self.response {
+            Some(pb::txn_op_response::Response::Get(resp)) => Some(resp),
+            _ => None,
+        }
+    }
+
+    pub fn as_get(&self) -> &pb::TxnGetResponse {
+        self.try_as_get().unwrap()
+    }
+
+    /// Returns the response as a `Get` response if it is one.
+    pub fn try_as_get(&self) -> Option<&pb::TxnGetResponse> {
+        match &self.response {
+            Some(pb::txn_op_response::Response::Get(resp)) => Some(resp),
+            _ => None,
+        }
+    }
 }
 
 impl pb::TxnGetResponse {

@@ -1699,6 +1699,9 @@ pub struct QueryConfig {
 
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
+
+    #[clap(skip)]
+    pub resources_management: Option<ResourcesManagementConfig>,
 }
 
 impl Default for QueryConfig {
@@ -1794,6 +1797,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            resources_management: self.resources_management,
         })
     }
 }
@@ -1895,6 +1899,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             max_cached_queries_profiles: inner.max_cached_queries_profiles,
             network_policy_whitelist: inner.network_policy_whitelist,
             settings: HashMap::new(),
+            resources_management: None,
         }
     }
 }
@@ -2982,6 +2987,17 @@ impl Default for SpillConfig {
     fn default() -> Self {
         inner::SpillConfig::default().into()
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct ResourcesManagementConfig {
+    #[clap(long = "type", value_name = "VALUE", default_value = "self_managed")]
+    #[serde(rename = "type")]
+    pub typ: String,
+
+    #[clap(long, value_name = "VALUE")]
+    pub node_group: Option<String>,
 }
 
 mod cache_config_converters {
