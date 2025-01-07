@@ -4024,6 +4024,11 @@ impl SchemaApiTestSuite {
                 .await?;
 
             assert_eq!(res.len(), 0);
+
+            let res = mt
+                .list_history_tables(true, ListTableReq::new(&tenant, db_id))
+                .await?;
+            assert_eq!(res.len(), 1);
         }
 
         Ok(())
