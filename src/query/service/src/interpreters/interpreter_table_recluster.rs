@@ -217,7 +217,7 @@ impl ReclusterTableInterpreter {
 
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-        self.ctx.clear_inserted_segment_locations()?;
+        self.ctx.clear_written_segment_locations()?;
         self.ctx.set_executor(complete_executor.get_inner())?;
         complete_executor.execute()?;
         // make sure the executor is dropped before the next loop.

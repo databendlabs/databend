@@ -152,7 +152,8 @@ pub struct QueryContext {
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
-    inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    written_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    // Used by hilbert clustering when do recluster.
     selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
@@ -180,7 +181,7 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            inserted_segment_locs: Default::default(),
+            written_segment_locs: Default::default(),
             block_threshold: Default::default(),
             m_cte_temp_table: Default::default(),
             selected_segment_locs: Default::default(),
@@ -1222,21 +1223,21 @@ impl TableContext for QueryContext {
         })
     }
 
-    fn add_inserted_segment_location(&self, segment_loc: Location) -> Result<()> {
-        let mut segment_locations = self.inserted_segment_locs.write();
+    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()> {
+        let mut segment_locations = self.written_segment_locs.write();
         segment_locations.insert(segment_loc);
         Ok(())
     }
 
-    fn clear_inserted_segment_locations(&self) -> Result<()> {
-        let mut segment_locations = self.inserted_segment_locs.write();
+    fn clear_written_segment_locations(&self) -> Result<()> {
+        let mut segment_locations = self.written_segment_locs.write();
         segment_locations.clear();
         Ok(())
     }
 
-    fn get_inserted_segment_locations(&self) -> Result<Vec<Location>> {
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
         Ok(self
-            .inserted_segment_locs
+            .written_segment_locs
             .read()
             .iter()
             .cloned()

@@ -392,7 +392,6 @@ impl ReclusterParts {
     }
 }
 
-// TODO refine this
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
 pub struct ReclusterInfoSideCar {
     pub merged_blocks: Vec<Arc<BlockMeta>>,

@@ -209,7 +209,7 @@ async fn generate_refresh_index_plan(
     catalog: &str,
     table_id: MetaId,
 ) -> Result<Vec<Plan>> {
-    let segment_locs = ctx.get_inserted_segment_locations()?;
+    let segment_locs = ctx.get_written_segment_locations()?;
     let catalog = ctx.get_catalog(catalog).await?;
     let mut plans = vec![];
     let indexes = catalog
@@ -272,7 +272,7 @@ async fn generate_refresh_inverted_index_plan(
     desc: &RefreshDesc,
     table: Arc<dyn Table>,
 ) -> Result<Vec<Plan>> {
-    let segment_locs = ctx.get_inserted_segment_locations()?;
+    let segment_locs = ctx.get_written_segment_locations()?;
     let mut plans = vec![];
 
     let table_meta = &table.get_table_info().meta;
@@ -296,7 +296,7 @@ async fn generate_refresh_virtual_column_plan(
     ctx: Arc<QueryContext>,
     desc: &RefreshDesc,
 ) -> Result<Option<Plan>> {
-    let segment_locs = ctx.get_inserted_segment_locations()?;
+    let segment_locs = ctx.get_written_segment_locations()?;
 
     let table_info = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)
