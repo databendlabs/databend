@@ -78,6 +78,7 @@ impl<'a> InputColumns<'a> {
     }
 
     pub fn new_block_proxy(args: &'a [usize], data: &'a DataBlock) -> InputColumns<'a> {
+        debug_assert!(args.len() <= data.num_columns());
         Self::Block(BlockProxy { args, data })
     }
 }

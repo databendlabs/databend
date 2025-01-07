@@ -19,6 +19,10 @@ use std::sync::LazyLock;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::AggrStateRegister;
+use databend_common_expression::AggrStateType;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
 use databend_common_expression::Scalar;
 
 use super::AggregateFunctionCombinatorNull;
@@ -304,5 +308,42 @@ impl AggregateFunctionFactory {
             .map(|v| &v.features)
             .cloned()
             .collect::<Vec<_>>()
+    }
+
+    pub fn get_schema(
+        &self,
+        name: impl AsRef<str>,
+        params: Vec<Scalar>,
+        arguments: Vec<DataType>,
+    ) -> Result<DataSchema> {
+        let name = name.as_ref();
+        let func = self.get(name, params, arguments)?;
+
+        let mut register = AggrStateRegister::default();
+        func.register_state(&mut register);
+
+        let fields = register
+            .states()
+            .iter()
+            .enumerate()
+            .map(|(i, typ)| match typ {
+                AggrStateType::Bool => {
+                    DataField::new(&format!("{name}_bool_{}", i), DataType::Boolean)
+                }
+                AggrStateType::Custom(_) => {
+                    DataField::new(&format!("{name}_custom_{}", i), DataType::Binary)
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Ok(DataSchema::new(fields))
+    }
+
+    pub fn get_udaf_schema(name: impl AsRef<str>) -> Result<DataSchema> {
+        let fields = vec![DataField::new(
+            &format!("{}_state", name.as_ref()),
+            DataType::Binary,
+        )];
+        Ok(DataSchema::new(fields))
     }
 }

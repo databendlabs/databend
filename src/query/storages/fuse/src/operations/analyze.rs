@@ -187,7 +187,8 @@ impl SinkAnalyzeState {
             let index: u32 = name.strip_prefix("ndv_").unwrap().parse().unwrap();
 
             let col = col.value.index(0).unwrap();
-            let col = col.as_binary().unwrap();
+            let col = col.as_tuple().unwrap();
+            let col = col[0].as_binary().unwrap();
             let hll: MetaHLL = borsh_deserialize_from_slice(col)?;
 
             if !is_full {
