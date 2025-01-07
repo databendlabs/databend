@@ -41,7 +41,7 @@ module.exports = async ({ github, context, core }) => {
     owner: context.repo.owner,
     repo: context.repo.repo,
     issue_number: context.issue.number,
-    labels: [label],
+    labels: labels,
   });
   core.setOutput("title", "semantic");
 };
