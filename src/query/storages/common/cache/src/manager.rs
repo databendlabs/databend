@@ -256,7 +256,7 @@ impl CacheManager {
                 Self::set_named_cache_items_capacity(cache, new_capacity, name);
             }
             MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA => {
-                Self::set_named_cache_bytes_capacity(
+                Self::set_named_cache_items_capacity(
                     &self.bloom_index_meta_cache,
                     new_capacity,
                     name,
