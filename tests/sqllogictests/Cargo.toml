@@ -19,7 +19,6 @@ async-trait = { workspace = true }
 bollard = { workspace = true }
 clap = { workspace = true }
 cookie = { workspace = true }
-databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 env_logger = { workspace = true }
 futures-util = { workspace = true }
