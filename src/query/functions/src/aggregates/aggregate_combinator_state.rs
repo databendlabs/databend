@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::AggrStateRegister;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -81,7 +82,11 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn state_layout(&self) -> Layout {
-        self.nested.state_layout()
+        unreachable!()
+    }
+
+    fn register_state(&self, register: &mut AggrStateRegister) {
+        self.nested.register_state(register);
     }
 
     fn accumulate(
@@ -109,23 +114,44 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.accumulate_row(place, columns, row)
     }
 
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.nested.serialize(place, writer)
+    fn serialize(&self, _: &AggrState, _: &mut Vec<u8>) -> Result<()> {
+        unreachable!()
     }
 
-    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
-        self.nested.merge(place, reader)
+    #[inline]
+    fn serialize_builder(&self, place: &AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
+        self.nested.serialize_builder(place, builders)
+    }
+
+    #[inline]
+    fn merge(&self, _: &AggrState, _: &mut &[u8]) -> Result<()> {
+        unreachable!()
+    }
+
+    #[inline]
+    fn batch_merge(
+        &self,
+        places: &[StateAddr],
+        loc: Box<[AggrStateLoc]>,
+        columns: InputColumns,
+    ) -> Result<()> {
+        self.nested.batch_merge(places, loc.clone(), columns)
+    }
+
+    fn batch_merge_single(&self, place: &AggrState, states: InputColumns) -> Result<()> {
+        self.nested.batch_merge_single(place, states)
     }
 
     fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
         self.nested.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let str_builder = builder.as_binary_mut().unwrap();
-        self.serialize(place, &mut str_builder.data)?;
-        str_builder.commit_row();
-        Ok(())
+    fn merge_result(&self, _place: &AggrState, _builder: &mut ColumnBuilder) -> Result<()> {
+        todo!()
+        // let str_builder = builder.as_binary_mut().unwrap();
+        // self.serialize(place, &mut str_builder.data)?;
+        // str_builder.commit_row();
+        // Ok(())
     }
 
     fn need_manual_drop_state(&self) -> bool {

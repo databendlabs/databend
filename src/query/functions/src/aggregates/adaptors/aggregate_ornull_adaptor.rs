@@ -61,19 +61,23 @@ impl AggregateFunctionOrNullAdaptor {
 
     #[inline]
     pub fn set_flag(&self, place: &AggrState, flag: bool) {
-        let c = place.addr.next(self.offset(place)).get::<u8>();
+        let c = place.addr.next(flag_offset(place)).get::<u8>();
         *c = flag as u8;
     }
 
     #[inline]
     pub fn get_flag(&self, place: &AggrState) -> bool {
-        let c = place.addr.next(self.offset(place)).get::<u8>();
+        let c = place.addr.next(flag_offset(place)).get::<u8>();
         *c != 0
     }
+}
 
-    fn offset(&self, place: &AggrState) -> usize {
-        *place.loc().last().unwrap().as_bool().unwrap().1
-    }
+fn flag_offset(place: &AggrState) -> usize {
+    *place.loc().last().unwrap().as_bool().unwrap().1
+}
+
+fn flag_idx(loc: &[AggrStateLoc]) -> usize {
+    *loc.last().unwrap().as_bool().unwrap().0
 }
 
 impl AggregateFunction for AggregateFunctionOrNullAdaptor {
@@ -87,7 +91,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
     #[inline]
     fn init_state(&self, place: &AggrState) {
-        let c = place.addr.next(self.offset(place)).get::<u8>();
+        let c = place.addr.next(flag_offset(place)).get::<u8>();
         *c = 0;
         self.inner.init_state(&place.remove_last_loc())
     }
@@ -196,11 +200,10 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
     #[inline]
     fn serialize_builder(&self, place: &AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        let last = builders.len() - 1;
         self.inner
-            .serialize_builder(&place.remove_last_loc(), &mut builders[..last])?;
+            .serialize_builder(&place.remove_last_loc(), builders)?;
         let flag = self.get_flag(place);
-        builders[last].push(ScalarRef::Boolean(flag));
+        builders[flag_idx(place.loc())].push(ScalarRef::Boolean(flag));
         Ok(())
     }
 
@@ -216,15 +219,18 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         loc: Box<[AggrStateLoc]>,
         columns: InputColumns,
     ) -> Result<()> {
-        let col = columns.iter().last().unwrap().as_boolean().unwrap();
-        let inner_columns = columns.slice(0..columns.len() - 1);
+        let col = columns
+            .iter()
+            .nth(flag_idx(&loc))
+            .unwrap()
+            .as_boolean()
+            .unwrap();
 
         let inner_loc = loc[..loc.len() - 1].to_vec().into_boxed_slice();
         for (addr, flag) in places.iter().zip(col.iter()) {
             let place = AggrState::with_loc(*addr, loc.clone());
             let flag = flag || self.get_flag(&place);
-            self.inner
-                .batch_merge(places, inner_loc.clone(), inner_columns)?;
+            self.inner.batch_merge(places, inner_loc.clone(), columns)?;
             self.set_flag(&place, flag);
         }
 
@@ -232,19 +238,25 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     fn batch_merge_single(&self, place: &AggrState, states: InputColumns) -> Result<()> {
-        let col = states.iter().last().unwrap().as_boolean().unwrap();
-        let inner_columns = states.slice(0..states.len() - 1);
+        let col = states
+            .iter()
+            .nth(flag_idx(place.loc()))
+            .unwrap()
+            .as_boolean()
+            .unwrap();
+
         for flag in col.iter() {
             let flag = flag || self.get_flag(place);
             self.inner
-                .batch_merge_single(&place.remove_last_loc(), inner_columns)?;
+                .batch_merge_single(&place.remove_last_loc(), states)?;
             self.set_flag(place, flag);
         }
         Ok(())
     }
 
     fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
-        self.inner.merge_states(&place.remove_last_loc(), rhs)?;
+        self.inner
+            .merge_states(&place.remove_last_loc(), &rhs.remove_last_loc())?;
         let flag = self.get_flag(place) || self.get_flag(rhs);
         self.set_flag(place, flag);
         Ok(())

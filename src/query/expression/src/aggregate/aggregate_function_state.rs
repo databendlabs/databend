@@ -181,6 +181,13 @@ impl AggrStateLoc {
             AggrStateLoc::Custom(_, offset) => *offset,
         }
     }
+
+    pub fn index(&self) -> usize {
+        match self {
+            AggrStateLoc::Bool(idx, _) => *idx,
+            AggrStateLoc::Custom(idx, _) => *idx,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -207,6 +214,17 @@ impl StatesLayout {
 
     pub fn num_states(&self) -> usize {
         self.loc.iter().flatten().count()
+    }
+
+    pub fn states_ranges(&self) -> Vec<std::ops::Range<usize>> {
+        let mut ranges = Vec::with_capacity(self.loc.len());
+        let mut acc = 0;
+        for n in self.loc.iter().map(|loc| loc.len()) {
+            let start = acc;
+            acc += n;
+            ranges.push(start..acc);
+        }
+        ranges
     }
 }
 
