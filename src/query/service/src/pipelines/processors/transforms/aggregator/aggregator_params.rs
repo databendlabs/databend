@@ -19,7 +19,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_functions::aggregates::get_state_layout;
+use databend_common_functions::aggregates::get_states_layout;
 use databend_common_functions::aggregates::AggregateFunctionRef;
 use databend_common_functions::aggregates::StatesLayout;
 use databend_common_sql::IndexType;
@@ -56,7 +56,7 @@ impl AggregatorParams {
         max_spill_io_requests: usize,
     ) -> Result<Arc<AggregatorParams>> {
         let states_layout = if !agg_funcs.is_empty() {
-            Some(get_state_layout(agg_funcs)?)
+            Some(get_states_layout(agg_funcs)?)
         } else {
             None
         };

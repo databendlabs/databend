@@ -116,7 +116,7 @@ impl From<StateAddr> for usize {
     }
 }
 
-pub fn get_state_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout> {
+pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout> {
     let mut register = AggrStateRegister::new();
     for func in funcs {
         func.register_state(&mut register);

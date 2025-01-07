@@ -25,7 +25,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 
-use super::get_state_layout;
+use super::get_states_layout;
 use super::AggrState;
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
@@ -117,7 +117,7 @@ struct EvalAggr {
 impl EvalAggr {
     fn new(func: AggregateFunctionRef) -> Self {
         let funcs = [func];
-        let state_layout = get_state_layout(&funcs).unwrap();
+        let state_layout = get_states_layout(&funcs).unwrap();
 
         let _arena = Bump::new();
         let place = _arena.alloc_layout(state_layout.layout);

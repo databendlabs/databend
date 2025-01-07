@@ -20,11 +20,11 @@ use std::io::Write;
 use bumpalo::Bump;
 use comfy_table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::get_states_layout;
 use databend_common_expression::type_check;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrState;
-use databend_common_expression::AggrStateLoc;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
@@ -192,22 +192,22 @@ pub fn simulate_two_groups_group_by(
 
     let func = factory.get(name, params, arguments)?;
     let data_type = func.return_type()?;
+    let states_layout = get_states_layout(&[func.clone()])?;
+    let loc = states_layout.loc[0].clone();
 
     let arena = Bump::new();
 
     // init state for two groups
-    let addr1 = arena.alloc_layout(func.state_layout()).into();
-    let state1 = AggrState::new(addr1, 0);
+    let addr1 = arena.alloc_layout(states_layout.layout).into();
+    let state1 = AggrState::with_loc(addr1, loc.clone());
     func.init_state(&state1);
-    let addr2 = arena.alloc_layout(func.state_layout()).into();
-    let state2 = AggrState::new(addr2, 0);
+    let addr2 = arena.alloc_layout(states_layout.layout).into();
+    let state2 = AggrState::with_loc(addr2, loc.clone());
     func.init_state(&state2);
 
     let places = (0..rows)
         .map(|i| if i % 2 == 0 { addr1 } else { addr2 })
         .collect::<Vec<_>>();
-
-    let loc = vec![AggrStateLoc::Custom(0, 0)].into_boxed_slice();
 
     func.accumulate_keys(&places, loc, columns.into(), rows)?;
 

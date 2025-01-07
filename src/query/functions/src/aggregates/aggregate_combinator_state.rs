@@ -20,6 +20,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegister;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -36,6 +37,7 @@ use crate::aggregates::AggregateFunctionRef;
 #[derive(Clone)]
 pub struct AggregateStateCombinator {
     name: String,
+    data_type: DataType,
     nested: AggregateFunctionRef,
 }
 
@@ -56,7 +58,25 @@ impl AggregateStateCombinator {
 
         let nested = AggregateFunctionFactory::instance().get(nested_name, params, arguments)?;
 
-        Ok(Arc::new(AggregateStateCombinator { name, nested }))
+        let mut register = AggrStateRegister::default();
+        nested.register_state(&mut register);
+
+        let sub_types = register
+            .states()
+            .iter()
+            .map(|typ| match typ {
+                AggrStateType::Bool => DataType::Boolean,
+                AggrStateType::Custom(_) => DataType::Binary,
+            })
+            .collect();
+
+        let data_type = DataType::Tuple(sub_types);
+
+        Ok(Arc::new(AggregateStateCombinator {
+            name,
+            data_type,
+            nested,
+        }))
     }
 
     pub fn combinator_desc() -> CombinatorDescription {
@@ -70,15 +90,11 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(DataType::Binary)
+        Ok(self.data_type.clone())
     }
 
     fn init_state(&self, place: &AggrState) {
         self.nested.init_state(place);
-    }
-
-    fn is_state(&self) -> bool {
-        true
     }
 
     fn state_layout(&self) -> Layout {
@@ -146,12 +162,21 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, _place: &AggrState, _builder: &mut ColumnBuilder) -> Result<()> {
-        todo!()
-        // let str_builder = builder.as_binary_mut().unwrap();
-        // self.serialize(place, &mut str_builder.data)?;
-        // str_builder.commit_row();
-        // Ok(())
+    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+        let builders = builder.as_tuple_mut().unwrap();
+
+        let loc = place
+            .loc()
+            .iter()
+            .enumerate()
+            .map(|(i, loc)| match loc {
+                AggrStateLoc::Bool(_, offset) => AggrStateLoc::Bool(i, *offset),
+                AggrStateLoc::Custom(_, offset) => AggrStateLoc::Custom(i, *offset),
+            })
+            .collect::<Vec<_>>()
+            .into_boxed_slice();
+        let place = AggrState::with_loc(place.addr, loc);
+        self.nested.serialize_builder(&place, builders)
     }
 
     fn need_manual_drop_state(&self) -> bool {

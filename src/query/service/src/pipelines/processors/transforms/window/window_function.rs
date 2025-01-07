@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
-use databend_common_expression::get_state_layout;
+use databend_common_expression::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::AggrState;
@@ -234,10 +234,10 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::Aggregate(agg, args) => {
                 let arena = Arena::new();
 
-                let state_layout = get_state_layout(&[agg.clone()])?;
+                let states_layout = get_states_layout(&[agg.clone()])?;
                 let place = AggrState::with_loc(
-                    arena.alloc_layout(state_layout.layout).into(),
-                    state_layout.loc[0].clone(),
+                    arena.alloc_layout(states_layout.layout).into(),
+                    states_layout.loc[0].clone(),
                 );
                 let agg = WindowFuncAggImpl {
                     _arena: arena,

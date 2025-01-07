@@ -36,10 +36,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn init_state(&self, place: &AggrState);
 
-    fn is_state(&self) -> bool {
-        false
-    }
-
     fn state_layout(&self) -> Layout;
 
     fn register_state(&self, register: &mut AggrStateRegister) {
@@ -256,6 +252,10 @@ impl AggrStateRegister {
 
     pub fn commit(&mut self) {
         self.offsets.push(self.states.len());
+    }
+
+    pub fn states(&self) -> &[AggrStateType] {
+        &self.states
     }
 }
 

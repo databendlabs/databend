@@ -1,9 +1,9 @@
 query T
-select length(max_state(number)), typeof(max_state(number)) from numbers(100);
+select length(max_state(number).1), typeof(max_state(number)) from numbers(100);
 ----
-10 BINARY
+9 TUPLE(BINARY, BOOLEAN)
 
 query I
-select length(sum_state(number)), typeof(max_state(number)) from numbers(10000);
+select length(sum_state(number).1), typeof(sum_state(number)) from numbers(10000);
 ----
-9 BINARY
+8 TUPLE(BINARY, BOOLEAN)
