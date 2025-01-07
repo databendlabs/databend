@@ -1833,6 +1833,16 @@ impl WarehouseApi for WarehouseMgr {
             ));
         }
 
+        if nodes.iter().any(|(name, _)| name.is_empty()) {
+            return Err(ErrorCode::BadArguments("Assign cluster name is empty."));
+        }
+
+        if nodes.iter().any(|(_, list)| list.is_empty()) {
+            return Err(ErrorCode::BadArguments(
+                "Assign cluster nodes list is empty.",
+            ));
+        }
+
         for _idx in 0..10 {
             let selected_nodes = self.pick_assign_warehouse_node(&warehouse, &nodes).await?;
 
@@ -1941,6 +1951,20 @@ impl WarehouseApi for WarehouseMgr {
             return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
         }
 
+        if nodes.is_empty() {
+            return Err(ErrorCode::BadArguments("Unassign list is empty."));
+        }
+
+        if nodes.iter().any(|(name, _)| name.is_empty()) {
+            return Err(ErrorCode::BadArguments("Unassign cluster name is empty."));
+        }
+
+        if nodes.iter().any(|(_, list)| list.is_empty()) {
+            return Err(ErrorCode::BadArguments(
+                "Unassign cluster nodes list is empty.",
+            ));
+        }
+
         for _idx in 0..10 {
             let mut nodes = nodes.clone();
             let mut drop_cluster_node_txn = TxnRequest::default();
@@ -2015,22 +2039,28 @@ impl WarehouseApi for WarehouseMgr {
                 ));
 
                 if let Some(v) = nodes.get_mut(&node_snapshot.node_info.cluster_id) {
-                    if let Some(remove_node) = v.pop() {
-                        let SelectedNode::Random(node_group) = remove_node;
-                        if node_snapshot.node_info.runtime_node_group == node_group {
-                            let node = node_snapshot.node_info.leave_warehouse();
+                    let runtime_node_group = node_snapshot.node_info.runtime_node_group.clone();
+                    if v.remove_first(&SelectedNode::Random(runtime_node_group))
+                        .is_some()
+                    {
+                        let node = node_snapshot.node_info.leave_warehouse();
 
-                            drop_cluster_node_txn
-                                .if_then
-                                .push(TxnOp::delete(cluster_node_key));
-                            drop_cluster_node_txn.if_then.push(TxnOp::put_with_ttl(
-                                node_key,
-                                serde_json::to_vec(&node)?,
-                                Some(self.lift_time * 4),
-                            ))
-                        }
+                        drop_cluster_node_txn
+                            .if_then
+                            .push(TxnOp::delete(cluster_node_key));
+                        drop_cluster_node_txn.if_then.push(TxnOp::put_with_ttl(
+                            node_key,
+                            serde_json::to_vec(&node)?,
+                            Some(self.lift_time * 4),
+                        ));
                     }
                 }
+            }
+
+            let txn_reply = self.metastore.transaction(drop_cluster_node_txn).await?;
+
+            if txn_reply.success {
+                return Ok(());
             }
         }
 
