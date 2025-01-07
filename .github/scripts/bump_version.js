@@ -1,4 +1,10 @@
 module.exports = async ({ github, context, core }) => {
+  const knownEvents = ["schedule", "workflow_dispatch", "release"];
+  if (!knownEvents.includes(context.eventName)) {
+    core.setFailed(`Triggerd by unknown event: ${context.eventName}`);
+    return;
+  }
+
   const { STABLE, TAG } = process.env;
   if (context.ref.startsWith("refs/tags/")) {
     let tag = context.ref.replace("refs/tags/", "");
