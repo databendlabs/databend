@@ -175,7 +175,7 @@ impl Payload {
             self.current_write_page += 1;
             if self.current_write_page > self.pages.len() {
                 let data = if zero_init {
-                    vec![0; self.row_per_page * self.tuple_size]
+                    vec![MaybeUninit::new(0); self.row_per_page * self.tuple_size]
                 } else {
                     Vec::with_capacity(self.row_per_page * self.tuple_size)
                 };
