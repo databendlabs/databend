@@ -19,7 +19,6 @@ use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MatchSeq;
 use databend_common_users::UserApiProvider;
 use log::warn;
 
@@ -44,7 +43,7 @@ impl Settings {
 
         UserApiProvider::instance()
             .setting_api(&self.tenant)
-            .try_drop_setting(key, MatchSeq::GE(1))
+            .try_drop_setting(key)
             .await
     }
 

@@ -3930,7 +3930,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-io",
  "databend-common-meta-app",
- "databend-common-meta-types",
  "databend-common-users",
  "itertools 0.13.0",
  "log",

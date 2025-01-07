@@ -10,35 +10,38 @@ module.exports = async ({ github, context, core }) => {
   const prType = m[1];
   // const prScope = m[2];
   // const prSummary = title.substring(m[0].length);
-  let label = "";
+  let labels = [];
   switch (prType) {
     case "rfc":
-      label = "pr-rfc";
+      labels.push("pr-rfc");
       break;
     case "feat":
-      label = "pr-feature";
+      labels.push("pr-feature");
       break;
     case "fix":
-      label = "pr-bugfix";
+      labels.push("pr-bugfix");
       break;
     case "refactor":
-      label = "pr-refactor";
+      labels.push("pr-refactor");
       break;
     case "ci":
-      label = "pr-build";
+      labels.push("pr-build");
       break;
     case "docs":
-      label = "pr-doc";
+      labels.push("pr-doc");
       break;
     case "chore":
-      label = "pr-chore";
+      labels.push("pr-chore");
       break;
+  }
+  if (context.payload.pull_request.base.ref.startsWith("backport/")) {
+    labels.push("pr-backport");
   }
   await github.rest.issues.addLabels({
     owner: context.repo.owner,
     repo: context.repo.repo,
     issue_number: context.issue.number,
-    labels: [label],
+    labels: labels,
   });
   core.setOutput("title", "semantic");
 };

@@ -33,6 +33,7 @@ use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -318,7 +319,7 @@ impl QueryContext {
 
     pub fn update_init_query_id(&self, id: String) {
         self.shared.spilled_files.write().clear();
-        self.shared.cluster_spill_file_nums.write().clear();
+        self.shared.cluster_spill_progress.write().clear();
         *self.shared.init_query_id.write() = id;
     }
 
@@ -363,11 +364,17 @@ impl QueryContext {
         &self,
         location: crate::spillers::Location,
         layout: crate::spillers::Layout,
+        data_size: usize,
     ) {
         if matches!(location, crate::spillers::Location::Remote(_)) {
             let current_id = self.get_cluster().local_id();
-            let mut w = self.shared.cluster_spill_file_nums.write();
-            w.entry(current_id).and_modify(|e| *e += 1).or_insert(1);
+            let mut w = self.shared.cluster_spill_progress.write();
+            let p = SpillProgress::new(1, data_size);
+            w.entry(current_id)
+                .and_modify(|stats| {
+                    stats.incr(&p);
+                })
+                .or_insert(p);
         }
         {
             let mut w = self.shared.spilled_files.write();
@@ -375,20 +382,29 @@ impl QueryContext {
         }
     }
 
-    pub fn set_cluster_spill_file_nums(&self, source_target: &str, num: usize) {
-        if num != 0 {
+    pub fn set_cluster_spill_progress(&self, source_target: &str, stats: SpillProgress) {
+        if stats.file_nums != 0 {
             let _ = self
                 .shared
-                .cluster_spill_file_nums
+                .cluster_spill_progress
                 .write()
-                .insert(source_target.to_string(), num);
+                .insert(source_target.to_string(), stats);
         }
     }
 
-    pub fn get_spill_file_nums(&self, node_id: Option<String>) -> usize {
-        let r = self.shared.cluster_spill_file_nums.read();
+    pub fn get_spill_file_stats(&self, node_id: Option<String>) -> SpillProgress {
+        let r = self.shared.cluster_spill_progress.read();
         let node_id = node_id.unwrap_or(self.get_cluster().local_id());
-        r.get(&node_id).cloned().unwrap_or(0)
+        r.get(&node_id).cloned().unwrap_or(SpillProgress::default())
+    }
+
+    pub fn get_total_spill_progress(&self) -> SpillProgress {
+        let r = self.shared.cluster_spill_progress.read();
+        let mut total = SpillProgress::default();
+        for (_, stats) in r.iter() {
+            total.incr(stats);
+        }
+        total
     }
 
     pub fn get_spill_layout(

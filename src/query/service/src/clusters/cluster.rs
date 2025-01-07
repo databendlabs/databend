@@ -364,10 +364,10 @@ impl ClusterDiscovery {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("expect time");
 
-        let nanos = system_timestamp.as_nanos();
-        let cluster_idx = (nanos % warehouse_clusters_nodes_index.len() as u128) as usize;
+        let millis = system_timestamp.as_millis();
+        let cluster_idx = (millis % warehouse_clusters_nodes_index.len() as u128) as usize;
         let pick_cluster_nodes = &warehouse_clusters_nodes[cluster_idx];
-        let nodes_idx = (nanos % pick_cluster_nodes.len() as u128) as usize;
+        let nodes_idx = (millis % pick_cluster_nodes.len() as u128) as usize;
         Ok(Some(pick_cluster_nodes[nodes_idx].clone()))
     }
 
