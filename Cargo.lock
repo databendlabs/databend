@@ -1530,7 +1530,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3ef8005764f53cd4dca619f5bf64cafd4664dada50ece25e4d81de54c80cc0b"
 dependencies = [
  "once_cell",
- "proc-macro-crate 3.1.0",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.95",
@@ -5157,20 +5157,18 @@ dependencies = [
  "databend-common-exception",
  "env_logger 0.11.5",
  "futures-util",
- "msql-srv",
  "mysql_async",
- "mysql_common 0.32.4",
  "rand",
  "recursive",
+ "redis",
  "regex",
  "reqwest",
  "serde",
  "serde_json",
  "sqllogictest",
- "sqlparser 0.50.0",
  "testcontainers",
+ "testcontainers-modules",
  "thiserror",
- "threadpool",
  "tokio",
  "url",
  "walkdir",
@@ -9733,18 +9731,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "msql-srv"
-version = "0.11.0"
-source = "git+https://github.com/databendlabs/msql-srv.git?rev=cd443dd#cd443dd062e2d64e029c82d7114ce5a6b324f73c"
-dependencies = [
- "byteorder",
- "chrono",
- "mysql_common 0.31.0",
- "nom",
- "rustls 0.23.18",
-]
-
-[[package]]
 name = "multer"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9788,24 +9774,6 @@ checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
 name = "mysql-common-derive"
-version = "0.30.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56b0d8a0db9bf6d2213e11f2c701cb91387b0614361625ab7b9743b41aa4938f"
-dependencies = [
- "darling",
- "heck 0.4.1",
- "num-bigint",
- "proc-macro-crate 1.3.1",
- "proc-macro-error 1.0.4",
- "proc-macro2",
- "quote",
- "syn 2.0.95",
- "termcolor",
- "thiserror",
-]
-
-[[package]]
-name = "mysql-common-derive"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afe0450cc9344afff34915f8328600ab5ae19260802a334d0f72d2d5bdda3bfe"
@@ -9813,7 +9781,7 @@ dependencies = [
  "darling",
  "heck 0.4.1",
  "num-bigint",
- "proc-macro-crate 3.1.0",
+ "proc-macro-crate",
  "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
@@ -9836,7 +9804,7 @@ dependencies = [
  "futures-util",
  "keyed_priority_queue",
  "lru",
- "mysql_common 0.32.4",
+ "mysql_common",
  "native-tls",
  "pem",
  "percent-encoding",
@@ -9851,46 +9819,6 @@ dependencies = [
  "tokio-util",
  "twox-hash",
  "url",
-]
-
-[[package]]
-name = "mysql_common"
-version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06f19e4cfa0ab5a76b627cec2d81331c49b034988eaf302c3bafeada684eadef"
-dependencies = [
- "base64 0.21.7",
- "bigdecimal",
- "bindgen",
- "bitflags 2.6.0",
- "bitvec",
- "btoi",
- "byteorder",
- "bytes",
- "cc",
- "chrono",
- "cmake",
- "crc32fast",
- "flate2",
- "frunk",
- "lazy_static",
- "mysql-common-derive 0.30.2",
- "num-bigint",
- "num-traits",
- "rand",
- "regex",
- "rust_decimal",
- "saturating",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "smallvec",
- "subprocess",
- "thiserror",
- "time",
- "uuid",
- "zstd 0.12.4",
 ]
 
 [[package]]
@@ -9914,7 +9842,7 @@ dependencies = [
  "flate2",
  "frunk",
  "lazy_static",
- "mysql-common-derive 0.31.1",
+ "mysql-common-derive",
  "num-bigint",
  "num-traits",
  "rand",
@@ -10227,7 +10155,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 3.1.0",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.95",
@@ -10442,7 +10370,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "chrono",
- "mysql_common 0.32.4",
+ "mysql_common",
  "nom",
  "pin-project-lite",
  "tokio",
@@ -11119,7 +11047,7 @@ version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a62fea1692d80a000126f9b28d865012a160b80000abb53ccf152b428222c155"
 dependencies = [
- "proc-macro-crate 3.1.0",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.95",
@@ -11257,16 +11185,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "353e1ca18966c16d9deb1c69278edbc5f194139612772bd9537af60ac231e1e6"
 dependencies = [
  "elliptic-curve",
-]
-
-[[package]]
-name = "proc-macro-crate"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
-dependencies = [
- "once_cell",
- "toml_edit 0.19.15",
 ]
 
 [[package]]
@@ -13442,15 +13360,6 @@ dependencies = [
 
 [[package]]
 name = "sqlparser"
-version = "0.50.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2e5b515a2bd5168426033e9efbfd05500114833916f1d5c268f938b4ee130ac"
-dependencies = [
- "log",
-]
-
-[[package]]
-name = "sqlparser"
 version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fe11944a61da0da3f592e19a45ebe5ab92dc14a779907ff1f08fbb797bfefc7"
@@ -14300,6 +14209,15 @@ dependencies = [
  "tokio-tar",
  "tokio-util",
  "url",
+]
+
+[[package]]
+name = "testcontainers-modules"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b4a531f812dedf1f0d844e69884d76fd7dd9b1967abc89550c6d270b2b55b9c"
+dependencies = [
+ "testcontainers",
 ]
 
 [[package]]

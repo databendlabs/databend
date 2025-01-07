@@ -20,11 +20,10 @@ use std::time::Instant;
 use bollard::Docker;
 use clap::Parser;
 use client::TTCClient;
-use databend_sqllogictests::mock_source::run_mysql_source;
-use databend_sqllogictests::mock_source::run_redis_source;
 use futures_util::stream;
 use futures_util::StreamExt;
 use rand::Rng;
+use redis::Commands;
 use sqllogictest::default_column_validator;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
@@ -33,8 +32,15 @@ use sqllogictest::DefaultColumnType;
 use sqllogictest::Record;
 use sqllogictest::Runner;
 use sqllogictest::TestError;
+use testcontainers::core::IntoContainerPort;
+use testcontainers::core::WaitFor;
+use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers::GenericImage;
+use testcontainers::ImageExt;
+use testcontainers_modules::mysql::Mysql;
+use testcontainers_modules::redis::Redis;
+use testcontainers_modules::redis::REDIS_PORT;
 
 use crate::arg::SqlLogicTestArgs;
 use crate::client::Client;
@@ -102,8 +108,11 @@ impl sqllogictest::AsyncDB for Databend {
 pub async fn main() -> Result<()> {
     env_logger::init();
 
+    let docker = Docker::connect_with_local_defaults().unwrap();
+
     // Run mock sources for dictionary test.
-    run_mock_sources();
+    let _mock_redis = run_redis_mock_sources(&docker).await?;
+    let _mock_mysql = run_mysql_mock_sources(&docker).await?;
     println!(
         "Run sqllogictests with args: {}",
         std::env::args().skip(1).collect::<Vec<String>>().join(" ")
@@ -123,7 +132,7 @@ pub async fn main() -> Result<()> {
                 run_http_client().await?;
             }
             HANDLER_HYBRID => {
-                run_hybrid_client(&mut containers).await?;
+                run_hybrid_client(&docker, &mut containers).await?;
             }
             _ => {
                 return Err(format!("Unknown test handler: {handler}").into());
@@ -134,15 +143,71 @@ pub async fn main() -> Result<()> {
     Ok(())
 }
 
-fn run_mock_sources() {
-    // Run a mock Redis server.
-    databend_common_base::runtime::spawn(async move {
-        run_redis_source().await;
-    });
-    // Run a mock MySQL server.
-    databend_common_base::runtime::Thread::spawn(move || {
-        run_mysql_source();
-    });
+async fn run_redis_mock_sources(docker: &Docker) -> Result<ContainerAsync<Redis>> {
+    let container_name = "redis".to_string();
+
+    // Stop the container
+    let _ = docker.stop_container(&container_name, None).await;
+    let _ = docker.remove_container(&container_name, None).await;
+
+    let mock_redis = Redis::default()
+        .with_network("host")
+        .with_container_name(container_name)
+        .start()
+        .await
+        .unwrap();
+
+    let host_ip = mock_redis.get_host().await.unwrap();
+    let url = format!("redis://{}:{}", host_ip, REDIS_PORT);
+    let client = redis::Client::open(url.as_ref()).unwrap();
+    let mut con = client.get_connection().unwrap();
+
+    // Add some key values for test.
+    let keys = vec!["a", "b", "c", "1", "2"];
+    for key in keys {
+        let val = format!("{}_value", key);
+        con.set::<_, _, ()>(key, val).unwrap();
+    }
+
+    Ok(mock_redis)
+}
+
+async fn run_mysql_mock_sources(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
+    let container_name = "mysqld".to_string();
+
+    // Stop the container
+    let _ = docker.stop_container(&container_name, None).await;
+    let _ = docker.remove_container(&container_name, None).await;
+
+    // Add a table for test.
+    // CREATE TABLE test.user(
+    //   id INT,
+    //   name VARCHAR(100),
+    //   age SMALLINT UNSIGNED,
+    //   salary DOUBLE,
+    //   active BOOL
+    // );
+    //
+    // +------+-------+------+---------+--------+
+    // | id   | name  | age  | salary  | active |
+    // +------+-------+------+---------+--------+
+    // |    1 | Alice |   24 |     100 |      1 |
+    // |    2 | Bob   |   35 |   200.1 |      0 |
+    // |    3 | Lily  |   41 |  1000.2 |      1 |
+    // |    4 | Tom   |   55 | 3000.55 |      0 |
+    // |    5 | NULL  | NULL |    NULL |   NULL |
+    // +------+-------+------+---------+--------+
+    let mock_mysqld = Mysql::default()
+        .with_init_sql(
+"CREATE TABLE test.user(id INT, name VARCHAR(100), age SMALLINT UNSIGNED, salary DOUBLE, active BOOL); INSERT INTO test.user VALUES(1, 'Alice', 24, 100, true), (2, 'Bob', 35, 200.1, false), (3, 'Lily', 41, 1000.2, true), (4, 'Tom', 55, 3000.55, false), (5, NULL, NULL, NULL, NULL);"
+        .to_string()
+        .into_bytes(),
+)
+        .with_network("host")
+        .with_container_name(container_name)
+        .start().await.unwrap();
+
+    Ok(mock_mysqld)
 }
 
 async fn run_mysql_client() -> Result<()> {
@@ -167,7 +232,10 @@ async fn run_http_client() -> Result<()> {
     Ok(())
 }
 
-async fn run_hybrid_client(cs: &mut Vec<ContainerAsync<GenericImage>>) -> Result<()> {
+async fn run_hybrid_client(
+    docker: &Docker,
+    cs: &mut Vec<ContainerAsync<GenericImage>>,
+) -> Result<()> {
     println!(
         "Hybird client starts to run with: {:?}",
         SqlLogicTestArgs::parse()
@@ -178,18 +246,10 @@ async fn run_hybrid_client(cs: &mut Vec<ContainerAsync<GenericImage>>) -> Result
     // preparse docker envs
     let mut port_start = TTC_PORT_START;
 
-    let docker = Docker::connect_with_local_defaults().unwrap();
-
     for (c, _) in HYBRID_CONFIGS.iter() {
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
             ClientType::Ttc(image, _) => {
-                use testcontainers::core::IntoContainerPort;
-                use testcontainers::core::WaitFor;
-                use testcontainers::runners::AsyncRunner;
-                use testcontainers::GenericImage;
-                use testcontainers::ImageExt;
-
                 let mut images = image.split(":");
                 let image = images.next().unwrap();
                 let tag = images.next().unwrap_or("latest");
