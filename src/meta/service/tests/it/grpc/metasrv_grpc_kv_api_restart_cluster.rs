@@ -24,6 +24,7 @@ use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::UpsertKV;
 use log::info;
 use test_harness::test;
+use tokio::time::sleep;
 
 use crate::testing::meta_service_test_harness;
 use crate::tests::service::start_metasrv_cluster;
@@ -85,6 +86,9 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
         }
         stopped_tcs
     };
+
+    // Sleep to make sure the previous nodes are completely stopped.
+    sleep(Duration::from_secs(1)).await;
 
     info!("--- restart the cluster");
     let tcs = {
