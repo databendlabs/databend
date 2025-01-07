@@ -3,6 +3,7 @@ module.exports = async ({ github, context, core }) => {
   if (context.ref.startsWith("refs/tags/")) {
     let tag = context.ref.replace("refs/tags/", "");
     core.setOutput("tag", tag);
+    core.setOutput("sha", context.sha);
     core.info(`Tag event triggered by ${tag}.`);
     return;
   }
