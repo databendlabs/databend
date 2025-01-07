@@ -70,7 +70,6 @@ jobs:
     needs:
       - changes
       - linux
-      - linux_hive
     steps:
       - name: Check Ready to Merge
         uses: actions/github-script@v7
