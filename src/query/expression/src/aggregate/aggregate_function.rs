@@ -181,7 +181,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
 #[derive(Debug)]
 pub struct AggrState {
-    addr: StateAddr,
+    pub addr: StateAddr,
     loc: Box<[AggrStateLoc]>,
 }
 
@@ -222,6 +222,18 @@ impl AggrState {
             self.addr,
             vec![AggrStateLoc::Custom(index, old + offset)].into_boxed_slice(),
         )
+    }
+
+    pub fn loc(&self) -> &[AggrStateLoc] {
+        &self.loc
+    }
+
+    pub fn remove_last_loc(&self) -> Self {
+        assert!(self.loc.len() >= 2);
+        Self {
+            addr: self.addr,
+            loc: self.loc[..self.loc.len() - 1].to_vec().into_boxed_slice(),
+        }
     }
 }
 
