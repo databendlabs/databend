@@ -221,7 +221,7 @@ impl AggregatingIndexChecker {
             params: _,
             args: _,
             window,
-            lambda,
+            lambda: _,
         } = func;
 
         let name = name.name.to_lowercase();
@@ -229,7 +229,7 @@ impl AggregatingIndexChecker {
         if AggregateFunctionFactory::instance().contains(func_name) {
             self.has_agg_function = true;
             // is agg func but not support now.
-            if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&func_name) || window.is_some() || lambda.is_some() {
+            if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&func_name) || window.is_some() {
                 self.not_support = true;
             }
         } else if let Some(func_property) = BUILTIN_FUNCTIONS.get_property(func_name) {
