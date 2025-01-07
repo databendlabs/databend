@@ -150,6 +150,9 @@ data_path = "./.databend/stateless_test_data"
 # use "disk" to enabled disk cache
 data_cache_storage = "none"
 
+
+table_meta_snapshot_count = 1
+
 [cache.disk]
 # cache path
 path = "./.databend/_cache"

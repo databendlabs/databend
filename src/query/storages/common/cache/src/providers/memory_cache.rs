@@ -27,6 +27,20 @@ pub struct InMemoryLruCache<V: Into<CacheValue<V>>> {
     inner: Arc<RwLock<LruCache<String, CacheValue<V>>>>,
 }
 
+impl<V: Into<CacheValue<V>>> InMemoryLruCache<V> {
+    pub fn set_bytes_capacity(&self, capacity: usize) {
+        let mut cache = self.inner.write();
+        // TODO no as please
+        cache.set_bytes_capacity(capacity as u64);
+    }
+
+    pub fn set_items_capacity(&self, capacity: usize) {
+        let mut cache = self.inner.write();
+        // TODO no as please
+        cache.set_items_capacity(capacity as u64);
+    }
+}
+
 impl<V: Into<CacheValue<V>>> Clone for InMemoryLruCache<V> {
     fn clone(&self) -> Self {
         Self {
@@ -84,10 +98,12 @@ mod impls {
             let mut guard = self.inner.write();
             match guard.get(k.as_ref()) {
                 None => {
+                    // TODO move these out lock
                     metrics_inc_cache_miss_count(1, &self.name);
                     None
                 }
                 Some(cached_value) => {
+                    // TODO move these out of lock
                     metrics_inc_cache_hit_count(1, &self.name);
                     Some(cached_value.get_inner())
                 }
