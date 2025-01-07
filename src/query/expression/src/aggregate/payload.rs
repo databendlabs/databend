@@ -167,15 +167,20 @@ impl Payload {
     }
 
     #[inline]
-    pub fn writable_page(&mut self) -> &mut Page {
+    pub fn writable_page(&mut self, zero_init: bool) -> &mut Page {
         if self.current_write_page == 0
             || self.pages[self.current_write_page - 1].rows
                 == self.pages[self.current_write_page - 1].capacity
         {
             self.current_write_page += 1;
             if self.current_write_page > self.pages.len() {
+                let data = if zero_init {
+                    vec![0; self.row_per_page * self.tuple_size]
+                } else {
+                    Vec::with_capacity(self.row_per_page * self.tuple_size)
+                };
                 self.pages.push(Page {
-                    data: Vec::with_capacity(self.row_per_page * self.tuple_size),
+                    data,
                     rows: 0,
                     capacity: self.row_per_page,
                 });
@@ -198,13 +203,13 @@ impl Payload {
         group_columns: InputColumns,
     ) {
         let tuple_size = self.tuple_size;
-        let mut page = self.writable_page();
+        let mut page = self.writable_page(true);
         for idx in select_vector.iter().take(new_group_rows).copied() {
             address[idx] = unsafe { page.data.as_ptr().add(page.rows * tuple_size) as *const u8 };
             page.rows += 1;
 
             if page.rows == page.capacity {
-                page = self.writable_page();
+                page = self.writable_page(true);
             }
         }
 
@@ -327,7 +332,7 @@ impl Payload {
         address: &[*const u8],
     ) {
         let tuple_size = self.tuple_size;
-        let mut page = self.writable_page();
+        let mut page = self.writable_page(false);
         for i in 0..row_count {
             let index = select_vector[i];
 
@@ -341,7 +346,7 @@ impl Payload {
             page.rows += 1;
 
             if page.rows == page.capacity {
-                page = self.writable_page();
+                page = self.writable_page(false);
             }
         }
 
