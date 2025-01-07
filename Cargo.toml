@@ -85,6 +85,7 @@ members = [
     "src/query/ee_features/storage_quota",
     "src/query/ee_features/inverted_index",
     "src/query/ee_features/virtual_column",
+    "src/query/ee_features/resources_management",
     "src/query/service",
     "src/query/ee",
     "src/meta/api",
@@ -185,6 +186,7 @@ databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
 databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }
 databend-enterprise-meta = { path = "src/meta/ee" }
 databend-enterprise-query = { path = "src/query/ee" }
+databend-enterprise-resources-management = { path = "src/query/ee_features/resources_management" }
 databend-enterprise-storage-encryption = { path = "src/query/ee_features/storage_encryption" }
 databend-enterprise-storage-quota = { path = "src/query/ee_features/storage_quota" }
 databend-enterprise-stream-handler = { path = "src/query/ee_features/stream_handler" }
@@ -236,9 +238,6 @@ async-compression = { git = "https://github.com/datafuse-extras/async-compressio
 async-recursion = "1.1.1"
 async-stream = "0.3.3"
 async-trait = { version = "0.1.77" }
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1.17.0"
-aws-smithy-runtime = { version = "1.6.2", default-features = false }
 backoff = "0.4" # FIXME: use backon to replace this.
 backon = "1"
 backtrace = "0.3.73"

@@ -147,17 +147,21 @@ impl Spiller {
 
     /// Spill some [`DataBlock`] to storage. These blocks will be concat into one.
     pub async fn spill(&self, data_block: Vec<DataBlock>) -> Result<Location> {
-        let (location, layout) = self.spill_unmanage(data_block).await?;
+        let (location, layout, data_size) = self.spill_unmanage(data_block).await?;
 
         // Record columns layout for spilled data.
-        self.ctx.add_spill_file(location.clone(), layout.clone());
+        self.ctx
+            .add_spill_file(location.clone(), layout.clone(), data_size);
         self.private_spilled_files
             .write()
             .insert(location.clone(), layout);
         Ok(location)
     }
 
-    async fn spill_unmanage(&self, data_block: Vec<DataBlock>) -> Result<(Location, Layout)> {
+    async fn spill_unmanage(
+        &self,
+        data_block: Vec<DataBlock>,
+    ) -> Result<(Location, Layout, usize)> {
         debug_assert!(!data_block.is_empty());
         let instant = Instant::now();
 
@@ -176,7 +180,7 @@ impl Spiller {
         // Record statistics.
         record_write_profile(&location, &instant, data_size);
         let layout = columns_layout.pop().unwrap();
-        Ok((location, layout))
+        Ok((location, layout, data_size))
     }
 
     pub fn create_unique_location(&self) -> String {
@@ -205,8 +209,11 @@ impl Spiller {
         }
 
         writer.close().await?;
-        self.ctx
-            .add_spill_file(Location::Remote(location.clone()), Layout::Aggregate);
+        self.ctx.add_spill_file(
+            Location::Remote(location.clone()),
+            Layout::Aggregate,
+            write_bytes,
+        );
 
         self.private_spilled_files
             .write()
@@ -289,7 +296,8 @@ impl Spiller {
         // Record statistics.
         record_write_profile(&location, &instant, write_bytes);
 
-        self.ctx.add_spill_file(location.clone(), layout.clone());
+        self.ctx
+            .add_spill_file(location.clone(), layout.clone(), write_bytes);
         self.private_spilled_files
             .write()
             .insert(location.clone(), layout);

@@ -154,7 +154,7 @@ impl TempFilesTable {
         let location_prefix = format!("_query_spill/{}/", tenant.tenant_name());
         let limit = push_downs.as_ref().and_then(|x| x.limit);
 
-        let operator = DataOperator::instance().operator();
+        let operator = DataOperator::instance().spill_operator();
         let lister = operator.lister_with(&location_prefix).recursive(true);
 
         let stream = {

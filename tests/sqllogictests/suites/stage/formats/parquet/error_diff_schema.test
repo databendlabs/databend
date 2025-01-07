@@ -1,2 +1,11 @@
 query error diff schema
 select $1 from @data/parquet/ (files=>('tuple.parquet', 'complex.parquet'))
+
+statement ok
+create or replace table t1 (id int, t TUPLE(A INT32, B STRING));
+
+query error diff schema
+copy into t1 from @data/parquet/ files=('tuple.parquet', 'complex.parquet')
+
+query error diff schema
+copy /*+ set_var(parquet_fast_read_bytes=0) */ into t1 from @data/parquet/ files=('tuple.parquet', 'complex.parquet')

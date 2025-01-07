@@ -119,14 +119,18 @@ query T
 explain select count(), max(number) + 3, min(day) from t;
 ----
 EvalScalar
-├── output columns: [min(day) (#7), count() (#5), max(number) + 3 (#8)]
+├── output columns: [count() (#5), min(day) (#7), max(number) + 3 (#8)]
 ├── expressions: [max(number) (#6) + 3]
 ├── estimated rows: 1.00
 └── EvalScalar
-    ├── output columns: [max(number) (#6), min(day) (#7), count() (#5)]
-    ├── expressions: [1999, '2024-01-01', 3000]
+    ├── output columns: [count() (#5), max(number) (#6), min(day) (#7)]
+    ├── expressions: [1999, '2024-01-01']
     ├── estimated rows: 1.00
-    └── DummyTableScan
+    └── EvalScalar
+        ├── output columns: [count() (#5)]
+        ├── expressions: [3000]
+        ├── estimated rows: 1.00
+        └── DummyTableScan
 
 query T
 explain select  count(), max(number) + 4, sum_if(number + 4 , number > 3 ), min(day), max(ts), min(money), 8, min(ts), sum(money) from t;
@@ -167,14 +171,18 @@ query T
 explain select 5, count(), min(number), max(ts), min(money), 4 from t;
 ----
 EvalScalar
-├── output columns: [min(number) (#6), max(ts) (#7), min(money) (#8), count() (#5), 5 (#9), 4 (#10)]
+├── output columns: [count() (#5), min(number) (#6), max(ts) (#7), min(money) (#8), 5 (#9), 4 (#10)]
 ├── expressions: [5, 4]
 ├── estimated rows: 1.00
 └── EvalScalar
-    ├── output columns: [min(number) (#6), max(ts) (#7), min(money) (#8), count() (#5)]
-    ├── expressions: [0, '2024-01-01 00:33:19.000000', 0.00, 3000]
+    ├── output columns: [count() (#5), min(number) (#6), max(ts) (#7), min(money) (#8)]
+    ├── expressions: [0, '2024-01-01 00:33:19.000000', 0.00]
     ├── estimated rows: 1.00
-    └── DummyTableScan
+    └── EvalScalar
+        ├── output columns: [count() (#5)]
+        ├── expressions: [3000]
+        ├── estimated rows: 1.00
+        └── DummyTableScan
 
 query T
 ----

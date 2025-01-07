@@ -49,7 +49,7 @@ statement ok
 CREATE AGGREGATING INDEX idx2 AS SELECT b FROM t1 WHERE a < 10
 
 statement ok
-CREATE AGGREGATING INDEX idx3 AS SELECT * FROM t2
+CREATE AGGREGATING INDEX idx3 AS SELECT max(a), avg(b) FROM t2
 
 statement ok
 SHOW INDEXES
@@ -59,7 +59,7 @@ SELECT name, type, definition FROM system.indexes
 ----
 idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE b > 3 GROUP BY b
 idx2 AGGREGATING SELECT b FROM test_index_db.t1 WHERE a < 10
-idx3 AGGREGATING SELECT * FROM test_index_db.t2
+idx3 AGGREGATING SELECT COUNT(), COUNT(b), MAX(a), SUM(b) FROM test_index_db.t2
 
 statement ok
 DROP AGGREGATING INDEX idx2
@@ -68,7 +68,7 @@ query TTT
 SELECT name, type, definition FROM system.indexes
 ----
 idx1 AGGREGATING SELECT b, SUM(a) FROM test_index_db.t1 WHERE b > 3 GROUP BY b
-idx3 AGGREGATING SELECT * FROM test_index_db.t2
+idx3 AGGREGATING SELECT COUNT(), COUNT(b), MAX(a), SUM(b) FROM test_index_db.t2
 
 statement ok
 DROP AGGREGATING INDEX idx1

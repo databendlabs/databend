@@ -30,7 +30,6 @@ use databend_common_management::QuotaApi;
 use databend_common_management::QuotaMgr;
 use databend_common_management::RoleApi;
 use databend_common_management::RoleMgr;
-use databend_common_management::SettingApi;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
@@ -152,8 +151,8 @@ impl UserApiProvider {
         Arc::new(QuotaMgr::<WRITE_PB>::create(self.client.clone(), tenant))
     }
 
-    pub fn setting_api(&self, tenant: &Tenant) -> Arc<dyn SettingApi> {
-        Arc::new(SettingMgr::create(self.client.clone(), tenant))
+    pub fn setting_api(&self, tenant: &Tenant) -> SettingMgr {
+        SettingMgr::create(self.client.clone(), tenant)
     }
     pub fn procedure_api(&self, _tenant: &Tenant) -> ProcedureMgr {
         ProcedureMgr::create(self.client.clone())

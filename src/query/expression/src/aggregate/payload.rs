@@ -429,7 +429,6 @@ impl Drop for Payload {
                                 unsafe {
                                     let state_addr =
                                         read::<u64>(ptr.add(self.state_offset) as _) as usize;
-
                                     let state_place = StateAddr::new(state_addr);
                                     aggr.drop_state(state_place.next(*addr_offset));
                                 }

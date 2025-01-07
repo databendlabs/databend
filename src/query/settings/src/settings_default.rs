@@ -1151,19 +1151,12 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("premise_deploy_danger_amend_accept_invalid_cert", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Setting this to a non-zero value will allow `fuse_amend` to accept invalid TLS certificates. For diagnostic purposes only, Be very cautious before setting this to a non-zero value. If you're unsure, leave it unchanged.",
+                ("warehouse", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_string()),
+                    desc: "Please use the <use warehouse> statement to set the warehouse, this settings is only used to synchronize the warehouse status between the client and the server.",
                     mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
-                ("premise_deploy_amend_force_path_style", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Setting this to a non-zero value will let `fuse_amend` use path style uri while accessing s3-compatible storage service.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    scope: SettingScope::Session,
+                    range: None,
                 }),
             ]);
 
