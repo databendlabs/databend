@@ -26,6 +26,8 @@ use databend_common_meta_types::NodeType;
 
 #[async_trait::async_trait]
 pub trait ResourcesManagement: Sync + Send + 'static {
+    fn support_forward_warehouse_request(&self) -> bool;
+
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()>;
 
     async fn create_warehouse(&self, name: String, nodes: Vec<SelectedNode>) -> Result<()>;
@@ -77,6 +79,10 @@ pub struct DummyResourcesManagement;
 
 #[async_trait::async_trait]
 impl ResourcesManagement for DummyResourcesManagement {
+    fn support_forward_warehouse_request(&self) -> bool {
+        false
+    }
+
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
         node.cluster_id = config.query.cluster_id.clone();

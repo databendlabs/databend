@@ -412,14 +412,19 @@ impl Drop for Payload {
             if !self.state_move_out {
                 for (aggr, addr_offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
                     if aggr.need_manual_drop_state() {
-                        for page in self.pages.iter() {
+                        'PAGE_END: for page in self.pages.iter() {
                             for row in 0..page.rows {
+                                let ptr = self.data_ptr(page, row);
                                 unsafe {
-                                    let state_place = StateAddr::new(read::<u64>(
-                                        self.data_ptr(page, row).add(self.state_offset) as _,
-                                    )
-                                        as usize);
+                                    let state_addr =
+                                        read::<u64>(ptr.add(self.state_offset) as _) as usize;
 
+                                    // row is reserved, but not written (maybe throw by oom error)
+                                    if state_addr == 0 {
+                                        break 'PAGE_END;
+                                    }
+
+                                    let state_place = StateAddr::new(state_addr);
                                     aggr.drop_state(state_place.next(*addr_offset));
                                 }
                             }

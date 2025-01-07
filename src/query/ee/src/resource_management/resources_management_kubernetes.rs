@@ -32,6 +32,10 @@ impl KubernetesResourcesManagement {
 
 #[async_trait::async_trait]
 impl ResourcesManagement for KubernetesResourcesManagement {
+    fn support_forward_warehouse_request(&self) -> bool {
+        false
+    }
+
     async fn init_node(&self, _: &mut NodeInfo) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented kubernetes resources management",
