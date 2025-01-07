@@ -45,4 +45,5 @@ pub use fuse_statistic::FuseStatisticsFunc;
 pub use fuse_time_travel_size::FuseTimeTravelSize;
 pub use fuse_time_travel_size::FuseTimeTravelSizeFunc;
 pub use fuse_vacuum_temporary_table::FuseVacuumTemporaryTable;
+pub use set_cache_capacity::SetCacheCapacity;
 pub use table_args::*;
