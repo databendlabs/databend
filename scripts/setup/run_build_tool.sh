@@ -14,6 +14,7 @@ BYPASS_ENV_VARS="${BYPASS_ENV_VARS:-RUSTFLAGS,RUST_LOG}"
 ENABLE_SCCACHE="${ENABLE_SCCACHE:-false}"
 COMMAND=$1
 COMMAND_ARGS="$*"
+RUSTFLAGS="${RUSTFLAGS} -C link-arg=-fuse-ld=mold"
 
 TOOLCHAIN_VERSION=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
 
