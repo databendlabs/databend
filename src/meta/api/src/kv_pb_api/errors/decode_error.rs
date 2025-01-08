@@ -12,24 +12,64 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use databend_common_meta_types::InvalidReply;
 use databend_common_meta_types::MetaError;
 use databend_common_proto_conv::Incompatible;
 
 /// An error occurred when decoding protobuf encoded value.
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
-#[error("PbDecodeError: {0}")]
-pub enum PbDecodeError {
+pub struct PbDecodeError {
+    pub error: ErrorEnum,
+    pub context: String,
+}
+
+#[derive(Clone, Debug, PartialEq, thiserror::Error)]
+#[error("{0}")]
+pub enum ErrorEnum {
     DecodeError(#[from] prost::DecodeError),
     Incompatible(#[from] Incompatible),
 }
 
+impl fmt::Display for PbDecodeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PbDecodeError: {}", self.error)?;
+        if !self.context.is_empty() {
+            write!(f, "; when:({})", self.context)?;
+        }
+        Ok(())
+    }
+}
+
+impl From<prost::DecodeError> for PbDecodeError {
+    fn from(value: prost::DecodeError) -> Self {
+        PbDecodeError {
+            error: ErrorEnum::DecodeError(value),
+            context: "".to_string(),
+        }
+    }
+}
+
+impl From<Incompatible> for PbDecodeError {
+    fn from(value: Incompatible) -> Self {
+        PbDecodeError {
+            error: ErrorEnum::Incompatible(value),
+            context: "".to_string(),
+        }
+    }
+}
+
 impl From<PbDecodeError> for MetaError {
     fn from(value: PbDecodeError) -> Self {
-        match value {
-            PbDecodeError::DecodeError(e) => MetaError::from(InvalidReply::new("", &e)),
-            PbDecodeError::Incompatible(e) => MetaError::from(InvalidReply::new("", &e)),
-        }
+        MetaError::from(InvalidReply::new("", &value))
+    }
+}
+
+impl PbDecodeError {
+    pub fn with_context(mut self, context: impl Into<String>) -> Self {
+        self.context = context.into();
+        self
     }
 }
 
@@ -39,9 +79,15 @@ mod tests {
 
     #[test]
     fn test_error_message() {
-        let e = PbDecodeError::DecodeError(prost::DecodeError::new("decode error"));
+        let e = PbDecodeError::from(prost::DecodeError::new("decode error"));
         assert_eq!(
             "PbDecodeError: failed to decode Protobuf message: decode error",
+            e.to_string()
+        );
+
+        let e = PbDecodeError::from(prost::DecodeError::new("decode error")).with_context("ctx");
+        assert_eq!(
+            "PbDecodeError: failed to decode Protobuf message: decode error; when:(ctx)",
             e.to_string()
         );
     }

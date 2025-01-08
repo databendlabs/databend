@@ -36,9 +36,7 @@ impl FromToProto for mt::principal::OwnershipInfo {
         Ok(mt::principal::OwnershipInfo {
             role: p.role.clone(),
             object: mt::principal::OwnershipObject::from_pb(p.object.ok_or_else(|| {
-                Incompatible {
-                    reason: format!("ROLE {}: Object can not be None", &p.role),
-                }
+                Incompatible::new(format!("ROLE {}: Object can not be None", &p.role))
             })?)?,
         })
     }
@@ -63,9 +61,9 @@ impl FromToProto for mt::principal::OwnershipObject {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let Some(object) = p.object else {
-            return Err(Incompatible {
-                reason: "OwnershipObject cannot be None".to_string(),
-            });
+            return Err(Incompatible::new(
+                "OwnershipObject cannot be None".to_string(),
+            ));
         };
 
         match object {

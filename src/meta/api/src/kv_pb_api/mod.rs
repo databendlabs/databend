@@ -177,7 +177,11 @@ pub trait KVPbApi: KVApi {
                 .get_kv(&key)
                 .await
                 .map_err(PbApiReadError::KvApiError)?;
-            let v = raw_seqv.map(decode_seqv::<K::ValueType>).transpose()?;
+            let v = raw_seqv
+                .map(|seqv| {
+                    decode_seqv::<K::ValueType>(seqv, || format!("decode value of {}", key.clone()))
+                })
+                .transpose()?;
             Ok(v)
         }
     }
@@ -357,7 +361,9 @@ pub trait KVPbApi: KVApi {
                 let k = K::from_str_key(&item.key).map_err(PbApiReadError::KeyError)?;
 
                 let v = if let Some(pb_seqv) = item.value {
-                    let seqv = decode_seqv::<K::ValueType>(SeqV::from(pb_seqv))?;
+                    let seqv = decode_seqv::<K::ValueType>(SeqV::from(pb_seqv), || {
+                        format!("decode value of {}", k.to_string_key())
+                    })?;
                     Some(seqv)
                 } else {
                     None
@@ -513,6 +519,7 @@ mod tests {
     use databend_common_meta_app::schema::HiveCatalogOption;
     use databend_common_meta_app::storage::StorageS3Config;
     use databend_common_meta_app::tenant::Tenant;
+    use databend_common_meta_kvapi::kvapi::DirName;
     use databend_common_meta_kvapi::kvapi::KVApi;
     use databend_common_meta_kvapi::kvapi::KVStream;
     use databend_common_meta_kvapi::kvapi::UpsertKVReply;
@@ -569,8 +576,16 @@ mod tests {
             Ok(strm.boxed())
         }
 
-        async fn list_kv(&self, _prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
-            unimplemented!()
+        async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+            let items = self
+                .kvs
+                .iter()
+                .filter(|(k, _)| k.starts_with(prefix))
+                .map(|(k, v)| Ok(StreamItem::new(k.clone(), Some(v.clone().into()))))
+                .collect::<Vec<_>>();
+
+            let strm = futures::stream::iter(items);
+            Ok(strm.boxed())
         }
 
         async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {
@@ -620,7 +635,7 @@ mod tests {
             let got = strm.try_collect::<Vec<_>>().await;
             assert_eq!(
                 got.unwrap_err().to_string(),
-                r#"InvalidReply: StreamReadEOF: expected 3 items but only received 2 items; source: "#
+                r#"InvalidReply: StreamReadEOF: expected 3 items but only received 2 items; source:()"#
             );
         }
 
@@ -760,6 +775,43 @@ mod tests {
                 assert_eq!(i, value.seq());
             }
         }
+
+        Ok(())
+    }
+
+    /// A decoding error should include the key.
+    #[tokio::test]
+    async fn test_list_pb_values_report_error_with_key() -> anyhow::Result<()> {
+        let n = 3;
+        let mut kvs = vec![];
+        for i in 1..=n {
+            let key = s(format!("__fd_catalog_by_id/{}", i));
+            let value = SeqV::new(i, b"b".to_vec());
+            kvs.push((key, value));
+        }
+
+        let foo = FooKV {
+            early_return: None,
+            kvs: kvs.into_iter().collect(),
+        };
+
+        let tenant = Tenant::new_literal("dummy");
+
+        let dir = DirName::new(CatalogIdIdent::new(&tenant, 0));
+        let mut strm = foo.list_pb_values(&dir).await?;
+        let mut errors = vec![];
+        while let Some(r) = strm.next().await {
+            if let Err(e) = r {
+                errors.push(e.to_string());
+            }
+        }
+
+        let want = vec![
+            "InvalidReply: source:(PbDecodeError: failed to decode Protobuf message: invalid varint; when:(decode value of __fd_catalog_by_id/1))",
+            "InvalidReply: source:(PbDecodeError: failed to decode Protobuf message: invalid varint; when:(decode value of __fd_catalog_by_id/2))",
+            "InvalidReply: source:(PbDecodeError: failed to decode Protobuf message: invalid varint; when:(decode value of __fd_catalog_by_id/3))"];
+
+        assert_eq!(errors, want);
 
         Ok(())
     }
