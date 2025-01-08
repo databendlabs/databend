@@ -201,23 +201,24 @@ impl AggregateHashTable {
             let state_places = &state.state_places.as_slice()[0..row_count];
             let states_layout = self.payload.state_layout.as_ref().unwrap();
             if agg_states.is_empty() {
-                for ((aggr, params), loc) in self
+                for ((func, params), loc) in self
                     .payload
                     .aggrs
                     .iter()
                     .zip(params.iter())
                     .zip(states_layout.loc.iter().cloned())
                 {
-                    aggr.accumulate_keys(state_places, loc, *params, row_count)?;
+                    func.accumulate_keys(state_places, loc, *params, row_count)?;
                 }
             } else {
-                for (aggr, loc) in self
+                for ((func, state), loc) in self
                     .payload
                     .aggrs
                     .iter()
+                    .zip(agg_states.iter())
                     .zip(states_layout.loc.iter().cloned())
                 {
-                    aggr.batch_merge(state_places, loc, agg_states)?;
+                    func.batch_merge(state_places, loc, state.as_binary().unwrap())?;
                 }
             }
         }

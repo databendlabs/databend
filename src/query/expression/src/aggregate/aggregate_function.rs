@@ -21,7 +21,9 @@ use databend_common_exception::Result;
 
 use super::AggrStateLoc;
 use super::StateAddr;
+use crate::types::BinaryColumn;
 use crate::types::DataType;
+use crate::Column;
 use crate::ColumnBuilder;
 use crate::InputColumns;
 use crate::Scalar;
@@ -71,18 +73,6 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()>;
 
-    fn serialize_builder(&self, place: &AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        let idx = *place.loc[0].as_custom().unwrap().0;
-        let builder = builders[idx].as_binary_mut().unwrap();
-        let mut buffer = Vec::new();
-        self.serialize(place, &mut buffer)?;
-
-        builder.put(&buffer);
-        builder.commit_row();
-
-        Ok(())
-    }
-
     fn serialize_size_per_row(&self) -> Option<usize> {
         None
     }
@@ -94,21 +84,17 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         &self,
         places: &[StateAddr],
         loc: Box<[AggrStateLoc]>,
-        columns: InputColumns,
+        state: &BinaryColumn,
     ) -> Result<()> {
-        let idx = *loc[0].as_custom().unwrap().0;
-        let c = columns[idx].as_binary().unwrap();
-        for (place, mut data) in places.iter().zip(c.iter()) {
+        for (place, mut data) in places.iter().zip(state.iter()) {
             self.merge(&AggrState::with_loc(*place, loc.clone()), &mut data)?;
         }
 
         Ok(())
     }
 
-    fn batch_merge_single(&self, place: &AggrState, states: InputColumns) -> Result<()> {
-        let idx = *place.loc[0].as_custom().unwrap().0;
-        let c = states[idx].as_binary().unwrap();
-
+    fn batch_merge_single(&self, place: &AggrState, state: &Column) -> Result<()> {
+        let c = state.as_binary().unwrap();
         for mut data in c.iter() {
             self.merge(place, &mut data)?;
         }
@@ -143,7 +129,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         }
         Ok(())
     }
-    // TODO append the value into the column builder
+
     fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()>;
 
     // std::mem::needs_drop::<State>

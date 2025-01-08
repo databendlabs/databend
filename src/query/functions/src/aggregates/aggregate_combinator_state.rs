@@ -130,32 +130,13 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.accumulate_row(place, columns, row)
     }
 
-    fn serialize(&self, _: &AggrState, _: &mut Vec<u8>) -> Result<()> {
-        unreachable!()
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
+        self.nested.serialize(place, writer)
     }
 
     #[inline]
-    fn serialize_builder(&self, place: &AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        self.nested.serialize_builder(place, builders)
-    }
-
-    #[inline]
-    fn merge(&self, _: &AggrState, _: &mut &[u8]) -> Result<()> {
-        unreachable!()
-    }
-
-    #[inline]
-    fn batch_merge(
-        &self,
-        places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
-        columns: InputColumns,
-    ) -> Result<()> {
-        self.nested.batch_merge(places, loc.clone(), columns)
-    }
-
-    fn batch_merge_single(&self, place: &AggrState, states: InputColumns) -> Result<()> {
-        self.nested.batch_merge_single(place, states)
+    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
+        self.nested.merge(place, reader)
     }
 
     fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
@@ -163,20 +144,10 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let builders = builder.as_tuple_mut().unwrap();
-
-        let loc = place
-            .loc()
-            .iter()
-            .enumerate()
-            .map(|(i, loc)| match loc {
-                AggrStateLoc::Bool(_, offset) => AggrStateLoc::Bool(i, *offset),
-                AggrStateLoc::Custom(_, offset) => AggrStateLoc::Custom(i, *offset),
-            })
-            .collect::<Vec<_>>()
-            .into_boxed_slice();
-        let place = AggrState::with_loc(place.addr, loc);
-        self.nested.serialize_builder(&place, builders)
+        let builder = builder.as_binary_mut().unwrap();
+        self.nested.serialize(place, &mut builder.data)?;
+        builder.commit_row();
+        Ok(())
     }
 
     fn need_manual_drop_state(&self) -> bool {

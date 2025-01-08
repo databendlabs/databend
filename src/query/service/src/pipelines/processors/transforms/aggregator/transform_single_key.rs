@@ -24,6 +24,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggrState;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::InputColumns;
@@ -103,20 +104,21 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 
         if is_agg_index_block {
             // Aggregation states are in the back of the block.
-            let states_indices = (block.num_columns() - self.states_layout.num_states()
+            let states_indices = (block.num_columns() - self.states_layout.loc.len()
                 ..block.num_columns())
                 .collect::<Vec<_>>();
             let states = InputColumns::new_block_proxy(&states_indices, &block);
 
-            for (place, func) in self
+            for ((place, func), state) in self
                 .states_layout
                 .loc
                 .iter()
                 .cloned()
                 .map(|loc| AggrState::with_loc(self.addr, loc))
                 .zip(self.funcs.iter())
+                .zip(states.iter())
             {
-                func.batch_merge_single(&place, states)?;
+                func.batch_merge_single(&place, state)?;
             }
         } else {
             for ((place, columns), func) in self
@@ -146,7 +148,8 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
         let blocks = if generate_data {
             let mut builders = self.states_layout.serialize_builders(1);
 
-            self.funcs
+            for ((func, place), builder) in self
+                .funcs
                 .iter()
                 .zip(
                     self.states_layout
@@ -155,9 +158,16 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                         .cloned()
                         .map(|loc| AggrState::with_loc(self.addr, loc)),
                 )
-                .try_for_each(|(func, place)| func.serialize_builder(&place, &mut builders))?;
+                .zip(builders.iter_mut())
+            {
+                func.serialize(&place, &mut builder.data)?;
+                builder.commit_row();
+            }
 
-            let columns = builders.into_iter().map(|b| b.build()).collect();
+            let columns = builders
+                .into_iter()
+                .map(|b| Column::Binary(b.build()))
+                .collect();
             vec![DataBlock::new_from_columns(columns)]
         } else {
             vec![]
@@ -271,16 +281,16 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             .map(|f| Ok(ColumnBuilder::with_capacity(&f.return_type()?, 1)))
             .collect::<Result<Vec<_>>>()?;
 
-        let states_indices = (0..self.states_layout.num_states()).collect::<Vec<_>>();
-        for ((func, place), builder) in self
+        for (idx, ((func, place), builder)) in self
             .funcs
             .iter()
             .zip(main_places.iter())
             .zip(result_builders.iter_mut())
+            .enumerate()
         {
             for block in self.to_merge_data.iter() {
-                let states = InputColumns::new_block_proxy(&states_indices, block);
-                func.batch_merge_single(place, states)?;
+                let state = block.get_by_offset(idx).value.as_column().unwrap();
+                func.batch_merge_single(place, state)?;
             }
             func.merge_result(place, builder)?;
         }

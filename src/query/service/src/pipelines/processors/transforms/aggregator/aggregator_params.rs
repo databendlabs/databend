@@ -96,9 +96,6 @@ impl AggregatorParams {
     }
 
     pub fn num_states(&self) -> usize {
-        self.states_layout
-            .as_ref()
-            .map(|layout| layout.num_states())
-            .unwrap_or_default()
+        self.aggregate_functions.len()
     }
 }

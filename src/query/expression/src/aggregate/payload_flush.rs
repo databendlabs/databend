@@ -136,20 +136,27 @@ impl Payload {
 
         let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
         if let Some(state_layout) = self.states_layout.as_ref() {
-            let mut state_builders = state_layout.serialize_builders(row_count);
+            let mut builders = state_layout.serialize_builders(row_count);
 
             for place in state.state_places.as_slice()[0..row_count].iter() {
-                for (loc, func) in state_layout.loc.iter().zip(self.aggrs.iter()) {
+                for (idx, (loc, func)) in state_layout.loc.iter().zip(self.aggrs.iter()).enumerate()
+                {
                     {
-                        func.serialize_builder(
+                        let builder = &mut builders[idx];
+                        func.serialize(
                             &AggrState::with_loc(*place, loc.to_owned()),
-                            &mut state_builders,
+                            &mut builder.data,
                         )?;
+                        builder.commit_row();
                     }
                 }
             }
 
-            cols.extend(state_builders.into_iter().map(|builder| builder.build()));
+            cols.extend(
+                builders
+                    .into_iter()
+                    .map(|builder| Column::Binary(builder.build())),
+            );
         }
 
         cols.extend_from_slice(&state.take_group_columns());

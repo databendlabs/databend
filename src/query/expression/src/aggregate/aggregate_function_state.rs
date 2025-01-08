@@ -22,9 +22,6 @@ use super::AggrStateRegister;
 use super::AggrStateType;
 use super::AggregateFunctionRef;
 use crate::types::binary::BinaryColumnBuilder;
-use crate::types::ArgType;
-use crate::types::BooleanType;
-use crate::ColumnBuilder;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StateAddr {
@@ -118,9 +115,11 @@ impl From<StateAddr> for usize {
 
 pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout> {
     let mut register = AggrStateRegister::new();
+    let mut serialize_size = Vec::with_capacity(funcs.len());
     for func in funcs {
         func.register_state(&mut register);
         register.commit();
+        serialize_size.push(func.serialize_size_per_row());
     }
 
     let AggrStateRegister { states, offsets } = register;
@@ -132,7 +131,11 @@ pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout>
         .map(|w| locs[w[0]..w[1]].to_vec().into_boxed_slice())
         .collect::<Vec<_>>();
 
-    Ok(StatesLayout { layout, loc })
+    Ok(StatesLayout {
+        layout,
+        loc,
+        serialize_size,
+    })
 }
 
 fn sort_states(states: Vec<AggrStateType>) -> (Layout, Vec<AggrStateLoc>) {
@@ -194,37 +197,15 @@ impl AggrStateLoc {
 pub struct StatesLayout {
     pub layout: Layout,
     pub loc: Vec<Box<[AggrStateLoc]>>,
+    serialize_size: Vec<Option<usize>>,
 }
 
 impl StatesLayout {
-    pub fn serialize_builders(&self, num_rows: usize) -> Vec<ColumnBuilder> {
-        self.loc
+    pub fn serialize_builders(&self, num_rows: usize) -> Vec<BinaryColumnBuilder> {
+        self.serialize_size
             .iter()
-            .flatten()
-            .map(|loc| match loc {
-                AggrStateLoc::Bool(_, _) => {
-                    ColumnBuilder::Boolean(BooleanType::create_builder(num_rows, &[]))
-                }
-                AggrStateLoc::Custom(_, _) => {
-                    ColumnBuilder::Binary(BinaryColumnBuilder::with_capacity(num_rows, 0))
-                }
-            })
+            .map(|size| BinaryColumnBuilder::with_capacity(num_rows, num_rows * size.unwrap_or(0)))
             .collect()
-    }
-
-    pub fn num_states(&self) -> usize {
-        self.loc.iter().flatten().count()
-    }
-
-    pub fn states_ranges(&self) -> Vec<std::ops::Range<usize>> {
-        let mut ranges = Vec::with_capacity(self.loc.len());
-        let mut acc = 0;
-        for n in self.loc.iter().map(|loc| loc.len()) {
-            let start = acc;
-            acc += n;
-            ranges.push(start..acc);
-        }
-        ranges
     }
 }
 

@@ -24,7 +24,7 @@ use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
+use databend_common_io::prelude::BinaryWrite;
 
 use crate::aggregates::aggregate_function_factory::AggregateFunctionFeatures;
 use crate::aggregates::AggrState;
@@ -74,10 +74,6 @@ impl AggregateFunctionOrNullAdaptor {
 
 fn flag_offset(place: &AggrState) -> usize {
     *place.loc().last().unwrap().as_bool().unwrap().1
-}
-
-fn flag_idx(loc: &[AggrStateLoc]) -> usize {
-    *loc.last().unwrap().as_bool().unwrap().0
 }
 
 impl AggregateFunction for AggregateFunctionOrNullAdaptor {
@@ -194,63 +190,17 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn serialize(&self, _: &AggrState, _: &mut Vec<u8>) -> Result<()> {
-        unreachable!()
+    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
+        self.inner.serialize(&place.remove_last_loc(), writer)?;
+        let flag = self.get_flag(place) as u8;
+        writer.write_scalar(&flag)
     }
 
     #[inline]
-    fn serialize_builder(&self, place: &AggrState, builders: &mut [ColumnBuilder]) -> Result<()> {
-        self.inner
-            .serialize_builder(&place.remove_last_loc(), builders)?;
-        let flag = self.get_flag(place);
-        builders[flag_idx(place.loc())].push(ScalarRef::Boolean(flag));
-        Ok(())
-    }
-
-    #[inline]
-    fn merge(&self, _: &AggrState, _: &mut &[u8]) -> Result<()> {
-        unreachable!()
-    }
-
-    #[inline]
-    fn batch_merge(
-        &self,
-        places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
-        columns: InputColumns,
-    ) -> Result<()> {
-        let col = columns
-            .iter()
-            .nth(flag_idx(&loc))
-            .unwrap()
-            .as_boolean()
-            .unwrap();
-
-        let inner_loc = loc[..loc.len() - 1].to_vec().into_boxed_slice();
-        for (addr, flag) in places.iter().zip(col.iter()) {
-            let place = AggrState::with_loc(*addr, loc.clone());
-            let flag = flag || self.get_flag(&place);
-            self.inner.batch_merge(places, inner_loc.clone(), columns)?;
-            self.set_flag(&place, flag);
-        }
-
-        Ok(())
-    }
-
-    fn batch_merge_single(&self, place: &AggrState, states: InputColumns) -> Result<()> {
-        let col = states
-            .iter()
-            .nth(flag_idx(place.loc()))
-            .unwrap()
-            .as_boolean()
-            .unwrap();
-
-        for flag in col.iter() {
-            let flag = flag || self.get_flag(place);
-            self.inner
-                .batch_merge_single(&place.remove_last_loc(), states)?;
-            self.set_flag(place, flag);
-        }
+    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
+        let flag = self.get_flag(place) || reader[reader.len() - 1] > 0;
+        self.inner.merge(place, &mut &reader[..reader.len() - 1])?;
+        self.set_flag(place, flag);
         Ok(())
     }
 
