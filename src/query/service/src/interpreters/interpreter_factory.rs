@@ -19,6 +19,7 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
+use databend_common_sql::plans::Mutation;
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
@@ -384,9 +385,15 @@ impl InterpreterFactory {
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::DataMutation { s_expr, schema, .. } => Ok(Arc::new(
-                MutationInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
-            )),
+            Plan::DataMutation { s_expr, schema, .. } => {
+                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                Ok(Arc::new(MutationInterpreter::try_create(
+                    ctx,
+                    *s_expr.clone(),
+                    schema.clone(),
+                    mutation.metadata.clone(),
+                )?))
+            }
 
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
