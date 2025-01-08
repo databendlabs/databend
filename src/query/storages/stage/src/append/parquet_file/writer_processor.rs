@@ -71,7 +71,7 @@ pub struct ParquetFileWriter {
 const MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
 // this is number of rows, not size
 const MAX_ROW_GROUP_SIZE: usize = 1024 * 1024;
-const VERSION_LEN: usize = 15; // "1.2.333-nightly".len();
+const CREATE_BY_LEN: usize = 24; // "Databend 1.2.333-nightly".len();
 
 fn create_writer(
     arrow_schema: Arc<Schema>,
@@ -87,8 +87,8 @@ fn create_writer(
         DATABEND_SEMVER.pre.as_str()
     );
 
-    if create_by.len() != VERSION_LEN {
-        create_by = format!("{:.<15}", create_by);
+    if create_by.len() != CREATE_BY_LEN {
+        create_by = format!("{:.<24}", create_by);
     }
 
     let props = WriterProperties::builder()
