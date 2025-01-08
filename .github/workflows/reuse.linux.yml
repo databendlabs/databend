@@ -65,7 +65,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build
+          name: sccache-build
           path: target/sccache.log
 
   build_udf:
@@ -100,7 +100,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build
+          name: sccache-build-udf
           path: target/sccache.log
 
   # build_address_sanitizer:
