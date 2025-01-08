@@ -19,6 +19,7 @@ databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-settings = { workspace = true }
+databend-functions-scalar-datetime = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 

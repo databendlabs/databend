@@ -29,7 +29,6 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
@@ -53,6 +52,7 @@ use databend_common_io::parse_bytes_to_ewkb;
 use databend_common_io::Interval;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
+use databend_functions_scalar_datetime::datetime::int64_to_timestamp;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num_traits::NumCast;
@@ -276,7 +276,7 @@ impl SeparatedTextDecoder {
     }
 
     fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
-        let mut ts = if !data.contains(&b'-') {
+        let ts = if !data.contains(&b'-') {
             read_num_text_exact(data)?
         } else {
             let mut buffer_readr = Cursor::new(&data);
@@ -297,7 +297,7 @@ impl SeparatedTextDecoder {
                 _ => unreachable!(),
             }
         };
-        clamp_timestamp(&mut ts);
+        let ts = int64_to_timestamp(ts);
         column.push(ts);
         Ok(())
     }

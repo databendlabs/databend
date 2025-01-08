@@ -119,7 +119,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 /// Check if timestamp is within range, and return the timestamp in micros.
 #[inline]
-fn int64_to_timestamp(mut n: i64) -> i64 {
+pub fn int64_to_timestamp(mut n: i64) -> i64 {
     if -31536000000 < n && n < 31536000000 {
         n * MICROS_PER_SEC
     } else if -31536000000000 < n && n < 31536000000000 {
