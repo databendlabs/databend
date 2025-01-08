@@ -1,0 +1,32 @@
+name: "Setup For GNU Test"
+description: "Setup For GNU Test"
+runs:
+  using: "composite"
+  steps:
+    - name: Get target
+      id: target
+      shell: bash
+      run: |
+        arch=$(uname -m)
+        target="${arch}-unknown-linux-gnu"
+        echo "target=${target}" >> $GITHUB_OUTPUT
+
+    - uses: ./.github/actions/setup_bendsql
+
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ steps.target.outputs.target }}
+        category: full
+
+    - name: Setup python env
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Setup java env
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "11"
