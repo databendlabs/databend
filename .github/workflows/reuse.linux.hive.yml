@@ -40,6 +40,12 @@ jobs:
           features: storage-hdfs
           category: hdfs
           artifacts: meta,query
+      - name: upload sccache log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: target/sccache.log
 
   test_stateful_hive_standalone:
     needs: build

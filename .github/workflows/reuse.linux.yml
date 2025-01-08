@@ -61,6 +61,12 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
           artifacts: all
+      - name: upload sccache log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: target/sccache.log
 
   build_udf:
     runs-on:
@@ -90,6 +96,12 @@ jobs:
           features: python-udf
           category: udf
           artifacts: query
+      - name: upload sccache log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build
+          path: target/sccache.log
 
   # build_address_sanitizer:
   #   runs-on:
