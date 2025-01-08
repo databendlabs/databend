@@ -1,5 +1,14 @@
 name: "Setup For GNU Test"
 description: "Setup For GNU Test"
+inputs:
+  path:
+    description: "default to ./target/${BUILD_PROFILE}/"
+    required: false
+    default: ""
+  artifacts:
+    description: "Artifacts to download, only works with s3/gcs"
+    required: false
+    default: "meta,query"
 runs:
   using: "composite"
   steps:
@@ -19,6 +28,8 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ steps.target.outputs.target }}
         category: full
+        artifacts: ${{ inputs.artifacts }}
+        path: ${{ inputs.path }}
 
     - name: Setup python env
       uses: actions/setup-python@v5

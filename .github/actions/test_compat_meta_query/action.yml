@@ -8,11 +8,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
+    - uses: ./.github/actions/setup_test
       with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
         path: ./bins/current
         artifacts: sqllogictests,meta,query
 

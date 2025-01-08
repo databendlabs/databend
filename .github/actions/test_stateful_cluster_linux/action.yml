@@ -1,19 +1,11 @@
 name: "Test Stateful Cluster Linux"
 description: "Running stateful tests in cluster mode"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
+    - uses: ./.github/actions/setup_test
       with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
+        artifacts: sqllogictests,meta,query
 
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash

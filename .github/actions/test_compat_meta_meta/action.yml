@@ -1,18 +1,10 @@
 name: "Test protocol compatibility between databend-meta servers"
 description: "Download old binaries and current binaries, write some data and then read data"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
+    - uses: ./.github/actions/setup_test
       with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
         path: ./bins/current/bin
         artifacts: meta,metactl,metabench
 
