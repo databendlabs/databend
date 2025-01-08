@@ -12,8 +12,7 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Get target
-      id: target
+    - id: target
       shell: bash
       run: |
         arch=$(uname -m)
@@ -22,8 +21,7 @@ runs:
 
     - uses: ./.github/actions/setup_bendsql
 
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
+    - uses: ./.github/actions/artifact_download
       with:
         sha: ${{ github.sha }}
         target: ${{ steps.target.outputs.target }}
@@ -31,13 +29,16 @@ runs:
         artifacts: ${{ inputs.artifacts }}
         path: ${{ inputs.path }}
 
-    - name: Setup python env
-      uses: actions/setup-python@v5
+    - uses: actions/setup-python@v5
       with:
         python-version: "3.12"
 
-    - name: Setup java env
-      uses: actions/setup-java@v4
+    - uses: actions/setup-java@v4
       with:
         distribution: temurin
         java-version: "11"
+
+    - name: setup java env
+      shell: bash
+      run: |
+        echo "LD_LIBRARY_PATH=${{ env.JAVA_HOME }}/lib/server:${{ env.LD_LIBRARY_PATH }}" >> $GITHUB_ENV"
