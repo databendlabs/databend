@@ -1,4000 +1,1920 @@
 Filter
 ├── filters: [is_true(t.a (#0) >= 0)]
-├── estimated rows: 750.00
-├── output rows: 750
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 1)]
-├── estimated rows: 749.00
-├── output rows: 749
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 3)]
-├── estimated rows: 747.00
-├── output rows: 747
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 4)]
-├── estimated rows: 746.00
-├── output rows: 746
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 6)]
-├── estimated rows: 744.00
-├── output rows: 744
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 7)]
-├── estimated rows: 743.00
-├── output rows: 743
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 9)]
-├── estimated rows: 741.00
-├── output rows: 741
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 10)]
-├── estimated rows: 740.00
-├── output rows: 740
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 12)]
-├── estimated rows: 738.00
-├── output rows: 738
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 13)]
-├── estimated rows: 737.00
-├── output rows: 737
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 15)]
-├── estimated rows: 735.00
-├── output rows: 735
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 16)]
-├── estimated rows: 734.00
-├── output rows: 734
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 18)]
-├── estimated rows: 732.00
-├── output rows: 732
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 19)]
-├── estimated rows: 731.00
-├── output rows: 731
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 21)]
-├── estimated rows: 729.00
-├── output rows: 729
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 22)]
-├── estimated rows: 728.00
-├── output rows: 728
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 24)]
-├── estimated rows: 726.00
-├── output rows: 726
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 25)]
-├── estimated rows: 725.00
-├── output rows: 725
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 27)]
-├── estimated rows: 723.00
-├── output rows: 723
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 28)]
-├── estimated rows: 722.00
-├── output rows: 722
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 30)]
-├── estimated rows: 720.00
-├── output rows: 720
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 31)]
-├── estimated rows: 719.00
-├── output rows: 719
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 33)]
-├── estimated rows: 717.00
-├── output rows: 717
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 34)]
-├── estimated rows: 716.00
-├── output rows: 716
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 36)]
-├── estimated rows: 714.00
-├── output rows: 714
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 37)]
-├── estimated rows: 713.00
-├── output rows: 713
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 39)]
-├── estimated rows: 711.00
-├── output rows: 711
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 40)]
-├── estimated rows: 710.00
-├── output rows: 710
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 42)]
-├── estimated rows: 708.00
-├── output rows: 708
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 43)]
-├── estimated rows: 707.00
-├── output rows: 707
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 45)]
-├── estimated rows: 705.00
-├── output rows: 705
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 46)]
-├── estimated rows: 704.00
-├── output rows: 704
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 48)]
-├── estimated rows: 702.00
-├── output rows: 702
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 49)]
-├── estimated rows: 701.00
-├── output rows: 701
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 51)]
-├── estimated rows: 699.00
-├── output rows: 699
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 52)]
-├── estimated rows: 698.00
-├── output rows: 698
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 54)]
-├── estimated rows: 696.00
-├── output rows: 696
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 55)]
-├── estimated rows: 695.00
-├── output rows: 695
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 57)]
-├── estimated rows: 693.00
-├── output rows: 693
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 58)]
-├── estimated rows: 692.00
-├── output rows: 692
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 60)]
-├── estimated rows: 690.00
-├── output rows: 690
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 61)]
-├── estimated rows: 689.00
-├── output rows: 689
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 63)]
-├── estimated rows: 687.00
-├── output rows: 687
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 64)]
-├── estimated rows: 686.00
-├── output rows: 686
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 66)]
-├── estimated rows: 684.00
-├── output rows: 684
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 67)]
-├── estimated rows: 683.00
-├── output rows: 683
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 69)]
-├── estimated rows: 681.00
-├── output rows: 681
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 70)]
-├── estimated rows: 680.00
-├── output rows: 680
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 72)]
-├── estimated rows: 678.00
-├── output rows: 678
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 73)]
-├── estimated rows: 677.00
-├── output rows: 677
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 75)]
-├── estimated rows: 675.00
-├── output rows: 675
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 76)]
-├── estimated rows: 674.00
-├── output rows: 674
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 78)]
-├── estimated rows: 672.00
-├── output rows: 672
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 79)]
-├── estimated rows: 671.00
-├── output rows: 671
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 81)]
-├── estimated rows: 669.00
-├── output rows: 669
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 82)]
-├── estimated rows: 668.00
-├── output rows: 668
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 84)]
-├── estimated rows: 666.00
-├── output rows: 666
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 85)]
-├── estimated rows: 665.00
-├── output rows: 665
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 87)]
-├── estimated rows: 663.00
-├── output rows: 663
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 88)]
-├── estimated rows: 662.00
-├── output rows: 662
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 90)]
-├── estimated rows: 660.00
-├── output rows: 660
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 91)]
-├── estimated rows: 659.00
-├── output rows: 659
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 93)]
-├── estimated rows: 657.00
-├── output rows: 657
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 94)]
-├── estimated rows: 656.00
-├── output rows: 656
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 96)]
-├── estimated rows: 654.00
-├── output rows: 654
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 97)]
-├── estimated rows: 653.00
-├── output rows: 653
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 99)]
-├── estimated rows: 651.00
-├── output rows: 651
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 100)]
-├── estimated rows: 650.00
-├── output rows: 650
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 102)]
-├── estimated rows: 648.00
-├── output rows: 648
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 103)]
-├── estimated rows: 647.00
-├── output rows: 647
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 105)]
-├── estimated rows: 645.00
-├── output rows: 645
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 106)]
-├── estimated rows: 644.00
-├── output rows: 644
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 108)]
-├── estimated rows: 642.00
-├── output rows: 642
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 109)]
-├── estimated rows: 641.00
-├── output rows: 641
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 111)]
-├── estimated rows: 639.00
-├── output rows: 639
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 112)]
-├── estimated rows: 638.00
-├── output rows: 638
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 114)]
-├── estimated rows: 636.00
-├── output rows: 636
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 115)]
-├── estimated rows: 635.00
-├── output rows: 635
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 117)]
-├── estimated rows: 633.00
-├── output rows: 633
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 118)]
-├── estimated rows: 632.00
-├── output rows: 632
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 120)]
-├── estimated rows: 630.00
-├── output rows: 630
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 121)]
-├── estimated rows: 629.00
-├── output rows: 629
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 123)]
-├── estimated rows: 627.00
-├── output rows: 627
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 124)]
-├── estimated rows: 626.00
-├── output rows: 626
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 126)]
-├── estimated rows: 624.00
-├── output rows: 624
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 127)]
-├── estimated rows: 623.00
-├── output rows: 623
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 129)]
-├── estimated rows: 621.00
-├── output rows: 621
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 130)]
-├── estimated rows: 620.00
-├── output rows: 620
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 132)]
-├── estimated rows: 618.00
-├── output rows: 618
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 133)]
-├── estimated rows: 617.00
-├── output rows: 617
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 135)]
-├── estimated rows: 615.00
-├── output rows: 615
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 136)]
-├── estimated rows: 614.00
-├── output rows: 614
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 138)]
-├── estimated rows: 612.00
-├── output rows: 612
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 139)]
-├── estimated rows: 611.00
-├── output rows: 611
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 141)]
-├── estimated rows: 609.00
-├── output rows: 609
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 142)]
-├── estimated rows: 608.00
-├── output rows: 608
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 144)]
-├── estimated rows: 606.00
-├── output rows: 606
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 145)]
-├── estimated rows: 605.00
-├── output rows: 605
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 147)]
-├── estimated rows: 603.00
-├── output rows: 603
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 148)]
-├── estimated rows: 602.00
-├── output rows: 602
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 150)]
-├── estimated rows: 600.00
-├── output rows: 600
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 151)]
-├── estimated rows: 599.00
-├── output rows: 599
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 153)]
-├── estimated rows: 597.00
-├── output rows: 597
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 154)]
-├── estimated rows: 596.00
-├── output rows: 596
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 156)]
-├── estimated rows: 594.00
-├── output rows: 594
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 157)]
-├── estimated rows: 593.00
-├── output rows: 593
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 159)]
-├── estimated rows: 591.00
-├── output rows: 591
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 160)]
-├── estimated rows: 590.00
-├── output rows: 590
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 162)]
-├── estimated rows: 588.00
-├── output rows: 588
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 163)]
-├── estimated rows: 587.00
-├── output rows: 587
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 165)]
-├── estimated rows: 585.00
-├── output rows: 585
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 166)]
-├── estimated rows: 584.00
-├── output rows: 584
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 168)]
-├── estimated rows: 582.00
-├── output rows: 582
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 169)]
-├── estimated rows: 581.00
-├── output rows: 581
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 171)]
-├── estimated rows: 579.00
-├── output rows: 579
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 172)]
-├── estimated rows: 578.00
-├── output rows: 578
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 174)]
-├── estimated rows: 576.00
-├── output rows: 576
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 175)]
-├── estimated rows: 575.00
-├── output rows: 575
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 177)]
-├── estimated rows: 573.00
-├── output rows: 573
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 178)]
-├── estimated rows: 572.00
-├── output rows: 572
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 180)]
-├── estimated rows: 570.00
-├── output rows: 570
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 181)]
-├── estimated rows: 569.00
-├── output rows: 569
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 183)]
-├── estimated rows: 567.00
-├── output rows: 567
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 184)]
-├── estimated rows: 566.00
-├── output rows: 566
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 186)]
-├── estimated rows: 564.00
-├── output rows: 564
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 187)]
-├── estimated rows: 563.00
-├── output rows: 563
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 189)]
-├── estimated rows: 561.00
-├── output rows: 561
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 190)]
-├── estimated rows: 560.00
-├── output rows: 560
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 192)]
-├── estimated rows: 558.00
-├── output rows: 558
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 193)]
-├── estimated rows: 557.00
-├── output rows: 557
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 195)]
-├── estimated rows: 555.00
-├── output rows: 555
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 196)]
-├── estimated rows: 554.00
-├── output rows: 554
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 198)]
-├── estimated rows: 552.00
-├── output rows: 552
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 199)]
-├── estimated rows: 551.00
-├── output rows: 551
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 201)]
-├── estimated rows: 549.00
-├── output rows: 549
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 202)]
-├── estimated rows: 548.00
-├── output rows: 548
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 204)]
-├── estimated rows: 546.00
-├── output rows: 546
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 205)]
-├── estimated rows: 545.00
-├── output rows: 545
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 207)]
-├── estimated rows: 543.00
-├── output rows: 543
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 208)]
-├── estimated rows: 542.00
-├── output rows: 542
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 210)]
-├── estimated rows: 540.00
-├── output rows: 540
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 211)]
-├── estimated rows: 539.00
-├── output rows: 539
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 213)]
-├── estimated rows: 537.00
-├── output rows: 537
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 214)]
-├── estimated rows: 536.00
-├── output rows: 536
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 216)]
-├── estimated rows: 534.00
-├── output rows: 534
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 217)]
-├── estimated rows: 533.00
-├── output rows: 533
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 219)]
-├── estimated rows: 531.00
-├── output rows: 531
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 220)]
-├── estimated rows: 530.00
-├── output rows: 530
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 222)]
-├── estimated rows: 528.00
-├── output rows: 528
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 223)]
-├── estimated rows: 527.00
-├── output rows: 527
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 225)]
-├── estimated rows: 525.00
-├── output rows: 525
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 226)]
-├── estimated rows: 524.00
-├── output rows: 524
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 228)]
-├── estimated rows: 522.00
-├── output rows: 522
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 229)]
-├── estimated rows: 521.00
-├── output rows: 521
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 231)]
-├── estimated rows: 519.00
-├── output rows: 519
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 232)]
-├── estimated rows: 518.00
-├── output rows: 518
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 234)]
-├── estimated rows: 516.00
-├── output rows: 516
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 235)]
-├── estimated rows: 515.00
-├── output rows: 515
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 237)]
-├── estimated rows: 513.00
-├── output rows: 513
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 238)]
-├── estimated rows: 512.00
-├── output rows: 512
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 240)]
-├── estimated rows: 510.00
-├── output rows: 510
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 241)]
-├── estimated rows: 509.00
-├── output rows: 509
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 243)]
-├── estimated rows: 507.00
-├── output rows: 507
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 244)]
-├── estimated rows: 506.00
-├── output rows: 506
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 246)]
-├── estimated rows: 504.00
-├── output rows: 504
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 247)]
-├── estimated rows: 503.00
-├── output rows: 503
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 249)]
-├── estimated rows: 501.00
-├── output rows: 501
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 250)]
-├── estimated rows: 500.00
-├── output rows: 500
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 252)]
-├── estimated rows: 498.00
-├── output rows: 498
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 253)]
-├── estimated rows: 497.00
-├── output rows: 497
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 255)]
-├── estimated rows: 495.00
-├── output rows: 495
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 256)]
-├── estimated rows: 494.00
-├── output rows: 494
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 258)]
-├── estimated rows: 492.00
-├── output rows: 492
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 259)]
-├── estimated rows: 491.00
-├── output rows: 491
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 261)]
-├── estimated rows: 489.00
-├── output rows: 489
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 262)]
-├── estimated rows: 488.00
-├── output rows: 488
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 264)]
-├── estimated rows: 486.00
-├── output rows: 486
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 265)]
-├── estimated rows: 485.00
-├── output rows: 485
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 267)]
-├── estimated rows: 483.00
-├── output rows: 483
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 268)]
-├── estimated rows: 482.00
-├── output rows: 482
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 270)]
-├── estimated rows: 480.00
-├── output rows: 480
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 271)]
-├── estimated rows: 479.00
-├── output rows: 479
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 273)]
-├── estimated rows: 477.00
-├── output rows: 477
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 274)]
-├── estimated rows: 476.00
-├── output rows: 476
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 276)]
-├── estimated rows: 474.00
-├── output rows: 474
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 277)]
-├── estimated rows: 473.00
-├── output rows: 473
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 279)]
-├── estimated rows: 471.00
-├── output rows: 471
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 280)]
-├── estimated rows: 470.00
-├── output rows: 470
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 282)]
-├── estimated rows: 468.00
-├── output rows: 468
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 283)]
-├── estimated rows: 467.00
-├── output rows: 467
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 285)]
-├── estimated rows: 465.00
-├── output rows: 465
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 286)]
-├── estimated rows: 464.00
-├── output rows: 464
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 288)]
-├── estimated rows: 462.00
-├── output rows: 462
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 289)]
-├── estimated rows: 461.00
-├── output rows: 461
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 291)]
-├── estimated rows: 459.00
-├── output rows: 459
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 292)]
-├── estimated rows: 458.00
-├── output rows: 458
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 294)]
-├── estimated rows: 456.00
-├── output rows: 456
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 295)]
-├── estimated rows: 455.00
-├── output rows: 455
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 297)]
-├── estimated rows: 453.00
-├── output rows: 453
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 298)]
-├── estimated rows: 452.00
-├── output rows: 452
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 300)]
-├── estimated rows: 450.00
-├── output rows: 450
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 301)]
-├── estimated rows: 449.00
-├── output rows: 449
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 303)]
-├── estimated rows: 447.00
-├── output rows: 447
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 304)]
-├── estimated rows: 446.00
-├── output rows: 446
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 306)]
-├── estimated rows: 444.00
-├── output rows: 444
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 307)]
-├── estimated rows: 443.00
-├── output rows: 443
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 309)]
-├── estimated rows: 441.00
-├── output rows: 441
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 310)]
-├── estimated rows: 440.00
-├── output rows: 440
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 312)]
-├── estimated rows: 438.00
-├── output rows: 438
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 313)]
-├── estimated rows: 437.00
-├── output rows: 437
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 315)]
-├── estimated rows: 435.00
-├── output rows: 435
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 316)]
-├── estimated rows: 434.00
-├── output rows: 434
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 318)]
-├── estimated rows: 432.00
-├── output rows: 432
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 319)]
-├── estimated rows: 431.00
-├── output rows: 431
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 321)]
-├── estimated rows: 429.00
-├── output rows: 429
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 322)]
-├── estimated rows: 428.00
-├── output rows: 428
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 324)]
-├── estimated rows: 426.00
-├── output rows: 426
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 325)]
-├── estimated rows: 425.00
-├── output rows: 425
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 327)]
-├── estimated rows: 423.00
-├── output rows: 423
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 328)]
-├── estimated rows: 422.00
-├── output rows: 422
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 330)]
-├── estimated rows: 420.00
-├── output rows: 420
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 331)]
-├── estimated rows: 419.00
-├── output rows: 419
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 333)]
-├── estimated rows: 417.00
-├── output rows: 417
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 334)]
-├── estimated rows: 416.00
-├── output rows: 416
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 336)]
-├── estimated rows: 414.00
-├── output rows: 414
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 337)]
-├── estimated rows: 413.00
-├── output rows: 413
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 339)]
-├── estimated rows: 411.00
-├── output rows: 411
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 340)]
-├── estimated rows: 410.00
-├── output rows: 410
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 342)]
-├── estimated rows: 408.00
-├── output rows: 408
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 343)]
-├── estimated rows: 407.00
-├── output rows: 407
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 345)]
-├── estimated rows: 405.00
-├── output rows: 405
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 346)]
-├── estimated rows: 404.00
-├── output rows: 404
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 348)]
-├── estimated rows: 402.00
-├── output rows: 402
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 349)]
-├── estimated rows: 401.00
-├── output rows: 401
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 351)]
-├── estimated rows: 399.00
-├── output rows: 399
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 352)]
-├── estimated rows: 398.00
-├── output rows: 398
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 354)]
-├── estimated rows: 396.00
-├── output rows: 396
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 355)]
-├── estimated rows: 395.00
-├── output rows: 395
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 357)]
-├── estimated rows: 393.00
-├── output rows: 393
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 358)]
-├── estimated rows: 392.00
-├── output rows: 392
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 360)]
-├── estimated rows: 390.00
-├── output rows: 390
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 361)]
-├── estimated rows: 389.00
-├── output rows: 389
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 363)]
-├── estimated rows: 387.00
-├── output rows: 387
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 364)]
-├── estimated rows: 386.00
-├── output rows: 386
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 366)]
-├── estimated rows: 384.00
-├── output rows: 384
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 367)]
-├── estimated rows: 383.00
-├── output rows: 383
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 369)]
-├── estimated rows: 381.00
-├── output rows: 381
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 370)]
-├── estimated rows: 380.00
-├── output rows: 380
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 372)]
-├── estimated rows: 378.00
-├── output rows: 378
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 373)]
-├── estimated rows: 377.00
-├── output rows: 377
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 375)]
-├── estimated rows: 375.00
-├── output rows: 375
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 376)]
-├── estimated rows: 374.00
-├── output rows: 374
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 378)]
-├── estimated rows: 372.00
-├── output rows: 372
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 379)]
-├── estimated rows: 371.00
-├── output rows: 371
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 381)]
-├── estimated rows: 369.00
-├── output rows: 369
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 382)]
-├── estimated rows: 368.00
-├── output rows: 368
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 384)]
-├── estimated rows: 366.00
-├── output rows: 366
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 385)]
-├── estimated rows: 365.00
-├── output rows: 365
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 387)]
-├── estimated rows: 363.00
-├── output rows: 363
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 388)]
-├── estimated rows: 362.00
-├── output rows: 362
-└── TableScan
-    ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
-Filter
-├── filters: [is_true(t.a (#0) >= 390)]
 ├── estimated rows: 360.00
 ├── output rows: 360
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 391)]
+├── filters: [is_true(t.a (#0) >= 1)]
 ├── estimated rows: 359.00
 ├── output rows: 359
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 393)]
+├── filters: [is_true(t.a (#0) >= 3)]
 ├── estimated rows: 357.00
 ├── output rows: 357
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 394)]
+├── filters: [is_true(t.a (#0) >= 4)]
 ├── estimated rows: 356.00
 ├── output rows: 356
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 396)]
+├── filters: [is_true(t.a (#0) >= 6)]
 ├── estimated rows: 354.00
 ├── output rows: 354
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 397)]
+├── filters: [is_true(t.a (#0) >= 7)]
 ├── estimated rows: 353.00
 ├── output rows: 353
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 399)]
+├── filters: [is_true(t.a (#0) >= 9)]
 ├── estimated rows: 351.00
 ├── output rows: 351
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 400)]
+├── filters: [is_true(t.a (#0) >= 10)]
 ├── estimated rows: 350.00
 ├── output rows: 350
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 402)]
+├── filters: [is_true(t.a (#0) >= 12)]
 ├── estimated rows: 348.00
 ├── output rows: 348
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 403)]
+├── filters: [is_true(t.a (#0) >= 13)]
 ├── estimated rows: 347.00
 ├── output rows: 347
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 405)]
+├── filters: [is_true(t.a (#0) >= 15)]
 ├── estimated rows: 345.00
 ├── output rows: 345
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 406)]
+├── filters: [is_true(t.a (#0) >= 16)]
 ├── estimated rows: 344.00
 ├── output rows: 344
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 408)]
+├── filters: [is_true(t.a (#0) >= 18)]
 ├── estimated rows: 342.00
 ├── output rows: 342
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 409)]
+├── filters: [is_true(t.a (#0) >= 19)]
 ├── estimated rows: 341.00
 ├── output rows: 341
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 411)]
+├── filters: [is_true(t.a (#0) >= 21)]
 ├── estimated rows: 339.00
 ├── output rows: 339
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 412)]
+├── filters: [is_true(t.a (#0) >= 22)]
 ├── estimated rows: 338.00
 ├── output rows: 338
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 414)]
+├── filters: [is_true(t.a (#0) >= 24)]
 ├── estimated rows: 336.00
 ├── output rows: 336
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 415)]
+├── filters: [is_true(t.a (#0) >= 25)]
 ├── estimated rows: 335.00
 ├── output rows: 335
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 417)]
+├── filters: [is_true(t.a (#0) >= 27)]
 ├── estimated rows: 333.00
 ├── output rows: 333
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 418)]
+├── filters: [is_true(t.a (#0) >= 28)]
 ├── estimated rows: 332.00
 ├── output rows: 332
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 420)]
+├── filters: [is_true(t.a (#0) >= 30)]
 ├── estimated rows: 330.00
 ├── output rows: 330
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 421)]
+├── filters: [is_true(t.a (#0) >= 31)]
 ├── estimated rows: 329.00
 ├── output rows: 329
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 423)]
+├── filters: [is_true(t.a (#0) >= 33)]
 ├── estimated rows: 327.00
 ├── output rows: 327
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 424)]
+├── filters: [is_true(t.a (#0) >= 34)]
 ├── estimated rows: 326.00
 ├── output rows: 326
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 426)]
+├── filters: [is_true(t.a (#0) >= 36)]
 ├── estimated rows: 324.00
 ├── output rows: 324
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 427)]
+├── filters: [is_true(t.a (#0) >= 37)]
 ├── estimated rows: 323.00
 ├── output rows: 323
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 429)]
+├── filters: [is_true(t.a (#0) >= 39)]
 ├── estimated rows: 321.00
 ├── output rows: 321
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 430)]
+├── filters: [is_true(t.a (#0) >= 40)]
 ├── estimated rows: 320.00
 ├── output rows: 320
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 432)]
+├── filters: [is_true(t.a (#0) >= 42)]
 ├── estimated rows: 318.00
 ├── output rows: 318
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 433)]
+├── filters: [is_true(t.a (#0) >= 43)]
 ├── estimated rows: 317.00
 ├── output rows: 317
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 435)]
+├── filters: [is_true(t.a (#0) >= 45)]
 ├── estimated rows: 315.00
 ├── output rows: 315
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 436)]
+├── filters: [is_true(t.a (#0) >= 46)]
 ├── estimated rows: 314.00
 ├── output rows: 314
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 438)]
+├── filters: [is_true(t.a (#0) >= 48)]
 ├── estimated rows: 312.00
 ├── output rows: 312
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 439)]
+├── filters: [is_true(t.a (#0) >= 49)]
 ├── estimated rows: 311.00
 ├── output rows: 311
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 441)]
+├── filters: [is_true(t.a (#0) >= 51)]
 ├── estimated rows: 309.00
 ├── output rows: 309
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 442)]
+├── filters: [is_true(t.a (#0) >= 52)]
 ├── estimated rows: 308.00
 ├── output rows: 308
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 444)]
+├── filters: [is_true(t.a (#0) >= 54)]
 ├── estimated rows: 306.00
 ├── output rows: 306
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 445)]
+├── filters: [is_true(t.a (#0) >= 55)]
 ├── estimated rows: 305.00
 ├── output rows: 305
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 447)]
+├── filters: [is_true(t.a (#0) >= 57)]
 ├── estimated rows: 303.00
 ├── output rows: 303
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 448)]
+├── filters: [is_true(t.a (#0) >= 58)]
 ├── estimated rows: 302.00
 ├── output rows: 302
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 450)]
+├── filters: [is_true(t.a (#0) >= 60)]
 ├── estimated rows: 300.00
 ├── output rows: 300
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 451)]
+├── filters: [is_true(t.a (#0) >= 61)]
 ├── estimated rows: 299.00
 ├── output rows: 299
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 453)]
+├── filters: [is_true(t.a (#0) >= 63)]
 ├── estimated rows: 297.00
 ├── output rows: 297
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 454)]
+├── filters: [is_true(t.a (#0) >= 64)]
 ├── estimated rows: 296.00
 ├── output rows: 296
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 456)]
+├── filters: [is_true(t.a (#0) >= 66)]
 ├── estimated rows: 294.00
 ├── output rows: 294
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 457)]
+├── filters: [is_true(t.a (#0) >= 67)]
 ├── estimated rows: 293.00
 ├── output rows: 293
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 459)]
+├── filters: [is_true(t.a (#0) >= 69)]
 ├── estimated rows: 291.00
 ├── output rows: 291
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 460)]
+├── filters: [is_true(t.a (#0) >= 70)]
 ├── estimated rows: 290.00
 ├── output rows: 290
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 462)]
+├── filters: [is_true(t.a (#0) >= 72)]
 ├── estimated rows: 288.00
 ├── output rows: 288
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 463)]
+├── filters: [is_true(t.a (#0) >= 73)]
 ├── estimated rows: 287.00
 ├── output rows: 287
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 465)]
+├── filters: [is_true(t.a (#0) >= 75)]
 ├── estimated rows: 285.00
 ├── output rows: 285
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 466)]
+├── filters: [is_true(t.a (#0) >= 76)]
 ├── estimated rows: 284.00
 ├── output rows: 284
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 468)]
+├── filters: [is_true(t.a (#0) >= 78)]
 ├── estimated rows: 282.00
 ├── output rows: 282
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 469)]
+├── filters: [is_true(t.a (#0) >= 79)]
 ├── estimated rows: 281.00
 ├── output rows: 281
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 471)]
+├── filters: [is_true(t.a (#0) >= 81)]
 ├── estimated rows: 279.00
 ├── output rows: 279
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 472)]
+├── filters: [is_true(t.a (#0) >= 82)]
 ├── estimated rows: 278.00
 ├── output rows: 278
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 474)]
+├── filters: [is_true(t.a (#0) >= 84)]
 ├── estimated rows: 276.00
 ├── output rows: 276
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 475)]
+├── filters: [is_true(t.a (#0) >= 85)]
 ├── estimated rows: 275.00
 ├── output rows: 275
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 477)]
+├── filters: [is_true(t.a (#0) >= 87)]
 ├── estimated rows: 273.00
 ├── output rows: 273
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 478)]
+├── filters: [is_true(t.a (#0) >= 88)]
 ├── estimated rows: 272.00
 ├── output rows: 272
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 480)]
+├── filters: [is_true(t.a (#0) >= 90)]
 ├── estimated rows: 270.00
 ├── output rows: 270
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 481)]
+├── filters: [is_true(t.a (#0) >= 91)]
 ├── estimated rows: 269.00
 ├── output rows: 269
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 483)]
+├── filters: [is_true(t.a (#0) >= 93)]
 ├── estimated rows: 267.00
 ├── output rows: 267
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 484)]
+├── filters: [is_true(t.a (#0) >= 94)]
 ├── estimated rows: 266.00
 ├── output rows: 266
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 486)]
+├── filters: [is_true(t.a (#0) >= 96)]
 ├── estimated rows: 264.00
 ├── output rows: 264
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 487)]
+├── filters: [is_true(t.a (#0) >= 97)]
 ├── estimated rows: 263.00
 ├── output rows: 263
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 489)]
+├── filters: [is_true(t.a (#0) >= 99)]
 ├── estimated rows: 261.00
 ├── output rows: 261
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 490)]
+├── filters: [is_true(t.a (#0) >= 100)]
 ├── estimated rows: 260.00
 ├── output rows: 260
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 492)]
+├── filters: [is_true(t.a (#0) >= 102)]
 ├── estimated rows: 258.00
 ├── output rows: 258
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 493)]
+├── filters: [is_true(t.a (#0) >= 103)]
 ├── estimated rows: 257.00
 ├── output rows: 257
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 495)]
+├── filters: [is_true(t.a (#0) >= 105)]
 ├── estimated rows: 255.00
 ├── output rows: 255
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 496)]
+├── filters: [is_true(t.a (#0) >= 106)]
 ├── estimated rows: 254.00
 ├── output rows: 254
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 498)]
+├── filters: [is_true(t.a (#0) >= 108)]
 ├── estimated rows: 252.00
 ├── output rows: 252
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 499)]
+├── filters: [is_true(t.a (#0) >= 109)]
 ├── estimated rows: 251.00
 ├── output rows: 251
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 501)]
+├── filters: [is_true(t.a (#0) >= 111)]
 ├── estimated rows: 249.00
 ├── output rows: 249
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 502)]
+├── filters: [is_true(t.a (#0) >= 112)]
 ├── estimated rows: 248.00
 ├── output rows: 248
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 504)]
+├── filters: [is_true(t.a (#0) >= 114)]
 ├── estimated rows: 246.00
 ├── output rows: 246
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 505)]
+├── filters: [is_true(t.a (#0) >= 115)]
 ├── estimated rows: 245.00
 ├── output rows: 245
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 507)]
+├── filters: [is_true(t.a (#0) >= 117)]
 ├── estimated rows: 243.00
 ├── output rows: 243
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 508)]
+├── filters: [is_true(t.a (#0) >= 118)]
 ├── estimated rows: 242.00
 ├── output rows: 242
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 510)]
+├── filters: [is_true(t.a (#0) >= 120)]
 ├── estimated rows: 240.00
 ├── output rows: 240
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 511)]
+├── filters: [is_true(t.a (#0) >= 121)]
 ├── estimated rows: 239.00
 ├── output rows: 239
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 513)]
+├── filters: [is_true(t.a (#0) >= 123)]
 ├── estimated rows: 237.00
 ├── output rows: 237
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 514)]
+├── filters: [is_true(t.a (#0) >= 124)]
 ├── estimated rows: 236.00
 ├── output rows: 236
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 516)]
+├── filters: [is_true(t.a (#0) >= 126)]
 ├── estimated rows: 234.00
 ├── output rows: 234
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 517)]
+├── filters: [is_true(t.a (#0) >= 127)]
 ├── estimated rows: 233.00
 ├── output rows: 233
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 519)]
+├── filters: [is_true(t.a (#0) >= 129)]
 ├── estimated rows: 231.00
 ├── output rows: 231
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 520)]
+├── filters: [is_true(t.a (#0) >= 130)]
 ├── estimated rows: 230.00
 ├── output rows: 230
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 522)]
+├── filters: [is_true(t.a (#0) >= 132)]
 ├── estimated rows: 228.00
 ├── output rows: 228
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 523)]
+├── filters: [is_true(t.a (#0) >= 133)]
 ├── estimated rows: 227.00
 ├── output rows: 227
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 525)]
+├── filters: [is_true(t.a (#0) >= 135)]
 ├── estimated rows: 225.00
 ├── output rows: 225
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 526)]
+├── filters: [is_true(t.a (#0) >= 136)]
 ├── estimated rows: 224.00
 ├── output rows: 224
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 528)]
+├── filters: [is_true(t.a (#0) >= 138)]
 ├── estimated rows: 222.00
 ├── output rows: 222
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 529)]
+├── filters: [is_true(t.a (#0) >= 139)]
 ├── estimated rows: 221.00
 ├── output rows: 221
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 531)]
+├── filters: [is_true(t.a (#0) >= 141)]
 ├── estimated rows: 219.00
 ├── output rows: 219
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 532)]
+├── filters: [is_true(t.a (#0) >= 142)]
 ├── estimated rows: 218.00
 ├── output rows: 218
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 534)]
+├── filters: [is_true(t.a (#0) >= 144)]
 ├── estimated rows: 216.00
 ├── output rows: 216
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 535)]
+├── filters: [is_true(t.a (#0) >= 145)]
 ├── estimated rows: 215.00
 ├── output rows: 215
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 537)]
+├── filters: [is_true(t.a (#0) >= 147)]
 ├── estimated rows: 213.00
 ├── output rows: 213
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 538)]
+├── filters: [is_true(t.a (#0) >= 148)]
 ├── estimated rows: 212.00
 ├── output rows: 212
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 540)]
+├── filters: [is_true(t.a (#0) >= 150)]
 ├── estimated rows: 210.00
 ├── output rows: 210
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 541)]
+├── filters: [is_true(t.a (#0) >= 151)]
 ├── estimated rows: 209.00
 ├── output rows: 209
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 543)]
+├── filters: [is_true(t.a (#0) >= 153)]
 ├── estimated rows: 207.00
 ├── output rows: 207
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 544)]
+├── filters: [is_true(t.a (#0) >= 154)]
 ├── estimated rows: 206.00
 ├── output rows: 206
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 546)]
+├── filters: [is_true(t.a (#0) >= 156)]
 ├── estimated rows: 204.00
 ├── output rows: 204
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 547)]
+├── filters: [is_true(t.a (#0) >= 157)]
 ├── estimated rows: 203.00
 ├── output rows: 203
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 549)]
+├── filters: [is_true(t.a (#0) >= 159)]
 ├── estimated rows: 201.00
 ├── output rows: 201
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 550)]
+├── filters: [is_true(t.a (#0) >= 160)]
 ├── estimated rows: 200.00
 ├── output rows: 200
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 552)]
+├── filters: [is_true(t.a (#0) >= 162)]
 ├── estimated rows: 198.00
 ├── output rows: 198
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 553)]
+├── filters: [is_true(t.a (#0) >= 163)]
 ├── estimated rows: 197.00
 ├── output rows: 197
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 555)]
+├── filters: [is_true(t.a (#0) >= 165)]
 ├── estimated rows: 195.00
 ├── output rows: 195
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 556)]
+├── filters: [is_true(t.a (#0) >= 166)]
 ├── estimated rows: 194.00
 ├── output rows: 194
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 558)]
+├── filters: [is_true(t.a (#0) >= 168)]
 ├── estimated rows: 192.00
 ├── output rows: 192
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 559)]
+├── filters: [is_true(t.a (#0) >= 169)]
 ├── estimated rows: 191.00
 ├── output rows: 191
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 561)]
+├── filters: [is_true(t.a (#0) >= 171)]
 ├── estimated rows: 189.00
 ├── output rows: 189
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 562)]
+├── filters: [is_true(t.a (#0) >= 172)]
 ├── estimated rows: 188.00
 ├── output rows: 188
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 564)]
+├── filters: [is_true(t.a (#0) >= 174)]
 ├── estimated rows: 186.00
 ├── output rows: 186
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 565)]
+├── filters: [is_true(t.a (#0) >= 175)]
 ├── estimated rows: 185.00
 ├── output rows: 185
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 567)]
+├── filters: [is_true(t.a (#0) >= 177)]
 ├── estimated rows: 183.00
 ├── output rows: 183
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 568)]
+├── filters: [is_true(t.a (#0) >= 178)]
 ├── estimated rows: 182.00
 ├── output rows: 182
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 570)]
+├── filters: [is_true(t.a (#0) >= 180)]
 ├── estimated rows: 180.00
 ├── output rows: 180
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 571)]
+├── filters: [is_true(t.a (#0) >= 181)]
 ├── estimated rows: 179.00
 ├── output rows: 179
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 573)]
+├── filters: [is_true(t.a (#0) >= 183)]
 ├── estimated rows: 177.00
 ├── output rows: 177
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 574)]
+├── filters: [is_true(t.a (#0) >= 184)]
 ├── estimated rows: 176.00
 ├── output rows: 176
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 576)]
+├── filters: [is_true(t.a (#0) >= 186)]
 ├── estimated rows: 174.00
 ├── output rows: 174
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 577)]
+├── filters: [is_true(t.a (#0) >= 187)]
 ├── estimated rows: 173.00
 ├── output rows: 173
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 579)]
+├── filters: [is_true(t.a (#0) >= 189)]
 ├── estimated rows: 171.00
 ├── output rows: 171
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 580)]
+├── filters: [is_true(t.a (#0) >= 190)]
 ├── estimated rows: 170.00
 ├── output rows: 170
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 582)]
+├── filters: [is_true(t.a (#0) >= 192)]
 ├── estimated rows: 168.00
 ├── output rows: 168
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 583)]
+├── filters: [is_true(t.a (#0) >= 193)]
 ├── estimated rows: 167.00
 ├── output rows: 167
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 585)]
+├── filters: [is_true(t.a (#0) >= 195)]
 ├── estimated rows: 165.00
 ├── output rows: 165
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 586)]
+├── filters: [is_true(t.a (#0) >= 196)]
 ├── estimated rows: 164.00
 ├── output rows: 164
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 588)]
+├── filters: [is_true(t.a (#0) >= 198)]
 ├── estimated rows: 162.00
 ├── output rows: 162
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 589)]
+├── filters: [is_true(t.a (#0) >= 199)]
 ├── estimated rows: 161.00
 ├── output rows: 161
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 591)]
+├── filters: [is_true(t.a (#0) >= 201)]
 ├── estimated rows: 159.00
 ├── output rows: 159
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 592)]
+├── filters: [is_true(t.a (#0) >= 202)]
 ├── estimated rows: 158.00
 ├── output rows: 158
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 594)]
+├── filters: [is_true(t.a (#0) >= 204)]
 ├── estimated rows: 156.00
 ├── output rows: 156
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 595)]
+├── filters: [is_true(t.a (#0) >= 205)]
 ├── estimated rows: 155.00
 ├── output rows: 155
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 597)]
+├── filters: [is_true(t.a (#0) >= 207)]
 ├── estimated rows: 153.00
 ├── output rows: 153
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 598)]
+├── filters: [is_true(t.a (#0) >= 208)]
 ├── estimated rows: 152.00
 ├── output rows: 152
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 600)]
+├── filters: [is_true(t.a (#0) >= 210)]
 ├── estimated rows: 150.00
 ├── output rows: 150
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 601)]
+├── filters: [is_true(t.a (#0) >= 211)]
 ├── estimated rows: 149.00
 ├── output rows: 149
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 603)]
+├── filters: [is_true(t.a (#0) >= 213)]
 ├── estimated rows: 147.00
 ├── output rows: 147
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 604)]
+├── filters: [is_true(t.a (#0) >= 214)]
 ├── estimated rows: 146.00
 ├── output rows: 146
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 606)]
+├── filters: [is_true(t.a (#0) >= 216)]
 ├── estimated rows: 144.00
 ├── output rows: 144
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 607)]
+├── filters: [is_true(t.a (#0) >= 217)]
 ├── estimated rows: 143.00
 ├── output rows: 143
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 609)]
+├── filters: [is_true(t.a (#0) >= 219)]
 ├── estimated rows: 141.00
 ├── output rows: 141
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 610)]
+├── filters: [is_true(t.a (#0) >= 220)]
 ├── estimated rows: 140.00
 ├── output rows: 140
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 612)]
+├── filters: [is_true(t.a (#0) >= 222)]
 ├── estimated rows: 138.00
 ├── output rows: 138
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 613)]
+├── filters: [is_true(t.a (#0) >= 223)]
 ├── estimated rows: 137.00
 ├── output rows: 137
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 615)]
+├── filters: [is_true(t.a (#0) >= 225)]
 ├── estimated rows: 135.00
 ├── output rows: 135
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 616)]
+├── filters: [is_true(t.a (#0) >= 226)]
 ├── estimated rows: 134.00
 ├── output rows: 134
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 618)]
+├── filters: [is_true(t.a (#0) >= 228)]
 ├── estimated rows: 132.00
 ├── output rows: 132
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 619)]
+├── filters: [is_true(t.a (#0) >= 229)]
 ├── estimated rows: 131.00
 ├── output rows: 131
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 621)]
+├── filters: [is_true(t.a (#0) >= 231)]
 ├── estimated rows: 129.00
 ├── output rows: 129
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 622)]
+├── filters: [is_true(t.a (#0) >= 232)]
 ├── estimated rows: 128.00
 ├── output rows: 128
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 624)]
+├── filters: [is_true(t.a (#0) >= 234)]
 ├── estimated rows: 126.00
 ├── output rows: 126
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 625)]
+├── filters: [is_true(t.a (#0) >= 235)]
 ├── estimated rows: 125.00
 ├── output rows: 125
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 627)]
+├── filters: [is_true(t.a (#0) >= 237)]
 ├── estimated rows: 123.00
 ├── output rows: 123
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 628)]
+├── filters: [is_true(t.a (#0) >= 238)]
 ├── estimated rows: 122.00
 ├── output rows: 122
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 630)]
+├── filters: [is_true(t.a (#0) >= 240)]
 ├── estimated rows: 120.00
 ├── output rows: 120
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 631)]
+├── filters: [is_true(t.a (#0) >= 241)]
 ├── estimated rows: 119.00
 ├── output rows: 119
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 633)]
+├── filters: [is_true(t.a (#0) >= 243)]
 ├── estimated rows: 117.00
 ├── output rows: 117
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 634)]
+├── filters: [is_true(t.a (#0) >= 244)]
 ├── estimated rows: 116.00
 ├── output rows: 116
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 636)]
+├── filters: [is_true(t.a (#0) >= 246)]
 ├── estimated rows: 114.00
 ├── output rows: 114
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 637)]
+├── filters: [is_true(t.a (#0) >= 247)]
 ├── estimated rows: 113.00
 ├── output rows: 113
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 639)]
+├── filters: [is_true(t.a (#0) >= 249)]
 ├── estimated rows: 111.00
 ├── output rows: 111
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 640)]
+├── filters: [is_true(t.a (#0) >= 250)]
 ├── estimated rows: 110.00
 ├── output rows: 110
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 642)]
+├── filters: [is_true(t.a (#0) >= 252)]
 ├── estimated rows: 108.00
 ├── output rows: 108
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 643)]
+├── filters: [is_true(t.a (#0) >= 253)]
 ├── estimated rows: 107.00
 ├── output rows: 107
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 645)]
+├── filters: [is_true(t.a (#0) >= 255)]
 ├── estimated rows: 105.00
 ├── output rows: 105
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 646)]
+├── filters: [is_true(t.a (#0) >= 256)]
 ├── estimated rows: 104.00
 ├── output rows: 104
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 648)]
+├── filters: [is_true(t.a (#0) >= 258)]
 ├── estimated rows: 102.00
 ├── output rows: 102
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 649)]
+├── filters: [is_true(t.a (#0) >= 259)]
 ├── estimated rows: 101.00
 ├── output rows: 101
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 651)]
+├── filters: [is_true(t.a (#0) >= 261)]
 ├── estimated rows: 99.00
 ├── output rows: 99
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 652)]
+├── filters: [is_true(t.a (#0) >= 262)]
 ├── estimated rows: 98.00
 ├── output rows: 98
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 654)]
+├── filters: [is_true(t.a (#0) >= 264)]
 ├── estimated rows: 96.00
 ├── output rows: 96
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 655)]
+├── filters: [is_true(t.a (#0) >= 265)]
 ├── estimated rows: 95.00
 ├── output rows: 95
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 657)]
+├── filters: [is_true(t.a (#0) >= 267)]
 ├── estimated rows: 93.00
 ├── output rows: 93
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 658)]
+├── filters: [is_true(t.a (#0) >= 268)]
 ├── estimated rows: 92.00
 ├── output rows: 92
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 660)]
+├── filters: [is_true(t.a (#0) >= 270)]
 ├── estimated rows: 90.00
 ├── output rows: 90
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 661)]
+├── filters: [is_true(t.a (#0) >= 271)]
 ├── estimated rows: 89.00
 ├── output rows: 89
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 663)]
+├── filters: [is_true(t.a (#0) >= 273)]
 ├── estimated rows: 87.00
 ├── output rows: 87
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 664)]
+├── filters: [is_true(t.a (#0) >= 274)]
 ├── estimated rows: 86.00
 ├── output rows: 86
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 666)]
+├── filters: [is_true(t.a (#0) >= 276)]
 ├── estimated rows: 84.00
 ├── output rows: 84
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 667)]
+├── filters: [is_true(t.a (#0) >= 277)]
 ├── estimated rows: 83.00
 ├── output rows: 83
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 669)]
+├── filters: [is_true(t.a (#0) >= 279)]
 ├── estimated rows: 81.00
 ├── output rows: 81
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 670)]
+├── filters: [is_true(t.a (#0) >= 280)]
 ├── estimated rows: 80.00
 ├── output rows: 80
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 672)]
+├── filters: [is_true(t.a (#0) >= 282)]
 ├── estimated rows: 78.00
 ├── output rows: 78
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 673)]
+├── filters: [is_true(t.a (#0) >= 283)]
 ├── estimated rows: 77.00
 ├── output rows: 77
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 675)]
+├── filters: [is_true(t.a (#0) >= 285)]
 ├── estimated rows: 75.00
 ├── output rows: 75
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 676)]
+├── filters: [is_true(t.a (#0) >= 286)]
 ├── estimated rows: 74.00
 ├── output rows: 74
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 678)]
+├── filters: [is_true(t.a (#0) >= 288)]
 ├── estimated rows: 72.00
 ├── output rows: 72
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 679)]
+├── filters: [is_true(t.a (#0) >= 289)]
 ├── estimated rows: 71.00
 ├── output rows: 71
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 681)]
+├── filters: [is_true(t.a (#0) >= 291)]
 ├── estimated rows: 69.00
 ├── output rows: 69
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 682)]
+├── filters: [is_true(t.a (#0) >= 292)]
 ├── estimated rows: 68.00
 ├── output rows: 68
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 684)]
+├── filters: [is_true(t.a (#0) >= 294)]
 ├── estimated rows: 66.00
 ├── output rows: 66
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 685)]
+├── filters: [is_true(t.a (#0) >= 295)]
 ├── estimated rows: 65.00
 ├── output rows: 65
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 687)]
+├── filters: [is_true(t.a (#0) >= 297)]
 ├── estimated rows: 63.00
 ├── output rows: 63
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 688)]
+├── filters: [is_true(t.a (#0) >= 298)]
 ├── estimated rows: 62.00
 ├── output rows: 62
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 690)]
+├── filters: [is_true(t.a (#0) >= 300)]
 ├── estimated rows: 60.00
 ├── output rows: 60
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 691)]
+├── filters: [is_true(t.a (#0) >= 301)]
 ├── estimated rows: 59.00
 ├── output rows: 59
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 693)]
+├── filters: [is_true(t.a (#0) >= 303)]
 ├── estimated rows: 57.00
 ├── output rows: 57
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 694)]
+├── filters: [is_true(t.a (#0) >= 304)]
 ├── estimated rows: 56.00
 ├── output rows: 56
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 696)]
+├── filters: [is_true(t.a (#0) >= 306)]
 ├── estimated rows: 54.00
 ├── output rows: 54
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 697)]
+├── filters: [is_true(t.a (#0) >= 307)]
 ├── estimated rows: 53.00
 ├── output rows: 53
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 699)]
+├── filters: [is_true(t.a (#0) >= 309)]
 ├── estimated rows: 51.00
 ├── output rows: 51
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 700)]
+├── filters: [is_true(t.a (#0) >= 310)]
 ├── estimated rows: 50.00
 ├── output rows: 50
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 702)]
+├── filters: [is_true(t.a (#0) >= 312)]
 ├── estimated rows: 48.00
 ├── output rows: 48
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 703)]
+├── filters: [is_true(t.a (#0) >= 313)]
 ├── estimated rows: 47.00
 ├── output rows: 47
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 705)]
+├── filters: [is_true(t.a (#0) >= 315)]
 ├── estimated rows: 45.00
 ├── output rows: 45
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 706)]
+├── filters: [is_true(t.a (#0) >= 316)]
 ├── estimated rows: 44.00
 ├── output rows: 44
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 708)]
+├── filters: [is_true(t.a (#0) >= 318)]
 ├── estimated rows: 42.00
 ├── output rows: 42
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 709)]
+├── filters: [is_true(t.a (#0) >= 319)]
 ├── estimated rows: 41.00
 ├── output rows: 41
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 711)]
+├── filters: [is_true(t.a (#0) >= 321)]
 ├── estimated rows: 39.00
 ├── output rows: 39
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 712)]
+├── filters: [is_true(t.a (#0) >= 322)]
 ├── estimated rows: 38.00
 ├── output rows: 38
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 714)]
+├── filters: [is_true(t.a (#0) >= 324)]
 ├── estimated rows: 36.00
 ├── output rows: 36
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 715)]
+├── filters: [is_true(t.a (#0) >= 325)]
 ├── estimated rows: 35.00
 ├── output rows: 35
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 717)]
+├── filters: [is_true(t.a (#0) >= 327)]
 ├── estimated rows: 33.00
 ├── output rows: 33
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 718)]
+├── filters: [is_true(t.a (#0) >= 328)]
 ├── estimated rows: 32.00
 ├── output rows: 32
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 720)]
+├── filters: [is_true(t.a (#0) >= 330)]
 ├── estimated rows: 30.00
 ├── output rows: 30
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 721)]
+├── filters: [is_true(t.a (#0) >= 331)]
 ├── estimated rows: 29.00
 ├── output rows: 29
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 723)]
+├── filters: [is_true(t.a (#0) >= 333)]
 ├── estimated rows: 27.00
 ├── output rows: 27
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 724)]
+├── filters: [is_true(t.a (#0) >= 334)]
 ├── estimated rows: 26.00
 ├── output rows: 26
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 726)]
+├── filters: [is_true(t.a (#0) >= 336)]
 ├── estimated rows: 24.00
 ├── output rows: 24
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 727)]
+├── filters: [is_true(t.a (#0) >= 337)]
 ├── estimated rows: 23.00
 ├── output rows: 23
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 729)]
+├── filters: [is_true(t.a (#0) >= 339)]
 ├── estimated rows: 21.00
 ├── output rows: 21
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 730)]
+├── filters: [is_true(t.a (#0) >= 340)]
 ├── estimated rows: 20.00
 ├── output rows: 20
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 732)]
+├── filters: [is_true(t.a (#0) >= 342)]
 ├── estimated rows: 18.00
 ├── output rows: 18
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 733)]
+├── filters: [is_true(t.a (#0) >= 343)]
 ├── estimated rows: 17.00
 ├── output rows: 17
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 735)]
+├── filters: [is_true(t.a (#0) >= 345)]
 ├── estimated rows: 15.00
 ├── output rows: 15
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 736)]
+├── filters: [is_true(t.a (#0) >= 346)]
 ├── estimated rows: 14.00
 ├── output rows: 14
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 738)]
+├── filters: [is_true(t.a (#0) >= 348)]
 ├── estimated rows: 12.00
 ├── output rows: 12
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 739)]
+├── filters: [is_true(t.a (#0) >= 349)]
 ├── estimated rows: 11.00
 ├── output rows: 11
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 741)]
+├── filters: [is_true(t.a (#0) >= 351)]
 ├── estimated rows: 9.00
 ├── output rows: 9
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 742)]
+├── filters: [is_true(t.a (#0) >= 352)]
 ├── estimated rows: 8.00
 ├── output rows: 8
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 744)]
+├── filters: [is_true(t.a (#0) >= 354)]
 ├── estimated rows: 6.00
 ├── output rows: 6
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 745)]
+├── filters: [is_true(t.a (#0) >= 355)]
 ├── estimated rows: 5.00
 ├── output rows: 5
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 747)]
+├── filters: [is_true(t.a (#0) >= 357)]
 ├── estimated rows: 3.00
 ├── output rows: 3
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
 Filter
-├── filters: [is_true(t.a (#0) >= 748)]
+├── filters: [is_true(t.a (#0) >= 358)]
 ├── estimated rows: 2.00
 ├── output rows: 2
 └── TableScan
     ├── table: default.default.t
-    ├── estimated rows: 750.00
-    └── output rows: 750
+    ├── estimated rows: 360.00
+    └── output rows: 360
