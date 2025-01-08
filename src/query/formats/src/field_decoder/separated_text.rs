@@ -29,6 +29,7 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
+use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
@@ -277,7 +278,7 @@ impl SeparatedTextDecoder {
 
     fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
         let ts = if !data.contains(&b'-') {
-            read_num_text_exact(data)?
+            int64_to_timestamp(read_num_text_exact(data)?)
         } else {
             let mut buffer_readr = Cursor::new(&data);
             let t = buffer_readr.read_timestamp_text(&self.common_settings().jiff_timezone)?;
@@ -292,12 +293,13 @@ impl SeparatedTextDecoder {
                         );
                         return Err(ErrorCode::BadBytes(msg));
                     }
-                    t.timestamp().as_microsecond()
+                    let mut ts = t.timestamp().as_microsecond();
+                    clamp_timestamp(&mut ts);
+                    ts
                 }
                 _ => unreachable!(),
             }
         };
-        let ts = int64_to_timestamp(ts);
         column.push(ts);
         Ok(())
     }
