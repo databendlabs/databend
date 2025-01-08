@@ -23,9 +23,9 @@ databend-common-exception = { workspace = true }
 env_logger = { workspace = true }
 futures-util = { workspace = true }
 mysql_async = { workspace = true }
-redis = { workspace = true }
 rand = { workspace = true }
 recursive = { workspace = true }
+redis = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["cookies"] }
 serde = { workspace = true }
