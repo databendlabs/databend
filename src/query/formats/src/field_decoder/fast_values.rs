@@ -37,7 +37,6 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -51,7 +50,6 @@ use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::BufferReadStringExt;
-use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
@@ -62,9 +60,9 @@ use databend_common_io::prelude::FormatSettings;
 use databend_common_io::Interval;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
-use num::cast::AsPrimitive;
 use num_traits::NumCast;
 
+use crate::field_decoder::common::read_timestamp;
 use crate::FieldDecoder;
 use crate::InputCommonSettings;
 
@@ -323,26 +321,7 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
-        let mut buffer_readr = Cursor::new(&buf);
-        let ts = buffer_readr.read_timestamp_text(&self.common_settings().jiff_timezone)?;
-        match ts {
-            DateTimeResType::Datetime(ts) => {
-                if !buffer_readr.eof() {
-                    let data = buf.to_str().unwrap_or("not utf8");
-                    let msg = format!(
-                        "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                        buffer_readr.position(),
-                        data
-                    );
-                    return Err(ErrorCode::BadBytes(msg));
-                }
-                let mut micros = ts.timestamp().as_microsecond();
-                clamp_timestamp(&mut micros);
-                column.push(micros.as_());
-            }
-            _ => unreachable!(),
-        }
-        Ok(())
+        read_timestamp(column, &buf, self.common_settings())
     }
 
     fn read_array<R: AsRef<[u8]>>(
