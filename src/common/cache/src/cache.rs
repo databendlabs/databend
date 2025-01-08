@@ -72,6 +72,10 @@ pub trait Cache<K: Eq + Hash + MemSized, V: MemSized> {
 
     fn items_capacity(&self) -> u64;
 
+    fn set_bytes_capacity(&mut self, capacity: usize);
+
+    fn set_items_capacity(&mut self, capacity: usize);
+
     /// Returns the bytes size of all the key-value pairs in the cache.
     fn bytes_size(&self) -> u64;
 

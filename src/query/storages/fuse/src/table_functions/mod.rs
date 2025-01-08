@@ -25,6 +25,8 @@ mod fuse_statistic;
 mod fuse_vacuum_temporary_table;
 mod table_args;
 
+mod set_cache_capacity;
+
 pub use clustering_information::ClusteringInformationFunc;
 pub use clustering_statistics::ClusteringStatisticsFunc;
 use databend_common_catalog::table_args::TableArgs;
@@ -40,4 +42,5 @@ pub use fuse_segment::FuseSegmentFunc;
 pub use fuse_snapshot::FuseSnapshotFunc;
 pub use fuse_statistic::FuseStatisticsFunc;
 pub use fuse_vacuum_temporary_table::FuseVacuumTemporaryTable;
+pub use set_cache_capacity::SetCacheCapacity;
 pub use table_args::*;
