@@ -87,8 +87,8 @@ fn create_writer(
         DATABEND_SEMVER.pre.as_str()
     );
 
-    if create_by.len() != CREATE_BY_LEN {
-        create_by = format!("{:.<24}", create_by);
+    if create_by.len() > CREATE_BY_LEN {
+        create_by.truncate(CREATE_BY_LEN);
     }
 
     let props = WriterProperties::builder()
