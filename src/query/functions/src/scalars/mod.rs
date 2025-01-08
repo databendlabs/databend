@@ -53,6 +53,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     variant::register(registry);
     arithmetic::register(registry);
     // register basic arithmetic operation (+ - * / %)
+    databend_functions_scalar_decimal::register_decimal_arithmetic(registry);
+    databend_functions_scalar_integer_basic_arithmetic::register_integer_basic_arithmetic(registry);
     register_numeric_basic_arithmetic(registry);
     arithmetic::register_binary_arithmetic(registry);
     arithmetic::register_unary_arithmetic(registry);

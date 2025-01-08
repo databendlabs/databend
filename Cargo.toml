@@ -42,6 +42,7 @@ members = [
     "src/query/functions/src/scalars/timestamp",
     "src/query/functions/src/scalars/numeric_basic_arithmetic",
     "src/query/functions/src/scalars/arithmetic",
+    "src/query/functions/src/scalars/integer_arithmetic",
     "src/query/management",
     "src/query/pipeline/core",
     "src/query/pipeline/sinks",
@@ -196,6 +197,7 @@ databend-functions-scalar-arithmetic = { path = "src/query/functions/src/scalars
 databend-functions-scalar-datetime = { path = "src/query/functions/src/scalars/timestamp" }
 databend-functions-scalar-decimal = { path = "src/query/functions/src/scalars/decimal" }
 databend-functions-scalar-geo = { path = "src/query/functions/src/scalars/geographic" }
+databend-functions-scalar-integer-basic-arithmetic = { path = "src/query/functions/src/scalars/integer_arithmetic" }
 databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathematics" }
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
 databend-meta = { path = "src/meta/service" }

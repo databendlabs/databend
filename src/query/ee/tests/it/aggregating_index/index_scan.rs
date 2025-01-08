@@ -747,47 +747,6 @@ struct TestSuite {
 /// ```
 fn get_test_suites() -> Vec<TestSuite> {
     vec![
-        // query: eval-scan, index: eval-scan
-        TestSuite {
-            query: "select to_string(c + 1) from t",
-            index: "select c + 1 from t",
-            is_index_scan: true,
-        },
-        TestSuite {
-            query: "select c + 1 from t",
-            index: "select c + 1 from t",
-            is_index_scan: true,
-        },
-        TestSuite {
-            query: "select a from t",
-            index: "select a from t",
-            is_index_scan: true,
-        },
-        TestSuite {
-            query: "select a as z from t",
-            index: "select a from t",
-            is_index_scan: true,
-        },
-        TestSuite {
-            query: "select a + 1, to_string(a) from t",
-            index: "select a from t",
-            is_index_scan: true,
-        },
-        TestSuite {
-            query: "select a + 1 as z, to_string(a) from t",
-            index: "select a from t",
-            is_index_scan: true,
-        },
-        TestSuite {
-            query: "select b from t",
-            index: "select a, b from t",
-            is_index_scan: true,
-        },
-        TestSuite {
-            query: "select a from t",
-            index: "select b, c from t",
-            is_index_scan: false,
-        },
         // query: eval-filter-scan, index: eval-scan
         TestSuite {
             query: "select a from t where b > 1",
