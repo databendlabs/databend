@@ -1,10 +1,5 @@
 name: "Test old metasrv is compatible with new query; new meta is compatible with old query"
 description: "Download old binaries and current binaries, run stateless test with old `meta` and latest `query`"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:

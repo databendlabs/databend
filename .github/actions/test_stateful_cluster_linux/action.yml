@@ -4,8 +4,6 @@ runs:
   using: "composite"
   steps:
     - uses: ./.github/actions/setup_test
-      with:
-        artifacts: sqllogictests,meta,query
 
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash
