@@ -71,7 +71,7 @@ runs:
         artifacts="meta,metactl,metabench,query,sqllogictests"
         binaries=""
         for artifact in ${artifacts//,/ }; do
-          binaries="${binaries} --bins databend-$artifact"
+          binaries="${binaries} --bin databend-$artifact"
         done
         cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
