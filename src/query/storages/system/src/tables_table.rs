@@ -328,6 +328,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             }
         }
 
+        let visibility_checker = ctx.get_visibility_checker(false).await?;
         // from system.tables where database = 'db' and name = 'name'
         // from system.tables where database = 'db' and table_id = 123
         if db_name.len() == 1
@@ -336,7 +337,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             && !invalid_tables_ids
             && !WITH_HISTORY
         {
-            let visibility_checker = ctx.get_visibility_checker(true).await?;
             for (ctl_name, ctl) in ctls.iter() {
                 for db in &db_name {
                     match ctl.get_database(&tenant, db.as_str()).await {
@@ -415,7 +415,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 }
             }
         } else {
-            let visibility_checker = ctx.get_visibility_checker(false).await?;
             let catalog_dbs = visibility_checker.get_visibility_database();
 
             for (ctl_name, ctl) in ctls.iter() {
