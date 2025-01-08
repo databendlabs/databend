@@ -3121,6 +3121,7 @@ dependencies = [
  "ethnum",
  "foreign_vec",
  "hex",
+ "log",
  "match-template",
  "num-traits",
  "proptest",
