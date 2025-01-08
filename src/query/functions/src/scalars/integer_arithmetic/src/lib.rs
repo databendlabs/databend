@@ -24,11 +24,6 @@
 #![feature(downcast_unchecked)]
 #![feature(str_internals)]
 
-pub mod arithmetic_modulo;
-pub mod numeric_basic_arithmetic;
+pub mod integer_arithmetic;
 
-pub use arithmetic_modulo::vectorize_modulo;
-pub use numeric_basic_arithmetic::div0_function;
-pub use numeric_basic_arithmetic::divide_function;
-pub use numeric_basic_arithmetic::divnull_function;
-pub use numeric_basic_arithmetic::register_numeric_basic_arithmetic;
+pub use integer_arithmetic::*;

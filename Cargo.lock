@@ -3333,6 +3333,7 @@ dependencies = [
  "databend-functions-scalar-datetime",
  "databend-functions-scalar-decimal",
  "databend-functions-scalar-geo",
+ "databend-functions-scalar-integer-basic-arithmetic",
  "databend-functions-scalar-math",
  "databend-functions-scalar-numeric-basic-arithmetic",
  "ethnum",
@@ -4838,6 +4839,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-functions-scalar-integer-basic-arithmetic"
+version = "0.1.0"
+dependencies = [
+ "databend-common-expression",
+ "databend-functions-scalar-numeric-basic-arithmetic",
+ "match-template",
+ "num-traits",
+]
+
+[[package]]
 name = "databend-functions-scalar-math"
 version = "0.1.0"
 dependencies = [
@@ -4854,7 +4865,6 @@ name = "databend-functions-scalar-numeric-basic-arithmetic"
 version = "0.1.0"
 dependencies = [
  "databend-common-expression",
- "databend-functions-scalar-decimal",
  "match-template",
  "num-traits",
  "strength_reduce",
