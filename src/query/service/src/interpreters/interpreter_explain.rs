@@ -147,6 +147,7 @@ impl Interpreter for ExplainInterpreter {
                         self.ctx.clone(),
                         *s_expr.clone(),
                         schema.clone(),
+                        metadata.clone(),
                     )?;
                     let plan = interpreter.build_physical_plan(&mutation, None).await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
@@ -529,7 +530,12 @@ impl ExplainInterpreter {
         schema: DataSchemaRef,
     ) -> Result<Vec<DataBlock>> {
         let mutation: Mutation = s_expr.plan().clone().try_into()?;
-        let interpreter = MutationInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
+        let interpreter = MutationInterpreter::try_create(
+            self.ctx.clone(),
+            s_expr,
+            schema,
+            mutation.metadata.clone(),
+        )?;
         let plan = interpreter.build_physical_plan(&mutation, None).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
