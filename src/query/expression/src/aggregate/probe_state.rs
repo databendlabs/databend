@@ -22,6 +22,7 @@ use crate::BATCH_SIZE;
 pub struct ProbeState {
     pub group_hashes: [u64; BATCH_SIZE],
     pub addresses: [*const u8; BATCH_SIZE],
+    pub page_index: [usize; BATCH_SIZE],
     pub state_places: [StateAddr; BATCH_SIZE],
     pub group_compare_vector: SelectVector,
     pub no_match_vector: SelectVector,
@@ -38,6 +39,7 @@ impl Default for ProbeState {
         Self {
             group_hashes: [0_u64; BATCH_SIZE],
             addresses: [std::ptr::null::<u8>(); BATCH_SIZE],
+            page_index: [0; BATCH_SIZE],
             state_places: [StateAddr::new(0); BATCH_SIZE],
             group_compare_vector: new_sel(),
             no_match_vector: new_sel(),
