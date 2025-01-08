@@ -22,5 +22,5 @@ sql = f"""create or replace table t as select number as a from numbers({size});"
 client1.run(sql)
 
 for i in range(num_predicates):
-    sql = f"explain select * from t where a >= {int(step * i)};"
+    sql = f"explain analyze partial select * from t where a >= {int(step * i)};"
     client1.run(sql)
