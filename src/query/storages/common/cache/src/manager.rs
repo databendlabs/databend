@@ -135,7 +135,7 @@ impl CacheManager {
 
         // Cache of deserialized table data
         let in_memory_table_data_cache =
-            Self::new_named_bytes_cache_slot(MEMORY_CACHE_TABLE_DATA, memory_cache_capacity);
+            Self::new_bytes_cache_slot(MEMORY_CACHE_TABLE_DATA, memory_cache_capacity);
 
         // setup in-memory table meta cache
         if !config.enable_table_meta_cache {
@@ -154,29 +154,29 @@ impl CacheManager {
                 block_meta_cache: CacheSlot::new(None),
             }));
         } else {
-            let table_snapshot_cache = Self::new_named_items_cache_slot(
-                config.table_meta_snapshot_count as usize,
+            let table_snapshot_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_TABLE_SNAPSHOT,
+                config.table_meta_snapshot_count as usize,
             );
-            let table_statistic_cache = Self::new_named_items_cache_slot(
-                config.table_meta_statistic_count as usize,
+            let table_statistic_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_TABLE_STATISTICS,
+                config.table_meta_statistic_count as usize,
             );
-            let compact_segment_info_cache = Self::new_named_bytes_cache_slot(
+            let compact_segment_info_cache = Self::new_bytes_cache_slot(
                 MEMORY_CACHE_COMPACT_SEGMENT_INFO,
                 config.table_meta_segment_bytes as usize,
             );
-            let bloom_index_filter_cache = Self::new_named_bytes_cache_slot(
+            let bloom_index_filter_cache = Self::new_bytes_cache_slot(
                 MEMORY_CACHE_BLOOM_INDEX_FILTER,
                 config.table_bloom_index_filter_size as usize,
             );
-            let bloom_index_meta_cache = Self::new_named_items_cache_slot(
-                config.table_bloom_index_meta_count as usize,
+            let bloom_index_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA,
+                config.table_bloom_index_meta_count as usize,
             );
-            let inverted_index_meta_cache = Self::new_named_items_cache_slot(
-                config.inverted_index_meta_count as usize,
+            let inverted_index_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA,
+                config.inverted_index_meta_count as usize,
             );
 
             // setup in-memory inverted index filter cache
@@ -187,23 +187,23 @@ impl CacheManager {
             } else {
                 config.inverted_index_filter_size as usize
             };
-            let inverted_index_file_cache = Self::new_named_bytes_cache_slot(
+            let inverted_index_file_cache = Self::new_bytes_cache_slot(
                 MEMORY_CACHE_INVERTED_INDEX_FILE,
                 inverted_index_file_size,
             );
-            let prune_partitions_cache = Self::new_named_items_cache_slot(
-                config.table_prune_partitions_count as usize,
+            let prune_partitions_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_PRUNE_PARTITIONS,
+                config.table_prune_partitions_count as usize,
             );
 
-            let parquet_meta_data_cache = Self::new_named_items_cache_slot(
-                DEFAULT_PARQUET_META_DATA_CACHE_ITEMS,
+            let parquet_meta_data_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_PARQUET_META_DATA,
+                DEFAULT_PARQUET_META_DATA_CACHE_ITEMS,
             );
 
-            let block_meta_cache = Self::new_named_items_cache_slot(
-                config.block_meta_count as usize,
+            let block_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_BLOCK_META,
+                config.block_meta_count as usize,
             );
 
             GlobalInstance::set(Arc::new(Self {
@@ -237,61 +237,41 @@ impl CacheManager {
         match name {
             MEMORY_CACHE_TABLE_DATA => {
                 let cache = &self.in_memory_table_data_cache;
-                Self::set_named_cache_bytes_capacity(cache, new_capacity, name);
+                Self::set_bytes_capacity(cache, new_capacity, name);
             }
             MEMORY_CACHE_PARQUET_META_DATA => {
                 let cache = &self.parquet_meta_data_cache;
-                Self::set_named_cache_items_capacity(cache, new_capacity, name)
+                Self::set_items_capacity(cache, new_capacity, name)
             }
             MEMORY_CACHE_PRUNE_PARTITIONS => {
                 let cache = &self.prune_partitions_cache;
-                Self::set_named_cache_items_capacity(cache, new_capacity, name)
+                Self::set_items_capacity(cache, new_capacity, name)
             }
             MEMORY_CACHE_INVERTED_INDEX_FILE => {
                 let cache = &self.inverted_index_file_cache;
-                Self::set_named_cache_bytes_capacity(cache, new_capacity, name);
+                Self::set_bytes_capacity(cache, new_capacity, name);
             }
             MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA => {
                 let cache = &self.inverted_index_meta_cache;
-                Self::set_named_cache_items_capacity(cache, new_capacity, name);
+                Self::set_items_capacity(cache, new_capacity, name);
             }
             MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA => {
-                Self::set_named_cache_items_capacity(
-                    &self.bloom_index_meta_cache,
-                    new_capacity,
-                    name,
-                );
+                Self::set_items_capacity(&self.bloom_index_meta_cache, new_capacity, name);
             }
             MEMORY_CACHE_BLOOM_INDEX_FILTER => {
-                Self::set_named_cache_bytes_capacity(
-                    &self.bloom_index_filter_cache,
-                    new_capacity,
-                    name,
-                );
+                Self::set_bytes_capacity(&self.bloom_index_filter_cache, new_capacity, name);
             }
             MEMORY_CACHE_COMPACT_SEGMENT_INFO => {
-                Self::set_named_cache_bytes_capacity(
-                    &self.compact_segment_info_cache,
-                    new_capacity,
-                    name,
-                );
+                Self::set_bytes_capacity(&self.compact_segment_info_cache, new_capacity, name);
             }
             MEMORY_CACHE_TABLE_STATISTICS => {
-                Self::set_named_cache_items_capacity(
-                    &self.table_statistic_cache,
-                    new_capacity,
-                    name,
-                );
+                Self::set_items_capacity(&self.table_statistic_cache, new_capacity, name);
             }
             MEMORY_CACHE_TABLE_SNAPSHOT => {
-                Self::set_named_cache_items_capacity(
-                    &self.table_snapshot_cache,
-                    new_capacity,
-                    name,
-                );
+                Self::set_items_capacity(&self.table_snapshot_cache, new_capacity, name);
             }
             MEMORY_CACHE_BLOCK_META => {
-                Self::set_named_cache_items_capacity(&self.block_meta_cache, new_capacity, name);
+                Self::set_items_capacity(&self.block_meta_cache, new_capacity, name);
             }
 
             crate::DISK_TABLE_DATA_CACHE_NAME => {
@@ -305,7 +285,7 @@ impl CacheManager {
         Ok(())
     }
 
-    fn set_named_cache_bytes_capacity<T: Into<CacheValue<T>>>(
+    fn set_bytes_capacity<T: Into<CacheValue<T>>>(
         cache: &CacheSlot<InMemoryLruCache<T>>,
         new_capacity: u64,
         name: impl Into<String>,
@@ -313,12 +293,12 @@ impl CacheManager {
         if let Some(v) = cache.get() {
             v.set_bytes_capacity(new_capacity as usize);
         } else {
-            let new_cache = Self::new_named_bytes_cache(name, new_capacity as usize);
+            let new_cache = Self::new_bytes_cache(name, new_capacity as usize);
             cache.set(new_cache)
         }
     }
 
-    fn set_named_cache_items_capacity<T: Into<CacheValue<T>>>(
+    fn set_items_capacity<T: Into<CacheValue<T>>>(
         cache: &CacheSlot<InMemoryLruCache<T>>,
         new_capacity: u64,
         name: impl Into<String>,
@@ -326,7 +306,7 @@ impl CacheManager {
         if let Some(v) = cache.get() {
             v.set_items_capacity(new_capacity as usize);
         } else {
-            let new_cache = Self::new_named_items_cache(new_capacity as usize, name);
+            let new_cache = Self::new_items_cache(name, new_capacity as usize);
             cache.set(new_cache)
         }
     }
@@ -375,16 +355,16 @@ impl CacheManager {
         self.in_memory_table_data_cache.get()
     }
 
-    fn new_named_items_cache_slot<V: Into<CacheValue<V>>>(
-        capacity: usize,
+    fn new_items_cache_slot<V: Into<CacheValue<V>>>(
         name: impl Into<String>,
+        capacity: usize,
     ) -> CacheSlot<InMemoryLruCache<V>> {
-        CacheSlot::new(Self::new_named_items_cache(capacity, name))
+        CacheSlot::new(Self::new_items_cache(name, capacity))
     }
 
-    fn new_named_items_cache<V: Into<CacheValue<V>>>(
-        capacity: usize,
+    fn new_items_cache<V: Into<CacheValue<V>>>(
         name: impl Into<String>,
+        capacity: usize,
     ) -> Option<InMemoryLruCache<V>> {
         match capacity {
             0 => None,
@@ -392,14 +372,14 @@ impl CacheManager {
         }
     }
 
-    fn new_named_bytes_cache_slot<V: Into<CacheValue<V>>>(
+    fn new_bytes_cache_slot<V: Into<CacheValue<V>>>(
         name: impl Into<String>,
         bytes_capacity: usize,
     ) -> CacheSlot<InMemoryLruCache<V>> {
-        CacheSlot::new(Self::new_named_bytes_cache(name, bytes_capacity))
+        CacheSlot::new(Self::new_bytes_cache(name, bytes_capacity))
     }
 
-    fn new_named_bytes_cache<V: Into<CacheValue<V>>>(
+    fn new_bytes_cache<V: Into<CacheValue<V>>>(
         name: impl Into<String>,
         bytes_capacity: usize,
     ) -> Option<InMemoryLruCache<V>> {
