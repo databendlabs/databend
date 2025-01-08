@@ -93,19 +93,18 @@ mod impls {
 
         fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<V>> {
             metrics_inc_cache_access_count(1, self.name());
-            let mut guard = self.inner.write();
-            match guard.get(k.as_ref()) {
-                None => {
-                    // TODO move these out lock
-                    metrics_inc_cache_miss_count(1, &self.name);
-                    None
-                }
-                Some(cached_value) => {
-                    // TODO move these out of lock
-                    metrics_inc_cache_hit_count(1, &self.name);
-                    Some(cached_value.get_inner())
-                }
+            let v = {
+                let mut guard = self.inner.write();
+                guard
+                    .get(k.as_ref())
+                    .map(|cache_value: &CacheValue<V>| cache_value.get_inner())
+            };
+            if v.is_none() {
+                metrics_inc_cache_miss_count(1, &self.name);
+            } else {
+                metrics_inc_cache_hit_count(1, &self.name);
             }
+            v
         }
 
         fn get_sized<Q: AsRef<str>>(&self, k: Q, len: u64) -> Option<Arc<Self::V>> {
