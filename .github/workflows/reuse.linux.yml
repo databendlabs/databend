@@ -41,7 +41,7 @@ jobs:
       - self-hosted
       - "${{ matrix.runner }}"
       - Linux
-      - 8c32g
+      - 16c64g
       - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
