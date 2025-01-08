@@ -280,7 +280,7 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        read_timestamp(column, &buf, &self.common_settings())
+        read_timestamp(column, &buf, self.common_settings())
     }
 
     fn read_bitmap<R: AsRef<[u8]>>(

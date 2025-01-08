@@ -274,7 +274,7 @@ impl SeparatedTextDecoder {
     }
 
     fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
-        read_timestamp(column, data, &self.common_settings())
+        read_timestamp(column, data, self.common_settings())
     }
 
     fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {

@@ -321,7 +321,7 @@ impl FastFieldDecoderValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf, positions)?;
-        read_timestamp(column, &buf, &self.common_settings())
+        read_timestamp(column, &buf, self.common_settings())
     }
 
     fn read_array<R: AsRef<[u8]>>(
