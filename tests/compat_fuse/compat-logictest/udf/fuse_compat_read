@@ -1,0 +1,13 @@
+query F
+select number, gcd_js(number * 3, number * 6) from numbers(5) where number > 0 order by 1
+----
+1 3
+2 6
+3 9
+4 12
+
+
+query T
+SELECT name FROM SYSTEM.USER_FUNCTIONS where name = 'gcd_js' ORDER BY name;
+----
+gcd_js

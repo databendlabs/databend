@@ -46,9 +46,8 @@ impl FromToProto for mt::background::BackgroundJobInfo {
             job_status: p
                 .job_status
                 .and_then(|t| BackgroundJobStatus::from_pb(t).ok()),
-            task_type: FromPrimitive::from_i32(p.task_type).ok_or_else(|| Incompatible {
-                reason: format!("invalid TaskType: {}", p.task_type),
-            })?,
+            task_type: FromPrimitive::from_i32(p.task_type)
+                .ok_or_else(|| Incompatible::new(format!("invalid TaskType: {}", p.task_type)))?,
 
             last_updated: p
                 .last_updated
@@ -89,9 +88,8 @@ impl FromToProto for mt::background::BackgroundJobParams {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(Self {
-            job_type: FromPrimitive::from_i32(p.job_type).ok_or_else(|| Incompatible {
-                reason: format!("invalid job type: {}", p.job_type),
-            })?,
+            job_type: FromPrimitive::from_i32(p.job_type)
+                .ok_or_else(|| Incompatible::new(format!("invalid job type: {}", p.job_type)))?,
             scheduled_job_interval: std::time::Duration::from_secs(
                 p.scheduled_job_interval_seconds,
             ),
@@ -99,9 +97,8 @@ impl FromToProto for mt::background::BackgroundJobParams {
             scheduled_job_timezone: p
                 .scheduled_job_timezone
                 .map(|t| {
-                    chrono_tz::Tz::from_str(&t).map_err(|e| Incompatible {
-                        reason: format!("invalid timezone: {}", e),
-                    })
+                    chrono_tz::Tz::from_str(&t)
+                        .map_err(|e| Incompatible::new(format!("invalid timezone: {}", e)))
                 })
                 .transpose()?,
             manual_trigger_params: p
@@ -138,9 +135,8 @@ impl FromToProto for BackgroundJobStatus {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(Self {
-            job_state: FromPrimitive::from_i32(p.job_state).ok_or_else(|| Incompatible {
-                reason: format!("invalid JobState: {}", p.job_state),
-            })?,
+            job_state: FromPrimitive::from_i32(p.job_state)
+                .ok_or_else(|| Incompatible::new(format!("invalid JobState: {}", p.job_state)))?,
             last_task_id: p.last_task_id,
             last_task_run_at: p
                 .last_task_run_at
@@ -200,11 +196,10 @@ impl FromToProto for mt::background::ManualTriggerParams {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(Self {
             id: p.id,
-            trigger: mt::principal::UserIdentity::from_pb(p.trigger.ok_or_else(|| {
-                Incompatible {
-                    reason: "trigger is required".to_string(),
-                }
-            })?)?,
+            trigger: mt::principal::UserIdentity::from_pb(
+                p.trigger
+                    .ok_or_else(|| Incompatible::new("trigger is required".to_string()))?,
+            )?,
             triggered_at: DateTime::<Utc>::from_pb(p.triggered_at)?,
         })
     }

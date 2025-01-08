@@ -215,7 +215,7 @@ databend-storages-common-table-meta = { path = "src/query/storages/common/table_
 # Crates.io dependencies
 ahash = "0.8"
 aho-corasick = { version = "1.0.1" } #
-anyerror = { version = "=0.1.10" }
+anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 approx = "0.5.1"
 arrow = { version = "53" }
