@@ -30,14 +30,12 @@ pub struct InMemoryLruCache<V: Into<CacheValue<V>>> {
 impl<V: Into<CacheValue<V>>> InMemoryLruCache<V> {
     pub fn set_bytes_capacity(&self, capacity: usize) {
         let mut cache = self.inner.write();
-        // TODO no as please
-        cache.set_bytes_capacity(capacity as u64);
+        cache.set_bytes_capacity(capacity);
     }
 
     pub fn set_items_capacity(&self, capacity: usize) {
         let mut cache = self.inner.write();
-        // TODO no as please
-        cache.set_items_capacity(capacity as u64);
+        cache.set_items_capacity(capacity);
     }
 }
 

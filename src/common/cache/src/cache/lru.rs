@@ -301,19 +301,18 @@ impl<K: Eq + Hash + MemSized, V: MemSized> Cache<K, V> for LruCache<K, V> {
         self.max_items as u64
     }
 
-    fn set_bytes_capacity(&mut self, capacity: u64) {
-        // TODO refine this
-        while self.bytes > self.max_bytes || self.map.len() > self.max_items {
+    fn set_bytes_capacity(&mut self, max_bytes: usize) {
+        while self.bytes > max_bytes || self.map.len() > self.max_items {
             self.pop_by_policy();
         }
-        self.max_bytes = capacity as usize;
+        self.max_bytes = max_bytes;
     }
 
-    fn set_items_capacity(&mut self, capacity: u64) {
-        while self.bytes > self.max_bytes || self.map.len() > self.max_items {
+    fn set_items_capacity(&mut self, max_items: usize) {
+        while self.bytes > self.max_bytes || self.map.len() > max_items {
             self.pop_by_policy();
         }
-        self.max_items = capacity as usize;
+        self.max_items = max_items;
     }
 
     /// Returns the bytes size of all the key-value pairs in the cache.
