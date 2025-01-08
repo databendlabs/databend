@@ -27,6 +27,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::Mutation;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
@@ -286,7 +287,9 @@ pub async fn do_mutation(
     s_expr: SExpr,
     schema: DataSchemaRef,
 ) -> Result<()> {
-    let interpreter = MutationInterpreter::try_create(ctx.clone(), s_expr, schema)?;
+    let mutation: Mutation = s_expr.plan().clone().try_into()?;
+    let interpreter =
+        MutationInterpreter::try_create(ctx.clone(), s_expr, schema, mutation.metadata.clone())?;
     let _ = interpreter.execute(ctx).await?;
     Ok(())
 }
