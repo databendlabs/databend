@@ -4,12 +4,12 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 
-rows=3
+times=256
 
 echo "" > /tmp/fuzz_a.txt
 echo "" > /tmp/fuzz_b.txt
 
-for i in `seq 1 ${rows}`;do
+for i in `seq 1 ${times}`;do
 	echo """with t0(sum_sid)  as (select sum(number) over(partition by number order by number)
 	  from numbers(3))  select  n, if(n =1,  sum_sid +1, 0) from t0,  (select 1 n union all select 2) order by 1,2;
 	  """ | $BENDSQL_CLIENT_CONNECT >> /tmp/fuzz_a.txt
