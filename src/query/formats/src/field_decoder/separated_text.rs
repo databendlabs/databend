@@ -59,6 +59,7 @@ use lexical_core::FromLexical;
 use num_traits::NumCast;
 
 use crate::binary::decode_binary;
+use crate::field_decoder::common::read_timestamp;
 use crate::field_decoder::FieldDecoder;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
@@ -277,31 +278,7 @@ impl SeparatedTextDecoder {
     }
 
     fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
-        let ts = if !data.contains(&b'-') {
-            int64_to_timestamp(read_num_text_exact(data)?)
-        } else {
-            let mut buffer_readr = Cursor::new(&data);
-            let t = buffer_readr.read_timestamp_text(&self.common_settings().jiff_timezone)?;
-            match t {
-                DateTimeResType::Datetime(t) => {
-                    if !buffer_readr.eof() {
-                        let data = data.to_str().unwrap_or("not utf8");
-                        let msg = format!(
-                            "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                            buffer_readr.position(),
-                            data
-                        );
-                        return Err(ErrorCode::BadBytes(msg));
-                    }
-                    let mut ts = t.timestamp().as_microsecond();
-                    clamp_timestamp(&mut ts);
-                    ts
-                }
-                _ => unreachable!(),
-            }
-        };
-        column.push(ts);
-        Ok(())
+        read_timestamp(column, data, &self.common_settings())
     }
 
     fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {
