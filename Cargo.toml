@@ -574,8 +574,8 @@ result_large_err = "allow"
 
 ## DONT'T DELETE THIS: If we want best performance, we should use this profile but it will take longer time to compile.
 ## Test SQL:
-## select sum(number) from numbers_mt(10000000000);   ~ 3x performance
-## select max(number) from numbers_mt(10000000000);   ~ 3x performance
+## select sum(number) from numbers_mt(10000000000);  ~ 3x performance
+## select max(number) from numbers_mt(10000000000);  ~ 3x performance
 # [profile.release]
 # debug = 1
 # lto = "thin"
