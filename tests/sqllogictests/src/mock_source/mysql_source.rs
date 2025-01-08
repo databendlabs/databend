@@ -39,7 +39,7 @@ pub fn run_mysql_source() {
     let listener = TcpListener::bind("0.0.0.0:3106").unwrap();
 
     // Create a thread pool
-    let pool = ThreadPool::new(256);
+    let pool = ThreadPool::new(256 * 16);
     let backend = Backend::create();
 
     loop {
