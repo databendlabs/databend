@@ -25,6 +25,7 @@ use borsh::BorshSerialize;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use databend_common_base::base::OrderedFloat;
+use log::error;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
 
@@ -319,9 +320,21 @@ impl months_days_micros {
     }
 
     pub fn total_micros(&self) -> i64 {
-        (self.months() as i64 * MICROS_PER_MONTH)
-            + (self.days() as i64 * MICROS_PER_DAY)
-            + self.microseconds()
+        let months_micros = (self.months() as i64).checked_mul(MICROS_PER_MONTH);
+        let days_micros = (self.days() as i64).checked_mul(MICROS_PER_DAY);
+
+        months_micros
+            .and_then(|months_micros| days_micros.map(|days_micros| months_micros + days_micros))
+            .and_then(|total_micros| total_micros.checked_add(self.microseconds()))
+            .unwrap_or_else(|| {
+                error!(
+                    "interval is out of range: months={}, days={}, micros={}",
+                    self.months(),
+                    self.days(),
+                    self.microseconds()
+                );
+                0
+            })
     }
 }
 
