@@ -1,19 +1,10 @@
 name: "Test fuse-table format in an old query is compatible with new query"
 description: "Download old binaries and current binaries, write data with old query, read data with new query"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
+    - uses: ./.github/actions/setup_test
       with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
         path: ./bins/current
         artifacts: sqllogictests,meta,query
 
