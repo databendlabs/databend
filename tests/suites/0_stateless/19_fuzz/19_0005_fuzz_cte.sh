@@ -16,7 +16,7 @@ for i in `seq 1 ${times}`;do
 done
 
 
-for i in `seq 1 ${rows}`;do
+for i in `seq 1 ${times}`;do
 	echo """with t0(sum_sid)  as (select sum(number) over(partition by number order by number)
 	  from numbers(3))  select  n, if(n =1,  sum_sid +1, 0) from t0,  (select 1 n union all select 2) order by 1,2;
 	  """ | $BENDSQL_CLIENT_CONNECT >> /tmp/fuzz_b.txt
