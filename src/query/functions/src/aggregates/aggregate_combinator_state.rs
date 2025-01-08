@@ -20,7 +20,6 @@ use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrStateRegister;
-use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -37,7 +36,6 @@ use crate::aggregates::AggregateFunctionRef;
 #[derive(Clone)]
 pub struct AggregateStateCombinator {
     name: String,
-    data_type: DataType,
     nested: AggregateFunctionRef,
 }
 
@@ -61,22 +59,7 @@ impl AggregateStateCombinator {
         let mut register = AggrStateRegister::default();
         nested.register_state(&mut register);
 
-        let sub_types = register
-            .states()
-            .iter()
-            .map(|typ| match typ {
-                AggrStateType::Bool => DataType::Boolean,
-                AggrStateType::Custom(_) => DataType::Binary,
-            })
-            .collect();
-
-        let data_type = DataType::Tuple(sub_types);
-
-        Ok(Arc::new(AggregateStateCombinator {
-            name,
-            data_type,
-            nested,
-        }))
+        Ok(Arc::new(AggregateStateCombinator { name, nested }))
     }
 
     pub fn combinator_desc() -> CombinatorDescription {
@@ -90,7 +73,7 @@ impl AggregateFunction for AggregateStateCombinator {
     }
 
     fn return_type(&self) -> Result<DataType> {
-        Ok(self.data_type.clone())
+        Ok(DataType::Binary)
     }
 
     fn init_state(&self, place: &AggrState) {
