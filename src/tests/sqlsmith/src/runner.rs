@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs;
 use std::future::Future;
+use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DropTableStmt;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -59,6 +64,10 @@ const KNOWN_ERRORS: &[&str] = &[
     "invalid directed edge index",
     "invalid coordinate range",
     "window function calls cannot be nested",
+    "attempt to shift left with overflow",
+    "attempt to shift right with overflow",
+    "attempt to subtract with overflow",
+    "attempt to add with overflow",
     // Unsupported features
     "Row format is not yet support for",
     "to_decimal not support this DataType",
@@ -107,6 +116,167 @@ impl Runner {
         })
     }
 
+    pub async fn run(&mut self) -> Result<()> {
+        let create_db_sql = format!("CREATE OR REPLACE database {}", self.db);
+        let _ = self.client.query(&create_db_sql).await?;
+        let use_db_sql = format!("USE {}", self.db);
+        let _ = self.client.query(&use_db_sql).await?;
+
+        let settings = self.get_settings().await?;
+
+        let mut rng = Self::generate_rng(self.seed);
+        let mut generator = SqlGenerator::new(&mut rng, settings);
+        let table_stmts = generator.gen_base_tables(&self.db);
+        let tables = self.create_base_table(table_stmts).await?;
+        let row_count = 10;
+
+        let mut new_tables = tables.clone();
+        for (i, table) in tables.iter().enumerate() {
+            let insert_stmt = generator.gen_insert(table, row_count);
+            let insert_sql = insert_stmt.to_string();
+            tracing::info!("insert_sql: {}", insert_sql);
+            Self::check_res(self.client.query(&insert_sql).await);
+
+            let alter_stmt_opt = generator.gen_alter(table, row_count);
+            if let Some((alter_stmt, new_table, insert_stmt_opt)) = alter_stmt_opt {
+                if let AlterTableAction::RenameTable { ref new_table } = alter_stmt.action {
+                    let drop_table_stmt = DropTableStmt {
+                        if_exists: true,
+                        catalog: None,
+                        database: None,
+                        table: new_table.clone(),
+                        all: false,
+                    };
+                    let drop_table_sql = drop_table_stmt.to_string();
+                    tracing::info!("drop_table_sql: {}", drop_table_sql);
+                    Self::check_res(self.client.query(&drop_table_sql).await);
+                }
+                let alter_sql = alter_stmt.to_string();
+                tracing::info!("alter_sql: {}", alter_sql);
+                Self::check_res(self.client.query(&alter_sql).await);
+                // save new table schema
+                new_tables[i] = new_table;
+                if let Some(insert_stmt) = insert_stmt_opt {
+                    let insert_sql = insert_stmt.to_string();
+                    tracing::info!("after alter insert_sql: {}", insert_sql);
+                    Self::check_res(self.client.query(&insert_sql).await);
+                }
+            }
+        }
+        generator.tables = new_tables;
+
+        let enable_merge = "set enable_experimental_merge_into = 1".to_string();
+        Self::check_res(self.client.query(&enable_merge).await);
+        // generate merge, replace, update, delete
+        for _ in 0..20 {
+            let sql = match generator.rng.gen_range(0..=20) {
+                0..=10 => generator.gen_merge().to_string(),
+                11..=15 => generator.gen_replace().to_string(),
+                16..=19 => generator.gen_update().to_string(),
+                20 => generator.gen_delete().to_string(),
+                _ => unreachable!(),
+            };
+            let mut timeout_err = None;
+            tracing::info!("dml sql: {}", sql);
+            Self::check_timeout(
+                async { Self::check_res(self.client.query(&sql).await) },
+                self.timeout,
+                &mut timeout_err,
+            )
+            .await;
+            if let Some(timeout_err) = timeout_err {
+                tracing::error!("sql timeout: {}", timeout_err);
+            }
+        }
+
+        // generate query
+        for _ in 0..self.count {
+            let query = generator.gen_query();
+            let query_sql = query.to_string();
+            self.run_sql(query_sql, Some(query)).await;
+        }
+        Ok(())
+    }
+
+    pub async fn run_fuzz(&mut self, fuzz_path: &str) -> Result<()> {
+        let sqls = Self::read_sql_from_sqllogic_tests(fuzz_path)?;
+        let mut query_fuzzer = QueryFuzzer::new();
+        for sql in sqls {
+            tracing::info!("orig sql: {}", sql);
+            let Ok(tokens) = tokenize_sql(&sql) else {
+                continue;
+            };
+            let Ok((stmt, _)) = parse_sql(&tokens, Dialect::PostgreSQL) else {
+                continue;
+            };
+            let fuzz_stmt = query_fuzzer.fuzz(stmt);
+            let fuzz_sql = fuzz_stmt.to_string();
+            tracing::info!("fuzz sql: {}", fuzz_sql);
+            if let Statement::Query(_) = fuzz_stmt {
+                self.run_sql(fuzz_sql, None).await;
+            } else if let Err(err) = self.client.query(&fuzz_sql).await {
+                tracing::error!("fuzz sql err: {}", err);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn run_sql(&mut self, query_sql: String, query: Option<Query>) {
+        let mut timeout_err = None;
+        let mut is_error = false;
+        let mut try_reduce = false;
+        let mut err_code = 0;
+        let mut err_message = String::new();
+        Self::check_timeout(
+            async {
+                match self.client.query(&query_sql).await {
+                    Ok(responses) => {
+                        if let Some(error) = &responses[0].error {
+                            let value = error.as_object().unwrap();
+                            let code = value["code"].as_u64().unwrap();
+                            let message = value["message"].as_str().unwrap();
+                            if code == 1005 || code == 1065 || code == 2004 || code == 1010 {
+                                return;
+                            }
+                            if KNOWN_ERRORS
+                                .iter()
+                                .any(|known_err| message.starts_with(known_err))
+                            {
+                                return;
+                            }
+                            is_error = true;
+                            err_code = code;
+                            err_message = format!("error: {}", message);
+                            try_reduce = true;
+                        }
+                    }
+                    Err(err) => {
+                        is_error = true;
+                        err_message = format!("http err: {}", err);
+                    }
+                }
+            },
+            self.timeout,
+            &mut timeout_err,
+        )
+        .await;
+
+        if let Some(timeout_err) = timeout_err {
+            tracing::info!("query_sql: {}", query_sql);
+            tracing::error!("sql timeout: {}", timeout_err);
+        } else if is_error {
+            tracing::info!("query_sql: {}", query_sql);
+            if try_reduce {
+                if let Some(query) = query {
+                    let reduced_query = self.try_reduce_query(err_code, query).await;
+                    tracing::info!("reduced query_sql: {}", reduced_query.to_string());
+                }
+            }
+            tracing::error!(err_message);
+        }
+    }
+
     fn generate_rng(seed: Option<u64>) -> impl Rng {
         if let Some(seed) = seed {
             SmallRng::seed_from_u64(seed)
@@ -128,7 +298,8 @@ impl Runner {
             tracing::info!("create_table_sql: {}", create_table_sql);
             Self::check_res(self.client.query(&create_table_sql).await);
 
-            let table_name = create_table_stmt.table.name.clone();
+            let db_name = create_table_stmt.database.clone();
+            let table_name = create_table_stmt.table.clone();
             let mut fields = Vec::new();
             if let CreateTableSource::Columns(columns, _) = create_table_stmt.source.unwrap() {
                 for column in columns {
@@ -139,7 +310,7 @@ impl Runner {
             }
             let schema = TableSchemaRefExt::create(fields);
 
-            let table = Table::new(table_name, schema);
+            let table = Table::new(db_name, table_name, schema);
             tables.push(table);
         }
         Ok(tables)
@@ -207,151 +378,61 @@ impl Runner {
         }
     }
 
-    pub async fn run_fuzz(&mut self) -> Result<()> {
-        let sqls = vec!["select 1, 'a'", "select 2, 'b'"];
-        let mut query_fuzzer = QueryFuzzer::new();
-        for sql in sqls {
-            let tokens = tokenize_sql(sql).unwrap();
-            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
-            let fuzz_stmt = query_fuzzer.fuzz(stmt);
-            let fuzz_sql = format!("{}", fuzz_stmt);
-            // todo
-            println!("fuzz_sql={:?}", fuzz_sql)
+    fn collect_paths(path: &Path, paths: &mut Vec<PathBuf>) -> Result<()> {
+        if path.is_dir() {
+            for entry in (path.read_dir()?).flatten() {
+                let sub_path = entry.path();
+                Self::collect_paths(&sub_path, paths)?;
+            }
+        } else if path.is_file() && path.extension().is_some_and(|ext| ext == "test") {
+            paths.push(path.to_path_buf());
         }
-
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<()> {
-        self.run_fuzz().await?;
+    // Walk through the sqllogic tests folder and read the test SQL in it as seed to generate fuzzed SQL.
+    fn read_sql_from_sqllogic_tests(fuzz_path: &str) -> Result<Vec<String>> {
+        let path = Path::new(fuzz_path);
+        let mut paths = vec![];
+        Self::collect_paths(path, &mut paths)?;
 
-        let create_db_sql = format!("CREATE OR REPLACE database {}", self.db);
-        let _ = self.client.query(&create_db_sql).await?;
-        let use_db_sql = format!("USE {}", self.db);
-        let _ = self.client.query(&use_db_sql).await?;
+        let mut sqls = vec![];
+        for path in paths.into_iter() {
+            let content = fs::read_to_string(path)?;
+            let lines: Vec<&str> = content.lines().collect();
+            let mut in_sql = false;
+            let mut current_sql = String::new();
 
-        let settings = self.get_settings().await?;
-
-        let mut rng = Self::generate_rng(self.seed);
-        let mut generator = SqlGenerator::new(&mut rng, settings);
-        let table_stmts = generator.gen_base_tables();
-        let tables = self.create_base_table(table_stmts).await?;
-        let row_count = 10;
-
-        let mut new_tables = tables.clone();
-        for (i, table) in tables.iter().enumerate() {
-            let insert_stmt = generator.gen_insert(table, row_count);
-            let insert_sql = insert_stmt.to_string();
-            tracing::info!("insert_sql: {}", insert_sql);
-            Self::check_res(self.client.query(&insert_sql).await);
-
-            let alter_stmt_opt = generator.gen_alter(table, row_count);
-            if let Some((alter_stmt, new_table, insert_stmt_opt)) = alter_stmt_opt {
-                if let AlterTableAction::RenameTable { ref new_table } = alter_stmt.action {
-                    let drop_table_stmt = DropTableStmt {
-                        if_exists: true,
-                        catalog: None,
-                        database: None,
-                        table: new_table.clone(),
-                        all: false,
-                    };
-                    let drop_table_sql = drop_table_stmt.to_string();
-                    tracing::info!("drop_table_sql: {}", drop_table_sql);
-                    Self::check_res(self.client.query(&drop_table_sql).await);
-                }
-                let alter_sql = alter_stmt.to_string();
-                tracing::info!("alter_sql: {}", alter_sql);
-                Self::check_res(self.client.query(&alter_sql).await);
-                // save new table schema
-                new_tables[i] = new_table;
-                if let Some(insert_stmt) = insert_stmt_opt {
-                    let insert_sql = insert_stmt.to_string();
-                    tracing::info!("after alter insert_sql: {}", insert_sql);
-                    Self::check_res(self.client.query(&insert_sql).await);
-                }
-            }
-        }
-        generator.tables = new_tables;
-
-        let enable_merge = "set enable_experimental_merge_into = 1".to_string();
-        Self::check_res(self.client.query(&enable_merge).await);
-        // generate merge, replace, update, delete
-        for _ in 0..20 {
-            let sql = match generator.rng.gen_range(0..=20) {
-                0..=10 => generator.gen_merge().to_string(),
-                11..=15 => generator.gen_replace().to_string(),
-                16..=19 => generator.gen_update().to_string(),
-                20 => generator.gen_delete().to_string(),
-                _ => unreachable!(),
-            };
-            let mut timeout_err = None;
-            tracing::info!("dml sql: {}", sql);
-            Self::check_timeout(
-                async { Self::check_res(self.client.query(&sql).await) },
-                self.timeout,
-                &mut timeout_err,
-            )
-            .await;
-            if let Some(timeout_err) = timeout_err {
-                tracing::error!("sql timeout: {}", timeout_err);
-            }
-        }
-
-        // generate query
-        for _ in 0..self.count {
-            let query = generator.gen_query();
-            let query_sql = query.to_string();
-            let mut timeout_err = None;
-            let mut is_error = false;
-            let mut try_reduce = false;
-            let mut err_code = 0;
-            let mut err_message = String::new();
-            Self::check_timeout(
-                async {
-                    match self.client.query(&query_sql).await {
-                        Ok(responses) => {
-                            if let Some(error) = &responses[0].error {
-                                let value = error.as_object().unwrap();
-                                let code = value["code"].as_u64().unwrap();
-                                let message = value["message"].as_str().unwrap();
-                                if code == 1005 || code == 1065 || code == 2004 || code == 1010 {
-                                    return;
-                                }
-                                if KNOWN_ERRORS
-                                    .iter()
-                                    .any(|known_err| message.starts_with(known_err))
-                                {
-                                    return;
-                                }
-                                is_error = true;
-                                err_code = code;
-                                err_message = format!("error: {}", message);
-                                try_reduce = true;
-                            }
-                        }
-                        Err(err) => {
-                            is_error = true;
-                            err_message = format!("http err: {}", err);
-                        }
+            for line in lines {
+                let line = line.trim();
+                if line.starts_with("statement") || line.starts_with("query") {
+                    if !current_sql.is_empty() {
+                        sqls.push(current_sql.clone());
+                        current_sql.clear();
                     }
-                },
-                self.timeout,
-                &mut timeout_err,
-            )
-            .await;
-
-            if let Some(timeout_err) = timeout_err {
-                tracing::info!("query_sql: {}", query_sql);
-                tracing::error!("sql timeout: {}", timeout_err);
-            } else if is_error {
-                tracing::info!("query_sql: {}", query_sql);
-                if try_reduce {
-                    let reduced_query = self.try_reduce_query(err_code, query).await;
-                    tracing::info!("reduced query_sql: {}", reduced_query.to_string());
+                    in_sql = !line.starts_with("statement error");
+                } else if line.eq("----") {
+                    // ignore result values
+                    in_sql = false;
+                } else if !line.is_empty()
+                    && !line.starts_with("--")
+                    && !line.starts_with("#")
+                    && !line.starts_with("include")
+                    && !line.starts_with("onlyif")
+                    && in_sql
+                {
+                    if current_sql.is_empty() {
+                        current_sql.push_str(line);
+                    } else {
+                        current_sql.push(' ');
+                        current_sql.push_str(line);
+                    }
                 }
-                tracing::error!(err_message);
+            }
+            if !current_sql.is_empty() {
+                sqls.push(current_sql);
             }
         }
-        Ok(())
+        Ok(sqls)
     }
 }

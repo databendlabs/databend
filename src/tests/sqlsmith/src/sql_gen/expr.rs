@@ -82,16 +82,16 @@ impl<R: Rng> SqlGenerator<'_, R> {
     fn gen_column(&mut self, ty: &DataType) -> Expr {
         for bound_column in &self.bound_columns {
             if bound_column.data_type == *ty {
-                let column = if !bound_column.table_name.is_empty() && self.rng.gen_bool(0.2) {
+                let column = if bound_column.table_name.is_some() && self.rng.gen_bool(0.2) {
                     ColumnID::Position(ColumnPosition::create(None, bound_column.index))
                 } else {
                     let name = Identifier::from_name(None, bound_column.name.clone());
                     ColumnID::Name(name)
                 };
                 let table = if self.is_join
-                    || (!bound_column.table_name.is_empty() && self.rng.gen_bool(0.2))
+                    || (bound_column.table_name.is_some() && self.rng.gen_bool(0.2))
                 {
-                    Some(Identifier::from_name(None, bound_column.table_name.clone()))
+                    bound_column.table_name.clone()
                 } else {
                     None
                 };

@@ -241,7 +241,7 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        if !order_by.is_empty() {
+        if !order_items.items.is_empty() {
             s_expr = self.bind_order_by(&from_context, order_items, &select_list, s_expr)?;
         }
 

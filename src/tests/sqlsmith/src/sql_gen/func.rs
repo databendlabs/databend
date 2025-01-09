@@ -707,12 +707,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
 
         let args_type = vec![ty.clone()];
         let lambda_name = format!("l{}", self.gen_random_name());
-        let lambda_column = Column {
-            table_name: "".to_string(),
-            name: lambda_name.clone(),
-            index: 0,
-            data_type: ty.clone(),
-        };
+        let lambda_column = Column::new(None, lambda_name.clone(), 0, ty.clone());
         self.bound_columns.push(lambda_column);
 
         let lambda_expr = self.gen_expr(inner_ty);

@@ -65,7 +65,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
     }
 
     pub(crate) fn gen_simple_data_type(&mut self) -> DataType {
-        match self.rng.gen_range(0..=12) {
+        match self.rng.gen_range(0..=13) {
             0 => DataType::Null,
             1 => DataType::Boolean,
             2 => DataType::String,
@@ -76,7 +76,8 @@ impl<R: Rng> SqlGenerator<'_, R> {
             9 => DataType::Variant,
             10 => DataType::Binary,
             11 => DataType::Geometry,
-            12 => {
+            12 => DataType::Interval,
+            13 => {
                 let inner_ty = self.gen_simple_data_type();
                 if !inner_ty.is_nullable_or_null() {
                     DataType::Nullable(Box::new(inner_ty))

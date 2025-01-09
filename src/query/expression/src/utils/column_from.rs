@@ -71,6 +71,7 @@ impl_from_data! { VariantType }
 impl_from_data! { BitmapType }
 impl_from_data! { GeometryType }
 impl_from_data! { GeographyType }
+impl_from_data! { IntervalType }
 
 impl<'a> FromData<&'a [u8]> for BinaryType {
     fn from_data(d: Vec<&'a [u8]>) -> Column {

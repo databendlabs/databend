@@ -2622,6 +2622,12 @@ impl<'a> TypeChecker<'a> {
                 )
                 .set_span(span));
             }
+            ExprContext::QualifyClause => {
+                return Err(ErrorCode::SemanticError(
+                    "set-returning functions cannot be used in QUALIFY clause".to_string(),
+                )
+                .set_span(span));
+            }
             _ => {}
         }
 
