@@ -233,6 +233,7 @@ arrow-udf-python = { version = "0.4.0" }
 arrow-udf-wasm = { version = "0.4.1" }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
+async-compat = { version = "0.2" }
 async-compression = { git = "https://github.com/datafuse-extras/async-compression", rev = "dc81082", features = [
     "futures-io",
     "all-algorithms",
@@ -240,7 +241,6 @@ async-compression = { git = "https://github.com/datafuse-extras/async-compressio
 async-recursion = "1.1.1"
 async-stream = "0.3.3"
 async-trait = { version = "0.1.77" }
-async-compat = { version = "0.2" }
 backoff = "0.4" # FIXME: use backon to replace this.
 backon = "1"
 backtrace = { version = "0.3.73", features = [
