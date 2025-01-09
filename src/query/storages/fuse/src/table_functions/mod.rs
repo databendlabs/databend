@@ -27,6 +27,8 @@ mod fuse_vacuum_drop_aggregating_index;
 mod fuse_vacuum_temporary_table;
 mod table_args;
 
+mod set_cache_capacity;
+
 pub use clustering_information::ClusteringInformationFunc;
 pub use clustering_statistics::ClusteringStatisticsFunc;
 use databend_common_catalog::table_args::TableArgs;
@@ -45,4 +47,5 @@ pub use fuse_time_travel_size::FuseTimeTravelSize;
 pub use fuse_time_travel_size::FuseTimeTravelSizeFunc;
 pub use fuse_vacuum_drop_aggregating_index::FuseVacuumDropAggregatingIndex;
 pub use fuse_vacuum_temporary_table::FuseVacuumTemporaryTable;
+pub use set_cache_capacity::SetCacheCapacity;
 pub use table_args::*;

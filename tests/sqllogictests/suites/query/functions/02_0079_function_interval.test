@@ -142,3 +142,15 @@ query T
 SELECT to_years(10);
 ----
 10 years
+
+onlyif http
+query T
+select to_interval('1200000000 months');
+----
+100000000 years
+
+onlyif http
+query T
+select to_interval('120000000000 months');
+----
+00:00:00

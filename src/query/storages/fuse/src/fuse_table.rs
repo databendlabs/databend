@@ -974,11 +974,12 @@ impl Table for FuseTable {
         };
 
         self.check_changes_valid(&db_tb_name, *seq)?;
+        let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
         self.get_changes_query(
             ctx,
             mode,
             location,
-            format!("{}.{} {}", database_name, table_name, desc),
+            format!("{quote}{database_name}{quote}.{quote}{table_name}{quote} {desc}"),
             *seq,
         )
         .await

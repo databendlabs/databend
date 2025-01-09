@@ -37,9 +37,9 @@ impl FromToProto for mt::CatalogMeta {
     fn from_pb(p: pb::CatalogMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let option = p.option.ok_or_else(|| Incompatible {
-            reason: "CatalogMeta.option is None".to_string(),
-        })?;
+        let option = p
+            .option
+            .ok_or_else(|| Incompatible::new("CatalogMeta.option is None".to_string()))?;
 
         let v = Self {
             catalog_option: mt::CatalogOption::from_pb(option)?,
@@ -115,9 +115,9 @@ impl FromToProto for mt::IcebergCatalogOption {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let option = p.iceberg_catalog_option.ok_or_else(|| Incompatible {
-            reason: "IcebergCatalogOption.option is None".to_string(),
-        })?;
+        let option = p
+            .iceberg_catalog_option
+            .ok_or_else(|| Incompatible::new("IcebergCatalogOption.option is None".to_string()))?;
 
         Ok(match option {
             pb::iceberg_catalog_option::IcebergCatalogOption::RestCatalog(v) => {

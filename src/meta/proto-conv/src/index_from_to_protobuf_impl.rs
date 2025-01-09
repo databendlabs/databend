@@ -42,9 +42,8 @@ impl FromToProto for mt::IndexMeta {
 
         let v = Self {
             table_id: p.table_id,
-            index_type: FromPrimitive::from_i32(p.index_type).ok_or_else(|| Incompatible {
-                reason: format!("invalid IndexType: {}", p.index_type),
-            })?,
+            index_type: FromPrimitive::from_i32(p.index_type)
+                .ok_or_else(|| Incompatible::new(format!("invalid IndexType: {}", p.index_type)))?,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             dropped_on: match p.dropped_on {
                 Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),

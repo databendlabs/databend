@@ -299,13 +299,13 @@ fn test_incompatible() -> anyhow::Result<()> {
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
-        Incompatible {
-            reason: format!(
+        Incompatible::new(
+            format!(
                 "executable ver={} is smaller than the min reader version({}) that can read this message",
                 VER,
                 VER + 1
             )
-        },
+        ),
         res.unwrap_err()
     );
 
@@ -316,11 +316,9 @@ fn test_incompatible() -> anyhow::Result<()> {
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
-        Incompatible {
-            reason: s(
-                "message ver=0 is smaller than executable MIN_MSG_VER(1) that this program can read"
-            )
-        },
+        Incompatible::new(s(
+            "message ver=0 is smaller than executable MIN_MSG_VER(1) that this program can read"
+        )),
         res.unwrap_err()
     );
 

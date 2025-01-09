@@ -87,9 +87,7 @@ impl FromToProto for mt::ShareDbId {
             Some(pb::share_db_id::DbId::Reference(reference)) => {
                 Ok(mt::ShareDbId::Reference(reference.id))
             }
-            None => Err(Incompatible {
-                reason: "ShareDbId cannot be None".to_string(),
-            }),
+            None => Err(Incompatible::new("ShareDbId cannot be None".to_string())),
         }
     }
 

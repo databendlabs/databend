@@ -1325,7 +1325,17 @@ impl Column {
                     .map(|_| rng.gen_range(DATE_MIN..=DATE_MAX))
                     .collect::<Vec<i32>>(),
             ),
-            DataType::Interval => unimplemented!(),
+            DataType::Interval => IntervalType::from_data(
+                (0..len)
+                    .map(|_| {
+                        months_days_micros::new(
+                            rng.gen::<i32>(),
+                            rng.gen::<i32>(),
+                            rng.gen::<i64>(),
+                        )
+                    })
+                    .collect::<Vec<months_days_micros>>(),
+            ),
             DataType::Nullable(ty) => NullableColumn::new_column(
                 Column::random(ty, len, options),
                 Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>()),

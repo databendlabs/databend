@@ -41,6 +41,7 @@ pub use ordered_float::OrderedFloat;
 pub use profiling::Profiling;
 pub use progress::Progress;
 pub use progress::ProgressValues;
+pub use progress::SpillProgress;
 pub use select::select3;
 pub use select::Select3Output;
 pub use semaphore::Semaphore;

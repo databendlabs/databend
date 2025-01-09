@@ -21,15 +21,15 @@ module.exports = async ({ github, context, core }) => {
     if (TAG) {
       // trigger stable release by workflow_dispatch with a tag
       let result = /v(\d+)\.(\d+)\.(\d+)-nightly/g.exec(TAG);
-      if (result === null) {
+      if (!result) {
         core.setFailed(`The tag ${TAG} to stablize is invalid, ignoring`);
         return;
       }
       let major = result[1];
       let minor = result[2];
       let patch = result[3];
-      let stable_tag = `v${major}.${minor}.${patch}`;
-      core.setOutput("tag", stable_tag);
+      let stableTag = `v${major}.${minor}.${patch}`;
+      core.setOutput("tag", stableTag);
       let ref = await github.rest.git.getRef({
         owner: context.repo.owner,
         repo: context.repo.repo,
@@ -37,7 +37,7 @@ module.exports = async ({ github, context, core }) => {
       });
       core.setOutput("sha", ref.data.object.sha);
       core.info(
-        `Stable release ${stable_tag} from ${TAG} (${ref.data.object.sha})`
+        `Stable release ${stableTag} from ${TAG} (${ref.data.object.sha})`
       );
     } else {
       core.setFailed("Stable release must be triggered with a nightly tag");
@@ -51,20 +51,27 @@ module.exports = async ({ github, context, core }) => {
       let releases = await github.rest.repos.listReleases({
         owner: context.repo.owner,
         repo: context.repo.repo,
-        per_page: 1,
+        per_page: 10,
       });
-      let tag = releases.data[0].tag_name;
-      let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(tag);
-      if (result === null) {
-        core.setFailed(`The previous tag ${tag} is invalid, ignoring`);
+      let tag = releases.data.filter(
+        (r) => r.tag_name.startsWith("v") && r.tag_name.endsWith("-nightly")
+      )[0];
+      if (!tag) {
+        core.setFailed(`No previous nightly release found, ignoring`);
+        return;
+      }
+      let lastTag = tag.tag_name;
+      let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(lastTag);
+      if (!result) {
+        core.setFailed(`The previous tag ${lastTag} is invalid, ignoring`);
         return;
       }
       let major = result[1];
       let minor = result[2];
       let patch = (parseInt(result[3]) + 1).toString();
-      let next_tag = `v${major}.${minor}.${patch}-nightly`;
-      core.setOutput("tag", next_tag);
-      core.info(`Nightly release ${next_tag} from ${tag} (${context.sha})`);
+      let nextTag = `v${major}.${minor}.${patch}-nightly`;
+      core.setOutput("tag", nextTag);
+      core.info(`Nightly release ${nextTag} from ${lastTag} (${context.sha})`);
     }
   }
 };

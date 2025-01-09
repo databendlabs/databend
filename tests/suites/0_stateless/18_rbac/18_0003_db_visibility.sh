@@ -92,3 +92,25 @@ echo "select * from db1.t1" | $BENDSQL_CLIENT_CONNECT
 echo "select * from db2.t2" | $BENDSQL_CLIENT_CONNECT
 echo "select * from db_u3.t3" | $BENDSQL_CLIENT_CONNECT
 echo "select * from db_root.t1" | $BENDSQL_CLIENT_CONNECT
+
+echo "=== test system.tables ==="
+echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists b;" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop database if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "create user a identified by '123' with default_role='a'" | $BENDSQL_CLIENT_CONNECT
+echo "create role a" | $BENDSQL_CLIENT_CONNECT
+echo "create database a" | $BENDSQL_CLIENT_CONNECT
+echo "grant ownership on a.* to role a" | $BENDSQL_CLIENT_CONNECT
+echo "grant role a to a" | $BENDSQL_CLIENT_CONNECT
+echo "create table a.b(id int)" | $BENDSQL_CLIENT_CONNECT
+echo "create role b" | $BENDSQL_CLIENT_CONNECT
+echo "grant ownership on a.b to role b" | $BENDSQL_CLIENT_CONNECT
+export TEST_A_CONNECT="bendsql --user=a --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+echo "select name, owner from system.tables where database = 'a'and name = 'b'" | $TEST_A_CONNECT
+echo "drop user if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop user if exists b;" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists b;" | $BENDSQL_CLIENT_CONNECT
+echo "drop role if exists a;" | $BENDSQL_CLIENT_CONNECT
+echo "drop database if exists a;" | $BENDSQL_CLIENT_CONNECT

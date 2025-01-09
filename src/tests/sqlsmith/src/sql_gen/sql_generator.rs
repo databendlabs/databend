@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::ast::GroupBy;
+use databend_common_ast::ast::Identifier;
 use databend_common_expression::types::DataType;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::TableSchemaRef;
@@ -21,22 +22,43 @@ use rand::Rng;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Table {
-    pub(crate) name: String,
+    pub(crate) db_name: Option<Identifier>,
+    pub(crate) name: Identifier,
     pub(crate) schema: TableSchemaRef,
 }
 
 impl Table {
-    pub fn new(name: String, schema: TableSchemaRef) -> Self {
-        Self { name, schema }
+    pub fn new(db_name: Option<Identifier>, name: Identifier, schema: TableSchemaRef) -> Self {
+        Self {
+            db_name,
+            name,
+            schema,
+        }
     }
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct Column {
-    pub(crate) table_name: String,
+    pub(crate) table_name: Option<Identifier>,
     pub(crate) name: String,
     pub(crate) index: usize,
     pub(crate) data_type: DataType,
+}
+
+impl Column {
+    pub fn new(
+        table_name: Option<Identifier>,
+        name: String,
+        index: usize,
+        data_type: DataType,
+    ) -> Self {
+        Self {
+            table_name,
+            name,
+            index,
+            data_type,
+        }
+    }
 }
 
 pub(crate) struct SqlGenerator<'a, R: Rng> {

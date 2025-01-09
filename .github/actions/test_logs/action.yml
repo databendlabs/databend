@@ -1,20 +1,9 @@
 name: "Test collection query & profile logs for databend query"
 description: "Test collection query & profile logs for databend query"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
-      with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
-        artifacts: meta,query
+    - uses: ./.github/actions/setup_test
 
     - name: Run logging Tests
       shell: bash
