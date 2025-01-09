@@ -12,6 +12,7 @@ module.exports = async ({ github, context, core }) => {
   const RE_TAG_PATCH = /^v(\d+)\.(\d+)\.(\d+)-p(\d+)$/g;
 
   switch (TYPE) {
+    case "":
     case "nightly": {
       core.setOutput("sha", context.sha);
       core.info(`Nightly release triggered by ${TAG} (${context.sha})`);
