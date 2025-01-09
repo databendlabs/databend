@@ -56,7 +56,6 @@ use sha2::Sha256;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BloomIndexBuilder;
-use crate::pruning::create_segment_location_vector;
 use crate::pruning::table_sample;
 use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
@@ -81,7 +80,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        dry_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
