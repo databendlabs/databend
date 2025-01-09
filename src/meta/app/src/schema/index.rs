@@ -67,6 +67,11 @@ pub struct IndexMeta {
     pub sync_creation: bool,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct MarkedDeletedIndexMeta {
+    pub indexes: Vec<(u64, IndexMeta)>,
+}
+
 impl Default for IndexMeta {
     fn default() -> Self {
         IndexMeta {
