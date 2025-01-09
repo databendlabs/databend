@@ -111,7 +111,7 @@ impl FuseTable {
                     segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
                 }
 
-                return Ok((
+                Ok((
                     PartStatistics::new_estimated(
                         Some(snapshot_loc),
                         snapshot.summary.row_count as usize,
@@ -120,7 +120,7 @@ impl FuseTable {
                         snapshot.segments.len(),
                     ),
                     Partitions::create(PartitionsShuffleKind::Mod, segments),
-                ));
+                ))
             }
             None => Ok((PartStatistics::default(), Partitions::default())),
         }
