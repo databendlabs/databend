@@ -413,7 +413,8 @@ pub fn exchange_shuffle(
 
     let inputs_size = pipeline.output_len();
     let outputs_size = params.destination_ids.len();
-    let transform = ExchangeShuffleTransform::create(inputs_size, outputs_size, output_len);
+    // For an N-way merge, we need at least a buffer size of 2N.
+    let transform = ExchangeShuffleTransform::create(inputs_size, outputs_size, output_len * 2);
 
     let inputs = transform.get_inputs();
     let outputs = transform.get_outputs();
