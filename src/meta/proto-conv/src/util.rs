@@ -145,6 +145,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (113, "2024-12-10: Add: GrantWarehouseObject"),
     (114, "2024-12-12: Add: New DataType Interval."),
     (115, "2024-12-16: Add: udf.proto: add UDAFScript and UDAFServer"),
+    (116, "2025-01-09: Add: MarkedDeletedIndexMeta"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
