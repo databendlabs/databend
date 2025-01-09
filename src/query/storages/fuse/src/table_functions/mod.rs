@@ -23,6 +23,7 @@ mod fuse_segment;
 mod fuse_snapshot;
 mod fuse_statistic;
 mod fuse_time_travel_size;
+mod fuse_vacuum_drop_aggregating_index;
 mod fuse_vacuum_temporary_table;
 mod table_args;
 
@@ -42,5 +43,6 @@ pub use fuse_snapshot::FuseSnapshotFunc;
 pub use fuse_statistic::FuseStatisticsFunc;
 pub use fuse_time_travel_size::FuseTimeTravelSize;
 pub use fuse_time_travel_size::FuseTimeTravelSizeFunc;
+pub use fuse_vacuum_drop_aggregating_index::FuseVacuumDropAggregatingIndex;
 pub use fuse_vacuum_temporary_table::FuseVacuumTemporaryTable;
 pub use table_args::*;

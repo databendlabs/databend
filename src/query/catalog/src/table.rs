@@ -450,6 +450,10 @@ pub trait Table: Sync + Send {
     fn use_own_sample_block(&self) -> bool {
         false
     }
+
+    async fn remove_aggregating_index_files(&self, _index_id: u64) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]

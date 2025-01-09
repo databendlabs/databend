@@ -1055,4 +1055,16 @@ impl Table for FuseTable {
     fn use_own_sample_block(&self) -> bool {
         true
     }
+
+    async fn remove_aggregating_index_files(&self, index_id: u64) -> Result<()> {
+        let prefix = format!(
+            "{}/{}",
+            self.meta_location_generator.agg_index_location_prefix(),
+            index_id
+        );
+        let op = &self.operator;
+        info!("remove_aggregating_index_files: {}", prefix);
+        op.remove_all(&prefix).await?;
+        Ok(())
+    }
 }
