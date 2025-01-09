@@ -254,7 +254,7 @@ where
             .enumerate()
             .zip(places.iter().cloned())
             .for_each(|((row, val), addr)| {
-                let state = AggrState::with_loc(addr, loc).get::<State>();
+                let state = AggrState::new(addr, loc).get::<State>();
                 if state.change(&val) {
                     state.update(val, A::index_column(&arg_col, row).unwrap())
                 }

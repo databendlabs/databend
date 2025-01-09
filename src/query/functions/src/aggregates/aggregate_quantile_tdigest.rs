@@ -354,7 +354,7 @@ where T: Number + AsPrimitive<f64>
     ) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         column.iter().zip(places.iter()).for_each(|(v, place)| {
-            let state = AggrState::with_loc(*place, loc).get::<QuantileTDigestState>();
+            let state = AggrState::new(*place, loc).get::<QuantileTDigestState>();
             state.add(v.as_(), None)
         });
         Ok(())

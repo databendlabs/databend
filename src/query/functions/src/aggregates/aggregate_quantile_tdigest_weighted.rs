@@ -138,7 +138,7 @@ where
             .zip(weighted.iter())
             .zip(places.iter())
             .for_each(|((value, weight), place)| {
-                let state = AggrState::with_loc(*place, loc).get::<QuantileTDigestState>();
+                let state = AggrState::new(*place, loc).get::<QuantileTDigestState>();
                 state.add(value.as_(), Some(weight.as_()))
             });
         Ok(())

@@ -244,7 +244,7 @@ where
         let column = T::try_downcast_column(&columns[0]).unwrap();
 
         for (i, place) in places.iter().enumerate() {
-            let state: &mut S = AggrState::with_loc(*place, loc).get::<S>();
+            let state: &mut S = AggrState::new(*place, loc).get::<S>();
             state.add(
                 T::index_column(&column, i).unwrap(),
                 self.function_data.as_deref(),
@@ -283,7 +283,7 @@ where
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         for place in places {
-            let state: &mut S = AggrState::with_loc(*place, &loc).get::<S>();
+            let state: &mut S = AggrState::new(*place, &loc).get::<S>();
             self.do_merge_result(state, builder)?;
         }
         Ok(())

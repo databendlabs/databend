@@ -208,7 +208,7 @@ where
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
             |((left_val, right_val), place)| {
-                let state = AggrState::with_loc(*place, loc).get::<AggregateCovarianceState>();
+                let state = AggrState::new(*place, loc).get::<AggregateCovarianceState>();
                 state.add(left_val.as_(), right_val.as_());
             },
         );

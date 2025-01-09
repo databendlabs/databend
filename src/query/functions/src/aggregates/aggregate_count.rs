@@ -128,7 +128,7 @@ impl AggregateFunction for AggregateCountFunction {
                 }
                 for (valid, &place) in v.iter().zip(places.iter()) {
                     if valid {
-                        let state = AggrState::with_loc(place, loc).get::<AggregateCountState>();
+                        let state = AggrState::new(place, loc).get::<AggregateCountState>();
                         state.count += 1;
                     }
                 }
@@ -136,7 +136,7 @@ impl AggregateFunction for AggregateCountFunction {
 
             _ => {
                 for place in places {
-                    let state = AggrState::with_loc(*place, loc).get::<AggregateCountState>();
+                    let state = AggrState::new(*place, loc).get::<AggregateCountState>();
                     state.count += 1;
                 }
             }
@@ -179,7 +179,7 @@ impl AggregateFunction for AggregateCountFunction {
         match builder {
             ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                 for place in places {
-                    let state = AggrState::with_loc(*place, &loc).get::<AggregateCountState>();
+                    let state = AggrState::new(*place, &loc).get::<AggregateCountState>();
                     builder.push(state.count);
                 }
             }

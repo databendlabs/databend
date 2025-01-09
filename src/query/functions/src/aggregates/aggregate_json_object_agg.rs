@@ -248,7 +248,7 @@ where
             for (k, (v, (valid, place))) in
                 key_column_iter.zip(val_column_iter.zip(validity.iter().zip(places.iter())))
             {
-                let state = AggrState::with_loc(*place, loc).get::<State>();
+                let state = AggrState::new(*place, loc).get::<State>();
                 if valid {
                     state.add(Some((k, v.clone())))?;
                 } else {
@@ -257,7 +257,7 @@ where
             }
         } else {
             for (k, (v, place)) in key_column_iter.zip(val_column_iter.zip(places.iter())) {
-                let state = AggrState::with_loc(*place, loc).get::<State>();
+                let state = AggrState::new(*place, loc).get::<State>();
                 state.add(Some((k, v.clone())))?;
             }
         }

@@ -163,7 +163,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
                 }
                 for (valid, (row, addr)) in v.iter().zip(places.iter().copied().enumerate()) {
                     if valid {
-                        let place = AggrState::with_loc(addr, loc);
+                        let place = AggrState::new(addr, loc);
                         self.set_flag(&place, 1);
                         self.nested.accumulate_row(&place, not_null_columns, row)?;
                     }
@@ -175,7 +175,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
                 places
                     .iter()
                     .copied()
-                    .map(|addr| AggrState::with_loc(addr, loc))
+                    .map(|addr| AggrState::new(addr, loc))
                     .for_each(|place| self.set_flag(&place, 1));
             }
         }

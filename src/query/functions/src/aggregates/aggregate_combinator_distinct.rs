@@ -66,7 +66,7 @@ where State: DistinctStateFunc
         place.write(|| State::new());
         let loc = self.nested_place_loc(place);
         self.nested
-            .init_state(&AggrState::with_loc(place.addr, &loc));
+            .init_state(&AggrState::new(place.addr, &loc));
     }
 
     fn state_layout(&self) -> Layout {
@@ -113,7 +113,7 @@ where State: DistinctStateFunc
     fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
         let loc = self.nested_place_loc(place);
-        let nested_place = AggrState::with_loc(place.addr, &loc);
+        let nested_place = AggrState::new(place.addr, &loc);
 
         // faster path for count
         if self.nested.name() == "AggregateCountFunction" {
@@ -147,7 +147,7 @@ where State: DistinctStateFunc
         if self.nested.need_manual_drop_state() {
             let loc = self.nested_place_loc(place);
             self.nested
-                .drop_state(&AggrState::with_loc(place.addr, &loc));
+                .drop_state(&AggrState::new(place.addr, &loc));
         }
     }
 

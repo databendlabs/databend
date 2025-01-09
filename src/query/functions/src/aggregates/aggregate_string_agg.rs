@@ -105,7 +105,7 @@ impl AggregateFunction for AggregateStringAggFunction {
         let column = StringType::try_downcast_column(&columns[0]).unwrap();
         let column_iter = StringType::iter_column(&column);
         column_iter.zip(places.iter()).for_each(|(v, place)| {
-            let state = AggrState::with_loc(*place, loc).get::<StringAggState>();
+            let state = AggrState::new(*place, loc).get::<StringAggState>();
             state.values.push_str(v);
             state.values.push_str(&self.delimiter);
         });

@@ -270,7 +270,7 @@ where
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
 
         for (data, addr) in column.iter().zip(places.iter().cloned()) {
-            let state = AggrState::with_loc(addr, loc).get::<BitmapAggState>();
+            let state = AggrState::new(addr, loc).get::<BitmapAggState>();
             let rb = deserialize_bitmap(data)?;
             state.add::<OP>(rb);
         }

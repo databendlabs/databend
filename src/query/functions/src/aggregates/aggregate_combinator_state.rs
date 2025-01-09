@@ -19,7 +19,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
-use databend_common_expression::AggrStateRegister;
+use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -56,8 +56,8 @@ impl AggregateStateCombinator {
 
         let nested = AggregateFunctionFactory::instance().get(nested_name, params, arguments)?;
 
-        let mut register = AggrStateRegister::default();
-        nested.register_state(&mut register);
+        let mut registry = AggrStateRegistry::default();
+        nested.register_state(&mut registry);
 
         Ok(Arc::new(AggregateStateCombinator { name, nested }))
     }
@@ -84,7 +84,7 @@ impl AggregateFunction for AggregateStateCombinator {
         unreachable!()
     }
 
-    fn register_state(&self, register: &mut AggrStateRegister) {
+    fn register_state(&self, register: &mut AggrStateRegistry) {
         self.nested.register_state(register);
     }
 

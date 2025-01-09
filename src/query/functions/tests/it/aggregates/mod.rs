@@ -193,16 +193,16 @@ pub fn simulate_two_groups_group_by(
     let func = factory.get(name, params, arguments)?;
     let data_type = func.return_type()?;
     let states_layout = get_states_layout(&[func.clone()])?;
-    let loc = states_layout.loc[0].clone();
+    let loc = states_layout.states_loc[0].clone();
 
     let arena = Bump::new();
 
     // init state for two groups
     let addr1 = arena.alloc_layout(states_layout.layout).into();
-    let state1 = AggrState::with_loc(addr1, &loc);
+    let state1 = AggrState::new(addr1, &loc);
     func.init_state(&state1);
     let addr2 = arena.alloc_layout(states_layout.layout).into();
-    let state2 = AggrState::with_loc(addr2, &loc);
+    let state2 = AggrState::new(addr2, &loc);
     func.init_state(&state2);
 
     let places = (0..rows)

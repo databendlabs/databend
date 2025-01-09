@@ -114,7 +114,7 @@ impl AggregateFunction for AggregateRetentionFunction {
             .map(|col| BooleanType::try_downcast_column(col).unwrap())
             .collect::<Vec<_>>();
         for (row, place) in places.iter().enumerate() {
-            let state = AggrState::with_loc(*place, loc).get::<AggregateRetentionState>();
+            let state = AggrState::new(*place, loc).get::<AggregateRetentionState>();
             for j in 0..self.events_size {
                 if new_columns[j as usize].get_bit(row) {
                     state.add(j);

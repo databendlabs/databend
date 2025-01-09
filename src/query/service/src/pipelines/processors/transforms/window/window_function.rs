@@ -59,7 +59,7 @@ impl WindowFuncAggImpl {
     #[inline]
     pub fn reset(&self) {
         self.agg
-            .init_state(&AggrState::with_loc(self.addr, &self.loc));
+            .init_state(&AggrState::new(self.addr, &self.loc));
     }
 
     #[inline]
@@ -70,13 +70,13 @@ impl WindowFuncAggImpl {
     #[inline]
     pub fn accumulate_row(&self, args: InputColumns, row: usize) -> Result<()> {
         self.agg
-            .accumulate_row(&AggrState::with_loc(self.addr, &self.loc), args, row)
+            .accumulate_row(&AggrState::new(self.addr, &self.loc), args, row)
     }
 
     #[inline]
     pub fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
         self.agg
-            .merge_result(&AggrState::with_loc(self.addr, &self.loc), builder)
+            .merge_result(&AggrState::new(self.addr, &self.loc), builder)
     }
 }
 
@@ -86,7 +86,7 @@ impl Drop for WindowFuncAggImpl {
             if self.agg.need_manual_drop_state() {
                 unsafe {
                     self.agg
-                        .drop_state(&AggrState::with_loc(self.addr, &self.loc));
+                        .drop_state(&AggrState::new(self.addr, &self.loc));
                 }
             }
         })
@@ -242,7 +242,7 @@ impl WindowFunctionImpl {
                 let arena = Arena::new();
                 let mut states_layout = get_states_layout(&[agg.clone()])?;
                 let addr = arena.alloc_layout(states_layout.layout).into();
-                let loc = states_layout.loc.pop().unwrap();
+                let loc = states_layout.states_loc.pop().unwrap();
                 let agg = WindowFuncAggImpl {
                     agg,
                     addr,

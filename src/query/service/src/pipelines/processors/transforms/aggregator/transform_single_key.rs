@@ -67,9 +67,9 @@ impl PartialSingleStateAggregator {
         for (func, loc) in params
             .aggregate_functions
             .iter()
-            .zip(state_layout.loc.iter())
+            .zip(state_layout.states_loc.iter())
         {
-            func.init_state(&AggrState::with_loc(addr, loc));
+            func.init_state(&AggrState::new(addr, loc));
         }
 
         Ok(PartialSingleStateAggregator {
@@ -104,16 +104,16 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 
         if is_agg_index_block {
             // Aggregation states are in the back of the block.
-            let states_indices = (block.num_columns() - self.states_layout.loc.len()
+            let states_indices = (block.num_columns() - self.states_layout.states_loc.len()
                 ..block.num_columns())
                 .collect::<Vec<_>>();
             let states = InputColumns::new_block_proxy(&states_indices, &block);
 
             for ((place, func), state) in self
                 .states_layout
-                .loc
+                .states_loc
                 .iter()
-                .map(|loc| AggrState::with_loc(self.addr, loc))
+                .map(|loc| AggrState::new(self.addr, loc))
                 .zip(self.funcs.iter())
                 .zip(states.iter())
             {
@@ -122,9 +122,9 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
         } else {
             for ((place, columns), func) in self
                 .states_layout
-                .loc
+                .states_loc
                 .iter()
-                .map(|loc| AggrState::with_loc(self.addr, loc))
+                .map(|loc| AggrState::new(self.addr, loc))
                 .zip(
                     self.arg_indices
                         .iter()
@@ -151,9 +151,9 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 .iter()
                 .zip(
                     self.states_layout
-                        .loc
+                        .states_loc
                         .iter()
-                        .map(|loc| AggrState::with_loc(self.addr, loc)),
+                        .map(|loc| AggrState::new(self.addr, loc)),
                 )
                 .zip(builders.iter_mut())
             {
@@ -171,9 +171,9 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
         };
 
         // destroy states
-        for (loc, func) in self.states_layout.loc.iter().zip(self.funcs.iter()) {
+        for (loc, func) in self.states_layout.states_loc.iter().zip(self.funcs.iter()) {
             if func.need_manual_drop_state() {
-                unsafe { func.drop_state(&AggrState::with_loc(self.addr, loc)) }
+                unsafe { func.drop_state(&AggrState::new(self.addr, loc)) }
             }
         }
 
@@ -216,7 +216,7 @@ impl FinalSingleStateAggregator {
             .ok_or_else(|| ErrorCode::LayoutError("layout shouldn't be None"))?
             .clone();
 
-        assert!(!states_layout.loc.is_empty());
+        assert!(!states_layout.states_loc.is_empty());
 
         Ok(AccumulatingTransformer::create(
             input,
@@ -255,9 +255,9 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             .iter()
             .zip(
                 self.states_layout
-                    .loc
+                    .states_loc
                     .iter()
-                    .map(|loc| AggrState::with_loc(main_addr, loc)),
+                    .map(|loc| AggrState::new(main_addr, loc)),
             )
             .map(|(func, place)| {
                 func.init_state(&place);

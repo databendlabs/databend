@@ -18,8 +18,6 @@ use std::ptr::NonNull;
 use databend_common_exception::Result;
 use enum_as_inner::EnumAsInner;
 
-use super::AggrStateRegister;
-use super::AggrStateType;
 use super::AggregateFunctionRef;
 use crate::types::binary::BinaryColumnBuilder;
 
@@ -114,26 +112,26 @@ impl From<StateAddr> for usize {
 }
 
 pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout> {
-    let mut register = AggrStateRegister::new();
+    let mut registry = AggrStateRegistry::default();
     let mut serialize_size = Vec::with_capacity(funcs.len());
     for func in funcs {
-        func.register_state(&mut register);
-        register.commit();
+        func.register_state(&mut registry);
+        registry.commit();
         serialize_size.push(func.serialize_size_per_row());
     }
 
-    let AggrStateRegister { states, offsets } = register;
+    let AggrStateRegistry { states, offsets } = registry;
 
     let (layout, locs) = sort_states(states);
 
-    let loc = offsets
+    let states_loc = offsets
         .windows(2)
         .map(|w| locs[w[0]..w[1]].to_vec().into_boxed_slice())
         .collect::<Vec<_>>();
 
     Ok(StatesLayout {
         layout,
-        loc,
+        states_loc,
         serialize_size,
     })
 }
@@ -173,8 +171,8 @@ fn sort_states(states: Vec<AggrStateType>) -> (Layout, Vec<AggrStateLoc>) {
 
 #[derive(Debug, Clone, Copy, EnumAsInner)]
 pub enum AggrStateLoc {
-    Bool(usize, usize),   // index
-    Custom(usize, usize), // index,offset
+    Bool(usize, usize),   // index, offset
+    Custom(usize, usize), // index, offset
 }
 
 impl AggrStateLoc {
@@ -196,7 +194,7 @@ impl AggrStateLoc {
 #[derive(Debug, Clone)]
 pub struct StatesLayout {
     pub layout: Layout,
-    pub loc: Vec<Box<[AggrStateLoc]>>,
+    pub states_loc: Vec<Box<[AggrStateLoc]>>,
     serialize_size: Vec<Option<usize>>,
 }
 
@@ -207,6 +205,87 @@ impl StatesLayout {
             .map(|size| BinaryColumnBuilder::with_capacity(num_rows, num_rows * size.unwrap_or(0)))
             .collect()
     }
+}
+
+#[derive(Debug)]
+pub struct AggrState<'a> {
+    pub addr: StateAddr,
+    loc: &'a [AggrStateLoc],
+}
+
+impl<'a> AggrState<'a> {
+    pub fn new(addr: StateAddr, loc: &'a [AggrStateLoc]) -> Self {
+        Self { addr, loc }
+    }
+
+    pub fn get<'b, T>(&self) -> &'b mut T {
+        self.addr
+            .next(self.loc[0].into_custom().unwrap().1)
+            .get::<T>()
+    }
+
+    pub fn write<T, F>(&self, f: F)
+    where F: FnOnce() -> T {
+        self.addr
+            .next(self.loc[0].into_custom().unwrap().1)
+            .write(f);
+    }
+
+    pub fn write_state<T>(&self, state: T) {
+        self.addr
+            .next(self.loc[0].into_custom().unwrap().1)
+            .write_state(state);
+    }
+
+    pub fn loc(&self) -> &[AggrStateLoc] {
+        self.loc
+    }
+
+    pub fn remove_last_loc(&self) -> Self {
+        assert!(self.loc.len() >= 2);
+        Self {
+            addr: self.addr,
+            loc: &self.loc[..self.loc.len() - 1],
+        }
+    }
+}
+
+pub struct AggrStateRegistry {
+    states: Vec<AggrStateType>,
+    offsets: Vec<usize>,
+}
+
+impl AggrStateRegistry {
+    pub fn new() -> Self {
+        Self {
+            states: vec![],
+            offsets: vec![0],
+        }
+    }
+
+    pub fn register(&mut self, state: AggrStateType) {
+        self.states.push(state);
+    }
+
+    pub fn commit(&mut self) {
+        self.offsets.push(self.states.len());
+    }
+
+    pub fn states(&self) -> &[AggrStateType] {
+        &self.states
+    }
+}
+
+impl Default for AggrStateRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AggrStateType {
+    Bool,
+    Custom(Layout),
 }
 
 #[cfg(test)]

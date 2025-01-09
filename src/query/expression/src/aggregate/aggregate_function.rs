@@ -19,7 +19,10 @@ use std::sync::Arc;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
+use super::AggrState;
 use super::AggrStateLoc;
+use super::AggrStateRegistry;
+use super::AggrStateType;
 use super::StateAddr;
 use crate::types::BinaryColumn;
 use crate::types::DataType;
@@ -40,7 +43,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn state_layout(&self) -> Layout;
 
-    fn register_state(&self, register: &mut AggrStateRegister) {
+    fn register_state(&self, register: &mut AggrStateRegistry) {
         register.register(AggrStateType::Custom(self.state_layout()));
     }
 
@@ -57,13 +60,13 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // used when we need to calculate with group keys
     fn accumulate_keys(
         &self,
-        places: &[StateAddr],
+        addrs: &[StateAddr],
         loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
-        for (row, place) in places.iter().enumerate() {
-            self.accumulate_row(&AggrState::with_loc(*place, loc), columns, row)?;
+        for (row, addr) in addrs.iter().enumerate() {
+            self.accumulate_row(&AggrState::new(*addr, loc), columns, row)?;
         }
         Ok(())
     }
@@ -83,11 +86,11 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn batch_merge(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         state: &BinaryColumn,
     ) -> Result<()> {
         for (place, mut data) in places.iter().zip(state.iter()) {
-            self.merge(&AggrState::with_loc(*place, &loc), &mut data)?;
+            self.merge(&AggrState::new(*place, loc), &mut data)?;
         }
 
         Ok(())
@@ -108,10 +111,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         loc: Box<[AggrStateLoc]>,
     ) -> Result<()> {
         for (place, rhs) in places.iter().zip(rhses.iter()) {
-            self.merge_states(
-                &AggrState::with_loc(*place, &loc),
-                &AggrState::with_loc(*rhs, &loc),
-            )?;
+            self.merge_states(&AggrState::new(*place, &loc), &AggrState::new(*rhs, &loc))?;
         }
         Ok(())
     }
@@ -125,7 +125,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         for place in places {
-            self.merge_result(&AggrState::with_loc(*place, &loc), builder)?;
+            self.merge_result(&AggrState::new(*place, &loc), builder)?;
         }
         Ok(())
     }
@@ -159,85 +159,4 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn convert_const_to_full(&self) -> bool {
         true
     }
-}
-
-#[derive(Debug)]
-pub struct AggrState<'a> {
-    pub addr: StateAddr,
-    loc: &'a [AggrStateLoc],
-}
-
-impl<'a> AggrState<'a> {
-    pub fn with_loc(addr: StateAddr, loc: &'a [AggrStateLoc]) -> Self {
-        Self { addr, loc }
-    }
-
-    pub fn get<'b, T>(&self) -> &'b mut T {
-        self.addr
-            .next(self.loc[0].into_custom().unwrap().1)
-            .get::<T>()
-    }
-
-    pub fn write<T, F>(&self, f: F)
-    where F: FnOnce() -> T {
-        self.addr
-            .next(self.loc[0].into_custom().unwrap().1)
-            .write(f);
-    }
-
-    pub fn write_state<T>(&self, state: T) {
-        self.addr
-            .next(self.loc[0].into_custom().unwrap().1)
-            .write_state(state);
-    }
-
-    pub fn loc(&self) -> &[AggrStateLoc] {
-        self.loc
-    }
-
-    pub fn remove_last_loc(&self) -> Self {
-        assert!(self.loc.len() >= 2);
-        Self {
-            addr: self.addr,
-            loc: &self.loc[..self.loc.len() - 1],
-        }
-    }
-}
-
-pub struct AggrStateRegister {
-    pub(super) states: Vec<AggrStateType>,
-    pub(super) offsets: Vec<usize>,
-}
-
-impl AggrStateRegister {
-    pub fn new() -> Self {
-        Self {
-            states: vec![],
-            offsets: vec![0],
-        }
-    }
-
-    pub fn register(&mut self, state: AggrStateType) {
-        self.states.push(state);
-    }
-
-    pub fn commit(&mut self) {
-        self.offsets.push(self.states.len());
-    }
-
-    pub fn states(&self) -> &[AggrStateType] {
-        &self.states
-    }
-}
-
-impl Default for AggrStateRegister {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum AggrStateType {
-    Bool,
-    Custom(Layout),
 }

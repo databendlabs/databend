@@ -251,7 +251,7 @@ where
 
         for ((row, timestamp), place) in T::iter_column(&tcolumn).enumerate().zip(places.iter()) {
             let state =
-                AggrState::with_loc(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+                AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
             let timestamp = T::to_owned_scalar(timestamp);
             for (i, filter) in dcolumns.iter().enumerate() {
                 if filter.get_bit(row) {

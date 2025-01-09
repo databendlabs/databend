@@ -19,7 +19,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
-use databend_common_expression::AggrStateRegister;
+use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
@@ -101,9 +101,9 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         unreachable!()
     }
 
-    fn register_state(&self, register: &mut AggrStateRegister) {
-        self.inner.register_state(register);
-        register.register(AggrStateType::Bool);
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        self.inner.register_state(registry);
+        registry.register(AggrStateType::Bool);
     }
 
     #[inline]
@@ -163,13 +163,13 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
                 for (&addr, valid) in places.iter().zip(v.iter()) {
                     if valid {
-                        self.set_flag(&AggrState::with_loc(addr, loc), true);
+                        self.set_flag(&AggrState::new(addr, loc), true);
                     }
                 }
             }
             _ => {
                 for &addr in places {
-                    self.set_flag(&AggrState::with_loc(addr, loc), true);
+                    self.set_flag(&AggrState::new(addr, loc), true);
                 }
             }
         }
@@ -248,6 +248,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner.convert_const_to_full()
     }
 }
+
 impl fmt::Display for AggregateFunctionOrNullAdaptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.inner)

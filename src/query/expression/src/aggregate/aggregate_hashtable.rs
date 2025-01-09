@@ -206,7 +206,7 @@ impl AggregateHashTable {
                     .aggrs
                     .iter()
                     .zip(params.iter())
-                    .zip(states_layout.loc.iter())
+                    .zip(states_layout.states_loc.iter())
                 {
                     func.accumulate_keys(state_places, loc, *params, row_count)?;
                 }
@@ -216,7 +216,7 @@ impl AggregateHashTable {
                     .aggrs
                     .iter()
                     .zip(agg_states.iter())
-                    .zip(states_layout.loc.iter().cloned())
+                    .zip(states_layout.states_loc.iter())
                 {
                     func.batch_merge(state_places, loc, state.as_binary().unwrap())?;
                 }
@@ -413,7 +413,12 @@ impl AggregateHashTable {
             let places = &state.state_places.as_slice()[0..row_count];
             let rhses = &flush_state.state_places.as_slice()[0..row_count];
             if let Some(layout) = self.payload.state_layout.as_ref() {
-                for (aggr, loc) in self.payload.aggrs.iter().zip(layout.loc.iter().cloned()) {
+                for (aggr, loc) in self
+                    .payload
+                    .aggrs
+                    .iter()
+                    .zip(layout.states_loc.iter().cloned())
+                {
                     aggr.batch_merge_states(places, rhses, loc)?;
                 }
             }
@@ -434,7 +439,7 @@ impl AggregateHashTable {
                 .payload
                 .aggrs
                 .iter()
-                .zip(states_layout.loc.iter().cloned())
+                .zip(states_layout.states_loc.iter().cloned())
             {
                 let return_type = aggr.return_type()?;
                 let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);

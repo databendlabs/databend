@@ -125,7 +125,7 @@ where
             _ => NumberType::<T>::try_downcast_column(columns).unwrap(),
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let state = AggrState::with_loc(*place, loc).get::<Self>();
+            let state = AggrState::new(*place, loc).get::<Self>();
             state.values.push(*c);
         });
         Ok(())
@@ -291,7 +291,7 @@ where T: Decimal
             _ => T::try_downcast_column(columns).unwrap().0,
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let state = AggrState::with_loc(*place, loc).get::<Self>();
+            let state = AggrState::new(*place, loc).get::<Self>();
             state.values.push(*c);
         });
         Ok(())
