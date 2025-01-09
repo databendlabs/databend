@@ -1,0 +1,57 @@
+name: Plaid Custom Build
+
+on: workflow_dispatch
+#  push:
+#    branches:
+#      - main
+#    paths:
+#      - "scripts/setup/**"
+#      - "docker/build-tool/**"
+#
+#permissions:
+#  id-token: write
+#  contents: read
+
+jobs:
+  debian:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: _json_key
+          password: ${{ secrets.GCR_JSON_KEY }}
+
+
+
+#      - uses: ./.github/actions/setup_docker
+#        id: login
+#        with:
+#          repo: build-tool
+#          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+#          dockerhub_user: ${{ secrets.DOCKERHUB_USERNAME }}
+#          dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Get rust toolchain version
+#        id: toolchain
+#        run: |
+#          version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
+#          echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
+      - name: Create tag
+        id: docker_tag
+        run: |
+          commit_tag=${GITHUB_REF#refs/*/}
+          echo "tag=${commit_tag}-${{ github.run_number }}-${{ github.run_attempt }}" >> $GITHUB_OUTPUT
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          pull: true
+          no-cache: true
+          tags: |
+            us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/databend:latest
+            us-docker.pkg.dev/plaidcloud-build/us-plaidcloud/databend:${{ steps.docker_tag.outputs.tag }}
+          context: ./scripts/setup
+          file: ./docker/build-tool/debian/Dockerfile
+          platforms: linux/amd64,linux/arm64
