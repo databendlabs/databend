@@ -21,15 +21,15 @@ module.exports = async ({ github, context, core }) => {
     if (TAG) {
       // trigger stable release by workflow_dispatch with a tag
       let result = /v(\d+)\.(\d+)\.(\d+)-nightly/g.exec(TAG);
-      if (result === null) {
+      if (!result) {
         core.setFailed(`The tag ${TAG} to stablize is invalid, ignoring`);
         return;
       }
       let major = result[1];
       let minor = result[2];
       let patch = result[3];
-      let stable_tag = `v${major}.${minor}.${patch}`;
-      core.setOutput("tag", stable_tag);
+      let stableTag = `v${major}.${minor}.${patch}`;
+      core.setOutput("tag", stableTag);
       let ref = await github.rest.git.getRef({
         owner: context.repo.owner,
         repo: context.repo.repo,
@@ -37,7 +37,7 @@ module.exports = async ({ github, context, core }) => {
       });
       core.setOutput("sha", ref.data.object.sha);
       core.info(
-        `Stable release ${stable_tag} from ${TAG} (${ref.data.object.sha})`
+        `Stable release ${stableTag} from ${TAG} (${ref.data.object.sha})`
       );
     } else {
       core.setFailed("Stable release must be triggered with a nightly tag");
