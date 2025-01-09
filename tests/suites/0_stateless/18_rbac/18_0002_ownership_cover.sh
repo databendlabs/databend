@@ -41,7 +41,7 @@ echo "select * from d_0002.t" | $TEST_USER_CONNECT
 ## stage
 echo "=== test stage ==="
 echo 'create stage hello' | $TEST_USER_CONNECT
-echo 'COPY INTO @hello from (select number from numbers(1)) FILE_FORMAT = (type = parquet)' | $TEST_USER_CONNECT
+echo 'COPY INTO @hello from (select number from numbers(1)) FILE_FORMAT = (type = parquet)' | $TEST_USER_CONNECT | cut -f1-2
 echo 'select * from @hello' | $TEST_USER_CONNECT
 
 ## udf
