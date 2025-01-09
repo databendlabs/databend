@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
-use std::fmt::format;
 use std::mem;
 use std::sync::Arc;
 
