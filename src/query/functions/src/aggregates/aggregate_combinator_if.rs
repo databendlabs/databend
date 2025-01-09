@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
@@ -22,6 +21,7 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
@@ -98,8 +98,8 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.init_state(place);
     }
 
-    fn state_layout(&self) -> Layout {
-        self.nested.state_layout()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        self.nested.register_state(registry);
     }
 
     fn accumulate(

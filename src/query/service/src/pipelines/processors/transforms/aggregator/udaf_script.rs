@@ -30,6 +30,8 @@ use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::AggrState;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -63,8 +65,8 @@ impl AggregateFunction for AggregateUdfScript {
         place.write_state(UdfAggState(self.init_state.0.clone()));
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<UdfAggState>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<UdfAggState>()));
     }
 
     fn accumulate(

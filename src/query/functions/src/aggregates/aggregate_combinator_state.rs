@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
@@ -80,12 +79,8 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.init_state(place);
     }
 
-    fn state_layout(&self) -> Layout {
-        unreachable!()
-    }
-
-    fn register_state(&self, register: &mut AggrStateRegistry) {
-        self.nested.register_state(register);
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        self.nested.register_state(registry);
     }
 
     fn accumulate(

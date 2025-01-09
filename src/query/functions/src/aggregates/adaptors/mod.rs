@@ -13,11 +13,9 @@
 // limitations under the License.
 
 mod aggregate_null_adaptor;
-mod aggregate_null_unary_adaptor;
-mod aggregate_null_variadic_adaptor;
+mod aggregate_null_unary_variadic_adaptor;
 mod aggregate_ornull_adaptor;
 
 pub use aggregate_null_adaptor::*;
-pub use aggregate_null_unary_adaptor::*;
-pub use aggregate_null_variadic_adaptor::*;
+pub use aggregate_null_unary_variadic_adaptor::*;
 pub use aggregate_ornull_adaptor::*;

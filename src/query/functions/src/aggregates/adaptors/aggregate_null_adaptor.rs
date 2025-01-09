@@ -17,8 +17,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::Scalar;
 
-use super::aggregate_null_variadic_adaptor::AggregateNullVariadicAdaptor;
-use super::AggregateNullUnaryAdaptor;
+use super::aggregate_null_unary_variadic_adaptor::AggregateNullUnaryAdaptor;
+use super::aggregate_null_unary_variadic_adaptor::AggregateNullVariadicAdaptor;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionFeatures;
 use crate::aggregates::aggregate_null_result::AggregateNullResultFunction;
 use crate::aggregates::AggregateFunctionRef;

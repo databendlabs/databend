@@ -23,6 +23,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -39,7 +41,6 @@ use super::aggregate_function_factory::CombinatorDescription;
 use super::aggregator_common::assert_variadic_arguments;
 use super::AggregateCountFunction;
 use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
 
 #[derive(Clone)]
 pub struct AggregateDistinctCombinator<State> {
@@ -64,16 +65,12 @@ where State: DistinctStateFunc
 
     fn init_state(&self, place: &AggrState) {
         place.write(|| State::new());
-        let loc = self.nested_place_loc(place);
-        self.nested
-            .init_state(&AggrState::new(place.addr, &loc));
+        self.nested.init_state(&place.remove_last_loc());
     }
 
-    fn state_layout(&self) -> Layout {
-        let layout = Layout::new::<State>();
-
-        let nested = self.nested.state_layout();
-        Layout::from_size_align(layout.size() + nested.size(), layout.align()).unwrap()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        self.nested.register_state(registry);
+        registry.register(AggrStateType::Custom(Layout::new::<State>()));
     }
 
     fn accumulate(
@@ -112,8 +109,7 @@ where State: DistinctStateFunc
 
     fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
-        let loc = self.nested_place_loc(place);
-        let nested_place = AggrState::new(place.addr, &loc);
+        let nested_place = place.remove_last_loc();
 
         // faster path for count
         if self.nested.name() == "AggregateCountFunction" {
@@ -145,9 +141,7 @@ where State: DistinctStateFunc
         std::ptr::drop_in_place(state);
 
         if self.nested.need_manual_drop_state() {
-            let loc = self.nested_place_loc(place);
-            self.nested
-                .drop_state(&AggrState::new(place.addr, &loc));
+            self.nested.drop_state(&place.remove_last_loc());
         }
     }
 
@@ -250,12 +244,4 @@ pub fn try_create(
         name,
         _state: PhantomData,
     }))
-}
-
-impl<State> AggregateDistinctCombinator<State> {
-    fn nested_place_loc(&self, place: &AggrState) -> [AggrStateLoc; 1] {
-        let layout = Layout::new::<State>();
-        let (index, offset) = place.loc()[0].as_custom().unwrap();
-        [AggrStateLoc::Custom(*index, *offset + layout.size())]
-    }
 }

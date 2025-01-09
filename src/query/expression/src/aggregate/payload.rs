@@ -427,7 +427,7 @@ impl Drop for Payload {
                 return;
             };
 
-            for (aggr, loc) in self.aggrs.iter().zip(states_layout.states_loc.iter().cloned()) {
+            for (aggr, loc) in self.aggrs.iter().zip(states_layout.states_loc.iter()) {
                 if !aggr.need_manual_drop_state() {
                     continue;
                 }
@@ -437,7 +437,7 @@ impl Drop for Payload {
                         let ptr = self.data_ptr(page, row);
                         unsafe {
                             let state_addr = read::<u64>(ptr.add(self.state_offset) as _) as usize;
-                            aggr.drop_state(&AggrState::new(StateAddr::new(state_addr), &loc));
+                            aggr.drop_state(&AggrState::new(StateAddr::new(state_addr), loc));
                         }
                     }
                 }

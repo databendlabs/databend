@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
@@ -94,11 +93,6 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
     fn serialize_size_per_row(&self) -> Option<usize> {
         self.inner.serialize_size_per_row().map(|row| row + 1)
-    }
-
-    #[inline]
-    fn state_layout(&self) -> Layout {
-        unreachable!()
     }
 
     fn register_state(&self, registry: &mut AggrStateRegistry) {

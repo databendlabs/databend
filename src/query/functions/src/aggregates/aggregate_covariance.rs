@@ -29,6 +29,8 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -160,8 +162,10 @@ where
         });
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateCovarianceState>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(
+            Layout::new::<AggregateCovarianceState>(),
+        ));
     }
 
     fn accumulate(

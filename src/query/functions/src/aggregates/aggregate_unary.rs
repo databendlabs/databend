@@ -25,6 +25,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::AggregateFunction;
 use databend_common_expression::AggregateFunctionRef;
 use databend_common_expression::ColumnBuilder;
@@ -208,8 +210,8 @@ where
         place.write_state(S::default());
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<S>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<S>()));
     }
 
     fn accumulate(

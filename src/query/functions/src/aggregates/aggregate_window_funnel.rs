@@ -36,6 +36,8 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_integer_mapped_type;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -183,8 +185,10 @@ where
         place.write(AggregateWindowFunnelState::<T::Scalar>::new);
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateWindowFunnelState<T::Scalar>>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<
+            AggregateWindowFunnelState<T::Scalar>,
+        >()));
     }
 
     fn accumulate(
@@ -250,8 +254,7 @@ where
         let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
 
         for ((row, timestamp), place) in T::iter_column(&tcolumn).enumerate().zip(places.iter()) {
-            let state =
-                AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
+            let state = AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
             let timestamp = T::to_owned_scalar(timestamp);
             for (i, filter) in dcolumns.iter().enumerate() {
                 if filter.get_bit(row) {

@@ -21,6 +21,8 @@ use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 
@@ -51,8 +53,8 @@ impl AggregateFunction for AggregateNullResultFunction {
 
     fn init_state(&self, _place: &AggrState) {}
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<u8>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<u8>()));
     }
 
     fn accumulate(

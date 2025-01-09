@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
@@ -22,7 +21,6 @@ use databend_common_exception::Result;
 use super::AggrState;
 use super::AggrStateLoc;
 use super::AggrStateRegistry;
-use super::AggrStateType;
 use super::StateAddr;
 use crate::types::BinaryColumn;
 use crate::types::DataType;
@@ -41,11 +39,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn init_state(&self, place: &AggrState);
 
-    fn state_layout(&self) -> Layout;
-
-    fn register_state(&self, register: &mut AggrStateRegistry) {
-        register.register(AggrStateType::Custom(self.state_layout()));
-    }
+    fn register_state(&self, registry: &mut AggrStateRegistry);
 
     // accumulate is to accumulate the arrays in batch mode
     // common used when there is no group by for aggregate function

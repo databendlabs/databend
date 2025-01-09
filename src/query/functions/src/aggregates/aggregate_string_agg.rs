@@ -24,6 +24,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -63,8 +65,8 @@ impl AggregateFunction for AggregateStringAggFunction {
         });
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<StringAggState>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<StringAggState>()));
     }
 
     fn accumulate(

@@ -26,6 +26,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GeometryType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
@@ -214,8 +216,8 @@ where
         place.write(|| State::new());
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<State>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<State>()));
     }
 
     fn accumulate(

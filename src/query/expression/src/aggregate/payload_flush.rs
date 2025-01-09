@@ -139,7 +139,11 @@ impl Payload {
             let mut builders = state_layout.serialize_builders(row_count);
 
             for place in state.state_places.as_slice()[0..row_count].iter() {
-                for (idx, (loc, func)) in state_layout.states_loc.iter().zip(self.aggrs.iter()).enumerate()
+                for (idx, (loc, func)) in state_layout
+                    .states_loc
+                    .iter()
+                    .zip(self.aggrs.iter())
+                    .enumerate()
                 {
                     {
                         let builder = &mut builders[idx];

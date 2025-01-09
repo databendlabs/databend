@@ -22,6 +22,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::utils::column_merge_validity;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
@@ -80,8 +82,8 @@ impl AggregateFunction for AggregateCountFunction {
         place.write(|| AggregateCountState { count: 0 });
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateCountState>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<AggregateCountState>()));
     }
 
     // columns may be nullable

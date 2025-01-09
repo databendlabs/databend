@@ -58,8 +58,7 @@ pub struct WindowFuncAggImpl {
 impl WindowFuncAggImpl {
     #[inline]
     pub fn reset(&self) {
-        self.agg
-            .init_state(&AggrState::new(self.addr, &self.loc));
+        self.agg.init_state(&AggrState::new(self.addr, &self.loc));
     }
 
     #[inline]
@@ -85,8 +84,7 @@ impl Drop for WindowFuncAggImpl {
         drop_guard(move || {
             if self.agg.need_manual_drop_state() {
                 unsafe {
-                    self.agg
-                        .drop_state(&AggrState::new(self.addr, &self.loc));
+                    self.agg.drop_state(&AggrState::new(self.addr, &self.loc));
                 }
             }
         })

@@ -26,6 +26,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -82,8 +84,8 @@ where
     fn init_state(&self, place: &AggrState) {
         place.write(QuantileTDigestState::new)
     }
-    fn state_layout(&self) -> Layout {
-        Layout::new::<QuantileTDigestState>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<QuantileTDigestState>()));
     }
     fn accumulate(
         &self,
