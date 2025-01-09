@@ -827,7 +827,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 seq_marked_deleted_indexes.seq,
             );
             txn.if_then.push(TxnOp::put(
-                marked_deleted_index_id_ident,
+                marked_deleted_index_id_ident.to_string_key(),
                 serialize_struct(&marked_deleted_indexes)?,
             ));
 
@@ -870,13 +870,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         match table_id {
             Some(table_id) => {
                 let ident = MarkedDeletedIndexIdIdent::new_generic(tenant, table_id.into());
-                let seq_marked_deleted_indexes = self.get_pb(&ident).await?.unwrap_or_default();
-                Ok(GetMarkedDeletedIndexesReply {
-                    table_indexes: vec![TableIndexes {
+                let seq_marked_deleted_indexes = self.get_pb(&ident).await?;
+                let table_indexes = seq_marked_deleted_indexes
+                    .into_iter()
+                    .map(|seq_v| TableIndexes {
                         table_id,
-                        indexes: seq_marked_deleted_indexes.data.indexes,
-                    }],
-                })
+                        indexes: seq_v.data.indexes,
+                    })
+                    .collect::<Vec<_>>();
+                Ok(GetMarkedDeletedIndexesReply { table_indexes })
             }
             None => {
                 let ident = MarkedDeletedIndexIdIdent::new_generic(tenant, 0u64.into());
@@ -3184,7 +3186,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 seq_marked_deleted_indexes.seq,
             );
             txn.if_then.push(TxnOp::put(
-                marked_deleted_index_id_ident.clone(),
+                marked_deleted_index_id_ident.to_string_key(),
                 serialize_struct(&marked_deleted_indexes)?,
             ));
 

@@ -6157,6 +6157,7 @@ impl SchemaApiTestSuite {
         let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
         let index_id;
+        let index_id_2;
 
         info!("--- prepare db and table");
         {
@@ -6228,7 +6229,8 @@ impl SchemaApiTestSuite {
                 meta: index_meta_2.clone(),
             };
 
-            mt.create_index(req).await?;
+            let res = mt.create_index(req).await?;
+            index_id_2 = res.index_id;
         }
 
         {
@@ -6280,10 +6282,40 @@ impl SchemaApiTestSuite {
         }
 
         {
+            info!("--- get marked deleted indexes");
+            let res = mt
+                .get_marked_deleted_indexes(Some(table_id), &tenant)
+                .await?;
+            assert_eq!(res.table_indexes.len(), 0);
+
+            let res = mt.get_marked_deleted_indexes(None, &tenant).await?;
+            assert_eq!(res.table_indexes.len(), 0);
+        }
+
+        {
             info!("--- drop index");
 
             let res = mt.drop_index(&name_ident_2).await?;
             assert!(res.is_some())
+        }
+
+        {
+            info!("--- get marked deleted indexes after drop one");
+            let results = vec![
+                mt.get_marked_deleted_indexes(Some(table_id), &tenant)
+                    .await?,
+                mt.get_marked_deleted_indexes(None, &tenant).await?,
+            ];
+            for res in results {
+                assert_eq!(res.table_indexes.len(), 1);
+                assert_eq!(res.table_indexes[0].table_id, table_id);
+                assert_eq!(res.table_indexes[0].indexes.len(), 1);
+                let (res_index_id, mut res_index_meta) = res.table_indexes[0].indexes[0].clone();
+                assert_eq!(res_index_id, index_id_2);
+                assert!(res_index_meta.dropped_on.is_some());
+                res_index_meta.dropped_on = None;
+                assert_eq!(res_index_meta, index_meta_2);
+            }
         }
 
         {
@@ -6319,6 +6351,76 @@ impl SchemaApiTestSuite {
 
             let res = mt.list_indexes(req).await?;
             assert!(res.is_empty())
+        }
+
+        {
+            info!("--- get marked deleted indexes after drop all");
+            let results = vec![
+                mt.get_marked_deleted_indexes(Some(table_id), &tenant)
+                    .await?,
+                mt.get_marked_deleted_indexes(None, &tenant).await?,
+            ];
+            for res in results {
+                assert_eq!(res.table_indexes.len(), 1);
+                assert_eq!(res.table_indexes[0].table_id, table_id);
+                assert_eq!(res.table_indexes[0].indexes.len(), 2);
+                let res_index_ids = res.table_indexes[0]
+                    .indexes
+                    .iter()
+                    .map(|(id, _)| id)
+                    .collect::<HashSet<_>>();
+                assert!(res_index_ids.contains(&index_id));
+                assert!(res_index_ids.contains(&index_id_2));
+
+                assert!(res.table_indexes[0]
+                    .indexes
+                    .iter()
+                    .all(|(_, meta)| { meta.dropped_on.is_some() }));
+
+                let res_index_metas = res.table_indexes[0]
+                    .indexes
+                    .iter()
+                    .map(|(_, meta)| {
+                        let mut meta = meta.clone();
+                        meta.dropped_on = None;
+                        meta
+                    })
+                    .collect::<Vec<_>>();
+                assert!(res_index_metas.contains(&index_meta_1));
+                assert!(res_index_metas.contains(&index_meta_2));
+            }
+        }
+
+        {
+            info!("--- remove marked deleted indexes");
+            mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id])
+                .await?;
+            let results = vec![
+                mt.get_marked_deleted_indexes(Some(table_id), &tenant)
+                    .await?,
+                mt.get_marked_deleted_indexes(None, &tenant).await?,
+            ];
+            for res in results {
+                assert_eq!(res.table_indexes.len(), 1);
+                assert_eq!(res.table_indexes[0].table_id, table_id);
+                assert_eq!(res.table_indexes[0].indexes.len(), 1);
+                let (res_index_id, mut res_index_meta) = res.table_indexes[0].indexes[0].clone();
+                assert_eq!(res_index_id, index_id_2);
+                assert!(res_index_meta.dropped_on.is_some());
+                res_index_meta.dropped_on = None;
+                assert_eq!(res_index_meta, index_meta_2);
+            }
+
+            mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id_2])
+                .await?;
+            let res = mt
+                .get_marked_deleted_indexes(Some(table_id), &tenant)
+                .await?;
+            assert_eq!(res.table_indexes.len(), 1);
+            assert_eq!(res.table_indexes[0].indexes.len(), 0);
+            let res = mt.get_marked_deleted_indexes(None, &tenant).await?;
+            assert_eq!(res.table_indexes.len(), 1);
+            assert_eq!(res.table_indexes[0].indexes.len(), 0);
         }
 
         {
