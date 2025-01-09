@@ -51,20 +51,28 @@ module.exports = async ({ github, context, core }) => {
       let releases = await github.rest.repos.listReleases({
         owner: context.repo.owner,
         repo: context.repo.repo,
-        per_page: 1,
+        per_page: 10,
       });
-      let tag = releases.data[0].tag_name;
-      let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(tag);
+      let lastTag = releases.data.filter(
+        (r) => r.tag_name.startsWith("v") && r.tag_name.endsWith("-nightly")
+      )[0];
+      if (!lastTag) {
+        core.setFailed(`No previous nightly release found, ignoring`);
+        return;
+      }
+      let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(lastTag.tag_name);
       if (result === null) {
-        core.setFailed(`The previous tag ${tag} is invalid, ignoring`);
+        core.setFailed(
+          `The previous tag ${lastTag.tag_name} is invalid, ignoring`
+        );
         return;
       }
       let major = result[1];
       let minor = result[2];
       let patch = (parseInt(result[3]) + 1).toString();
-      let next_tag = `v${major}.${minor}.${patch}-nightly`;
-      core.setOutput("tag", next_tag);
-      core.info(`Nightly release ${next_tag} from ${tag} (${context.sha})`);
+      let nextTag = `v${major}.${minor}.${patch}-nightly`;
+      core.setOutput("tag", nextTag);
+      core.info(`Nightly release ${nextTag} from ${lastTag} (${context.sha})`);
     }
   }
 };
