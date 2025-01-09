@@ -55,14 +55,16 @@ module.exports = async ({ github, context, core }) => {
       });
       let lastTag = releases.data.filter(
         (r) => r.tag_name.startsWith("v") && r.tag_name.endsWith("-nightly")
-      )[0].tag_name;
+      )[0];
       if (!lastTag) {
         core.setFailed(`No previous nightly release found, ignoring`);
         return;
       }
-      let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(lastTag);
+      let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(lastTag.tag_name);
       if (result === null) {
-        core.setFailed(`The previous tag ${lastTag} is invalid, ignoring`);
+        core.setFailed(
+          `The previous tag ${lastTag.tag_name} is invalid, ignoring`
+        );
         return;
       }
       let major = result[1];
