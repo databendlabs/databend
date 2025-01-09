@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::fmt::format;
 use std::mem;
 use std::sync::Arc;
 
@@ -87,8 +88,9 @@ fn create_writer(
         DATABEND_SEMVER.pre.as_str()
     );
 
-    if create_by.len() > CREATE_BY_LEN {
-        create_by.truncate(CREATE_BY_LEN);
+    if create_by.len() != CREATE_BY_LEN {
+        create_by = format!("{:.<24}", create_by);
+        create_by.truncate(24);
     }
 
     let props = WriterProperties::builder()
