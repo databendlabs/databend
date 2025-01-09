@@ -101,12 +101,12 @@ impl AggregateFunction for AggregateStateCombinator {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
         self.nested
-            .accumulate_keys(places, loc.clone(), columns, input_rows)
+            .accumulate_keys(places, loc, columns, input_rows)
     }
 
     fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {

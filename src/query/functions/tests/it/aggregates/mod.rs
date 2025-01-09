@@ -199,17 +199,17 @@ pub fn simulate_two_groups_group_by(
 
     // init state for two groups
     let addr1 = arena.alloc_layout(states_layout.layout).into();
-    let state1 = AggrState::with_loc(addr1, loc.clone());
+    let state1 = AggrState::with_loc(addr1, &loc);
     func.init_state(&state1);
     let addr2 = arena.alloc_layout(states_layout.layout).into();
-    let state2 = AggrState::with_loc(addr2, loc.clone());
+    let state2 = AggrState::with_loc(addr2, &loc);
     func.init_state(&state2);
 
     let places = (0..rows)
         .map(|i| if i % 2 == 0 { addr1 } else { addr2 })
         .collect::<Vec<_>>();
 
-    func.accumulate_keys(&places, loc, columns.into(), rows)?;
+    func.accumulate_keys(&places, &loc, columns.into(), rows)?;
 
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(&state1, &mut builder)?;

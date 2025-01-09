@@ -206,7 +206,7 @@ impl AggregateHashTable {
                     .aggrs
                     .iter()
                     .zip(params.iter())
-                    .zip(states_layout.loc.iter().cloned())
+                    .zip(states_layout.loc.iter())
                 {
                     func.accumulate_keys(state_places, loc, *params, row_count)?;
                 }

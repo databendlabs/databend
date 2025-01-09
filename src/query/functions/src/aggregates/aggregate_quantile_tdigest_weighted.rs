@@ -127,7 +127,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -138,7 +138,7 @@ where
             .zip(weighted.iter())
             .zip(places.iter())
             .for_each(|((value, weight), place)| {
-                let state = AggrState::with_loc(*place, loc.clone()).get::<QuantileTDigestState>();
+                let state = AggrState::with_loc(*place, loc).get::<QuantileTDigestState>();
                 state.add(value.as_(), Some(weight.as_()))
             });
         Ok(())

@@ -67,7 +67,7 @@ impl PartialSingleStateAggregator {
         for (func, loc) in params
             .aggregate_functions
             .iter()
-            .zip(state_layout.loc.iter().cloned())
+            .zip(state_layout.loc.iter())
         {
             func.init_state(&AggrState::with_loc(addr, loc));
         }
@@ -113,7 +113,6 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 .states_layout
                 .loc
                 .iter()
-                .cloned()
                 .map(|loc| AggrState::with_loc(self.addr, loc))
                 .zip(self.funcs.iter())
                 .zip(states.iter())
@@ -125,7 +124,6 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 .states_layout
                 .loc
                 .iter()
-                .cloned()
                 .map(|loc| AggrState::with_loc(self.addr, loc))
                 .zip(
                     self.arg_indices
@@ -155,7 +153,6 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                     self.states_layout
                         .loc
                         .iter()
-                        .cloned()
                         .map(|loc| AggrState::with_loc(self.addr, loc)),
                 )
                 .zip(builders.iter_mut())
@@ -174,13 +171,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
         };
 
         // destroy states
-        for (loc, func) in self
-            .states_layout
-            .loc
-            .iter()
-            .cloned()
-            .zip(self.funcs.iter())
-        {
+        for (loc, func) in self.states_layout.loc.iter().zip(self.funcs.iter()) {
             if func.need_manual_drop_state() {
                 unsafe { func.drop_state(&AggrState::with_loc(self.addr, loc)) }
             }
@@ -266,7 +257,6 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
                 self.states_layout
                     .loc
                     .iter()
-                    .cloned()
                     .map(|loc| AggrState::with_loc(main_addr, loc)),
             )
             .map(|(func, place)| {

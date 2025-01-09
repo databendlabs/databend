@@ -242,7 +242,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -254,7 +254,7 @@ where
             .enumerate()
             .zip(places.iter().cloned())
             .for_each(|((row, val), addr)| {
-                let state = AggrState::with_loc(addr, loc.clone()).get::<State>();
+                let state = AggrState::with_loc(addr, loc).get::<State>();
                 if state.change(&val) {
                     state.update(val, A::index_column(&arg_col, row).unwrap())
                 }

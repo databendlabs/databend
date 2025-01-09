@@ -237,7 +237,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -250,8 +250,8 @@ where
         let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
 
         for ((row, timestamp), place) in T::iter_column(&tcolumn).enumerate().zip(places.iter()) {
-            let state = AggrState::with_loc(*place, loc.clone())
-                .get::<AggregateWindowFunnelState<T::Scalar>>();
+            let state =
+                AggrState::with_loc(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
             let timestamp = T::to_owned_scalar(timestamp);
             for (i, filter) in dcolumns.iter().enumerate() {
                 if filter.get_bit(row) {

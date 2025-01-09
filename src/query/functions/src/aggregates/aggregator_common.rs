@@ -24,11 +24,13 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
+use databend_common_expression::StateAddr;
 
 use super::get_states_layout;
 use super::AggrState;
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
+use crate::aggregates::StatesLayout;
 
 pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
@@ -109,7 +111,8 @@ pub fn assert_variadic_arguments<D: Display>(
 }
 
 struct EvalAggr {
-    state: AggrState,
+    addr: StateAddr,
+    state_layout: StatesLayout,
     _arena: Bump,
     func: AggregateFunctionRef,
 }
@@ -118,17 +121,19 @@ impl EvalAggr {
     fn new(func: AggregateFunctionRef) -> Self {
         let funcs = [func];
         let state_layout = get_states_layout(&funcs).unwrap();
+        let [func] = funcs;
 
         let _arena = Bump::new();
-        let place = _arena.alloc_layout(state_layout.layout);
-        let state = AggrState::with_loc(place.into(), state_layout.loc[0].clone());
+        let addr = _arena.alloc_layout(state_layout.layout).into();
 
-        let [func] = funcs;
+        let state = AggrState::with_loc(addr, &state_layout.loc[0]);
         func.init_state(&state);
+
         Self {
+            addr,
+            state_layout,
             _arena,
             func,
-            state,
         }
     }
 }
@@ -138,7 +143,8 @@ impl Drop for EvalAggr {
         drop_guard(move || {
             if self.func.need_manual_drop_state() {
                 unsafe {
-                    self.func.drop_state(&self.state);
+                    self.func
+                        .drop_state(&AggrState::with_loc(self.addr, &self.state_layout.loc[0]));
                 }
             }
         })
@@ -158,9 +164,10 @@ pub fn eval_aggr(
     let data_type = func.return_type()?;
 
     let eval = EvalAggr::new(func.clone());
-    func.accumulate(&eval.state, columns.into(), None, rows)?;
+    let state = AggrState::with_loc(eval.addr, &eval.state_layout.loc[0]);
+    func.accumulate(&state, columns.into(), None, rows)?;
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(&eval.state, &mut builder)?;
+    func.merge_result(&state, &mut builder)?;
     Ok((builder.build(), data_type))
 }
 

@@ -68,7 +68,7 @@ impl AggregateFunction for AggregateNullResultFunction {
     fn accumulate_keys(
         &self,
         _places: &[StateAddr],
-        _loc: Box<[AggrStateLoc]>,
+        _loc: &[AggrStateLoc],
         _columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {

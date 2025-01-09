@@ -294,7 +294,7 @@ impl Payload {
                 }
 
                 let place = StateAddr::from(place);
-                for (aggr, loc) in self.aggrs.iter().zip(layout.loc.iter().cloned()) {
+                for (aggr, loc) in self.aggrs.iter().zip(layout.loc.iter()) {
                     {
                         aggr.init_state(&AggrState::with_loc(place, loc));
                     }
@@ -432,10 +432,7 @@ impl Drop for Payload {
                                 break 'PAGE_END;
                             }
 
-                            aggr.drop_state(&AggrState::with_loc(
-                                StateAddr::new(state_addr),
-                                loc.clone(),
-                            ));
+                            aggr.drop_state(&AggrState::with_loc(StateAddr::new(state_addr), &loc));
                         }
                     }
                 }

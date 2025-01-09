@@ -199,7 +199,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -208,8 +208,7 @@ where
 
         left.iter().zip(right.iter()).zip(places.iter()).for_each(
             |((left_val, right_val), place)| {
-                let state =
-                    AggrState::with_loc(*place, loc.clone()).get::<AggregateCovarianceState>();
+                let state = AggrState::with_loc(*place, loc).get::<AggregateCovarianceState>();
                 state.add(left_val.as_(), right_val.as_());
             },
         );

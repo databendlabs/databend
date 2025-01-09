@@ -263,14 +263,14 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
 
         for (data, addr) in column.iter().zip(places.iter().cloned()) {
-            let state = AggrState::with_loc(addr, loc.clone()).get::<BitmapAggState>();
+            let state = AggrState::with_loc(addr, loc).get::<BitmapAggState>();
             let rb = deserialize_bitmap(data)?;
             state.add::<OP>(rb);
         }
@@ -460,7 +460,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {

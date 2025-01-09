@@ -58,12 +58,12 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         for (row, place) in places.iter().enumerate() {
-            self.accumulate_row(&AggrState::with_loc(*place, loc.clone()), columns, row)?;
+            self.accumulate_row(&AggrState::with_loc(*place, loc), columns, row)?;
         }
         Ok(())
     }
@@ -87,7 +87,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         state: &BinaryColumn,
     ) -> Result<()> {
         for (place, mut data) in places.iter().zip(state.iter()) {
-            self.merge(&AggrState::with_loc(*place, loc.clone()), &mut data)?;
+            self.merge(&AggrState::with_loc(*place, &loc), &mut data)?;
         }
 
         Ok(())
@@ -109,8 +109,8 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     ) -> Result<()> {
         for (place, rhs) in places.iter().zip(rhses.iter()) {
             self.merge_states(
-                &AggrState::with_loc(*place, loc.clone()),
-                &AggrState::with_loc(*rhs, loc.clone()),
+                &AggrState::with_loc(*place, &loc),
+                &AggrState::with_loc(*rhs, &loc),
             )?;
         }
         Ok(())
@@ -125,7 +125,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         for place in places {
-            self.merge_result(&AggrState::with_loc(*place, loc.clone()), builder)?;
+            self.merge_result(&AggrState::with_loc(*place, &loc), builder)?;
         }
         Ok(())
     }
@@ -162,24 +162,17 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 }
 
 #[derive(Debug)]
-pub struct AggrState {
+pub struct AggrState<'a> {
     pub addr: StateAddr,
-    loc: Box<[AggrStateLoc]>,
+    loc: &'a [AggrStateLoc],
 }
 
-impl AggrState {
-    pub fn new(addr: StateAddr, index: usize) -> Self {
-        Self {
-            addr,
-            loc: vec![AggrStateLoc::Custom(index, 0)].into_boxed_slice(),
-        }
-    }
-
-    pub fn with_loc(addr: StateAddr, loc: Box<[AggrStateLoc]>) -> Self {
+impl<'a> AggrState<'a> {
+    pub fn with_loc(addr: StateAddr, loc: &'a [AggrStateLoc]) -> Self {
         Self { addr, loc }
     }
 
-    pub fn get<'a, T>(&self) -> &'a mut T {
+    pub fn get<'b, T>(&self) -> &'b mut T {
         self.addr
             .next(self.loc[0].into_custom().unwrap().1)
             .get::<T>()
@@ -198,23 +191,15 @@ impl AggrState {
             .write_state(state);
     }
 
-    pub fn next(&self, offset: usize) -> AggrState {
-        let (index, old) = self.loc[0].into_custom().unwrap();
-        Self::with_loc(
-            self.addr,
-            vec![AggrStateLoc::Custom(index, old + offset)].into_boxed_slice(),
-        )
-    }
-
     pub fn loc(&self) -> &[AggrStateLoc] {
-        &self.loc
+        self.loc
     }
 
     pub fn remove_last_loc(&self) -> Self {
         assert!(self.loc.len() >= 2);
         Self {
             addr: self.addr,
-            loc: self.loc[..self.loc.len() - 1].to_vec().into_boxed_slice(),
+            loc: &self.loc[..self.loc.len() - 1],
         }
     }
 }

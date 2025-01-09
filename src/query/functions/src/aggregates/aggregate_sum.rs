@@ -48,11 +48,7 @@ pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 
     fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()>;
 
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()>;
-    fn accumulate_keys(
-        places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
-        columns: &Column,
-    ) -> Result<()>;
+    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()>;
 
     fn merge_result(
         &mut self,

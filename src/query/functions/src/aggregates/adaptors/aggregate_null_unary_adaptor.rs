@@ -53,7 +53,8 @@ impl<const NULLABLE_RESULT: bool> AggregateNullUnaryAdaptor<NULLABLE_RESULT> {
     #[inline]
     pub fn set_flag(&self, place: &AggrState, flag: u8) {
         if NULLABLE_RESULT {
-            let c = place.next(self.size_of_data).get::<u8>();
+            let offset = place.loc()[0].offset() + self.size_of_data;
+            let c = place.addr.next(offset).get::<u8>();
             *c = flag;
         }
     }
@@ -61,7 +62,8 @@ impl<const NULLABLE_RESULT: bool> AggregateNullUnaryAdaptor<NULLABLE_RESULT> {
     #[inline]
     pub fn init_flag(&self, place: &AggrState) {
         if NULLABLE_RESULT {
-            let c = place.next(self.size_of_data).get::<u8>();
+            let offset = place.loc()[0].offset() + self.size_of_data;
+            let c = place.addr.next(offset).get::<u8>();
             *c = 0;
         }
     }
@@ -69,7 +71,8 @@ impl<const NULLABLE_RESULT: bool> AggregateNullUnaryAdaptor<NULLABLE_RESULT> {
     #[inline]
     pub fn get_flag(&self, place: &AggrState) -> u8 {
         if NULLABLE_RESULT {
-            let c = place.next(self.size_of_data).get::<u8>();
+            let offset = place.loc()[0].offset() + self.size_of_data;
+            let c = place.addr.next(offset).get::<u8>();
             *c
         } else {
             1
@@ -138,7 +141,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
@@ -156,7 +159,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
 
                 for (valid, (row, place)) in v.iter().zip(places.iter().enumerate()) {
                     if valid {
-                        let place = AggrState::with_loc(*place, loc.clone());
+                        let place = AggrState::with_loc(*place, loc);
                         self.set_flag(&place, 1);
                         self.nested.accumulate_row(&place, not_null_columns, row)?;
                     }
@@ -164,10 +167,10 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
             }
             _ => {
                 self.nested
-                    .accumulate_keys(places, loc.clone(), not_null_columns, input_rows)?;
+                    .accumulate_keys(places, loc, not_null_columns, input_rows)?;
                 places
                     .iter()
-                    .for_each(|place| self.set_flag(&AggrState::with_loc(*place, loc.clone()), 1));
+                    .for_each(|place| self.set_flag(&AggrState::with_loc(*place, loc), 1));
             }
         }
 

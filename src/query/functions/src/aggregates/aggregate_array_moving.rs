@@ -116,11 +116,7 @@ where
         Ok(())
     }
 
-    fn accumulate_keys(
-        places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
-        columns: &Column,
-    ) -> Result<()> {
+    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()> {
         let buffer = match columns {
             Column::Null { len } => Buffer::from(vec![T::default(); *len]),
             Column::Nullable(box nullable_column) => {
@@ -129,7 +125,7 @@ where
             _ => NumberType::<T>::try_downcast_column(columns).unwrap(),
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let state = AggrState::with_loc(*place, loc.clone()).get::<Self>();
+            let state = AggrState::with_loc(*place, loc).get::<Self>();
             state.values.push(*c);
         });
         Ok(())
@@ -286,11 +282,7 @@ where T: Decimal
         Ok(())
     }
 
-    fn accumulate_keys(
-        places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
-        columns: &Column,
-    ) -> Result<()> {
+    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()> {
         let buffer = match columns {
             Column::Null { len } => Buffer::from(vec![T::default(); *len]),
             Column::Nullable(box nullable_column) => {
@@ -299,7 +291,7 @@ where T: Decimal
             _ => T::try_downcast_column(columns).unwrap().0,
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let state = AggrState::with_loc(*place, loc.clone()).get::<Self>();
+            let state = AggrState::with_loc(*place, loc).get::<Self>();
             state.values.push(*c);
         });
         Ok(())
@@ -433,11 +425,11 @@ where State: SumState
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
-        State::accumulate_keys(places, loc.clone(), &columns[0])
+        State::accumulate_keys(places, loc, &columns[0])
     }
 
     fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
@@ -627,11 +619,11 @@ where State: SumState
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
-        State::accumulate_keys(places, loc.clone(), &columns[0])
+        State::accumulate_keys(places, loc, &columns[0])
     }
 
     fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {

@@ -244,7 +244,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -255,7 +255,7 @@ where
                 column_iter
                     .zip(nullable_column.validity.iter().zip(places.iter()))
                     .for_each(|(v, (valid, place))| {
-                        let state = AggrState::with_loc(*place, loc.clone()).get::<State>();
+                        let state = AggrState::with_loc(*place, loc).get::<State>();
                         if valid {
                             state.add(Some(v.clone()))
                         } else {
@@ -267,7 +267,7 @@ where
                 if let Some(column) = T::try_downcast_column(&columns[0]) {
                     let column_iter = T::iter_column(&column);
                     column_iter.zip(places.iter()).for_each(|(v, place)| {
-                        let state = AggrState::with_loc(*place, loc.clone()).get::<State>();
+                        let state = AggrState::with_loc(*place, loc).get::<State>();
                         state.add(Some(v.clone()))
                     });
                 }

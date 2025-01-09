@@ -146,16 +146,12 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
-        self.inner.accumulate_keys(
-            places,
-            loc[..loc.len() - 1].to_vec().into_boxed_slice(),
-            columns,
-            input_rows,
-        )?;
+        self.inner
+            .accumulate_keys(places, &loc[..loc.len() - 1], columns, input_rows)?;
         let if_cond = self.inner.get_if_condition(columns);
 
         match if_cond {
@@ -167,13 +163,13 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
                 for (&addr, valid) in places.iter().zip(v.iter()) {
                     if valid {
-                        self.set_flag(&AggrState::with_loc(addr, loc.clone()), true);
+                        self.set_flag(&AggrState::with_loc(addr, loc), true);
                     }
                 }
             }
             _ => {
                 for &addr in places {
-                    self.set_flag(&AggrState::with_loc(addr, loc.clone()), true);
+                    self.set_flag(&AggrState::with_loc(addr, loc), true);
                 }
             }
         }

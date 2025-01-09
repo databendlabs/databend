@@ -39,6 +39,7 @@ use super::aggregate_function_factory::CombinatorDescription;
 use super::aggregator_common::assert_variadic_arguments;
 use super::AggregateCountFunction;
 use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 
 #[derive(Clone)]
 pub struct AggregateDistinctCombinator<State> {
@@ -63,9 +64,9 @@ where State: DistinctStateFunc
 
     fn init_state(&self, place: &AggrState) {
         place.write(|| State::new());
-        let layout = Layout::new::<State>();
-        let nested_place = place.next(layout.size());
-        self.nested.init_state(&nested_place);
+        let loc = self.nested_place_loc(place);
+        self.nested
+            .init_state(&AggrState::with_loc(place.addr, &loc));
     }
 
     fn state_layout(&self) -> Layout {
@@ -111,9 +112,8 @@ where State: DistinctStateFunc
 
     fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
-
-        let layout = Layout::new::<State>();
-        let nested_place = place.next(layout.size());
+        let loc = self.nested_place_loc(place);
+        let nested_place = AggrState::with_loc(place.addr, &loc);
 
         // faster path for count
         if self.nested.name() == "AggregateCountFunction" {
@@ -145,8 +145,9 @@ where State: DistinctStateFunc
         std::ptr::drop_in_place(state);
 
         if self.nested.need_manual_drop_state() {
-            let layout = Layout::new::<State>();
-            self.nested.drop_state(&place.next(layout.size()));
+            let loc = self.nested_place_loc(place);
+            self.nested
+                .drop_state(&AggrState::with_loc(place.addr, &loc));
         }
     }
 
@@ -249,4 +250,12 @@ pub fn try_create(
         name,
         _state: PhantomData,
     }))
+}
+
+impl<State> AggregateDistinctCombinator<State> {
+    fn nested_place_loc(&self, place: &AggrState) -> [AggrStateLoc; 1] {
+        let layout = Layout::new::<State>();
+        let (index, offset) = place.loc()[0].as_custom().unwrap();
+        [AggrStateLoc::Custom(*index, *offset + layout.size())]
+    }
 }

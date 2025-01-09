@@ -112,7 +112,7 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -128,8 +128,7 @@ impl AggregateFunction for AggregateCountFunction {
                 }
                 for (valid, &place) in v.iter().zip(places.iter()) {
                     if valid {
-                        let state =
-                            AggrState::with_loc(place, loc.clone()).get::<AggregateCountState>();
+                        let state = AggrState::with_loc(place, loc).get::<AggregateCountState>();
                         state.count += 1;
                     }
                 }
@@ -137,8 +136,7 @@ impl AggregateFunction for AggregateCountFunction {
 
             _ => {
                 for place in places {
-                    let state =
-                        AggrState::with_loc(*place, loc.clone()).get::<AggregateCountState>();
+                    let state = AggrState::with_loc(*place, loc).get::<AggregateCountState>();
                     state.count += 1;
                 }
             }
@@ -181,8 +179,7 @@ impl AggregateFunction for AggregateCountFunction {
         match builder {
             ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                 for place in places {
-                    let state =
-                        AggrState::with_loc(*place, loc.clone()).get::<AggregateCountState>();
+                    let state = AggrState::with_loc(*place, &loc).get::<AggregateCountState>();
                     builder.push(state.count);
                 }
             }

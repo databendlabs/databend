@@ -348,13 +348,13 @@ where T: Number + AsPrimitive<f64>
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        loc: Box<[AggrStateLoc]>,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         let column = NumberType::<T>::try_downcast_column(&columns[0]).unwrap();
         column.iter().zip(places.iter()).for_each(|(v, place)| {
-            let state = AggrState::with_loc(*place, loc.clone()).get::<QuantileTDigestState>();
+            let state = AggrState::with_loc(*place, loc).get::<QuantileTDigestState>();
             state.add(v.as_(), None)
         });
         Ok(())
