@@ -71,11 +71,27 @@ pub struct ParquetFileWriter {
 const MAX_BUFFER_SIZE: usize = 64 * 1024 * 1024;
 // this is number of rows, not size
 const MAX_ROW_GROUP_SIZE: usize = 1024 * 1024;
+const CREATE_BY_LEN: usize = 24; // "Databend 1.2.333-nightly".len();
 
 fn create_writer(
     arrow_schema: Arc<Schema>,
     targe_file_size: Option<usize>,
 ) -> Result<ArrowWriter<Vec<u8>>> {
+    // example:  1.2.333-nightly
+    // tags may contain other items like `1.2.680-p2`, we will fill it with `1.2.680-p2.....`
+    let mut create_by = format!(
+        "Databend {}.{}.{}-{:.<7}",
+        DATABEND_SEMVER.major,
+        DATABEND_SEMVER.minor,
+        DATABEND_SEMVER.patch,
+        DATABEND_SEMVER.pre.as_str()
+    );
+
+    if create_by.len() != CREATE_BY_LEN {
+        create_by = format!("{:.<24}", create_by);
+        create_by.truncate(24);
+    }
+
     let props = WriterProperties::builder()
         .set_compression(TableCompression::Zstd.into())
         .set_max_row_group_size(MAX_ROW_GROUP_SIZE)
@@ -83,7 +99,7 @@ fn create_writer(
         .set_dictionary_enabled(false)
         .set_statistics_enabled(EnabledStatistics::Chunk)
         .set_bloom_filter_enabled(false)
-        .set_created_by(format!("Databend {}", *DATABEND_SEMVER))
+        .set_created_by(create_by)
         .build();
     let buf_size = match targe_file_size {
         Some(n) if n < MAX_BUFFER_SIZE => n,
