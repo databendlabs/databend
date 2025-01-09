@@ -87,7 +87,7 @@ async fn test_grpc_client_handshake_timeout() {
         let got = res.unwrap_err();
         let got =
             ErrorCode::from(MetaError::ClientError(MetaClientError::HandshakeError(got))).message();
-        let expect = "failed to handshake with meta-service: when sending handshake rpc, cause: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} } source: transport error source: Timeout expired";
+        let expect = "failed to handshake with meta-service: when sending handshake rpc, cause: tonic::status::Status: status: Cancelled, message: \"Timeout expired\", details: [], metadata: MetadataMap { headers: {} }; source: transport error; source: Timeout expired";
         assert_eq!(got, expect);
     }
 

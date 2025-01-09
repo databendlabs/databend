@@ -33,6 +33,7 @@ either = { workspace = true }
 ethnum = { workspace = true }
 foreign_vec = { workspace = true }
 hex = { workspace = true }
+log = { workspace = true }
 match-template = { workspace = true }
 num-traits = { workspace = true }
 serde = { workspace = true, features = ["rc"], optional = true }

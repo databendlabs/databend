@@ -105,6 +105,7 @@ impl PartitionedPayload {
                 &state.empty_vector,
                 &state.group_hashes,
                 &mut state.addresses,
+                &mut state.page_index,
                 new_group_rows,
                 group_columns,
             );
@@ -131,6 +132,7 @@ impl PartitionedPayload {
                         sel,
                         &state.group_hashes,
                         &mut state.addresses,
+                        &mut state.page_index,
                         count,
                         group_columns,
                     );

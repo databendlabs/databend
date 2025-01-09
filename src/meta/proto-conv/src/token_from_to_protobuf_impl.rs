@@ -37,9 +37,8 @@ impl FromToProto for mt::QueryTokenInfo {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
-            token_type: FromPrimitive::from_i32(p.token_type).ok_or_else(|| Incompatible {
-                reason: format!("invalid TokenType: {}", p.token_type),
-            })?,
+            token_type: FromPrimitive::from_i32(p.token_type)
+                .ok_or_else(|| Incompatible::new(format!("invalid TokenType: {}", p.token_type)))?,
             parent: p.parent,
         };
         Ok(v)

@@ -30,7 +30,7 @@ access_key_id = \"minioadmin\"
 secret_access_key = \"minioadmin\"
 allow_insecure = true"
 
-echo "$config" >> ./scripts/ci/deploy/config/databend-query-node-1.toml
+echo "$config" >>./scripts/ci/deploy/config/databend-query-node-1.toml
 
 echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone.sh

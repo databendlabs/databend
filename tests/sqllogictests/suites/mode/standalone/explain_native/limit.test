@@ -221,4 +221,3 @@ Limit
                         ├── partitions scanned: 1
                         ├── push downs: [filters: [], limit: NONE]
                         └── estimated rows: 2.00
-

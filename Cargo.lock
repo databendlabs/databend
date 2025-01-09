@@ -219,9 +219,9 @@ dependencies = [
 
 [[package]]
 name = "anyerror"
-version = "0.1.10"
+version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0aaeb671913f64cfbe528d9f2236832902c7f32db31b9ec3790f675fceb937c6"
+checksum = "71add24cc141a1e8326f249b74c41cfd217aeb2a67c9c6cf9134d175469afd49"
 dependencies = [
  "serde",
 ]
@@ -3121,6 +3121,7 @@ dependencies = [
  "ethnum",
  "foreign_vec",
  "hex",
+ "log",
  "match-template",
  "num-traits",
  "proptest",
@@ -3290,6 +3291,7 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-settings",
+ "databend-functions-scalar-datetime",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "geozero",
@@ -3334,6 +3336,7 @@ dependencies = [
  "databend-functions-scalar-datetime",
  "databend-functions-scalar-decimal",
  "databend-functions-scalar-geo",
+ "databend-functions-scalar-integer-basic-arithmetic",
  "databend-functions-scalar-math",
  "databend-functions-scalar-numeric-basic-arithmetic",
  "ethnum",
@@ -3931,7 +3934,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-io",
  "databend-common-meta-app",
- "databend-common-meta-types",
  "databend-common-users",
  "itertools 0.13.0",
  "log",
@@ -4840,6 +4842,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-functions-scalar-integer-basic-arithmetic"
+version = "0.1.0"
+dependencies = [
+ "databend-common-expression",
+ "databend-functions-scalar-numeric-basic-arithmetic",
+ "match-template",
+ "num-traits",
+]
+
+[[package]]
 name = "databend-functions-scalar-math"
 version = "0.1.0"
 dependencies = [
@@ -4856,7 +4868,6 @@ name = "databend-functions-scalar-numeric-basic-arithmetic"
 version = "0.1.0"
 dependencies = [
  "databend-common-expression",
- "databend-functions-scalar-decimal",
  "match-template",
  "num-traits",
  "strength_reduce",

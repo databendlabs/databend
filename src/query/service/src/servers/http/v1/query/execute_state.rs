@@ -18,6 +18,7 @@ use std::time::SystemTime;
 
 use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -78,6 +79,7 @@ pub struct Progresses {
     pub write_progress: ProgressValues,
     pub result_progress: ProgressValues,
     pub total_scan: ProgressValues,
+    pub spill_progress: SpillProgress,
 }
 
 impl Progresses {
@@ -87,6 +89,7 @@ impl Progresses {
             write_progress: ctx.get_write_progress_value(),
             result_progress: ctx.get_result_progress_value(),
             total_scan: ctx.get_total_scan_value(),
+            spill_progress: ctx.get_total_spill_progress(),
         }
     }
 }

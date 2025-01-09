@@ -84,8 +84,11 @@ impl FromToProto for mt::principal::ProcedureMeta {
         let mut return_types = Vec::with_capacity(self.return_types.len());
         for arg_type in self.return_types.iter() {
             let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| Incompatible {
-                    reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
                 })?
                 .to_pb()?;
             return_types.push(arg_type);

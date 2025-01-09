@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::sync::Arc;
 
 /// Defines API to convert from/to protobuf meta type.
@@ -44,16 +45,34 @@ pub trait FromToProtoEnum {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-#[error("Incompatible: {reason}")]
 pub struct Incompatible {
+    pub context: String,
     pub reason: String,
+}
+
+impl fmt::Display for Incompatible {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.reason)?;
+
+        if !self.context.is_empty() {
+            write!(f, "; when:({})", self.context)?;
+        }
+        Ok(())
+    }
 }
 
 impl Incompatible {
     pub fn new(reason: impl Into<String>) -> Self {
         Self {
+            context: "".into(),
             reason: reason.into(),
         }
+    }
+
+    /// Set the context of the error.
+    pub fn with_context(mut self, context: impl Into<String>) -> Self {
+        self.context = context.into();
+        self
     }
 }
 

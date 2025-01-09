@@ -1,10 +1,6 @@
 name: "Test cloud control sqllogic Standalone"
 description: "Running cloud control sqllogic tests in standalone mode"
 inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
   dirs:
     description: "logic test suites dirs"
     required: true
@@ -21,11 +17,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
+    - uses: ./.github/actions/setup_test
       with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
         artifacts: sqllogictests,meta,query
 
     - name: Run sqllogic Tests with Standalone mode

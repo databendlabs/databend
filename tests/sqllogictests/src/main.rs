@@ -63,7 +63,7 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
         (Box::new(ClientType::MySQL), 3),
         (
             Box::new(ClientType::Ttc(
-                "sundyli/ttc-rust:latest".to_string(),
+                "datafuselabs/ttc-rust:latest".to_string(),
                 TTC_PORT_START,
             )),
             7,

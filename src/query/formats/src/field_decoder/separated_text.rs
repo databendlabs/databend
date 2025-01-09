@@ -29,7 +29,6 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
@@ -45,8 +44,6 @@ use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::cursor_ext::collect_number;
 use databend_common_io::cursor_ext::read_num_text_exact;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
-use databend_common_io::cursor_ext::DateTimeResType;
-use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
@@ -58,6 +55,7 @@ use lexical_core::FromLexical;
 use num_traits::NumCast;
 
 use crate::binary::decode_binary;
+use crate::field_decoder::common::read_timestamp;
 use crate::field_decoder::FieldDecoder;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
@@ -276,30 +274,7 @@ impl SeparatedTextDecoder {
     }
 
     fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
-        let mut ts = if !data.contains(&b'-') {
-            read_num_text_exact(data)?
-        } else {
-            let mut buffer_readr = Cursor::new(&data);
-            let t = buffer_readr.read_timestamp_text(&self.common_settings().jiff_timezone)?;
-            match t {
-                DateTimeResType::Datetime(t) => {
-                    if !buffer_readr.eof() {
-                        let data = data.to_str().unwrap_or("not utf8");
-                        let msg = format!(
-                            "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                            buffer_readr.position(),
-                            data
-                        );
-                        return Err(ErrorCode::BadBytes(msg));
-                    }
-                    t.timestamp().as_microsecond()
-                }
-                _ => unreachable!(),
-            }
-        };
-        clamp_timestamp(&mut ts);
-        column.push(ts);
-        Ok(())
+        read_timestamp(column, data, self.common_settings())
     }
 
     fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {

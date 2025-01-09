@@ -1,18 +1,10 @@
 name: "Test metactl"
 description: ""
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
+    - uses: ./.github/actions/setup_test
       with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
         artifacts: metactl,meta
 
     - name: Test metactl

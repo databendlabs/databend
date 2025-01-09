@@ -36,6 +36,7 @@ use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
 use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::planner::MetadataRef;
 use databend_common_sql::plans;
 use databend_common_sql::plans::Mutation;
 use databend_common_storage::MutationStatus;
@@ -44,6 +45,7 @@ use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::dml_build_update_stream_req;
@@ -58,6 +60,7 @@ pub struct MutationInterpreter {
     ctx: Arc<QueryContext>,
     s_expr: SExpr,
     schema: DataSchemaRef,
+    metadata: MetadataRef,
 }
 
 impl MutationInterpreter {
@@ -65,11 +68,13 @@ impl MutationInterpreter {
         ctx: Arc<QueryContext>,
         s_expr: SExpr,
         schema: DataSchemaRef,
+        metadata: MetadataRef,
     ) -> Result<MutationInterpreter> {
         Ok(MutationInterpreter {
             ctx,
             s_expr,
             schema,
+            metadata,
         })
     }
 }
@@ -128,6 +133,12 @@ impl Interpreter for MutationInterpreter {
         let physical_plan = self
             .build_physical_plan(&mutation, Some(mutation_build_info))
             .await?;
+
+        let query_plan = physical_plan
+            .format(self.metadata.clone(), Default::default())?
+            .format_pretty()?;
+
+        info!("Query physical plan: \n{}", query_plan);
 
         // Build pipeline.
         let mut build_res =

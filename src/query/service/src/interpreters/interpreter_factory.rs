@@ -20,6 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
+use databend_common_sql::plans::Mutation;
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
@@ -161,6 +162,11 @@ impl InterpreterFactory {
             Plan::UnassignWarehouseNodes(v) => Ok(Arc::new(
                 UnassignWarehouseNodesInterpreter::try_create(ctx.clone(), *v.clone())?,
             )),
+            // We allow the execution of SET statements because this could be SET GLOBAL enterprise_license.
+            Plan::Set(set_variable) => Ok(Arc::new(SetInterpreter::try_create(
+                ctx,
+                *set_variable.clone(),
+            )?)),
             Plan::Query { metadata, .. } => {
                 let read_guard = metadata.read();
                 for table in read_guard.tables() {
@@ -467,9 +473,15 @@ impl InterpreterFactory {
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::DataMutation { s_expr, schema, .. } => Ok(Arc::new(
-                MutationInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
-            )),
+            Plan::DataMutation { s_expr, schema, .. } => {
+                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                Ok(Arc::new(MutationInterpreter::try_create(
+                    ctx,
+                    *s_expr.clone(),
+                    schema.clone(),
+                    mutation.metadata.clone(),
+                )?))
+            }
 
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(

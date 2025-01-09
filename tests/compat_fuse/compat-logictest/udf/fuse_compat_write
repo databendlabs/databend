@@ -1,0 +1,17 @@
+statement ok
+DROP FUNCTION IF EXISTS add_signed;
+
+statement ok
+DROP FUNCTION IF EXISTS gcd_js;
+
+statement ok
+CREATE OR REPLACE FUNCTION gcd_js (INT, INT) RETURNS BIGINT LANGUAGE javascript HANDLER = 'gcd_js' AS $$
+export function gcd_js(a, b) {
+    while (b != 0) {
+        let t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+$$;

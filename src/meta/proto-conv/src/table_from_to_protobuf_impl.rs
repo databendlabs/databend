@@ -183,9 +183,9 @@ impl FromToProto for mt::TableMeta {
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let schema = p.schema.ok_or_else(|| Incompatible {
-            reason: "TableMeta.schema can not be None".to_string(),
-        })?;
+        let schema = p
+            .schema
+            .ok_or_else(|| Incompatible::new("TableMeta.schema can not be None".to_string()))?;
 
         let mut indexes = BTreeMap::new();
         for (name, index) in p.indexes {

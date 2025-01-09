@@ -476,17 +476,15 @@ impl<R: Rng> SqlGenerator<'_, R> {
             self.cte_tables[len - i - 1].clone()
         };
         let schema = table.schema.clone();
-        let table_name = Identifier::from_name(None, table.name.clone());
-
-        self.bound_table(table);
+        self.bound_table(table.clone());
 
         let table_ref = TableReference::Table {
             span: None,
             // TODO
             catalog: None,
             // TODO
-            database: None,
-            table: table_name,
+            database: table.db_name.clone(),
+            table: table.name.clone(),
             // TODO
             alias: None,
             // TODO
@@ -519,18 +517,17 @@ impl<R: Rng> SqlGenerator<'_, R> {
 
         match name {
             "numbers" | "numbers_mt" | "numbers_local" => {
-                let table = Table {
-                    name: name.to_string(),
-                    schema: TableSchemaRefExt::create(vec![TableField::new(
-                        "number",
-                        TableDataType::Number(NumberDataType::UInt64),
-                    )]),
-                };
+                let table_name = Identifier::from_name(None, name.to_string());
+                let schema = TableSchemaRefExt::create(vec![TableField::new(
+                    "number",
+                    TableDataType::Number(NumberDataType::UInt64),
+                )]);
+                let table = Table::new(None, table_name.clone(), schema);
                 self.bound_table(table);
                 TableReference::TableFunction {
                     span: None,
                     lateral: false,
-                    name: Identifier::from_name(None, name),
+                    name: table_name,
                     params: vec![Expr::Literal {
                         span: None,
                         value: Literal::UInt64(self.rng.gen_range(0..=10)),
@@ -590,17 +587,17 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 };
                 let (ty1, param1) = gen_expr(idx);
                 let (_, param2) = gen_expr(idx);
-                let table = Table {
-                    name: name.to_string(),
-                    schema: TableSchemaRefExt::create(vec![TableField::new(name, ty1)]),
-                };
+
+                let table_name = Identifier::from_name(None, name.to_string());
+                let schema = TableSchemaRefExt::create(vec![TableField::new(name, ty1)]);
+                let table = Table::new(None, table_name.clone(), schema);
                 let (_, param3) = gen_expr(2);
                 self.bound_table(table);
 
                 TableReference::TableFunction {
                     span: None,
                     lateral: false,
-                    name: Identifier::from_name(None, name),
+                    name: table_name,
                     params: if self.rng.gen_bool(0.5) {
                         vec![param1, param2]
                     } else {
@@ -723,29 +720,29 @@ impl<R: Rng> SqlGenerator<'_, R> {
 
     pub(crate) fn gen_subquery_table(&mut self, schema: TableSchemaRef) -> (Table, TableAlias) {
         let name = self.gen_random_name();
-        let table_name = format!("t{}", name);
+        let table_name = Identifier::from_name(None, format!("t{}", name));
         let mut columns = Vec::with_capacity(schema.num_fields());
         for field in schema.fields() {
             let column = Identifier::from_name(None, field.name.clone());
             columns.push(column);
         }
         let alias = TableAlias {
-            name: Identifier::from_name(None, table_name.clone()),
+            name: table_name.clone(),
             columns,
         };
-        let table = Table::new(table_name, schema);
+        let table = Table::new(None, table_name, schema);
 
         (table, alias)
     }
 
     pub(crate) fn bound_table(&mut self, table: Table) {
         for (i, field) in table.schema.fields().iter().enumerate() {
-            let column = Column {
-                table_name: table.name.clone(),
-                name: field.name.clone(),
-                index: i + 1,
-                data_type: DataType::from(&field.data_type),
-            };
+            let column = Column::new(
+                Some(table.name.clone()),
+                field.name.clone(),
+                i + 1,
+                DataType::from(&field.data_type),
+            );
             self.bound_columns.push(column);
         }
         self.bound_tables.push(table);
