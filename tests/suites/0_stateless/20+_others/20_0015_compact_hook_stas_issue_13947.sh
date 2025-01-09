@@ -13,7 +13,7 @@ insert into tmp values(1);
 insert into tmp values(2);
 EOF
 
-echo "copy into @test_stage from (select * from tmp)" | $BENDSQL_CLIENT_CONNECT | $RM_UUID | cut -f1-2
+echo "copy into @test_stage from (select * from  i13947.tmp)" | $BENDSQL_CLIENT_CONNECT | $RM_UUID | cut -f1-2
 
 
 # It is not convenient to extract the .stats.write_progress.rows from the output of bendsql,
