@@ -233,6 +233,7 @@ arrow-udf-python = { version = "0.4.0" }
 arrow-udf-wasm = { version = "0.4.1" }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
+async-compat = { version = "0.2" }
 async-compression = { git = "https://github.com/datafuse-extras/async-compression", rev = "dc81082", features = [
     "futures-io",
     "all-algorithms",
