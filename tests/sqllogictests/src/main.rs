@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fs::ReadDir;
+use std::collections::HashSet;
 use std::future::Future;
 use std::path::Path;
 use std::time::Instant;
@@ -23,7 +23,6 @@ use client::TTCClient;
 use futures_util::stream;
 use futures_util::StreamExt;
 use rand::Rng;
-use redis::Commands;
 use sqllogictest::default_column_validator;
 use sqllogictest::default_validator;
 use sqllogictest::parse_file;
@@ -32,15 +31,8 @@ use sqllogictest::DefaultColumnType;
 use sqllogictest::Record;
 use sqllogictest::Runner;
 use sqllogictest::TestError;
-use testcontainers::core::IntoContainerPort;
-use testcontainers::core::WaitFor;
-use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
 use testcontainers::GenericImage;
-use testcontainers::ImageExt;
-use testcontainers_modules::mysql::Mysql;
-use testcontainers_modules::redis::Redis;
-use testcontainers_modules::redis::REDIS_PORT;
 
 use crate::arg::SqlLogicTestArgs;
 use crate::client::Client;
@@ -49,8 +41,11 @@ use crate::client::HttpClient;
 use crate::client::MySQLClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
+use crate::util::collect_lazy_dir;
 use crate::util::get_files;
 use crate::util::lazy_prepare_data;
+use crate::util::lazy_run_dictionary_containers;
+use crate::util::run_ttc_container;
 
 mod arg;
 mod client;
@@ -108,11 +103,6 @@ impl sqllogictest::AsyncDB for Databend {
 pub async fn main() -> Result<()> {
     env_logger::init();
 
-    let docker = Docker::connect_with_local_defaults().unwrap();
-
-    // Run mock sources for dictionary test.
-    let _mock_redis = run_redis_mock_sources(&docker).await?;
-    let _mock_mysql = run_mysql_mock_sources(&docker).await?;
     println!(
         "Run sqllogictests with args: {}",
         std::env::args().skip(1).collect::<Vec<String>>().join(" ")
@@ -126,13 +116,14 @@ pub async fn main() -> Result<()> {
     for handler in handlers.iter() {
         match *handler {
             HANDLER_MYSQL => {
-                run_mysql_client().await?;
+                run_mysql_client(args.clone()).await?;
             }
             HANDLER_HTTP => {
-                run_http_client().await?;
+                run_http_client(args.clone()).await?;
             }
             HANDLER_HYBRID => {
-                run_hybrid_client(&docker, &mut containers).await?;
+                let docker = Docker::connect_with_local_defaults().unwrap();
+                run_hybrid_client(args.clone(), &docker, &mut containers).await?;
             }
             _ => {
                 return Err(format!("Unknown test handler: {handler}").into());
@@ -143,105 +134,24 @@ pub async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run_redis_mock_sources(docker: &Docker) -> Result<ContainerAsync<Redis>> {
-    let container_name = "redis".to_string();
-
-    // Stop the container
-    let _ = docker.stop_container(&container_name, None).await;
-    let _ = docker.remove_container(&container_name, None).await;
-
-    let mock_redis = Redis::default()
-        .with_network("host")
-        .with_container_name(container_name)
-        .start()
-        .await
-        .unwrap();
-
-    let host_ip = mock_redis.get_host().await.unwrap();
-    let url = format!("redis://{}:{}", host_ip, REDIS_PORT);
-    let client = redis::Client::open(url.as_ref()).unwrap();
-    let mut con = client.get_connection().unwrap();
-
-    // Add some key values for test.
-    let keys = vec!["a", "b", "c", "1", "2"];
-    for key in keys {
-        let val = format!("{}_value", key);
-        con.set::<_, _, ()>(key, val).unwrap();
-    }
-
-    Ok(mock_redis)
-}
-
-async fn run_mysql_mock_sources(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
-    let container_name = "mysqld".to_string();
-
-    // Stop the container
-    let _ = docker.stop_container(&container_name, None).await;
-    let _ = docker.remove_container(&container_name, None).await;
-
-    // Add a table for test.
-    // CREATE TABLE test.user(
-    //   id INT,
-    //   name VARCHAR(100),
-    //   age SMALLINT UNSIGNED,
-    //   salary DOUBLE,
-    //   active BOOL
-    // );
-    //
-    // +------+-------+------+---------+--------+
-    // | id   | name  | age  | salary  | active |
-    // +------+-------+------+---------+--------+
-    // |    1 | Alice |   24 |     100 |      1 |
-    // |    2 | Bob   |   35 |   200.1 |      0 |
-    // |    3 | Lily  |   41 |  1000.2 |      1 |
-    // |    4 | Tom   |   55 | 3000.55 |      0 |
-    // |    5 | NULL  | NULL |    NULL |   NULL |
-    // +------+-------+------+---------+--------+
-    let mock_mysqld = Mysql::default()
-        .with_init_sql(
-"CREATE TABLE test.user(id INT, name VARCHAR(100), age SMALLINT UNSIGNED, salary DOUBLE, active BOOL); INSERT INTO test.user VALUES(1, 'Alice', 24, 100, true), (2, 'Bob', 35, 200.1, false), (3, 'Lily', 41, 1000.2, true), (4, 'Tom', 55, 3000.55, false), (5, NULL, NULL, NULL, NULL);"
-        .to_string()
-        .into_bytes(),
-)
-        .with_network("host")
-        .with_container_name(container_name)
-        .start().await.unwrap();
-
-    Ok(mock_mysqld)
-}
-
-async fn run_mysql_client() -> Result<()> {
-    println!(
-        "MySQL client starts to run with: {:?}",
-        SqlLogicTestArgs::parse()
-    );
-    let suits = SqlLogicTestArgs::parse().suites;
-    let suits = std::fs::read_dir(suits).unwrap();
-    run_suits(suits, ClientType::MySQL).await?;
+async fn run_mysql_client(args: SqlLogicTestArgs) -> Result<()> {
+    println!("MySQL client starts to run with: {:?}", args);
+    run_suits(args, ClientType::MySQL).await?;
     Ok(())
 }
 
-async fn run_http_client() -> Result<()> {
-    println!(
-        "Http client starts to run with: {:?}",
-        SqlLogicTestArgs::parse()
-    );
-    let suits = SqlLogicTestArgs::parse().suites;
-    let suits = std::fs::read_dir(suits).unwrap();
-    run_suits(suits, ClientType::Http).await?;
+async fn run_http_client(args: SqlLogicTestArgs) -> Result<()> {
+    println!("Http client starts to run with: {:?}", args);
+    run_suits(args, ClientType::Http).await?;
     Ok(())
 }
 
 async fn run_hybrid_client(
+    args: SqlLogicTestArgs,
     docker: &Docker,
     cs: &mut Vec<ContainerAsync<GenericImage>>,
 ) -> Result<()> {
-    println!(
-        "Hybird client starts to run with: {:?}",
-        SqlLogicTestArgs::parse()
-    );
-    let suits = SqlLogicTestArgs::parse().suites;
-    let suits = std::fs::read_dir(suits).unwrap();
+    println!("Hybird client starts to run with: {:?}", args);
 
     // preparse docker envs
     let mut port_start = TTC_PORT_START;
@@ -250,39 +160,14 @@ async fn run_hybrid_client(
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
             ClientType::Ttc(image, _) => {
-                let mut images = image.split(":");
-                let image = images.next().unwrap();
-                let tag = images.next().unwrap_or("latest");
-
-                let container_name = format!("databend-ttc-{}", port_start);
-                println!("Start {container_name}");
-
-                // Stop the container
-                let _ = docker.stop_container(&container_name, None).await;
-                let _ = docker.remove_container(&container_name, None).await;
-
-                let container: ContainerAsync<GenericImage> = GenericImage::new(image, tag)
-                    .with_exposed_port(port_start.tcp())
-                    .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
-                    .with_network("host")
-                    .with_env_var(
-                        "DATABEND_DSN",
-                        "databend://root:@127.0.0.1:8000?sslmode=disable",
-                    )
-                    .with_env_var("TTC_PORT", format!("{port_start}"))
-                    .with_container_name(container_name)
-                    .start()
-                    .await
-                    .unwrap();
-                println!("Started container: {}", container.id());
-                cs.push(container);
+                run_ttc_container(docker, image, port_start, cs).await?;
                 port_start += 1;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
     }
 
-    run_suits(suits, ClientType::Hybird).await?;
+    run_suits(args, ClientType::Hybird).await?;
     Ok(())
 }
 
@@ -335,21 +220,23 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
     Ok(Databend::create(client))
 }
 
-async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
+async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()> {
     // Todo: set validator to process regex
-    let args = SqlLogicTestArgs::parse();
     let mut tasks = vec![];
     let mut num_of_tests = 0;
+    let mut lazy_dirs = HashSet::new();
+    let mut files = vec![];
     let start = Instant::now();
     // Walk each suit dir and read all files in it
     // After get a slt file, set the file name to databend
+    let suits = std::fs::read_dir(args.suites).unwrap();
     for suit in suits {
         // Get a suit and find all slt files in the suit
         let suit = suit.unwrap().path();
         // Parse the suit and find all slt files
-        let files = get_files(suit)?;
-        for file in files.into_iter() {
-            let file_name = file
+        let suit_files = get_files(suit)?;
+        for suit_file in suit_files.into_iter() {
+            let file_name = suit_file
                 .as_ref()
                 .unwrap()
                 .path()
@@ -368,38 +255,55 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     continue;
                 }
             }
-            num_of_tests += parse_file::<DefaultColumnType>(file.as_ref().unwrap().path())
+            num_of_tests += parse_file::<DefaultColumnType>(suit_file.as_ref().unwrap().path())
                 .unwrap()
                 .len();
 
-            lazy_prepare_data(file.as_ref().unwrap().path())?;
-
-            if args.complete {
-                let col_separator = " ";
-                let validator = default_validator;
-                let column_validator = default_column_validator;
-                let mut runner =
-                    Runner::new(|| async { create_databend(&client_type, &file_name).await });
-                runner
-                    .update_test_file(
-                        file.unwrap().path(),
-                        col_separator,
-                        validator,
-                        column_validator,
-                    )
-                    .await
-                    .unwrap();
-            } else {
-                let client_type = client_type.clone();
-                tasks.push(async move { run_file_async(&client_type, file.unwrap().path()).await });
-            }
+            collect_lazy_dir(suit_file.as_ref().unwrap().path(), &mut lazy_dirs)?;
+            files.push(suit_file);
         }
     }
+
+    // lazy load test datas
+    lazy_prepare_data(&lazy_dirs)?;
+    // lazy run dictionaries containers
+    let _dict_container = lazy_run_dictionary_containers(&lazy_dirs).await?;
+
     if args.complete {
-        return Ok(());
+        for file in files {
+            let file_name = file
+                .as_ref()
+                .unwrap()
+                .path()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string();
+
+            let col_separator = " ";
+            let validator = default_validator;
+            let column_validator = default_column_validator;
+            let mut runner =
+                Runner::new(|| async { create_databend(&client_type, &file_name).await });
+            runner
+                .update_test_file(
+                    file.unwrap().path(),
+                    col_separator,
+                    validator,
+                    column_validator,
+                )
+                .await
+                .unwrap();
+        }
+    } else {
+        for file in files {
+            let client_type = client_type.clone();
+            tasks.push(async move { run_file_async(&client_type, file.unwrap().path()).await });
+        }
+        // Run all tasks parallel
+        run_parallel_async(tasks, num_of_tests).await?;
     }
-    // Run all tasks parallel
-    run_parallel_async(tasks, num_of_tests).await?;
     let duration = start.elapsed();
     println!(
         "Run all tests[{}] using {} ms",
