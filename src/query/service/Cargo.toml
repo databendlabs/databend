@@ -41,6 +41,7 @@ async-channel = { workspace = true }
 async-recursion = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
+async-compat = { workspace = true }
 backoff = { workspace = true, features = ["futures", "tokio"] }
 backon = { workspace = true }
 base64 = { workspace = true }
