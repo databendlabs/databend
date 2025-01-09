@@ -1,6 +1,6 @@
 1
 1
-2	10	399
+2	10
 expects .stats.write_progress.rows be 2
 expects .error be null
 2
