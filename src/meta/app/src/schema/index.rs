@@ -167,6 +167,17 @@ pub struct GetIndexReply {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GetMarkedDeletedIndexesReply {
+    pub table_indexes: Vec<TableIndexes>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TableIndexes {
+    pub table_id: u64,
+    pub indexes: Vec<(u64, IndexMeta)>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateIndexReq {
     pub tenant: Tenant,
     pub index_id: u64,
