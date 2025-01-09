@@ -18,12 +18,12 @@ for i in `seq 1 10`;do
 done
 
 
-echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $BENDSQL_CLIENT_CONNECT
-echo "copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $BENDSQL_CLIENT_CONNECT | cut -f1-2
+echo "copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $BENDSQL_CLIENT_CONNECT | cut -f1-2
 echo "list @s2;" | $BENDSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
 
 
-echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV) MAX_FILE_SIZE = 10;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV) MAX_FILE_SIZE = 10;" | $BENDSQL_CLIENT_CONNECT | cut -f1-2
 
 lines=`echo "list @s2;" | $BENDSQL_CLIENT_CONNECT | wc -l`
 
