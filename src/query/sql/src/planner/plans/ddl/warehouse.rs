@@ -92,11 +92,40 @@ pub struct RenameWarehouseClusterPlan {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct AssignWarehouseNodesPlan {
     pub warehouse: String,
+    #[serde(with = "vectorize_cluster_map")]
     pub assign_clusters: HashMap<String, HashMap<Option<String>, usize>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct UnassignWarehouseNodesPlan {
     pub warehouse: String,
+    #[serde(with = "vectorize_cluster_map")]
     pub unassign_clusters: HashMap<String, HashMap<Option<String>, usize>>,
+}
+
+mod vectorize_cluster_map {
+    use std::collections::HashMap;
+
+    use serde::ser::SerializeMap;
+    use serde::ser::Serializer;
+
+    pub fn serialize<S>(
+        map: &HashMap<String, HashMap<Option<String>, usize>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut serialize_map = serializer.serialize_map(Some(map.len()))?;
+        for (key, value) in map {
+            serialize_map.serialize_key(&key)?;
+            let vec = value
+                .iter()
+                .map(|(k, v)| (k.clone(), *v))
+                .collect::<Vec<_>>();
+            serialize_map.serialize_value(&vec)?;
+        }
+
+        serialize_map.end()
+    }
 }

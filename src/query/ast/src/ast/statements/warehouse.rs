@@ -186,7 +186,7 @@ impl Display for AddWarehouseClusterStmt {
                 }
             }
 
-            write!(f, "(")?;
+            write!(f, ")")?;
         }
 
         if !self.options.is_empty() {
