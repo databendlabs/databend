@@ -15,6 +15,8 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use std::collections::BTreeMap;
+
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
@@ -79,5 +81,33 @@ impl FromToProto for mt::IndexMeta {
             sync_creation: self.sync_creation,
         };
         Ok(p)
+    }
+}
+
+impl FromToProto for mt::MarkedDeletedIndexMeta {
+    type PB = pb::MarkedDeletedIndexMeta;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> {
+        let mut indexes = Vec::with_capacity(p.indexes.len());
+        for (id, meta) in p.indexes {
+            indexes.push((id, mt::IndexMeta::from_pb(meta)?));
+        }
+        Ok(Self { indexes })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let mut indexes = BTreeMap::new();
+        for (id, meta) in self.indexes.iter() {
+            indexes.insert(*id, meta.to_pb()?);
+        }
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            indexes,
+        })
     }
 }
