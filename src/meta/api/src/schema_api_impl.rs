@@ -803,7 +803,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 IndexIdToNameIdent::new_generic(name_ident.tenant(), seq_id.data).to_string_key(),
             ));
 
-            // add (index_id, index_meta) to marked_deleted_index_id_ident(table_id)
+            // add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta
             let marked_deleted_index_id_ident = MarkedDeletedIndexIdIdent::new_generic(
                 name_ident.tenant(),
                 MarkedDeletedIndexId::new(seq_meta.data.table_id, *seq_id.data),
