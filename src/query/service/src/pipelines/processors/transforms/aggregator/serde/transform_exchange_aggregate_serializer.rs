@@ -158,7 +158,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         continue;
                     }
 
-                    let bucket = compute_block_number(bucket, max_partition_count)?;
+                    let block_number = compute_block_number(bucket, max_partition_count)?;
                     let stream = SerializeAggregateStream::create(
                         &self.params,
                         SerializePayload::AggregatePayload(p),
@@ -174,7 +174,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         }
                         c
                     };
-                    let c = serialize_block(bucket, c, &self.options)?;
+                    let c = serialize_block(block_number, c, &self.options)?;
                     serialized_blocks.push(FlightSerialized::DataBlock(c));
                 }
             };

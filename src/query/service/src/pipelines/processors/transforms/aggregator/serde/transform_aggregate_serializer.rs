@@ -202,10 +202,14 @@ impl SerializeAggregateStream {
     }
 
     pub fn empty_block(bucket: isize, max_partition_count: usize) -> DataBlock {
-        DataBlock::empty_with_meta(AggregateSerdeMeta::create_agg_payload(
-            bucket,
-            max_partition_count,
-        ))
+        DataBlock::new_with_meta(
+            vec![],
+            1,
+            Some(AggregateSerdeMeta::create_agg_payload(
+                bucket,
+                max_partition_count,
+            )),
+        )
     }
 }
 
