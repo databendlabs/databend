@@ -407,7 +407,13 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
     loop {
         let mysql_res = Mysql::default()
             .with_init_sql(
-    "CREATE TABLE test.user(id INT, name VARCHAR(100), age SMALLINT UNSIGNED, salary DOUBLE, active BOOL); INSERT INTO test.user VALUES(1, 'Alice', 24, 100, true), (2, 'Bob', 35, 200.1, false), (3, 'Lily', 41, 1000.2, true), (4, 'Tom', 55, 3000.55, false), (5, NULL, NULL, NULL, NULL);"
+    "CREATE TABLE test.user(id INT, name VARCHAR(100), age SMALLINT UNSIGNED, salary DOUBLE, active BOOL); \
+    INSERT INTO test.user VALUES \
+    (1, 'Alice', 24, 100, true), \
+    (2, 'Bob', 35, 200.1, false), \
+    (3, 'Lily', 41, 1000.2, true), \
+    (4, 'Tom', 55, 3000.55, false), \
+    (5, NULL, NULL, NULL, NULL);"
                 .to_string()
                 .into_bytes(),
             )
