@@ -30,7 +30,7 @@ ls  /tmp/test_vacuum_drop_aggregating_index/"$PREFIX"/_i_a/ | wc -l
 
 stmt "drop aggregating index index"
 
-stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index('test_vacuum_drop_aggregating_index','agg')" 
+stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index('test_vacuum_drop_aggregating_index','agg')" > /dev/null
 
 echo "after vacuum, should be 0 index dir"
 find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX"/_i_a/ -type f | wc -l
@@ -80,7 +80,7 @@ echo "before vacuum, should be 1 index dir"
 
 find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_2"/_i_a/ -type f | wc -l
 
-stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index()" 
+stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index()" > /dev/null
 
 echo "after vacuum, should be 0 index dir"
 
