@@ -18,7 +18,9 @@ use chrono::Duration;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
@@ -64,7 +66,14 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
     }
 
     fn schema(&self) -> TableSchemaRef {
-        TableSchemaRefExt::create(vec![TableField::new("result", TableDataType::String)])
+        TableSchemaRefExt::create(vec![
+            TableField::new("table_name", TableDataType::String),
+            TableField::new("index_id", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "num_removed_files",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+        ])
     }
 
     async fn apply(
@@ -72,6 +81,9 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
         ctx: &Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
+        let mut table_names = Vec::new();
+        let mut index_ids = Vec::new();
+        let mut num_removed_files = Vec::new();
         let catalog = ctx.get_default_catalog()?;
         let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
         let retention_time = chrono::Utc::now() - duration;
@@ -118,16 +130,22 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
                 table_id, indexes_to_be_vacuumed
             );
             for index_id in &indexes_to_be_vacuumed {
-                table.remove_aggregating_index_files(*index_id).await?;
+                let n = table
+                    .remove_aggregating_index_files(ctx.clone(), *index_id)
+                    .await?;
+                table_names.push(table_id.to_string());
+                index_ids.push(index_id.to_string());
+                num_removed_files.push(n);
             }
             catalog
                 .remove_marked_deleted_index_ids(&tenant, table_id, &indexes_to_be_vacuumed)
                 .await?;
         }
-        let col: Vec<String> = vec!["Ok".to_owned()];
 
         Ok(Some(DataBlock::new_from_columns(vec![
-            StringType::from_data(col),
+            StringType::from_data(table_names),
+            StringType::from_data(index_ids),
+            UInt64Type::from_data(num_removed_files),
         ])))
     }
 

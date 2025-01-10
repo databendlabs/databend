@@ -71,6 +71,7 @@ use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -90,6 +91,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use futures_util::TryStreamExt;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -1057,7 +1059,11 @@ impl Table for FuseTable {
         true
     }
 
-    async fn remove_aggregating_index_files(&self, index_id: u64) -> Result<()> {
+    async fn remove_aggregating_index_files(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        index_id: u64,
+    ) -> Result<u64> {
         let prefix = format!(
             "{}/{}",
             self.meta_location_generator.agg_index_location_prefix(),
@@ -1065,7 +1071,18 @@ impl Table for FuseTable {
         );
         let op = &self.operator;
         info!("remove_aggregating_index_files: {}", prefix);
-        op.remove_all(&prefix).await?;
-        Ok(())
+        let mut lister = op.lister_with(&prefix).recursive(true).await?;
+        let mut files = Vec::new();
+        while let Some(entry) = lister.try_next().await? {
+            if entry.metadata().is_dir() {
+                continue;
+            }
+            files.push(entry.path().to_string());
+        }
+
+        let op = Files::create(ctx, self.operator.clone());
+        let len = files.len() as u64;
+        op.remove_file_in_batch(files).await?;
+        Ok(len)
     }
 }

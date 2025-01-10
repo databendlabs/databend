@@ -451,8 +451,12 @@ pub trait Table: Sync + Send {
         false
     }
 
-    async fn remove_aggregating_index_files(&self, _index_id: u64) -> Result<()> {
-        Ok(())
+    async fn remove_aggregating_index_files(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _index_id: u64,
+    ) -> Result<u64> {
+        Ok(0)
     }
 }
 
