@@ -19,7 +19,6 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -67,7 +66,7 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
 
     fn schema(&self) -> TableSchemaRef {
         TableSchemaRefExt::create(vec![
-            TableField::new("table_name", TableDataType::String),
+            TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("index_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new(
                 "num_removed_files",
@@ -81,7 +80,7 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
         ctx: &Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
-        let mut table_names = Vec::new();
+        let mut table_ids = Vec::new();
         let mut index_ids = Vec::new();
         let mut num_removed_files = Vec::new();
         let catalog = ctx.get_default_catalog()?;
@@ -133,8 +132,8 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
                 let n = table
                     .remove_aggregating_index_files(ctx.clone(), *index_id)
                     .await?;
-                table_names.push(table.name().to_string());
-                index_ids.push(index_id.to_string());
+                table_ids.push(table_id);
+                index_ids.push(*index_id);
                 num_removed_files.push(n);
             }
             catalog
@@ -143,8 +142,8 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
         }
 
         Ok(Some(DataBlock::new_from_columns(vec![
-            StringType::from_data(table_names),
-            StringType::from_data(index_ids),
+            UInt64Type::from_data(table_ids),
+            UInt64Type::from_data(index_ids),
             UInt64Type::from_data(num_removed_files),
         ])))
     }
