@@ -201,13 +201,10 @@ impl SerializeAggregateStream {
         }
     }
 
-    pub fn empty_block(&self) -> DataBlock {
-        let p = match self.payload.as_ref().get_ref() {
-            SerializePayload::AggregatePayload(p) => p,
-        };
+    pub fn empty_block(bucket: isize, max_partition_count: usize) -> DataBlock {
         DataBlock::empty_with_meta(AggregateSerdeMeta::create_agg_payload(
-            p.bucket,
-            p.max_partition_count,
+            bucket,
+            max_partition_count,
         ))
     }
 }

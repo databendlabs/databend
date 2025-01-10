@@ -149,6 +149,8 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                 }
 
                 Some(AggregateMeta::AggregatePayload(p)) => {
+                    let (bucket, max_partition_count) = (p.bucket, p.max_partition_count);
+
                     if index == self.local_pos {
                         serialized_blocks.push(FlightSerialized::DataBlock(
                             block.add_meta(Some(Box::new(AggregateMeta::AggregatePayload(p))))?,
@@ -156,7 +158,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         continue;
                     }
 
-                    let bucket = compute_block_number(p.bucket, p.max_partition_count)?;
+                    let bucket = compute_block_number(bucket, max_partition_count)?;
                     let stream = SerializeAggregateStream::create(
                         &self.params,
                         SerializePayload::AggregatePayload(p),
@@ -164,7 +166,7 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                     let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
 
                     let c = if stream_blocks.is_empty() {
-                        stream.empty_block()
+                        SerializeAggregateStream::empty_block(bucket, max_partition_count)
                     } else {
                         let mut c = DataBlock::concat(&stream_blocks)?;
                         if let Some(meta) = stream_blocks[0].take_meta() {
