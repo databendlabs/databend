@@ -99,17 +99,26 @@ module.exports = async ({ github, context, core }) => {
     }
 
     case "patch": {
-      core.setOutput("sha", context.sha);
       if (!TAG) {
         core.setFailed("Patch release must be triggered with a stable tag");
         return;
       }
-      core.info(`Patch release triggered by ${TAG} (${context.sha})`);
+      core.info(`Patch release triggered by ${TAG}`);
       const result = RE_TAG_STABLE.exec(TAG);
       if (!result) {
         core.setFailed(`The tag ${TAG} is invalid, ignoring`);
         return;
       }
+
+      const branch = await github.rest.repos.getBranch({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        branch: `backport/${TAG}`,
+      });
+      core.setOutput("sha", branch.data.commit.sha);
+      core.info(
+        `Patch release triggered by ${TAG} (${branch.data.commit.sha})`
+      );
 
       let pv = 1;
       let previous = null;
