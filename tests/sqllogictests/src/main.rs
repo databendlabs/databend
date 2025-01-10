@@ -122,8 +122,7 @@ pub async fn main() -> Result<()> {
                 run_http_client(args.clone()).await?;
             }
             HANDLER_HYBRID => {
-                let docker = Docker::connect_with_local_defaults().unwrap();
-                run_hybrid_client(args.clone(), &docker, &mut containers).await?;
+                run_hybrid_client(args.clone(), &mut containers).await?;
             }
             _ => {
                 return Err(format!("Unknown test handler: {handler}").into());
@@ -148,7 +147,6 @@ async fn run_http_client(args: SqlLogicTestArgs) -> Result<()> {
 
 async fn run_hybrid_client(
     args: SqlLogicTestArgs,
-    docker: &Docker,
     cs: &mut Vec<ContainerAsync<GenericImage>>,
 ) -> Result<()> {
     println!("Hybird client starts to run with: {:?}", args);
@@ -156,11 +154,12 @@ async fn run_hybrid_client(
     // preparse docker envs
     let mut port_start = TTC_PORT_START;
 
+    let docker = Docker::connect_with_local_defaults().unwrap();
     for (c, _) in HYBRID_CONFIGS.iter() {
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
             ClientType::Ttc(image, _) => {
-                run_ttc_container(docker, image, port_start, cs).await?;
+                run_ttc_container(&docker, image, port_start, cs).await?;
                 port_start += 1;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
@@ -222,7 +221,6 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
 
 async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()> {
     // Todo: set validator to process regex
-    let mut tasks = vec![];
     let mut num_of_tests = 0;
     let mut lazy_dirs = HashSet::new();
     let mut files = vec![];
@@ -297,6 +295,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                 .unwrap();
         }
     } else {
+        let mut tasks = Vec::with_capacity(files.len());
         for file in files {
             let client_type = client_type.clone();
             tasks.push(async move { run_file_async(&client_type, file.unwrap().path()).await });
