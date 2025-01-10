@@ -87,6 +87,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    // This `range_partition_id(col, range_bounds)` function calculates the partition ID for each value
+    // in the column based on the specified partition boundaries.
+    // The column values are conceptually divided into multiple partitions defined by the range_bounds.
+    // For example, given the column values (0, 1, 3, 6, 8) and a partition configuration with 3 partitions,
+    // the range_bounds might be [1, 6]. The function would then return partition IDs as (0, 0, 1, 1, 2).
     registry.register_passthrough_nullable_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
         "range_partition_id",
         |_, _, _| FunctionDomain::Full,
@@ -94,7 +99,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             let mut low = 0;
             let mut high = arr.len();
             while low < high {
-                let mid = (high + low) / 2;
+                let mid = low + ((high - low) / 2);
                 let bound = unsafe {arr.index_unchecked(mid)};
                 if val > bound {
                     low = mid + 1;

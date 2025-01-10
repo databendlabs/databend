@@ -85,10 +85,6 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
             )
             .await?;
 
-            if compact_segments.is_empty() {
-                continue;
-            }
-
             for (location, segment) in compact_segments.into_iter() {
                 if checker.add(location, segment) {
                     break 'FOR;
