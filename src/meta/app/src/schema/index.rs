@@ -174,6 +174,7 @@ pub struct GetIndexReply {
     pub index_meta: IndexMeta,
 }
 
+/// Maps table_id to a vector of (index_id, marked_deleted_index_meta) pairs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetMarkedDeletedIndexesReply {
     pub table_indexes: HashMap<u64, Vec<(u64, MarkedDeletedIndexMeta)>>,
