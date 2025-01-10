@@ -189,7 +189,8 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     #[inline]
     fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
         let flag = self.get_flag(place) || reader[reader.len() - 1] > 0;
-        self.inner.merge(place, &mut &reader[..reader.len() - 1])?;
+        self.inner
+            .merge(&place.remove_last_loc(), &mut &reader[..reader.len() - 1])?;
         self.set_flag(place, flag);
         Ok(())
     }

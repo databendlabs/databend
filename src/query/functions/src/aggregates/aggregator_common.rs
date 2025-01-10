@@ -157,6 +157,16 @@ pub fn eval_aggr(
     columns: &[Column],
     rows: usize,
 ) -> Result<(Column, DataType)> {
+    eval_aggr_for_test(name, params, columns, rows, false)
+}
+
+pub fn eval_aggr_for_test(
+    name: &str,
+    params: Vec<Scalar>,
+    columns: &[Column],
+    rows: usize,
+    with_serialize: bool,
+) -> Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
     let arguments = columns.iter().map(|x| x.data_type()).collect();
 
@@ -166,6 +176,12 @@ pub fn eval_aggr(
     let eval = EvalAggr::new(func.clone());
     let state = AggrState::new(eval.addr, &eval.state_layout.states_loc[0]);
     func.accumulate(&state, columns.into(), None, rows)?;
+    if with_serialize {
+        let mut buf = vec![];
+        func.serialize(&state, &mut buf)?;
+        func.init_state(&state);
+        func.merge(&state, &mut buf.as_slice())?;
+    }
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
     func.merge_result(&state, &mut builder)?;
     Ok((builder.build(), data_type))
