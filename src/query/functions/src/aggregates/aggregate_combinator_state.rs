@@ -52,12 +52,7 @@ impl AggregateStateCombinator {
             .join(", ");
 
         let name = format!("StateCombinator({nested_name}, {arg_name})");
-
         let nested = AggregateFunctionFactory::instance().get(nested_name, params, arguments)?;
-
-        let mut registry = AggrStateRegistry::default();
-        nested.register_state(&mut registry);
-
         Ok(Arc::new(AggregateStateCombinator { name, nested }))
     }
 
@@ -75,7 +70,7 @@ impl AggregateFunction for AggregateStateCombinator {
         Ok(DataType::Binary)
     }
 
-    fn init_state(&self, place: &AggrState) {
+    fn init_state(&self, place: AggrState) {
         self.nested.init_state(place);
     }
 
@@ -85,7 +80,7 @@ impl AggregateFunction for AggregateStateCombinator {
 
     fn accumulate(
         &self,
-        place: &AggrState,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -104,24 +99,24 @@ impl AggregateFunction for AggregateStateCombinator {
             .accumulate_keys(places, loc, columns, input_rows)
     }
 
-    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         self.nested.accumulate_row(place, columns, row)
     }
 
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         self.nested.serialize(place, writer)
     }
 
     #[inline]
-    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         self.nested.merge(place, reader)
     }
 
-    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         self.nested.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = builder.as_binary_mut().unwrap();
         self.nested.serialize(place, &mut builder.data)?;
         builder.commit_row();
@@ -132,7 +127,7 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.need_manual_drop_state()
     }
 
-    unsafe fn drop_state(&self, place: &AggrState) {
+    unsafe fn drop_state(&self, place: AggrState) {
         self.nested.drop_state(place);
     }
 

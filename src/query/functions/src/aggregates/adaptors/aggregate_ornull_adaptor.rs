@@ -25,12 +25,12 @@ use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 use databend_common_io::prelude::BinaryWrite;
 
-use crate::aggregates::aggregate_function_factory::AggregateFunctionFeatures;
-use crate::aggregates::AggrState;
-use crate::aggregates::AggrStateLoc;
-use crate::aggregates::AggregateFunction;
-use crate::aggregates::AggregateFunctionRef;
-use crate::aggregates::StateAddr;
+use super::AggrState;
+use super::AggrStateLoc;
+use super::AggregateFunction;
+use super::AggregateFunctionFeatures;
+use super::AggregateFunctionRef;
+use super::StateAddr;
 
 /// OrNullAdaptor will use OrNull for aggregate functions.
 /// If there are no input values, return NULL or a default value, accordingly.
@@ -57,22 +57,20 @@ impl AggregateFunctionOrNullAdaptor {
             inner_nullable: inner_return_type.is_nullable(),
         }))
     }
-
-    #[inline]
-    pub fn set_flag(&self, place: &AggrState, flag: bool) {
-        let c = place.addr.next(flag_offset(place)).get::<u8>();
-        *c = flag as u8;
-    }
-
-    #[inline]
-    pub fn get_flag(&self, place: &AggrState) -> bool {
-        let c = place.addr.next(flag_offset(place)).get::<u8>();
-        *c != 0
-    }
 }
 
-fn flag_offset(place: &AggrState) -> usize {
-    *place.loc().last().unwrap().as_bool().unwrap().1
+pub fn set_flag(place: AggrState, flag: bool) {
+    let c = place.addr.next(flag_offset(place)).get::<u8>();
+    *c = flag as u8;
+}
+
+pub fn get_flag(place: AggrState) -> bool {
+    let c = place.addr.next(flag_offset(place)).get::<u8>();
+    *c != 0
+}
+
+fn flag_offset(place: AggrState) -> usize {
+    *place.loc.last().unwrap().as_bool().unwrap().1
 }
 
 impl AggregateFunction for AggregateFunctionOrNullAdaptor {
@@ -85,10 +83,10 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn init_state(&self, place: &AggrState) {
+    fn init_state(&self, place: AggrState) {
         let c = place.addr.next(flag_offset(place)).get::<u8>();
         *c = 0;
-        self.inner.init_state(&place.remove_last_loc())
+        self.inner.init_state(place.remove_last_loc())
     }
 
     fn serialize_size_per_row(&self) -> Option<usize> {
@@ -103,7 +101,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     #[inline]
     fn accumulate(
         &self,
-        place: &AggrState,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -126,9 +124,9 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
             .map(|c| c.null_count() != input_rows)
             .unwrap_or(true)
         {
-            self.set_flag(place, true);
+            set_flag(place, true);
             self.inner.accumulate(
-                &place.remove_last_loc(),
+                place.remove_last_loc(),
                 columns,
                 validity.as_ref(),
                 input_rows,
@@ -157,13 +155,13 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
 
                 for (&addr, valid) in places.iter().zip(v.iter()) {
                     if valid {
-                        self.set_flag(&AggrState::new(addr, loc), true);
+                        set_flag(AggrState::new(addr, loc), true);
                     }
                 }
             }
             _ => {
                 for &addr in places {
-                    self.set_flag(&AggrState::new(addr, loc), true);
+                    set_flag(AggrState::new(addr, loc), true);
                 }
             }
         }
@@ -172,47 +170,47 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         self.inner
-            .accumulate_row(&place.remove_last_loc(), columns, row)?;
-        self.set_flag(place, true);
+            .accumulate_row(place.remove_last_loc(), columns, row)?;
+        set_flag(place, true);
         Ok(())
     }
 
     #[inline]
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        self.inner.serialize(&place.remove_last_loc(), writer)?;
-        let flag = self.get_flag(place) as u8;
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+        self.inner.serialize(place.remove_last_loc(), writer)?;
+        let flag = get_flag(place) as u8;
         writer.write_scalar(&flag)
     }
 
     #[inline]
-    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
-        let flag = self.get_flag(place) || reader[reader.len() - 1] > 0;
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+        let flag = get_flag(place) || reader[reader.len() - 1] > 0;
         self.inner
-            .merge(&place.remove_last_loc(), &mut &reader[..reader.len() - 1])?;
-        self.set_flag(place, flag);
+            .merge(place.remove_last_loc(), &mut &reader[..reader.len() - 1])?;
+        set_flag(place, flag);
         Ok(())
     }
 
-    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         self.inner
-            .merge_states(&place.remove_last_loc(), &rhs.remove_last_loc())?;
-        let flag = self.get_flag(place) || self.get_flag(rhs);
-        self.set_flag(place, flag);
+            .merge_states(place.remove_last_loc(), rhs.remove_last_loc())?;
+        let flag = get_flag(place) || get_flag(rhs);
+        set_flag(place, flag);
         Ok(())
     }
 
-    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         match builder {
             ColumnBuilder::Nullable(inner_mut) => {
-                if !self.get_flag(place) {
+                if !get_flag(place) {
                     inner_mut.push_null();
                 } else if self.inner_nullable {
-                    self.inner.merge_result(&place.remove_last_loc(), builder)?;
+                    self.inner.merge_result(place.remove_last_loc(), builder)?;
                 } else {
                     self.inner
-                        .merge_result(&place.remove_last_loc(), &mut inner_mut.builder)?;
+                        .merge_result(place.remove_last_loc(), &mut inner_mut.builder)?;
                     inner_mut.validity.push(true);
                 }
             }
@@ -235,7 +233,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner.need_manual_drop_state()
     }
 
-    unsafe fn drop_state(&self, place: &AggrState) {
+    unsafe fn drop_state(&self, place: AggrState) {
         self.inner.drop_state(place)
     }
 

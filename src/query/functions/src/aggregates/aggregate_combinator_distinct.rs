@@ -52,6 +52,22 @@ pub struct AggregateDistinctCombinator<State> {
     _state: PhantomData<State>,
 }
 
+impl<State> AggregateDistinctCombinator<State> {
+    fn get_state(place: AggrState) -> &mut State {
+        place
+            .addr
+            .next(place.loc[0].into_custom().unwrap().1)
+            .get::<State>()
+    }
+
+    fn set_state(place: AggrState, state: State) {
+        place
+            .addr
+            .next(place.loc[0].into_custom().unwrap().1)
+            .write_state(state);
+    }
+}
+
 impl<State> AggregateFunction for AggregateDistinctCombinator<State>
 where State: DistinctStateFunc
 {
@@ -63,9 +79,9 @@ where State: DistinctStateFunc
         self.nested.return_type()
     }
 
-    fn init_state(&self, place: &AggrState) {
-        place.write(|| State::new());
-        self.nested.init_state(&place.remove_first_loc());
+    fn init_state(&self, place: AggrState) {
+        Self::set_state(place, State::new());
+        self.nested.init_state(place.remove_first_loc());
     }
 
     fn register_state(&self, registry: &mut AggrStateRegistry) {
@@ -75,40 +91,40 @@ where State: DistinctStateFunc
 
     fn accumulate(
         &self,
-        place: &AggrState,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
     ) -> Result<()> {
-        let state = place.get::<State>();
+        let state = Self::get_state(place);
         state.batch_add(columns, validity, input_rows)
     }
 
-    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let state = place.get::<State>();
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+        let state = Self::get_state(place);
         state.add(columns, row)
     }
 
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
-        let state = place.get::<State>();
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+        let state = Self::get_state(place);
         state.serialize(writer)
     }
 
-    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<State>();
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+        let state = Self::get_state(place);
         let rhs = State::deserialize(reader)?;
 
         state.merge(&rhs)
     }
 
-    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
-        let state = place.get::<State>();
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
+        let state = Self::get_state(place);
         let other = rhs.get::<State>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
-        let state = place.get::<State>();
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+        let state = Self::get_state(place);
         let nested_place = place.remove_first_loc();
 
         // faster path for count
@@ -122,13 +138,13 @@ where State: DistinctStateFunc
             Ok(())
         } else {
             if state.is_empty() {
-                return self.nested.merge_result(&nested_place, builder);
+                return self.nested.merge_result(nested_place, builder);
             }
             let columns = &state.build_columns(&self.arguments).unwrap();
             self.nested
-                .accumulate(&nested_place, columns.into(), None, state.len())?;
+                .accumulate(nested_place, columns.into(), None, state.len())?;
             // merge_result
-            self.nested.merge_result(&nested_place, builder)
+            self.nested.merge_result(nested_place, builder)
         }
     }
 
@@ -136,12 +152,12 @@ where State: DistinctStateFunc
         true
     }
 
-    unsafe fn drop_state(&self, place: &AggrState) {
-        let state = place.get::<State>();
+    unsafe fn drop_state(&self, place: AggrState) {
+        let state = Self::get_state(place);
         std::ptr::drop_in_place(state);
 
         if self.nested.need_manual_drop_state() {
-            self.nested.drop_state(&place.remove_first_loc());
+            self.nested.drop_state(place.remove_first_loc());
         }
     }
 

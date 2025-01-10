@@ -69,7 +69,7 @@ impl PartialSingleStateAggregator {
             .iter()
             .zip(state_layout.states_loc.iter())
         {
-            func.init_state(&AggrState::new(addr, loc));
+            func.init_state(AggrState::new(addr, loc));
         }
 
         Ok(PartialSingleStateAggregator {
@@ -117,7 +117,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 .zip(self.funcs.iter())
                 .zip(states.iter())
             {
-                func.batch_merge_single(&place, state)?;
+                func.batch_merge_single(place, state)?;
             }
         } else {
             for ((place, columns), func) in self
@@ -132,7 +132,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 )
                 .zip(self.funcs.iter())
             {
-                func.accumulate(&place, columns, None, block.num_rows())?;
+                func.accumulate(place, columns, None, block.num_rows())?;
             }
         }
 
@@ -157,7 +157,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                 )
                 .zip(builders.iter_mut())
             {
-                func.serialize(&place, &mut builder.data)?;
+                func.serialize(place, &mut builder.data)?;
                 builder.commit_row();
             }
 
@@ -173,7 +173,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
         // destroy states
         for (loc, func) in self.states_layout.states_loc.iter().zip(self.funcs.iter()) {
             if func.need_manual_drop_state() {
-                unsafe { func.drop_state(&AggrState::new(self.addr, loc)) }
+                unsafe { func.drop_state(AggrState::new(self.addr, loc)) }
             }
         }
 
@@ -260,7 +260,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
                     .map(|loc| AggrState::new(main_addr, loc)),
             )
             .map(|(func, place)| {
-                func.init_state(&place);
+                func.init_state(place);
                 place
             })
             .collect::<Vec<_>>();
@@ -274,7 +274,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
         for (idx, ((func, place), builder)) in self
             .funcs
             .iter()
-            .zip(main_places.iter())
+            .zip(main_places.iter().copied())
             .zip(result_builders.iter_mut())
             .enumerate()
         {
@@ -288,7 +288,7 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
         let columns = result_builders.into_iter().map(|b| b.build()).collect();
 
         // destroy states
-        for (place, func) in main_places.iter().zip(self.funcs.iter()) {
+        for (place, func) in main_places.iter().copied().zip(self.funcs.iter()) {
             if func.need_manual_drop_state() {
                 unsafe { func.drop_state(place) }
             }

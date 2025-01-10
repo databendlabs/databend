@@ -91,7 +91,7 @@ macro_rules! with_bitmap_agg_mapped_type {
 }
 
 trait BitmapAggResult: Send + Sync + 'static {
-    fn merge_result(place: &AggrState, builder: &mut ColumnBuilder) -> Result<()>;
+    fn merge_result(place: AggrState, builder: &mut ColumnBuilder) -> Result<()>;
 
     fn return_type() -> Result<DataType>;
 }
@@ -101,7 +101,7 @@ struct BitmapCountResult;
 struct BitmapRawResult;
 
 impl BitmapAggResult for BitmapCountResult {
-    fn merge_result(place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = UInt64Type::try_downcast_builder(builder).unwrap();
         let state = place.get::<BitmapAggState>();
         builder.push(state.rb.as_ref().map(|rb| rb.len()).unwrap_or(0));
@@ -114,7 +114,7 @@ impl BitmapAggResult for BitmapCountResult {
 }
 
 impl BitmapAggResult for BitmapRawResult {
-    fn merge_result(place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = BitmapType::try_downcast_builder(builder).unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(rb) = state.rb.as_ref() {
@@ -218,7 +218,7 @@ where
         AGG::return_type()
     }
 
-    fn init_state(&self, place: &AggrState) {
+    fn init_state(&self, place: AggrState) {
         place.write(BitmapAggState::new);
     }
 
@@ -228,7 +228,7 @@ where
 
     fn accumulate(
         &self,
-        place: &AggrState,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -279,7 +279,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let column = BitmapType::try_downcast_column(&columns[0]).unwrap();
         let state = place.get::<BitmapAggState>();
         if let Some(data) = BitmapType::index_column(&column, row) {
@@ -289,7 +289,7 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<BitmapAggState>();
         // flag indicate where bitmap is none
         let flag: u8 = if state.rb.is_some() { 1 } else { 0 };
@@ -300,7 +300,7 @@ where
         Ok(())
     }
 
-    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<BitmapAggState>();
 
         let flag = reader[0];
@@ -312,7 +312,7 @@ where
         Ok(())
     }
 
-    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<BitmapAggState>();
         let other = rhs.get::<BitmapAggState>();
 
@@ -322,7 +322,7 @@ where
         Ok(())
     }
 
-    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         AGG::merge_result(place, builder)
     }
 
@@ -330,7 +330,7 @@ where
         true
     }
 
-    unsafe fn drop_state(&self, place: &AggrState) {
+    unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<BitmapAggState>();
         std::ptr::drop_in_place(state);
     }
@@ -435,7 +435,7 @@ where
         self.inner.return_type()
     }
 
-    fn init_state(&self, place: &AggrState) {
+    fn init_state(&self, place: AggrState) {
         self.inner.init_state(place);
     }
 
@@ -445,7 +445,7 @@ where
 
     fn accumulate(
         &self,
-        place: &AggrState,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -478,26 +478,26 @@ where
             .accumulate_keys(new_places_slice, loc, input.as_slice().into(), row_size)
     }
 
-    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         if self.filter_row(columns, row)? {
             return self.inner.accumulate_row(place, columns, row);
         }
         Ok(())
     }
 
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         self.inner.serialize(place, writer)
     }
 
-    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         self.inner.merge(place, reader)
     }
 
-    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         self.inner.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         self.inner.merge_result(place, builder)
     }
 }

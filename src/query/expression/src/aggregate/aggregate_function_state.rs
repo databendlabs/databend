@@ -207,10 +207,10 @@ impl StatesLayout {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct AggrState<'a> {
     pub addr: StateAddr,
-    loc: &'a [AggrStateLoc],
+    pub loc: &'a [AggrStateLoc],
 }
 
 impl<'a> AggrState<'a> {
@@ -219,6 +219,7 @@ impl<'a> AggrState<'a> {
     }
 
     pub fn get<'b, T>(&self) -> &'b mut T {
+        debug_assert_eq!(self.loc.len(), 1);
         self.addr
             .next(self.loc[0].into_custom().unwrap().1)
             .get::<T>()
@@ -226,19 +227,10 @@ impl<'a> AggrState<'a> {
 
     pub fn write<T, F>(&self, f: F)
     where F: FnOnce() -> T {
+        debug_assert_eq!(self.loc.len(), 1);
         self.addr
             .next(self.loc[0].into_custom().unwrap().1)
             .write(f);
-    }
-
-    pub fn write_state<T>(&self, state: T) {
-        self.addr
-            .next(self.loc[0].into_custom().unwrap().1)
-            .write_state(state);
-    }
-
-    pub fn loc(&self) -> &[AggrStateLoc] {
-        self.loc
     }
 
     pub fn remove_last_loc(&self) -> Self {

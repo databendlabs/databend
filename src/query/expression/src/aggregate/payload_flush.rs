@@ -147,7 +147,7 @@ impl Payload {
                 {
                     {
                         let builder = &mut builders[idx];
-                        func.serialize(&AggrState::new(*place, loc), &mut builder.data)?;
+                        func.serialize(AggrState::new(*place, loc), &mut builder.data)?;
                         builder.commit_row();
                     }
                 }

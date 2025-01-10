@@ -81,7 +81,7 @@ where
     fn return_type(&self) -> Result<DataType> {
         Ok(self.return_type.clone())
     }
-    fn init_state(&self, place: &AggrState) {
+    fn init_state(&self, place: AggrState) {
         place.write(QuantileTDigestState::new)
     }
     fn register_state(&self, registry: &mut AggrStateRegistry) {
@@ -89,7 +89,7 @@ where
     }
     fn accumulate(
         &self,
-        place: &AggrState,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -116,7 +116,7 @@ where
 
         Ok(())
     }
-    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let column = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
         let weighted = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
         let value = unsafe { column.get_unchecked(row) };
@@ -145,24 +145,24 @@ where
             });
         Ok(())
     }
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         let mut rhs: QuantileTDigestState = borsh_deserialize_state(reader)?;
         state.merge(&mut rhs)
     }
 
-    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         let other = rhs.get::<QuantileTDigestState>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         state.merge_result(builder, self.levels.clone())
     }
@@ -171,7 +171,7 @@ where
         true
     }
 
-    unsafe fn drop_state(&self, place: &AggrState) {
+    unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<QuantileTDigestState>();
         std::ptr::drop_in_place(state);
     }

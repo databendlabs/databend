@@ -206,8 +206,8 @@ where
         Ok(self.return_type.clone())
     }
 
-    fn init_state(&self, place: &AggrState) {
-        place.write_state(S::default());
+    fn init_state(&self, place: AggrState) {
+        place.write(S::default);
     }
 
     fn register_state(&self, registry: &mut AggrStateRegistry) {
@@ -216,7 +216,7 @@ where
 
     fn accumulate(
         &self,
-        place: &AggrState,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -227,7 +227,7 @@ where
         state.add_batch(column, validity, self.function_data.as_deref())
     }
 
-    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let column = T::try_downcast_column(&columns[0]).unwrap();
         let value = T::index_column(&column, row);
 
@@ -256,24 +256,24 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state: &mut S = place.get::<S>();
         Ok(borsh::to_writer(writer, state)?)
     }
 
-    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state: &mut S = place.get::<S>();
         let rhs = S::deserialize_reader(reader)?;
         state.merge(&rhs)
     }
 
-    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state: &mut S = place.get::<S>();
         let other: &mut S = rhs.get::<S>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state: &mut S = place.get::<S>();
         self.do_merge_result(state, builder)
     }
@@ -295,7 +295,7 @@ where
         self.need_drop
     }
 
-    unsafe fn drop_state(&self, place: &AggrState) {
+    unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<S>();
         std::ptr::drop_in_place(state);
     }

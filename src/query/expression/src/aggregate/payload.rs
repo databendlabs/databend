@@ -299,7 +299,7 @@ impl Payload {
                 let place = StateAddr::from(place);
                 for (aggr, loc) in self.aggrs.iter().zip(layout.states_loc.iter()) {
                     {
-                        aggr.init_state(&AggrState::new(place, loc));
+                        aggr.init_state(AggrState::new(place, loc));
                     }
                 }
                 self.pages[page_index[idx]].state_rows += 1;
@@ -437,7 +437,7 @@ impl Drop for Payload {
                         let ptr = self.data_ptr(page, row);
                         unsafe {
                             let state_addr = read::<u64>(ptr.add(self.state_offset) as _) as usize;
-                            aggr.drop_state(&AggrState::new(StateAddr::new(state_addr), loc));
+                            aggr.drop_state(AggrState::new(StateAddr::new(state_addr), loc));
                         }
                     }
                 }

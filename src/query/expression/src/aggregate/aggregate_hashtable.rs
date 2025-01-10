@@ -413,12 +413,7 @@ impl AggregateHashTable {
             let places = &state.state_places.as_slice()[0..row_count];
             let rhses = &flush_state.state_places.as_slice()[0..row_count];
             if let Some(layout) = self.payload.state_layout.as_ref() {
-                for (aggr, loc) in self
-                    .payload
-                    .aggrs
-                    .iter()
-                    .zip(layout.states_loc.iter().cloned())
-                {
+                for (aggr, loc) in self.payload.aggrs.iter().zip(layout.states_loc.iter()) {
                     aggr.batch_merge_states(places, rhses, loc)?;
                 }
             }

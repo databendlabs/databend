@@ -74,7 +74,7 @@ impl AggregateFunction for AggregateRetentionFunction {
         ))))
     }
 
-    fn init_state(&self, place: &AggrState) {
+    fn init_state(&self, place: AggrState) {
         place.write(|| AggregateRetentionState { events: 0 });
     }
 
@@ -86,7 +86,7 @@ impl AggregateFunction for AggregateRetentionFunction {
 
     fn accumulate(
         &self,
-        place: &AggrState,
+        place: AggrState,
         columns: InputColumns,
         _validity: Option<&Bitmap>,
         input_rows: usize,
@@ -128,7 +128,7 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: &AggrState, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let new_columns = columns
             .iter()
@@ -142,19 +142,19 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
-    fn serialize(&self, place: &AggrState, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: &AggrState, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let rhs: AggregateRetentionState = borsh_deserialize_state(reader)?;
         state.merge(&rhs);
         Ok(())
     }
 
-    fn merge_states(&self, place: &AggrState, rhs: &AggrState) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let other = rhs.get::<AggregateRetentionState>();
         state.merge(other);
@@ -162,7 +162,7 @@ impl AggregateFunction for AggregateRetentionFunction {
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let builder = builder.as_array_mut().unwrap();
         let inner = builder

@@ -127,7 +127,7 @@ impl EvalAggr {
         let addr = _arena.alloc_layout(state_layout.layout).into();
 
         let state = AggrState::new(addr, &state_layout.states_loc[0]);
-        func.init_state(&state);
+        func.init_state(state);
 
         Self {
             addr,
@@ -144,7 +144,7 @@ impl Drop for EvalAggr {
             if self.func.need_manual_drop_state() {
                 unsafe {
                     self.func
-                        .drop_state(&AggrState::new(self.addr, &self.state_layout.states_loc[0]));
+                        .drop_state(AggrState::new(self.addr, &self.state_layout.states_loc[0]));
                 }
             }
         })
@@ -175,15 +175,15 @@ pub fn eval_aggr_for_test(
 
     let eval = EvalAggr::new(func.clone());
     let state = AggrState::new(eval.addr, &eval.state_layout.states_loc[0]);
-    func.accumulate(&state, columns.into(), None, rows)?;
+    func.accumulate(state, columns.into(), None, rows)?;
     if with_serialize {
         let mut buf = vec![];
-        func.serialize(&state, &mut buf)?;
-        func.init_state(&state);
-        func.merge(&state, &mut buf.as_slice())?;
+        func.serialize(state, &mut buf)?;
+        func.init_state(state);
+        func.merge(state, &mut buf.as_slice())?;
     }
     let mut builder = ColumnBuilder::with_capacity(&data_type, 1024);
-    func.merge_result(&state, &mut builder)?;
+    func.merge_result(state, &mut builder)?;
     Ok((builder.build(), data_type))
 }
 
