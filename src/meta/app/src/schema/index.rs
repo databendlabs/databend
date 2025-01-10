@@ -68,23 +68,13 @@ pub struct IndexMeta {
     pub sync_creation: bool,
 }
 
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Clone,
-    Debug,
-    Eq,
-    PartialEq,
-    Default,
-    num_derive::FromPrimitive,
-)]
+#[derive(Clone, Debug, Eq, PartialEq, num_derive::FromPrimitive)]
 pub enum MarkedDeletedIndexType {
-    #[default]
     AGGREGATING = 1,
     INVERTED = 2,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MarkedDeletedIndexMeta {
     pub dropped_on: DateTime<Utc>,
     pub index_type: MarkedDeletedIndexType,

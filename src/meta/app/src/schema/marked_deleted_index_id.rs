@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Debug, Copy, Default, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Copy, Eq, PartialEq, PartialOrd, Ord)]
 pub struct MarkedDeletedIndexId {
     pub table_id: u64,
     pub index_id: u64,
