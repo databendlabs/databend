@@ -133,7 +133,7 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
                 let n = table
                     .remove_aggregating_index_files(ctx.clone(), *index_id)
                     .await?;
-                table_names.push(table.name());
+                table_names.push(table.name().to_string());
                 index_ids.push(index_id.to_string());
                 num_removed_files.push(n);
             }
