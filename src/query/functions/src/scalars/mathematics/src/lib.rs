@@ -12,21 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod common;
-mod fast_values;
-mod json_ast;
-mod nested;
-mod separated_text;
+#![allow(clippy::arc_with_non_send_sync)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::ptr_arg)]
+#![allow(clippy::type_complexity)]
+#![allow(internal_features)]
+#![feature(core_intrinsics)]
+#![feature(box_patterns)]
+#![feature(type_ascription)]
+#![feature(try_blocks)]
+#![feature(downcast_unchecked)]
+#![feature(str_internals)]
 
-use std::any::Any;
-
-pub use fast_values::FastFieldDecoderValues;
-pub use fast_values::FastValuesDecodeFallback;
-pub use fast_values::FastValuesDecoder;
-pub use json_ast::FieldJsonAstDecoder;
-pub use nested::NestedValues;
-pub use separated_text::SeparatedTextDecoder;
-
-pub trait FieldDecoder: Send + Sync {
-    fn as_any(&self) -> &dyn Any;
-}
+pub mod math;

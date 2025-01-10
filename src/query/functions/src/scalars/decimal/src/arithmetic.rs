@@ -361,7 +361,7 @@ macro_rules! register_decimal_binary_op {
     };
 }
 
-pub(crate) fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {
+pub fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {
     // TODO checked overflow by default
     register_decimal_binary_op!(
         registry,

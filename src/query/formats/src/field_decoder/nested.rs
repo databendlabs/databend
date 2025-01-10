@@ -32,7 +32,6 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -45,7 +44,6 @@ use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::BufferReadStringExt;
-use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
@@ -57,6 +55,7 @@ use jsonb::parse_value;
 use lexical_core::FromLexical;
 
 use crate::binary::decode_binary;
+use crate::field_decoder::common::read_timestamp;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
 
@@ -67,9 +66,9 @@ pub struct NestedValues {
 
 impl NestedValues {
     /// Consider map/tuple/array as a private object format like JSON.
-    /// Currently we assume it as a fixed format, embed it in "strings" of other formats.
-    /// So we can used the same code to encode/decode in clients.
-    /// It maybe need to be configurable in future,
+    /// Currently, we assume it as a fixed format, embed it in "strings" of other formats.
+    /// So we can use the same code to encode/decode in clients.
+    /// It maybe needs to be configurable in the future,
     /// to read data from other DB which also support map/tuple/array.
     pub fn create(options_ext: &FileFormatOptionsExt) -> Self {
         NestedValues {
@@ -281,30 +280,7 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        let mut buffer_readr = Cursor::new(&buf);
-        let mut ts = if !buf.contains(&b'-') {
-            buffer_readr.read_num_text_exact()?
-        } else {
-            let t = buffer_readr.read_timestamp_text(&self.common_settings().jiff_timezone)?;
-            match t {
-                DateTimeResType::Datetime(t) => {
-                    if !buffer_readr.eof() {
-                        let data = buf.to_str().unwrap_or("not utf8");
-                        let msg = format!(
-                            "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                            buffer_readr.position(),
-                            data
-                        );
-                        return Err(ErrorCode::BadBytes(msg));
-                    }
-                    t.timestamp().as_microsecond()
-                }
-                _ => unreachable!(),
-            }
-        };
-        clamp_timestamp(&mut ts);
-        column.push(ts);
-        Ok(())
+        read_timestamp(column, &buf, self.common_settings())
     }
 
     fn read_bitmap<R: AsRef<[u8]>>(

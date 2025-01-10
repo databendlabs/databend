@@ -40,6 +40,7 @@ use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::parse_bitmap;
+use databend_functions_scalar_datetime::datetime::int64_to_timestamp;
 use jiff::tz::TimeZone;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
@@ -296,8 +297,8 @@ impl FieldJsonAstDecoder {
                 Ok(())
             }
             Value::Number(number) => match number.as_i64() {
-                Some(mut n) => {
-                    clamp_timestamp(&mut n);
+                Some(n) => {
+                    let n = int64_to_timestamp(n);
                     column.push(n);
                     Ok(())
                 }
