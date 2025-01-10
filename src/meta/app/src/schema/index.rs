@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -67,9 +68,26 @@ pub struct IndexMeta {
     pub sync_creation: bool,
 }
 
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    Default,
+    num_derive::FromPrimitive,
+)]
+pub enum MarkedDeletedIndexType {
+    #[default]
+    AGGREGATING = 1,
+    INVERTED = 2,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct MarkedDeletedIndexMeta {
-    pub indexes: Vec<(u64, IndexMeta)>,
+    pub dropped_on: DateTime<Utc>,
+    pub index_type: MarkedDeletedIndexType,
 }
 
 impl Default for IndexMeta {
@@ -168,13 +186,7 @@ pub struct GetIndexReply {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetMarkedDeletedIndexesReply {
-    pub table_indexes: Vec<TableIndexes>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TableIndexes {
-    pub table_id: u64,
-    pub indexes: Vec<(u64, IndexMeta)>,
+    pub table_indexes: HashMap<u64, Vec<(u64, MarkedDeletedIndexMeta)>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
