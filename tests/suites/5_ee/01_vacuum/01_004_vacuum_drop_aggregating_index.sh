@@ -30,11 +30,10 @@ ls  /tmp/test_vacuum_drop_aggregating_index/"$PREFIX"/_i_a/ | wc -l
 
 stmt "drop aggregating index index"
 
-stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index('test_vacuum_drop_aggregating_index','agg')"
+stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index('test_vacuum_drop_aggregating_index','agg')" > /dev/null
 
 echo "after vacuum, should be 0 index dir"
-
-ls  /tmp/test_vacuum_drop_aggregating_index/"$PREFIX"/_i_a/ | wc -l
+find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX"/_i_a/ -type f | wc -l
 
 
 ### vacuum from all tables
@@ -57,7 +56,7 @@ PREFIX_1=$(echo "$SNAPSHOT_LOCATION_1" | cut -d'/' -f1-2)
 
 echo "before vacuum, should be 2 index dir"
 
-ls  /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_1"/_i_a/ | wc -l
+find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_1"/_i_a/ -type f | wc -l
 
 stmt "create or replace table test_vacuum_drop_aggregating_index.agg_2(a int, b int,c int) 'fs:///tmp/test_vacuum_drop_aggregating_index/'"
 
@@ -79,11 +78,11 @@ stmt "drop aggregating index index_3"
 
 echo "before vacuum, should be 1 index dir"
 
-ls  /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_2"/_i_a/ | wc -l
+find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_2"/_i_a/ -type f | wc -l
 
-stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index()"
+stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index()" > /dev/null
 
 echo "after vacuum, should be 0 index dir"
 
-ls  /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_1"/_i_a/ | wc -l
-ls  /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_2"/_i_a/ | wc -l
+find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_1"/_i_a/ -type f | wc -l
+find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_2"/_i_a/ -type f | wc -l

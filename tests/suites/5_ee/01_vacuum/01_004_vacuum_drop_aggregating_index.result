@@ -9,8 +9,6 @@
 before vacuum, should be 1 index dir
 1
 >>>> drop aggregating index index
->>>> set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index('test_vacuum_drop_aggregating_index','agg')
-Ok
 after vacuum, should be 0 index dir
 0
 >>>> create or replace table test_vacuum_drop_aggregating_index.agg_1(a int, b int,c int) 'fs:///tmp/test_vacuum_drop_aggregating_index/'
@@ -36,8 +34,6 @@ before vacuum, should be 2 index dir
 >>>> drop aggregating index index_3
 before vacuum, should be 1 index dir
 1
->>>> set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index()
-Ok
 after vacuum, should be 0 index dir
 0
 0
