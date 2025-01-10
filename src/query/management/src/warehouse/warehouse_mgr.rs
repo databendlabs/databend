@@ -1015,6 +1015,10 @@ impl WarehouseApi for WarehouseMgr {
                         value: Some(seq_v), ..
                     })),
             }) => Ok(seq_v.seq),
+            // compatibility
+            // After network fail, nodes may become expired due to failed heartbeats.
+            // For system-managed nodes, this situation has already been handled in resolve_conflicts.
+            // For self-managed nodes, we need to return seq = 0 so that the next heartbeat can proceed normally.
             _ if matches!(node.node_type, NodeType::SelfManaged) => Ok(0),
             _ => Err(ErrorCode::MetaServiceError("Heartbeat node info failure.")),
         }
