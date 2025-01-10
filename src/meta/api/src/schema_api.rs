@@ -167,8 +167,8 @@ pub trait SchemaApi: Send + Sync {
 
     async fn get_marked_deleted_indexes(
         &self,
-        table_id: Option<u64>,
         tenant: &Tenant,
+        table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply, MetaError>;
 
     async fn update_index(

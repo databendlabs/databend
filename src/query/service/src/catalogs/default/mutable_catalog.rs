@@ -358,7 +358,7 @@ impl Catalog for MutableCatalog {
         let res = self
             .ctx
             .meta
-            .get_marked_deleted_indexes(table_id, tenant)
+            .get_marked_deleted_indexes(tenant, table_id)
             .await?;
         Ok(res)
     }

@@ -851,8 +851,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[fastrace::trace]
     async fn get_marked_deleted_indexes(
         &self,
-        table_id: Option<u64>,
         tenant: &Tenant,
+        table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply, MetaError> {
         let dir = match table_id {
             Some(table_id) => {
