@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_compat::CompatExt;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storages_stage::StageTable;
 use databend_common_users::UserApiProvider;
+use futures_util::io;
+use futures_util::AsyncWriteExt;
 use http::StatusCode;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -115,13 +118,24 @@ pub async fn upload_to_stage(
             Some(name) => name.to_string(),
             None => uuid::Uuid::new_v4().to_string(),
         };
-        let bytes = field.bytes().await.map_err(InternalServerError)?;
         let file_path = format!("{}/{}", args.relative_path, name)
             .trim_start_matches('/')
             .to_string();
-        op.write(&file_path, bytes)
+
+        // Read field with 1MiB buf.
+        let mut r = io::BufReader::with_capacity(1024 * 1024, field.into_async_read().compat());
+        // Upload in 16MiB chunks.
+        let mut w = op
+            .writer_with(&file_path)
+            .chunk(16 * 1024 * 1024)
+            .await
+            .map_err(InternalServerError)?
+            .into_futures_async_write();
+
+        io::copy_buf(&mut r, &mut w)
             .await
             .map_err(InternalServerError)?;
+        w.close().await.map_err(InternalServerError)?;
 
         files.push(name.clone());
     }
