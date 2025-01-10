@@ -232,6 +232,7 @@ impl CopyIntoTableInterpreter {
         duplicated_files_detected: Vec<String>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         deduplicated_label: Option<String>,
+        path_prefix: Option<String>,
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let to_table = ctx
@@ -249,6 +250,7 @@ impl CopyIntoTableInterpreter {
                 to_table.as_ref(),
                 &files_to_copy,
                 &plan.stage_table_info.copy_into_table_options,
+                path_prefix,
             )?;
 
             to_table.commit_insertion(
@@ -371,6 +373,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 duplicated_files_detected,
                 update_stream_meta,
                 unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                self.plan.path_prefix.clone(),
             )
             .await?;
         }

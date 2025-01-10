@@ -1169,6 +1169,7 @@ impl TableContext for QueryContext {
         database_name: &str,
         table_name: &str,
         files: &[StageFileInfo],
+        path_prefix: Option<String>,
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         if files.is_empty() {
@@ -1195,20 +1196,34 @@ impl TableContext for QueryContext {
         let mut duplicated_files = Vec::with_capacity(files.len());
 
         for chunk in files.chunks(batch_size) {
-            let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
-            let req = GetTableCopiedFileReq { table_id, files };
+            let files = chunk
+                .iter()
+                .map(|v| {
+                    if let Some(p) = &path_prefix {
+                        format!("{}{}", p, v.path)
+                    } else {
+                        v.path.clone()
+                    }
+                })
+                .collect::<Vec<_>>();
+            println!("filter req {}", files[0]);
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: files.clone(),
+            };
             let start_request = Instant::now();
             let copied_files = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
+            println!("copied files {:?}", &copied_files);
 
             metrics_inc_copy_filter_out_copied_files_request_milliseconds(
                 Instant::now().duration_since(start_request).as_millis() as u64,
             );
             // Colored
-            for file in chunk {
-                if !copied_files.contains_key(&file.path) {
+            for (file, key) in chunk.iter().zip(files.iter()) {
+                if !copied_files.contains_key(key) {
                     files_to_copy.push(file.clone());
                     result_size += 1;
                     if result_size == max_files {

@@ -878,4 +878,8 @@ impl Settings {
     pub fn get_hilbert_sample_size_per_block(&self) -> Result<u64> {
         self.try_get_u64("hilbert_sample_size_per_block")
     }
+
+    pub fn get_copy_dedup_full_path_by_default(&self) -> Result<bool> {
+        Ok(self.try_get_u64("copy_dedup_full_path_by_default")? == 1)
+    }
 }
