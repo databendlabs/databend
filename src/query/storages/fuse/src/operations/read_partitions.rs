@@ -105,6 +105,10 @@ impl FuseTable {
         );
         match snapshot {
             Some(snapshot) => {
+                // To optimize the Hilbert clustering logic, it is necessary to pre-set the selected segments.
+                // Since the recluster logic requires scanning the table twice, fetching the segments directly
+                // can avoid redundant selection logic and ensure that the same data is accessed during both scans.
+                // TODO(zhyass): refactor if necessary.
                 let selected_segment = ctx.get_selected_segment_locations();
                 let segment_locs = if !selected_segment.is_empty() {
                     selected_segment
