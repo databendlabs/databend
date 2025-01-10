@@ -65,12 +65,12 @@ where State: DistinctStateFunc
 
     fn init_state(&self, place: &AggrState) {
         place.write(|| State::new());
-        self.nested.init_state(&place.remove_last_loc());
+        self.nested.init_state(&place.remove_first_loc());
     }
 
     fn register_state(&self, registry: &mut AggrStateRegistry) {
-        self.nested.register_state(registry);
         registry.register(AggrStateType::Custom(Layout::new::<State>()));
+        self.nested.register_state(registry);
     }
 
     fn accumulate(
@@ -109,7 +109,7 @@ where State: DistinctStateFunc
 
     fn merge_result(&self, place: &AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
-        let nested_place = place.remove_last_loc();
+        let nested_place = place.remove_first_loc();
 
         // faster path for count
         if self.nested.name() == "AggregateCountFunction" {
@@ -141,7 +141,7 @@ where State: DistinctStateFunc
         std::ptr::drop_in_place(state);
 
         if self.nested.need_manual_drop_state() {
-            self.nested.drop_state(&place.remove_last_loc());
+            self.nested.drop_state(&place.remove_first_loc());
         }
     }
 

@@ -248,6 +248,14 @@ impl<'a> AggrState<'a> {
             loc: &self.loc[..self.loc.len() - 1],
         }
     }
+
+    pub fn remove_first_loc(&self) -> Self {
+        assert!(self.loc.len() >= 2);
+        Self {
+            addr: self.addr,
+            loc: &self.loc[1..],
+        }
+    }
 }
 
 pub struct AggrStateRegistry {
