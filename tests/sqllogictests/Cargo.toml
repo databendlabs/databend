@@ -19,24 +19,21 @@ async-trait = { workspace = true }
 bollard = { workspace = true }
 clap = { workspace = true }
 cookie = { workspace = true }
-databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 env_logger = { workspace = true }
 futures-util = { workspace = true }
-msql-srv = { workspace = true }
 mysql_async = { workspace = true }
-mysql_common = { workspace = true }
 rand = { workspace = true }
 recursive = { workspace = true }
+redis = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["cookies"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqllogictest = { workspace = true }
-sqlparser = { workspace = true }
 testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true, features = ["mysql", "redis"] }
 thiserror = { workspace = true }
-threadpool = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }
 walkdir = { workspace = true }
