@@ -1015,6 +1015,7 @@ impl WarehouseApi for WarehouseMgr {
                         value: Some(seq_v), ..
                     })),
             }) => Ok(seq_v.seq),
+            _ if matches!(node.node_type, NodeType::SelfManaged) => Ok(0),
             _ => Err(ErrorCode::MetaServiceError("Heartbeat node info failure.")),
         }
     }
