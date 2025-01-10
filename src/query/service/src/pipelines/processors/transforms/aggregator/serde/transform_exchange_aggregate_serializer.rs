@@ -163,17 +163,17 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                     );
                     let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
 
-                    if stream_blocks.is_empty() {
-                        serialized_blocks.push(FlightSerialized::DataBlock(DataBlock::empty()));
+                    let c = if stream_blocks.is_empty() {
+                        stream.empty_block()
                     } else {
                         let mut c = DataBlock::concat(&stream_blocks)?;
                         if let Some(meta) = stream_blocks[0].take_meta() {
                             c.replace_meta(meta);
                         }
-
-                        let c = serialize_block(bucket, c, &self.options)?;
-                        serialized_blocks.push(FlightSerialized::DataBlock(c));
-                    }
+                        c
+                    };
+                    let c = serialize_block(bucket, c, &self.options)?;
+                    serialized_blocks.push(FlightSerialized::DataBlock(c));
                 }
             };
         }
