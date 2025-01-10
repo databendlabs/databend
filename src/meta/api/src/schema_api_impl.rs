@@ -68,6 +68,7 @@ use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
 use databend_common_meta_app::schema::index_id_to_name_ident::IndexIdToNameIdent;
 use databend_common_meta_app::schema::index_name_ident::IndexName;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_app::schema::marked_deleted_index_id::MarkedDeletedIndexId;
 use databend_common_meta_app::schema::marked_deleted_index_ident::MarkedDeletedIndexIdIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_common_meta_app::schema::CatalogIdToNameIdent;
@@ -132,6 +133,7 @@ use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
+use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
@@ -147,7 +149,6 @@ use databend_common_meta_app::schema::TableIdList;
 use databend_common_meta_app::schema::TableIdToName;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableIndex;
-use databend_common_meta_app::schema::TableIndexes;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -805,30 +806,16 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             // add (index_id, index_meta) to marked_deleted_index_id_ident(table_id)
             let marked_deleted_index_id_ident = MarkedDeletedIndexIdIdent::new_generic(
                 name_ident.tenant(),
-                seq_meta.data.table_id.into(),
+                MarkedDeletedIndexId::new(seq_meta.data.table_id, *seq_id.data),
             );
-            let seq_marked_deleted_indexes = self
-                .get_pb(&marked_deleted_index_id_ident)
-                .await?
-                .unwrap_or_default();
-            let marked_deleted_indexes = {
-                let mut marked_deleted_indexes = seq_marked_deleted_indexes.data;
-                let dropped_on = Utc::now();
-                let mut index_meta = seq_meta.data.clone();
-                index_meta.dropped_on = Some(dropped_on);
-                marked_deleted_indexes
-                    .indexes
-                    .push((*seq_id.data, index_meta));
-                marked_deleted_indexes
+            let marked_deleted_index_meta = MarkedDeletedIndexMeta {
+                dropped_on: Utc::now(),
+                index_type: MarkedDeletedIndexType::AGGREGATING,
             };
-            txn_cond_seq(
-                &marked_deleted_index_id_ident,
-                Eq,
-                seq_marked_deleted_indexes.seq,
-            );
+
             txn.if_then.push(TxnOp::put(
                 marked_deleted_index_id_ident.to_string_key(),
-                serialize_struct(&marked_deleted_indexes)?,
+                serialize_struct(&marked_deleted_index_meta)?,
             ));
 
             let (succ, _responses) = send_txn(self, txn).await?;
@@ -867,34 +854,32 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         table_id: Option<u64>,
         tenant: &Tenant,
     ) -> Result<GetMarkedDeletedIndexesReply, MetaError> {
-        match table_id {
+        let dir = match table_id {
             Some(table_id) => {
-                let ident = MarkedDeletedIndexIdIdent::new_generic(tenant, table_id.into());
-                let seq_marked_deleted_indexes = self.get_pb(&ident).await?;
-                let table_indexes = seq_marked_deleted_indexes
-                    .into_iter()
-                    .map(|seq_v| TableIndexes {
-                        table_id,
-                        indexes: seq_v.data.indexes,
-                    })
-                    .collect::<Vec<_>>();
-                Ok(GetMarkedDeletedIndexesReply { table_indexes })
+                let ident = MarkedDeletedIndexIdIdent::new_generic(
+                    tenant,
+                    MarkedDeletedIndexId::new(table_id, 0),
+                );
+                DirName::new(ident)
             }
             None => {
-                let ident = MarkedDeletedIndexIdIdent::new_generic(tenant, 0u64.into());
-                let dir_name = DirName::new(ident);
-                let list_res = self.list_pb_vec(&dir_name).await?;
-                Ok(GetMarkedDeletedIndexesReply {
-                    table_indexes: list_res
-                        .into_iter()
-                        .map(|(k, v)| TableIndexes {
-                            table_id: **k.name(),
-                            indexes: v.data.indexes,
-                        })
-                        .collect(),
-                })
+                let ident =
+                    MarkedDeletedIndexIdIdent::new_generic(tenant, MarkedDeletedIndexId::new(0, 0));
+                DirName::new_with_level(ident, 2)
             }
+        };
+        let list_res = self.list_pb_vec(&dir).await?;
+        let mut table_indexes = HashMap::new();
+        for (k, v) in list_res {
+            let table_id = k.name().table_id;
+            let index_id = k.name().index_id;
+            let index_meta = v.data;
+            table_indexes
+                .entry(table_id)
+                .or_insert_with(Vec::new)
+                .push((index_id, index_meta));
         }
+        Ok(GetMarkedDeletedIndexesReply { table_indexes })
     }
 
     #[logcall::logcall]
@@ -3160,38 +3145,20 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         index_ids: &[u64],
     ) -> Result<(), MetaTxnError> {
         let mut trials = txn_backoff(None, func_name!());
-        let marked_deleted_index_id_ident =
-            MarkedDeletedIndexIdIdent::new_generic(tenant, table_id.into());
 
         loop {
             trials.next().unwrap()?.await;
             let mut txn = TxnRequest::default();
 
-            let seq_marked_deleted_indexes = self
-                .get_pb(&marked_deleted_index_id_ident)
-                .await?
-                .unwrap_or_default();
-            let marked_deleted_indexes = {
-                let indexes = seq_marked_deleted_indexes
-                    .data
-                    .indexes
-                    .into_iter()
-                    .filter(|(id, _)| !index_ids.contains(id))
-                    .collect();
-                MarkedDeletedIndexMeta { indexes }
-            };
-            txn_cond_seq(
-                &marked_deleted_index_id_ident,
-                Eq,
-                seq_marked_deleted_indexes.seq,
-            );
-            txn.if_then.push(TxnOp::put(
-                marked_deleted_index_id_ident.to_string_key(),
-                serialize_struct(&marked_deleted_indexes)?,
-            ));
+            for index_id in index_ids {
+                txn.if_then
+                    .push(txn_op_del(&MarkedDeletedIndexIdIdent::new_generic(
+                        tenant,
+                        MarkedDeletedIndexId::new(table_id, *index_id),
+                    )));
+            }
 
             let (succ, _responses) = send_txn(self, txn).await?;
-            debug!(key :? =marked_deleted_index_id_ident, succ = succ; "{}", func_name!());
 
             if succ {
                 return Ok(());

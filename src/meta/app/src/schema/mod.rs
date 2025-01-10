@@ -27,6 +27,7 @@ pub mod index_id_ident;
 pub mod index_id_to_name_ident;
 pub mod index_name_ident;
 pub mod least_visible_time_ident;
+pub mod marked_deleted_index_id;
 pub mod marked_deleted_index_ident;
 pub mod table_lock_ident;
 pub mod table_niv;

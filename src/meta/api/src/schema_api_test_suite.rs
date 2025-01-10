@@ -98,6 +98,7 @@ use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
+use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -6308,13 +6309,16 @@ impl SchemaApiTestSuite {
             ];
             for res in results {
                 assert_eq!(res.table_indexes.len(), 1);
-                assert_eq!(res.table_indexes[0].table_id, table_id);
-                assert_eq!(res.table_indexes[0].indexes.len(), 1);
-                let (res_index_id, mut res_index_meta) = res.table_indexes[0].indexes[0].clone();
+                let index = res.table_indexes.get(&table_id);
+                assert!(index.is_some());
+                let index = index.unwrap();
+                assert_eq!(index.len(), 1);
+                let (res_index_id, res_index_meta) = index[0].clone();
                 assert_eq!(res_index_id, index_id_2);
-                assert!(res_index_meta.dropped_on.is_some());
-                res_index_meta.dropped_on = None;
-                assert_eq!(res_index_meta, index_meta_2);
+                assert_eq!(
+                    res_index_meta.index_type,
+                    MarkedDeletedIndexType::AGGREGATING
+                );
             }
         }
 
@@ -6362,32 +6366,17 @@ impl SchemaApiTestSuite {
             ];
             for res in results {
                 assert_eq!(res.table_indexes.len(), 1);
-                assert_eq!(res.table_indexes[0].table_id, table_id);
-                assert_eq!(res.table_indexes[0].indexes.len(), 2);
-                let res_index_ids = res.table_indexes[0]
-                    .indexes
-                    .iter()
-                    .map(|(id, _)| id)
-                    .collect::<HashSet<_>>();
+                let index = res.table_indexes.get(&table_id);
+                assert!(index.is_some());
+                let index = index.unwrap();
+                assert_eq!(index.len(), 2);
+                let res_index_ids = index.iter().map(|(id, _)| id).collect::<HashSet<_>>();
                 assert!(res_index_ids.contains(&index_id));
                 assert!(res_index_ids.contains(&index_id_2));
 
-                assert!(res.table_indexes[0]
-                    .indexes
-                    .iter()
-                    .all(|(_, meta)| { meta.dropped_on.is_some() }));
-
-                let res_index_metas = res.table_indexes[0]
-                    .indexes
-                    .iter()
-                    .map(|(_, meta)| {
-                        let mut meta = meta.clone();
-                        meta.dropped_on = None;
-                        meta
-                    })
-                    .collect::<Vec<_>>();
-                assert!(res_index_metas.contains(&index_meta_1));
-                assert!(res_index_metas.contains(&index_meta_2));
+                assert!(index.iter().all(|(_, meta)| {
+                    matches!(meta.index_type, MarkedDeletedIndexType::AGGREGATING)
+                }));
             }
         }
 
@@ -6402,13 +6391,16 @@ impl SchemaApiTestSuite {
             ];
             for res in results {
                 assert_eq!(res.table_indexes.len(), 1);
-                assert_eq!(res.table_indexes[0].table_id, table_id);
-                assert_eq!(res.table_indexes[0].indexes.len(), 1);
-                let (res_index_id, mut res_index_meta) = res.table_indexes[0].indexes[0].clone();
+                let index = res.table_indexes.get(&table_id);
+                assert!(index.is_some());
+                let index = index.unwrap();
+                assert_eq!(index.len(), 1);
+                let (res_index_id, res_index_meta) = index[0].clone();
                 assert_eq!(res_index_id, index_id_2);
-                assert!(res_index_meta.dropped_on.is_some());
-                res_index_meta.dropped_on = None;
-                assert_eq!(res_index_meta, index_meta_2);
+                assert_eq!(
+                    res_index_meta.index_type,
+                    MarkedDeletedIndexType::AGGREGATING
+                );
             }
 
             mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id_2])
@@ -6416,11 +6408,9 @@ impl SchemaApiTestSuite {
             let res = mt
                 .get_marked_deleted_indexes(Some(table_id), &tenant)
                 .await?;
-            assert_eq!(res.table_indexes.len(), 1);
-            assert_eq!(res.table_indexes[0].indexes.len(), 0);
+            assert_eq!(res.table_indexes.len(), 0);
             let res = mt.get_marked_deleted_indexes(None, &tenant).await?;
-            assert_eq!(res.table_indexes.len(), 1);
-            assert_eq!(res.table_indexes[0].indexes.len(), 0);
+            assert_eq!(res.table_indexes.len(), 0);
         }
 
         {

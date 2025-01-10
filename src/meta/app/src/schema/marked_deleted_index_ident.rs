@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::data_id::DataId;
 use crate::tenant_key::ident::TIdent;
-
-pub type MarkedDeletedIndexId = DataId<MarkedDeletedIndexResource>;
 
 pub type MarkedDeletedIndexIdIdent = TIdent<MarkedDeletedIndexResource, MarkedDeletedIndexId>;
 
 pub use kvapi_impl::MarkedDeletedIndexResource;
+
+use super::marked_deleted_index_id::MarkedDeletedIndexId;
 
 mod kvapi_impl {
 
@@ -29,7 +28,7 @@ mod kvapi_impl {
     use crate::schema::MarkedDeletedIndexMeta;
     use crate::tenant_key::resource::TenantResource;
 
-    /// The meta-service key for storing id of dropped but not vacuumed indexes for a table id
+    /// The meta-service key for storing id of dropped but not vacuumed index
     pub struct MarkedDeletedIndexResource;
     impl TenantResource for MarkedDeletedIndexResource {
         const PREFIX: &'static str = "__fd_marked_deleted_index";
@@ -58,10 +57,10 @@ mod tests {
     #[test]
     fn test_index_id_ident() {
         let tenant = Tenant::new_literal("dummy");
-        let ident = MarkedDeletedIndexIdIdent::new_generic(tenant, MarkedDeletedIndexId::new(3));
+        let ident = MarkedDeletedIndexIdIdent::new_generic(tenant, MarkedDeletedIndexId::new(3, 4));
 
         let key = ident.to_string_key();
-        assert_eq!(key, "__fd_marked_deleted_index/3");
+        assert_eq!(key, "__fd_marked_deleted_index/3/4");
 
         assert_eq!(
             ident,

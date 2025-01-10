@@ -26,7 +26,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::TableIdent;
-use databend_common_meta_app::schema::TableIndexes;
 use databend_common_meta_app::schema::TableInfo;
 use log::info;
 
@@ -96,7 +95,7 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
             duration, retention_time, table_id, reply
         );
 
-        for TableIndexes { table_id, indexes } in reply.table_indexes {
+        for (table_id, indexes) in reply.table_indexes {
             let Some(table_meta) = catalog.get_table_meta_by_id(table_id).await? else {
                 // Skip vacuuming indexes of dropped tables - this will be handled by the vacuum drop table operation
                 info!("skip vacuuming indexes of dropped table: {}", table_id);
@@ -111,7 +110,7 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
             let table = catalog.get_table_by_info(&table_info)?;
             let indexes_to_be_vacuumed = indexes
                 .into_iter()
-                .filter(|(_, index_meta)| index_meta.dropped_on.as_ref().unwrap() < &retention_time)
+                .filter(|(_, index_meta)| index_meta.dropped_on < retention_time)
                 .map(|(index_id, _)| index_id)
                 .collect::<Vec<_>>();
             info!(
