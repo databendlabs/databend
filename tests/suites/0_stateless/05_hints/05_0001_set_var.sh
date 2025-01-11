@@ -18,15 +18,15 @@ echo "select /*+ SET_VAR(storage_read_buffer_size=200) SET_VAR(timezone=x) */ na
 echo "drop database if exists set_var;" | $BENDSQL_CLIENT_CONNECT
 echo "create database set_var;" | $BENDSQL_CLIENT_CONNECT
 echo "create table set_var.test(id int);" | $BENDSQL_CLIENT_CONNECT
-echo "insert /*+SET_VAR(timezone='Asia/Shanghai') SET_VAR(storage_read_buffer_size=200)*/ into set_var.test values(1)" | $BENDSQL_CLIENT_CONNECT
-echo "insert /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ into set_var.test values(3)" | $BENDSQL_CLIENT_CONNECT
+echo "insert /*+SET_VAR(timezone='Asia/Shanghai') SET_VAR(storage_read_buffer_size=200)*/ into set_var.test values(1)" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "insert /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ into set_var.test values(3)" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "select /*+SET_VAR(timezone='Asia/Shanghai') SET_VAR(storage_read_buffer_size=200)*/ * from set_var.test order by id" | $BENDSQL_CLIENT_CONNECT
 echo "select /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ id from set_var.test order by id" | $BENDSQL_CLIENT_CONNECT
-echo "update /*+SET_VAR(timezone='Asia/Shanghai') SET_VAR(storage_read_buffer_size=200)*/ set_var.test set id=2 where id=1" | $BENDSQL_CLIENT_CONNECT
-echo "update /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ set_var.test set id=4 where id=3" | $BENDSQL_CLIENT_CONNECT
+echo "update /*+SET_VAR(timezone='Asia/Shanghai') SET_VAR(storage_read_buffer_size=200)*/ set_var.test set id=2 where id=1" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "update /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ set_var.test set id=4 where id=3" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "select * from set_var.test order by id" | $BENDSQL_CLIENT_CONNECT
-echo "delete /*+SET_VAR(timezone='Asia/Shanghai') SET_VAR(storage_read_buffer_size=200)*/ from set_var.test where id=2" | $BENDSQL_CLIENT_CONNECT
-echo "delete /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ from set_var.test where id=4" | $BENDSQL_CLIENT_CONNECT
+echo "delete /*+SET_VAR(timezone='Asia/Shanghai') SET_VAR(storage_read_buffer_size=200)*/ from set_var.test where id=2" | $BENDSQL_CLIENT_OUTPUT_NULL
+echo "delete /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ from set_var.test where id=4" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "select * from set_var.test" | $BENDSQL_CLIENT_CONNECT
 
 echo "set timezone='America/Toronto'; select /*+SET_VAR(timezone='Asia/Shanghai') */ timezone(); select timezone();" | $BENDSQL_CLIENT_CONNECT
