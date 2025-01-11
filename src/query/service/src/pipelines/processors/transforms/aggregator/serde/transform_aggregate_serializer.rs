@@ -19,11 +19,9 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::local_block_meta_serde;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockMetaInfoPtr;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline_core::processors::Event;
@@ -243,22 +241,7 @@ impl SerializeAggregateStream {
                         // always return at least one block
                         if self.nums == 0 {
                             self.nums += 1;
-                            let fake_rows = 10;
-                            let block = p.payload.empty_block();
-                            let entries = block
-                                .columns()
-                                .iter()
-                                .map(|c| {
-                                    let b = ColumnBuilder::repeat_default(&c.data_type, fake_rows);
-                                    let s = b.build();
-                                    BlockEntry {
-                                        value: databend_common_expression::Value::Column(s),
-                                        data_type: c.data_type.clone(),
-                                    }
-                                })
-                                .collect();
-                            let block = DataBlock::new(entries, fake_rows);
-
+                            let block = p.payload.empty_block(Some(1));
                             Ok(Some(block.add_meta(Some(
                                 AggregateSerdeMeta::create_agg_payload(
                                     p.bucket,
