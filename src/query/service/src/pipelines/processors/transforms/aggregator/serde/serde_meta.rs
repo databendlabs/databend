@@ -97,8 +97,4 @@ impl BlockMetaInfo for AggregateSerdeMeta {
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
     }
-
-    fn deserialize_skip_empty_block(&self) -> bool {
-        false
-    }
 }
