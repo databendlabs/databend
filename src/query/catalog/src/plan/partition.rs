@@ -391,3 +391,10 @@ impl ReclusterParts {
         }
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct ReclusterInfoSideCar {
+    pub merged_blocks: Vec<Arc<BlockMeta>>,
+    pub removed_segment_indexes: Vec<usize>,
+    pub removed_statistics: Statistics,
+}

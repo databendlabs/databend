@@ -22,7 +22,7 @@ use databend_common_ast::ast::AlterTableStmt;
 use databend_common_ast::ast::AnalyzeTableStmt;
 use databend_common_ast::ast::AttachTableStmt;
 use databend_common_ast::ast::ClusterOption;
-use databend_common_ast::ast::ClusterType;
+use databend_common_ast::ast::ClusterType as AstClusterType;
 use databend_common_ast::ast::ColumnDefinition;
 use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CompactTarget;
@@ -32,6 +32,7 @@ use databend_common_ast::ast::DescribeTableStmt;
 use databend_common_ast::ast::DropTableStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::ExistsTableStmt;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::InvertedIndexDefinition;
 use databend_common_ast::ast::ModifyColumnAction;
@@ -62,6 +63,7 @@ use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::CompactionLimits;
+use databend_common_catalog::table::TableExt;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -78,6 +80,8 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::storage::StorageParams;
@@ -86,6 +90,7 @@ use databend_common_storage::init_operator;
 use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
+use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -98,6 +103,7 @@ use derive_visitor::DriveMut;
 use log::debug;
 use opendal::Operator;
 
+use crate::bind_table;
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
@@ -145,8 +151,10 @@ use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
+use crate::NameResolutionContext;
 use crate::Planner;
 use crate::SelectBuilder;
+use crate::TypeChecker;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -469,7 +477,7 @@ impl Binder {
                     Some(self.ctx.as_ref()),
                     "when create TABLE with external location",
                 )
-                .await?;
+                    .await?;
 
                 // create a temporary op to check if params is correct
                 let op = init_operator(&sp)?;
@@ -1023,50 +1031,15 @@ impl Binder {
                 selection,
                 limit,
             } => {
-                let filters = if let Some(expr) = selection {
-                    let (_, mut context) =
-                        self.bind_table_reference(bind_context, table_reference)?;
-
-                    let mut scalar_binder = ScalarBinder::new(
-                        &mut context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        &[],
-                    );
-                    scalar_binder.forbid_udf();
-                    let (scalar, _) = scalar_binder.bind(expr)?;
-
-                    // prepare the filter expression
-                    let filter = cast_expr_to_non_null_boolean(
-                        scalar
-                            .as_expr()?
-                            .project_column_ref(|col| col.column_name.clone()),
-                    )?;
-                    // prepare the inverse filter expression
-                    let inverted_filter =
-                        check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
-
-                    Some(Filters {
-                        filter: filter.as_remote_expr(),
-                        inverted_filter: inverted_filter.as_remote_expr(),
-                    })
-                } else {
-                    None
-                };
-
-                let recluster = RelOperator::Recluster(Recluster {
+                self.bind_recluster_table(
                     catalog,
                     database,
                     table,
-                    filters,
-                    limit: limit.map(|v| v as usize),
-                });
-                let s_expr = SExpr::create_leaf(Arc::new(recluster));
-                Ok(Plan::ReclusterTable {
-                    s_expr: Box::new(s_expr),
-                    is_final: *is_final,
-                })
+                    limit.map(|v| v as usize),
+                    selection,
+                    *is_final,
+                )
+                .await
             }
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
@@ -1095,6 +1068,150 @@ impl Binder {
                 })))
             }
         }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn bind_recluster_table(
+        &mut self,
+        catalog: String,
+        database: String,
+        table: String,
+        limit: Option<usize>,
+        selection: &Option<Expr>,
+        is_final: bool,
+    ) -> Result<Plan> {
+        let tbl = self.ctx.get_table(&catalog, &database, &table).await?;
+        // check mutability
+        tbl.check_mutable()?;
+        let Some(cluster_type) = tbl.cluster_type() else {
+            return Err(ErrorCode::UnclusteredTable(format!(
+                "Unclustered table '{}.{}'",
+                database, table,
+            )));
+        };
+
+        let filters = if let Some(expr) = selection {
+            let (mut context, metadata) = bind_table(tbl.clone())?;
+            let mut type_checker = TypeChecker::try_create(
+                &mut context,
+                self.ctx.clone(),
+                &self.name_resolution_ctx,
+                metadata,
+                &[],
+                true,
+            )?;
+            let (scalar, _) = *type_checker.resolve(expr)?;
+
+            // prepare the filter expression
+            let filter = cast_expr_to_non_null_boolean(
+                scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone()),
+            )?;
+            // prepare the inverse filter expression
+            let inverted_filter =
+                check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
+
+            Some(Filters {
+                filter: filter.as_remote_expr(),
+                inverted_filter: inverted_filter.as_remote_expr(),
+            })
+        } else {
+            None
+        };
+
+        let hilbert_query = if matches!(cluster_type, ClusterType::Hilbert) {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
+            let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
+            let cluster_keys_len = ast_exprs.len();
+            let settings = self.ctx.get_settings();
+            let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+            let cluster_key_strs = ast_exprs.into_iter().fold(
+                Vec::with_capacity(cluster_keys_len),
+                |mut acc, mut ast| {
+                    let mut normalizer = IdentifierNormalizer {
+                        ctx: &name_resolution_ctx,
+                    };
+                    ast.drive_mut(&mut normalizer);
+                    acc.push(format!("{:#}", &ast));
+                    acc
+                },
+            );
+
+            let partitions = settings.get_hilbert_num_range_ids()?;
+            let sample_size = settings.get_hilbert_sample_size_per_block()?;
+            let keys_bounds_str = cluster_key_strs
+                .iter()
+                .map(|s| format!("range_bound({partitions}, {sample_size})({s}) AS {s}_bound"))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let hilbert_keys_str = cluster_key_strs
+                .iter()
+                .map(|s| {
+                    format!(
+                        "hilbert_key(cast(ifnull(range_partition_id({table}.{s}, _keys_bound.{s}_bound), {}) as uint16))",
+                        partitions
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let quote = settings.get_sql_dialect()?.default_ident_quote();
+            let schema = tbl.schema_with_stream();
+            let mut output_with_table = Vec::with_capacity(schema.fields.len());
+            let mut output = Vec::with_capacity(schema.fields.len());
+            for field in &schema.fields {
+                output_with_table.push(format!(
+                    "{quote}{table}{quote}.{quote}{}{quote}",
+                    field.name
+                ));
+                output.push(format!("{quote}{}{quote}", field.name));
+            }
+            let output_with_table_str = output_with_table.join(", ");
+            let output_str = output.join(", ");
+
+            let query = format!(
+                "WITH _keys_bound AS ( \
+                        SELECT \
+                            {keys_bounds_str} \
+                        FROM {database}.{table} \
+                    ), \
+                    _source_data AS ( \
+                        SELECT \
+                            {output_with_table_str}, \
+                            hilbert_index([{hilbert_keys_str}], 2) AS _hilbert_index \
+                        FROM {database}.{table}, _keys_bound \
+                    ) \
+                    SELECT \
+                        {output_str} \
+                    FROM _source_data \
+                    ORDER BY _hilbert_index"
+            );
+            let tokens = tokenize_sql(query.as_str())?;
+            let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+            let Statement::Query(query) = stmt else {
+                unreachable!()
+            };
+            Some(query)
+        } else {
+            None
+        };
+
+        let recluster = RelOperator::Recluster(Recluster {
+            catalog,
+            database,
+            table,
+            limit,
+            filters,
+        });
+
+        Ok(Plan::ReclusterTable {
+            s_expr: Box::new(SExpr::create_leaf(Arc::new(recluster))),
+            hilbert_query,
+            is_final,
+        })
     }
 
     #[async_backtrace::framed]
@@ -1646,10 +1763,15 @@ impl Binder {
         } = cluster_opt;
 
         let expr_len = cluster_exprs.len();
-        if matches!(cluster_type, ClusterType::Hilbert) && !(2..=5).contains(&expr_len) {
-            return Err(ErrorCode::InvalidClusterKeys(
-                "Hilbert clustering requires the dimension to be between 2 and 5",
-            ));
+        if matches!(cluster_type, AstClusterType::Hilbert) {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
+
+            if !(2..=5).contains(&expr_len) {
+                return Err(ErrorCode::InvalidClusterKeys(
+                    "Hilbert clustering requires the dimension to be between 2 and 5",
+                ));
+            }
         }
 
         // Build a temporary BindContext to resolve the expr

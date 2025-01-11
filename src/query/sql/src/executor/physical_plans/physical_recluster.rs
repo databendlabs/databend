@@ -14,14 +14,14 @@
 
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
-use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
+use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 
-use crate::executor::physical_plans::physical_commit_sink::ReclusterInfoSideCar;
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::Exchange;
@@ -29,6 +29,8 @@ use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MutationKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::SExpr;
+use crate::ColumnSet;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Recluster {
@@ -37,30 +39,19 @@ pub struct Recluster {
     pub table_info: TableInfo,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct HilbertSerialize {
+    pub plan_id: u32,
+    pub input: Box<PhysicalPlan>,
+    pub table_info: TableInfo,
+}
+
 impl PhysicalPlanBuilder {
-    /// The flow of Pipeline is as follows:
-    // ┌──────────┐     ┌───────────────┐     ┌─────────┐
-    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┐
-    // └──────────┘     └───────────────┘     └─────────┘    │
-    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │     ┌──────────────┐     ┌─────────┐
-    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┤────►│MultiSortMerge├────►│Resize(N)├───┐
-    // └──────────┘     └───────────────┘     └─────────┘    │     └──────────────┘     └─────────┘   │
-    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │                                        │
-    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┘                                        │
-    // └──────────┘     └───────────────┘     └─────────┘                                             │
-    // ┌──────────────────────────────────────────────────────────────────────────────────────────────┘
-    // │         ┌──────────────┐
-    // │    ┌───►│SerializeBlock├───┐
-    // │    │    └──────────────┘   │
-    // │    │    ┌──────────────┐   │    ┌─────────┐    ┌────────────────┐     ┌─────────────┐     ┌──────────┐
-    // └───►│───►│SerializeBlock├───┤───►│Resize(1)├───►│SerializeSegment├────►│ReclusterAggr├────►│CommitSink│
-    //      │    └──────────────┘   │    └─────────┘    └────────────────┘     └─────────────┘     └──────────┘
-    //      │    ┌──────────────┐   │
-    //      └───►│SerializeBlock├───┘
-    //           └──────────────┘
     pub async fn build_recluster(
         &mut self,
+        s_expr: &SExpr,
         recluster: &crate::plans::Recluster,
+        required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         let crate::plans::Recluster {
             catalog,
@@ -70,100 +61,127 @@ impl PhysicalPlanBuilder {
             limit,
         } = recluster;
 
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(catalog).await?;
-        let tbl = catalog.get_table(&tenant, database, table).await?;
-        // check mutability
-        tbl.check_mutable()?;
-
+        let tbl = self.ctx.get_table(catalog, database, table).await?;
         let push_downs = filters.clone().map(|v| PushDownInfo {
             filters: Some(v),
             ..PushDownInfo::default()
         });
-        let Some((parts, snapshot)) = tbl.recluster(self.ctx.clone(), push_downs, *limit).await?
-        else {
-            return Err(ErrorCode::NoNeedToRecluster(format!(
-                "No need to do recluster for '{database}'.'{table}'"
-            )));
-        };
-        if parts.is_empty() {
-            return Err(ErrorCode::NoNeedToRecluster(format!(
-                "No need to do recluster for '{database}'.'{table}'"
-            )));
-        }
-
-        let is_distributed = parts.is_distributed(self.ctx.clone());
         let table_info = tbl.get_table_info().clone();
-        let mut plan = match parts {
-            ReclusterParts::Recluster {
-                tasks,
-                remained_blocks,
-                removed_segment_indexes,
-                removed_segment_summary,
-            } => {
-                let mut root = PhysicalPlan::Recluster(Box::new(Recluster {
-                    tasks,
-                    table_info: table_info.clone(),
-                    plan_id: u32::MAX,
-                }));
+        let is_hilbert = !s_expr.children.is_empty();
+        let mut plan = if is_hilbert {
+            let handler = get_hilbert_clustering_handler();
+            let Some((recluster_info, snapshot)) = handler
+                .do_hilbert_clustering(tbl.clone(), self.ctx.clone(), push_downs)
+                .await?
+            else {
+                return Err(ErrorCode::NoNeedToRecluster(format!(
+                    "No need to do recluster for '{database}'.'{table}'"
+                )));
+            };
 
-                if is_distributed {
-                    root = PhysicalPlan::Exchange(Exchange {
-                        plan_id: 0,
-                        input: Box::new(root),
-                        kind: FragmentKind::Merge,
-                        keys: vec![],
-                        allow_adjust_parallelism: true,
-                        ignore_exchange: false,
-                    });
-                }
-                PhysicalPlan::CommitSink(Box::new(CommitSink {
-                    input: Box::new(root),
-                    table_info,
-                    snapshot: Some(snapshot),
-                    mutation_kind: MutationKind::Recluster,
-                    update_stream_meta: vec![],
-                    merge_meta: false,
-                    deduplicated_label: None,
-                    plan_id: u32::MAX,
-                    recluster_info: Some(ReclusterInfoSideCar {
-                        merged_blocks: remained_blocks,
-                        removed_segment_indexes,
-                        removed_statistics: removed_segment_summary,
-                    }),
-                }))
+            let plan = self.build(s_expr.child(0)?, required).await?;
+            let plan = PhysicalPlan::HilbertSerialize(Box::new(HilbertSerialize {
+                plan_id: 0,
+                input: Box::new(plan),
+                table_info: table_info.clone(),
+            }));
+            PhysicalPlan::CommitSink(Box::new(CommitSink {
+                input: Box::new(plan),
+                table_info,
+                snapshot: Some(snapshot),
+                mutation_kind: MutationKind::Recluster,
+                update_stream_meta: vec![],
+                merge_meta: false,
+                deduplicated_label: None,
+                plan_id: u32::MAX,
+                recluster_info: Some(recluster_info),
+            }))
+        } else {
+            let Some((parts, snapshot)) =
+                tbl.recluster(self.ctx.clone(), push_downs, *limit).await?
+            else {
+                return Err(ErrorCode::NoNeedToRecluster(format!(
+                    "No need to do recluster for '{database}'.'{table}'"
+                )));
+            };
+            if parts.is_empty() {
+                return Err(ErrorCode::NoNeedToRecluster(format!(
+                    "No need to do recluster for '{database}'.'{table}'"
+                )));
             }
-            ReclusterParts::Compact(parts) => {
-                let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-                let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
-                    parts,
-                    table_info: table_info.clone(),
-                    column_ids: snapshot.schema.to_leaf_column_id_set(),
-                    plan_id: u32::MAX,
-                }));
 
-                if is_distributed {
-                    root = PhysicalPlan::Exchange(Exchange {
-                        plan_id: 0,
+            let is_distributed = parts.is_distributed(self.ctx.clone());
+            match parts {
+                ReclusterParts::Recluster {
+                    tasks,
+                    remained_blocks,
+                    removed_segment_indexes,
+                    removed_segment_summary,
+                } => {
+                    let mut root = PhysicalPlan::Recluster(Box::new(Recluster {
+                        tasks,
+                        table_info: table_info.clone(),
+                        plan_id: u32::MAX,
+                    }));
+
+                    if is_distributed {
+                        root = PhysicalPlan::Exchange(Exchange {
+                            plan_id: 0,
+                            input: Box::new(root),
+                            kind: FragmentKind::Merge,
+                            keys: vec![],
+                            allow_adjust_parallelism: true,
+                            ignore_exchange: false,
+                        });
+                    }
+                    PhysicalPlan::CommitSink(Box::new(CommitSink {
                         input: Box::new(root),
-                        kind: FragmentKind::Merge,
-                        keys: vec![],
-                        allow_adjust_parallelism: true,
-                        ignore_exchange: false,
-                    });
+                        table_info,
+                        snapshot: Some(snapshot),
+                        mutation_kind: MutationKind::Recluster,
+                        update_stream_meta: vec![],
+                        merge_meta: false,
+                        deduplicated_label: None,
+                        plan_id: u32::MAX,
+                        recluster_info: Some(ReclusterInfoSideCar {
+                            merged_blocks: remained_blocks,
+                            removed_segment_indexes,
+                            removed_statistics: removed_segment_summary,
+                        }),
+                    }))
                 }
+                ReclusterParts::Compact(parts) => {
+                    let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
+                    let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
+                        parts,
+                        table_info: table_info.clone(),
+                        column_ids: snapshot.schema.to_leaf_column_id_set(),
+                        plan_id: u32::MAX,
+                    }));
 
-                PhysicalPlan::CommitSink(Box::new(CommitSink {
-                    input: Box::new(root),
-                    table_info,
-                    snapshot: Some(snapshot),
-                    mutation_kind: MutationKind::Compact,
-                    update_stream_meta: vec![],
-                    merge_meta,
-                    deduplicated_label: None,
-                    plan_id: u32::MAX,
-                    recluster_info: None,
-                }))
+                    if is_distributed {
+                        root = PhysicalPlan::Exchange(Exchange {
+                            plan_id: 0,
+                            input: Box::new(root),
+                            kind: FragmentKind::Merge,
+                            keys: vec![],
+                            allow_adjust_parallelism: true,
+                            ignore_exchange: false,
+                        });
+                    }
+
+                    PhysicalPlan::CommitSink(Box::new(CommitSink {
+                        input: Box::new(root),
+                        table_info,
+                        snapshot: Some(snapshot),
+                        mutation_kind: MutationKind::Compact,
+                        update_stream_meta: vec![],
+                        merge_meta,
+                        deduplicated_label: None,
+                        plan_id: u32::MAX,
+                        recluster_info: None,
+                    }))
+                }
             }
         };
         plan.adjust_plan_id(&mut 0);

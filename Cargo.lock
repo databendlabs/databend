@@ -3992,6 +3992,7 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-hilbert-clustering",
  "databend-storages-common-cache",
  "databend-storages-common-io",
  "databend-storages-common-session",
@@ -4644,6 +4645,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-enterprise-hilbert-clustering"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-storages-common-table-meta",
+]
+
+[[package]]
 name = "databend-enterprise-inverted-index"
 version = "0.1.0"
 dependencies = [
@@ -4703,6 +4716,7 @@ dependencies = [
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
+ "databend-enterprise-hilbert-clustering",
  "databend-enterprise-inverted-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-storage-encryption",
