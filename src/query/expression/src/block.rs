@@ -93,6 +93,10 @@ pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
             "The reason for not implementing clone_self is usually because the higher-level logic doesn't allow/need the associated block to be cloned."
         )
     }
+
+    fn deserialize_skip_empty_block(&self) -> bool {
+        true
+    }
 }
 
 pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {

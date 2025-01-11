@@ -75,9 +75,9 @@ impl TransformDeserializer {
         let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
         let row_count: u32 = row_count_meta.read_scalar()?;
 
-        if row_count == 0 {
-            return Ok(DataBlock::new_with_meta(vec![], 0, meta));
-        }
+        // if row_count == 0 {
+        //     return Ok(DataBlock::new_with_meta(vec![], 0, meta));
+        // }
 
         let data_block = match &meta {
             None => {
