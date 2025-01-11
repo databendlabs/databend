@@ -22,6 +22,7 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_io::prelude::bincode_deserialize_from_slice;
@@ -69,15 +70,21 @@ impl TransformDeserializer {
     fn recv_data(&self, dict: Vec<DataPacket>, fragment_data: FragmentData) -> Result<DataBlock> {
         const ROW_HEADER_SIZE: usize = std::mem::size_of::<u32>();
 
-        let meta = bincode_deserialize_from_slice(&fragment_data.get_meta()[ROW_HEADER_SIZE..])
-            .map_err(|_| ErrorCode::BadBytes("block meta deserialize error when exchange"))?;
+        let meta: Option<BlockMetaInfoPtr> =
+            bincode_deserialize_from_slice(&fragment_data.get_meta()[ROW_HEADER_SIZE..])
+                .map_err(|_| ErrorCode::BadBytes("block meta deserialize error when exchange"))?;
 
         let mut row_count_meta = &fragment_data.get_meta()[..ROW_HEADER_SIZE];
         let row_count: u32 = row_count_meta.read_scalar()?;
 
-        // if row_count == 0 {
-        //     return Ok(DataBlock::new_with_meta(vec![], 0, meta));
-        // }
+        if row_count == 0
+            && meta
+                .as_ref()
+                .map(|m| m.deserialize_skip_empty_block())
+                .unwrap_or(true)
+        {
+            return Ok(DataBlock::new_with_meta(vec![], 0, meta));
+        }
 
         let data_block = match &meta {
             None => {
