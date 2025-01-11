@@ -475,6 +475,14 @@ pub trait Table: Sync + Send {
     fn use_own_sample_block(&self) -> bool {
         false
     }
+
+    async fn remove_aggregating_index_files(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _index_id: u64,
+    ) -> Result<u64> {
+        Ok(0)
+    }
 }
 
 #[async_trait::async_trait]
