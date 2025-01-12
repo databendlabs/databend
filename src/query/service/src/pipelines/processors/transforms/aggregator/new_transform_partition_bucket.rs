@@ -212,6 +212,7 @@ impl NewTransformPartitionBucket {
     #[allow(unused_assignments)]
     fn add_bucket(&mut self, mut data_block: DataBlock) -> Result<(isize, usize)> {
         let (mut bucket, mut partition_count) = (0, 0);
+        let mut is_empty_block = false;
         if let Some(block_meta) = data_block.get_meta() {
             if let Some(block_meta) = AggregateMeta::downcast_ref_from(block_meta) {
                 (bucket, partition_count) = match block_meta {
@@ -274,6 +275,7 @@ impl NewTransformPartitionBucket {
                         unreachable!()
                     }
                     AggregateMeta::Serialized(payload) => {
+                        is_empty_block = payload.data_block.is_empty();
                         self.max_partition_count =
                             self.max_partition_count.max(payload.max_partition_count);
 
@@ -298,23 +300,25 @@ impl NewTransformPartitionBucket {
             ));
         }
 
-        if self.all_inputs_init {
-            if partition_count != self.max_partition_count {
-                return Err(ErrorCode::Internal(
+        if !is_empty_block {
+            if self.all_inputs_init {
+                if partition_count != self.max_partition_count {
+                    return Err(ErrorCode::Internal(
                     "Internal, the partition count does not equal the max partition count on TransformPartitionBucket.
                     ",
                 ));
+                }
+                match self.buckets_blocks.entry(bucket) {
+                    Entry::Vacant(v) => {
+                        v.insert(vec![data_block]);
+                    }
+                    Entry::Occupied(mut v) => {
+                        v.get_mut().push(data_block);
+                    }
+                };
+            } else {
+                self.unpartitioned_blocks.push(data_block);
             }
-            match self.buckets_blocks.entry(bucket) {
-                Entry::Vacant(v) => {
-                    v.insert(vec![data_block]);
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().push(data_block);
-                }
-            };
-        } else {
-            self.unpartitioned_blocks.push(data_block);
         }
 
         Ok((bucket, partition_count))
