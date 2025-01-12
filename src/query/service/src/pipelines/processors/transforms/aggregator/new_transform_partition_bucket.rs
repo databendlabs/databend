@@ -251,7 +251,11 @@ impl NewTransformPartitionBucket {
                         if let Some(AggregateMeta::Spilled(buckets_payload)) =
                             AggregateMeta::downcast_from(meta)
                         {
-                            let partition_count = buckets_payload[0].max_partition_count;
+                            let partition_count = if !buckets_payload.is_empty() {
+                                buckets_payload[0].max_partition_count
+                            } else {
+                                MAX_PARTITION_COUNT
+                            };
                             self.max_partition_count =
                                 self.max_partition_count.max(partition_count);
 
