@@ -207,7 +207,7 @@ impl Table for MemoryTable {
         let parts = vec![MemoryPartInfo::create()];
         return Ok((
             statistics,
-            Partitions::create(PartitionsShuffleKind::Broadcast, parts),
+            Partitions::create(PartitionsShuffleKind::BroadcastCluster, parts),
         ));
     }
 

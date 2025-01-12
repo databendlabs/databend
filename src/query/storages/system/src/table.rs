@@ -77,9 +77,9 @@ pub trait SyncSystemTable: Send + Sync {
             )),
             false => Ok((
                 PartStatistics::default(),
-                Partitions::create(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
-                    SystemTablePart,
-                ))]),
+                Partitions::create(PartitionsShuffleKind::BroadcastWarehouse, vec![Arc::new(
+                    Box::new(SystemTablePart),
+                )]),
             )),
         }
     }
@@ -222,9 +222,9 @@ pub trait AsyncSystemTable: Send + Sync {
             )),
             false => Ok((
                 PartStatistics::default(),
-                Partitions::create(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
-                    SystemTablePart,
-                ))]),
+                Partitions::create(PartitionsShuffleKind::BroadcastWarehouse, vec![Arc::new(
+                    Box::new(SystemTablePart),
+                )]),
             )),
         }
     }

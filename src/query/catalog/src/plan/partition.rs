@@ -102,7 +102,7 @@ pub enum PartitionsShuffleKind {
     // Bind the Partition to executor by partition.rand() order.
     Rand,
     // Bind the Partition to executor by broadcast
-    Broadcast,
+    BroadcastCluster,
     // Bind the Partition to warehouse executor by broadcast
     BroadcastWarehouse,
 }
@@ -193,7 +193,7 @@ impl Partitions {
                 parts
             }
             // the executors will be all nodes in the warehouse if a query is BroadcastWarehouse.
-            PartitionsShuffleKind::Broadcast | PartitionsShuffleKind::BroadcastWarehouse => {
+            PartitionsShuffleKind::BroadcastCluster | PartitionsShuffleKind::BroadcastWarehouse => {
                 return Ok(executors_sorted
                     .into_iter()
                     .map(|executor| {

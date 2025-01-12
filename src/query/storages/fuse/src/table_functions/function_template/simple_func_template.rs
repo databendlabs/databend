@@ -149,9 +149,9 @@ impl<T: SimpleTableFunc> Table for TableFunctionTemplate<T> {
             )),
             false => Ok((
                 PartStatistics::default(),
-                Partitions::create(PartitionsShuffleKind::Broadcast, vec![Arc::new(Box::new(
-                    PlaceHolder,
-                ))]),
+                Partitions::create(PartitionsShuffleKind::BroadcastWarehouse, vec![Arc::new(
+                    Box::new(PlaceHolder),
+                )]),
             )),
         }
     }

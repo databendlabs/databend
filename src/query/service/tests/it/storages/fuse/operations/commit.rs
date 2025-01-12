@@ -882,7 +882,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_cluster(&self, cluster: Arc<Cluster>) {
+    fn set_cluster(&self, _: Arc<Cluster>) {
         todo!()
     }
 }
