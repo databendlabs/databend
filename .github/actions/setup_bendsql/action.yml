@@ -7,7 +7,7 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        if bendsql --version; then
+        if command -v bendsql >/dev/null 2>&1; then
           exit 0
         fi
         case $RUNNER_PROVIDER in
@@ -29,7 +29,7 @@ runs:
       if: runner.os == 'macOS'
       shell: bash
       run: |
-        if bendsql --version; then
+        if command -v bendsql >/dev/null 2>&1; then
           exit 0
         fi
         brew install databendcloud/homebrew-tap/bendsql

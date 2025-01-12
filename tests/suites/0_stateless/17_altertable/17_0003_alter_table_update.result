@@ -1,8 +1,12 @@
 alter table add a column
 update table column
+1
 alter table drop a column
 update table column
+0
 alter table add a column
 update table column
+1
 alter table drop a column
 update table column
+0

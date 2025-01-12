@@ -20,10 +20,12 @@ Error: APIError: QueryFailed: [1063]Permission denied: privilege [Delete] is req
 2
 test -- update
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Update] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+1
 2
 3
 test -- delete
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+1
 true
 test -- insert overwrite
 2
