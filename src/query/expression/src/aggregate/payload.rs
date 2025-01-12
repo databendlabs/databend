@@ -408,7 +408,7 @@ impl Payload {
             .chain(
                 self.group_types
                     .iter()
-                    .map(|t| ColumnBuilder::with_capacity(t, fake_rows).build()),
+                    .map(|t| ColumnBuilder::repeat_default(t, fake_rows).build()),
             )
             .collect_vec();
         DataBlock::new_from_columns(columns)
