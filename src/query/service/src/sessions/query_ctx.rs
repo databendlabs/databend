@@ -976,6 +976,10 @@ impl TableContext for QueryContext {
         self.shared.get_cluster()
     }
 
+    fn set_cluster(&self, cluster: Arc<Cluster>) {
+        self.shared.set_cluster(cluster)
+    }
+
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
@@ -1140,10 +1144,9 @@ impl TableContext for QueryContext {
             if actual_batch_limit != max_batch_size {
                 return Err(ErrorCode::StorageUnsupported(
                     format!(
-                    "Within the same transaction, the batch size for a stream must remain consistent {:?} {:?}",
+                        "Within the same transaction, the batch size for a stream must remain consistent {:?} {:?}",
                         actual_batch_limit, max_batch_size
                     )
-
                 ));
             }
         } else if max_batch_size.is_some() {

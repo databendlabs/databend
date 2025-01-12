@@ -15,12 +15,14 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_sql::planner::query_executor::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
 
+use crate::clusters::ClusterDiscovery;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -65,6 +67,13 @@ pub async fn build_query_pipeline_without_render_result_set(
     let build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan).await
     } else {
+        if plan.is_warehouse_distributed_plan() {
+            let config = GlobalConfig::instance();
+            let discovery = ClusterDiscovery::instance();
+            let all_warehouse_node_in_cluster = discovery.discover_warehouse_nodes(&config).await?;
+            ctx.set_cluster(all_warehouse_node_in_cluster);
+        }
+
         build_distributed_pipeline(ctx, plan).await
     }?;
     Ok(build_res)

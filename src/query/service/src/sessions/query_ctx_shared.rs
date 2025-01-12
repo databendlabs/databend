@@ -91,7 +91,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
-    pub(in crate::sessions) cluster_cache: Arc<Cluster>,
+    pub(in crate::sessions) cluster_cache: Arc<RwLock<Arc<Cluster>>>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     pub(in crate::sessions) running_query_text_hash: Arc<RwLock<Option<String>>>,
@@ -158,7 +158,7 @@ impl QueryContextShared {
             query_settings: Settings::create(session.get_current_tenant()),
             catalog_manager: CatalogManager::instance(),
             session,
-            cluster_cache,
+            cluster_cache: Arc::new(RwLock::new(cluster_cache)),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             total_scan_values: Arc::new(Progress::create()),
@@ -263,8 +263,13 @@ impl QueryContextShared {
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
+    pub fn set_cluster(&self, cluster: Arc<Cluster>) {
+        let mut cluster_cache = self.cluster_cache.write();
+        *cluster_cache = cluster;
+    }
+
     pub fn get_cluster(&self) -> Arc<Cluster> {
-        self.cluster_cache.clone()
+        self.cluster_cache.read().clone()
     }
 
     pub fn get_current_catalog(&self) -> String {

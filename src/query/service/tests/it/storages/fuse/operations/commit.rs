@@ -881,6 +881,10 @@ impl TableContext for CtxDelegation {
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
         todo!()
     }
+
+    fn set_cluster(&self, cluster: Arc<Cluster>) {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -273,17 +273,11 @@ impl ClusterDiscovery {
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
-    #[async_backtrace::framed]
-    pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        let nodes = match config.query.cluster_id.is_empty() {
-            true => self.warehouse_manager.discover(&config.query.node_id).await,
-            false => {
-                self.warehouse_manager
-                    .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
-                    .await
-            }
-        };
-
+    async fn create_cluster_with_try_connect(
+        &self,
+        config: &InnerConfig,
+        nodes: Result<Vec<NodeInfo>>,
+    ) -> Result<Arc<Cluster>> {
         match nodes {
             Err(cause) => {
                 metric_incr_cluster_error_count(
@@ -334,6 +328,37 @@ impl ClusterDiscovery {
                 Ok(Cluster::create(res, self.local_id.clone()))
             }
         }
+    }
+
+    pub async fn discover_warehouse_nodes(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
+        let nodes = match config.query.cluster_id.is_empty() {
+            true => {
+                self.warehouse_manager
+                    .discover_warehouse_nodes(&config.query.node_id)
+                    .await
+            }
+            false => {
+                self.warehouse_manager
+                    .list_warehouse_nodes(self.cluster_id.clone())
+                    .await
+            }
+        };
+
+        self.create_cluster_with_try_connect(config, nodes).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
+        let nodes = match config.query.cluster_id.is_empty() {
+            true => self.warehouse_manager.discover(&config.query.node_id).await,
+            false => {
+                self.warehouse_manager
+                    .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
+                    .await
+            }
+        };
+
+        self.create_cluster_with_try_connect(config, nodes).await
     }
 
     pub async fn find_node_by_warehouse(

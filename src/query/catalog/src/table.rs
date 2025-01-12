@@ -450,7 +450,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn broadcast_truncate_to_cluster(&self) -> bool {
+    fn broadcast_truncate_to_warehouse(&self) -> bool {
         false
     }
 

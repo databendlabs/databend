@@ -155,7 +155,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         self.inner_table.truncate(ctx, pipeline)
     }
 
-    fn broadcast_truncate_to_cluster(&self) -> bool {
+    fn broadcast_truncate_to_warehouse(&self) -> bool {
         TTable::BROADCAST_TRUNCATE
     }
 }

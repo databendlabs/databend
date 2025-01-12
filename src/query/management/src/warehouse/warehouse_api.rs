@@ -128,5 +128,7 @@ pub trait WarehouseApi: Sync + Send {
 
     async fn discover(&self, node_id: &str) -> Result<Vec<NodeInfo>>;
 
+    async fn discover_warehouse_nodes(&self, node_id: &str) -> Result<Vec<NodeInfo>>;
+
     async fn get_node_info(&self, node_id: &str) -> Result<Option<NodeInfo>>;
 }
