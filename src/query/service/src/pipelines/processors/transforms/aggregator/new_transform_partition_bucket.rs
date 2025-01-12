@@ -286,6 +286,7 @@ impl NewTransformPartitionBucket {
                         (payload.bucket, payload.max_partition_count)
                     }
                     AggregateMeta::AggregatePayload(payload) => {
+                        is_empty_block = payload.payload.len() == 0;
                         self.max_partition_count =
                             self.max_partition_count.max(payload.max_partition_count);
 
