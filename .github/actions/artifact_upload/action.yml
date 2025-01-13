@@ -44,6 +44,12 @@ runs:
         aws s3 sync ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/ \
           s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
           --exclude "*" --include "databend-*" --no-progress
+        if [[ -f ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ]]; then
+          aws s3 presign s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-query --expires-in 21600
+        fi
+        if [[ -f ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-meta ]]; then
+          aws s3 presign s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-meta --expires-in 21600
+        fi
 
     - name: Upload artifact to gcs
       if: env.RUNNER_PROVIDER == 'gcp'
