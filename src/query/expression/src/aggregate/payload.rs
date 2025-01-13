@@ -339,6 +339,7 @@ impl Payload {
                 )
             }
             page.rows += 1;
+            page.state_rows += 1;
 
             if page.rows == page.capacity {
                 page = self.writable_page();
