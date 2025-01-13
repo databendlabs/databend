@@ -586,7 +586,7 @@ result_large_err = "allow"
 debug = 1
 lto = "thin"
 overflow-checks = false
-opt-level = "s"         ## defaults to be 3
+opt-level = "s"         # defaults to be 3
 incremental = true
 
 [profile.ci]
