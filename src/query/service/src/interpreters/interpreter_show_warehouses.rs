@@ -63,6 +63,7 @@ impl Interpreter for ShowWarehousesInterpreter {
         let mut warehouses_status =
             ColumnBuilder::with_capacity(&DataType::String, warehouses.len());
 
+        let visibility_checker = self.ctx.get_visibility_checker(false).await?;
         for warehouse in warehouses {
             match warehouse {
                 WarehouseInfo::SelfManaged(name) => {
@@ -71,9 +72,12 @@ impl Interpreter for ShowWarehousesInterpreter {
                     warehouses_status.push(Scalar::String(String::from("Running")).as_ref());
                 }
                 WarehouseInfo::SystemManaged(v) => {
-                    warehouses_name.push(Scalar::String(v.id.clone()).as_ref());
-                    warehouses_type.push(Scalar::String(String::from("System-Managed")).as_ref());
-                    warehouses_status.push(Scalar::String(v.status.clone()).as_ref());
+                    if visibility_checker.check_warehouse_visibility(&v.role_id) {
+                        warehouses_name.push(Scalar::String(v.id.clone()).as_ref());
+                        warehouses_type
+                            .push(Scalar::String(String::from("System-Managed")).as_ref());
+                        warehouses_status.push(Scalar::String(v.status.clone()).as_ref());
+                    }
                 }
             }
         }
