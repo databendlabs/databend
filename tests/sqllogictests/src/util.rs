@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
 
+use bollard::container::RemoveContainerOptions;
 use bollard::Docker;
 use clap::Parser;
 use redis::Commands;
@@ -256,12 +257,9 @@ pub async fn run_ttc_container(
     let start = Instant::now();
     println!("Start container {container_name}");
 
-    // Stop the container
-    let _ = docker.stop_container(&container_name, None).await;
-    let _ = docker.remove_container(&container_name, None).await;
-
     let mut i = 1;
     loop {
+        stop_container(docker, &container_name).await;
         let container_res = GenericImage::new(image, tag)
             .with_exposed_port(port.tcp())
             .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
@@ -327,12 +325,9 @@ async fn run_redis_server(docker: &Docker) -> Result<ContainerAsync<Redis>> {
     let container_name = "redis".to_string();
     println!("Start container {container_name}");
 
-    // Stop the container
-    let _ = docker.stop_container(&container_name, None).await;
-    let _ = docker.remove_container(&container_name, None).await;
-
     let mut i = 1;
     loop {
+        stop_container(docker, &container_name).await;
         let redis_res = Redis::default()
             .with_network("host")
             .with_startup_timeout(Duration::from_secs(CONTAINER_STARTUP_TIMEOUT_SECONDS))
@@ -381,10 +376,6 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
     let container_name = "mysql".to_string();
     println!("Start container {container_name}");
 
-    // Stop the container
-    let _ = docker.stop_container(&container_name, None).await;
-    let _ = docker.remove_container(&container_name, None).await;
-
     // Add a table for test.
     // CREATE TABLE test.user(
     //   id INT,
@@ -405,6 +396,7 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
     // +------+-------+------+---------+--------+
     let mut i = 1;
     loop {
+        stop_container(docker, &container_name).await;
         let mysql_res = Mysql::default()
             .with_init_sql(
     "CREATE TABLE test.user(id INT, name VARCHAR(100), age SMALLINT UNSIGNED, salary DOUBLE, active BOOL); \
@@ -445,4 +437,17 @@ async fn run_mysql_server(docker: &Docker) -> Result<ContainerAsync<Mysql>> {
         }
     }
     Err(format!("Start {container_name} failed").into())
+}
+
+// Stop the running container to avoid conflict
+async fn stop_container(docker: &Docker, container_name: &str) {
+    if docker.inspect_container(container_name, None).await.is_ok() {
+        let _ = docker.stop_container(container_name, None).await;
+        let options = Some(RemoveContainerOptions {
+            force: true,
+            ..Default::default()
+        });
+        let _ = docker.remove_container(container_name, options).await;
+        println!("Stop container {container_name}");
+    }
 }
