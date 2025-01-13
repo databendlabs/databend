@@ -157,6 +157,7 @@ impl Transform for CompoundBlockOperator {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        println!("data_block -> {:?}", data_block);
         self.operators
             .iter()
             .try_fold(data_block, |input, op| op.execute(&self.ctx, input))

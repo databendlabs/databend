@@ -449,6 +449,7 @@ impl<T: Number> TransformWindow<T> {
                 let mut output = block.block.clone();
                 let data_type = block.builder.data_type();
                 // The memory of the builder can be released.
+                println!("block.builder {}", block.builder.data_type());
                 let builder = std::mem::replace(
                     &mut block.builder,
                     ColumnBuilder::with_capacity(&data_type, 0),
@@ -1327,6 +1328,7 @@ where T: Number + ResultTypeOfUnary
             }
             ProcessorState::Output => {
                 let output = self.outputs.pop_front().unwrap();
+                println!("output {}", output);
                 self.output.push_data(Ok(output));
                 if self.outputs.is_empty() {
                     self.state = ProcessorState::Consume;
