@@ -21,6 +21,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
@@ -64,8 +65,8 @@ pub trait SimpleTableFunc: Send + Sync + 'static {
         "table_func_template".to_owned()
     }
 
-    fn is_local_func(&self) -> bool {
-        true
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Local
     }
 
     fn table_args(&self) -> Option<TableArgs>;
@@ -129,8 +130,8 @@ impl<T: SimpleTableFunc> Table for TableFunctionTemplate<T> {
         &self.table_info
     }
 
-    fn is_local(&self) -> bool {
-        self.inner.is_local_func()
+    fn distribution_level(&self) -> DistributionLevel {
+        self.inner.distribution_level()
     }
 
     #[async_backtrace::framed]
@@ -140,14 +141,20 @@ impl<T: SimpleTableFunc> Table for TableFunctionTemplate<T> {
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        match self.inner.is_local_func() {
-            true => Ok((
+        match self.inner.distribution_level() {
+            DistributionLevel::Local => Ok((
                 PartStatistics::default(),
                 Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(Box::new(
                     PlaceHolder,
                 ))]),
             )),
-            false => Ok((
+            DistributionLevel::Cluster => Ok((
+                PartStatistics::default(),
+                Partitions::create(PartitionsShuffleKind::BroadcastCluster, vec![Arc::new(
+                    Box::new(PlaceHolder),
+                )]),
+            )),
+            DistributionLevel::Warehouse => Ok((
                 PartStatistics::default(),
                 Partitions::create(PartitionsShuffleKind::BroadcastWarehouse, vec![Arc::new(
                     Box::new(PlaceHolder),

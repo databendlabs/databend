@@ -23,6 +23,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -150,8 +151,8 @@ impl<Event: SystemLogElement + 'static> SystemLogTable<Event> {
 
 #[async_trait::async_trait]
 impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Warehouse
     }
 
     fn as_any(&self) -> &dyn Any {
