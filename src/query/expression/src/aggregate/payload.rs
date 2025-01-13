@@ -281,17 +281,27 @@ impl Payload {
 
         write_offset += 8;
         debug_assert!(write_offset == self.state_offset);
-        if let Some(layout) = &self.states_layout {
+        if let Some(StatesLayout {
+            layout, states_loc, ..
+        }) = &self.states_layout
+        {
             // write states
-            for idx in select_vector.iter().take(new_group_rows).copied() {
-                let place = self.arena.alloc_layout(layout.layout);
+            let n = select_vector.len().min(new_group_rows);
+            let (array_layout, padded_size) = layout.repeat(n).unwrap();
+            let place = self.arena.alloc_layout(array_layout);
+            for (idx, place) in select_vector
+                .iter()
+                .take(new_group_rows)
+                .copied()
+                .zip((0..n).map(|i| unsafe { place.add(padded_size * i) }))
+            {
                 unsafe {
                     let dst = address[idx].add(write_offset);
                     store::<u64>(&(place.as_ptr() as u64), dst as *mut u8);
                 }
 
                 let place = StateAddr::from(place);
-                for (aggr, loc) in self.aggrs.iter().zip(layout.states_loc.iter()) {
+                for (aggr, loc) in self.aggrs.iter().zip(states_loc.iter()) {
                     {
                         aggr.init_state(AggrState::new(place, loc));
                     }
