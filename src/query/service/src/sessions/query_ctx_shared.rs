@@ -22,15 +22,13 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
-use databend_common_ast::ast::Query;
 use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressHook;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::metrics::Counter;
-use databend_common_base::runtime::metrics::FamilyCounter;
+use databend_common_base::runtime::metrics::InnerFamilyCounter;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
@@ -676,10 +674,10 @@ impl Drop for QueryContextShared {
 }
 
 struct QueryProgressMetrics {
-    scan_rows: Arc<FamilyCounter<Vec<(&'static str, String)>>>,
-    scan_bytes: Arc<FamilyCounter<Vec<(&'static str, String)>>>,
-    write_rows: Arc<FamilyCounter<Vec<(&'static str, String)>>>,
-    write_bytes: Arc<FamilyCounter<Vec<(&'static str, String)>>>,
+    scan_rows: Arc<InnerFamilyCounter<Vec<(&'static str, String)>>>,
+    scan_bytes: Arc<InnerFamilyCounter<Vec<(&'static str, String)>>>,
+    write_rows: Arc<InnerFamilyCounter<Vec<(&'static str, String)>>>,
+    write_bytes: Arc<InnerFamilyCounter<Vec<(&'static str, String)>>>,
 }
 
 impl QueryProgressMetrics {
@@ -689,37 +687,48 @@ impl QueryProgressMetrics {
             ("cluster", cluster.to_string()),
         ];
 
+        let scan_rows = databend_common_metrics::interpreter::QUERY_PROGRESS_SCAN_ROWS
+            .get_or_create(&common_labels);
+        let scan_bytes = databend_common_metrics::interpreter::QUERY_PROGRESS_SCAN_BYTES
+            .get_or_create(&common_labels);
+        let write_rows = databend_common_metrics::interpreter::QUERY_PROGRESS_WRITE_ROWS
+            .get_or_create(&common_labels);
+        let write_bytes = databend_common_metrics::interpreter::QUERY_PROGRESS_WRITE_BYTES
+            .get_or_create(&common_labels);
+
         Self {
-            scan_rows: databend_common_metrics::interpreter::QUERY_PROGRESS_SCAN_ROWS
-                .get_or_create(&common_labels),
-            scan_bytes: databend_common_metrics::interpreter::QUERY_PROGRESS_SCAN_BYTES
-                .get_or_create(&common_labels),
-            write_rows: databend_common_metrics::interpreter::QUERY_PROGRESS_WRITE_ROWS
-                .get_or_create(&common_labels),
-            write_bytes: databend_common_metrics::interpreter::QUERY_PROGRESS_WRITE_BYTES
-                .get_or_create(&common_labels),
+            scan_rows,
+            scan_bytes,
+            write_rows,
+            write_bytes,
         }
     }
 
-    fn scan_progress_hook(&self) -> QueryProgressMetricsHook {
-        QueryProgressMetricsHook::new(self.scan_rows.clone(), self.scan_bytes.clone())
+    fn scan_progress_hook(&self) -> Box<QueryProgressMetricsHook> {
+        Box::new(QueryProgressMetricsHook::new(
+            self.scan_rows.clone(),
+            self.scan_bytes.clone(),
+        ))
     }
 
-    fn write_progress_hook(&self) -> QueryProgressMetricsHook {
-        QueryProgressMetricsHook::new(self.write_rows.clone(), self.write_bytes.clone())
+    fn write_progress_hook(&self) -> Box<QueryProgressMetricsHook> {
+        Box::new(QueryProgressMetricsHook::new(
+            self.write_rows.clone(),
+            self.write_bytes.clone(),
+        ))
     }
 }
 
 #[derive(Debug)]
 pub struct QueryProgressMetricsHook {
-    rows_metrics: Arc<FamilyCounter<Vec<(&'static str, String)>>>,
-    bytes_metrics: Arc<FamilyCounter<Vec<(&'static str, String)>>>,
+    rows_metrics: Arc<InnerFamilyCounter<Vec<(&'static str, String)>>>,
+    bytes_metrics: Arc<InnerFamilyCounter<Vec<(&'static str, String)>>>,
 }
 
 impl QueryProgressMetricsHook {
     pub fn new(
-        rows_metrics: Arc<FamilyCounter<Vec<(&'static str, String)>>>,
-        bytes_metrics: Arc<FamilyCounter<Vec<(&'static str, String)>>>,
+        rows_metrics: Arc<InnerFamilyCounter<Vec<(&'static str, String)>>>,
+        bytes_metrics: Arc<InnerFamilyCounter<Vec<(&'static str, String)>>>,
     ) -> Self {
         Self {
             rows_metrics,

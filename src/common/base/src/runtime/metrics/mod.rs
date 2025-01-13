@@ -22,6 +22,9 @@ mod registry;
 mod sample;
 
 pub use counter::Counter;
+pub use family_metrics::FamilyCounter as InnerFamilyCounter;
+pub use family_metrics::FamilyGauge as InnerFamilyGauge;
+pub use family_metrics::FamilyHistogram as InnerFamilyHistogram;
 pub use gauge::Gauge;
 pub use histogram::Histogram;
 pub use histogram::BUCKET_MILLISECONDS;
