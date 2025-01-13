@@ -114,3 +114,4 @@ mod v113_warehouse_grantobject;
 mod v114_interval_datatype;
 mod v115_add_udaf_script;
 mod v116_marked_deleted_index_meta;
+mod v117_warehouse_ownershipobject;
