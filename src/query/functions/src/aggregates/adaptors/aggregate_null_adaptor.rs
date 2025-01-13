@@ -432,22 +432,17 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
                     if !valid {
                         continue;
                     }
-                    let place = if NULLABLE_RESULT {
-                        let place = AggrState::new(*place, loc);
+                    let place = AggrState::new(*place, loc);
+                    if NULLABLE_RESULT {
                         set_flag(place, true);
-                        place.remove_last_loc()
-                    } else {
-                        AggrState::new(*place, loc)
-                    };
-                    if !NULLABLE_RESULT {
-                        self.nested.accumulate_row(place, not_null_columns, row)?;
-                    } else {
                         self.nested.accumulate_row(
                             place.remove_last_loc(),
                             not_null_columns,
                             row,
                         )?;
-                    }
+                    } else {
+                        self.nested.accumulate_row(place, not_null_columns, row)?;
+                    };
                 }
                 Ok(())
             }
