@@ -27,6 +27,7 @@ use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
+use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use futures::TryStreamExt;
 
@@ -156,13 +157,24 @@ impl UdfMgr {
     ) -> Result<Option<SeqV<UserDefinedFunction>>, MetaError> {
         let key = UdfIdent::new(&self.tenant, udf_name);
         let req = UpsertPB::delete(key).with(seq);
-        let res = self.kv_api.upsert_pb(&req).await?;
-
-        if res.is_changed() {
-            Ok(res.prev)
+        if let Ok(res) = self.kv_api.upsert_pb(&req).await {
+            if res.is_changed() {
+                Ok(res.prev)
+            } else {
+                Ok(None)
+            }
         } else {
+            self.try_drop_old_udf(udf_name).await?;
             Ok(None)
         }
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn try_drop_old_udf(&self, udf_name: &str) -> Result<(), MetaError> {
+        let key = UdfIdent::new(&self.tenant, udf_name);
+        let _res = self.kv_api.upsert_kv(UpsertKV::delete(&key)).await?;
+        Ok(())
     }
 
     fn ensure_non_builtin(&self, name: &str) -> Result<(), UdfError> {

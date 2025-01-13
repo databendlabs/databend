@@ -28,6 +28,8 @@ use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::Operation;
+use databend_common_meta_types::UpsertKV;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_add_udf() -> Result<()> {
@@ -106,6 +108,33 @@ async fn test_add_udf() -> Result<()> {
         catch => panic!("GetKVActionReply{:?}", catch),
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_drop_old_udf() -> Result<()> {
+    let (kv_api, udf_api) = new_udf_api().await?;
+
+    // lambda udf
+    let udf = create_test_lambda_udf();
+    let udf_key = format!("__fd_udfs/admin/{}", udf.name);
+
+    let v = serde_json::to_vec("test")?;
+    let kv_api = kv_api.clone();
+    let _upsert_kv = kv_api
+        .upsert_kv(UpsertKV::new(
+            &udf_key,
+            MatchSeq::Exact(0),
+            Operation::Update(v),
+            None,
+        ))
+        .await?;
+    let err = udf_api.list_udf().await.is_err();
+    assert!(err);
+
+    udf_api.drop_udf(&udf.name, MatchSeq::GE(1)).await?;
+    let udfs = udf_api.list_udf().await?;
+    assert_eq!(udfs, vec![]);
     Ok(())
 }
 
