@@ -50,3 +50,4 @@ before vacuum, should be 1 index dir
 >>>> create or replace aggregating index index AS SELECT MIN(a), MAX(b) FROM test_vacuum_drop_aggregating_index.agg;
 after vacuum, should be 0 index dir
 0
+>>>> drop aggregating index index

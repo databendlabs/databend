@@ -118,3 +118,5 @@ stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregat
 
 echo "after vacuum, should be 0 index dir"
 find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX"/_i_a/ -type f | wc -l
+
+stmt "drop aggregating index index"
