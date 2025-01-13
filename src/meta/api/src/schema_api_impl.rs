@@ -802,21 +802,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             txn.if_then.push(TxnOp::delete(
                 IndexIdToNameIdent::new_generic(name_ident.tenant(), seq_id.data).to_string_key(),
             ));
-
-            // add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta
-            let marked_deleted_index_id_ident = MarkedDeletedIndexIdIdent::new_generic(
+            txn.if_then.push(mark_index_as_deleted(
                 name_ident.tenant(),
-                MarkedDeletedIndexId::new(seq_meta.data.table_id, *seq_id.data),
-            );
-            let marked_deleted_index_meta = MarkedDeletedIndexMeta {
-                dropped_on: Utc::now(),
-                index_type: MarkedDeletedIndexType::AGGREGATING,
-            };
-
-            txn.if_then.push(TxnOp::put(
-                marked_deleted_index_id_ident.to_string_key(),
-                serialize_struct(&marked_deleted_index_meta)?,
-            ));
+                seq_meta.data.table_id,
+                *seq_id.data,
+            )?);
 
             let (succ, _responses) = send_txn(self, txn).await?;
             debug!(key :? =name_ident, id :? =&id_ident,succ = succ; "{}", func_name!());
@@ -4176,4 +4166,25 @@ fn typ<K>() -> &'static str {
         .rsplit("::")
         .next()
         .unwrap_or("UnknownType")
+}
+
+/// add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta
+pub fn mark_index_as_deleted(
+    tenant: &Tenant,
+    table_id: u64,
+    index_id: u64,
+) -> Result<TxnOp, MetaError> {
+    let marked_deleted_index_id_ident = MarkedDeletedIndexIdIdent::new_generic(
+        tenant,
+        MarkedDeletedIndexId::new(table_id, index_id),
+    );
+    let marked_deleted_index_meta = MarkedDeletedIndexMeta {
+        dropped_on: Utc::now(),
+        index_type: MarkedDeletedIndexType::AGGREGATING,
+    };
+
+    Ok(TxnOp::put(
+        marked_deleted_index_id_ident.to_string_key(),
+        serialize_struct(&marked_deleted_index_meta)?,
+    ))
 }

@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::fmt::Debug;
 
 use crate::kvapi;
 
 /// A value that can be stored in kvapi::KVApi.
-pub trait Value: Debug {
+pub trait Value: Debug + Any {
     type KeyType: kvapi::Key;
 
     /// Return keys this value depends on.
