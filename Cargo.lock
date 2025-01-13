@@ -3397,7 +3397,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "hickory-resolver",
- "hyper 0.14.30",
  "hyper 1.4.1",
  "hyper-util",
  "jwt-simple",
