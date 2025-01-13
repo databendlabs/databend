@@ -40,8 +40,8 @@ const METRIC_QUERY_RESULT_ROWS: &str = "query_result_rows";
 const METRIC_QUERY_RESULT_BYTES: &str = "query_result_bytes";
 const METRIC_QUERY_PROGRESS_SCAN_ROWS: &str = "query_progress_scan_rows";
 const METRIC_QUERY_PROGRESS_SCAN_BYTES: &str = "query_progress_scan_bytes";
-const METRIC_QUERY_PROGRSS_WRITE_ROWS: &str = "query_progress_write_rows";
-const METRIC_QUERY_PROGRSS_WRITE_BYTES: &str = "query_progress_write_bytes";
+const METRIC_QUERY_PROGRESS_WRITE_ROWS: &str = "query_progress_write_rows";
+const METRIC_QUERY_PROGRESS_WRITE_BYTES: &str = "query_progress_write_bytes";
 
 pub static QUERY_START: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_START));
@@ -83,6 +83,6 @@ pub static QUERY_PROGRESS_SCAN_ROWS: LazyLock<FamilyCounter<VecLabels>> =
 pub static QUERY_PROGRESS_SCAN_BYTES: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_PROGRESS_SCAN_BYTES));
 pub static QUERY_PROGRESS_WRITE_ROWS: LazyLock<FamilyCounter<VecLabels>> =
-    LazyLock::new(|| register_counter_family(METRIC_QUERY_PROGRSS_WRITE_ROWS));
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_PROGRESS_WRITE_ROWS));
 pub static QUERY_PROGRESS_WRITE_BYTES: LazyLock<FamilyCounter<VecLabels>> =
-    LazyLock::new(|| register_counter_family(METRIC_QUERY_PROGRSS_WRITE_BYTES));
+    LazyLock::new(|| register_counter_family(METRIC_QUERY_PROGRESS_WRITE_BYTES));
