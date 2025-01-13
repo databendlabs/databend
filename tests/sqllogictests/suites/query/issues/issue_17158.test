@@ -1,0 +1,8 @@
+statement ok
+create table tt2 (c0 bool, c1 int);
+
+statement ok
+insert into tt2 values(true, 1),(false, 2),(true, 3);
+
+statement ok
+select null, c0, 30, c1 from tt2 where false order by c0 LIMIT 3 OFFSET 0;
