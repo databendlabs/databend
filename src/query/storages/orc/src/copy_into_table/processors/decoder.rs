@@ -106,7 +106,7 @@ impl StripeDecoderForCopy {
                 display_name, id, ..
             } = expr
             {
-                if display_name.starts_with("#!") {
+                if let Some(display_name) = display_name.strip_prefix("#!") {
                     let typs = match field.data_type() {
                         DataType::Nullable(box DataType::Array(box DataType::Nullable(
                             box DataType::Tuple(v),
@@ -116,7 +116,7 @@ impl StripeDecoderForCopy {
                             unreachable!("expect value: array of tuple")
                         }
                     };
-                    let positions = display_name[2..]
+                    let positions = display_name
                         .split(',')
                         .map(|s| s.parse::<i32>().unwrap())
                         .collect::<Vec<i32>>();
