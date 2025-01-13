@@ -183,6 +183,7 @@ pub struct SerializeAggregateStream {
     pub payload: Pin<Box<SerializePayload>>,
     flush_state: PayloadFlushState,
     end_iter: bool,
+    nums: usize,
 }
 
 unsafe impl Send for SerializeAggregateStream {}
@@ -198,6 +199,7 @@ impl SerializeAggregateStream {
             flush_state: PayloadFlushState::default(),
             _params: params.clone(),
             end_iter: false,
+            nums: 0,
         }
     }
 }
@@ -225,10 +227,32 @@ impl SerializeAggregateStream {
                 }
 
                 match block {
-                    Some(block) => Ok(Some(block.add_meta(Some(
-                        AggregateSerdeMeta::create_agg_payload(p.bucket, p.max_partition_count),
-                    ))?)),
-                    None => Ok(None),
+                    Some(block) => {
+                        self.nums += 1;
+                        Ok(Some(block.add_meta(Some(
+                            AggregateSerdeMeta::create_agg_payload(
+                                p.bucket,
+                                p.max_partition_count,
+                                false,
+                            ),
+                        ))?))
+                    }
+                    None => {
+                        // always return at least one block
+                        if self.nums == 0 {
+                            self.nums += 1;
+                            let block = p.payload.empty_block(Some(1));
+                            Ok(Some(block.add_meta(Some(
+                                AggregateSerdeMeta::create_agg_payload(
+                                    p.bucket,
+                                    p.max_partition_count,
+                                    true,
+                                ),
+                            ))?))
+                        } else {
+                            Ok(None)
+                        }
+                    }
                 }
             }
         }
