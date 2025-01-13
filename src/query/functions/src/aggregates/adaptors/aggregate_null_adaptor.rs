@@ -204,7 +204,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.0.nested.drop_state(place)
+        self.0.drop_state(place);
     }
 
     fn convert_const_to_full(&self) -> bool {
@@ -329,7 +329,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.0.nested.drop_state(place)
+        self.0.drop_state(place);
     }
 
     fn convert_const_to_full(&self) -> bool {
@@ -354,20 +354,21 @@ struct CommonNullAdaptor<const NULLABLE_RESULT: bool> {
 
 impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
     fn return_type(&self) -> Result<DataType> {
-        let nested = self.nested.return_type()?;
-        match NULLABLE_RESULT {
-            true => Ok(nested.wrap_nullable()),
-            false => Ok(nested),
+        if !NULLABLE_RESULT {
+            return self.nested.return_type();
         }
+
+        let nested = self.nested.return_type()?;
+        Ok(nested.wrap_nullable())
     }
 
     fn init_state(&self, place: AggrState) {
-        if NULLABLE_RESULT {
-            set_flag(place, false);
-            self.nested.init_state(place.remove_last_loc());
-        } else {
-            self.nested.init_state(place);
+        if !NULLABLE_RESULT {
+            return self.nested.init_state(place);
         }
+
+        set_flag(place, false);
+        self.nested.init_state(place.remove_last_loc());
     }
 
     fn serialize_size_per_row(&self) -> Option<usize> {
@@ -392,23 +393,24 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
         input_rows: usize,
     ) -> Result<()> {
         if !NULLABLE_RESULT {
-            self.nested
-                .accumulate(place, not_null_column, validity.as_ref(), input_rows)
-        } else {
-            if validity
-                .as_ref()
-                .map(|c| c.null_count() != input_rows)
-                .unwrap_or(true)
-            {
-                set_flag(place, true);
-            }
-            self.nested.accumulate(
-                place.remove_last_loc(),
-                not_null_column,
-                validity.as_ref(),
-                input_rows,
-            )
+            return self
+                .nested
+                .accumulate(place, not_null_column, validity.as_ref(), input_rows);
         }
+
+        if validity
+            .as_ref()
+            .map(|c| c.null_count() != input_rows)
+            .unwrap_or(true)
+        {
+            set_flag(place, true);
+        }
+        self.nested.accumulate(
+            place.remove_last_loc(),
+            not_null_column,
+            validity.as_ref(),
+            input_rows,
+        )
     }
 
     fn accumulate_keys(
@@ -437,7 +439,15 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
                     } else {
                         AggrState::new(*place, loc)
                     };
-                    self.nested.accumulate_row(place, not_null_columns, row)?;
+                    if !NULLABLE_RESULT {
+                        self.nested.accumulate_row(place, not_null_columns, row)?;
+                    } else {
+                        self.nested.accumulate_row(
+                            place.remove_last_loc(),
+                            not_null_columns,
+                            row,
+                        )?;
+                    }
                 }
                 Ok(())
             }
@@ -482,13 +492,13 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
             return Ok(());
         }
 
-        if NULLABLE_RESULT {
-            set_flag(place, true);
-            self.nested
-                .accumulate_row(place.remove_last_loc(), not_null_columns, row)
-        } else {
-            self.nested.accumulate_row(place, not_null_columns, row)
+        if !NULLABLE_RESULT {
+            return self.nested.accumulate_row(place, not_null_columns, row);
         }
+
+        set_flag(place, true);
+        self.nested
+            .accumulate_row(place.remove_last_loc(), not_null_columns, row)
     }
 
     fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
@@ -554,6 +564,14 @@ impl<const NULLABLE_RESULT: bool> CommonNullAdaptor<NULLABLE_RESULT> {
         } else {
             inner.push_null();
             Ok(())
+        }
+    }
+
+    unsafe fn drop_state(&self, place: AggrState) {
+        if !NULLABLE_RESULT {
+            self.nested.drop_state(place)
+        } else {
+            self.nested.drop_state(place.remove_last_loc())
         }
     }
 }

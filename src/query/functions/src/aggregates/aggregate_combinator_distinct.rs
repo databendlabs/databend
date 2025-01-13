@@ -119,7 +119,7 @@ where State: DistinctStateFunc
 
     fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = Self::get_state(place);
-        let other = rhs.get::<State>();
+        let other = Self::get_state(rhs);
         state.merge(other)
     }
 

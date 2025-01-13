@@ -234,7 +234,7 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     unsafe fn drop_state(&self, place: AggrState) {
-        self.inner.drop_state(place)
+        self.inner.drop_state(place.remove_last_loc())
     }
 
     fn convert_const_to_full(&self) -> bool {
