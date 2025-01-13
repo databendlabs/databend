@@ -832,9 +832,9 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::DropUDF(plan) => {
                 let udf_name = &plan.udf;
-                if !UserApiProvider::instance().exists_udf(&tenant, udf_name).await? && plan.if_exists {
+                /*if !UserApiProvider::instance().exists_udf(&tenant, udf_name).await? && plan.if_exists {
                     return Ok(());
-                }
+                }*/
                 if enable_experimental_rbac_check {
                     let udf = HashSet::from([udf_name]);
                     self.validate_udf_access(udf).await?;

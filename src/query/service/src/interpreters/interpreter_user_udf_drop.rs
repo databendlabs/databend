@@ -15,10 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_management::RoleApi;
-use databend_common_meta_app::principal::OwnershipObject;
+// use databend_common_management::RoleApi;
+// use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropUDFPlan;
-use databend_common_users::RoleCacheManager;
+// use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
 
@@ -57,21 +57,20 @@ impl Interpreter for DropUserUDFScript {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
 
-        // we should do `drop ownership` after actually drop udf, and udf maybe not exists.
+        // // we should do `drop ownership` after actually drop udf, and udf maybe not exists.
         // drop the ownership
-        if UserApiProvider::instance()
-            .exists_udf(&tenant, &self.plan.udf)
-            .await?
-        {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            let owner_object = OwnershipObject::UDF {
-                name: self.plan.udf.clone(),
-            };
-
-            role_api.revoke_ownership(&owner_object).await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
-
+        // if UserApiProvider::instance()
+        // .exists_udf(&tenant, &self.plan.udf)
+        // .await?
+        // {
+        // let role_api = UserApiProvider::instance().role_api(&tenant);
+        // let owner_object = OwnershipObject::UDF {
+        // name: self.plan.udf.clone(),
+        // };
+        //
+        // role_api.revoke_ownership(&owner_object).await?;
+        // RoleCacheManager::instance().invalidate_cache(&tenant);
+        // }
         // TODO: if it is appropriate to return an ErrorCode that contains either meta-service error and UdfNotFound error?
 
         UserApiProvider::instance()
