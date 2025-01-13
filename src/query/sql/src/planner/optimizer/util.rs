@@ -41,7 +41,7 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
 pub fn contains_warehouse_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool {
     if s_expr
         .children()
-        .any(|s_expr| all_warehouse_table_scan(s_expr, metadata))
+        .any(|s_expr| contains_warehouse_table_scan(s_expr, metadata))
     {
         return true;
     }
