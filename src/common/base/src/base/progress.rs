@@ -24,10 +24,17 @@ pub struct ProgressValues {
     pub bytes: usize,
 }
 
+/// [`ProgressHook`] can be used to hook the progress to update the global metrics
+/// whenever the progress is updated.
+pub trait ProgressHook: std::fmt::Debug + Send + Sync {
+    fn incr(&self, progress_values: &ProgressValues);
+}
+
 #[derive(Debug)]
 pub struct Progress {
     rows: AtomicUsize,
     bytes: AtomicUsize,
+    hook: Option<Box<dyn ProgressHook>>,
 }
 
 impl Progress {
@@ -35,6 +42,15 @@ impl Progress {
         Self {
             rows: AtomicUsize::new(0),
             bytes: AtomicUsize::new(0),
+            hook: None,
+        }
+    }
+
+    pub fn with_hook(self, hook: Box<dyn ProgressHook>) -> Self {
+        Self {
+            rows: self.rows,
+            bytes: self.bytes,
+            hook: Some(hook),
         }
     }
 
@@ -42,6 +58,9 @@ impl Progress {
         self.rows.fetch_add(progress_values.rows, Ordering::Relaxed);
         self.bytes
             .fetch_add(progress_values.bytes, Ordering::Relaxed);
+        if let Some(hook) = &self.hook {
+            hook.incr(progress_values);
+        }
     }
 
     pub fn set(&self, progress_values: &ProgressValues) {
