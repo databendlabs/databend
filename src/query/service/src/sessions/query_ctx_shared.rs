@@ -26,6 +26,7 @@ use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::metrics::Counter;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
@@ -54,6 +55,7 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
+use opentelemetry_sdk::metrics::data::Metric;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -154,6 +156,8 @@ impl QueryContextShared {
         session: Arc<Session>,
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
+        let progress_metrics =
+            ProgressMetrics::new(session.get_current_tenant(), cluster_cache.name());
         Ok(Arc::new(QueryContextShared {
             query_settings: Settings::create(session.get_current_tenant()),
             catalog_manager: CatalogManager::instance(),
@@ -162,9 +166,15 @@ impl QueryContextShared {
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             total_scan_values: Arc::new(Progress::create()),
-            scan_progress: Arc::new(Progress::create()),
+            scan_progress: Arc::new(Progress::create().with_hook(MetricProgressHook::new(
+                progress_metrics.scan_rows.clone(),
+                progress_metrics.scan_bytes.clone(),
+            ))),
             result_progress: Arc::new(Progress::create()),
-            write_progress: Arc::new(Progress::create()),
+            write_progress: Arc::new(Progress::create().with_hook(MetricProgressHook::new(
+                progress_metrics.write_rows.clone(),
+                progress_metrics.write_bytes.clone(),
+            ))),
             error: Arc::new(Mutex::new(None)),
             warnings: Arc::new(Mutex::new(vec![])),
             runtime: Arc::new(RwLock::new(None)),
@@ -659,5 +669,32 @@ impl Drop for QueryContextShared {
                 .session_ctx
                 .update_query_ids_results(self.init_query_id.read().clone(), None)
         })
+    }
+}
+
+struct ProgressMetrics {
+    scan_rows: Arc<Counter>,
+    scan_bytes: Arc<Counter>,
+    write_rows: Arc<Counter>,
+    write_bytes: Arc<Counter>,
+}
+
+impl ProgressMetrics {
+    fn new(tenant: &str, cluster: &str) -> Self {
+        let common_labels = vec![
+            ("tenant", tenant.to_string()),
+            ("cluster", cluster.to_string()),
+        ];
+
+        Self {
+            scan_rows: crate::metrics::interpreter::QUERY_PROGRESS_SCAN_ROWS
+                .get_or_create(&common_labels),
+            scan_bytes: crate::metrics::interpreter::QUERY_PROGRESS_SCAN_BYTES
+                .get_or_create(&common_labels),
+            write_rows: crate::metrics::interpreter::QUERY_PROGRESS_WRITE_ROWS
+                .get_or_create(&common_labels),
+            write_bytes: crate::metrics::interpreter::QUERY_PROGRESS_WRITE_BYTES
+                .get_or_create(&common_labels),
+        }
     }
 }
