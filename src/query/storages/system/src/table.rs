@@ -117,7 +117,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     }
 
     fn distribution_level(&self) -> DistributionLevel {
-        DistributionLevel::Warehouse
+        TTable::DISTRIBUTION_LEVEL
     }
 
     fn get_table_info(&self) -> &TableInfo {

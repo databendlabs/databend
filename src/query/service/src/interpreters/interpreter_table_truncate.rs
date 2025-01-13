@@ -17,11 +17,9 @@ use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
 
-use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
@@ -88,9 +86,7 @@ impl Interpreter for TruncateTableInterpreter {
         table.check_mutable()?;
 
         if self.proxy_to_warehouse && table.broadcast_truncate_to_warehouse() {
-            let config = GlobalConfig::instance();
-            let discovery = ClusterDiscovery::instance();
-            let warehouse = discovery.discover_warehouse_nodes(&config).await?;
+            let warehouse = self.ctx.get_warehouse_cluster().await?;
 
             let mut message = HashMap::with_capacity(warehouse.nodes.len());
             for node_info in &warehouse.nodes {

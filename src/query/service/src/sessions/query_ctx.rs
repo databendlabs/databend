@@ -1717,6 +1717,10 @@ impl TableContext for QueryContext {
         }
         Ok(streams_meta)
     }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        self.shared.get_warehouse_clusters().await
+    }
 }
 
 impl TrySpawn for QueryContext {

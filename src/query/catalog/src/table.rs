@@ -679,6 +679,7 @@ pub struct ColumnRange {
     pub max: Bound,
 }
 
+#[derive(Debug)]
 pub enum DistributionLevel {
     Local,
     Cluster,

@@ -235,6 +235,7 @@ pub trait TableContext: Send + Sync {
     fn get_session_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
     fn set_cluster(&self, cluster: Arc<Cluster>);
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
     fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>>;

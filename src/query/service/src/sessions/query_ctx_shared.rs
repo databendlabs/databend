@@ -36,6 +36,7 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::StageAttachment;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -59,6 +60,7 @@ use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
+use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
@@ -92,6 +94,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<RwLock<Arc<Cluster>>>,
+    pub(in crate::sessions) warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     pub(in crate::sessions) running_query_text_hash: Arc<RwLock<Option<String>>>,
@@ -206,6 +209,7 @@ impl QueryContextShared {
 
             cluster_spill_progress: Default::default(),
             spilled_files: Default::default(),
+            warehouse_cache: Arc::new(RwLock::new(None)),
         }))
     }
 
@@ -270,6 +274,24 @@ impl QueryContextShared {
 
     pub fn get_cluster(&self) -> Arc<Cluster> {
         self.cluster_cache.read().clone()
+    }
+
+    pub async fn get_warehouse_clusters(&self) -> Result<Arc<Cluster>> {
+        if let Some(warehouse) = self.warehouse_cache.read().as_ref() {
+            return Ok(warehouse.clone());
+        }
+
+        let config = GlobalConfig::instance();
+        let discovery = ClusterDiscovery::instance();
+        let warehouse = discovery.discover_warehouse_nodes(&config).await?;
+
+        let mut write_guard = self.warehouse_cache.write();
+
+        if write_guard.is_none() {
+            *write_guard = Some(warehouse.clone());
+        }
+
+        Ok(write_guard.as_ref().cloned().expect("expect cluster."))
     }
 
     pub fn get_current_catalog(&self) -> String {

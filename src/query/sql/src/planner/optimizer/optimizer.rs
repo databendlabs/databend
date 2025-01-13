@@ -383,8 +383,12 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
             ));
         }
 
-        opt_ctx.enable_distributed_optimization = true;
-        info!("Disable distributed optimization due to warehouse table scan.");
+        let warehouse = opt_ctx.table_ctx.get_warehouse_cluster().await?;
+
+        if !warehouse.is_empty() {
+            opt_ctx.enable_distributed_optimization = true;
+            info!("Enable distributed optimization due to warehouse table scan.");
+        }
     }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
