@@ -314,7 +314,17 @@ async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
         SelectedNode::Random(None),
     ]);
 
-    create_warehouse.await?;
+    let cw = create_warehouse.await?;
+    if let WarehouseInfo::SystemManaged(sw) = cw {
+        assert_eq!(sw.id, "test_warehouse");
+        for warehouse in warehouse_manager.list_warehouses().await? {
+            if let WarehouseInfo::SystemManaged(w) = warehouse {
+                if w.id == sw.id {
+                    assert_eq!(w.role_id, sw.role_id)
+                }
+            }
+        }
+    }
 
     for node in &nodes {
         let online_node = format!("__fd_clusters_v6/test%2dtenant%2did/online_nodes/{}", node);
@@ -526,7 +536,8 @@ async fn test_create_warehouse_with_self_manage() -> Result<()> {
             None,
         )]);
 
-    create_warehouse.await
+    assert!(create_warehouse.await.is_ok());
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -936,7 +947,18 @@ async fn test_drop_system_managed_warehouse() -> Result<()> {
     create_warehouse.await?;
 
     let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test_warehouse"));
-    drop_warehouse.await?;
+
+    let cw = drop_warehouse.await?;
+    if let WarehouseInfo::SystemManaged(sw) = cw {
+        assert_eq!(sw.id, "test_warehouse");
+        for warehouse in warehouse_manager.list_warehouses().await? {
+            if let WarehouseInfo::SystemManaged(w) = warehouse {
+                if w.id == sw.id {
+                    assert_eq!(w.role_id, sw.role_id)
+                }
+            }
+        }
+    }
 
     let create_warehouse =
         warehouse_manager.create_warehouse(String::from("test_warehouse"), vec![
