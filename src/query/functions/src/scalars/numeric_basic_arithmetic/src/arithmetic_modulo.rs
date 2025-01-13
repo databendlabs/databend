@@ -25,7 +25,7 @@ use strength_reduce::StrengthReducedU32;
 use strength_reduce::StrengthReducedU64;
 use strength_reduce::StrengthReducedU8;
 
-pub(crate) fn vectorize_modulo<L, R, M, O>(
+pub fn vectorize_modulo<L, R, M, O>(
 ) -> impl Fn(Value<NumberType<L>>, Value<NumberType<R>>, &mut EvalContext) -> Value<NumberType<O>> + Copy
 where
     L: Number + AsPrimitive<M>,

@@ -119,7 +119,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
 /// Check if timestamp is within range, and return the timestamp in micros.
 #[inline]
-fn int64_to_timestamp(mut n: i64) -> i64 {
+pub fn int64_to_timestamp(mut n: i64) -> i64 {
     if -31536000000 < n && n < 31536000000 {
         n * MICROS_PER_SEC
     } else if -31536000000000 < n && n < 31536000000000 {
@@ -367,7 +367,7 @@ fn string_to_format_timestamp(
     timestamp: &str,
     format: &str,
     ctx: &mut EvalContext,
-) -> Result<(i64, bool), ErrorCode> {
+) -> Result<(i64, bool), Box<ErrorCode>> {
     if format.is_empty() {
         return Ok((0, true));
     }
@@ -385,7 +385,7 @@ fn string_to_format_timestamp(
     if ctx.func_ctx.parse_datetime_ignore_remainder {
         let mut parsed = Parsed::new();
         if let Err(e) = parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format)) {
-            return Err(ErrorCode::BadArguments(format!("{}", e)));
+            return Err(Box::new(ErrorCode::BadArguments(format!("{}", e))));
         }
         // Additional checks and adjustments for parsed timestamp
         // If parsed.timestamp is Some no need to pad default year.
@@ -418,11 +418,11 @@ fn string_to_format_timestamp(
             parsed
                 .to_datetime()
                 .map(|res| (res.timestamp_micros(), false))
-                .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))
         } else {
             parsed
                 .to_naive_datetime_with_offset(0)
-                .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))
                 .and_then(|res| {
                     let dt = datetime(
                         res.year() as i16,
@@ -435,20 +435,20 @@ fn string_to_format_timestamp(
                     );
                     match dt.to_zoned(ctx.func_ctx.jiff_tz.clone()) {
                         Ok(res) => Ok((res.timestamp().as_microsecond(), false)),
-                        Err(e) => Err(ErrorCode::BadArguments(format!(
+                        Err(e) => Err(Box::new(ErrorCode::BadArguments(format!(
                             "Can not parse timestamp with error: {}",
                             e
-                        ))),
+                        )))),
                     }
                 })
         }
     } else if parse_tz {
         DateTime::parse_from_str(timestamp, format)
             .map(|res| (res.timestamp_micros(), false))
-            .map_err(|err| ErrorCode::BadArguments(format!("{}", err)))
+            .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{}", err))))
     } else {
         NaiveDateTime::parse_from_str(timestamp, format)
-            .map_err(|err| ErrorCode::BadArguments(format!("{}", err)))
+            .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{}", err))))
             .and_then(|res| {
                 let dt = datetime(
                     res.year() as i16,
@@ -461,10 +461,10 @@ fn string_to_format_timestamp(
                 );
                 match dt.to_zoned(ctx.func_ctx.jiff_tz.clone()) {
                     Ok(res) => Ok((res.timestamp().as_microsecond(), false)),
-                    Err(e) => Err(ErrorCode::BadArguments(format!(
+                    Err(e) => Err(Box::new(ErrorCode::BadArguments(format!(
                         "Can not parse timestamp with error: {}",
                         e
-                    ))),
+                    )))),
                 }
             })
     }
