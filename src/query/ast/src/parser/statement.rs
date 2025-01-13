@@ -3304,6 +3304,10 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             UserPrivilegeType::CreateDatabase,
             rule! { CREATE ~ DATABASE },
         ),
+        value(
+            UserPrivilegeType::CreateWarehouse,
+            rule! { CREATE ~ WAREHOUSE },
+        ),
         value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
         value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
         value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),
@@ -3363,11 +3367,16 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         GrantObjectName::UDF(udf_name.to_string())
     });
 
+    let warehouse = map(rule! { WAREHOUSE ~ #ident}, |(_, w)| {
+        GrantObjectName::Warehouse(w.to_string())
+    });
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #udf : "UDF <udf_name>"
+        | #warehouse : "WAREHOUSE <warehouse_name>"
     )(i)
 }
 
@@ -3462,10 +3471,12 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     enum Object {
         Stage,
         Udf,
+        Warehouse,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
         value(Object::Stage, rule! { STAGE }),
+        value(Object::Warehouse, rule! { STAGE }),
     ));
 
     // Object object_name
@@ -3474,13 +3485,14 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
         |(object, object_name)| match object {
             Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
             Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
+            Object::Warehouse => AccountMgrLevel::Warehouse(object_name.to_string()),
         },
     );
 
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
-        | #object : "STAGE | UDF <object_name>"
+        | #object : "STAGE | UDF | WAREHOUSE <object_name>"
     )(i)
 }
 
