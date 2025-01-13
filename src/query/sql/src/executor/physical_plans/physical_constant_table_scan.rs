@@ -51,14 +51,10 @@ impl PhysicalPlanBuilder {
         required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         // 1. Prune unused Columns.
-        let mut used: ColumnSet = required.intersection(&scan.columns).cloned().collect();
+        let used: ColumnSet = required.intersection(&scan.columns).cloned().collect();
         let (values, fields) = if used == scan.columns {
             (scan.values.clone(), scan.schema.fields().clone())
         } else {
-            for column in self.metadata.read().clone().lazy_columns() {
-                used.insert(*column);
-            }
-
             let new_scan = scan.prune_columns(used);
             (new_scan.values.clone(), new_scan.schema.fields().clone())
         };
