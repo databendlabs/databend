@@ -22,7 +22,6 @@ use strength_reduce::StrengthReducedU64;
 
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
-use crate::get_states_layout;
 use crate::read;
 use crate::store;
 use crate::types::DataType;
@@ -89,13 +88,8 @@ impl Payload {
         arena: Arc<Bump>,
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
+        states_layout: Option<StatesLayout>,
     ) -> Self {
-        let states_layout = if !aggrs.is_empty() {
-            Some(get_states_layout(&aggrs).unwrap())
-        } else {
-            None
-        };
-
         let mut tuple_size = 0;
         let mut validity_offsets = Vec::with_capacity(group_types.len());
         for x in group_types.iter() {

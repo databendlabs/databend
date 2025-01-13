@@ -19,6 +19,7 @@ use itertools::Itertools;
 
 use super::payload::Payload;
 use super::probe_state::ProbeState;
+use crate::get_states_layout;
 use crate::read;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
@@ -37,7 +38,7 @@ pub struct PartitionedPayload {
     pub validity_offsets: Vec<usize>,
     pub hash_offset: usize,
     pub state_offset: usize,
-    pub state_layout: Option<StatesLayout>,
+    pub states_layout: Option<StatesLayout>,
 
     pub arenas: Vec<Arc<Bump>>,
 
@@ -59,8 +60,21 @@ impl PartitionedPayload {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
 
+        let states_layout = if !aggrs.is_empty() {
+            Some(get_states_layout(&aggrs).unwrap())
+        } else {
+            None
+        };
+
         let payloads = (0..partition_count)
-            .map(|_| Payload::new(arenas[0].clone(), group_types.clone(), aggrs.clone()))
+            .map(|_| {
+                Payload::new(
+                    arenas[0].clone(),
+                    group_types.clone(),
+                    aggrs.clone(),
+                    states_layout.clone(),
+                )
+            })
             .collect_vec();
 
         let group_sizes = payloads[0].group_sizes.clone();
@@ -68,7 +82,6 @@ impl PartitionedPayload {
         let validity_offsets = payloads[0].validity_offsets.clone();
         let hash_offset = payloads[0].hash_offset;
         let state_offset = payloads[0].state_offset;
-        let state_layout = payloads[0].states_layout.clone();
 
         PartitionedPayload {
             payloads,
@@ -79,7 +92,7 @@ impl PartitionedPayload {
             validity_offsets,
             hash_offset,
             state_offset,
-            state_layout,
+            states_layout,
             partition_count,
 
             arenas,

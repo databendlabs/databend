@@ -199,7 +199,7 @@ impl AggregateHashTable {
             }
 
             let state_places = &state.state_places.as_slice()[0..row_count];
-            let states_layout = self.payload.state_layout.as_ref().unwrap();
+            let states_layout = self.payload.states_layout.as_ref().unwrap();
             if agg_states.is_empty() {
                 for ((func, params), loc) in self
                     .payload
@@ -412,7 +412,7 @@ impl AggregateHashTable {
             let state = &mut flush_state.probe_state;
             let places = &state.state_places.as_slice()[0..row_count];
             let rhses = &flush_state.state_places.as_slice()[0..row_count];
-            if let Some(layout) = self.payload.state_layout.as_ref() {
+            if let Some(layout) = self.payload.states_layout.as_ref() {
                 for (aggr, loc) in self.payload.aggrs.iter().zip(layout.states_loc.iter()) {
                     aggr.batch_merge_states(places, rhses, loc)?;
                 }
@@ -429,7 +429,7 @@ impl AggregateHashTable {
 
         let row_count = flush_state.row_count;
         flush_state.aggregate_results.clear();
-        if let Some(states_layout) = self.payload.state_layout.as_ref() {
+        if let Some(states_layout) = self.payload.states_layout.as_ref() {
             for (aggr, loc) in self
                 .payload
                 .aggrs

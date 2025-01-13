@@ -86,7 +86,12 @@ fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
     let mut state = PayloadFlushState::default();
 
     for _ in 0..buckets.capacity() {
-        let p = Payload::new(payload.arena.clone(), group_types.clone(), aggrs.clone());
+        let p = Payload::new(
+            payload.arena.clone(),
+            group_types.clone(),
+            aggrs.clone(),
+            payload.states_layout.clone(),
+        );
         buckets.push(p);
     }
 
@@ -134,6 +139,7 @@ fn scatter_partitioned_payload(
             Arc::new(Bump::new()),
             group_types.clone(),
             aggrs.clone(),
+            partitioned_payload.states_layout.clone(),
         ));
     }
 
