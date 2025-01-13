@@ -21,6 +21,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::NullAs;
@@ -92,6 +93,39 @@ pub fn project_columnar(
                             to_field.data_type.remove_nullable(),
                         ) {
                             (
+                                TableDataType::Array(box TableDataType::Nullable(
+                                    box TableDataType::Tuple {
+                                        fields_name: from_fields_name,
+                                        fields_type: _from_fields_type,
+                                    },
+                                )),
+                                TableDataType::Array(box TableDataType::Nullable(
+                                    box TableDataType::Tuple {
+                                        fields_name: to_fields_name,
+                                        fields_type: _to_fields_type,
+                                    },
+                                )),
+                            ) => {
+                                let mut v = vec![];
+                                for to in to_fields_name.iter() {
+                                    match from_fields_name.iter().position(|k| k == to) {
+                                        Some(p) => v.push(p as i32),
+                                        None => v.push(-1),
+                                    };
+                                }
+                                let name = v
+                                    .iter()
+                                    .map(|v| v.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(",");
+                                Expr::ColumnRef {
+                                    span: None,
+                                    id: pos,
+                                    data_type: from_field.data_type().into(),
+                                    display_name: format!("#!{name}",),
+                                }
+                            }
+                            (
                                 TableDataType::Tuple {
                                     fields_name: from_fields_name,
                                     fields_type: from_fields_type,
@@ -100,102 +134,15 @@ pub fn project_columnar(
                                     fields_name: to_fields_name,
                                     fields_type: to_fields_type,
                                 },
-                            ) => {
-                                println!("tuple: {from_fields_name:?} {from_fields_type:?} to {to_fields_name:?} {to_fields_type:?}");
-                                let mut inner_columns = Vec::with_capacity(to_fields_name.len());
-
-                                for (to_field_name, to_field_type) in
-                                    to_fields_name.iter().zip(to_fields_type.iter())
-                                {
-                                    let inner_column = match from_fields_name
-                                        .iter()
-                                        .position(|k| k == to_field_name)
-                                    {
-                                        Some(idx) => {
-                                            let from_field_type =
-                                                from_fields_type.get(idx).unwrap();
-                                            let tuple_idx = Scalar::Number(NumberScalar::Int64(
-                                                (idx + 1) as i64,
-                                            ));
-                                            let inner_column = check_function(
-                                                None,
-                                                "get",
-                                                &[tuple_idx],
-                                                &[expr.clone()],
-                                                &BUILTIN_FUNCTIONS,
-                                            )?;
-                                            if from_field_type != to_field_type {
-                                                check_cast(
-                                                    None,
-                                                    false,
-                                                    inner_column,
-                                                    &to_field_type.into(),
-                                                    &BUILTIN_FUNCTIONS,
-                                                )?
-                                            } else {
-                                                inner_column
-                                            }
-                                        }
-                                        None => {
-                                            // if inner field not exists, fill default value.
-                                            let data_type: DataType = to_field_type.into();
-                                            let scalar = Scalar::default_value(&data_type);
-                                            Expr::Constant {
-                                                span: None,
-                                                scalar,
-                                                data_type,
-                                            }
-                                        }
-                                    };
-                                    inner_columns.push(inner_column);
-                                }
-                                let tuple_column = check_function(
-                                    None,
-                                    "tuple",
-                                    &[],
-                                    &inner_columns,
-                                    &BUILTIN_FUNCTIONS,
-                                )?;
-                                let tuple_column = if from_field.data_type != to_field.data_type {
-                                    let dest_ty: DataType = (&to_field.data_type).into();
-                                    check_cast(
-                                        None,
-                                        false,
-                                        tuple_column,
-                                        &dest_ty,
-                                        &BUILTIN_FUNCTIONS,
-                                    )?
-                                } else {
-                                    tuple_column
-                                };
-
-                                if from_field.data_type.is_nullable()
-                                    && to_field.data_type.is_nullable()
-                                {
-                                    // add if function to cast null value
-                                    let is_not_null = check_function(
-                                        None,
-                                        "is_not_null",
-                                        &[],
-                                        &[expr.clone()],
-                                        &BUILTIN_FUNCTIONS,
-                                    )?;
-                                    let null_scalar = Expr::Constant {
-                                        span: None,
-                                        scalar: Scalar::Null,
-                                        data_type: DataType::Null,
-                                    };
-                                    check_function(
-                                        None,
-                                        "if",
-                                        &[],
-                                        &[is_not_null, tuple_column, null_scalar],
-                                        &BUILTIN_FUNCTIONS,
-                                    )?
-                                } else {
-                                    tuple_column
-                                }
-                            }
+                            ) => project_tuple(
+                                expr,
+                                from_field,
+                                to_field,
+                                &from_fields_name,
+                                &from_fields_type,
+                                &to_fields_name,
+                                &to_fields_type,
+                            )?,
                             (_, _) => {
                                 return Err(ErrorCode::BadDataValueType(format!(
                                     "fail to load file {}: Cannot cast column {} from {:?} to {:?}",
@@ -255,4 +202,86 @@ pub fn project_columnar(
         )));
     }
     Ok((output_projection, pushdown_columns))
+}
+
+fn project_tuple(
+    expr: Expr,
+    from_field: &TableField,
+    to_field: &TableField,
+    from_fields_name: &[String],
+    from_fields_type: &[TableDataType],
+    to_fields_name: &[String],
+    to_fields_type: &[TableDataType],
+) -> databend_common_exception::Result<Expr> {
+    let mut inner_columns = Vec::with_capacity(to_fields_name.len());
+
+    for (to_field_name, to_field_type) in to_fields_name.iter().zip(to_fields_type.iter()) {
+        let inner_column = match from_fields_name.iter().position(|k| k == to_field_name) {
+            Some(idx) => {
+                let from_field_type = from_fields_type.get(idx).unwrap();
+                let tuple_idx = Scalar::Number(NumberScalar::Int64((idx + 1) as i64));
+                let inner_column = check_function(
+                    None,
+                    "get",
+                    &[tuple_idx],
+                    &[expr.clone()],
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                if from_field_type != to_field_type {
+                    check_cast(
+                        None,
+                        false,
+                        inner_column,
+                        &to_field_type.into(),
+                        &BUILTIN_FUNCTIONS,
+                    )?
+                } else {
+                    inner_column
+                }
+            }
+            None => {
+                // if inner field not exists, fill default value.
+                let data_type: DataType = to_field_type.into();
+                let scalar = Scalar::default_value(&data_type);
+                Expr::Constant {
+                    span: None,
+                    scalar,
+                    data_type,
+                }
+            }
+        };
+        inner_columns.push(inner_column);
+    }
+    let tuple_column = check_function(None, "tuple", &[], &inner_columns, &BUILTIN_FUNCTIONS)?;
+    let tuple_column = if from_field.data_type != to_field.data_type {
+        let dest_ty: DataType = (&to_field.data_type).into();
+        check_cast(None, false, tuple_column, &dest_ty, &BUILTIN_FUNCTIONS)?
+    } else {
+        tuple_column
+    };
+
+    if from_field.data_type.is_nullable() && to_field.data_type.is_nullable() {
+        // add if function to cast null value
+        let is_not_null = check_function(
+            None,
+            "is_not_null",
+            &[],
+            &[expr.clone()],
+            &BUILTIN_FUNCTIONS,
+        )?;
+        let null_scalar = Expr::Constant {
+            span: None,
+            scalar: Scalar::Null,
+            data_type: DataType::Null,
+        };
+        check_function(
+            None,
+            "if",
+            &[],
+            &[is_not_null, tuple_column, null_scalar],
+            &BUILTIN_FUNCTIONS,
+        )
+    } else {
+        Ok(tuple_column)
+    }
 }

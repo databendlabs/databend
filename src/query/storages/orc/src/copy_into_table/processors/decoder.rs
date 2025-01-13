@@ -22,13 +22,19 @@ use arrow_array::RecordBatch;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::ArrayColumn;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NullableColumn;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
@@ -96,6 +102,59 @@ impl StripeDecoderForCopy {
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let mut columns = Vec::with_capacity(projection.len());
         for (field, expr) in self.output_schema.fields().iter().zip(projection.iter()) {
+            if let Expr::ColumnRef {
+                display_name, id, ..
+            } = expr
+            {
+                if display_name.starts_with("#!") {
+                    let typs = match field.data_type() {
+                        DataType::Nullable(box DataType::Array(box DataType::Nullable(
+                            box DataType::Tuple(v),
+                        ))) => v,
+                        _ => {
+                            log::error!("expect array of tuple, got {:?}", field);
+                            unreachable!("expect value: array of tuple")
+                        }
+                    };
+                    let positions = display_name[2..]
+                        .split(',')
+                        .map(|s| s.parse::<i32>().unwrap())
+                        .collect::<Vec<i32>>();
+                    let mut e = block.columns()[*id].clone();
+                    match e.value {
+                        Value::Column(Column::Nullable(box NullableColumn {
+                            column:
+                                Column::Array(box ArrayColumn {
+                                    values:
+                                        Column::Nullable(box NullableColumn {
+                                            column: Column::Tuple(ref mut v),
+                                            ..
+                                        }),
+                                    ..
+                                }),
+                            ..
+                        })) => {
+                            let len = v[0].len();
+                            let mut v2 = vec![];
+                            for (i, p) in positions.iter().enumerate() {
+                                if *p < 0 {
+                                    v2.push(ColumnBuilder::repeat_default(&typs[i], len).build());
+                                } else {
+                                    v2.push(v[*p as usize].clone());
+                                }
+                            }
+                            *v = v2
+                        }
+                        _ => {
+                            log::error!("expect array of tuple, got {:?} {:?}", field, e.value);
+                            unreachable!("expect value: array of tuple")
+                        }
+                    }
+                    let column = BlockEntry::new(field.data_type().clone(), e.value);
+                    columns.push(column);
+                    continue;
+                }
+            }
             let value = evaluator.run(expr)?;
             let column = BlockEntry::new(field.data_type().clone(), value);
             columns.push(column);
