@@ -40,6 +40,7 @@ pub use net::get_free_udp_port;
 pub use ordered_float::OrderedFloat;
 pub use profiling::Profiling;
 pub use progress::Progress;
+pub use progress::ProgressHook;
 pub use progress::ProgressValues;
 pub use progress::SpillProgress;
 pub use select::select3;

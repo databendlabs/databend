@@ -19,8 +19,6 @@ use std::sync::Arc;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::runtime::metrics::Counter;
-
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ProgressValues {
     pub rows: usize,
@@ -31,28 +29,6 @@ pub struct ProgressValues {
 /// whenever the progress is updated.
 pub trait ProgressHook: std::fmt::Debug + Send + Sync {
     fn incr(&self, progress_values: &ProgressValues);
-}
-
-#[derive(Debug)]
-pub struct MetricProgressHook {
-    pub rows_metrics: Arc<Counter>,
-    pub bytes_metrics: Arc<Counter>,
-}
-
-impl MetricProgressHook {
-    pub fn new(rows_metrics: Arc<Counter>, bytes_metrics: Arc<Counter>) -> Self {
-        Self {
-            rows_metrics,
-            bytes_metrics,
-        }
-    }
-}
-
-impl ProgressHook for MetricProgressHook {
-    fn incr(&self, progress_values: &ProgressValues) {
-        self.rows_metrics.inc_by(progress_values.rows as u64);
-        self.bytes_metrics.inc_by(progress_values.bytes as u64);
-    }
 }
 
 #[derive(Debug)]

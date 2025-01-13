@@ -82,7 +82,7 @@ pub static QUERY_PROGRESS_SCAN_ROWS: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_PROGRESS_SCAN_ROWS));
 pub static QUERY_PROGRESS_SCAN_BYTES: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_PROGRESS_SCAN_BYTES));
-pub static QUERY_PROGRSS_WRITE_ROWS: LazyLock<FamilyCounter<VecLabels>> =
+pub static QUERY_PROGRESS_WRITE_ROWS: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_PROGRSS_WRITE_ROWS));
-pub static QUERY_PROGRSS_WRITE_BYTES: LazyLock<FamilyCounter<VecLabels>> =
+pub static QUERY_PROGRESS_WRITE_BYTES: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_PROGRSS_WRITE_BYTES));
