@@ -1024,7 +1024,7 @@ impl WarehouseApi for WarehouseMgr {
         }
     }
 
-    async fn drop_warehouse(&self, warehouse: String) -> Result<()> {
+    async fn drop_warehouse(&self, warehouse: String) -> Result<WarehouseInfo> {
         if warehouse.is_empty() {
             return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
         }
@@ -1075,7 +1075,7 @@ impl WarehouseApi for WarehouseMgr {
                 continue;
             }
 
-            return Ok(());
+            return Ok(warehouse_snapshot.warehouse_info);
         }
 
         Err(ErrorCode::WarehouseOperateConflict(
@@ -1083,7 +1083,11 @@ impl WarehouseApi for WarehouseMgr {
         ))
     }
 
-    async fn create_warehouse(&self, warehouse: String, nodes: Vec<SelectedNode>) -> Result<()> {
+    async fn create_warehouse(
+        &self,
+        warehouse: String,
+        nodes: Vec<SelectedNode>,
+    ) -> Result<WarehouseInfo> {
         if warehouse.is_empty() {
             return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
         }
@@ -1129,26 +1133,28 @@ impl WarehouseApi for WarehouseMgr {
 
             let warehouse_info_key = self.warehouse_info_key(&warehouse)?;
 
+            let warehouse_info = WarehouseInfo::SystemManaged(SystemManagedWarehouse {
+                role_id: GlobalUniqName::unique(),
+                status: "Running".to_string(),
+                id: warehouse.clone(),
+                clusters: HashMap::from([(
+                    String::from(DEFAULT_CLUSTER_ID),
+                    SystemManagedCluster {
+                        nodes: nodes.clone(),
+                    },
+                )]),
+            });
+
             txn.condition
                 .push(map_condition(&warehouse_info_key, MatchSeq::Exact(0)));
             txn.if_then.push(TxnOp::put(
                 warehouse_info_key.clone(),
-                serde_json::to_vec(&WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                    role_id: GlobalUniqName::unique(),
-                    status: "Running".to_string(),
-                    id: warehouse.clone(),
-                    clusters: HashMap::from([(
-                        String::from(DEFAULT_CLUSTER_ID),
-                        SystemManagedCluster {
-                            nodes: nodes.clone(),
-                        },
-                    )]),
-                }))?,
+                serde_json::to_vec(&warehouse_info)?,
             ));
             txn.else_then.push(TxnOp::get(warehouse_info_key));
 
             return match self.metastore.transaction(txn).await? {
-                res if res.success => Ok(()),
+                res if res.success => Ok(warehouse_info),
                 res => match res.responses.last() {
                     Some(TxnOpResponse {
                         response: Some(Response::Get(res)),

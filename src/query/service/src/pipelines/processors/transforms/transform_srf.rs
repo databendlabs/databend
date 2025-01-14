@@ -113,6 +113,9 @@ impl BlockingTransform for TransformSRF {
         }
 
         let input = self.input.take().unwrap();
+        if input.is_empty() {
+            return Ok(None);
+        }
 
         let mut result_size = 0;
         let mut used = 0;

@@ -350,6 +350,7 @@ impl Payload {
                 )
             }
             page.rows += 1;
+            page.state_rows += 1;
 
             if page.rows == page.capacity {
                 (page, _) = self.writable_page();
@@ -401,15 +402,14 @@ impl Payload {
         true
     }
 
-    pub fn empty_block(&self) -> DataBlock {
-        let columns = self
-            .aggrs
-            .iter()
-            .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
+    pub fn empty_block(&self, fake_rows: Option<usize>) -> DataBlock {
+        let fake_rows = fake_rows.unwrap_or(0);
+        let columns = (0..self.aggrs.len())
+            .map(|_| ColumnBuilder::repeat_default(&DataType::Binary, fake_rows).build())
             .chain(
                 self.group_types
                     .iter()
-                    .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
+                    .map(|t| ColumnBuilder::repeat_default(t, fake_rows).build()),
             )
             .collect_vec();
         DataBlock::new_from_columns(columns)
