@@ -67,7 +67,14 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
                 "datafuselabs/ttc-rust:latest".to_string(),
                 TTC_PORT_START,
             )),
-            7,
+            1,
+        ),
+        (
+            Box::new(ClientType::Ttc(
+                "ghcr.io/forsaken628/ttc-go:latest".to_string(),
+                TTC_PORT_START + 1,
+            )),
+            6,
         ),
     ]
 });
