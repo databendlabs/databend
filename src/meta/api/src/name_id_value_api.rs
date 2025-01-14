@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::future::Future;
 
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::primitive::Id;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_meta_app::KeyWithTenant;
@@ -40,7 +38,6 @@ use log::debug;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
 use crate::meta_txn_error::MetaTxnError;
-use crate::schema_api_impl::mark_index_as_deleted;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_op_del;
 use crate::util::fetch_id;
@@ -76,15 +73,17 @@ where
     ///
     /// If there is already a `name_ident` exists, return the existing id in a `Ok(Err(exist))`.
     /// Otherwise, create `name -> id -> value` and returns the created id in a `Ok(Ok(created))`.
-    async fn create_id_value<A>(
+    async fn create_id_value<A, M>(
         &self,
         name_ident: &K,
         value: &IdRsc::ValueType,
         override_exist: bool,
         associated_records: A,
+        mark_delete_records: M,
     ) -> Result<Result<DataId<IdRsc>, SeqV<DataId<IdRsc>>>, MetaTxnError>
     where
         A: Fn(DataId<IdRsc>) -> Vec<(String, Vec<u8>)> + Send,
+        M: Fn(DataId<IdRsc>, &IdRsc::ValueType) -> Result<Vec<(String, Vec<u8>)>, MetaError> + Send,
     {
         debug!(name_ident :? =name_ident; "NameIdValueApi: {}", func_name!());
 
@@ -118,13 +117,9 @@ where
                             txn.if_then.push(TxnOp::delete(k));
                         }
 
-                        let index_meta = <dyn Any>::downcast_ref::<IndexMeta>(&seq_meta.data);
-                        if let Some(index_meta) = index_meta {
-                            txn.if_then.push(mark_index_as_deleted(
-                                name_ident.tenant(),
-                                index_meta.table_id,
-                                *seq_id.data,
-                            )?);
+                        let kvs = mark_delete_records(seq_id.data, &seq_meta.data)?;
+                        for (k, v) in kvs {
+                            txn.if_then.push(TxnOp::put(k, v));
                         }
                     } else {
                         return Ok(Err(seq_id));
