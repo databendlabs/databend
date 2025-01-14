@@ -80,7 +80,7 @@ pub struct Page {
     pub(crate) data: Vec<MaybeUninit<u8>>,
     pub(crate) rows: usize,
     // state_offset = state_rows * agg_len
-    // which mark that the offset to destory the agg states
+    // which mark that the offset to clean the agg states
     pub(crate) state_offsets: usize,
     pub(crate) capacity: usize,
 }
@@ -450,7 +450,7 @@ impl Drop for Payload {
                             let is_partial_state = page.is_partial_state(self.aggrs.len());
 
                             if is_partial_state && idx == 0 {
-                                info!("Destorying partial page, state_offsets: {}, row: {}, agg length: {}", page.state_offsets, page.rows, self.aggrs.len());
+                                info!("Cleaning partial page, state_offsets: {}, row: {}, agg length: {}", page.state_offsets, page.rows, self.aggrs.len());
                             }
                             for row in 0..page.state_offsets.div_ceil(self.aggrs.len()) {
                                 // When OOM, some states are not initialized, we don't need to destroy them
