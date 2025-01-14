@@ -302,3 +302,23 @@ echo "drop table if exists t1" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists t2" | $BENDSQL_CLIENT_CONNECT
 echo "drop stage if exists s3;" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists db01" | $BENDSQL_CLIENT_CONNECT
+
+echo "=== set privilege check ==="
+echo "drop user if exists c" | $BENDSQL_CLIENT_CONNECT
+echo "create user c identified by '123'" | $BENDSQL_CLIENT_CONNECT
+export USER_C_CONNECT="bendsql --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+echo "set session max_threads=1000" | $BENDSQL_CLIENT_CONNECT
+echo "unset session max_threads" | $BENDSQL_CLIENT_CONNECT
+echo "settings (ddl_column_type_nullable=0) select 100" | $BENDSQL_CLIENT_CONNECT
+echo "SET variable a = 'a';" | $BENDSQL_CLIENT_CONNECT
+echo "set global max_threads=1000" | $BENDSQL_CLIENT_CONNECT
+echo "unset global max_threads" | $BENDSQL_CLIENT_CONNECT
+
+echo "set session max_threads=1000" | $USER_C_CONNECT
+echo "unset session max_threads" | $USER_C_CONNECT
+echo "settings (ddl_column_type_nullable=0) select 100" | $USER_C_CONNECT
+echo "SET variable a = 'a';" | $USER_C_CONNECT
+echo "set global max_threads=1000;" | $USER_C_CONNECT 2>&1  | grep "Super" | wc -l
+echo "unset global max_threads;" | $USER_C_CONNECT 2>&1  | grep "Super" | wc -l
+echo "drop user if exists c" | $BENDSQL_CLIENT_CONNECT
+echo "=== set privilege check succ ==="

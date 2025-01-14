@@ -173,26 +173,20 @@ impl FlightScatter for HashTableHashScatter {
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateSpilling(payload) => {
                         for p in scatter_partitioned_payload(payload, self.buckets)? {
-                            blocks.push(match p.len() == 0 {
-                                true => DataBlock::empty(),
-                                false => DataBlock::empty_with_meta(
-                                    AggregateMeta::create_agg_spilling(p),
-                                ),
-                            });
+                            blocks.push(DataBlock::empty_with_meta(
+                                AggregateMeta::create_agg_spilling(p),
+                            ));
                         }
                     }
                     AggregateMeta::AggregatePayload(p) => {
                         for payload in scatter_payload(p.payload, self.buckets)? {
-                            blocks.push(match payload.len() == 0 {
-                                true => DataBlock::empty(),
-                                false => {
-                                    DataBlock::empty_with_meta(AggregateMeta::create_agg_payload(
-                                        p.bucket,
-                                        payload,
-                                        p.max_partition_count,
-                                    ))
-                                }
-                            });
+                            blocks.push(DataBlock::empty_with_meta(
+                                AggregateMeta::create_agg_payload(
+                                    p.bucket,
+                                    payload,
+                                    p.max_partition_count,
+                                ),
+                            ));
                         }
                     }
                 };

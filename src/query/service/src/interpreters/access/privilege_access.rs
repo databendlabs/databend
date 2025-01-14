@@ -1151,7 +1151,21 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant,false, false)
                     .await?;
             }
-            Plan::Set(_) | Plan::Unset(_) | Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
+            Plan::Set(plan) => {
+                use databend_common_ast::ast::SetType;
+                if let SetType::SettingsGlobal = plan.set_type {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
+            }
+            Plan::Unset(plan) => {
+                use databend_common_ast::ast::SetType;
+                if let SetType::SettingsGlobal = plan.unset_type {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
+            }
+            Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
