@@ -59,26 +59,3 @@ pub fn contains_warehouse_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> 
 
     false
 }
-
-#[allow(dead_code)]
-pub fn contains_not_warehouse_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool {
-    if s_expr
-        .children()
-        .any(|s_expr| contains_not_warehouse_table_scan(s_expr, metadata))
-    {
-        return true;
-    }
-
-    if let RelOperator::Scan(scan) = s_expr.plan() {
-        return !matches!(
-            metadata
-                .read()
-                .table(scan.table_index)
-                .table()
-                .distribution_level(),
-            DistributionLevel::Warehouse,
-        );
-    }
-
-    false
-}

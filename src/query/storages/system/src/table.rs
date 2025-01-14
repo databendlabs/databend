@@ -117,7 +117,13 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     }
 
     fn distribution_level(&self) -> DistributionLevel {
-        TTable::DISTRIBUTION_LEVEL
+        // When querying a memory table, we send the partition to one node for execution. The other nodes send empty partitions.
+        // For system tables, they are always non-local, which ensures that system tables can be JOIN or UNION operation with any other table.
+        match TTable::DISTRIBUTION_LEVEL {
+            DistributionLevel::Local => DistributionLevel::Cluster,
+            DistributionLevel::Cluster => DistributionLevel::Cluster,
+            DistributionLevel::Warehouse => DistributionLevel::Warehouse,
+        }
     }
 
     fn get_table_info(&self) -> &TableInfo {
@@ -263,7 +269,13 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
     }
 
     fn distribution_level(&self) -> DistributionLevel {
-        TTable::DISTRIBUTION_LEVEL
+        // When querying a memory table, we send the partition to one node for execution. The other nodes send empty partitions.
+        // For system tables, they are always non-local, which ensures that system tables can be JOIN or UNION operation with any other table.
+        match TTable::DISTRIBUTION_LEVEL {
+            DistributionLevel::Local => DistributionLevel::Cluster,
+            DistributionLevel::Cluster => DistributionLevel::Cluster,
+            DistributionLevel::Warehouse => DistributionLevel::Warehouse,
+        }
     }
 
     fn get_table_info(&self) -> &TableInfo {

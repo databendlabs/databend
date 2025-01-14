@@ -377,12 +377,6 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
         opt_ctx.enable_distributed_optimization = false;
         info!("Disable distributed optimization due to local table scan.");
     } else if contains_warehouse_table_scan(&s_expr, &opt_ctx.metadata) {
-        if contains_not_warehouse_table_scan(&s_expr, &opt_ctx.metadata) {
-            return Err(ErrorCode::SemanticError(
-                "Warehouse level tables cannot be used with other levels tables.",
-            ));
-        }
-
         let warehouse = opt_ctx.table_ctx.get_warehouse_cluster().await?;
 
         if !warehouse.is_empty() {
