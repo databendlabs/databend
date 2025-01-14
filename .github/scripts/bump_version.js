@@ -24,7 +24,7 @@ module.exports = async ({ github, context, core }) => {
     }
   }
 
-  async function getNextNightlyRelease(previous) {
+  function getNextNightlyRelease(previous) {
     const nightly = RE_TAG_NIGHTLY.exec(previous);
     if (nightly) {
       const major = nightly[1];
