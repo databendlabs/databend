@@ -170,6 +170,10 @@ impl Metadata {
         self.lazy_columns.extend(indices);
     }
 
+    pub fn clear_lazy_columns(&mut self) {
+        self.lazy_columns.clear();
+    }
+
     pub fn add_non_lazy_columns(&mut self, indices: HashSet<usize>) {
         debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
         self.non_lazy_columns.extend(indices);
