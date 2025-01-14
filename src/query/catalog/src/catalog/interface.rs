@@ -56,6 +56,7 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -166,6 +167,29 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn drop_index(&self, req: DropIndexReq) -> Result<()>;
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
+
+    async fn get_marked_deleted_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_marked_deleted_indexes' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        _tenant: &Tenant,
+        _table_id: u64,
+        _index_ids: &[u64],
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'remove_marked_deleted_index_ids' not implemented for catalog {}",
+            self.name()
+        )))
+    }
 
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply>;
 

@@ -420,12 +420,12 @@ pub fn try_create_aggregate_array_agg_function(
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, argument_types.len())?;
     let data_type = argument_types[0].clone();
-    let nullable = data_type.is_nullable();
+    let is_nullable = data_type.is_nullable_or_null();
     let return_type = DataType::Array(Box::new(data_type.clone()));
 
     with_simple_no_number_mapped_type!(|T| match data_type.remove_nullable() {
         DataType::T => {
-            if nullable {
+            if is_nullable {
                 type State = NullableArrayAggState<T>;
                 AggregateArrayAggFunction::<T, State>::try_create(display_name, return_type)
             } else {
@@ -436,7 +436,7 @@ pub fn try_create_aggregate_array_agg_function(
         DataType::Number(num_type) => {
             with_number_mapped_type!(|NUM| match num_type {
                 NumberDataType::NUM => {
-                    if nullable {
+                    if is_nullable {
                         type State = NullableArrayAggState<NumberType<NUM>>;
                         AggregateArrayAggFunction::<NumberType<NUM>, State>::try_create(
                             display_name,
@@ -453,7 +453,7 @@ pub fn try_create_aggregate_array_agg_function(
             })
         }
         DataType::Decimal(DecimalDataType::Decimal128(_)) => {
-            if nullable {
+            if is_nullable {
                 type State = NullableArrayAggState<DecimalType<i128>>;
                 AggregateArrayAggFunction::<DecimalType<i128>, State>::try_create(
                     display_name,
@@ -468,7 +468,7 @@ pub fn try_create_aggregate_array_agg_function(
             }
         }
         DataType::Decimal(DecimalDataType::Decimal256(_)) => {
-            if nullable {
+            if is_nullable {
                 type State = NullableArrayAggState<DecimalType<i256>>;
                 AggregateArrayAggFunction::<DecimalType<i256>, State>::try_create(
                     display_name,
@@ -483,7 +483,7 @@ pub fn try_create_aggregate_array_agg_function(
             }
         }
         _ => {
-            if nullable {
+            if is_nullable {
                 type State = NullableArrayAggState<AnyType>;
                 AggregateArrayAggFunction::<AnyType, State>::try_create(display_name, return_type)
             } else {

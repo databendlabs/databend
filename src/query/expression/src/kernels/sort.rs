@@ -16,6 +16,7 @@ use databend_common_exception::Result;
 
 use crate::types::DataType;
 use crate::visitor::ValueVisitor;
+use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Scalar;
@@ -126,8 +127,11 @@ pub fn compare_scalars(rows: Vec<Vec<Scalar>>, data_types: &[DataType]) -> Resul
         .into_iter()
         .map(|builder| builder.build())
         .collect::<Vec<_>>();
+    compare_columns(order_columns, length)
+}
 
-    let descriptions = order_columns
+pub fn compare_columns(columns: Vec<Column>, length: usize) -> Result<Vec<u32>> {
+    let descriptions = columns
         .iter()
         .enumerate()
         .map(|(idx, _)| SortColumnDescription {
@@ -139,7 +143,7 @@ pub fn compare_scalars(rows: Vec<Vec<Scalar>>, data_types: &[DataType]) -> Resul
 
     let mut sort_compare = SortCompare::new(descriptions, length, LimitType::None);
 
-    for array in order_columns {
+    for array in columns {
         sort_compare.visit_value(Value::Column(array))?;
         sort_compare.increment_column_index();
     }

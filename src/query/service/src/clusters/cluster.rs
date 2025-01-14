@@ -323,8 +323,15 @@ impl ClusterDiscovery {
                     cluster_nodes.len() as f64,
                 );
 
-                let res = Cluster::create(res, self.local_id.clone());
-                Ok(res)
+                // compatibility, for self-managed nodes, we allow queries to continue executing even when the heartbeat fails.
+                if cluster_nodes.is_empty() && !config.query.cluster_id.is_empty() {
+                    let mut cluster = Cluster::empty();
+                    let mut_cluster = Arc::get_mut(&mut cluster).unwrap();
+                    mut_cluster.local_id = self.local_id.clone();
+                    return Ok(cluster);
+                }
+
+                Ok(Cluster::create(res, self.local_id.clone()))
             }
         }
     }

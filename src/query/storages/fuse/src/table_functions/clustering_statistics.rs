@@ -172,7 +172,6 @@ impl<'a> ClusteringStatisticsImpl<'a> {
         );
 
         let mut row_num = 0;
-        let mut end_flag = false;
         let chunk_size =
             std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
 
@@ -220,13 +219,8 @@ impl<'a> ClusteringStatisticsImpl<'a> {
 
                     row_num += 1;
                     if row_num >= limit {
-                        end_flag = true;
-                        break;
+                        break 'FOR;
                     }
-                }
-
-                if end_flag {
-                    break 'FOR;
                 }
             }
         }

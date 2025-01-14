@@ -1,70 +1,174 @@
 module.exports = async ({ github, context, core }) => {
-  const knownEvents = ["schedule", "workflow_dispatch", "release"];
+  const knownEvents = ["schedule", "workflow_dispatch"];
   if (!knownEvents.includes(context.eventName)) {
     core.setFailed(`Triggerd by unknown event: ${context.eventName}`);
     return;
   }
 
-  const { STABLE, TAG } = process.env;
+  const { TYPE, TAG } = process.env;
 
-  // trigger by release event
-  if (context.ref.startsWith("refs/tags/")) {
-    let tag = context.ref.replace("refs/tags/", "");
-    core.setOutput("tag", tag);
-    core.setOutput("sha", context.sha);
-    core.info(`Tag event triggered by ${tag}.`);
-    return;
-  }
+  const RE_TAG_STABLE = /^v(\d+)\.(\d+)\.(\d+)$/g;
+  const RE_TAG_NIGHTLY = /^v(\d+)\.(\d+)\.(\d+)-nightly$/g;
+  const RE_TAG_PATCH = /^v(\d+)\.(\d+)\.(\d+)-p(\d+)$/g;
 
-  // trigger by schedule or workflow_dispatch event
-  if (STABLE == "true") {
-    if (TAG) {
-      // trigger stable release by workflow_dispatch with a tag
-      let result = /v(\d+)\.(\d+)\.(\d+)-nightly/g.exec(TAG);
-      if (result === null) {
-        core.setFailed(`The tag ${TAG} to stablize is invalid, ignoring`);
-        return;
-      }
-      let major = result[1];
-      let minor = result[2];
-      let patch = result[3];
-      let stable_tag = `v${major}.${minor}.${patch}`;
-      core.setOutput("tag", stable_tag);
-      let ref = await github.rest.git.getRef({
+  switch (TYPE) {
+    case "":
+    case "nightly": {
+      core.setOutput("sha", context.sha);
+      core.info(`Nightly release triggered by ${TAG} (${context.sha})`);
+
+      let previous = null;
+      const releases = await github.rest.repos.listReleases({
         owner: context.repo.owner,
         repo: context.repo.repo,
-        ref: `tags/${TAG}`,
       });
-      core.setOutput("sha", ref.data.object.sha);
-      core.info(
-        `Stable release ${stable_tag} from ${TAG} (${ref.data.object.sha})`
-      );
-    } else {
-      core.setFailed("Stable release must be triggered with a nightly tag");
+      for (const release of releases.data) {
+        const result = RE_TAG_NIGHTLY.exec(release.tag_name);
+        if (result) {
+          previous = release.tag_name;
+          break;
+        }
+      }
+      core.setOutput("previous", previous);
+      core.info(`Nightly release with previous release: ${previous}`);
+
+      if (TAG) {
+        core.setOutput("tag", TAG);
+        core.info(`Release create manually with tag ${TAG}`);
+        return;
+      }
+      const result = RE_TAG_NIGHTLY.exec(previous);
+      if (!result) {
+        core.setFailed(`The previous tag ${previous} is invalid.`);
+        return;
+      }
+      const major = result[1];
+      const minor = result[2];
+      const patch = (parseInt(result[3]) + 1).toString();
+      const nextTag = `v${major}.${minor}.${patch}-nightly`;
+      core.setOutput("tag", nextTag);
+      core.info(`Release create new nightly ${nextTag}`);
+      return;
     }
-  } else {
-    core.setOutput("sha", context.sha);
-    if (TAG) {
-      core.setOutput("tag", TAG);
-      core.info(`Release create manually with tag ${TAG} (${context.sha})`);
-    } else {
-      let releases = await github.rest.repos.listReleases({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-        per_page: 1,
-      });
-      let tag = releases.data[0].tag_name;
-      let result = /v(\d+)\.(\d+)\.(\d+)/g.exec(tag);
-      if (result === null) {
-        core.setFailed(`The previous tag ${tag} is invalid, ignoring`);
+
+    case "stable": {
+      core.setOutput("sha", context.sha);
+      if (!TAG) {
+        core.setFailed("Stable release must be triggered with a nightly tag");
         return;
       }
-      let major = result[1];
-      let minor = result[2];
-      let patch = (parseInt(result[3]) + 1).toString();
-      let next_tag = `v${major}.${minor}.${patch}-nightly`;
-      core.setOutput("tag", next_tag);
-      core.info(`Nightly release ${next_tag} from ${tag} (${context.sha})`);
+      core.info(`Stable release triggered by ${TAG} (${context.sha})`);
+      const result = RE_TAG_NIGHTLY.exec(TAG);
+      if (!result) {
+        core.setFailed(`The tag ${TAG} is invalid, ignoring`);
+        return;
+      }
+      const major = result[1];
+      const minor = result[2];
+      const patch = result[3];
+      const nextTag = `v${major}.${minor}.${patch}`;
+      core.setOutput("tag", nextTag);
+      core.info(`Stable release ${nextTag} from ${TAG}`);
+
+      let previous = null;
+      let page = 1;
+      while (true) {
+        const releases = await github.rest.repos.listReleases({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          page,
+        });
+        if (releases.data.length === 0) {
+          break;
+        }
+        page++;
+        for (const release of releases.data) {
+          const ret = RE_TAG_STABLE.exec(release.tag_name);
+          if (ret) {
+            previous = release.tag_name;
+            break;
+          }
+        }
+      }
+      if (!previous) {
+        core.setFailed(`No previous stable release found, ignoring`);
+        return;
+      }
+      core.setOutput("previous", previous);
+      core.info(`Stable release with previous release: ${previous}`);
+    }
+
+    case "patch": {
+      if (!TAG) {
+        core.setFailed("Patch release must be triggered with a stable tag");
+        return;
+      }
+      core.info(`Patch release triggered by ${TAG}`);
+      const result = RE_TAG_STABLE.exec(TAG);
+      if (!result) {
+        core.setFailed(`The tag ${TAG} is invalid, ignoring`);
+        return;
+      }
+
+      const branch = await github.rest.repos.getBranch({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        branch: `backport/${TAG}`,
+      });
+      core.setOutput("sha", branch.data.commit.sha);
+      core.info(
+        `Patch release triggered by ${TAG} (${branch.data.commit.sha})`
+      );
+
+      let pv = 1;
+      let previous = null;
+      let page = 1;
+      while (true) {
+        const releases = await github.rest.repos.listReleases({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+          page,
+        });
+        if (releases.data.length === 0) {
+          break;
+        }
+        page++;
+        for (const release of releases.data) {
+          if (!release.tag_name.startsWith(TAG)) {
+            continue;
+          }
+          if (release.tag_name === TAG) {
+            previous = release.tag_name;
+            break;
+          }
+          const ret = RE_TAG_PATCH.exec(release.tag_name);
+          if (!ret) {
+            core.warning(`Ignore previous release ${release.tag_name}`);
+            continue;
+          }
+          pv = parseInt(result[4]) + 1;
+          previous = release.tag_name;
+        }
+      }
+      if (!previous) {
+        core.setFailed(`No previous stable release found, ignoring`);
+        return;
+      }
+      core.setOutput("previous", previous);
+      core.info(`Patch release with previous release: ${previous}`);
+
+      const major = result[1];
+      const minor = result[2];
+      const patch = result[3];
+      const nextTag = `v${major}.${minor}.${patch}-p${pv}`;
+      core.setOutput("tag", nextTag);
+      core.info(`Patch release ${nextTag} from ${TAG}`);
+      return;
+    }
+
+    default: {
+      core.setFailed(`Unknown release type: ${TYPE}`);
+      return;
     }
   }
 };
