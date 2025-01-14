@@ -41,6 +41,10 @@
 
 **Databend**, built in Rust, is an open-source cloud data warehouse that serves as a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). With its focus on fast query execution and data ingestion, it's designed for complex analysis of the world's largest datasets.
 
+**Production-Proven Scale:**
+- 🤝 **Enterprise Adoption**: Trusted by over **50 organizations** processing more than **100 million queries daily**
+- 🗄️ **Massive Scale**: Successfully managing over **800 petabytes** of analytical data
+
 ## ⚡ Performance
 
 <div align="center">
