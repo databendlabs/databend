@@ -45,7 +45,7 @@ module.exports = async ({ github, context, core }) => {
     }
   }
 
-  async function getPreviousPatchRelease(github, context, TAG) {
+  async function getPreviousPatchRelease(github, context) {
     let page = 1;
     while (true) {
       const releases = await github.rest.repos.listReleases({
@@ -67,7 +67,7 @@ module.exports = async ({ github, context, core }) => {
         }
         const ret = RE_TAG_PATCH.exec(release.tag_name);
         if (!ret) {
-          core.warning(`Ignore previous release ${release.tag_name}`);
+          core.warning(`Ignore invalid patch release ${release.tag_name}`);
           continue;
         }
         return release.tag_name;
@@ -176,9 +176,9 @@ module.exports = async ({ github, context, core }) => {
         `Patch release triggered by ${TAG} (${branch.data.commit.sha})`
       );
 
-      const previous = await getPreviousPatchRelease(github, context, TAG);
+      const previous = await getPreviousPatchRelease(github, context);
       if (!previous) {
-        core.setFailed(`No previous stable release found, ignoring`);
+        core.setFailed(`No previous patch release found, ignoring`);
         return;
       }
       core.setOutput("previous", previous);
