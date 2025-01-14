@@ -16,12 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::plans::SetPriorityPlan;
 
-use crate::clusters::ClusterDiscovery;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
@@ -54,9 +52,7 @@ impl SetPriorityInterpreter {
 
     #[async_backtrace::framed]
     async fn set_warehouse_priority(&self) -> Result<PipelineBuildResult> {
-        let config = GlobalConfig::instance();
-        let discovery = ClusterDiscovery::instance();
-        let warehouse = discovery.discover_warehouse_nodes(&config).await?;
+        let warehouse = self.ctx.get_warehouse_cluster().await?;
 
         let mut message = HashMap::with_capacity(warehouse.nodes.len());
         for node_info in &warehouse.nodes {
