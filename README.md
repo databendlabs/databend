@@ -1,5 +1,5 @@
 <h1 align="center">Databend: The Next-Gen Cloud [Data+AI] Analytics</h1>
-<h2 align="center">Zero Disk Architecture</h2>
+<h2 align="center">The open-source, on-premise alternative to Snowflake</h2>
 
 <div align="center">
 
