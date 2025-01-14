@@ -17,13 +17,12 @@ use std::iter::TrustedLen;
 use std::mem;
 use std::mem::MaybeUninit;
 
-use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::JEAllocator;
 
 use crate::table0::Entry;
 use crate::HashtableLike;
 
-pub struct LookupHashtable<K: Sized, const CAPACITY: usize, V, A: Allocator + Clone = MmapAllocator>
-{
+pub struct LookupHashtable<K: Sized, const CAPACITY: usize, V, A: Allocator + Clone = JEAllocator> {
     flags: Box<[bool; CAPACITY], A>,
     data: Box<[Entry<K, V>; CAPACITY], A>,
     len: usize,

@@ -20,7 +20,7 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::JEAllocator;
 
 use crate::container::Container;
 use crate::container::HeapContainer;
@@ -102,7 +102,7 @@ pub struct DictionaryStringHashTable<V> {
     arena: Arc<Bump>,
     dict_keys: usize,
     entries_len: usize,
-    pub(crate) entries: HeapContainer<DictionaryEntry<V>, MmapAllocator>,
+    pub(crate) entries: HeapContainer<DictionaryEntry<V>, JEAllocator>,
     pub dictionary_hashset: StringHashSet<[u8]>,
 }
 
@@ -116,7 +116,7 @@ impl<V> DictionaryStringHashTable<V> {
             arena: bump.clone(),
             dict_keys,
             entries_len: 0,
-            entries: unsafe { HeapContainer::new_zeroed(256, MmapAllocator::default()) },
+            entries: unsafe { HeapContainer::new_zeroed(256, JEAllocator::default()) },
             dictionary_hashset: StringHashSet::new(bump),
         }
     }
@@ -452,7 +452,7 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
                 }
             }
 
-            self.entries = HeapContainer::new_zeroed(0, MmapAllocator::default());
+            self.entries = HeapContainer::new_zeroed(0, JEAllocator::default());
         }
 
         self.dictionary_hashset.clear();
@@ -615,7 +615,7 @@ impl<'a, V> Iterator for DictionaryTableMutIter<'a, V> {
 }
 
 pub struct DictionarySlotIter<'a> {
-    empty: Option<&'a TableEmpty<(), MmapAllocator>>,
+    empty: Option<&'a TableEmpty<(), JEAllocator>>,
     entities_slice: &'a [Entry<FallbackKey, ()>],
     i: usize,
 }
