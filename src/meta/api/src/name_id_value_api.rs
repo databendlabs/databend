@@ -71,6 +71,9 @@ where
     /// Such operations do not have any condition constraints.
     /// For example, a `name -> id` mapping can have a reverse `id -> name` mapping.
     ///
+    /// `mark_delete_records` is used to generate additional key-values for implementing `mark_delete` operation.
+    /// For example, when an index is dropped by `override_exist`,  `__fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta` will be added.
+    ///
     /// If there is already a `name_ident` exists, return the existing id in a `Ok(Err(exist))`.
     /// Otherwise, create `name -> id -> value` and returns the created id in a `Ok(Ok(created))`.
     async fn create_id_value<A, M>(
