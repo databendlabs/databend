@@ -23,8 +23,8 @@ module.exports = async ({ github, context, core }) => {
         repo: context.repo.repo,
       });
       for (const release of releases.data) {
-        const result = RE_TAG_NIGHTLY.exec(release.tag_name);
-        if (result) {
+        const ret = RE_TAG_NIGHTLY.exec(release.tag_name);
+        if (ret) {
           previous = release.tag_name;
           break;
         }
