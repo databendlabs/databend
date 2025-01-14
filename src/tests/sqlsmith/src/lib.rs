@@ -19,5 +19,6 @@ mod query_fuzzer;
 mod reducer;
 mod runner;
 mod sql_gen;
+mod util;
 
 pub use runner::Runner;

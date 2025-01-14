@@ -1088,7 +1088,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             #function_name
             ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ #window_function
+            ~ #window_function?
         },
         |(name, _, params, _, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
             func: FunctionCall {
@@ -1096,24 +1096,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name,
                 args: opt_args.unwrap_or_default(),
                 params,
-                window: Some(window),
-                lambda: None,
-            },
-        },
-    );
-    let function_call_with_params = map(
-        rule! {
-            #function_name
-            ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
-            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-        },
-        |(name, _, params, _, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
-            func: FunctionCall {
-                distinct: opt_distinct.is_some(),
-                name,
-                args: opt_args.unwrap_or_default(),
-                params,
-                window: None,
+                window,
                 lambda: None,
             },
         },
@@ -1406,7 +1389,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #function_call_with_lambda : "`function(..., x -> ...)`"
                 | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
                 | #function_call_with_params_window : "`function(...)(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-                | #function_call_with_params : "`function(...)(...)`"
                 | #function_call : "`function(...)`"
             ),
             rule!(
