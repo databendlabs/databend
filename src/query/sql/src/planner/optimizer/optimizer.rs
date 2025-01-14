@@ -41,7 +41,6 @@ use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
-use crate::optimizer::util::contains_not_warehouse_table_scan;
 use crate::optimizer::util::contains_warehouse_table_scan;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
@@ -471,14 +470,12 @@ async fn get_optimized_memo(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
         opt_ctx.enable_distributed_optimization = false;
         info!("Disable distributed optimization due to local table scan.");
     } else if contains_warehouse_table_scan(&s_expr, &opt_ctx.metadata) {
-        if contains_not_warehouse_table_scan(&s_expr, &opt_ctx.metadata) {
-            return Err(ErrorCode::SemanticError(
-                "Warehouse level tables cannot be used with other levels tables.",
-            ));
-        }
+        let warehouse = opt_ctx.table_ctx.get_warehouse_cluster().await?;
 
-        opt_ctx.enable_distributed_optimization = true;
-        info!("Enable distributed optimization due to warehouse table scan.");
+        if !warehouse.is_empty() {
+            opt_ctx.enable_distributed_optimization = true;
+            info!("Enable distributed optimization due to warehouse table scan.");
+        }
     }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
