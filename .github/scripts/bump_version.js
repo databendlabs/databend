@@ -11,23 +11,98 @@ module.exports = async ({ github, context, core }) => {
   const RE_TAG_NIGHTLY = /^v(\d+)\.(\d+)\.(\d+)-nightly$/;
   const RE_TAG_PATCH = /^v(\d+)\.(\d+)\.(\d+)-p(\d+)$/;
 
+  async function getPreviousNightlyRelease(github, context) {
+    const releases = await github.rest.repos.listReleases({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+    });
+    for (const release of releases.data) {
+      const ret = RE_TAG_NIGHTLY.exec(release.tag_name);
+      if (ret) {
+        return release.tag_name;
+      }
+    }
+  }
+
+  async function getPreviousStableRelease(github, context) {
+    let page = 1;
+    while (true) {
+      const releases = await github.rest.repos.listReleases({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        page,
+      });
+      if (releases.data.length === 0) {
+        break;
+      }
+      page++;
+      for (const release of releases.data) {
+        const ret = RE_TAG_STABLE.exec(release.tag_name);
+        if (ret) {
+          return release.tag_name;
+        }
+      }
+    }
+  }
+
+  async function getPreviousPatchRelease(github, context, TAG) {
+    let page = 1;
+    while (true) {
+      const releases = await github.rest.repos.listReleases({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        page,
+      });
+      if (releases.data.length === 0) {
+        break;
+      }
+      page++;
+      for (const release of releases.data) {
+        if (!release.tag_name.startsWith(TAG)) {
+          continue;
+        }
+        if (release.tag_name === TAG) {
+          // no previous patch release, use the previous stable release
+          return release.tag_name;
+        }
+        const ret = RE_TAG_PATCH.exec(release.tag_name);
+        if (!ret) {
+          core.warning(`Ignore previous release ${release.tag_name}`);
+          continue;
+        }
+        return release.tag_name;
+      }
+    }
+  }
+
+  function getNextPatchRelease(previous) {
+    const stable = RE_TAG_STABLE.exec(previous);
+    if (stable) {
+      const major = stable[1];
+      const minor = stable[2];
+      const patch = stable[3];
+      return `v${major}.${minor}.${patch}-p1`;
+    }
+    const patch = RE_TAG_PATCH.exec(previous);
+    if (patch) {
+      const major = patch[1];
+      const minor = patch[2];
+      const patch = patch[3];
+      const pv = parseInt(patch[4]);
+      return `v${major}.${minor}.${patch}-p${pv + 1}`;
+    }
+  }
+
   switch (TYPE) {
     case "":
     case "nightly": {
       core.setOutput("sha", context.sha);
       core.info(`Nightly release triggered by (${context.sha})`);
 
-      let previous = null;
-      const releases = await github.rest.repos.listReleases({
-        owner: context.repo.owner,
-        repo: context.repo.repo,
-      });
-      for (const release of releases.data) {
-        const ret = RE_TAG_NIGHTLY.exec(release.tag_name);
-        if (ret) {
-          previous = release.tag_name;
-          break;
-        }
+      const previous = await getPreviousNightlyRelease(github, context);
+      if (!previous) {
+        core.setFailed(`No previous nightly release found, ignoring`);
+        return;
       }
       core.setOutput("previous", previous);
       core.info(`Nightly release with previous release: ${previous}`);
@@ -70,26 +145,7 @@ module.exports = async ({ github, context, core }) => {
       core.setOutput("tag", nextTag);
       core.info(`Stable release ${nextTag} from ${TAG}`);
 
-      let previous = null;
-      let page = 1;
-      while (true) {
-        const releases = await github.rest.repos.listReleases({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          page,
-        });
-        if (releases.data.length === 0) {
-          break;
-        }
-        page++;
-        for (const release of releases.data) {
-          const ret = RE_TAG_STABLE.exec(release.tag_name);
-          if (ret) {
-            previous = release.tag_name;
-            break;
-          }
-        }
-      }
+      const previous = await getPreviousStableRelease(github, context);
       if (!previous) {
         core.setFailed(`No previous stable release found, ignoring`);
         return;
@@ -120,40 +176,7 @@ module.exports = async ({ github, context, core }) => {
         `Patch release triggered by ${TAG} (${branch.data.commit.sha})`
       );
 
-      let pv = 1;
-      let previous = null;
-      let page = 1;
-      while (true) {
-        const releases = await github.rest.repos.listReleases({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          page,
-        });
-        if (releases.data.length === 0) {
-          break;
-        }
-        page++;
-        for (const release of releases.data) {
-          if (!release.tag_name.startsWith(TAG)) {
-            continue;
-          }
-          if (release.tag_name === TAG) {
-            previous = release.tag_name;
-            break;
-          }
-          const ret = RE_TAG_PATCH.exec(release.tag_name);
-          if (!ret) {
-            core.warning(`Ignore previous release ${release.tag_name}`);
-            continue;
-          }
-          const lastPV = parseInt(ret[4]);
-          if (lastPV) {
-            pv = lastPV + 1;
-            previous = release.tag_name;
-            break;
-          }
-        }
-      }
+      const previous = await getPreviousPatchRelease(github, context, TAG);
       if (!previous) {
         core.setFailed(`No previous stable release found, ignoring`);
         return;
@@ -161,12 +184,13 @@ module.exports = async ({ github, context, core }) => {
       core.setOutput("previous", previous);
       core.info(`Patch release with previous release: ${previous}`);
 
-      const major = result[1];
-      const minor = result[2];
-      const patch = result[3];
-      const nextTag = `v${major}.${minor}.${patch}-p${pv}`;
+      const nextTag = getNextPatchRelease(previous);
+      if (!nextTag) {
+        core.setFailed(`No next patch release from ${previous}`);
+        return;
+      }
       core.setOutput("tag", nextTag);
-      core.info(`Patch release ${nextTag} from ${TAG}`);
+      core.info(`Patch release ${nextTag} from ${previous}`);
       return;
     }
 
