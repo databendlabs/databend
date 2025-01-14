@@ -40,8 +40,8 @@ select a + b from ( select weighted_avg(number+1, number*2) a, avg(number) b fro
 11.833333492279053
 
 query IR
-select number % 3, weighted_avg(number, 1) from numbers(10) group by 1;
+select number % 3, weighted_avg(number, 1) from numbers(10) group by 1 order by 1;
 ----
-0 4999.5
-2 5000
-1 4999
+0 4.5
+1 4.0
+2 5.0
