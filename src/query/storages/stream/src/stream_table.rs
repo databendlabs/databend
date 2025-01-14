@@ -24,6 +24,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -335,8 +336,8 @@ impl StreamTable {
 
 #[async_trait::async_trait]
 impl Table for StreamTable {
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn as_any(&self) -> &dyn Any {

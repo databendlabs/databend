@@ -86,3 +86,37 @@ echo "after vacuum, should be 0 index dir"
 
 find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_1"/_i_a/ -type f | wc -l
 find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX_2"/_i_a/ -type f | wc -l
+
+
+### create or replace index
+
+stmt "create or replace database test_vacuum_drop_aggregating_index"
+
+mkdir -p /tmp/test_vacuum_drop_aggregating_index/
+
+stmt "create or replace table test_vacuum_drop_aggregating_index.agg(a int, b int,c int) 'fs:///tmp/test_vacuum_drop_aggregating_index/'"
+
+
+stmt "insert into test_vacuum_drop_aggregating_index.agg values (1,1,4), (1,2,1), (1,2,4)"
+
+stmt "CREATE OR REPLACE AGGREGATING INDEX index AS SELECT MIN(a), MAX(b) FROM test_vacuum_drop_aggregating_index.agg;"
+
+stmt "insert into test_vacuum_drop_aggregating_index.agg values (2,2,5)"
+
+stmt "REFRESH AGGREGATING INDEX index;"
+
+SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacuum_drop_aggregating_index','agg') limit 1" | $BENDSQL_CLIENT_CONNECT)
+PREFIX=$(echo "$SNAPSHOT_LOCATION" | cut -d'/' -f1-2)
+
+echo "before vacuum, should be 1 index dir"
+
+ls  /tmp/test_vacuum_drop_aggregating_index/"$PREFIX"/_i_a/ | wc -l
+
+stmt "create or replace aggregating index index AS SELECT MIN(a), MAX(b) FROM test_vacuum_drop_aggregating_index.agg;"
+
+stmt "set data_retention_time_in_days=0; select * from fuse_vacuum_drop_aggregating_index('test_vacuum_drop_aggregating_index','agg')" > /dev/null
+
+echo "after vacuum, should be 0 index dir"
+find /tmp/test_vacuum_drop_aggregating_index/"$PREFIX"/_i_a/ -type f | wc -l
+
+stmt "drop aggregating index index"

@@ -29,6 +29,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::DummyColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
@@ -188,8 +189,8 @@ impl Table for ParquetRSTable {
         self
     }
 
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn get_table_info(&self) -> &TableInfo {
