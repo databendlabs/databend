@@ -77,10 +77,7 @@ fn test_agg() {
     });
     test_agg_median(file, eval_aggr);
     test_agg_median_tdigest(file, eval_aggr);
-    // FIXME
-    test_agg_array_agg(file, |name, params, columns, rows| {
-        eval_aggr_for_test(name, params, columns, rows, false)
-    });
+    test_agg_array_agg(file, eval_aggr);
     test_agg_string_agg(file, eval_aggr);
     test_agg_bitmap_count(file, eval_aggr);
     test_agg_bitmap(file, eval_aggr);
