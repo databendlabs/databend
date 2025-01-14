@@ -146,8 +146,12 @@ module.exports = async ({ github, context, core }) => {
             core.warning(`Ignore previous release ${release.tag_name}`);
             continue;
           }
-          pv = parseInt(result[4]) + 1;
-          previous = release.tag_name;
+          const lastPV = parseInt(ret[4]);
+          if (lastPV) {
+            pv = lastPV + 1;
+            previous = release.tag_name;
+            break;
+          }
         }
       }
       if (!previous) {
