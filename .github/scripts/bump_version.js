@@ -7,15 +7,15 @@ module.exports = async ({ github, context, core }) => {
 
   const { TYPE, TAG } = process.env;
 
-  const RE_TAG_STABLE = /^v(\d+)\.(\d+)\.(\d+)$/g;
-  const RE_TAG_NIGHTLY = /^v(\d+)\.(\d+)\.(\d+)-nightly$/g;
-  const RE_TAG_PATCH = /^v(\d+)\.(\d+)\.(\d+)-p(\d+)$/g;
+  const RE_TAG_STABLE = /^v(\d+)\.(\d+)\.(\d+)$/;
+  const RE_TAG_NIGHTLY = /^v(\d+)\.(\d+)\.(\d+)-nightly$/;
+  const RE_TAG_PATCH = /^v(\d+)\.(\d+)\.(\d+)-p(\d+)$/;
 
   switch (TYPE) {
     case "":
     case "nightly": {
       core.setOutput("sha", context.sha);
-      core.info(`Nightly release triggered by ${TAG} (${context.sha})`);
+      core.info(`Nightly release triggered by (${context.sha})`);
 
       let previous = null;
       const releases = await github.rest.repos.listReleases({
