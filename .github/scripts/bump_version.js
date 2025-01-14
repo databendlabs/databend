@@ -103,13 +103,13 @@ module.exports = async ({ github, context, core }) => {
       const patch = stable[3];
       return `v${major}.${minor}.${patch}-p1`;
     }
-    const patch = RE_TAG_PATCH.exec(previous);
-    if (patch) {
-      const major = patch[1];
-      const minor = patch[2];
-      const patch = patch[3];
-      const pv = parseInt(patch[4]);
-      return `v${major}.${minor}.${patch}-p${pv + 1}`;
+    const version = RE_TAG_PATCH.exec(previous);
+    if (version) {
+      const major = version[1];
+      const minor = version[2];
+      const patch = version[3];
+      const pv = parseInt(version[4]) + 1;
+      return `v${major}.${minor}.${patch}-p${pv}`;
     }
   }
 
