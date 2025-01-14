@@ -67,9 +67,6 @@ impl BlockOperator {
                         None => Ok(input),
                     }
                 } else {
-                    // for (i, c) in input.columns().iter().enumerate() {
-                    //     println!("{i}: {} = {:?}",c.data_type, c.value.index(0))
-                    // }
                     for expr in exprs {
                         let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                         let result = evaluator.run(expr)?;
