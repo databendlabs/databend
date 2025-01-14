@@ -753,12 +753,21 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let name_ident_raw = serialize_struct(&IndexNameIdentRaw::from(name_ident))?;
 
         let create_res = self
-            .create_id_value(name_ident, meta, overriding, |id| {
-                vec![(
-                    IndexIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
-                    name_ident_raw.clone(),
-                )]
-            })
+            .create_id_value(
+                name_ident,
+                meta,
+                overriding,
+                |id| {
+                    vec![(
+                        IndexIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
+                        name_ident_raw.clone(),
+                    )]
+                },
+                |index_id, value| {
+                    mark_index_as_deleted(name_ident.tenant(), value.table_id, *index_id)
+                        .map(|(k, v)| vec![(k, v)])
+                },
+            )
             .await?;
 
         match create_res {
@@ -803,20 +812,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 IndexIdToNameIdent::new_generic(name_ident.tenant(), seq_id.data).to_string_key(),
             ));
 
-            // add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta
-            let marked_deleted_index_id_ident = MarkedDeletedIndexIdIdent::new_generic(
-                name_ident.tenant(),
-                MarkedDeletedIndexId::new(seq_meta.data.table_id, *seq_id.data),
-            );
-            let marked_deleted_index_meta = MarkedDeletedIndexMeta {
-                dropped_on: Utc::now(),
-                index_type: MarkedDeletedIndexType::AGGREGATING,
-            };
-
-            txn.if_then.push(TxnOp::put(
-                marked_deleted_index_id_ident.to_string_key(),
-                serialize_struct(&marked_deleted_index_meta)?,
-            ));
+            let (key, value) =
+                mark_index_as_deleted(name_ident.tenant(), seq_meta.data.table_id, *seq_id.data)?;
+            txn.if_then.push(TxnOp::put(key, value));
 
             let (succ, _responses) = send_txn(self, txn).await?;
             debug!(key :? =name_ident, id :? =&id_ident,succ = succ; "{}", func_name!());
@@ -2901,12 +2899,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident))?;
 
         let res = self
-            .create_id_value(name_ident, meta, false, |id| {
-                vec![(
-                    CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
-                    name_ident_raw.clone(),
-                )]
-            })
+            .create_id_value(
+                name_ident,
+                meta,
+                false,
+                |id| {
+                    vec![(
+                        CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
+                        name_ident_raw.clone(),
+                    )]
+                },
+                |_, _| Ok(vec![]),
+            )
             .await?;
 
         Ok(res)
@@ -3020,7 +3024,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         let name_ident = &req.dictionary_ident;
 
         let create_res = self
-            .create_id_value(name_ident, &req.dictionary_meta, false, |_| vec![])
+            .create_id_value(
+                name_ident,
+                &req.dictionary_meta,
+                false,
+                |_| vec![],
+                |_, _| Ok(vec![]),
+            )
             .await?;
 
         match create_res {
@@ -4176,4 +4186,25 @@ fn typ<K>() -> &'static str {
         .rsplit("::")
         .next()
         .unwrap_or("UnknownType")
+}
+
+/// add __fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta
+pub fn mark_index_as_deleted(
+    tenant: &Tenant,
+    table_id: u64,
+    index_id: u64,
+) -> Result<(String, Vec<u8>), MetaError> {
+    let marked_deleted_index_id_ident = MarkedDeletedIndexIdIdent::new_generic(
+        tenant,
+        MarkedDeletedIndexId::new(table_id, index_id),
+    );
+    let marked_deleted_index_meta = MarkedDeletedIndexMeta {
+        dropped_on: Utc::now(),
+        index_type: MarkedDeletedIndexType::AGGREGATING,
+    };
+
+    Ok((
+        marked_deleted_index_id_ident.to_string_key(),
+        serialize_struct(&marked_deleted_index_meta)?,
+    ))
 }

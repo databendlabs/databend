@@ -1083,18 +1083,36 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             },
         },
     );
-    let function_call_with_params = map(
+    let function_call_with_params_window = map(
         rule! {
             #function_name
-            ~ ("(" ~ #comma_separated_list1(subexpr(0)) ~ ")")?
+            ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            ~ #window_function
         },
-        |(name, params, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+        |(name, _, params, _, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
             func: FunctionCall {
                 distinct: opt_distinct.is_some(),
                 name,
                 args: opt_args.unwrap_or_default(),
-                params: params.map(|(_, x, _)| x).unwrap_or_default(),
+                params,
+                window: Some(window),
+                lambda: None,
+            },
+        },
+    );
+    let function_call_with_params = map(
+        rule! {
+            #function_name
+            ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+        },
+        |(name, _, params, _, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct: opt_distinct.is_some(),
+                name,
+                args: opt_args.unwrap_or_default(),
+                params,
                 window: None,
                 lambda: None,
             },
@@ -1376,7 +1394,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #interval_expr : "`INTERVAL <str_literal>`"
                 | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
                 | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
-
             ),
             rule!(
                 #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
@@ -1388,9 +1405,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #count_all_with_window : "`COUNT(*) OVER ...`"
                 | #function_call_with_lambda : "`function(..., x -> ...)`"
                 | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
+                | #function_call_with_params_window : "`function(...)(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
                 | #function_call_with_params : "`function(...)(...)`"
                 | #function_call : "`function(...)`"
-                | #case : "`CASE ... END`"
+            ),
+            rule!(
+                #case : "`CASE ... END`"
                 | #tuple : "`(<expr> [, ...])`"
                 | #subquery : "`(SELECT ...)`"
                 | #column_ref : "<column>"

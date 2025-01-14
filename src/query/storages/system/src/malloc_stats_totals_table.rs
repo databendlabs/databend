@@ -15,6 +15,7 @@
 use std::default::Default;
 use std::sync::Arc;
 
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -53,7 +54,7 @@ pub struct MallocStatsTotalsTable {
 
 impl SyncSystemTable for MallocStatsTotalsTable {
     const NAME: &'static str = "system.malloc_stats_totals";
-    const DATA_IN_LOCAL: bool = false;
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info

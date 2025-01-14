@@ -25,6 +25,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
@@ -396,8 +397,8 @@ impl HiveTable {
 
 #[async_trait::async_trait]
 impl Table for HiveTable {
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn as_any(&self) -> &(dyn std::any::Any + 'static) {

@@ -30,7 +30,7 @@ use crate::sessions::QueryContext;
 pub struct SetPriorityInterpreter {
     ctx: Arc<QueryContext>,
     plan: SetPriorityPlan,
-    proxy_to_cluster: bool,
+    proxy_to_warehouse: bool,
 }
 
 impl SetPriorityInterpreter {
@@ -38,7 +38,7 @@ impl SetPriorityInterpreter {
         Ok(SetPriorityInterpreter {
             ctx,
             plan,
-            proxy_to_cluster: true,
+            proxy_to_warehouse: true,
         })
     }
 
@@ -46,17 +46,17 @@ impl SetPriorityInterpreter {
         Ok(SetPriorityInterpreter {
             ctx,
             plan,
-            proxy_to_cluster: false,
+            proxy_to_warehouse: false,
         })
     }
 
     #[async_backtrace::framed]
-    async fn set_cluster_priority(&self) -> Result<PipelineBuildResult> {
-        let cluster = self.ctx.get_cluster();
+    async fn set_warehouse_priority(&self) -> Result<PipelineBuildResult> {
+        let warehouse = self.ctx.get_warehouse_cluster().await?;
 
-        let mut message = HashMap::with_capacity(cluster.nodes.len());
-        for node_info in &cluster.nodes {
-            if node_info.id != cluster.local_id {
+        let mut message = HashMap::with_capacity(warehouse.nodes.len());
+        for node_info in &warehouse.nodes {
+            if node_info.id != warehouse.local_id {
                 message.insert(node_info.id.clone(), self.plan.clone());
             }
         }
@@ -67,7 +67,7 @@ impl SetPriorityInterpreter {
             retry_times: settings.get_flight_max_retry_times()?,
             retry_interval: settings.get_flight_retry_interval()?,
         };
-        let res = cluster
+        let res = warehouse
             .do_action::<_, bool>(SET_PRIORITY, message, flight_params)
             .await?;
 
@@ -96,8 +96,8 @@ impl Interpreter for SetPriorityInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let id = &self.plan.id;
         match self.ctx.get_session_by_id(id) {
-            None => match self.proxy_to_cluster {
-                true => self.set_cluster_priority().await,
+            None => match self.proxy_to_warehouse {
+                true => self.set_warehouse_priority().await,
                 false => Err(ErrorCode::UnknownSession(format!(
                     "Not found session id {}",
                     id
