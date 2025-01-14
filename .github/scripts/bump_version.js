@@ -24,6 +24,16 @@ module.exports = async ({ github, context, core }) => {
     }
   }
 
+  async function getNextNightlyRelease(previous) {
+    const nightly = RE_TAG_NIGHTLY.exec(previous);
+    if (nightly) {
+      const major = nightly[1];
+      const minor = nightly[2];
+      const patch = parseInt(nightly[3]) + 1;
+      return `v${major}.${minor}.${patch}-nightly`;
+    }
+  }
+
   async function getPreviousStableRelease(github, context) {
     let page = 1;
     while (true) {
@@ -112,15 +122,11 @@ module.exports = async ({ github, context, core }) => {
         core.info(`Release create manually with tag ${TAG}`);
         return;
       }
-      const result = RE_TAG_NIGHTLY.exec(previous);
-      if (!result) {
-        core.setFailed(`The previous tag ${previous} is invalid.`);
+      const nextTag = getNextNightlyRelease(previous);
+      if (!nextTag) {
+        core.setFailed(`No next nightly release from ${previous}`);
         return;
       }
-      const major = result[1];
-      const minor = result[2];
-      const patch = (parseInt(result[3]) + 1).toString();
-      const nextTag = `v${major}.${minor}.${patch}-nightly`;
       core.setOutput("tag", nextTag);
       core.info(`Release create new nightly ${nextTag}`);
       return;
