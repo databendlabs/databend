@@ -55,6 +55,16 @@ module.exports = async ({ github, context, core }) => {
     }
   }
 
+  function getNextStableRelease() {
+    const nightly = RE_TAG_NIGHTLY.exec(TAG);
+    if (nightly) {
+      const major = nightly[1];
+      const minor = nightly[2];
+      const patch = nightly[3];
+      return `v${major}.${minor}.${patch}`;
+    }
+  }
+
   async function getPreviousPatchRelease(github, context) {
     let page = 1;
     while (true) {
@@ -139,15 +149,11 @@ module.exports = async ({ github, context, core }) => {
         return;
       }
       core.info(`Stable release triggered by ${TAG} (${context.sha})`);
-      const result = RE_TAG_NIGHTLY.exec(TAG);
-      if (!result) {
-        core.setFailed(`The tag ${TAG} is invalid, ignoring`);
+      const nextTag = getNextStableRelease();
+      if (!nextTag) {
+        core.setFailed(`No stable release from ${TAG}`);
         return;
       }
-      const major = result[1];
-      const minor = result[2];
-      const patch = result[3];
-      const nextTag = `v${major}.${minor}.${patch}`;
       core.setOutput("tag", nextTag);
       core.info(`Stable release ${nextTag} from ${TAG}`);
 
