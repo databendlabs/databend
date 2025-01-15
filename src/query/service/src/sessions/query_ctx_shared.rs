@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -147,6 +148,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
     pub(in crate::sessions) spilled_files:
         Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
+    pub(in crate::sessions) unload_callbacked: AtomicBool,
 }
 
 impl QueryContextShared {
@@ -206,6 +208,7 @@ impl QueryContextShared {
 
             cluster_spill_progress: Default::default(),
             spilled_files: Default::default(),
+            unload_callbacked: AtomicBool::new(false),
         }))
     }
 

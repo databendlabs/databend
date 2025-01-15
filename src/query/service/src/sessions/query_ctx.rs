@@ -322,6 +322,9 @@ impl QueryContext {
 
     pub fn update_init_query_id(&self, id: String) {
         self.shared.spilled_files.write().clear();
+        self.shared
+            .unload_callbacked
+            .store(false, Ordering::Release);
         self.shared.cluster_spill_progress.write().clear();
         *self.shared.init_query_id.write() = id;
     }
@@ -471,9 +474,16 @@ impl QueryContext {
         Ok(table)
     }
 
-    pub fn take_spill_files(&self) -> Vec<String> {
+    pub fn mark_unload_callbacked(&self) -> bool {
+        self.shared
+            .unload_callbacked
+            .fetch_or(true, Ordering::SeqCst)
+    }
+
+    pub fn unload_spill_meta(&self) {
+        const SPILL_META_SUFFIX: &str = ".list";
         let r = self.shared.spilled_files.read();
-        let remote_spill_files = r
+        let mut remote_spill_files = r
             .iter()
             .map(|(k, _)| k)
             .filter_map(|l| match l {
@@ -486,17 +496,13 @@ impl QueryContext {
         drop(r);
 
         if remote_spill_files.is_empty() {
-            return remote_spill_files;
+            return;
         }
 
-        let mut w = self.shared.spilled_files.write();
-        w.clear();
-
-        remote_spill_files
-    }
-
-    pub fn unload_spill_meta(&self, mut remote_spill_files: Vec<String>) {
-        const SPILL_META_SUFFIX: &str = ".list";
+        {
+            let mut w = self.shared.spilled_files.write();
+            w.clear();
+        }
 
         let location_prefix = self.query_tenant_spill_prefix();
         let node_idx = self.get_cluster().ordered_index();
