@@ -16,7 +16,7 @@ use std::alloc::Allocator;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use databend_common_base::mem_allocator::JEAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
 use databend_common_column::bitmap::Bitmap;
 
 use super::traits::HashJoinHashtableLike;
@@ -37,7 +37,7 @@ pub struct StringRawEntry {
     pub next: u64,
 }
 
-pub struct HashJoinStringHashTable<A: Allocator + Clone = JEAllocator> {
+pub struct HashJoinStringHashTable<A: Allocator + Clone = DefaultAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,

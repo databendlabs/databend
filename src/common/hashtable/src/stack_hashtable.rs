@@ -16,7 +16,7 @@ use std::alloc::Allocator;
 use std::intrinsics::unlikely;
 use std::mem::MaybeUninit;
 
-use databend_common_base::mem_allocator::JEAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
 
 use super::container::StackContainer;
 use super::table0::Entry;
@@ -25,7 +25,7 @@ use super::table0::Table0Iter;
 use super::traits::Keyable;
 use super::utils::ZeroEntry;
 
-pub struct StackHashtable<K, V, const N: usize = 16, A = JEAllocator>
+pub struct StackHashtable<K, V, const N: usize = 16, A = DefaultAllocator>
 where
     K: Keyable,
     A: Allocator + Clone,

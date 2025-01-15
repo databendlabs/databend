@@ -19,7 +19,7 @@ use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_base::mem_allocator::JEAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
 
 use super::container::HeapContainer;
 use super::table0::Entry;
@@ -38,7 +38,7 @@ use crate::table_empty::TableEmptyIterMut;
 /// Simple unsized hashtable is used for storing unsized keys in arena. It can be worked with HashMethodSerializer.
 /// Different from `ShortStringHashTable`, it doesn't use adaptive sub hashtable to store key values via key size.
 /// It can be considered as a minimal hashtable implementation of ShortStringHashTable
-pub struct StringHashtable<K, V, A = JEAllocator>
+pub struct StringHashtable<K, V, A = DefaultAllocator>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,
