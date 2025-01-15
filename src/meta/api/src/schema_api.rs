@@ -53,6 +53,7 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
@@ -170,6 +171,12 @@ pub trait SchemaApi: Send + Sync {
         tenant: &Tenant,
         table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply, MetaError>;
+
+    async fn get_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply, MetaError>;
 
     async fn update_index(
         &self,
@@ -401,5 +408,12 @@ pub trait SchemaApi: Send + Sync {
         tenant: &Tenant,
         table_id: u64,
         index_ids: &[u64],
+    ) -> Result<(), MetaTxnError>;
+
+    async fn remove_marked_deleted_table_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
     ) -> Result<(), MetaTxnError>;
 }

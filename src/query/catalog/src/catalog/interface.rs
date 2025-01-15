@@ -57,6 +57,7 @@ use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -174,7 +175,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         _table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "'list_marked_deleted_indexes' not implemented for catalog {}",
+            "'get_marked_deleted_indexes' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn get_marked_deleted_table_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'get_marked_deleted_table_indexes' not implemented for catalog {}",
             self.name()
         )))
     }
@@ -187,6 +199,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "'remove_marked_deleted_index_ids' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn remove_marked_deleted_table_index_ids(
+        &self,
+        _tenant: &Tenant,
+        _table_id: u64,
+        _indexes: &[(String, String)],
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'remove_marked_deleted_table_index_ids' not implemented for catalog {}",
             self.name()
         )))
     }

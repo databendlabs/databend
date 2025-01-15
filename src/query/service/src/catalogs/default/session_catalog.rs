@@ -60,6 +60,7 @@ use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -201,6 +202,16 @@ impl Catalog for SessionCatalog {
             .await
     }
 
+    async fn get_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        self.inner
+            .get_marked_deleted_table_indexes(tenant, table_id)
+            .await
+    }
+
     #[async_backtrace::framed]
     async fn remove_marked_deleted_index_ids(
         &self,
@@ -210,6 +221,18 @@ impl Catalog for SessionCatalog {
     ) -> Result<()> {
         self.inner
             .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_table_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<()> {
+        self.inner
+            .remove_marked_deleted_table_index_ids(tenant, table_id, indexes)
             .await
     }
 
