@@ -77,6 +77,12 @@ impl Rule for RuleEliminateFilter {
                 .derive_relational_prop(&RelExpr::with_s_expr(s_expr))?
                 .output_columns
                 .clone();
+
+            {
+                let mut metadata = self.metadata.write();
+                metadata.clear_lazy_columns();
+            }
+
             let metadata = self.metadata.read();
             let mut fields = Vec::with_capacity(output_columns.len());
 

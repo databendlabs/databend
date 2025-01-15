@@ -23,6 +23,14 @@ runs:
         category: ${{ inputs.category }}
         path: distro/bin
         artifacts: metactl,meta,query,query.debug
+    - name: Download BendSQL
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        verison=$(gh release list --repo databendlabs/bendsql | head -n 1 | awk '{print $1}')
+        curl -sSLfo /tmp/bendsql.tar.gz https://github.com/databendlabs/bendsql/releases/download/${verison}/bendsql-${verison}-${{ inputs.target }}.tar.gz
+        tar -xzvf /tmp/bendsql.tar.gz -C distro/bin
     - name: Pack Binaries
       id: pack_binaries
       shell: bash

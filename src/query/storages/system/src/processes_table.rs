@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -46,7 +47,7 @@ pub struct ProcessesTable {
 impl SyncSystemTable for ProcessesTable {
     const NAME: &'static str = "system.processes";
 
-    const DATA_IN_LOCAL: bool = false;
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info

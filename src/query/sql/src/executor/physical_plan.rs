@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -708,6 +709,12 @@ impl PhysicalPlan {
                 self,
                 Self::ExchangeSource(_) | Self::ExchangeSink(_) | Self::Exchange(_)
             )
+    }
+
+    pub fn is_warehouse_distributed_plan(&self) -> bool {
+        self.children()
+            .any(|child| child.is_warehouse_distributed_plan())
+            || matches!(self, Self::TableScan(v) if v.source.parts.kind == PartitionsShuffleKind::BroadcastWarehouse)
     }
 
     pub fn get_desc(&self) -> Result<String> {

@@ -39,6 +39,7 @@ use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::CompactionLimits;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::AbortChecker;
@@ -605,8 +606,8 @@ impl FuseTable {
 
 #[async_trait::async_trait]
 impl Table for FuseTable {
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn as_any(&self) -> &dyn Any {
