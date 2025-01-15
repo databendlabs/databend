@@ -62,17 +62,17 @@ use std::sync::LazyLock;
 static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|| {
     vec![
         (Box::new(ClientType::MySQL), 3),
-        (
-            Box::new(ClientType::Ttc(
-                "datafuselabs/ttc-rust:latest".to_string(),
-                TTC_PORT_START,
-            )),
-            1,
-        ),
+        // (
+        //     Box::new(ClientType::Ttc(
+        //         "datafuselabs/ttc-rust:latest".to_string(),
+        //         TTC_PORT_START,
+        //     )),
+        //     1,
+        // ),
         (
             Box::new(ClientType::Ttc(
                 "ghcr.io/forsaken628/ttc-go:latest".to_string(),
-                TTC_PORT_START + 1,
+                TTC_PORT_START,
             )),
             6,
         ),
@@ -158,16 +158,12 @@ async fn run_hybrid_client(
 ) -> Result<()> {
     println!("Hybird client starts to run with: {:?}", args);
 
-    // preparse docker envs
-    let mut port_start = TTC_PORT_START;
-
     let docker = Docker::connect_with_local_defaults().unwrap();
     for (c, _) in HYBRID_CONFIGS.iter() {
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
-            ClientType::Ttc(image, _) => {
-                run_ttc_container(&docker, image, port_start, cs).await?;
-                port_start += 1;
+            ClientType::Ttc(image, port) => {
+                run_ttc_container(&docker, image, port, cs).await?;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
