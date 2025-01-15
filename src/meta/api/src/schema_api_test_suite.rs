@@ -6248,7 +6248,7 @@ impl SchemaApiTestSuite {
 
             {
                 info!("--- remove marked deleted table indexes");
-                mt.remove_marked_deleted_table_index_ids(&tenant, table_id, &[
+                mt.remove_marked_deleted_table_indexes(&tenant, table_id, &[
                     (index_name_1, index_version_1),
                     (index_name_2, index_version_2),
                 ])

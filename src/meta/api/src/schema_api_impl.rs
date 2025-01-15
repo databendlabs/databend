@@ -3242,7 +3242,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn remove_marked_deleted_table_index_ids(
+    async fn remove_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
         table_id: u64,

@@ -203,14 +203,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         )))
     }
 
-    async fn remove_marked_deleted_table_index_ids(
+    async fn remove_marked_deleted_table_indexes(
         &self,
         _tenant: &Tenant,
         _table_id: u64,
         _indexes: &[(String, String)],
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
-            "'remove_marked_deleted_table_index_ids' not implemented for catalog {}",
+            "'remove_marked_deleted_table_indexes' not implemented for catalog {}",
             self.name()
         )))
     }

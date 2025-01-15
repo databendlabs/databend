@@ -145,7 +145,7 @@ impl SimpleTableFunc for FuseVacuumDropInvertedIndex {
                 num_removed_files.push(n);
             }
             catalog
-                .remove_marked_deleted_table_index_ids(&tenant, table_id, &indexes_to_be_vacuumed)
+                .remove_marked_deleted_table_indexes(&tenant, table_id, &indexes_to_be_vacuumed)
                 .await?;
         }
 

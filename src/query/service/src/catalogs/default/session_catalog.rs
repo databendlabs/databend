@@ -225,14 +225,14 @@ impl Catalog for SessionCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn remove_marked_deleted_table_index_ids(
+    async fn remove_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
         table_id: u64,
         indexes: &[(String, String)],
     ) -> Result<()> {
         self.inner
-            .remove_marked_deleted_table_index_ids(tenant, table_id, indexes)
+            .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
             .await
     }
 

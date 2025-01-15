@@ -410,7 +410,7 @@ pub trait SchemaApi: Send + Sync {
         index_ids: &[u64],
     ) -> Result<(), MetaTxnError>;
 
-    async fn remove_marked_deleted_table_index_ids(
+    async fn remove_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
         table_id: u64,
