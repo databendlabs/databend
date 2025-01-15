@@ -75,7 +75,6 @@ mod python_udf {
     use arrow_udf_python::Runtime;
     use parking_lot::RwLock;
 
-    /// python runtime should be only initialized once by gil lock, see: https://github.com/python/cpython/blob/main/Python/pystate.c
     pub static GLOBAL_PYTHON_RUNTIME: LazyLock<Arc<RwLock<Runtime>>> =
         LazyLock::new(|| Arc::new(RwLock::new(Runtime::new().unwrap())));
 }

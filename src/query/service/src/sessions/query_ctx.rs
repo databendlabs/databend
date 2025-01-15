@@ -471,10 +471,9 @@ impl QueryContext {
         Ok(table)
     }
 
-    pub fn unload_spill_meta(&self) {
-        const SPILL_META_SUFFIX: &str = ".list";
+    pub fn take_spill_files(&self) -> Vec<String> {
         let r = self.shared.spilled_files.read();
-        let mut remote_spill_files = r
+        let remote_spill_files = r
             .iter()
             .map(|(k, _)| k)
             .filter_map(|l| match l {
@@ -487,13 +486,17 @@ impl QueryContext {
         drop(r);
 
         if remote_spill_files.is_empty() {
-            return;
+            return remote_spill_files;
         }
 
-        {
-            let mut w = self.shared.spilled_files.write();
-            w.clear();
-        }
+        let mut w = self.shared.spilled_files.write();
+        w.clear();
+
+        remote_spill_files
+    }
+
+    pub fn unload_spill_meta(&self, mut remote_spill_files: Vec<String>) {
+        const SPILL_META_SUFFIX: &str = ".list";
 
         let location_prefix = self.query_tenant_spill_prefix();
         let node_idx = self.get_cluster().ordered_index();

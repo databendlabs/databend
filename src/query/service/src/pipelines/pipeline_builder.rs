@@ -94,11 +94,15 @@ impl PipelineBuilder {
         }
 
         // unload spill metas
-        self.main_pipeline
-            .set_on_finished(always_callback(move |_info: &ExecutionInfo| {
-                self.ctx.unload_spill_meta();
-                Ok(())
-            }));
+        let remote_spill_files = self.ctx.take_spill_files();
+
+        if !remote_spill_files.is_empty() {
+            self.main_pipeline
+                .set_on_finished(always_callback(move |_info: &ExecutionInfo| {
+                    self.ctx.unload_spill_meta(remote_spill_files);
+                    Ok(())
+                }));
+        }
 
         Ok(PipelineBuildResult {
             main_pipeline: self.main_pipeline,
