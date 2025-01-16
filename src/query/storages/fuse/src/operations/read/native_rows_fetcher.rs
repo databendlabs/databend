@@ -148,10 +148,6 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
 
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
     }
-
-    fn schema(&self) -> DataSchema {
-        self.reader.data_schema()
-    }
 }
 
 impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {

@@ -158,10 +158,6 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
 
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
     }
-
-    fn schema(&self) -> DataSchema {
-        self.reader.data_schema()
-    }
 }
 
 impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
