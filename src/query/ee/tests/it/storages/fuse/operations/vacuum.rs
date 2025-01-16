@@ -522,7 +522,7 @@ async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
     let file_util = Files::create(ctx, operator);
 
     // files to be deleted does not matter, faulty_accessor will always fail to delete
-    let r = file_util.remove_file_in_batch(vec!["1", "2"], false).await;
+    let r = file_util.remove_file_in_batch(vec!["1", "2"]).await;
     assert!(r.is_err());
 
     // verify that accessor.delete() was called

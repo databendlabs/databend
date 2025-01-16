@@ -39,7 +39,6 @@ impl Files {
     pub async fn remove_file_in_batch(
         &self,
         file_locations: impl IntoIterator<Item = impl AsRef<str>>,
-        limit_max_delete_requests: bool,
     ) -> Result<()> {
         let locations = Vec::from_iter(file_locations.into_iter().map(|v| v.as_ref().to_string()));
 
@@ -49,10 +48,7 @@ impl Files {
 
         // adjusts batch_size according to the `max_threads` settings,
         // limits its min/max value to 1 and 1000.
-        let threads_nums = match limit_max_delete_requests {
-            true => self.ctx.get_settings().get_max_delete_requests()?,
-            false => self.ctx.get_settings().get_max_threads()?,
-        } as usize;
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
         let batch_size = (locations.len() / threads_nums).clamp(1, 1000);
 
         info!(

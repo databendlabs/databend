@@ -232,9 +232,9 @@ pub async fn do_vacuum2(
     // order is important
     // indexes should be removed before blocks, because index locations to gc are generated from block locations
     // subject_files should be removed before snapshots, because gc of subject_files depend on gc root
-    op.remove_file_in_batch(&indexes_to_gc, true).await?;
-    op.remove_file_in_batch(&subject_files_to_gc, true).await?;
-    op.remove_file_in_batch(snapshots_to_gc, true).await?;
+    op.remove_file_in_batch(&indexes_to_gc).await?;
+    op.remove_file_in_batch(&subject_files_to_gc).await?;
+    op.remove_file_in_batch(snapshots_to_gc).await?;
 
     let files_to_gc: Vec<_> = subject_files_to_gc
         .into_iter()

@@ -1083,7 +1083,7 @@ async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, fil
     match op {
         Ok(op) => {
             let file_op = Files::create(ctx, op);
-            if let Err(e) = file_op.remove_file_in_batch(files, false).await {
+            if let Err(e) = file_op.remove_file_in_batch(files).await {
                 error!("Failed to delete file: {:?}, error: {}", files, e);
             }
         }

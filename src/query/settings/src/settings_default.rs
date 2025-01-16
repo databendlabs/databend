@@ -200,13 +200,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
-                ("max_delete_requests", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Sets the maximum number of concurrent delete files requests in fuse_vacuum2().",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(1..=1024)),
-                }),
                 ("storage_io_min_bytes_for_seek", DefaultSettingValue {
                     value: UserSettingValue::UInt64(48),
                     desc: "Sets the minimum byte size of data that must be read from storage in a single I/O operation \

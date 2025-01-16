@@ -833,14 +833,6 @@ impl Settings {
         self.try_set_u64("short_sql_max_length", val)
     }
 
-    pub fn get_max_delete_requests(&self) -> Result<u64> {
-        self.try_get_u64("max_delete_requests")
-    }
-
-    pub fn set_max_delete_requests(&self, val: u64) -> Result<()> {
-        self.try_set_u64("max_delete_requests", val)
-    }
-
     pub fn get_enable_prune_pipeline(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_prune_pipeline")? == 1)
     }
