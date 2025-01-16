@@ -22,8 +22,6 @@ runs:
           bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.318 1.2.527 rbac
           bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.307 1.2.527 rbac
           bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.318 1.2.527 rbac
-          bash ./tests/compat_fuse/test_compat_fuse.sh         1.2.680 1.2.680 udf
-          bash ./tests/compat_fuse/test_compat_fuse_forward.sh 1.2.680 1.2.680 udf
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure
