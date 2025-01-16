@@ -69,11 +69,12 @@ runs:
       shell: bash
       run: |
         artifacts="meta,metactl,metabench,query,sqllogictests"
+        binaries=""
         for artifact in ${artifacts//,/ }; do
-          echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
+          binaries="${binaries} --bin databend-$artifact"
         done
-        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
+        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
+        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Release for specific artifacts
       if: inputs.artifacts != 'all'
@@ -83,8 +84,8 @@ runs:
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
+          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
-        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
     - name: Check Binary Info
       shell: bash
