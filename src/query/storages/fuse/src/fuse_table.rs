@@ -1085,7 +1085,7 @@ impl Table for FuseTable {
 
         let op = Files::create(ctx, self.operator.clone());
         let len = files.len() as u64;
-        op.remove_file_in_batch(files).await?;
+        op.remove_file_in_batch(files, false).await?;
         Ok(len)
     }
 }

@@ -20,8 +20,8 @@ use databend_common_catalog::plan::ReclusterTask;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::CompactSource;
@@ -46,6 +46,7 @@ pub struct HilbertSerialize {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {
@@ -81,11 +82,16 @@ impl PhysicalPlanBuilder {
                 )));
             };
 
+            let table_meta_timestamps = self
+                .ctx
+                .get_table_meta_timestamps(tbl.get_id(), Some(snapshot.clone()))?;
+
             let plan = self.build(s_expr.child(0)?, required).await?;
             let plan = PhysicalPlan::HilbertSerialize(Box::new(HilbertSerialize {
                 plan_id: 0,
                 input: Box::new(plan),
                 table_info: table_info.clone(),
+                table_meta_timestamps,
             }));
             PhysicalPlan::CommitSink(Box::new(CommitSink {
                 input: Box::new(plan),
@@ -97,6 +103,7 @@ impl PhysicalPlanBuilder {
                 deduplicated_label: None,
                 plan_id: u32::MAX,
                 recluster_info: Some(recluster_info),
+                table_meta_timestamps,
             }))
         } else {
             let Some((parts, snapshot)) =
@@ -106,6 +113,11 @@ impl PhysicalPlanBuilder {
                     "No need to do recluster for '{database}'.'{table}'"
                 )));
             };
+
+            let table_meta_timestamps = self
+                .ctx
+                .get_table_meta_timestamps(tbl.get_id(), Some(snapshot.clone()))?;
+
             if parts.is_empty() {
                 return Err(ErrorCode::NoNeedToRecluster(format!(
                     "No need to do recluster for '{database}'.'{table}'"
@@ -124,6 +136,7 @@ impl PhysicalPlanBuilder {
                         tasks,
                         table_info: table_info.clone(),
                         plan_id: u32::MAX,
+                        table_meta_timestamps,
                     }));
 
                     if is_distributed {
@@ -150,6 +163,7 @@ impl PhysicalPlanBuilder {
                             removed_segment_indexes,
                             removed_statistics: removed_segment_summary,
                         }),
+                        table_meta_timestamps,
                     }))
                 }
                 ReclusterParts::Compact(parts) => {
@@ -159,6 +173,7 @@ impl PhysicalPlanBuilder {
                         table_info: table_info.clone(),
                         column_ids: snapshot.schema.to_leaf_column_id_set(),
                         plan_id: u32::MAX,
+                        table_meta_timestamps,
                     }));
 
                     if is_distributed {
@@ -182,6 +197,7 @@ impl PhysicalPlanBuilder {
                         deduplicated_label: None,
                         plan_id: u32::MAX,
                         recluster_info: None,
+                        table_meta_timestamps,
                     }))
                 }
             }

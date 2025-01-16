@@ -85,7 +85,6 @@ pub struct TableMutationAggregator {
     kind: MutationKind,
     start_time: Instant,
     finished_tasks: usize,
-    table_id: u64,
     table_meta_timestamps: TableMetaTimestamps,
 }
 
@@ -298,6 +297,7 @@ impl TableMutationAggregator {
                     block_per_seg,
                     kind,
                     set_hilbert_level,
+                    table_meta_timestamps,
                 )
                 .await
             });
@@ -441,13 +441,11 @@ impl TableMutationAggregator {
             let schema = self.schema.clone();
             let op = self.dal.clone();
             let location_gen = self.location_gen.clone();
+            let table_meta_timestamps = self.table_meta_timestamps;
 
             tasks.push(async move {
                 let mut all_perfect = false;
                 let mut set_level = false;
-            let table_meta_timestamps = self.table_meta_timestamps;
-            let mut all_perfect = false;
-            tasks.push(async move {
                 let (new_blocks, origin_summary) = if let Some(loc) = location {
                     // read the old segment
                     let compact_segment_info =
