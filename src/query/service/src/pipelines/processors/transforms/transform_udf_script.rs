@@ -176,7 +176,7 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
 type JsRuntimePool = Pool<arrow_udf_js::Runtime, JsRuntimeBuilder>;
 
 #[cfg(feature = "python-udf")]
-struct PyRuntimeBuilder {
+pub struct PyRuntimeBuilder {
     name: String,
     handler: String,
     code: String,
