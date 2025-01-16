@@ -223,6 +223,7 @@ impl Binder {
             write_mode: CopyIntoTableMode::Copy,
             query: None,
             enable_distributed: false,
+            files_collected: false,
         })
     }
 
@@ -400,6 +401,7 @@ impl Binder {
 
             enable_distributed: false,
             is_transform: false,
+            files_collected: true,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)
