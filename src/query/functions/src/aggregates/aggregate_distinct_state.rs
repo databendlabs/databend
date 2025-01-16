@@ -41,6 +41,7 @@ use databend_common_hashtable::HashSet as CommonHashSet;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::HashtableLike;
 use databend_common_hashtable::ShortStringHashSet;
+use databend_common_hashtable::StackHashSet;
 use databend_common_io::prelude::*;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
@@ -318,13 +319,13 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
 
 // For count(distinct string) and uniq(string)
 pub struct AggregateUniqStringState {
-    set: CommonHashSet<u128>,
+    set: StackHashSet<u128>,
 }
 
 impl DistinctStateFunc for AggregateUniqStringState {
     fn new() -> Self {
         AggregateUniqStringState {
-            set: CommonHashSet::new(),
+            set: StackHashSet::new(),
         }
     }
 
@@ -338,7 +339,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self> {
         let size = reader.read_uvarint()?;
-        let mut set = CommonHashSet::with_capacity(size as usize);
+        let mut set = StackHashSet::with_capacity(size as usize);
         for _ in 0..size {
             let e = borsh_deserialize_state(reader)?;
             let _ = set.set_insert(e).is_ok();
