@@ -322,6 +322,9 @@ impl QueryContext {
 
     pub fn update_init_query_id(&self, id: String) {
         self.shared.spilled_files.write().clear();
+        self.shared
+            .unload_callbacked
+            .store(false, Ordering::Release);
         self.shared.cluster_spill_progress.write().clear();
         *self.shared.init_query_id.write() = id;
     }
@@ -469,6 +472,12 @@ impl QueryContext {
             _ => table,
         };
         Ok(table)
+    }
+
+    pub fn mark_unload_callbacked(&self) -> bool {
+        self.shared
+            .unload_callbacked
+            .fetch_or(true, Ordering::SeqCst)
     }
 
     pub fn unload_spill_meta(&self) {

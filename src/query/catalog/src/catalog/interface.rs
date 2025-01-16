@@ -111,6 +111,7 @@ use databend_common_meta_types::SeqV;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
+use log::info;
 
 use crate::database::Database;
 use crate::table::Table;
@@ -412,16 +413,21 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        self.retryable_update_multi_table_meta(req)
-            .await?
-            .map_err(|e| {
-                ErrorCode::TableVersionMismatched(format!(
-                    "Fail to update table metas, conflict tables: {:?}",
-                    e.iter()
-                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
-                        .collect::<Vec<_>>()
-                ))
-            })
+        let result = self.retryable_update_multi_table_meta(req).await?;
+        match result {
+            Ok(reply) => Ok(reply),
+            Err(failed_tables) => {
+                let err_msg = format!(
+                    "Due to concurrent transactions, transaction commit failed. Conflicting table IDs: {:?}",
+                    failed_tables.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
+                );
+                info!(
+                    "Due to concurrent transactions, transaction commit failed. Conflicting tables: {:?}",
+                    failed_tables
+                );
+                Err(ErrorCode::TableVersionMismatched(err_msg))
+            }
+        }
     }
 
     // update stream metas, currently used by "copy into location form stream"

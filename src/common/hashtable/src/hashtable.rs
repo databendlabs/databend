@@ -17,7 +17,7 @@ use std::intrinsics::unlikely;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 
-use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
 
 use super::container::HeapContainer;
 use super::table0::Entry;
@@ -29,7 +29,7 @@ use super::traits::Keyable;
 use super::utils::ZeroEntry;
 use crate::FastHash;
 
-pub struct Hashtable<K, V, A = MmapAllocator>
+pub struct Hashtable<K, V, A = DefaultAllocator>
 where
     K: Keyable,
     A: Allocator + Clone,
