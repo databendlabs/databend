@@ -23,6 +23,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::NullAs;
+use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_storage::parquet_rs::infer_schema_with_extension;
 use databend_storages_common_stage::project_columnar;
 use opendal::Operator;
@@ -88,6 +89,7 @@ impl RowGroupReaderForCopy {
             &default_values,
             location,
             case_sensitive,
+            StageFileFormatType::Parquet,
         )?;
         pushdown_columns.sort();
         let mapping = pushdown_columns

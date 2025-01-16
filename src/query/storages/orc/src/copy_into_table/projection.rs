@@ -19,6 +19,7 @@ use databend_common_expression::Expr;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::NullAs;
+use databend_common_meta_app::principal::StageFileFormatType;
 use databend_storages_common_stage::project_columnar;
 
 use crate::hashable_schema::HashableSchema;
@@ -56,6 +57,7 @@ impl ProjectionFactory {
                 &self.default_values,
                 location,
                 false,
+                StageFileFormatType::Orc,
             )?
             .0;
             self.projections.insert(schema.clone(), v.clone());
