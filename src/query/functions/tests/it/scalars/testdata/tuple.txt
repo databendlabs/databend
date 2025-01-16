@@ -57,6 +57,41 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : array_tuple(NULL, NULL)
+raw expr       : array_tuple(NULL, NULL)
+checked expr   : array_tuple<NULL, NULL>(NULL, NULL)
+optimized expr : [(NULL, NULL)]
+output type    : Array(Tuple(NULL, NULL))
+output domain  : [({NULL}, {NULL})]
+output         : [(NULL, NULL)]
+
+
+ast            : array_tuple(1, 2, 'a')
+raw expr       : array_tuple(1, 2, 'a')
+checked expr   : array_tuple<UInt8, UInt8, String>(1_u8, 2_u8, "a")
+optimized expr : [(1, 2, 'a')]
+output type    : Array(Tuple(UInt8, UInt8, String))
+output domain  : [({1..=1}, {2..=2}, {"a"..="a"})]
+output         : [(1, 2, 'a')]
+
+
+ast            : array_tuple([1,2,3], ['a','b','c'], 10)
+raw expr       : array_tuple(array(1, 2, 3), array('a', 'b', 'c'), 10)
+checked expr   : array_tuple<Array(UInt8), Array(String), UInt8>(array<T0=UInt8><T0, T0, T0>(1_u8, 2_u8, 3_u8), array<T0=String><T0, T0, T0>("a", "b", "c"), 10_u8)
+optimized expr : [(1, 'a', 10), (2, 'b', 10), (3, 'c', 10)]
+output type    : Array(Tuple(UInt8, String, UInt8))
+output domain  : [({1..=3}, {"a"..="c"}, {10..=10})]
+output         : [(1, 'a', 10), (2, 'b', 10), (3, 'c', 10)]
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | array_tuple([1,2,3], ['a','b'], 10)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ array length must be equal, but got 3 and 2 while evaluating function `array_tuple([1, 2, 3], ['a', 'b'], 10)` in expr `array_tuple(array(1, 2, 3), array('a', 'b'), 10)`
+
+
+
 error: 
   --> SQL:1:1
   |

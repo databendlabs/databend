@@ -1,3 +1,20 @@
 statement ok
 SELECT (1, 'a', NULL, to_date(18869), (2.1, to_datetime(1630320462000000)))
 
+query T
+SELECT tuple([1,2,3], ['a','b','c'], 10);
+----
+([1,2,3],['a','b','c'],10)
+
+query T
+SELECT array_tuple([1,2,3], ['a','b','c'], 10);
+----
+[(1,'a',10),(2,'b',10),(3,'c',10)]
+
+statement error 1006
+SELECT array_tuple([1,2,3], ['a','b'], 10);
+
+query T
+SELECT array_tuple(1, 'a', null);
+----
+[(1,'a',NULL)]

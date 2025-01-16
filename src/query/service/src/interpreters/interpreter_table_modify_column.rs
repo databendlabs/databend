@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
@@ -19,8 +20,10 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -142,11 +145,19 @@ impl ModifyTableColumnInterpreter {
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
 
+        let mut modify_field_indices = HashSet::new();
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             let column = &field.name.to_string();
             let data_type = &field.data_type;
-            if let Some((i, _)) = schema.column_with_name(column) {
+            if let Some((i, old_field)) = schema.column_with_name(column) {
+                modify_field_indices.insert(i);
+                // if the field has different leaf column numbers, we need drop the old column
+                // and add a new one to generate new column id. otherwise, leaf column ids will conflict.
+                if field.data_type.num_leaf_columns() != old_field.data_type.num_leaf_columns() {
+                    let _ = new_schema.drop_column(column);
+                    let _ = new_schema.add_column(field, i);
+                }
                 if let Some(default_expr) = &field.default_expr {
                     let default_expr = default_expr.to_string();
                     new_schema.fields[i].data_type = data_type.clone();
@@ -336,28 +347,153 @@ impl ModifyTableColumnInterpreter {
         }
 
         // 1. construct sql for selecting data from old table
-        let mut sql = "select".to_string();
-        schema
+        let query_fields = schema
             .fields()
             .iter()
             .enumerate()
-            .for_each(|(index, field)| {
-                if index != schema.fields().len() - 1 {
-                    sql = format!("{} `{}`,", sql, field.name.clone());
+            .map(|(index, field)| {
+                if modify_field_indices.contains(&index) {
+                    let new_field = new_schema.field(index);
+                    // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
+                    // the auto cast to fail.
+                    // We read the leaf column data, and then use build function to construct a new Tuple or Array(Tuple).
+                    // Note: other nested types auto cast can still fail, we need a more general handling
+                    // to solve this problem in the future.
+                    match (
+                        field.data_type.remove_nullable(),
+                        new_field.data_type.remove_nullable(),
+                    ) {
+                        (
+                            TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            },
+                            TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            },
+                        ) => {
+                            let transform_funcs = new_fields_name
+                                .iter()
+                                .zip(new_fields_type.iter())
+                                .map(|(new_field_name, new_field_type)| {
+                                    match old_fields_name.iter().position(|n| n == new_field_name) {
+                                        Some(idx) => {
+                                            format!("`{}`.{}", field.name, idx + 1)
+                                        }
+                                        None => {
+                                            let new_data_type = DataType::from(new_field_type);
+                                            let default_value =
+                                                Scalar::default_value(&new_data_type);
+                                            format!("{default_value}")
+                                        }
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+
+                            format!(
+                                "if(is_not_null(`{}`), tuple({}), NULL) AS {}",
+                                field.name, transform_funcs, field.name
+                            )
+                        }
+                        (
+                            TableDataType::Array(box TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            }),
+                            TableDataType::Array(box TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            }),
+                        )
+                        | (
+                            TableDataType::Array(box TableDataType::Nullable(
+                                box TableDataType::Tuple {
+                                    fields_name: old_fields_name,
+                                    ..
+                                },
+                            )),
+                            TableDataType::Array(box TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            }),
+                        )
+                        | (
+                            TableDataType::Array(box TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            }),
+                            TableDataType::Array(box TableDataType::Nullable(
+                                box TableDataType::Tuple {
+                                    fields_name: new_fields_name,
+                                    fields_type: new_fields_type,
+                                },
+                            )),
+                        )
+                        | (
+                            TableDataType::Array(box TableDataType::Nullable(
+                                box TableDataType::Tuple {
+                                    fields_name: old_fields_name,
+                                    ..
+                                },
+                            )),
+                            TableDataType::Array(box TableDataType::Nullable(
+                                box TableDataType::Tuple {
+                                    fields_name: new_fields_name,
+                                    fields_type: new_fields_type,
+                                },
+                            )),
+                        ) => {
+                            let transform_funcs = new_fields_name
+                                .iter()
+                                .zip(new_fields_type.iter())
+                                .map(|(new_field_name, new_field_type)| {
+                                    match old_fields_name.iter().position(|n| n == new_field_name) {
+                                        Some(idx) => {
+                                            format!(
+                                                "array_transform(`{}`, v -> v.{})",
+                                                field.name,
+                                                idx + 1
+                                            )
+                                        }
+                                        None => {
+                                            let new_data_type = DataType::from(new_field_type);
+                                            let default_value =
+                                                Scalar::default_value(&new_data_type);
+                                            format!("{default_value}")
+                                        }
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+
+                            format!(
+                                "if(is_not_null(`{}`), array_tuple({}), NULL) AS {}",
+                                field.name, transform_funcs, field.name
+                            )
+                        }
+                        (_, _) => {
+                            format!("`{}`", field.name)
+                        }
+                    }
                 } else {
-                    sql = format!(
-                        "{} `{}` from `{}`.`{}`",
-                        sql,
-                        field.name.clone(),
-                        self.plan.database,
-                        self.plan.table
-                    );
+                    format!("`{}`", field.name)
                 }
-            });
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let sql = format!(
+            "SELECT {} FROM `{}`.`{}`",
+            query_fields, self.plan.database, self.plan.table
+        );
 
         // 2. build plan by sql
         let mut planner = Planner::new(self.ctx.clone());
         let (plan, _extras) = planner.plan_sql(&sql).await?;
+
+        let select_schema = plan.schema();
 
         // 3. build physical plan by plan
         let (select_plan, select_column_bindings) = match plan {
@@ -387,7 +523,7 @@ impl ModifyTableColumnInterpreter {
                 plan_id: select_plan.get_id(),
                 input: Box::new(select_plan),
                 table_info: new_table.get_table_info().clone(),
-                select_schema: Arc::new(Arc::new(schema).into()),
+                select_schema,
                 select_column_bindings,
                 insert_schema: Arc::new(Arc::new(new_schema).into()),
                 cast_needed: true,
