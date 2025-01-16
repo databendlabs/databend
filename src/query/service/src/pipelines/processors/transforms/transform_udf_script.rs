@@ -148,18 +148,23 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
         let mut runtime = arrow_udf_js::Runtime::new()
             .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))?;
 
-        let output_type: ArrowType = (&self.output_type).into();
+        let converter = runtime.converter_mut();
+        converter.set_arrow_extension_key(EXTENSION_KEY);
+        converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
+
+        // we pass the field instead of the data type because arrow-udf-js
+        // now takes the field as an argument here so that it can get any
+        // metadata associated with the field
+        let tmp_schema = DataSchema::new(vec![DataField::new("tmp", self.output_type.clone())]);
+        let return_type = arrow_schema::Schema::from(&tmp_schema).field(0).clone();
+
         runtime.add_function_with_handler(
             &self.name,
-            output_type,
+            return_type,
             arrow_udf_js::CallMode::ReturnNullOnNullInput,
             &self.code,
             &self.handler,
         )?;
-
-        let converter = runtime.converter_mut();
-        converter.set_arrow_extension_key(EXTENSION_KEY);
-        converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
         log::info!(
             "Init JavaScript UDF runtime for {:?} #{} took: {:?}",
