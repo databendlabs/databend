@@ -658,24 +658,24 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_marked_deleted_indexes(
+    async fn list_marked_deleted_indexes(
         &self,
         tenant: &Tenant,
         table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply> {
         self.mutable_catalog
-            .get_marked_deleted_indexes(tenant, table_id)
+            .list_marked_deleted_indexes(tenant, table_id)
             .await
     }
 
     #[async_backtrace::framed]
-    async fn get_marked_deleted_table_indexes(
+    async fn list_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
         table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedTableIndexesReply> {
         self.mutable_catalog
-            .get_marked_deleted_table_indexes(tenant, table_id)
+            .list_marked_deleted_table_indexes(tenant, table_id)
             .await
     }
 

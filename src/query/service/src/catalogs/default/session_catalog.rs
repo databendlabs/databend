@@ -192,23 +192,23 @@ impl Catalog for SessionCatalog {
         self.inner.get_index(req).await
     }
 
-    async fn get_marked_deleted_indexes(
+    async fn list_marked_deleted_indexes(
         &self,
         tenant: &Tenant,
         table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply> {
         self.inner
-            .get_marked_deleted_indexes(tenant, table_id)
+            .list_marked_deleted_indexes(tenant, table_id)
             .await
     }
 
-    async fn get_marked_deleted_table_indexes(
+    async fn list_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
         table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedTableIndexesReply> {
         self.inner
-            .get_marked_deleted_table_indexes(tenant, table_id)
+            .list_marked_deleted_table_indexes(tenant, table_id)
             .await
     }
 

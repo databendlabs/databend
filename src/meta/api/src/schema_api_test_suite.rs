@@ -6157,9 +6157,9 @@ impl SchemaApiTestSuite {
         {
             info!("--- get marked deleted table indexes after drop");
             let results = vec![
-                mt.get_marked_deleted_table_indexes(&tenant, Some(table_id))
+                mt.list_marked_deleted_table_indexes(&tenant, Some(table_id))
                     .await?,
-                mt.get_marked_deleted_table_indexes(&tenant, None).await?,
+                mt.list_marked_deleted_table_indexes(&tenant, None).await?,
             ];
             for res in results {
                 let table_indexes = res.table_indexes.get(&table_id);
@@ -6213,9 +6213,9 @@ impl SchemaApiTestSuite {
         {
             info!("--- get marked deleted table indexes after replace");
             let results = vec![
-                mt.get_marked_deleted_table_indexes(&tenant, Some(table_id))
+                mt.list_marked_deleted_table_indexes(&tenant, Some(table_id))
                     .await?,
-                mt.get_marked_deleted_table_indexes(&tenant, None).await?,
+                mt.list_marked_deleted_table_indexes(&tenant, None).await?,
             ];
 
             for res in results {
@@ -6255,10 +6255,10 @@ impl SchemaApiTestSuite {
                 .await?;
 
                 let res = mt
-                    .get_marked_deleted_table_indexes(&tenant, Some(table_id))
+                    .list_marked_deleted_table_indexes(&tenant, Some(table_id))
                     .await?;
                 assert_eq!(res.table_indexes.len(), 0);
-                let res = mt.get_marked_deleted_table_indexes(&tenant, None).await?;
+                let res = mt.list_marked_deleted_table_indexes(&tenant, None).await?;
                 assert_eq!(res.table_indexes.len(), 0);
             }
         }
@@ -6402,11 +6402,11 @@ impl SchemaApiTestSuite {
         {
             info!("--- get marked deleted indexes");
             let res = mt
-                .get_marked_deleted_indexes(&tenant, Some(table_id))
+                .list_marked_deleted_indexes(&tenant, Some(table_id))
                 .await?;
             assert_eq!(res.table_indexes.len(), 0);
 
-            let res = mt.get_marked_deleted_indexes(&tenant, None).await?;
+            let res = mt.list_marked_deleted_indexes(&tenant, None).await?;
             assert_eq!(res.table_indexes.len(), 0);
         }
 
@@ -6420,9 +6420,9 @@ impl SchemaApiTestSuite {
         {
             info!("--- get marked deleted indexes after drop one");
             let results = vec![
-                mt.get_marked_deleted_indexes(&tenant, Some(table_id))
+                mt.list_marked_deleted_indexes(&tenant, Some(table_id))
                     .await?,
-                mt.get_marked_deleted_indexes(&tenant, None).await?,
+                mt.list_marked_deleted_indexes(&tenant, None).await?,
             ];
             for res in results {
                 assert_eq!(res.table_indexes.len(), 1);
@@ -6477,9 +6477,9 @@ impl SchemaApiTestSuite {
         {
             info!("--- get marked deleted indexes after drop all");
             let results = vec![
-                mt.get_marked_deleted_indexes(&tenant, Some(table_id))
+                mt.list_marked_deleted_indexes(&tenant, Some(table_id))
                     .await?,
-                mt.get_marked_deleted_indexes(&tenant, None).await?,
+                mt.list_marked_deleted_indexes(&tenant, None).await?,
             ];
             for res in results {
                 assert_eq!(res.table_indexes.len(), 1);
@@ -6502,9 +6502,9 @@ impl SchemaApiTestSuite {
             mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id])
                 .await?;
             let results = vec![
-                mt.get_marked_deleted_indexes(&tenant, Some(table_id))
+                mt.list_marked_deleted_indexes(&tenant, Some(table_id))
                     .await?,
-                mt.get_marked_deleted_indexes(&tenant, None).await?,
+                mt.list_marked_deleted_indexes(&tenant, None).await?,
             ];
             for res in results {
                 assert_eq!(res.table_indexes.len(), 1);
@@ -6523,10 +6523,10 @@ impl SchemaApiTestSuite {
             mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id_2])
                 .await?;
             let res = mt
-                .get_marked_deleted_indexes(&tenant, Some(table_id))
+                .list_marked_deleted_indexes(&tenant, Some(table_id))
                 .await?;
             assert_eq!(res.table_indexes.len(), 0);
-            let res = mt.get_marked_deleted_indexes(&tenant, None).await?;
+            let res = mt.list_marked_deleted_indexes(&tenant, None).await?;
             assert_eq!(res.table_indexes.len(), 0);
         }
 

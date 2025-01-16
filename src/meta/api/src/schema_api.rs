@@ -166,13 +166,13 @@ pub trait SchemaApi: Send + Sync {
         name_ident: &IndexNameIdent,
     ) -> Result<Option<GetIndexReply>, MetaError>;
 
-    async fn get_marked_deleted_indexes(
+    async fn list_marked_deleted_indexes(
         &self,
         tenant: &Tenant,
         table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply, MetaError>;
 
-    async fn get_marked_deleted_table_indexes(
+    async fn list_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
         table_id: Option<u64>,

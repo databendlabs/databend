@@ -351,7 +351,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_marked_deleted_indexes(
+    async fn list_marked_deleted_indexes(
         &self,
         tenant: &Tenant,
         table_id: Option<u64>,
@@ -359,13 +359,13 @@ impl Catalog for MutableCatalog {
         let res = self
             .ctx
             .meta
-            .get_marked_deleted_indexes(tenant, table_id)
+            .list_marked_deleted_indexes(tenant, table_id)
             .await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn get_marked_deleted_table_indexes(
+    async fn list_marked_deleted_table_indexes(
         &self,
         tenant: &Tenant,
         table_id: Option<u64>,
@@ -373,7 +373,7 @@ impl Catalog for MutableCatalog {
         Ok(self
             .ctx
             .meta
-            .get_marked_deleted_table_indexes(tenant, table_id)
+            .list_marked_deleted_table_indexes(tenant, table_id)
             .await?)
     }
 

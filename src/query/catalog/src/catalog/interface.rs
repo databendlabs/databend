@@ -169,24 +169,24 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
 
-    async fn get_marked_deleted_indexes(
+    async fn list_marked_deleted_indexes(
         &self,
         _tenant: &Tenant,
         _table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "'get_marked_deleted_indexes' not implemented for catalog {}",
+            "'list_marked_deleted_indexes' not implemented for catalog {}",
             self.name()
         )))
     }
 
-    async fn get_marked_deleted_table_indexes(
+    async fn list_marked_deleted_table_indexes(
         &self,
         _tenant: &Tenant,
         _table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedTableIndexesReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "'get_marked_deleted_table_indexes' not implemented for catalog {}",
+            "'list_marked_deleted_table_indexes' not implemented for catalog {}",
             self.name()
         )))
     }
