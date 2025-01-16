@@ -44,11 +44,11 @@ impl<R, B: RuntimeBuilder<R>> Pool<R, B> {
         };
         drop(runtimes);
 
-        let result = op(&runtime)?;
+        let result = op(&runtime);
 
         let mut runtimes = self.runtimes.lock().unwrap();
         runtimes.push(runtime);
 
-        Ok(result)
+        result
     }
 }

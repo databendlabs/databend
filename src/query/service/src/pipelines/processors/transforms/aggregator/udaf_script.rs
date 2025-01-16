@@ -326,12 +326,14 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
-        let output_type: ArrowType = (&self.output_type).into();
         runtime
             .add_aggregate(
                 &self.name,
                 self.state_type.clone(),
-                output_type,
+                // we pass the field instead of the data type because arrow-udf-js
+                // now takes the field as an argument here so that it can get any
+                // metadata associated with the field
+                arrow_field_from_data_type(&self.name, self.output_type.clone()),
                 arrow_udf_js::CallMode::CalledOnNullInput,
                 &self.code,
             )
@@ -339,6 +341,11 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
 
         Ok(runtime)
     }
+}
+
+fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
+    let field = DataField::new(name, dt);
+    (&field).into()
 }
 
 type JsRuntimePool = Pool<arrow_udf_js::Runtime, JsRuntimeBuilder>;
@@ -361,11 +368,10 @@ mod python_pool {
             let mut runtime = arrow_udf_python::Builder::default()
                 .sandboxed(true)
                 .build()?;
-            let output_type: ArrowType = (&self.output_type).into();
             runtime.add_aggregate(
                 &self.name,
                 self.state_type.clone(),
-                output_type,
+                arrow_field_from_data_type(&self.name, self.output_type.clone()),
                 arrow_udf_python::CallMode::CalledOnNullInput,
                 &self.code,
             )?;

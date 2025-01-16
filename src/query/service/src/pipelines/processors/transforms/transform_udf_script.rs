@@ -18,7 +18,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use arrow_schema::DataType as ArrowType;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
@@ -152,15 +151,12 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
-        // we pass the field instead of the data type because arrow-udf-js
-        // now takes the field as an argument here so that it can get any
-        // metadata associated with the field
-        let tmp_schema = DataSchema::new(vec![DataField::new("tmp", self.output_type.clone())]);
-        let return_type = arrow_schema::Schema::from(&tmp_schema).field(0).clone();
-
         runtime.add_function_with_handler(
             &self.name,
-            return_type,
+            // we pass the field instead of the data type because arrow-udf-js
+            // now takes the field as an argument here so that it can get any
+            // metadata associated with the field
+            arrow_field_from_data_type(&self.name, self.output_type.clone()),
             arrow_udf_js::CallMode::ReturnNullOnNullInput,
             &self.code,
             &self.handler,
@@ -176,6 +172,11 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
 
         Ok(runtime)
     }
+}
+
+fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
+    let field = DataField::new(name, dt);
+    (&field).into()
 }
 
 type JsRuntimePool = Pool<arrow_udf_js::Runtime, JsRuntimeBuilder>;
@@ -202,10 +203,9 @@ mod python_pool {
             let mut runtime = arrow_udf_python::Builder::default()
                 .sandboxed(true)
                 .build()?;
-            let output_type: ArrowType = (&self.output_type).into();
             runtime.add_function_with_handler(
                 &self.name,
-                output_type,
+                arrow_field_from_data_type(&self.name, self.output_type.clone()),
                 arrow_udf_python::CallMode::CalledOnNullInput,
                 &self.code,
                 &self.handler,
