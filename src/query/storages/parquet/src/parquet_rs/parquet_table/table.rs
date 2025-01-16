@@ -49,6 +49,7 @@ use databend_common_storage::parquet_rs::read_metadata_async;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::table::ChangeType;
+use log::info;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
@@ -174,7 +175,9 @@ impl ParquetRSTable {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let size = operator.stat(path).await?.content_length();
+        let stat = operator.stat(path).await?;
+        let size = stat.content_length();
+        info!("infer schema from file {}, with stat {:?}", path, stat);
         let first_meta = read_metadata_async(path, &operator, Some(size)).await?;
         let arrow_schema = infer_schema_with_extension(first_meta.file_metadata())?;
         let compression_ratio = get_compression_ratio(&first_meta);
