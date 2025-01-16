@@ -54,7 +54,6 @@ jobs:
           - { dirs: "tpch", runner: "2c8g" }
           - { dirs: "standalone", runner: "2c8g" }
         handler:
-          - "hybrid"
           - "http"
     steps:
       - uses: actions/checkout@v4
@@ -83,7 +82,7 @@ jobs:
         timeout-minutes: 15
         with:
           dirs: udf_server
-          handlers: http,hybrid
+          handlers: http
           parallel: 1
           storage-format: all
       - name: Upload failure
@@ -105,7 +104,7 @@ jobs:
         timeout-minutes: 15
         with:
           dirs: task
-          handlers: http,hybrid
+          handlers: http
           storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
@@ -121,7 +120,6 @@ jobs:
         dirs:
           - "query"
         handler:
-          - "hybrid"
           - "http"
         format:
           - "native"
@@ -152,7 +150,7 @@ jobs:
         timeout-minutes: 15
         with:
           dirs: tpch_iceberg
-          handlers: http,hybrid
+          handlers: http
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -179,7 +177,6 @@ jobs:
           - { dirs: "tpch", runner: "2c8g" }
           - { dirs: "cluster", runner: "2c8g" }
         handler:
-          - "hybrid"
           - "http"
     steps:
       - uses: actions/checkout@v4
@@ -213,7 +210,7 @@ jobs:
         with:
           storage: ${{ matrix.storage }}
           dirs: stage
-          handlers: http,hybrid
+          handlers: http
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -262,7 +259,7 @@ jobs:
         timeout-minutes: 15
         with:
           dirs: ee
-          handlers: http,hybrid
+          handlers: http
           storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
