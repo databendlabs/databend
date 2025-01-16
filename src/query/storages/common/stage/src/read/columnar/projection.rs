@@ -25,6 +25,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::NullAs;
+use databend_common_meta_app::principal::StageFileFormatType;
 
 use crate::read::cast::load_can_auto_cast_to;
 
@@ -35,10 +36,11 @@ use crate::read::cast::load_can_auto_cast_to;
 pub fn project_columnar(
     input_schema: &TableSchemaRef,
     output_schema: &TableSchemaRef,
-    null_as: &NullAs,
+    missing_as: &NullAs,
     default_values: &Option<Vec<RemoteExpr>>,
     location: &str,
     case_sensitive: bool,
+    fmt: StageFileFormatType,
 ) -> databend_common_exception::Result<(Vec<Expr>, Vec<usize>)> {
     let mut pushdown_columns = vec![];
     let mut output_projection = vec![];
@@ -87,77 +89,87 @@ pub fn project_columnar(
                             &BUILTIN_FUNCTIONS,
                         )?
                     } else {
-                        // special cast for tuple type, fill in default values for the missing fields.
-                        match (
-                            from_field.data_type.remove_nullable(),
-                            to_field.data_type.remove_nullable(),
-                        ) {
-                            (
-                                TableDataType::Array(box TableDataType::Nullable(
-                                    box TableDataType::Tuple {
+                        if fmt == StageFileFormatType::Orc && !matches!(missing_as, NullAs::Error) {
+                            // special cast for tuple type, fill in default values for the missing fields.
+                            match (
+                                from_field.data_type.remove_nullable(),
+                                to_field.data_type.remove_nullable(),
+                            ) {
+                                (
+                                    TableDataType::Array(box TableDataType::Nullable(
+                                        box TableDataType::Tuple {
+                                            fields_name: from_fields_name,
+                                            fields_type: _from_fields_type,
+                                        },
+                                    )),
+                                    TableDataType::Array(box TableDataType::Nullable(
+                                        box TableDataType::Tuple {
+                                            fields_name: to_fields_name,
+                                            fields_type: _to_fields_type,
+                                        },
+                                    )),
+                                ) => {
+                                    let mut v = vec![];
+                                    for to in to_fields_name.iter() {
+                                        match from_fields_name.iter().position(|k| k == to) {
+                                            Some(p) => v.push(p as i32),
+                                            None => v.push(-1),
+                                        };
+                                    }
+                                    let name = v
+                                        .iter()
+                                        .map(|v| v.to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(",");
+                                    Expr::ColumnRef {
+                                        span: None,
+                                        id: pos,
+                                        data_type: from_field.data_type().into(),
+                                        display_name: format!("#!{name}",),
+                                    }
+                                }
+                                (
+                                    TableDataType::Tuple {
                                         fields_name: from_fields_name,
-                                        fields_type: _from_fields_type,
+                                        fields_type: from_fields_type,
                                     },
-                                )),
-                                TableDataType::Array(box TableDataType::Nullable(
-                                    box TableDataType::Tuple {
+                                    TableDataType::Tuple {
                                         fields_name: to_fields_name,
-                                        fields_type: _to_fields_type,
+                                        fields_type: to_fields_type,
                                     },
-                                )),
-                            ) => {
-                                let mut v = vec![];
-                                for to in to_fields_name.iter() {
-                                    match from_fields_name.iter().position(|k| k == to) {
-                                        Some(p) => v.push(p as i32),
-                                        None => v.push(-1),
-                                    };
-                                }
-                                let name = v
-                                    .iter()
-                                    .map(|v| v.to_string())
-                                    .collect::<Vec<_>>()
-                                    .join(",");
-                                Expr::ColumnRef {
-                                    span: None,
-                                    id: pos,
-                                    data_type: from_field.data_type().into(),
-                                    display_name: format!("#!{name}",),
+                                ) => project_tuple(
+                                    expr,
+                                    from_field,
+                                    to_field,
+                                    &from_fields_name,
+                                    &from_fields_type,
+                                    &to_fields_name,
+                                    &to_fields_type,
+                                )?,
+                                (_, _) => {
+                                    return Err(ErrorCode::BadDataValueType(format!(
+                                        "fail to load file {}: Cannot cast column {} from {:?} to {:?}",
+                                        location,
+                                        field_name,
+                                        from_field.data_type(),
+                                        to_field.data_type()
+                                    )));
                                 }
                             }
-                            (
-                                TableDataType::Tuple {
-                                    fields_name: from_fields_name,
-                                    fields_type: from_fields_type,
-                                },
-                                TableDataType::Tuple {
-                                    fields_name: to_fields_name,
-                                    fields_type: to_fields_type,
-                                },
-                            ) => project_tuple(
-                                expr,
-                                from_field,
-                                to_field,
-                                &from_fields_name,
-                                &from_fields_type,
-                                &to_fields_name,
-                                &to_fields_type,
-                            )?,
-                            (_, _) => {
-                                return Err(ErrorCode::BadDataValueType(format!(
-                                    "fail to load file {}: Cannot cast column {} from {:?} to {:?}",
-                                    location,
-                                    field_name,
-                                    from_field.data_type(),
-                                    to_field.data_type()
-                                )));
-                            }
+                        } else {
+                            return Err(ErrorCode::BadDataValueType(format!(
+                                "fail to load file {}: Cannot cast column {} from {:?} to {:?}",
+                                location,
+                                field_name,
+                                from_field.data_type(),
+                                to_field.data_type()
+                            )));
                         }
                     }
                 }
             }
             0 => {
-                match null_as {
+                match missing_as {
                     // default
                     NullAs::Error => {
                         return Err(ErrorCode::BadDataValueType(format!(
