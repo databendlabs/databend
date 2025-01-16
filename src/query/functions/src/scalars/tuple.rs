@@ -149,14 +149,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                             if let ScalarRef::Array(col) = value {
                                 if let Some(array_len) = array_len {
                                     if array_len != col.len() {
+                                        is_diff_len = true;
                                         let err = format!(
                                             "array length must be equal, but got {} and {}",
                                             array_len,
                                             col.len()
                                         );
-                                        is_diff_len = true;
                                         ctx.set_error(builder.len(), err);
-                                        builder.push_default();
                                         offsets.push(offset);
                                         break;
                                     }
