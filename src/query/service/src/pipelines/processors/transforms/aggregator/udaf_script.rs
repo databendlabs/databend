@@ -17,7 +17,6 @@ use std::fmt;
 use std::io::BufRead;
 use std::io::Cursor;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use arrow_array::Array;
 use arrow_array::RecordBatch;
@@ -40,8 +39,8 @@ use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 
-#[cfg(feature = "python-udf")]
-use super::super::python_udf::GLOBAL_PYTHON_RUNTIME;
+use super::runtime_pool::Pool;
+use super::runtime_pool::RuntimeBuilder;
 
 pub struct AggregateUdfScript {
     display_name: String,
@@ -137,6 +136,15 @@ impl AggregateFunction for AggregateUdfScript {
         let result = Column::from_arrow_rs(array, &self.runtime.return_type())?;
         builder.append_column(&result);
         Ok(())
+    }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: StateAddr) {
+        let state = place.get::<UdfAggState>();
+        std::ptr::drop_in_place(state);
     }
 }
 
@@ -244,10 +252,10 @@ pub fn create_udaf_script_function(
     let UDFScriptCode { language, code, .. } = code;
     let runtime = match language {
         UDFLanguage::JavaScript => {
-            let pool = JsRuntimePool::new(
+            let builder = JsRuntimeBuilder {
                 name,
-                String::from_utf8(code.to_vec())?,
-                ArrowType::Struct(
+                code: String::from_utf8(code.to_vec())?,
+                state_type: ArrowType::Struct(
                     state_fields
                         .iter()
                         .map(|f| f.into())
@@ -255,8 +263,8 @@ pub fn create_udaf_script_function(
                         .into(),
                 ),
                 output_type,
-            );
-            UDAFRuntime::JavaScript(pool)
+            };
+            UDAFRuntime::JavaScript(JsRuntimePool::new(builder))
         }
         UDFLanguage::WebAssembly => unimplemented!(),
         #[cfg(not(feature = "python-udf"))]
@@ -267,22 +275,19 @@ pub fn create_udaf_script_function(
         }
         #[cfg(feature = "python-udf")]
         UDFLanguage::Python => {
-            let mut runtime = GLOBAL_PYTHON_RUNTIME.write();
-            let code = String::from_utf8(code.to_vec())?;
-            runtime.add_aggregate(
-                &name,
-                ArrowType::Struct(
+            let builder = python_pool::PyRuntimeBuilder {
+                name,
+                code: String::from_utf8(code.to_vec())?,
+                state_type: ArrowType::Struct(
                     state_fields
                         .iter()
                         .map(|f| f.into())
                         .collect::<Vec<arrow_schema::Field>>()
                         .into(),
                 ),
-                ArrowType::from(&output_type),
-                arrow_udf_python::CallMode::CalledOnNullInput,
-                &code,
-            )?;
-            UDAFRuntime::Python(PythonInfo { name, output_type })
+                output_type,
+            };
+            UDAFRuntime::Python(Pool::new(builder))
         }
     };
     let init_state = runtime
@@ -297,27 +302,17 @@ pub fn create_udaf_script_function(
     }))
 }
 
-struct JsRuntimePool {
+struct JsRuntimeBuilder {
     name: String,
     code: String,
     state_type: ArrowType,
     output_type: DataType,
-
-    runtimes: Mutex<Vec<arrow_udf_js::Runtime>>,
 }
 
-impl JsRuntimePool {
-    fn new(name: String, code: String, state_type: ArrowType, output_type: DataType) -> Self {
-        Self {
-            name,
-            code,
-            state_type,
-            output_type,
-            runtimes: Mutex::new(vec![]),
-        }
-    }
+impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
+    type Error = ErrorCode;
 
-    fn create(&self) -> Result<arrow_udf_js::Runtime> {
+    fn build(&self) -> std::result::Result<arrow_udf_js::Runtime, Self::Error> {
         let mut runtime = match arrow_udf_js::Runtime::new() {
             Ok(runtime) => runtime,
             Err(e) => {
@@ -344,23 +339,41 @@ impl JsRuntimePool {
 
         Ok(runtime)
     }
+}
 
-    fn call<T, F>(&self, op: F) -> anyhow::Result<T>
-    where F: FnOnce(&arrow_udf_js::Runtime) -> anyhow::Result<T> {
-        let mut runtimes = self.runtimes.lock().unwrap();
-        let runtime = match runtimes.pop() {
-            Some(runtime) => runtime,
-            None => self.create()?,
-        };
-        drop(runtimes);
+type JsRuntimePool = Pool<arrow_udf_js::Runtime, JsRuntimeBuilder>;
 
-        let result = op(&runtime)?;
+#[cfg(feature = "python-udf")]
+mod python_pool {
+    use super::*;
 
-        let mut runtimes = self.runtimes.lock().unwrap();
-        runtimes.push(runtime);
-
-        Ok(result)
+    pub(super) struct PyRuntimeBuilder {
+        pub name: String,
+        pub code: String,
+        pub state_type: ArrowType,
+        pub output_type: DataType,
     }
+
+    impl RuntimeBuilder<arrow_udf_python::Runtime> for PyRuntimeBuilder {
+        type Error = ErrorCode;
+
+        fn build(&self) -> std::result::Result<arrow_udf_python::Runtime, Self::Error> {
+            let mut runtime = arrow_udf_python::Builder::default()
+                .sandboxed(true)
+                .build()?;
+            let output_type: ArrowType = (&self.output_type).into();
+            runtime.add_aggregate(
+                &self.name,
+                self.state_type.clone(),
+                output_type,
+                arrow_udf_python::CallMode::CalledOnNullInput,
+                &self.code,
+            )?;
+            Ok(runtime)
+        }
+    }
+
+    pub type PyRuntimePool = Pool<arrow_udf_python::Runtime, PyRuntimeBuilder>;
 }
 
 enum UDAFRuntime {
@@ -368,41 +381,36 @@ enum UDAFRuntime {
     #[expect(unused)]
     WebAssembly,
     #[cfg(feature = "python-udf")]
-    Python(PythonInfo),
-}
-
-#[cfg(feature = "python-udf")]
-struct PythonInfo {
-    name: String,
-    output_type: DataType,
+    Python(python_pool::PyRuntimePool),
 }
 
 impl UDAFRuntime {
     fn name(&self) -> &str {
         match self {
-            UDAFRuntime::JavaScript(pool) => &pool.name,
+            UDAFRuntime::JavaScript(pool) => &pool.builder.name,
             #[cfg(feature = "python-udf")]
-            UDAFRuntime::Python(info) => &info.name,
+            UDAFRuntime::Python(info) => &info.builder.name,
             _ => unimplemented!(),
         }
     }
 
     fn return_type(&self) -> DataType {
         match self {
-            UDAFRuntime::JavaScript(pool) => pool.output_type.clone(),
+            UDAFRuntime::JavaScript(pool) => pool.builder.output_type.clone(),
             #[cfg(feature = "python-udf")]
-            UDAFRuntime::Python(info) => info.output_type.clone(),
+            UDAFRuntime::Python(info) => info.builder.output_type.clone(),
             _ => unimplemented!(),
         }
     }
 
     fn create_state(&self) -> anyhow::Result<UdfAggState> {
         let state = match self {
-            UDAFRuntime::JavaScript(pool) => pool.call(|runtime| runtime.create_state(&pool.name)),
+            UDAFRuntime::JavaScript(pool) => {
+                pool.call(|runtime| runtime.create_state(&pool.builder.name))
+            }
             #[cfg(feature = "python-udf")]
-            UDAFRuntime::Python(info) => {
-                let runtime = GLOBAL_PYTHON_RUNTIME.read();
-                runtime.create_state(&info.name)
+            UDAFRuntime::Python(pool) => {
+                pool.call(|runtime| runtime.create_state(&pool.builder.name))
             }
             _ => unimplemented!(),
         }?;
@@ -412,12 +420,11 @@ impl UDAFRuntime {
     fn accumulate(&self, state: &UdfAggState, input: &RecordBatch) -> anyhow::Result<UdfAggState> {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => {
-                pool.call(|runtime| runtime.accumulate(&pool.name, &state.0, input))
+                pool.call(|runtime| runtime.accumulate(&pool.builder.name, &state.0, input))
             }
             #[cfg(feature = "python-udf")]
-            UDAFRuntime::Python(info) => {
-                let runtime = GLOBAL_PYTHON_RUNTIME.read();
-                runtime.accumulate(&info.name, &state.0, input)
+            UDAFRuntime::Python(pool) => {
+                pool.call(|runtime| runtime.accumulate(&pool.builder.name, &state.0, input))
             }
             _ => unimplemented!(),
         }?;
@@ -426,11 +433,12 @@ impl UDAFRuntime {
 
     fn merge(&self, states: &Arc<dyn Array>) -> anyhow::Result<UdfAggState> {
         let state = match self {
-            UDAFRuntime::JavaScript(pool) => pool.call(|runtime| runtime.merge(&pool.name, states)),
+            UDAFRuntime::JavaScript(pool) => {
+                pool.call(|runtime| runtime.merge(&pool.builder.name, states))
+            }
             #[cfg(feature = "python-udf")]
-            UDAFRuntime::Python(info) => {
-                let runtime = GLOBAL_PYTHON_RUNTIME.read();
-                runtime.merge(&info.name, states)
+            UDAFRuntime::Python(pool) => {
+                pool.call(|runtime| runtime.merge(&pool.builder.name, states))
             }
             _ => unimplemented!(),
         }?;
@@ -440,12 +448,11 @@ impl UDAFRuntime {
     fn finish(&self, state: &UdfAggState) -> anyhow::Result<Arc<dyn Array>> {
         match self {
             UDAFRuntime::JavaScript(pool) => {
-                pool.call(|runtime| runtime.finish(&pool.name, &state.0))
+                pool.call(|runtime| runtime.finish(&pool.builder.name, &state.0))
             }
             #[cfg(feature = "python-udf")]
-            UDAFRuntime::Python(info) => {
-                let runtime = GLOBAL_PYTHON_RUNTIME.read();
-                runtime.finish(&info.name, &state.0)
+            UDAFRuntime::Python(pool) => {
+                pool.call(|runtime| runtime.finish(&pool.builder.name, &state.0))
             }
             _ => unimplemented!(),
         }
@@ -495,9 +502,9 @@ mod tests {
             Field::new("sum", ArrowType::Int64, false),
             Field::new("weight", ArrowType::Int64, false),
         ];
-        let pool = JsRuntimePool::new(
-            agg_name.clone(),
-            r#"
+        let builder = JsRuntimeBuilder {
+            name: agg_name.clone(),
+            code: r#"
 export function create_state() {
     return {sum: 0, weight: 0};
 }
@@ -521,9 +528,10 @@ export function finish(state) {
 }
             "#
             .to_string(),
-            ArrowType::Struct(fields.clone().into()),
-            Float32Type::data_type(),
-        );
+            state_type: ArrowType::Struct(fields.clone().into()),
+            output_type: Float32Type::data_type(),
+        };
+        let pool = JsRuntimePool::new(builder);
 
         let state = pool.call(|runtime| runtime.create_state(&agg_name))?;
 
