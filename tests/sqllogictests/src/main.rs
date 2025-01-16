@@ -33,6 +33,7 @@ use sqllogictest::Runner;
 use sqllogictest::TestError;
 use testcontainers::ContainerAsync;
 use testcontainers::GenericImage;
+use testcontainers::Image;
 
 use crate::arg::SqlLogicTestArgs;
 use crate::client::Client;
@@ -163,7 +164,7 @@ async fn run_hybrid_client(
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
             ClientType::Ttc(image, port) => {
-                run_ttc_container(&docker, image, port, cs).await?;
+                run_ttc_container(&docker, image, *port, cs).await?;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
@@ -172,7 +173,7 @@ async fn run_hybrid_client(
     if let Err(e) = run_suits(args, ClientType::Hybird).await {
         for c in cs {
             println!("{}", c.id());
-            println!("{}", c.image());
+            println!("{}", c.image().name());
             if let Ok(log) = c.stderr_to_vec().await {
                 println!("stderr: {}", String::from_utf8_lossy(&log));
             }
