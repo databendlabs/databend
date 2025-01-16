@@ -127,13 +127,19 @@ impl PhysicalPlanBuilder {
             RelOperator::MutationSource(mutation_source) => {
                 self.build_mutation_source(mutation_source).await
             }
-            RelOperator::Recluster(recluster) => self.build_recluster(recluster).await,
+            RelOperator::Recluster(recluster) => {
+                self.build_recluster(s_expr, recluster, required).await
+            }
             RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
         }
     }
 
     pub fn set_mutation_build_info(&mut self, mutation_build_info: MutationBuildInfo) {
         self.mutation_build_info = Some(mutation_build_info);
+    }
+
+    pub fn set_metadata(&mut self, metadata: MetadataRef) {
+        self.metadata = metadata;
     }
 }
 

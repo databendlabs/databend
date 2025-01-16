@@ -252,6 +252,10 @@ impl Domain {
                 min: this.min.min(other.min),
                 max: this.max.max(other.max),
             }),
+            (Domain::Interval(this), Domain::Interval(other)) => Domain::Interval(SimpleDomain {
+                min: this.min.min(other.min),
+                max: this.max.max(other.max),
+            }),
             (
                 Domain::Nullable(NullableDomain {
                     has_null: true,
@@ -389,6 +393,9 @@ impl Domain {
                 Some(Scalar::Timestamp(*min))
             }
             Domain::Date(SimpleDomain { min, max }) if min == max => Some(Scalar::Date(*min)),
+            Domain::Interval(SimpleDomain { min, max }) if min == max => {
+                Some(Scalar::Interval(*min))
+            }
             Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: None,

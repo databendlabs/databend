@@ -149,6 +149,8 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                 }
 
                 Some(AggregateMeta::AggregatePayload(p)) => {
+                    let (bucket, max_partition_count) = (p.bucket, p.max_partition_count);
+
                     if index == self.local_pos {
                         serialized_blocks.push(FlightSerialized::DataBlock(
                             block.add_meta(Some(Box::new(AggregateMeta::AggregatePayload(p))))?,
@@ -156,24 +158,19 @@ impl BlockMetaTransform<ExchangeShuffleMeta> for TransformExchangeAggregateSeria
                         continue;
                     }
 
-                    let bucket = compute_block_number(p.bucket, p.max_partition_count)?;
+                    let block_number = compute_block_number(bucket, max_partition_count)?;
                     let stream = SerializeAggregateStream::create(
                         &self.params,
                         SerializePayload::AggregatePayload(p),
                     );
                     let mut stream_blocks = stream.into_iter().collect::<Result<Vec<_>>>()?;
-
-                    if stream_blocks.is_empty() {
-                        serialized_blocks.push(FlightSerialized::DataBlock(DataBlock::empty()));
-                    } else {
-                        let mut c = DataBlock::concat(&stream_blocks)?;
-                        if let Some(meta) = stream_blocks[0].take_meta() {
-                            c.replace_meta(meta);
-                        }
-
-                        let c = serialize_block(bucket, c, &self.options)?;
-                        serialized_blocks.push(FlightSerialized::DataBlock(c));
+                    debug_assert!(!stream_blocks.is_empty());
+                    let mut c = DataBlock::concat(&stream_blocks)?;
+                    if let Some(meta) = stream_blocks[0].take_meta() {
+                        c.replace_meta(meta);
                     }
+                    let c = serialize_block(block_number, c, &self.options)?;
+                    serialized_blocks.push(FlightSerialized::DataBlock(c));
                 }
             };
         }

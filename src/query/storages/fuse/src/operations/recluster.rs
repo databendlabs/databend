@@ -32,6 +32,7 @@ use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_schedul
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::warn;
 use opendal::Operator;
 
@@ -61,14 +62,12 @@ impl FuseTable {
             ctx.set_status_info(status);
         }
 
-        if self.cluster_key_meta.is_none() {
+        let cluster_type = self.cluster_type();
+        if cluster_type.is_none_or(|v| v != ClusterType::Linear) {
             return Ok(None);
         }
 
-        let snapshot_opt = self.read_table_snapshot().await?;
-        let snapshot = if let Some(val) = snapshot_opt {
-            val
-        } else {
+        let Some(snapshot) = self.read_table_snapshot().await? else {
             // no snapshot, no recluster.
             return Ok(None);
         };

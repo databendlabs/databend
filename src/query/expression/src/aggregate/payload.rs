@@ -78,6 +78,7 @@ unsafe impl Sync for Payload {}
 pub struct Page {
     pub(crate) data: Vec<MaybeUninit<u8>>,
     pub(crate) rows: usize,
+    pub(crate) state_rows: usize,
     pub(crate) capacity: usize,
 }
 
@@ -167,21 +168,26 @@ impl Payload {
     }
 
     #[inline]
-    pub fn writable_page(&mut self) -> &mut Page {
+    pub fn writable_page(&mut self) -> (&mut Page, usize) {
         if self.current_write_page == 0
             || self.pages[self.current_write_page - 1].rows
                 == self.pages[self.current_write_page - 1].capacity
         {
             self.current_write_page += 1;
             if self.current_write_page > self.pages.len() {
+                let data = Vec::with_capacity(self.row_per_page * self.tuple_size);
                 self.pages.push(Page {
-                    data: Vec::with_capacity(self.row_per_page * self.tuple_size),
+                    data,
                     rows: 0,
+                    state_rows: 0,
                     capacity: self.row_per_page,
                 });
             }
         }
-        &mut self.pages[self.current_write_page - 1]
+        (
+            &mut self.pages[self.current_write_page - 1],
+            self.current_write_page - 1,
+        )
     }
 
     #[inline]
@@ -194,31 +200,27 @@ impl Payload {
         select_vector: &SelectVector,
         group_hashes: &[u64],
         address: &mut [*const u8],
+        page_index: &mut [usize],
         new_group_rows: usize,
         group_columns: InputColumns,
     ) {
         let tuple_size = self.tuple_size;
-        let mut page = self.writable_page();
+        let (mut page, mut page_index_value) = self.writable_page();
         for idx in select_vector.iter().take(new_group_rows).copied() {
             address[idx] = unsafe { page.data.as_ptr().add(page.rows * tuple_size) as *const u8 };
+            page_index[idx] = page_index_value;
             page.rows += 1;
 
             if page.rows == page.capacity {
-                page = self.writable_page();
+                (page, page_index_value) = self.writable_page();
             }
         }
-
-        self.total_rows += new_group_rows;
-
-        debug_assert_eq!(
-            self.total_rows,
-            self.pages.iter().map(|x| x.rows).sum::<usize>()
-        );
 
         self.append_rows(
             select_vector,
             group_hashes,
             address,
+            page_index,
             new_group_rows,
             group_columns,
         )
@@ -229,6 +231,7 @@ impl Payload {
         select_vector: &SelectVector,
         group_hashes: &[u64],
         address: &mut [*const u8],
+        page_index: &mut [usize],
         new_group_rows: usize,
         group_columns: InputColumns,
     ) {
@@ -300,8 +303,16 @@ impl Payload {
                 for (aggr, offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
                     aggr.init_state(place.next(*offset));
                 }
+                self.pages[page_index[idx]].state_rows += 1;
             }
         }
+
+        self.total_rows += new_group_rows;
+
+        debug_assert_eq!(
+            self.total_rows,
+            self.pages.iter().map(|x| x.rows).sum::<usize>()
+        );
     }
 
     pub fn combine(&mut self, mut other: Payload) {
@@ -327,7 +338,7 @@ impl Payload {
         address: &[*const u8],
     ) {
         let tuple_size = self.tuple_size;
-        let mut page = self.writable_page();
+        let (mut page, _) = self.writable_page();
         for i in 0..row_count {
             let index = select_vector[i];
 
@@ -339,9 +350,10 @@ impl Payload {
                 )
             }
             page.rows += 1;
+            page.state_rows += 1;
 
             if page.rows == page.capacity {
-                page = self.writable_page();
+                (page, _) = self.writable_page();
             }
         }
 
@@ -390,15 +402,14 @@ impl Payload {
         true
     }
 
-    pub fn empty_block(&self) -> DataBlock {
-        let columns = self
-            .aggrs
-            .iter()
-            .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
+    pub fn empty_block(&self, fake_rows: Option<usize>) -> DataBlock {
+        let fake_rows = fake_rows.unwrap_or(0);
+        let columns = (0..self.aggrs.len())
+            .map(|_| ColumnBuilder::repeat_default(&DataType::Binary, fake_rows).build())
             .chain(
                 self.group_types
                     .iter()
-                    .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
+                    .map(|t| ColumnBuilder::repeat_default(t, fake_rows).build()),
             )
             .collect_vec();
         DataBlock::new_from_columns(columns)
@@ -413,13 +424,12 @@ impl Drop for Payload {
                 for (aggr, addr_offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
                     if aggr.need_manual_drop_state() {
                         for page in self.pages.iter() {
-                            for row in 0..page.rows {
+                            for row in 0..page.state_rows {
+                                let ptr = self.data_ptr(page, row);
                                 unsafe {
-                                    let state_place = StateAddr::new(read::<u64>(
-                                        self.data_ptr(page, row).add(self.state_offset) as _,
-                                    )
-                                        as usize);
-
+                                    let state_addr =
+                                        read::<u64>(ptr.add(self.state_offset) as _) as usize;
+                                    let state_place = StateAddr::new(state_addr);
                                     aggr.drop_state(state_place.next(*addr_offset));
                                 }
                             }

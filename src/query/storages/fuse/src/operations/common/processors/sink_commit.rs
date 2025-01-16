@@ -446,7 +446,7 @@ where F: SnapshotGenerator + Send + 'static
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
                         }
                         for segment_loc in std::mem::take(&mut self.new_segment_locs).into_iter() {
-                            self.ctx.add_segment_location(segment_loc)?;
+                            self.ctx.add_written_segment_location(segment_loc)?;
                         }
 
                         let target_descriptions = {

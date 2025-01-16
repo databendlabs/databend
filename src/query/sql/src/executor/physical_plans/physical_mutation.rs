@@ -188,7 +188,7 @@ impl PhysicalPlanBuilder {
                 table_info: mutation_build_info.table_info.clone(),
                 mutation_expr,
                 computed_expr,
-                mutation_type: mutation_type.clone(),
+                mutation_kind,
                 field_id_to_schema_index,
                 input_num_columns: mutation_input_schema.fields().len(),
                 has_filter_column: predicate_column_index.is_some(),

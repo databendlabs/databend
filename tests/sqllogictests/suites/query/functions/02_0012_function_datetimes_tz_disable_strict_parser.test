@@ -1,0 +1,7 @@
+statement ok
+set enable_strict_datetime_parser = 0;
+
+include ./02_0012_function_datetimes_tz.test
+
+statement ok
+unset enable_strict_datetime_parser;

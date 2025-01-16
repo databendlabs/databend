@@ -145,6 +145,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (113, "2024-12-10: Add: GrantWarehouseObject"),
     (114, "2024-12-12: Add: New DataType Interval."),
     (115, "2024-12-16: Add: udf.proto: add UDAFScript and UDAFServer"),
+    (116, "2025-01-09: Add: MarkedDeletedIndexMeta"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
@@ -168,27 +169,25 @@ pub const MIN_MSG_VER: u64 = 1;
 pub fn reader_check_msg(msg_ver: u64, msg_min_reader_ver: u64) -> Result<(), Incompatible> {
     // The reader version must be big enough
     if VER < msg_min_reader_ver {
-        return Err(Incompatible {
-            reason: format!(
+        return Err(Incompatible::new(
+            format!(
                 "executable ver={} is smaller than the min reader version({}) that can read this message",
                 VER, msg_min_reader_ver
             ),
-        });
+        ));
     }
 
     // The message version must be big enough
     if msg_ver < MIN_MSG_VER {
-        return Err(Incompatible {
-            reason: format!(
-                "message ver={} is smaller than executable MIN_MSG_VER({}) that this program can read",
-                msg_ver, MIN_MSG_VER
-            ),
-        });
+        return Err(Incompatible::new(format!(
+            "message ver={} is smaller than executable MIN_MSG_VER({}) that this program can read",
+            msg_ver, MIN_MSG_VER
+        )));
     }
     Ok(())
 }
 
 pub fn missing(reason: impl ToString) -> impl FnOnce() -> Incompatible {
     let s = reason.to_string();
-    move || Incompatible { reason: s }
+    move || Incompatible::new(s)
 }

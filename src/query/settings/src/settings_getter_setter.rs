@@ -181,6 +181,11 @@ impl Settings {
         self.try_get_u64("max_block_size")
     }
 
+    // Set max_block_size.
+    pub fn set_max_block_size(&self, val: u64) -> Result<()> {
+        self.try_set_u64("max_block_size", val)
+    }
+
     // Max block size for parquet reader
     pub fn get_parquet_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("parquet_max_block_size")
@@ -870,11 +875,11 @@ impl Settings {
         self.unchecked_set_setting(String::from("warehouse"), warehouse)
     }
 
-    pub fn get_premise_deploy_danger_amend_accept_invalid_cert(&self) -> Result<bool> {
-        Ok(self.try_get_u64("premise_deploy_danger_amend_accept_invalid_cert")? != 0)
+    pub fn get_hilbert_num_range_ids(&self) -> Result<u64> {
+        self.try_get_u64("hilbert_num_range_ids")
     }
 
-    pub fn get_premise_deploy_amend_force_path_style(&self) -> Result<bool> {
-        Ok(self.try_get_u64("premise_deploy_amend_force_path_style")? != 0)
+    pub fn get_hilbert_sample_size_per_block(&self) -> Result<u64> {
+        self.try_get_u64("hilbert_sample_size_per_block")
     }
 }

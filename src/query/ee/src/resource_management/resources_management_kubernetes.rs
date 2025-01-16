@@ -32,19 +32,23 @@ impl KubernetesResourcesManagement {
 
 #[async_trait::async_trait]
 impl ResourcesManagement for KubernetesResourcesManagement {
+    fn support_forward_warehouse_request(&self) -> bool {
+        false
+    }
+
     async fn init_node(&self, _: &mut NodeInfo) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented kubernetes resources management",
         ))
     }
 
-    async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<()> {
+    async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<WarehouseInfo> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented kubernetes resources management",
         ))
     }
 
-    async fn drop_warehouse(&self, _: String) -> Result<()> {
+    async fn drop_warehouse(&self, _: String) -> Result<WarehouseInfo> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented kubernetes resources management",
         ))

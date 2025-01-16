@@ -47,9 +47,7 @@ impl FromToProto for mt::LockKey {
                 let tenant = Tenant::new_nonempty(non_empty);
                 Ok(mt::LockKey::Table { tenant, table_id })
             }
-            None => Err(Incompatible {
-                reason: "LockKey cannot be None".to_string(),
-            }),
+            None => Err(Incompatible::new("LockKey cannot be None".to_string())),
         }
     }
 
@@ -88,9 +86,8 @@ impl FromToProto for mt::LockMeta {
                 Some(acquired_on) => Some(DateTime::<Utc>::from_pb(acquired_on)?),
                 None => None,
             },
-            lock_type: FromPrimitive::from_i32(p.lock_type).ok_or_else(|| Incompatible {
-                reason: format!("invalid LockType: {}", p.lock_type),
-            })?,
+            lock_type: FromPrimitive::from_i32(p.lock_type)
+                .ok_or_else(|| Incompatible::new(format!("invalid LockType: {}", p.lock_type)))?,
             extra_info: p.extra_info,
         };
 

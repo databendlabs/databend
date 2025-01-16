@@ -62,6 +62,7 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -655,6 +656,29 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
         self.mutable_catalog.get_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn get_marked_deleted_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        self.mutable_catalog
+            .get_marked_deleted_indexes(tenant, table_id)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        index_ids: &[u64],
+    ) -> Result<()> {
+        self.mutable_catalog
+            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
+            .await
     }
 
     #[async_backtrace::framed]

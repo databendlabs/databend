@@ -1,20 +1,10 @@
 name: "Test Stateless Cluster MacOS"
 description: "Running stateless tests in cluster mode"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-apple-darwin"
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
+    - uses: ./.github/actions/setup_test
 
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
-      with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
     - name: Test setup
       shell: bash
       run: |

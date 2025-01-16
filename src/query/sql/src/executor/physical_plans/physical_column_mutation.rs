@@ -18,8 +18,8 @@ use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
-use crate::binder::MutationType;
 use crate::executor::physical_plan::PhysicalPlan;
+use crate::executor::physical_plans::MutationKind;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ColumnMutation {
@@ -28,7 +28,7 @@ pub struct ColumnMutation {
     pub table_info: TableInfo,
     pub mutation_expr: Option<Vec<(usize, RemoteExpr)>>,
     pub computed_expr: Option<Vec<(usize, RemoteExpr)>>,
-    pub mutation_type: MutationType,
+    pub mutation_kind: MutationKind,
     pub field_id_to_schema_index: HashMap<usize, usize>,
     pub input_num_columns: usize,
     pub has_filter_column: bool,

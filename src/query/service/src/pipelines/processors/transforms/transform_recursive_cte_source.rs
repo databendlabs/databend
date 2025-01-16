@@ -339,6 +339,7 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::CompactSource(_)
         | PhysicalPlan::CommitSink(_)
         | PhysicalPlan::Recluster(_)
+        | PhysicalPlan::HilbertSerialize(_)
         | PhysicalPlan::Duplicate(_)
         | PhysicalPlan::ChunkFilter(_)
         | PhysicalPlan::ChunkEvalScalar(_)

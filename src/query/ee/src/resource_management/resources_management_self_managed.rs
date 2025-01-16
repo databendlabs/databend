@@ -41,6 +41,10 @@ impl SelfManagedResourcesManagement {
 
 #[async_trait::async_trait]
 impl ResourcesManagement for SelfManagedResourcesManagement {
+    fn support_forward_warehouse_request(&self) -> bool {
+        false
+    }
+
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
         node.cluster_id = config.query.cluster_id.clone();
@@ -49,13 +53,13 @@ impl ResourcesManagement for SelfManagedResourcesManagement {
         Ok(())
     }
 
-    async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<()> {
+    async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<WarehouseInfo> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented create warehouse with self-managed resources management",
         ))
     }
 
-    async fn drop_warehouse(&self, _: String) -> Result<()> {
+    async fn drop_warehouse(&self, _: String) -> Result<WarehouseInfo> {
         Err(ErrorCode::Unimplemented(
             "Unimplemented drop warehouse with self-managed resources management",
         ))

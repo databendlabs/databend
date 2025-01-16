@@ -57,9 +57,9 @@ impl FromToProtoEnum for mt::principal::StageFileFormatType {
             mt::principal::StageFileFormatType::Orc => Ok(pb::StageFileFormatType::Orc),
             mt::principal::StageFileFormatType::Parquet => Ok(pb::StageFileFormatType::Parquet),
             mt::principal::StageFileFormatType::Xml => Ok(pb::StageFileFormatType::Xml),
-            mt::principal::StageFileFormatType::None => Err(Incompatible {
-                reason: "StageFileFormatType::None cannot be converted to protobuf".to_string(),
-            }),
+            mt::principal::StageFileFormatType::None => Err(Incompatible::new(
+                "StageFileFormatType::None cannot be converted to protobuf".to_string(),
+            )),
         }
     }
 }
@@ -114,14 +114,14 @@ impl FromToProto for mt::principal::FileFormatOptions {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let format = mt::principal::StageFileFormatType::from_pb_enum(
-            FromPrimitive::from_i32(p.format).ok_or_else(|| Incompatible {
-                reason: format!("invalid StageFileFormatType: {}", p.format),
+            FromPrimitive::from_i32(p.format).ok_or_else(|| {
+                Incompatible::new(format!("invalid StageFileFormatType: {}", p.format))
             })?,
         )?;
 
         let compression = mt::principal::StageFileCompression::from_pb_enum(
-            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
-                reason: format!("invalid StageFileCompression: {}", p.compression),
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| {
+                Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
             })?,
         )?;
 
@@ -176,13 +176,11 @@ impl FromToProto for mt::principal::UserDefinedFileFormat {
 
         let file_format_params =
             mt::principal::FileFormatParams::from_pb(p.file_format_params.ok_or_else(|| {
-                Incompatible {
-                    reason: "StageInfo.file_format_params cannot be None".to_string(),
-                }
+                Incompatible::new("StageInfo.file_format_params cannot be None".to_string())
             })?)?;
         let creator =
-            mt::principal::UserIdentity::from_pb(p.creator.ok_or_else(|| Incompatible {
-                reason: "StageInfo.creator cannot be None".to_string(),
+            mt::principal::UserIdentity::from_pb(p.creator.ok_or_else(|| {
+                Incompatible::new("StageInfo.creator cannot be None".to_string())
             })?)?;
 
         Ok(mt::principal::UserDefinedFileFormat {
@@ -249,9 +247,9 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::XmlFileFormatParams::from_pb(p)?,
                 ))
             }
-            None => Err(Incompatible {
-                reason: "FileFormatParams.format cannot be None".to_string(),
-            }),
+            None => Err(Incompatible::new(
+                "FileFormatParams.format cannot be None".to_string(),
+            )),
         }
     }
 
@@ -305,11 +303,8 @@ impl FromToProto for mt::principal::OrcFileFormatParams {
     fn from_pb(p: pb::OrcFileFormatParams) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        mt::principal::OrcFileFormatParams::try_create(p.missing_field_as.as_deref()).map_err(|e| {
-            Incompatible {
-                reason: format!("{e}"),
-            }
-        })
+        mt::principal::OrcFileFormatParams::try_create(p.missing_field_as.as_deref())
+            .map_err(|e| Incompatible::new(format!("{e}")))
     }
 
     fn to_pb(&self) -> Result<pb::OrcFileFormatParams, Incompatible> {
@@ -331,9 +326,7 @@ impl FromToProto for mt::principal::ParquetFileFormatParams {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         mt::principal::ParquetFileFormatParams::try_create(p.missing_field_as.as_deref(), p.null_if)
-            .map_err(|e| Incompatible {
-                reason: format!("{e}"),
-            })
+            .map_err(|e| Incompatible::new(format!("{e}")))
     }
 
     fn to_pb(&self) -> Result<pb::ParquetFileFormatParams, Incompatible> {
@@ -356,8 +349,8 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let compression = mt::principal::StageFileCompression::from_pb_enum(
-            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
-                reason: format!("invalid StageFileCompression: {}", p.compression),
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| {
+                Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
             })?,
         )?;
 
@@ -367,9 +360,7 @@ impl FromToProto for mt::principal::NdJsonFileFormatParams {
             p.null_field_as.as_deref(),
             p.null_if,
         )
-        .map_err(|e| Incompatible {
-            reason: format!("{e}"),
-        })
+        .map_err(|e| Incompatible::new(format!("{e}")))
     }
 
     fn to_pb(&self) -> Result<pb::NdJsonFileFormatParams, Incompatible> {
@@ -396,8 +387,8 @@ impl FromToProto for mt::principal::JsonFileFormatParams {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let compression = mt::principal::StageFileCompression::from_pb_enum(
-            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
-                reason: format!("invalid StageFileCompression: {}", p.compression),
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| {
+                Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
             })?,
         )?;
         Ok(Self { compression })
@@ -424,8 +415,8 @@ impl FromToProto for mt::principal::XmlFileFormatParams {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let compression = mt::principal::StageFileCompression::from_pb_enum(
-            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
-                reason: format!("invalid StageFileCompression: {}", p.compression),
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| {
+                Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
             })?,
         )?;
         Ok(Self {
@@ -456,8 +447,8 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let compression = mt::principal::StageFileCompression::from_pb_enum(
-            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
-                reason: format!("invalid StageFileCompression: {}", p.compression),
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| {
+                Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
             })?,
         )?;
         let null_display = if p.null_display.is_empty() {
@@ -468,11 +459,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
 
         let empty_field_as = p
             .empty_field_as
-            .map(|s| {
-                EmptyFieldAs::from_str(&s).map_err(|e| Incompatible {
-                    reason: format!("{:?}", e),
-                })
-            })
+            .map(|s| EmptyFieldAs::from_str(&s).map_err(|e| Incompatible::new(format!("{:?}", e))))
             .transpose()?
             .unwrap_or_default();
 
@@ -480,17 +467,13 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             .binary_format
             .map(|s| BinaryFormat::from_str(&s))
             .transpose()
-            .map_err(|e| Incompatible {
-                reason: format!("{:?}", e),
-            })?
+            .map_err(|e| Incompatible::new(format!("{:?}", e)))?
             .unwrap_or_default();
         let geometry_format = p
             .geometry_format
             .map(|s| GeometryDataType::from_str(&s))
             .transpose()
-            .map_err(|e| Incompatible {
-                reason: format!("{:?}", e),
-            })?
+            .map_err(|e| Incompatible::new(format!("{:?}", e)))?
             .unwrap_or_default();
 
         Ok(Self {
@@ -543,8 +526,8 @@ impl FromToProto for mt::principal::TsvFileFormatParams {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         let compression = mt::principal::StageFileCompression::from_pb_enum(
-            FromPrimitive::from_i32(p.compression).ok_or_else(|| Incompatible {
-                reason: format!("invalid StageFileCompression: {}", p.compression),
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| {
+                Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
             })?,
         )?;
         Ok(Self {

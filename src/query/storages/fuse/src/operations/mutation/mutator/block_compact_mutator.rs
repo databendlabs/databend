@@ -349,7 +349,7 @@ impl SegmentCompactChecker {
             return vec![];
         }
 
-        if self.total_block_count > 2 * self.block_threshold {
+        if self.total_block_count >= 2 * self.block_threshold {
             self.total_block_count = 0;
             let trivial = vec![(idx, segment)];
             if self.segments.is_empty() {
@@ -458,7 +458,7 @@ impl CompactTaskBuilder {
             self.blocks.push(block.clone());
             (false, true)
         } else {
-            // blocks > 2N
+            // blocks >= 2N
             (true, !self.blocks.is_empty())
         }
     }

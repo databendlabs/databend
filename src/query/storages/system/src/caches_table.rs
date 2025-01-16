@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
@@ -62,7 +63,7 @@ impl SyncSystemTable for CachesTable {
     const NAME: &'static str = "system.caches";
 
     // Allow distributed query.
-    const DATA_IN_LOCAL: bool = false;
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info

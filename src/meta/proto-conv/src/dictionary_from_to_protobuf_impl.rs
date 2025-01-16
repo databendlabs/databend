@@ -34,8 +34,8 @@ impl FromToProto for mt::DictionaryMeta {
     fn from_pb(p: pb::DictionaryMeta) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        let schema = p.schema.ok_or_else(|| Incompatible {
-            reason: "DictionaryMeta.schema can not be None".to_string(),
+        let schema = p.schema.ok_or_else(|| {
+            Incompatible::new("DictionaryMeta.schema can not be None".to_string())
         })?;
         let v = Self {
             source: p.source,

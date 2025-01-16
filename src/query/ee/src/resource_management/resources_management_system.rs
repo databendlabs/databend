@@ -38,6 +38,10 @@ impl SystemResourcesManagement {
 
 #[async_trait::async_trait]
 impl ResourcesManagement for SystemResourcesManagement {
+    fn support_forward_warehouse_request(&self) -> bool {
+        true
+    }
+
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
         assert!(config.query.cluster_id.is_empty());
@@ -58,11 +62,15 @@ impl ResourcesManagement for SystemResourcesManagement {
         Ok(())
     }
 
-    async fn create_warehouse(&self, name: String, nodes: Vec<SelectedNode>) -> Result<()> {
+    async fn create_warehouse(
+        &self,
+        name: String,
+        nodes: Vec<SelectedNode>,
+    ) -> Result<WarehouseInfo> {
         self.warehouse_manager.create_warehouse(name, nodes).await
     }
 
-    async fn drop_warehouse(&self, name: String) -> Result<()> {
+    async fn drop_warehouse(&self, name: String) -> Result<WarehouseInfo> {
         self.warehouse_manager.drop_warehouse(name).await
     }
 

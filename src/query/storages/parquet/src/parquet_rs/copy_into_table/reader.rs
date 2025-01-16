@@ -116,6 +116,7 @@ impl RowGroupReaderForCopy {
             parquet_table_schema,
             schema_descr,
             Some(arrow_schema),
+            None,
         )
         .with_push_downs(Some(&pushdowns));
         reader_builder.build_output()?;

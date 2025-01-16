@@ -41,6 +41,7 @@ use crate::optimizer::join::SingleToInnerOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
+use crate::optimizer::util::contains_warehouse_table_scan;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -374,6 +375,13 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
     if contains_local_table_scan(&s_expr, &opt_ctx.metadata) {
         opt_ctx.enable_distributed_optimization = false;
         info!("Disable distributed optimization due to local table scan.");
+    } else if contains_warehouse_table_scan(&s_expr, &opt_ctx.metadata) {
+        let warehouse = opt_ctx.table_ctx.get_warehouse_cluster().await?;
+
+        if !warehouse.is_empty() {
+            opt_ctx.enable_distributed_optimization = true;
+            info!("Enable distributed optimization due to warehouse table scan.");
+        }
     }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
@@ -461,6 +469,13 @@ async fn get_optimized_memo(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
     if contains_local_table_scan(&s_expr, &opt_ctx.metadata) {
         opt_ctx.enable_distributed_optimization = false;
         info!("Disable distributed optimization due to local table scan.");
+    } else if contains_warehouse_table_scan(&s_expr, &opt_ctx.metadata) {
+        let warehouse = opt_ctx.table_ctx.get_warehouse_cluster().await?;
+
+        if !warehouse.is_empty() {
+            opt_ctx.enable_distributed_optimization = true;
+            info!("Enable distributed optimization due to warehouse table scan.");
+        }
     }
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
@@ -507,7 +522,7 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {
         input_s_expr = input_s_expr.child(0)?.clone();
     }
-    // If there still exists a Exchange::Merge operator, we should disable distributed optimization and
+    // If there still exists an Exchange::Merge operator, we should disable distributed optimization and
     // optimize the input plan again.
     if input_s_expr.has_merge_exchange() {
         opt_ctx = opt_ctx.with_enable_distributed_optimization(false);

@@ -166,7 +166,7 @@ impl Processor for ParquetSource {
                             .full_file_reader
                             .as_ref()
                             .unwrap()
-                            .read_blocks_from_binary(buffer)?;
+                            .read_blocks_from_binary(buffer, &path)?;
                         let num_rows = bs.iter().map(|b| b.num_rows()).sum();
                         self.copy_status.add_chunk(path.as_str(), FileStatus {
                             num_rows_loaded: num_rows,
@@ -175,12 +175,12 @@ impl Processor for ParquetSource {
                         blocks.extend(bs);
                     }
                 } else {
-                    for (_, buffer) in buffers {
+                    for (path, buffer) in buffers {
                         blocks.extend(
                             self.full_file_reader
                                 .as_ref()
                                 .unwrap()
-                                .read_blocks_from_binary(buffer)?,
+                                .read_blocks_from_binary(buffer, &path)?,
                         );
                     }
                 }

@@ -18,6 +18,7 @@ pub mod background_service;
 pub mod data_mask;
 pub mod enterprise_services;
 pub mod fail_safe;
+pub mod hilbert_clustering;
 pub mod inverted_index;
 pub mod license;
 pub mod resource_management;

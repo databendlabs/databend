@@ -21,21 +21,23 @@ pid=$!
 # kill query randomly
 sleep_time=$(expr $RANDOM % 5 + 5)
 sleep $sleep_time
-killall databend-query >/dev/null 2>&1
-kill $pid
+disown %1
+kill -9 $pid > /dev/null 2>&1
 
 # restart query
+echo "will restart query"
 bash ../scripts/ci/deploy/databend-query-standalone.sh >/dev/null 2>&1
 
 # check if before and after vacuum table the table count matched
 old_count=$(echo "select * from test_vacuum.a order by c" | $BENDSQL_CLIENT_CONNECT)
 
 echo "set data_retention_time_in_days=0; vacuum table test_vacuum.a" | $BENDSQL_CLIENT_CONNECT >/dev/null
-#echo "optimize table test_vacuum.a all" | $BENDSQL_CLIENT_CONNECT
+echo "optimize table test_vacuum.a all" | $BENDSQL_CLIENT_CONNECT
 count=$(echo "select * from test_vacuum.a order by c" | $BENDSQL_CLIENT_CONNECT)
 
 if [[ "$old_count" != "$count" ]]; then
-  echo "vacuum table, old count:$old_count,new count:$count"
+  echo "vacuum table, new count:$count"
+  echo "vacuum table, old count:$old_count"
   exit 1
 fi
 

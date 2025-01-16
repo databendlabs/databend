@@ -26,11 +26,17 @@ use databend_common_meta_types::NodeType;
 
 #[async_trait::async_trait]
 pub trait ResourcesManagement: Sync + Send + 'static {
+    fn support_forward_warehouse_request(&self) -> bool;
+
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()>;
 
-    async fn create_warehouse(&self, name: String, nodes: Vec<SelectedNode>) -> Result<()>;
+    async fn create_warehouse(
+        &self,
+        name: String,
+        nodes: Vec<SelectedNode>,
+    ) -> Result<WarehouseInfo>;
 
-    async fn drop_warehouse(&self, name: String) -> Result<()>;
+    async fn drop_warehouse(&self, name: String) -> Result<WarehouseInfo>;
 
     async fn resume_warehouse(&self, name: String) -> Result<()>;
 
@@ -77,6 +83,10 @@ pub struct DummyResourcesManagement;
 
 #[async_trait::async_trait]
 impl ResourcesManagement for DummyResourcesManagement {
+    fn support_forward_warehouse_request(&self) -> bool {
+        false
+    }
+
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()> {
         let config = GlobalConfig::instance();
         node.cluster_id = config.query.cluster_id.clone();
@@ -85,11 +95,11 @@ impl ResourcesManagement for DummyResourcesManagement {
         Ok(())
     }
 
-    async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<()> {
+    async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<WarehouseInfo> {
         Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
     }
 
-    async fn drop_warehouse(&self, _: String) -> Result<()> {
+    async fn drop_warehouse(&self, _: String) -> Result<WarehouseInfo> {
         Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
     }
 

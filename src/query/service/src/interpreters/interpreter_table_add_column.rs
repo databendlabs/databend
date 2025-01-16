@@ -27,6 +27,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
+use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
@@ -135,8 +136,13 @@ impl Interpreter for AddTableColumnInterpreter {
             let mut planner = Planner::new(self.ctx.clone());
             let (plan, _) = planner.plan_sql(&query).await?;
             if let Plan::DataMutation { s_expr, schema, .. } = plan {
-                let interpreter =
-                    MutationInterpreter::try_create(self.ctx.clone(), *s_expr, schema)?;
+                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                let interpreter = MutationInterpreter::try_create(
+                    self.ctx.clone(),
+                    *s_expr,
+                    schema,
+                    mutation.metadata.clone(),
+                )?;
                 let _ = interpreter.execute(self.ctx.clone()).await?;
                 return Ok(PipelineBuildResult::create());
             }

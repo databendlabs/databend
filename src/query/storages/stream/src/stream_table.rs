@@ -24,6 +24,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -335,8 +336,8 @@ impl StreamTable {
 
 #[async_trait::async_trait]
 impl Table for StreamTable {
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -429,7 +430,9 @@ impl Table for StreamTable {
     ) -> Result<String> {
         let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let table_desc = format!("{database_name}.{table_name}{with_options}");
+        let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
+        let table_desc =
+            format!("{quote}{database_name}{quote}.{quote}{table_name}{quote}{with_options}");
         fuse_table
             .get_changes_query(
                 ctx,

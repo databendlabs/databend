@@ -1172,19 +1172,19 @@ impl DefaultSettings {
                     scope: SettingScope::Session,
                     range: None,
                 }),
-                ("premise_deploy_danger_amend_accept_invalid_cert", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Setting this to a non-zero value will allow `fuse_amend` to accept invalid TLS certificates. For diagnostic purposes only, Be very cautious before setting this to a non-zero value. If you're unsure, leave it unchanged.",
+                ("hilbert_num_range_ids", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Specifies the domain of range IDs in Hilbert clustering. A larger value provides finer granularity, but may incur a performance cost.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: Some(SettingRange::Numeric(1..=65535)),
                 }),
-                ("premise_deploy_amend_force_path_style", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Setting this to a non-zero value will let `fuse_amend` use path style uri while accessing s3-compatible storage service.",
+                ("hilbert_sample_size_per_block", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Specifies the number of sample points per block used in Hilbert clustering.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
             ]);
 

@@ -42,6 +42,7 @@ members = [
     "src/query/functions/src/scalars/timestamp",
     "src/query/functions/src/scalars/numeric_basic_arithmetic",
     "src/query/functions/src/scalars/arithmetic",
+    "src/query/functions/src/scalars/integer_arithmetic",
     "src/query/management",
     "src/query/pipeline/core",
     "src/query/pipeline/sinks",
@@ -183,6 +184,7 @@ databend-enterprise-attach-table = { path = "src/query/ee_features/attach_table"
 databend-enterprise-background-service = { path = "src/query/ee_features/background_service" }
 databend-enterprise-data-mask-feature = { path = "src/query/ee_features/data_mask" }
 databend-enterprise-fail-safe = { path = "src/query/ee_features/fail_safe" }
+databend-enterprise-hilbert-clustering = { path = "src/query/ee_features/hilbert_clustering" }
 databend-enterprise-inverted-index = { path = "src/query/ee_features/inverted_index" }
 databend-enterprise-meta = { path = "src/meta/ee" }
 databend-enterprise-query = { path = "src/query/ee" }
@@ -196,6 +198,7 @@ databend-functions-scalar-arithmetic = { path = "src/query/functions/src/scalars
 databend-functions-scalar-datetime = { path = "src/query/functions/src/scalars/timestamp" }
 databend-functions-scalar-decimal = { path = "src/query/functions/src/scalars/decimal" }
 databend-functions-scalar-geo = { path = "src/query/functions/src/scalars/geographic" }
+databend-functions-scalar-integer-basic-arithmetic = { path = "src/query/functions/src/scalars/integer_arithmetic" }
 databend-functions-scalar-math = { path = "src/query/functions/src/scalars/mathematics" }
 databend-functions-scalar-numeric-basic-arithmetic = { path = "src/query/functions/src/scalars/numeric_basic_arithmetic" }
 databend-meta = { path = "src/meta/service" }
@@ -213,7 +216,7 @@ databend-storages-common-table-meta = { path = "src/query/storages/common/table_
 # Crates.io dependencies
 ahash = "0.8"
 aho-corasick = { version = "1.0.1" } #
-anyerror = { version = "=0.1.10" }
+anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 approx = "0.5.1"
 arrow = { version = "53" }
@@ -231,6 +234,7 @@ arrow-udf-python = { version = "0.4.0" }
 arrow-udf-wasm = { version = "0.4.1" }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
+async-compat = { version = "0.2" }
 async-compression = { git = "https://github.com/datafuse-extras/async-compression", rev = "dc81082", features = [
     "futures-io",
     "all-algorithms",
@@ -240,7 +244,10 @@ async-stream = "0.3.3"
 async-trait = { version = "0.1.77" }
 backoff = "0.4" # FIXME: use backon to replace this.
 backon = "1"
-backtrace = "0.3.73"
+backtrace = { version = "0.3.73", features = [
+    "std",
+    "serialize-serde",
+] }
 base64 = "0.22"
 bincode = { version = "2.0.0-rc.3", features = ["serde", "std", "alloc"] }
 bincode_v1 = { package = "bincode", version = "1.3.3" }
@@ -362,10 +369,10 @@ num-derive = "0.3.3"
 num-traits = "0.2.19"
 num_cpus = "1.13.1"
 object = "0.36.5"
-object_store_opendal = { git = "https://github.com/apache/opendal", package = "object_store_opendal", rev = "f7f9990" }
+object_store_opendal = { version = "0.49.0" }
 once_cell = "1.15.0"
 openai_api_rust = "0.1"
-opendal = { version = "0.51", git = "https://github.com/apache/opendal", rev = "f7f9990", features = [
+opendal = { version = "0.51.1", features = [
     "layers-fastrace",
     "layers-prometheus-client",
     "layers-async-backtrace",
@@ -483,6 +490,7 @@ tempfile = "3.4.0"
 terminal_size = "0.2.6"
 test-harness = "0.1.1"
 testcontainers = "0.23"
+testcontainers-modules = "0.11.5"
 thiserror = { version = "1" }
 thrift = "0.17.0"
 tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }
@@ -552,12 +560,8 @@ tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "valuable"] }
 
 # Databend Integration Test
-msql-srv = { git = "https://github.com/databendlabs/msql-srv.git", rev = "cd443dd" }
-mysql_common = "0.32.4"
 quickcheck = "1.0"
 sqllogictest = "0.21.0"
-sqlparser = "0.50.0"
-threadpool = "1.8"
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
@@ -569,8 +573,8 @@ result_large_err = "allow"
 
 ## DONT'T DELETE THIS: If we want best performance, we should use this profile but it will take longer time to compile.
 ## Test SQL:
-## select sum(number) from numbers_mt(10000000000);   ~ 3x performance
-## select max(number) from numbers_mt(10000000000);   ~ 3x performance
+## select sum(number) from numbers_mt(10000000000); ~ 3x performance
+## select max(number) from numbers_mt(10000000000); ~ 3x performance
 # [profile.release]
 # debug = 1
 # lto = "thin"
@@ -582,7 +586,7 @@ result_large_err = "allow"
 debug = 1
 lto = "thin"
 overflow-checks = false
-opt-level = "s"         ## defaults to be 3
+opt-level = "s"         # defaults to be 3
 incremental = true
 
 [profile.ci]
@@ -629,10 +633,7 @@ arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "ade8
 arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "ade868f" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
-backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be", features = [
-    "std",
-    "serialize-serde",
-] }
+backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "3038c145" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }

@@ -8,6 +8,7 @@ on:
       - reopened
     branches:
       - main
+      - backport/*
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -54,22 +55,12 @@ jobs:
       runner_provider: aws
       license_type: trial
 
-  linux_hive:
-    needs: changes
-    if: needs.changes.outputs.any_src_changed == 'true'
-    uses: ./.github/workflows/reuse.linux.hive.yml
-    secrets: inherit
-    with:
-      build_profile: ci
-      runner_provider: aws
-
   ready:
     if: always()
     runs-on: ubuntu-latest
     needs:
       - changes
       - linux
-      - linux_hive
     steps:
       - name: Check Ready to Merge
         uses: actions/github-script@v7

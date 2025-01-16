@@ -98,6 +98,7 @@ use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
+use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
@@ -6157,6 +6158,7 @@ impl SchemaApiTestSuite {
         let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
         let index_id;
+        let index_id_2;
 
         info!("--- prepare db and table");
         {
@@ -6228,7 +6230,8 @@ impl SchemaApiTestSuite {
                 meta: index_meta_2.clone(),
             };
 
-            mt.create_index(req).await?;
+            let res = mt.create_index(req).await?;
+            index_id_2 = res.index_id;
         }
 
         {
@@ -6280,10 +6283,43 @@ impl SchemaApiTestSuite {
         }
 
         {
+            info!("--- get marked deleted indexes");
+            let res = mt
+                .get_marked_deleted_indexes(&tenant, Some(table_id))
+                .await?;
+            assert_eq!(res.table_indexes.len(), 0);
+
+            let res = mt.get_marked_deleted_indexes(&tenant, None).await?;
+            assert_eq!(res.table_indexes.len(), 0);
+        }
+
+        {
             info!("--- drop index");
 
             let res = mt.drop_index(&name_ident_2).await?;
             assert!(res.is_some())
+        }
+
+        {
+            info!("--- get marked deleted indexes after drop one");
+            let results = vec![
+                mt.get_marked_deleted_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.get_marked_deleted_indexes(&tenant, None).await?,
+            ];
+            for res in results {
+                assert_eq!(res.table_indexes.len(), 1);
+                let index = res.table_indexes.get(&table_id);
+                assert!(index.is_some());
+                let index = index.unwrap();
+                assert_eq!(index.len(), 1);
+                let (res_index_id, res_index_meta) = index[0].clone();
+                assert_eq!(res_index_id, index_id_2);
+                assert_eq!(
+                    res_index_meta.index_type,
+                    MarkedDeletedIndexType::AGGREGATING
+                );
+            }
         }
 
         {
@@ -6319,6 +6355,62 @@ impl SchemaApiTestSuite {
 
             let res = mt.list_indexes(req).await?;
             assert!(res.is_empty())
+        }
+
+        {
+            info!("--- get marked deleted indexes after drop all");
+            let results = vec![
+                mt.get_marked_deleted_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.get_marked_deleted_indexes(&tenant, None).await?,
+            ];
+            for res in results {
+                assert_eq!(res.table_indexes.len(), 1);
+                let index = res.table_indexes.get(&table_id);
+                assert!(index.is_some());
+                let index = index.unwrap();
+                assert_eq!(index.len(), 2);
+                let res_index_ids = index.iter().map(|(id, _)| id).collect::<HashSet<_>>();
+                assert!(res_index_ids.contains(&index_id));
+                assert!(res_index_ids.contains(&index_id_2));
+
+                assert!(index.iter().all(|(_, meta)| {
+                    matches!(meta.index_type, MarkedDeletedIndexType::AGGREGATING)
+                }));
+            }
+        }
+
+        {
+            info!("--- remove marked deleted indexes");
+            mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id])
+                .await?;
+            let results = vec![
+                mt.get_marked_deleted_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.get_marked_deleted_indexes(&tenant, None).await?,
+            ];
+            for res in results {
+                assert_eq!(res.table_indexes.len(), 1);
+                let index = res.table_indexes.get(&table_id);
+                assert!(index.is_some());
+                let index = index.unwrap();
+                assert_eq!(index.len(), 1);
+                let (res_index_id, res_index_meta) = index[0].clone();
+                assert_eq!(res_index_id, index_id_2);
+                assert_eq!(
+                    res_index_meta.index_type,
+                    MarkedDeletedIndexType::AGGREGATING
+                );
+            }
+
+            mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id_2])
+                .await?;
+            let res = mt
+                .get_marked_deleted_indexes(&tenant, Some(table_id))
+                .await?;
+            assert_eq!(res.table_indexes.len(), 0);
+            let res = mt.get_marked_deleted_indexes(&tenant, None).await?;
+            assert_eq!(res.table_indexes.len(), 0);
         }
 
         {

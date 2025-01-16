@@ -12,7 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod mysql_source;
-mod redis_source;
-pub use mysql_source::run_mysql_source;
-pub use redis_source::run_redis_source;
+#![allow(clippy::arc_with_non_send_sync)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::ptr_arg)]
+#![allow(clippy::type_complexity)]
+#![allow(internal_features)]
+#![feature(core_intrinsics)]
+#![feature(box_patterns)]
+#![feature(type_ascription)]
+#![feature(try_blocks)]
+#![feature(downcast_unchecked)]
+#![feature(str_internals)]
+
+pub mod integer_arithmetic;
+
+pub use integer_arithmetic::*;

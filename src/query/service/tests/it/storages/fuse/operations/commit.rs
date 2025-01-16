@@ -730,15 +730,15 @@ impl TableContext for CtxDelegation {
         HashMap::new()
     }
 
-    fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {
+    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
         todo!()
     }
 
-    fn clear_segment_locations(&self) -> Result<()> {
+    fn clear_written_segment_locations(&self) -> Result<()> {
         todo!()
     }
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
         todo!()
     }
 
@@ -879,6 +879,14 @@ impl TableContext for CtxDelegation {
     }
 
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
+
+    fn set_cluster(&self, _: Arc<Cluster>) {
+        todo!()
+    }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
     fn get_table_meta_timestamps(

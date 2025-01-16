@@ -47,6 +47,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::ClusterType;
 use parking_lot::RwLock;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -294,7 +295,10 @@ impl ReplaceInterpreter {
             .ctx
             .get_settings()
             .get_replace_into_bloom_pruning_max_column_number()?;
-        let bloom_filter_column_indexes = if table.cluster_key_meta().is_some() {
+        let bloom_filter_column_indexes = if table
+            .cluster_type()
+            .is_some_and(|v| v == ClusterType::Linear)
+        {
             fuse_table
                 .choose_bloom_filter_columns(
                     self.ctx.clone(),
