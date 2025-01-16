@@ -426,7 +426,7 @@ impl FuseTable {
             .as_ref()
             .filter(|p| p.order_by.is_empty() && p.filters.is_none())
             .and_then(|p| p.limit);
-
+        let enable_prune_cache = ctx.get_settings().get_enable_prune_cache()?;
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
             limit,
@@ -441,16 +441,20 @@ impl FuseTable {
                 top_k.clone(),
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
+                enable_prune_cache,
             )
         })?;
 
-        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
-            if let Ok(()) = info.res {
-                // only populating cache when the pipeline is finished successfully
-                send_part_state.populating_cache();
-            }
-            Ok(())
-        });
+        if enable_prune_cache {
+            info!("prune pipeline: enable prune cache");
+            prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+                if let Ok(()) = info.res {
+                    // only populating cache when the pipeline is finished successfully
+                    send_part_state.populating_cache();
+                }
+                Ok(())
+            });
+        }
 
         Ok(())
     }
