@@ -886,8 +886,11 @@ impl Display for DropTableIndexReq {
 /// Maps table_id to a vector of (index_name, index_version, marked_deleted_index_meta) pairs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetMarkedDeletedTableIndexesReply {
-    pub table_indexes: HashMap<u64, Vec<(String, String, MarkedDeletedIndexMeta)>>,
+    pub table_indexes: HashMap<u64, Vec<(IndexName, IndexVersion, MarkedDeletedIndexMeta)>>,
 }
+
+pub type IndexName = String;
+pub type IndexVersion = String;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableReq {
