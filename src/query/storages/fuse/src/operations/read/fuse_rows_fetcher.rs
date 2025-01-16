@@ -163,7 +163,12 @@ where F: RowsFetcher + Send + Sync + 'static
         }
 
         let mut data = DataBlock::concat(&self.blocks)?;
+        self.blocks.clear();
+
         let num_rows = data.num_rows();
+        if num_rows == 0 {
+            return Ok(None);
+        }
 
         let entry = &data.columns()[self.row_id_col_offset];
         let value = entry
