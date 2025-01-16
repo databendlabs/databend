@@ -34,6 +34,7 @@ use databend_common_catalog::table::DummyColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -145,6 +146,17 @@ impl ParquetRSTable {
             query_kind,
             QueryKind::CopyIntoTable | QueryKind::CopyIntoLocation
         );
+        match query_kind {
+            QueryKind::CopyIntoTable | QueryKind::CopyIntoLocation => true,
+            QueryKind::Unknown => {
+                // add this branch to ensure query_kind is set
+                return Err(ErrorCode::Internal(
+                    "ParquetRSTable::create unknown query kind",
+                ));
+            }
+            _ => false,
+        };
+
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
 
