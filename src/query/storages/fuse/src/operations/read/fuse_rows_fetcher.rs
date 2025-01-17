@@ -161,6 +161,8 @@ where F: RowsFetcher + Send + Sync + 'static
             return Ok(None);
         }
 
+        let start_time = std::time::Instant::now();
+        let num_blocks = self.blocks.len();
         let mut data = DataBlock::concat(&self.blocks)?;
         self.blocks.clear();
 
@@ -191,6 +193,13 @@ where F: RowsFetcher + Send + Sync + 'static
                 data.add_column(col.clone());
             }
         }
+
+        log::info!(
+            "TransformRowsFetcher on_finish: num_rows: {}, input blocks: {} in {} milliseconds",
+            num_rows,
+            num_blocks,
+            start_time.elapsed().as_millis()
+        );
 
         Ok(Some(data))
     }
