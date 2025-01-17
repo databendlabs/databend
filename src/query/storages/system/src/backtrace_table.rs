@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_base::get_all_tasks;
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -44,7 +45,7 @@ impl SyncSystemTable for BacktraceTable {
     const NAME: &'static str = "system.backtrace";
 
     // Allow distributed query.
-    const DATA_IN_LOCAL: bool = false;
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info

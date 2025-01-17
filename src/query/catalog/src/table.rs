@@ -94,8 +94,8 @@ pub trait Table: Sync + Send {
         self.get_table_info().ident.table_id
     }
 
-    fn is_local(&self) -> bool {
-        true
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Local
     }
 
     fn as_any(&self) -> &dyn Any;
@@ -450,7 +450,7 @@ pub trait Table: Sync + Send {
         false
     }
 
-    fn broadcast_truncate_to_cluster(&self) -> bool {
+    fn broadcast_truncate_to_warehouse(&self) -> bool {
         false
     }
 
@@ -677,4 +677,11 @@ pub struct Bound {
 pub struct ColumnRange {
     pub min: Bound,
     pub max: Bound,
+}
+
+#[derive(Debug)]
+pub enum DistributionLevel {
+    Local,
+    Cluster,
+    Warehouse,
 }

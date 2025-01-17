@@ -18,6 +18,7 @@ use std::sync::Arc;
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use itertools::Itertools;
+use log::info;
 use strength_reduce::StrengthReducedU64;
 
 use super::payload_row::rowformat_size;
@@ -77,8 +78,16 @@ unsafe impl Sync for Payload {}
 pub struct Page {
     pub(crate) data: Vec<MaybeUninit<u8>>,
     pub(crate) rows: usize,
-    pub(crate) state_rows: usize,
+    // state_offset = state_rows * agg_len
+    // which mark that the offset to clean the agg states
+    pub(crate) state_offsets: usize,
     pub(crate) capacity: usize,
+}
+
+impl Page {
+    pub fn is_partial_state(&self, agg_len: usize) -> bool {
+        self.rows * agg_len != self.state_offsets
+    }
 }
 
 pub type Pages = Vec<Page>;
@@ -170,7 +179,7 @@ impl Payload {
                 self.pages.push(Page {
                     data,
                     rows: 0,
-                    state_rows: 0,
+                    state_offsets: 0,
                     capacity: self.row_per_page,
                 });
             }
@@ -302,12 +311,18 @@ impl Payload {
                 }
 
                 let place = StateAddr::from(place);
+                let page = &mut self.pages[page_index[idx]];
                 for (aggr, loc) in self.aggrs.iter().zip(states_loc.iter()) {
-                    {
-                        aggr.init_state(AggrState::new(place, loc));
-                    }
+                    aggr.init_state(AggrState::new(place, loc));
+                    page.state_offsets += 1;
                 }
-                self.pages[page_index[idx]].state_rows += 1;
+            }
+
+            #[cfg(debug_assertions)]
+            {
+                for page in self.pages.iter() {
+                    assert_eq!(page.rows * self.aggrs.len(), page.state_offsets);
+                }
             }
         }
 
@@ -342,6 +357,7 @@ impl Payload {
         address: &[*const u8],
     ) {
         let tuple_size = self.tuple_size;
+        let agg_len = self.aggrs.len();
         let (mut page, _) = self.writable_page();
         for i in 0..row_count {
             let index = select_vector[i];
@@ -354,7 +370,7 @@ impl Payload {
                 )
             }
             page.rows += 1;
-            page.state_rows += 1;
+            page.state_offsets += agg_len;
 
             if page.rows == page.capacity {
                 (page, _) = self.writable_page();
@@ -432,13 +448,32 @@ impl Drop for Payload {
                 return;
             };
 
-            for (aggr, loc) in self.aggrs.iter().zip(states_layout.states_loc.iter()) {
+            'FOR: for (idx, (aggr, loc)) in self
+                .aggrs
+                .iter()
+                .zip(states_layout.states_loc.iter())
+                .enumerate()
+            {
                 if !aggr.need_manual_drop_state() {
                     continue;
                 }
 
                 for page in self.pages.iter() {
-                    for row in 0..page.state_rows {
+                    let is_partial_state = page.is_partial_state(self.aggrs.len());
+
+                    if is_partial_state && idx == 0 {
+                        info!(
+                            "Cleaning partial page, state_offsets: {}, row: {}, agg length: {}",
+                            page.state_offsets,
+                            page.rows,
+                            self.aggrs.len()
+                        );
+                    }
+                    for row in 0..page.state_offsets.div_ceil(self.aggrs.len()) {
+                        // When OOM, some states are not initialized, we don't need to destroy them
+                        if is_partial_state && row * self.aggrs.len() + idx >= page.state_offsets {
+                            continue 'FOR;
+                        }
                         let ptr = self.data_ptr(page, row);
                         unsafe {
                             let state_addr = read::<u64>(ptr.add(self.state_offset) as _) as usize;

@@ -26,6 +26,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -139,8 +140,8 @@ impl Table for MemoryTable {
 
     /// MemoryTable could be distributed table, yet we only insert data in one node per query
     /// Because commit_insert did not support distributed transaction
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn support_column_projection(&self) -> bool {
@@ -207,7 +208,7 @@ impl Table for MemoryTable {
         let parts = vec![MemoryPartInfo::create()];
         return Ok((
             statistics,
-            Partitions::create(PartitionsShuffleKind::Broadcast, parts),
+            Partitions::create(PartitionsShuffleKind::BroadcastCluster, parts),
         ));
     }
 

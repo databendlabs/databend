@@ -4230,6 +4230,120 @@ FunctionCall {
 
 
 ---------- Input ----------
+QUANTILE_CONT(0.5)(salary) OVER (PARTITION BY department ORDER BY hire_date)
+---------- Output ---------
+QUANTILE_CONT(0.5)(salary) OVER (PARTITION BY department ORDER BY hire_date)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..76,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..13,
+            ),
+            name: "QUANTILE_CONT",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    19..25,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                19..25,
+                            ),
+                            name: "salary",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [
+            Literal {
+                span: Some(
+                    14..17,
+                ),
+                value: Decimal256 {
+                    value: 5,
+                    precision: 76,
+                    scale: 1,
+                },
+            },
+        ],
+        window: Some(
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [
+                            ColumnRef {
+                                span: Some(
+                                    46..56,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                46..56,
+                                            ),
+                                            name: "department",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        66..75,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    66..75,
+                                                ),
+                                                name: "hire_date",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                        ],
+                        window_frame: None,
+                    },
+                ),
+            },
+        ),
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
 ARRAY_APPLY([1,2,3], x -> x + 1)
 ---------- Output ---------
 ARRAY_APPLY([1, 2, 3], x -> x + 1)
