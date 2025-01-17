@@ -402,14 +402,7 @@ pub fn bind_values(
     for (row_idx, row) in values.iter().enumerate() {
         for (column_idx, expr) in row.iter().enumerate() {
             let (scalar, data_type) = scalar_binder.bind(expr)?;
-            if matches!(
-                scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::SubqueryExpr(_)
-                    | ScalarExpr::UDAFCall(_)
-                    | ScalarExpr::UDFCall(_)
-            ) {
+            if !scalar.evaluable() {
                 return Err(ErrorCode::SemanticError(format!(
                     "Values can't contain subquery, aggregate functions, window functions, or UDFs"
                 ))
