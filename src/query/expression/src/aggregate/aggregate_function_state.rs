@@ -234,7 +234,7 @@ impl<'a> AggrState<'a> {
     }
 
     pub fn remove_last_loc(&self) -> Self {
-        assert!(self.loc.len() >= 2);
+        debug_assert!(self.loc.len() >= 2);
         Self {
             addr: self.addr,
             loc: &self.loc[..self.loc.len() - 1],
@@ -242,7 +242,7 @@ impl<'a> AggrState<'a> {
     }
 
     pub fn remove_first_loc(&self) -> Self {
-        assert!(self.loc.len() >= 2);
+        debug_assert!(self.loc.len() >= 2);
         Self {
             addr: self.addr,
             loc: &self.loc[1..],

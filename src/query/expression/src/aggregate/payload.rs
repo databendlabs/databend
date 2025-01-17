@@ -295,15 +295,15 @@ impl Payload {
         }) = &self.states_layout
         {
             // write states
-            let n = select_vector.len().min(new_group_rows);
-            let (array_layout, padded_size) = layout.repeat(n).unwrap();
+            let (array_layout, padded_size) = layout.repeat(new_group_rows).unwrap();
             // Bump only allocates but does not drop, so there is no use after free for any item.
             let place = self.arena.alloc_layout(array_layout);
             for (idx, place) in select_vector
                 .iter()
                 .take(new_group_rows)
                 .copied()
-                .zip((0..n).map(|i| unsafe { place.add(padded_size * i) }))
+                .enumerate()
+                .map(|(i, idx)| (idx, unsafe { place.add(padded_size * i) }))
             {
                 unsafe {
                     let dst = address[idx].add(write_offset);
