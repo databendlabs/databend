@@ -35,3 +35,4 @@ pub use transform_single_key::PartialSingleStateAggregator;
 pub use udaf_script::*;
 
 pub use self::serde::*;
+use super::runtime_pool;
