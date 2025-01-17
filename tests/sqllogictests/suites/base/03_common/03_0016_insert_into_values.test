@@ -13,6 +13,9 @@ CREATE DATABASE db2;
 statement ok
 USE db1;
 
+statement error 1065
+explain VALUES(2), (3), (COUNT(*) OVER ()), (4), (5)
+
 statement ok
 CREATE TABLE IF NOT EXISTS t1(a Int8 null, b UInt32 null, c Date null, d DateTime null, e String null, f Float64 null) Engine = Fuse
 
@@ -32,6 +35,7 @@ query II
 select sum(a),sum(b) from t1
 ----
 401 367
+
 
 statement ok
 CREATE TABLE IF NOT EXISTS t_str(a Varchar)
