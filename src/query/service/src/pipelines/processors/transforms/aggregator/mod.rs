@@ -37,3 +37,4 @@ pub use udaf_script::*;
 pub use utils::*;
 
 pub use self::serde::*;
+use super::runtime_pool;
