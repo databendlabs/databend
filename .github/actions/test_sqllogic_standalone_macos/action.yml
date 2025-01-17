@@ -1,10 +1,6 @@
 name: "Test sqllogic Standalone"
 description: "Running sqllogic tests in standalone mode"
 inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-apple-darwin"
   dirs:
     description: "logic test suites dirs"
     required: true
@@ -16,23 +12,22 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
+    - uses: ./.github/actions/setup_test
       with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
         artifacts: sqllogictests,meta,query
+
     - name: Test setup
       shell: bash
       run: |
         bash ./scripts/setup/dev_setup.sh -yd
+
     - name: Run sqllogic Tests with Standalone mode with embedded meta-store
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
       run: |
         bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
+
     - name: Upload failure
       if: failure()
       uses: ./.github/actions/artifact_failure

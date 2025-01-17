@@ -41,39 +41,7 @@ jobs:
       - self-hosted
       - "${{ matrix.runner }}"
       - Linux
-      - 8c32g
-      - "${{ inputs.runner_provider }}"
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { arch: x86_64, runner: X64 }
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # fetch all tags, metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/build_linux
-        timeout-minutes: 60
-        env:
-          DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY: ${{ secrets.DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY }}
-        with:
-          sha: ${{ github.sha }}
-          target: ${{ matrix.arch }}-unknown-linux-gnu
-          artifacts: all
-      - name: upload sccache log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sccache-build
-          path: target/sccache.log
-
-  build_udf:
-    runs-on:
-      - self-hosted
-      - "${{ matrix.runner }}"
-      - Linux
-      - 8c32g
+      - 16c64g
       - "${{ inputs.runner_provider }}"
     strategy:
       fail-fast: false
@@ -84,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # fetch all tags, metasrv and metaclient need tag as its version.
+          # fetch all tags, metasrv and meta client need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
         timeout-minutes: 60
@@ -93,14 +61,14 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-gnu
-          features: python-udf
-          category: udf
-          artifacts: query
+          features: python-udf,storage-hdfs
+          category: full
+          artifacts: all
       - name: upload sccache log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: sccache-build-udf
+          name: sccache-build-${{ matrix.arch }}
           path: target/sccache.log
 
   # build_address_sanitizer:
@@ -127,7 +95,7 @@ jobs:
   #         artifacts: query
 
   test_unit:
-    runs-on: [self-hosted, X64, Linux, 8c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 16c64g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -249,6 +217,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_iceberg_rest_standalone
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-iceberg-rest-standalone
+
+  test_stateful_hive_standalone:
+    needs: [build, check]
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_stateful_hive_standalone
         timeout-minutes: 10
       - name: Upload failure
         if: failure()

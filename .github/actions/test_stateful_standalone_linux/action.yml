@@ -1,19 +1,9 @@
 name: "Test Stateful Standalone Linux"
 description: "Running stateful tests in standalone mode"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
-      with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
+    - uses: ./.github/actions/setup_test
 
     - name: Minio Setup for (ubuntu-latest only)
       shell: bash
