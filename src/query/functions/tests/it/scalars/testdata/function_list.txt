@@ -183,11 +183,11 @@ Functions overloads:
 1 array_to_string(Array(String) NULL, String NULL) :: String NULL
 2 array_to_string(Array(String NULL), String) :: String
 3 array_to_string(Array(String NULL) NULL, String NULL) :: String NULL
-0 array_tuple FACTORY
 0 array_unique(Array(Nothing)) :: UInt64
 1 array_unique(Array(Nothing) NULL) :: UInt64 NULL
 2 array_unique(Array(T0)) :: UInt64
 3 array_unique(Array(T0) NULL) :: UInt64 NULL
+0 arrays_zip FACTORY
 0 as_array(Variant) :: Variant NULL
 1 as_array(Variant NULL) :: Variant NULL
 0 as_boolean(Variant) :: Boolean NULL

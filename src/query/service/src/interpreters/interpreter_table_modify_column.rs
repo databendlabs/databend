@@ -469,7 +469,7 @@ impl ModifyTableColumnInterpreter {
                                 .join(", ");
 
                             format!(
-                                "if(is_not_null(`{}`), array_tuple({}), NULL) AS {}",
+                                "if(is_not_null(`{}`), arrays_zip({}), NULL) AS {}",
                                 field.name, transform_funcs, field.name
                             )
                         }

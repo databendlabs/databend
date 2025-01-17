@@ -28,7 +28,6 @@ fn test_tuple() {
     let file = &mut mint.new_goldenfile("tuple.txt").unwrap();
 
     test_create(file);
-    test_array_tuple(file);
     test_get(file);
 }
 
@@ -43,13 +42,6 @@ fn test_create(file: &mut impl Write) {
             true, true, false, true,
         ]),
     )]);
-}
-
-fn test_array_tuple(file: &mut impl Write) {
-    run_ast(file, "array_tuple(NULL, NULL)", &[]);
-    run_ast(file, "array_tuple(1, 2, 'a')", &[]);
-    run_ast(file, "array_tuple([1,2,3], ['a','b','c'], 10)", &[]);
-    run_ast(file, "array_tuple([1,2,3], ['a','b'], 10)", &[]);
 }
 
 fn test_get(file: &mut impl Write) {
