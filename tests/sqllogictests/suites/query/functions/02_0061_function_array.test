@@ -399,17 +399,17 @@ select json_array_reduce([1,2,3,4]::Variant, (x, y) -> 3 + x + y), json_array_tr
 19 []
 
 query T
-SELECT arrays_zip([1,2,3], ['a','b','c'], 10);
-----
-[(1,'a',10),(2,'b',10),(3,'c',10)]
- 
-statement error 1006
-SELECT arrays_zip([1,2,3], ['a','b'], 10);
- 
-query T
 SELECT arrays_zip(1, 'a', null);
 ----
 [(1,'a',NULL)]
+
+query T
+SELECT arrays_zip([1,2,3], ['a','b','c'], 10);
+----
+[(1,'a',10),(2,'b',10),(3,'c',10)]
+
+statement error 1006
+SELECT arrays_zip([1,2,3], ['a','b'], 10);
 
 query T
 SELECT arrays_zip(col1, col2) FROM t3;
