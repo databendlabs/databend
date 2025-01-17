@@ -25,15 +25,13 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_transforms::processors::AsyncTransform;
-use databend_common_pipeline_transforms::processors::AsyncTransformer;
+use databend_common_pipeline_transforms::AsyncAccumulatingTransform;
+use databend_common_pipeline_transforms::AsyncAccumulatingTransformer;
 use databend_storages_common_io::ReadSettings;
 
 use super::native_rows_fetcher::NativeRowsFetcher;
@@ -132,17 +130,17 @@ pub fn row_fetch_processor(
 pub trait RowsFetcher {
     async fn on_start(&mut self) -> Result<()>;
     async fn fetch(&mut self, row_ids: &[u64]) -> Result<DataBlock>;
-    fn schema(&self) -> DataSchema;
 }
 
 pub struct TransformRowsFetcher<F: RowsFetcher> {
     row_id_col_offset: usize,
     fetcher: F,
     need_wrap_nullable: bool,
+    blocks: Vec<DataBlock>,
 }
 
 #[async_trait::async_trait]
-impl<F> AsyncTransform for TransformRowsFetcher<F>
+impl<F> AsyncAccumulatingTransform for TransformRowsFetcher<F>
 where F: RowsFetcher + Send + Sync + 'static
 {
     const NAME: &'static str = "TransformRowsFetcher";
@@ -152,18 +150,25 @@ where F: RowsFetcher + Send + Sync + 'static
         self.fetcher.on_start().await
     }
 
+    async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
+        self.blocks.push(data);
+        Ok(None)
+    }
+
     #[async_backtrace::framed]
-    async fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
+    async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
+        if self.blocks.is_empty() {
+            return Ok(None);
+        }
+
+        let start_time = std::time::Instant::now();
+        let num_blocks = self.blocks.len();
+        let mut data = DataBlock::concat(&self.blocks)?;
+        self.blocks.clear();
+
         let num_rows = data.num_rows();
         if num_rows == 0 {
-            // Although the data block is empty, we need to add empty columns to align the schema.
-            let fetched_schema = self.fetcher.schema();
-            for f in fetched_schema.fields().iter() {
-                let builder = ColumnBuilder::with_capacity(f.data_type(), 0);
-                let col = builder.build();
-                data.add_column(BlockEntry::new(f.data_type().clone(), Value::Column(col)));
-            }
-            return Ok(data);
+            return Ok(None);
         }
 
         let entry = &data.columns()[self.row_id_col_offset];
@@ -189,7 +194,14 @@ where F: RowsFetcher + Send + Sync + 'static
             }
         }
 
-        Ok(data)
+        log::info!(
+            "TransformRowsFetcher on_finish: num_rows: {}, input blocks: {} in {} milliseconds",
+            num_rows,
+            num_blocks,
+            start_time.elapsed().as_millis()
+        );
+
+        Ok(Some(data))
     }
 }
 
@@ -203,10 +215,11 @@ where F: RowsFetcher + Send + Sync + 'static
         fetcher: F,
         need_wrap_nullable: bool,
     ) -> ProcessorPtr {
-        ProcessorPtr::create(AsyncTransformer::create(input, output, Self {
+        ProcessorPtr::create(AsyncAccumulatingTransformer::create(input, output, Self {
             row_id_col_offset,
             fetcher,
             need_wrap_nullable,
+            blocks: vec![],
         }))
     }
 }

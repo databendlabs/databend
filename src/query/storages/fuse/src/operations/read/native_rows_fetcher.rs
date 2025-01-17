@@ -26,7 +26,6 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::LoadParams;
@@ -147,10 +146,6 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
             .collect::<Vec<_>>();
 
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
-    }
-
-    fn schema(&self) -> DataSchema {
-        self.reader.data_schema()
     }
 }
 
