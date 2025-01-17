@@ -194,7 +194,7 @@ query IT
 SELECT * FROM `05_0003_at_t5`
 ----
 1 NULL
-2 [(1,2.0,'x'),(3,4.0,'y')]
+2 [(1,2,'x'),(3,4,'y')]
 3 [(5,NULL,NULL),(6,NULL,'z')]
 
 statement ok
