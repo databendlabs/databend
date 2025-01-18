@@ -175,8 +175,8 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .filter(|f| RangeIndex::supported_type(&f.data_type().into()))
                 .map(|f| {
                     format!(
-                        "approx_count_distinct_state({DISTINCT_ERROR_RATE})({}) as ndv_{}",
-                        format!("{quote}{}{quote}", f.name),
+                        "approx_count_distinct_state({DISTINCT_ERROR_RATE})({quote}{}{quote}) as ndv_{}",
+                        f.name,
                         f.column_id()
                     )
                 })
