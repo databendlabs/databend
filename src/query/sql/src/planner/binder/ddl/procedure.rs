@@ -39,6 +39,7 @@ use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::SubqueryType;
 use crate::resolve_type_name;
+use crate::resolve_type_name_by_str;
 use crate::BindContext;
 use crate::Binder;
 use crate::ScalarExpr;
@@ -73,10 +74,26 @@ impl Binder {
         // 2. need check script's return type and stmt.return_type
 
         let meta = self.procedure_meta(return_type, script, comment, language, args)?;
+        let mut args_type = vec![];
+        for arg in name.args_type.split(',') {
+            args_type.push(DataType::from(&resolve_type_name_by_str(arg, true)?));
+        }
+        let new_name = databend_common_ast::ast::ProcedureIdentity {
+            name: name.name.to_string(),
+            args_type: if args_type.is_empty() {
+                "".to_string()
+            } else {
+                args_type
+                    .iter()
+                    .map(|arg| arg.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+            },
+        };
         Ok(Plan::CreateProcedure(Box::new(CreateProcedurePlan {
             create_option: create_option.clone().into(),
             tenant: tenant.to_owned(),
-            name: ProcedureNameIdent::new(&tenant, ProcedureIdentity::from(name.clone())),
+            name: ProcedureNameIdent::new(&tenant, ProcedureIdentity::from(new_name)),
             meta,
         })))
     }
@@ -85,10 +102,26 @@ impl Binder {
         let DropProcedureStmt { name, if_exists } = stmt;
 
         let tenant = self.ctx.get_tenant();
+        let mut args_type = vec![];
+        for arg in name.args_type.split(',') {
+            args_type.push(DataType::from(&resolve_type_name_by_str(arg, true)?));
+        }
+        let new_name = databend_common_ast::ast::ProcedureIdentity {
+            name: name.name.to_string(),
+            args_type: if args_type.is_empty() {
+                "".to_string()
+            } else {
+                args_type
+                    .iter()
+                    .map(|arg| arg.to_string())
+                    .collect::<Vec<String>>()
+                    .join(",")
+            },
+        };
         Ok(Plan::DropProcedure(Box::new(DropProcedurePlan {
             if_exists: *if_exists,
             tenant: tenant.to_owned(),
-            name: ProcedureNameIdent::new(tenant, ProcedureIdentity::from(name.clone())),
+            name: ProcedureNameIdent::new(tenant, ProcedureIdentity::from(new_name)),
         })))
     }
 

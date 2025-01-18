@@ -64,7 +64,7 @@ impl Interpreter for DropProcedureInterpreter {
         if dropped.is_none() && !self.plan.if_exists {
             return Err(ErrorCode::UnknownProcedure(format!(
                 "Unknown procedure '{}' while drop procedure",
-                drop_procedure_req.name_ident
+                drop_procedure_req.name_ident.procedure_name()
             )));
         }
 

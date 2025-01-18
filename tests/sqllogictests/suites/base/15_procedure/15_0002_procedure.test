@@ -156,4 +156,19 @@ statement ok
 drop procedure sum_even_numbers(Int, Int);
 
 statement ok
+CREATE PROCEDURE if not exists p2(x STRING) RETURNS Int32 NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
+BEGIN
+    RETURN x;
+END;
+$$;
+
+query T
+call procedure p2('x');
+----
+'x'
+
+statement ok
+drop procedure p2(string);
+
+statement ok
 unset global enable_experimental_procedure;
