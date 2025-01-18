@@ -15,6 +15,7 @@
 use std::io::Write;
 
 use chrono::format::parse_and_remainder;
+use chrono::format::Item;
 use chrono::format::Parsed;
 use chrono::format::StrftimeItems;
 use chrono::prelude::*;
@@ -700,18 +701,29 @@ fn register_to_string(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
-                    let (mut secs, mut nanos) =
-                        (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
-                    if nanos < 0 {
-                        secs -= 1;
-                        nanos += 1_000_000_000;
-                    }
-                    let ts = ctx.func_ctx.tz.timestamp_opt(secs, nanos as u32).unwrap();
                     // https://github.com/BurntSushi/jiff/issues/155
-                    // ASCII is currently required in jiff crate
-                    let res = ts.format(format).to_string();
-                    output.push(&res);
+                    // Consider use jiff crate 0.1.24 version.
+                    // let datetime = micros.to_timestamp(ctx.func_ctx.jiff_tz.clone());
+                    // match strtime::format(&datetime, format) {
+                    //     Ok(res) => output.push(&res),
+                    //     Err(e) => { ctx.set_error(output.len(), e.into());output.push_null() },
+                    // }
+                    let items = StrftimeItems::new(format);
+                    if items.clone().any(|item| matches!(item, Item::Error)) {
+                        ctx.set_error(output.len(), "Invalid format string".to_string());
+                        output.push_null();
+                    } else {
+                        // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
+                        let (mut secs, mut nanos) =
+                            (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
+                        if nanos < 0 {
+                            secs -= 1;
+                            nanos += 1_000_000_000;
+                        }
+                        let ts = ctx.func_ctx.tz.timestamp_opt(secs, nanos as u32).unwrap();
+                        let res = ts.format(format).to_string();
+                        output.push(&res);
+                    }
                 }
             },
         ),
