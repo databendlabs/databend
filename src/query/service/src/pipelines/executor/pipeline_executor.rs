@@ -34,6 +34,7 @@ use futures_util::future::Either;
 use log::info;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
+use tokio::sync::oneshot::error::RecvError;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::GlobalQueriesExecutor;
@@ -295,5 +296,126 @@ impl PipelineExecutor {
                 query_wrapper.graph.change_priority(priority as u64);
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+pub trait QueryHandle: Send + Sync + 'static {
+    async fn wait(&self) -> Result<()>;
+
+    fn is_finished(&self) -> bool;
+
+    fn finish(&self, cause: Option<ErrorCode<()>>);
+
+    fn fetch_profiling(&self, collect_metrics: bool) -> HashMap<u32, PlanProfile>;
+}
+
+#[async_trait::async_trait]
+pub trait NewPipelineExecutor {
+    async fn submit(
+        &self,
+        pipelines: Vec<Pipeline>,
+        settings: ExecutorSettings,
+    ) -> Result<Arc<dyn QueryHandle>>;
+}
+
+pub struct QueryTask {
+    pub graph: Arc<RunningGraph>,
+    pub settings: ExecutorSettings,
+    pub on_init_callback: InitCallback,
+    pub on_finished_callback: FinishedCallbackChain,
+    pub holds: Vec<Arc<LockGuard>>,
+    pub max_threads_num: usize,
+    pub tx: Option<tokio::sync::oneshot::Sender<Result<Arc<dyn QueryHandle>>>>,
+}
+
+impl QueryTask {
+    fn pipelines_max_threads(pipelines: &[Pipeline]) -> usize {
+        pipelines
+            .iter()
+            .map(|x| x.get_max_threads())
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn pipelines_on_init(pipelines: &mut [Pipeline]) -> InitCallback {
+        let mut on_init_functions = Vec::with_capacity(pipelines.len());
+
+        for pipeline in pipelines {
+            on_init_functions.push(pipeline.take_on_init());
+        }
+
+        Box::new(move || {
+            for on_init_function in on_init_functions {
+                on_init_function()?;
+            }
+
+            Ok(())
+        })
+    }
+
+    fn pipelines_on_finish(pipelines: &mut [Pipeline]) -> FinishedCallbackChain {
+        let mut finished_chain = FinishedCallbackChain::create();
+        for pipeline in pipelines {
+            finished_chain.extend(pipeline.take_on_finished());
+        }
+
+        finished_chain
+    }
+
+    fn pipelines_hold(pipelines: &mut [Pipeline]) -> Vec<Arc<LockGuard>> {
+        let mut holds = Vec::with_capacity(pipelines.len());
+        for pipeline in pipelines {
+            holds.extend(pipeline.take_lock_guards());
+        }
+
+        holds
+    }
+
+    pub fn try_create(
+        mut pipelines: Vec<Pipeline>,
+        tx: tokio::sync::oneshot::Sender<Result<Arc<dyn QueryHandle>>>,
+        settings: ExecutorSettings,
+    ) -> Result<QueryTask> {
+        let on_init_callback = Self::pipelines_on_init(&mut pipelines);
+        let mut on_finished_callback = Self::pipelines_on_finish(&mut pipelines);
+        let holds = Self::pipelines_hold(&mut pipelines);
+
+        if pipelines.is_empty() {
+            let cause = ErrorCode::Internal("Executor Pipelines is empty.");
+            let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
+            let _ignore = on_finished_callback.apply(info);
+            return Err(cause);
+        }
+
+        let threads_num = Self::pipelines_max_threads(&pipelines);
+
+        if threads_num == 0 {
+            let cause = ErrorCode::Internal("Pipeline max threads cannot equals zero.");
+            let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
+            let _ignore = on_finished_callback.apply(info);
+            return Err(cause);
+        }
+
+        let query_id = settings.query_id.clone();
+
+        let running_graph = match RunningGraph::from_pipelines(pipelines, 1, query_id, None) {
+            Ok(running_graph) => running_graph,
+            Err(cause) => {
+                let info = ExecutionInfo::create(Err(cause.clone()), HashMap::new());
+                let _ignore_res = on_finished_callback.apply(info);
+                return Err(cause);
+            }
+        };
+
+        Ok(QueryTask {
+            settings,
+            tx: Some(tx),
+            on_init_callback,
+            on_finished_callback,
+            holds,
+            graph: running_graph,
+            max_threads_num: 0,
+        })
     }
 }

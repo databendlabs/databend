@@ -19,6 +19,7 @@ mod executor_graph;
 mod executor_settings;
 mod executor_worker_context;
 mod global_queries_executor;
+mod new_query_pipeline_executor;
 mod pipeline_complete_executor;
 mod pipeline_executor;
 mod pipeline_pulling_executor;

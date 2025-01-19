@@ -29,6 +29,7 @@ use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
@@ -513,7 +514,7 @@ impl ScheduleQueue {
         mut self,
         global: &Arc<QueryExecutorTasksQueue>,
         context: &mut ExecutorWorkerContext,
-        executor: &Arc<QueryPipelineExecutor>,
+        executor: &Arc<Runtime>,
     ) {
         debug_assert!(!context.has_task());
 
@@ -541,7 +542,7 @@ impl ScheduleQueue {
     pub fn schedule_async_task(
         proc: ProcessorWrapper,
         query_id: Arc<String>,
-        executor: &Arc<QueryPipelineExecutor>,
+        executor: &Arc<Runtime>,
         wakeup_worker_id: usize,
         workers_condvar: Arc<WorkersCondvar>,
         global_queue: Arc<QueryExecutorTasksQueue>,
@@ -553,7 +554,7 @@ impl ScheduleQueue {
             let tracking_payload = graph.get_node_tracking_payload(node_index);
             let _guard = ThreadTracker::tracking(tracking_payload.clone());
             let process_future = proc.processor.async_process();
-            executor.async_runtime.spawn(
+            executor.spawn(
                 ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
@@ -723,9 +724,9 @@ impl RunningGraph {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn schedule_queue(self: Arc<Self>, node_index: NodeIndex) -> Result<ScheduleQueue> {
+    pub unsafe fn schedule_queue(self: &Arc<Self>, node_index: NodeIndex) -> Result<ScheduleQueue> {
         let mut schedule_queue = ScheduleQueue::with_capacity(0);
-        ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue, &self)?;
+        ExecutingGraph::schedule_queue(&self.0, node_index, &mut schedule_queue, self)?;
         Ok(schedule_queue)
     }
 

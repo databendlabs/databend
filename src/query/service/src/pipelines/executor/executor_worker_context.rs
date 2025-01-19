@@ -109,6 +109,17 @@ impl ExecutorWorkerContext {
         std::mem::replace(&mut self.task, ExecutorTask::None)
     }
 
+    pub fn get_task_pid(&self) -> NodeIndex {
+        unsafe {
+            match &self.task {
+                ExecutorTask::None => unreachable!(),
+                ExecutorTask::Sync(p) => p.processor.id(),
+                ExecutorTask::Async(p) => p.processor.id(),
+                ExecutorTask::AsyncCompleted(p) => p.id,
+            }
+        }
+    }
+
     pub fn get_task_info(&self) -> Option<(Arc<RunningGraph>, NodeIndex)> {
         unsafe {
             match &self.task {
@@ -117,6 +128,24 @@ impl ExecutorWorkerContext {
                 ExecutorTask::Async(p) => Some((p.graph.clone(), p.processor.id())),
                 ExecutorTask::AsyncCompleted(p) => Some((p.graph.clone(), p.id)),
             }
+        }
+    }
+
+    pub unsafe fn execute_task_new(&mut self) -> Result<(NodeIndex)> {
+        match std::mem::replace(&mut self.task, ExecutorTask::None) {
+            ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
+            ExecutorTask::Sync(processor) => match self.execute_sync_task(processor) {
+                Ok(Some((node_idx, s))) => Ok(node_idx),
+                Ok(None) => Err(ErrorCode::Internal("Execute none task.")),
+                Err(cause) => Err(cause),
+            },
+            ExecutorTask::Async(processor) => Err(ErrorCode::Internal(
+                "Async task should only be executed on queries executor",
+            )),
+            ExecutorTask::AsyncCompleted(task) => match task.res {
+                Ok(_) => Ok(task.id),
+                Err(cause) => Err(cause),
+            },
         }
     }
 
