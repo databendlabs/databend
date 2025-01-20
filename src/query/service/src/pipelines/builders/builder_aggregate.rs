@@ -296,6 +296,8 @@ impl PipelineBuilder {
             max_spill_io_requests,
         )?;
 
+        log::debug!("aggregate states layout: {:?}", params.states_layout);
+
         Ok(params)
     }
 }

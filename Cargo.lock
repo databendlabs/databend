@@ -3274,6 +3274,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "pretty_assertions",
+ "proptest",
  "rand",
  "recursive",
  "roaring",

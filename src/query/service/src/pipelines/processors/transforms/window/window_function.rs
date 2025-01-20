@@ -16,16 +16,18 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
+use databend_common_expression::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::AggrState;
+use databend_common_expression::AggrStateLoc;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::InputColumns;
-use databend_common_functions::aggregates::get_layout_offsets;
+use databend_common_expression::StateAddr;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
-use databend_common_functions::aggregates::StateAddr;
 use databend_common_sql::executor::physical_plans::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::WindowFunction;
 
@@ -48,14 +50,15 @@ pub struct WindowFuncAggImpl {
     // Need to hold arena until `drop`.
     _arena: Arena,
     agg: Arc<dyn AggregateFunction>,
-    place: StateAddr,
+    addr: StateAddr,
+    loc: Box<[AggrStateLoc]>,
     args: Vec<usize>,
 }
 
 impl WindowFuncAggImpl {
     #[inline]
     pub fn reset(&self) {
-        self.agg.init_state(self.place);
+        self.agg.init_state(AggrState::new(self.addr, &self.loc));
     }
 
     #[inline]
@@ -65,12 +68,14 @@ impl WindowFuncAggImpl {
 
     #[inline]
     pub fn accumulate_row(&self, args: InputColumns, row: usize) -> Result<()> {
-        self.agg.accumulate_row(self.place, args, row)
+        self.agg
+            .accumulate_row(AggrState::new(self.addr, &self.loc), args, row)
     }
 
     #[inline]
     pub fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
-        self.agg.merge_result(self.place, builder)
+        self.agg
+            .merge_result(AggrState::new(self.addr, &self.loc), builder)
     }
 }
 
@@ -79,7 +84,7 @@ impl Drop for WindowFuncAggImpl {
         drop_guard(move || {
             if self.agg.need_manual_drop_state() {
                 unsafe {
-                    self.agg.drop_state(self.place);
+                    self.agg.drop_state(AggrState::new(self.addr, &self.loc));
                 }
             }
         })
@@ -233,15 +238,15 @@ impl WindowFunctionImpl {
         Ok(match window {
             WindowFunctionInfo::Aggregate(agg, args) => {
                 let arena = Arena::new();
-                let mut state_offset = Vec::with_capacity(1);
-                let layout = get_layout_offsets(&[agg.clone()], &mut state_offset)?;
-                let place: StateAddr = arena.alloc_layout(layout).into();
-                let place = place.next(state_offset[0]);
+                let mut states_layout = get_states_layout(&[agg.clone()])?;
+                let addr = arena.alloc_layout(states_layout.layout).into();
+                let loc = states_layout.states_loc.pop().unwrap();
                 let agg = WindowFuncAggImpl {
-                    _arena: arena,
                     agg,
-                    place,
+                    addr,
+                    loc,
                     args,
+                    _arena: arena,
                 };
                 agg.reset();
                 Self::Aggregate(agg)

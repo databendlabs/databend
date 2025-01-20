@@ -19,6 +19,7 @@ use ethnum::i256;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
+use super::AggrState;
 use crate::read;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -127,40 +128,40 @@ impl Payload {
     }
 
     pub fn aggregate_flush(&self, state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
-        if self.flush(state) {
-            let row_count = state.row_count;
+        if !self.flush(state) {
+            return Ok(None);
+        }
 
-            let mut state_builders: Vec<BinaryColumnBuilder> = self
-                .aggrs
-                .iter()
-                .map(|_| BinaryColumnBuilder::with_capacity(row_count, row_count * 4))
-                .collect();
+        let row_count = state.row_count;
+
+        let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
+        if let Some(state_layout) = self.states_layout.as_ref() {
+            let mut builders = state_layout.serialize_builders(row_count);
 
             for place in state.state_places.as_slice()[0..row_count].iter() {
-                for (idx, (addr_offset, aggr)) in self
-                    .state_addr_offsets
+                for (idx, (loc, func)) in state_layout
+                    .states_loc
                     .iter()
                     .zip(self.aggrs.iter())
                     .enumerate()
                 {
-                    let arg_place = place.next(*addr_offset);
-                    aggr.serialize(arg_place, &mut state_builders[idx].data)
-                        .unwrap();
-                    state_builders[idx].commit_row();
+                    {
+                        let builder = &mut builders[idx];
+                        func.serialize(AggrState::new(*place, loc), &mut builder.data)?;
+                        builder.commit_row();
+                    }
                 }
             }
 
-            let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
-            for builder in state_builders.into_iter() {
-                let col = Column::Binary(builder.build());
-                cols.push(col);
-            }
-
-            cols.extend_from_slice(&state.take_group_columns());
-            return Ok(Some(DataBlock::new_from_columns(cols)));
+            cols.extend(
+                builders
+                    .into_iter()
+                    .map(|builder| Column::Binary(builder.build())),
+            );
         }
 
-        Ok(None)
+        cols.extend_from_slice(&state.take_group_columns());
+        Ok(Some(DataBlock::new_from_columns(cols)))
     }
 
     pub fn group_by_flush_all(&self) -> Result<DataBlock> {
