@@ -23,13 +23,15 @@ runs:
         category: ${{ inputs.category }}
         path: distro/bin
         artifacts: metactl,meta,query,query.debug
+    - name: Get Latest BendSQL
+      id: bendsql
+      uses: pozetroninc/github-action-get-latest-release@master
+      with:
+        repository: databendlabs/bendsql
     - name: Download BendSQL
       shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
       run: |
-        verison=$(gh release list --repo databendlabs/bendsql --json 'name' --jq '.[].name' | head -n 1)
-        curl -sSLfo /tmp/bendsql.tar.gz https://github.com/databendlabs/bendsql/releases/download/${verison}/bendsql-${{ inputs.target }}.tar.gz
+        curl -sSLfo /tmp/bendsql.tar.gz https://github.com/databendlabs/bendsql/releases/download/${{ steps.bendsql.outputs.release }}/bendsql-${{ inputs.target }}.tar.gz
         mkdir -p distro/bin
         tar -xzvf /tmp/bendsql.tar.gz -C distro/bin
     - name: Pack Binaries
