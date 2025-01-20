@@ -19,17 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Get Latest BendSQL
-      id: bendsql
-      uses: pozetroninc/github-action-get-latest-release@master
-      with:
-        repository: databendlabs/bendsql
-    - name: Download BendSQL
-      shell: bash
-      run: |
-        curl -sSLfo /tmp/bendsql.tar.gz https://github.com/databendlabs/bendsql/releases/download/${{ steps.bendsql.outputs.release }}/bendsql-${{ inputs.target }}.tar.gz
-        mkdir -p distro/bin
-        tar -xzvf /tmp/bendsql.tar.gz -C distro/bin
-        ls -l distro/bin
+        id: bendsql
+        uses: pozetroninc/github-action-get-latest-release@master
+        with:
+          repository: databendlabs/bendsql
+      - name: Download BendSQL
+        shell: bash
+        run: |
+          curl -sSLfo /tmp/bendsql.tar.gz https://github.com/databendlabs/bendsql/releases/download/${{ steps.bendsql.outputs.release }}/bendsql-x86_64-unknown-linux-gnu.tar.gz
+          mkdir -p distro/bin
+          tar -xzvf /tmp/bendsql.tar.gz -C distro/bin
+          ls -l distro/bin
 
   changes:
     runs-on: ubuntu-latest
