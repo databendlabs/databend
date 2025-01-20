@@ -114,6 +114,18 @@ statement ok
 DROP TABLE t3
 
 query I
+SELECT number FROM numbers(3) ORDER BY number LIMIT 214748364900;
+----
+0
+1
+2
+
+query I
+SELECT number FROM numbers(100000) ORDER BY number LIMIT 1 OFFSET 50000;
+----
+50000
+
+query I
 SELECT number FROM numbers(10000) ORDER BY number LIMIT 3
 ----
 0
