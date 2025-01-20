@@ -28,8 +28,9 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        verison=$(gh release list --repo databendlabs/bendsql | head -n 1 | awk '{print $1}')
-        curl -sSLfo /tmp/bendsql.tar.gz https://github.com/databendlabs/bendsql/releases/download/${verison}/bendsql-${verison}-${{ inputs.target }}.tar.gz
+        verison=$(gh release list --repo databendlabs/bendsql --json 'name' --jq '.[].name' | head -n 1)
+        curl -sSLfo /tmp/bendsql.tar.gz https://github.com/databendlabs/bendsql/releases/download/${verison}/bendsql-${{ inputs.target }}.tar.gz
+        mkdir -p distro/bin
         tar -xzvf /tmp/bendsql.tar.gz -C distro/bin
     - name: Pack Binaries
       id: pack_binaries
