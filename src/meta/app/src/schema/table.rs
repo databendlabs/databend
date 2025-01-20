@@ -38,6 +38,7 @@ use maplit::hashmap;
 use super::CatalogInfo;
 use super::CreateOption;
 use super::DatabaseId;
+use super::MarkedDeletedIndexMeta;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
@@ -866,6 +867,7 @@ impl Display for CreateTableIndexReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableIndexReq {
+    pub tenant: Tenant,
     pub if_exists: bool,
     pub table_id: u64,
     pub name: String,
@@ -880,6 +882,15 @@ impl Display for DropTableIndexReq {
         )
     }
 }
+
+/// Maps table_id to a vector of (index_name, index_version, marked_deleted_index_meta) pairs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GetMarkedDeletedTableIndexesReply {
+    pub table_indexes: HashMap<u64, Vec<(IndexName, IndexVersion, MarkedDeletedIndexMeta)>>,
+}
+
+pub type IndexName = String;
+pub type IndexVersion = String;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableReq {
