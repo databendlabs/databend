@@ -126,11 +126,11 @@ async fn test_fast_values_decoder_multi() -> Result<()> {
         writeln!(file, "---------- Output ---------")?;
 
         if let Err(err) = result {
-            writeln!(file, "{}", err.to_string()).unwrap();
+            writeln!(file, "{}", err)?;
         } else {
             let columns = columns.into_iter().map(|cb| cb.build()).collect::<Vec<_>>();
             let got = DataBlock::new_from_columns(columns);
-            writeln!(file, "{}", got.to_string()).unwrap();
+            writeln!(file, "{}", got)?;
         }
         writeln!(file, "\n")?;
     }

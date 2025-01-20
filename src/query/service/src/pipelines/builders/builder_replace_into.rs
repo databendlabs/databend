@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::parser::parse_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::table::Table;
@@ -528,7 +528,13 @@ impl FastValuesDecodeFallback for RawValueSource {
             let mut bind_context = self.bind_context.clone();
             let metadata = self.metadata.clone();
 
-            let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            let exprs = parse_values_with_placeholder(&tokens, sql_dialect)?
+                .into_iter()
+                .map(|expr| match expr {
+                    Some(expr) => Ok(expr),
+                    None => Err(ErrorCode::SyntaxException("unexpected placeholder")),
+                })
+                .collect::<Result<Vec<_>>>()?;
 
             bind_context
                 .exprs_to_scalar(

@@ -29,6 +29,7 @@ base64 = { workspace = true }
 bstr = { workspace = true }
 chrono-tz = { workspace = true }
 geozero = { workspace = true }
+goldenfile = { workspace = true }
 hex = { workspace = true }
 jiff = { workspace = true }
 jsonb = { workspace = true }
@@ -39,7 +40,6 @@ num = { workspace = true }
 num-traits = { workspace = true }
 roaring = { workspace = true, features = ["serde"] }
 serde_json = { workspace = true }
-goldenfile = { workspace = true }
 
 [dev-dependencies]
 
