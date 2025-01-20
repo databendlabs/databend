@@ -27,7 +27,7 @@ sleep 1
 
 # restart query
 echo "will restart query"
-bash ../scripts/ci/deploy/databend-query-standalone.sh >/dev/null
+bash ../scripts/ci/deploy/databend-query-standalone.sh >/dev/null 2>&1
 
 # check if before and after vacuum table the table count matched
 old_count=$(echo "select * from test_vacuum.a order by c" | $BENDSQL_CLIENT_CONNECT)
