@@ -1,0 +1,14 @@
+[package]
+name = "bendsave"
+description = "databend backup and restore tools"
+version = "0.1.0"
+authors = { workspace = true }
+license = "Elastic-2.0"
+edition = "2021"
+
+[dependencies]
+clap.workspace = true
+opendal = { workspace = true }
+
+[lints]
+workspace = true
