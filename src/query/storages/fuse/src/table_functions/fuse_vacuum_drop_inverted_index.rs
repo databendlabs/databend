@@ -19,6 +19,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -35,16 +36,16 @@ use super::string_value;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::TableArgs;
-pub struct FuseVacuumDropAggregatingIndex {
-    args: FuseVacuumDropAggregatingIndexArgs,
+pub struct FuseVacuumDropInvertedIndex {
+    args: FuseVacuumDropInvertedIndexArgs,
 }
 
-struct FuseVacuumDropAggregatingIndexArgs {
+struct FuseVacuumDropInvertedIndexArgs {
     database_table: Option<(String, String)>,
 }
 
-impl From<&FuseVacuumDropAggregatingIndexArgs> for TableArgs {
-    fn from(args: &FuseVacuumDropAggregatingIndexArgs) -> Self {
+impl From<&FuseVacuumDropInvertedIndexArgs> for TableArgs {
+    fn from(args: &FuseVacuumDropInvertedIndexArgs) -> Self {
         let mut table_args = vec![];
         if let Some((database, table)) = &args.database_table {
             table_args.push(string_literal(database));
@@ -55,9 +56,9 @@ impl From<&FuseVacuumDropAggregatingIndexArgs> for TableArgs {
 }
 
 #[async_trait::async_trait]
-impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
+impl SimpleTableFunc for FuseVacuumDropInvertedIndex {
     fn get_engine_name(&self) -> String {
-        "fuse_vacuum_drop_aggregating_index".to_owned()
+        "fuse_vacuum_drop_inverted_index".to_owned()
     }
 
     fn table_args(&self) -> Option<TableArgs> {
@@ -67,7 +68,8 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
     fn schema(&self) -> TableSchemaRef {
         TableSchemaRefExt::create(vec![
             TableField::new("table_id", TableDataType::Number(NumberDataType::UInt64)),
-            TableField::new("index_id", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("index_name", TableDataType::String),
+            TableField::new("index_version", TableDataType::String),
             TableField::new(
                 "num_removed_files",
                 TableDataType::Number(NumberDataType::UInt64),
@@ -81,7 +83,8 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
         _plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
         let mut table_ids = Vec::new();
-        let mut index_ids = Vec::new();
+        let mut index_names = Vec::new();
+        let mut index_versions = Vec::new();
         let mut num_removed_files = Vec::new();
         let catalog = ctx.get_default_catalog()?;
         let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
@@ -98,7 +101,7 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
         let table_id = table.map(|t| t.get_id());
 
         let reply = catalog
-            .list_marked_deleted_indexes(&tenant, table_id)
+            .list_marked_deleted_table_indexes(&tenant, table_id)
             .await?;
 
         info!(
@@ -121,29 +124,35 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
             let table = catalog.get_table_by_info(&table_info)?;
             let indexes_to_be_vacuumed = indexes
                 .into_iter()
-                .filter(|(_, index_meta)| index_meta.dropped_on < retention_time)
-                .map(|(index_id, _)| index_id)
+                .filter(|(_, _, index_meta)| index_meta.dropped_on < retention_time)
+                .map(|(index_name, index_version, _)| (index_name, index_version))
                 .collect::<Vec<_>>();
             info!(
                 "indexes_to_be_vacuumed for table: {:?}, indexes: {:?}",
                 table_id, indexes_to_be_vacuumed
             );
-            for index_id in &indexes_to_be_vacuumed {
+            for (index_name, index_version) in &indexes_to_be_vacuumed {
                 let n = table
-                    .remove_aggregating_index_files(ctx.clone(), *index_id)
+                    .remove_inverted_index_files(
+                        ctx.clone(),
+                        index_name.clone(),
+                        index_version.clone(),
+                    )
                     .await?;
                 table_ids.push(table_id);
-                index_ids.push(*index_id);
+                index_names.push(index_name.clone());
+                index_versions.push(index_version.clone());
                 num_removed_files.push(n);
             }
             catalog
-                .remove_marked_deleted_index_ids(&tenant, table_id, &indexes_to_be_vacuumed)
+                .remove_marked_deleted_table_indexes(&tenant, table_id, &indexes_to_be_vacuumed)
                 .await?;
         }
 
         Ok(Some(DataBlock::new_from_columns(vec![
             UInt64Type::from_data(table_ids),
-            UInt64Type::from_data(index_ids),
+            StringType::from_data(index_names),
+            StringType::from_data(index_versions),
             UInt64Type::from_data(num_removed_files),
         ])))
     }
@@ -166,7 +175,7 @@ impl SimpleTableFunc for FuseVacuumDropAggregatingIndex {
             }
         };
         Ok(Self {
-            args: FuseVacuumDropAggregatingIndexArgs { database_table },
+            args: FuseVacuumDropInvertedIndexArgs { database_table },
         })
     }
 }

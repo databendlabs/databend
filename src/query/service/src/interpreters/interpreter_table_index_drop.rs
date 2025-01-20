@@ -57,6 +57,7 @@ impl Interpreter for DropTableIndexInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
         let drop_index_req = DropTableIndexReq {
+            tenant: self.ctx.get_tenant(),
             if_exists: self.plan.if_exists,
             table_id,
             name: index_name,

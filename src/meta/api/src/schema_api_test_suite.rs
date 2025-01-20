@@ -5989,8 +5989,14 @@ impl SchemaApiTestSuite {
         }
 
         let index_name_1 = "idx1".to_string();
+        let index_version_1;
         let index_column_ids_1 = vec![0, 1];
+        let index1_drop_start_time;
+        let index1_drop_end_time;
         let index_name_2 = "idx2".to_string();
+        let index_version_2;
+        let index2_drop_start_time;
+        let index2_drop_end_time;
         let index_column_ids_2 = vec![2];
         let index_name_3 = "idx2".to_string();
         let index_column_ids_3 = vec![3];
@@ -6008,6 +6014,12 @@ impl SchemaApiTestSuite {
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
+
+            index_version_1 = {
+                let seqv = mt.get_table_by_id(table_id).await?.unwrap();
+                let index = seqv.data.indexes.get(&index_name_1).unwrap();
+                index.version.clone()
+            };
 
             info!("--- create table index 2 with duplicate column id");
             let req = CreateTableIndexReq {
@@ -6034,6 +6046,12 @@ impl SchemaApiTestSuite {
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
+
+            index_version_2 = {
+                let seqv = mt.get_table_by_id(table_id).await?.unwrap();
+                let index = seqv.data.indexes.get(&index_name_2).unwrap();
+                index.version.clone()
+            };
         }
 
         {
@@ -6107,14 +6125,18 @@ impl SchemaApiTestSuite {
         {
             info!("--- drop table index");
             let req = DropTableIndexReq {
+                tenant: tenant.clone(),
                 if_exists: false,
                 table_id,
                 name: index_name_1.clone(),
             };
+            index1_drop_start_time = Utc::now();
             let res = mt.drop_table_index(req).await;
+            index1_drop_end_time = Utc::now();
             assert!(res.is_ok());
 
             let req = DropTableIndexReq {
+                tenant: tenant.clone(),
                 if_exists: false,
                 table_id,
                 name: index_name_1.clone(),
@@ -6123,12 +6145,37 @@ impl SchemaApiTestSuite {
             assert!(res.is_err());
 
             let req = DropTableIndexReq {
+                tenant: tenant.clone(),
                 if_exists: true,
                 table_id,
                 name: index_name_1.clone(),
             };
             let res = mt.drop_table_index(req).await;
             assert!(res.is_ok());
+        }
+
+        {
+            info!("--- get marked deleted table indexes after drop");
+            let results = vec![
+                mt.list_marked_deleted_table_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.list_marked_deleted_table_indexes(&tenant, None).await?,
+            ];
+            for res in results {
+                let table_indexes = res.table_indexes.get(&table_id);
+                assert!(table_indexes.is_some());
+                let table_indexes = table_indexes.unwrap();
+                assert_eq!(table_indexes.len(), 1);
+                let (index_name, index_version, index_meta) = table_indexes[0].clone();
+                assert_eq!(index_name, index_name_1);
+                assert_eq!(index_version, index_version_1);
+                assert!(matches!(
+                    index_meta.index_type,
+                    MarkedDeletedIndexType::INVERTED
+                ));
+                assert!(index_meta.dropped_on > index1_drop_start_time);
+                assert!(index_meta.dropped_on < index1_drop_end_time);
+            }
         }
 
         {
@@ -6144,6 +6191,76 @@ impl SchemaApiTestSuite {
             assert!(index2.is_some());
             let index2 = index2.unwrap();
             assert_eq!(index2.column_ids, index_column_ids_2);
+        }
+
+        {
+            info!("--- replace index_2");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::CreateOrReplace,
+                table_id,
+                tenant: tenant.clone(),
+                name: index_name_2.clone(),
+                column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
+                options: BTreeMap::new(),
+            };
+            index2_drop_start_time = Utc::now();
+            let res = mt.create_table_index(req).await;
+            index2_drop_end_time = Utc::now();
+            assert!(res.is_ok(), "{}", res.err().unwrap());
+        }
+
+        {
+            info!("--- get marked deleted table indexes after replace");
+            let results = vec![
+                mt.list_marked_deleted_table_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.list_marked_deleted_table_indexes(&tenant, None).await?,
+            ];
+
+            for res in results {
+                let table_indexes = res.table_indexes.get(&table_id);
+                assert!(table_indexes.is_some());
+                let mut table_indexes = table_indexes.unwrap().clone();
+                assert_eq!(table_indexes.len(), 2);
+                table_indexes.sort_by(|a, b| a.0.cmp(&b.0));
+                let (actual_index_name_1, actual_index_version_1, actual_index_meta_1) =
+                    table_indexes[0].clone();
+                let (actual_index_name_2, actual_index_version_2, actual_index_meta_2) =
+                    table_indexes[1].clone();
+                assert_eq!(actual_index_name_1, index_name_1);
+                assert_eq!(actual_index_name_2, index_name_2);
+                assert_eq!(actual_index_version_1, index_version_1);
+                assert_eq!(actual_index_version_2, index_version_2);
+                assert!(matches!(
+                    actual_index_meta_1.index_type,
+                    MarkedDeletedIndexType::INVERTED
+                ));
+                assert!(matches!(
+                    actual_index_meta_2.index_type,
+                    MarkedDeletedIndexType::INVERTED
+                ));
+                assert!(actual_index_meta_1.dropped_on > index1_drop_start_time);
+                assert!(actual_index_meta_1.dropped_on < index1_drop_end_time);
+                assert!(actual_index_meta_2.dropped_on > index2_drop_start_time);
+                assert!(actual_index_meta_2.dropped_on < index2_drop_end_time);
+            }
+
+            {
+                info!("--- remove marked deleted table indexes");
+                mt.remove_marked_deleted_table_indexes(&tenant, table_id, &[
+                    (index_name_1, index_version_1),
+                    (index_name_2, index_version_2),
+                ])
+                .await?;
+
+                let res = mt
+                    .list_marked_deleted_table_indexes(&tenant, Some(table_id))
+                    .await?;
+                assert_eq!(res.table_indexes.len(), 0);
+                let res = mt.list_marked_deleted_table_indexes(&tenant, None).await?;
+                assert_eq!(res.table_indexes.len(), 0);
+            }
         }
 
         Ok(())
@@ -6285,11 +6402,11 @@ impl SchemaApiTestSuite {
         {
             info!("--- get marked deleted indexes");
             let res = mt
-                .get_marked_deleted_indexes(&tenant, Some(table_id))
+                .list_marked_deleted_indexes(&tenant, Some(table_id))
                 .await?;
             assert_eq!(res.table_indexes.len(), 0);
 
-            let res = mt.get_marked_deleted_indexes(&tenant, None).await?;
+            let res = mt.list_marked_deleted_indexes(&tenant, None).await?;
             assert_eq!(res.table_indexes.len(), 0);
         }
 
@@ -6303,9 +6420,9 @@ impl SchemaApiTestSuite {
         {
             info!("--- get marked deleted indexes after drop one");
             let results = vec![
-                mt.get_marked_deleted_indexes(&tenant, Some(table_id))
+                mt.list_marked_deleted_indexes(&tenant, Some(table_id))
                     .await?,
-                mt.get_marked_deleted_indexes(&tenant, None).await?,
+                mt.list_marked_deleted_indexes(&tenant, None).await?,
             ];
             for res in results {
                 assert_eq!(res.table_indexes.len(), 1);
@@ -6360,9 +6477,9 @@ impl SchemaApiTestSuite {
         {
             info!("--- get marked deleted indexes after drop all");
             let results = vec![
-                mt.get_marked_deleted_indexes(&tenant, Some(table_id))
+                mt.list_marked_deleted_indexes(&tenant, Some(table_id))
                     .await?,
-                mt.get_marked_deleted_indexes(&tenant, None).await?,
+                mt.list_marked_deleted_indexes(&tenant, None).await?,
             ];
             for res in results {
                 assert_eq!(res.table_indexes.len(), 1);
@@ -6385,9 +6502,9 @@ impl SchemaApiTestSuite {
             mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id])
                 .await?;
             let results = vec![
-                mt.get_marked_deleted_indexes(&tenant, Some(table_id))
+                mt.list_marked_deleted_indexes(&tenant, Some(table_id))
                     .await?,
-                mt.get_marked_deleted_indexes(&tenant, None).await?,
+                mt.list_marked_deleted_indexes(&tenant, None).await?,
             ];
             for res in results {
                 assert_eq!(res.table_indexes.len(), 1);
@@ -6406,10 +6523,10 @@ impl SchemaApiTestSuite {
             mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id_2])
                 .await?;
             let res = mt
-                .get_marked_deleted_indexes(&tenant, Some(table_id))
+                .list_marked_deleted_indexes(&tenant, Some(table_id))
                 .await?;
             assert_eq!(res.table_indexes.len(), 0);
-            let res = mt.get_marked_deleted_indexes(&tenant, None).await?;
+            let res = mt.list_marked_deleted_indexes(&tenant, None).await?;
             assert_eq!(res.table_indexes.len(), 0);
         }
 
