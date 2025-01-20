@@ -37,3 +37,17 @@ before vacuum, should be 1 index dir
 after vacuum, should be 0 index dir
 0
 0
+>>>> create or replace database test_vacuum_drop_aggregating_index
+>>>> create or replace table test_vacuum_drop_aggregating_index.agg(a int, b int,c int) 'fs:///tmp/test_vacuum_drop_aggregating_index/'
+>>>> insert into test_vacuum_drop_aggregating_index.agg values (1,1,4), (1,2,1), (1,2,4)
+3
+>>>> CREATE OR REPLACE AGGREGATING INDEX index AS SELECT MIN(a), MAX(b) FROM test_vacuum_drop_aggregating_index.agg;
+>>>> insert into test_vacuum_drop_aggregating_index.agg values (2,2,5)
+1
+>>>> REFRESH AGGREGATING INDEX index;
+before vacuum, should be 1 index dir
+1
+>>>> create or replace aggregating index index AS SELECT MIN(a), MAX(b) FROM test_vacuum_drop_aggregating_index.agg;
+after vacuum, should be 0 index dir
+0
+>>>> drop aggregating index index

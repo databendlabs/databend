@@ -21,7 +21,7 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
 
 use super::container::HeapContainer;
 use super::table0::Entry;
@@ -39,7 +39,7 @@ use crate::table_empty::TableEmpty;
 use crate::table_empty::TableEmptyIter;
 use crate::table_empty::TableEmptyIterMut;
 
-pub struct ShortStringHashtable<K, V, A = MmapAllocator>
+pub struct ShortStringHashtable<K, V, A = DefaultAllocator>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,

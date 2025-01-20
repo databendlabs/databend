@@ -90,10 +90,6 @@ impl AsyncCrashMeTable {
 
 #[async_trait::async_trait]
 impl Table for AsyncCrashMeTable {
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

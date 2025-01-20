@@ -395,7 +395,30 @@ pub fn parse_cluster_keys(
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
 ) -> Result<Vec<Expr>> {
-    let exprs = parse_ast_exprs(ctx, table_meta, ast_exprs)?;
+    let schema = table_meta.schema();
+    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let settings = ctx.get_settings();
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let mut type_checker = TypeChecker::try_create(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        false,
+    )?;
+
+    let exprs: Vec<Expr> = ast_exprs
+        .iter()
+        .map(|ast| {
+            let (scalar, _) = *type_checker.resolve(ast)?;
+            let expr = scalar
+                .as_expr()?
+                .project_column_ref(|col| schema.index_of(&col.column_name).unwrap());
+            Ok(expr)
+        })
+        .collect::<Result<_>>()?;
+
     let mut res = Vec::with_capacity(exprs.len());
     for expr in exprs {
         let inner_type = expr.data_type().remove_nullable();

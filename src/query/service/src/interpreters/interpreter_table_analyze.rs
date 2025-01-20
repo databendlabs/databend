@@ -117,7 +117,6 @@ impl Interpreter for AnalyzeTableInterpreter {
 
         if let Some(snapshot) = snapshot_opt {
             // plan sql
-            let schema = table.schema();
             let _table_info = table.get_table_info();
 
             let table_statistics = table
@@ -165,22 +164,20 @@ impl Interpreter for AnalyzeTableInterpreter {
                 .get_settings()
                 .get_sql_dialect()?
                 .default_ident_quote();
-            let index_cols: Vec<(u32, String)> = schema
-                .fields()
-                .iter()
-                .filter(|f| RangeIndex::supported_type(&f.data_type().into()))
-                .map(|f| (f.column_id(), format!("{quote}{}{quote}", f.name)))
-                .collect();
 
             // 0.01625 --> 12 buckets --> 4K size per column
             // 1.04 / math.sqrt(1<<12) --> 0.01625
             const DISTINCT_ERROR_RATE: f64 = 0.01625;
-            let ndv_select_expr = index_cols
+            let ndv_select_expr = snapshot
+                .schema
+                .fields()
                 .iter()
-                .map(|c| {
+                .filter(|f| RangeIndex::supported_type(&f.data_type().into()))
+                .map(|f| {
                     format!(
-                        "approx_count_distinct_state({DISTINCT_ERROR_RATE})({}) as ndv_{}",
-                        c.1, c.0
+                        "approx_count_distinct_state({DISTINCT_ERROR_RATE})({quote}{}{quote}) as ndv_{}",
+                        f.name,
+                        f.column_id()
                     )
                 })
                 .join(", ");
@@ -190,7 +187,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                 plan.database, plan.table,
             );
 
-            info!("Analyze via sql {:?}", sql);
+            info!("Analyze via sql: {sql}");
 
             let (physical_plan, bind_context) = self.plan_sql(sql).await?;
             let mut build_res =
@@ -200,34 +197,33 @@ impl Interpreter for AnalyzeTableInterpreter {
             // We add a setting `enable_analyze_histogram` to control whether to compute histogram(default is closed).
             let mut histogram_info_receivers = HashMap::new();
             if self.ctx.get_settings().get_enable_analyze_histogram()? {
-                let histogram_sqls = index_cols
+                let histogram_sqls = table
+                    .schema()
+                    .fields()
                     .iter()
-                    .map(|c| {
-                        format!(
-                            "SELECT quantile,
-                            COUNT(DISTINCT {}) AS ndv,
-                            MAX({}) AS max_value,
-                            MIN({}) AS min_value,
-                            COUNT() as count
-                        FROM  (
-                            SELECT {}, NTILE({}) OVER (ORDER BY {}) AS quantile
-                            FROM {}.{} WHERE {} IS DISTINCT FROM NULL
-                        )
-                        GROUP BY quantile ORDER BY quantile \n",
-                            c.1,
-                            c.1,
-                            c.1,
-                            c.1,
-                            DEFAULT_HISTOGRAM_BUCKETS,
-                            c.1,
-                            plan.database,
-                            plan.table,
-                            c.1,
+                    .filter(|f| RangeIndex::supported_type(&f.data_type().into()))
+                    .map(|f| {
+                        let col_name = format!("{quote}{}{quote}", f.name);
+                        (
+                            format!(
+                                "SELECT quantile, \
+                                    COUNT(DISTINCT {col_name}) AS ndv, \
+                                    MAX({col_name}) AS max_value, \
+                                    MIN({col_name}) AS min_value, \
+                                    COUNT() as count \
+                                FROM ( \
+                                    SELECT {col_name}, NTILE({}) OVER (ORDER BY {col_name}) AS quantile \
+                                    FROM {}.{} WHERE {col_name} IS DISTINCT FROM NULL \
+                                ) \
+                                GROUP BY quantile ORDER BY quantile",
+                                DEFAULT_HISTOGRAM_BUCKETS, plan.database, plan.table,
+                            ),
+                            f.column_id(),
                         )
                     })
                     .collect::<Vec<_>>();
-                for (sql, (col_id, _)) in histogram_sqls.into_iter().zip(index_cols.iter()) {
-                    info!("Analyze histogram via sql {:?}", sql);
+                for (sql, col_id) in histogram_sqls.into_iter() {
+                    info!("Analyze histogram via sql: {sql}");
                     let (mut histogram_plan, bind_context) = self.plan_sql(sql).await?;
                     if !self.ctx.get_cluster().is_empty() {
                         histogram_plan = remove_exchange(histogram_plan);
@@ -253,7 +249,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                     build_res
                         .sources_pipelines
                         .extend(histogram_build_res.sources_pipelines);
-                    histogram_info_receivers.insert(*col_id, rx);
+                    histogram_info_receivers.insert(col_id, rx);
                 }
             }
             FuseTable::do_analyze(

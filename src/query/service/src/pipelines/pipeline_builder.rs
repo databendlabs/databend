@@ -94,11 +94,13 @@ impl PipelineBuilder {
         }
 
         // unload spill metas
-        self.main_pipeline
-            .set_on_finished(always_callback(move |_info: &ExecutionInfo| {
-                self.ctx.unload_spill_meta();
-                Ok(())
-            }));
+        if !self.ctx.mark_unload_callbacked() {
+            self.main_pipeline
+                .set_on_finished(always_callback(move |_info: &ExecutionInfo| {
+                    self.ctx.unload_spill_meta();
+                    Ok(())
+                }));
+        }
 
         Ok(PipelineBuildResult {
             main_pipeline: self.main_pipeline,

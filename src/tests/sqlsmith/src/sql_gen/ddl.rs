@@ -87,7 +87,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             };
 
             let create_table = CreateTableStmt {
-                create_option: CreateOption::CreateIfNotExists,
+                create_option: CreateOption::CreateOrReplace,
                 catalog: None,
                 database: Some(Identifier::from_name(None, db_name)),
                 table: Identifier::from_name(None, table_name),

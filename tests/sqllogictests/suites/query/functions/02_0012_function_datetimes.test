@@ -1367,6 +1367,10 @@ select to_date('精彩的2022年，美丽的02month,激动の02d', '精彩的%Y�
 ----
 2022-02-02
 
+
+statement error 1006
+select date_format('2022-2-04T03:58:59', '%i');
+
 statement error 1006
 select date_format('', '');
 
@@ -1486,3 +1490,5 @@ query T
 SELECT add_hours(to_timestamp(710455), 2147483647);
 ----
 1000-01-01 00:00:00.000000
+
+

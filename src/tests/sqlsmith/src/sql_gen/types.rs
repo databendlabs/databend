@@ -64,6 +64,21 @@ impl<R: Rng> SqlGenerator<'_, R> {
         }
     }
 
+    pub(crate) fn gen_simple_common_data_type(&mut self) -> DataType {
+        let ty = match self.rng.gen_range(0..=7) {
+            0 => DataType::String,
+            1..=5 => self.gen_all_number_data_type(),
+            6 => DataType::Timestamp,
+            7 => DataType::Date,
+            _ => unreachable!(),
+        };
+        if self.rng.gen_bool(0.5) {
+            ty
+        } else {
+            DataType::Nullable(Box::new(ty))
+        }
+    }
+
     pub(crate) fn gen_simple_data_type(&mut self) -> DataType {
         match self.rng.gen_range(0..=13) {
             0 => DataType::Null,
