@@ -98,6 +98,8 @@ message WebhdfsStorageConfig {
 
   string username = 4; // reserved for future use
   string password = 5; // reserved for future use
+
+  bool disable_list_batch = 6;
 }
 
 message ObsStorageConfig {

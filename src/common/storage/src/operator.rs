@@ -355,10 +355,14 @@ fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
 
 /// init_webhdfs_operator will init a WebHDFS operator
 fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Builder> {
-    let builder = services::Webhdfs::default()
+    let mut builder = services::Webhdfs::default()
         .endpoint(&v.endpoint_url)
         .root(&v.root)
         .delegation(&v.delegation);
+
+    if v.disable_list_batch {
+        builder = builder.disable_list_batch();
+    }
 
     Ok(builder)
 }

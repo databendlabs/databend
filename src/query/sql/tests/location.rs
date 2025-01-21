@@ -386,16 +386,21 @@ async fn test_parse_uri_location() -> Result<()> {
                 "webhdfs".to_string(),
                 "example.com".to_string(),
                 "/path/to/dir/".to_string(),
-                vec![("https", "TrUE"), ("delegation", "databendthebest")]
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<_, _>>(),
+                vec![
+                    ("https", "TrUE"),
+                    ("delegation", "databendthebest"),
+                    ("disable_list_batch", "true"),
+                ]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<_, _>>(),
             ),
             (
                 StorageParams::Webhdfs(StorageWebhdfsConfig {
                     root: "/path/to/dir/".to_string(),
                     endpoint_url: "https://example.com".to_string(),
                     delegation: "databendthebest".to_string(),
+                    disable_list_batch: true,
                 }),
                 "/".to_string(),
             ),
