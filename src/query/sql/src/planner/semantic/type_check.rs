@@ -1729,19 +1729,14 @@ impl<'a> TypeChecker<'a> {
             && arguments.len() == 2
             && params.is_empty()
         {
-            let max_num_buckets = ConstantExpr::try_from(arguments[1].clone());
+            let max_num_buckets: u64 = check_number(
+                None,
+                &FunctionContext::default(),
+                &arguments[1].as_expr()?,
+                &BUILTIN_FUNCTIONS,
+            )?;
 
-            let is_positive_integer = match &max_num_buckets {
-                Ok(v) => v.value.is_positive(),
-                Err(_) => false,
-            } && arg_types[1].is_integer();
-            if !is_positive_integer {
-                return Err(ErrorCode::SemanticError(
-                    "The max_num_buckets of `histogram` must be a constant positive int",
-                ));
-            }
-
-            vec![max_num_buckets.unwrap().value]
+            vec![Scalar::Number(NumberScalar::UInt64(max_num_buckets))]
         } else {
             params
         };
