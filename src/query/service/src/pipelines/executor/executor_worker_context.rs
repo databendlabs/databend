@@ -131,15 +131,16 @@ impl ExecutorWorkerContext {
         }
     }
 
-    pub unsafe fn execute_task_new(&mut self) -> Result<(NodeIndex)> {
+    /// # Safety
+    pub unsafe fn execute_task_new(&mut self) -> Result<NodeIndex> {
         match std::mem::replace(&mut self.task, ExecutorTask::None) {
             ExecutorTask::None => Err(ErrorCode::Internal("Execute none task.")),
             ExecutorTask::Sync(processor) => match self.execute_sync_task(processor) {
-                Ok(Some((node_idx, s))) => Ok(node_idx),
+                Ok(Some((node_idx, _))) => Ok(node_idx),
                 Ok(None) => Err(ErrorCode::Internal("Execute none task.")),
                 Err(cause) => Err(cause),
             },
-            ExecutorTask::Async(processor) => Err(ErrorCode::Internal(
+            ExecutorTask::Async(_processor) => Err(ErrorCode::Internal(
                 "Async task should only be executed on queries executor",
             )),
             ExecutorTask::AsyncCompleted(task) => match task.res {

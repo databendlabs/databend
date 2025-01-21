@@ -129,8 +129,9 @@ impl TransformRecursiveCteSource {
         ctx.clear_runtime_filter();
         let build_res = build_query_pipeline_without_render_result_set(&ctx, &plan).await?;
         let settings = ExecutorSettings::try_create(ctx.clone())?;
-        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
-        ctx.set_executor(pulling_executor.get_inner())?;
+        let mut pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+        ctx.set_query_handle(pulling_executor.start().await?)?;
+
         Ok((
             PullingExecutorStream::create(pulling_executor)?
                 .try_collect::<Vec<DataBlock>>()

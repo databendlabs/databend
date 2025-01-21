@@ -305,7 +305,15 @@ impl Executor {
                     if e.code() != ErrorCode::CLOSED_QUERY {
                         r.session.txn_mgr().lock().set_fail();
                     }
-                    r.session.force_kill_query(e.clone());
+
+                    r.session.force_kill_query(ErrorCode::create(
+                        e.code(),
+                        e.name(),
+                        e.display_text(),
+                        e.detail(),
+                        None,
+                        e.backtrace(),
+                    ));
                 }
                 ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),

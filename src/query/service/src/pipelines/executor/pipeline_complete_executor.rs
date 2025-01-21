@@ -14,23 +14,26 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::MemStat;
-use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::Pipeline;
-use fastrace::func_path;
-use fastrace::prelude::*;
+use parking_lot::Mutex;
 
+use crate::pipelines::executor::pipeline_executor::NewPipelineExecutor;
+use crate::pipelines::executor::pipeline_executor::QueryHandle;
 use crate::pipelines::executor::ExecutorSettings;
-use crate::pipelines::executor::PipelineExecutor;
 
 pub struct PipelineCompleteExecutor {
-    executor: Arc<PipelineExecutor>,
+    pipelines: Mutex<Vec<Pipeline>>,
+    settings: Mutex<Option<ExecutorSettings>>,
+
     tracking_payload: TrackingPayload,
+    query_handle: Mutex<Option<Arc<dyn QueryHandle>>>,
 }
 
 // Use this executor when the pipeline is complete pipeline (has source and sink)
@@ -56,11 +59,12 @@ impl PipelineCompleteExecutor {
                 "Logical error, PipelineCompleteExecutor can only work on complete pipeline.",
             ));
         }
-        let executor = PipelineExecutor::create(pipeline, settings)?;
 
         Ok(PipelineCompleteExecutor {
-            executor: Arc::new(executor),
+            pipelines: Mutex::new(vec![pipeline]),
+            settings: Mutex::new(Some(settings)),
             tracking_payload,
+            query_handle: Mutex::new(None),
         })
     }
 
@@ -79,48 +83,47 @@ impl PipelineCompleteExecutor {
             }
         }
 
-        let executor = PipelineExecutor::from_pipelines(pipelines, settings)?;
         Ok(Arc::new(PipelineCompleteExecutor {
-            executor: Arc::new(executor),
             tracking_payload,
+            settings: Mutex::new(Some(settings)),
+            pipelines: Mutex::new(pipelines),
+            query_handle: Mutex::new(None),
         }))
     }
 
-    pub fn get_inner(&self) -> Arc<PipelineExecutor> {
-        self.executor.clone()
+    pub fn get_handle(&self) -> Arc<dyn QueryHandle> {
+        self.query_handle.lock().clone().unwrap()
     }
 
     pub fn finish(&self, cause: Option<ErrorCode>) {
-        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
-        self.executor.finish(cause);
-    }
-
-    #[fastrace::trace]
-    pub fn execute(&self) -> Result<()> {
-        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
-
-        Thread::named_spawn(
-            Some(String::from("CompleteExecutor")),
-            self.thread_function(),
-        )
-        .join()
-        .flatten()
-    }
-
-    fn thread_function(&self) -> impl Fn() -> Result<()> {
-        let span = Span::enter_with_local_parent(func_path!());
-        let executor = self.executor.clone();
-
-        move || {
-            let _g = span.set_local_parent();
-            executor.execute()
+        if let Some(handle) = self.query_handle.lock().as_ref() {
+            handle.finish(cause);
         }
+    }
+
+    pub async fn execute(&self) -> Result<Arc<dyn QueryHandle>> {
+        let (settings, pipelines) = {
+            if let Some(settings) = self.settings.lock().take() {
+                let mut pipelines = vec![];
+                std::mem::swap(&mut pipelines, self.pipelines.lock().as_mut());
+                (settings, pipelines)
+            } else {
+                return Ok(self.query_handle.lock().clone().unwrap());
+            }
+        };
+
+        let executor = GlobalInstance::get::<Arc<dyn NewPipelineExecutor>>();
+        let query_handle = executor.submit(pipelines, settings).await?;
+        *self.query_handle.lock() = Some(query_handle.clone());
+        Ok(query_handle)
     }
 }
 
 impl Drop for PipelineCompleteExecutor {
     fn drop(&mut self) {
         drop_guard(move || {
+            let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
+
             self.finish(None);
         })
     }

@@ -47,6 +47,7 @@ use crate::clusters::ClusterDiscovery;
 use crate::locks::LockManager;
 #[cfg(feature = "enable_queries_executor")]
 use crate::pipelines::executor::GlobalQueriesExecutor;
+use crate::pipelines::executor::NewQueryPipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
@@ -90,6 +91,8 @@ impl GlobalServices {
 
         // 4. cluster discovery init.
         ClusterDiscovery::init(config).await?;
+
+        NewQueryPipelineExecutor::init(config)?;
 
         // TODO(xuanwo):
         //

@@ -60,7 +60,6 @@ use crate::pipelines::executor::ProcessorAsyncTask;
 use crate::pipelines::executor::QueriesExecutorTasksQueue;
 use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
-use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
 use crate::pipelines::processors::connect;
 use crate::pipelines::processors::DirectedEdge;
@@ -717,8 +716,8 @@ impl RunningGraph {
     /// # Safety
     ///
     /// Method is thread unsafe and require thread safe call
-    pub unsafe fn init_schedule_queue(self: Arc<Self>, capacity: usize) -> Result<ScheduleQueue> {
-        ExecutingGraph::init_schedule_queue(&self.0, capacity, &self)
+    pub unsafe fn init_schedule_queue(self: &Arc<Self>, capacity: usize) -> Result<ScheduleQueue> {
+        ExecutingGraph::init_schedule_queue(&self.0, capacity, self)
     }
 
     /// # Safety

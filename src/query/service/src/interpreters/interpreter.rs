@@ -132,15 +132,15 @@ pub trait Interpreter: Sync + Send {
 
             let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
-            ctx.set_executor(complete_executor.get_inner())?;
-            complete_executor.execute()?;
+            ctx.set_query_handle(complete_executor.get_handle())?;
+            complete_executor.execute().await?;
             self.inject_result()
         } else {
-            let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
 
-            ctx.set_executor(pulling_executor.get_inner())?;
+            ctx.set_query_handle(executor.start().await?)?;
             Ok(Box::pin(ProgressStream::try_create(
-                Box::pin(PullingExecutorStream::create(pulling_executor)?),
+                Box::pin(PullingExecutorStream::create(executor)?),
                 ctx.get_result_progress(),
             )?))
         }

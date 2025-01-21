@@ -61,7 +61,7 @@ use uuid::Uuid;
 
 use crate::clusters::Cluster;
 use crate::clusters::ClusterDiscovery;
-use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::QueryHandle;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::storages::Table;
@@ -105,7 +105,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
-    pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
+    pub(in crate::sessions) query_handle: Arc<RwLock<Option<Weak<dyn QueryHandle>>>>,
     pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
     // now it is only set in query_log::log_query_finished
@@ -179,7 +179,7 @@ impl QueryContextShared {
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             streams_refs: Default::default(),
             affect: Arc::new(Mutex::new(None)),
-            executor: Arc::new(RwLock::new(Weak::new())),
+            query_handle: Arc::new(RwLock::new(None)),
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
             finish_time: Default::default(),
@@ -255,11 +255,15 @@ impl QueryContextShared {
         *guard = Some(mode);
     }
 
-    pub fn kill<C>(&self, cause: ErrorCode<C>) {
+    pub fn kill(&self, cause: ErrorCode) {
         self.set_error(cause.clone());
 
-        if let Some(executor) = self.executor.read().upgrade() {
-            executor.finish(Some(cause));
+        let query_handle = self.query_handle.read();
+
+        if let Some(query_handle) = query_handle.as_ref() {
+            if let Some(query_handle) = query_handle.upgrade() {
+                query_handle.finish(Some(cause));
+            }
         }
 
         self.aborting.store(true, Ordering::Release);
@@ -604,15 +608,24 @@ impl QueryContextShared {
         *guard = Some(affect);
     }
 
-    pub fn set_executor(&self, executor: Arc<PipelineExecutor>) -> Result<()> {
-        let mut guard = self.executor.write();
+    pub fn set_query_handle(&self, handle: Arc<dyn QueryHandle>) -> Result<()> {
         match self.check_aborting() {
             Ok(_) => {
-                *guard = Arc::downgrade(&executor);
+                let mut guard = self.query_handle.write();
+                *guard = Some(Arc::downgrade(&handle));
                 Ok(())
             }
             Err(err) => {
-                executor.finish(Some(err.clone()));
+                let error_code = ErrorCode::create(
+                    err.code(),
+                    err.name(),
+                    err.display_text(),
+                    err.detail(),
+                    None,
+                    err.backtrace(),
+                );
+
+                handle.finish(Some(error_code));
                 Err(err.with_context("failed to set executor"))
             }
         }
@@ -646,15 +659,17 @@ impl QueryContextShared {
         &self.query_cache_metrics
     }
 
-    pub fn set_priority(&self, priority: u8) {
-        if let Some(executor) = self.executor.read().upgrade() {
-            executor.change_priority(priority)
-        }
+    pub fn set_priority(&self, _priority: u8) {
+        unimplemented!()
     }
 
     pub fn get_query_profiles(&self) -> Vec<PlanProfile> {
-        if let Some(executor) = self.executor.read().upgrade() {
-            self.add_query_profiles(&executor.fetch_profiling(false));
+        let query_handle = self.query_handle.read();
+
+        if let Some(query_handle) = query_handle.as_ref() {
+            if let Some(query_handle) = query_handle.upgrade() {
+                self.add_query_profiles(&query_handle.fetch_profiling(false));
+            }
         }
 
         self.query_profiles.read().values().cloned().collect()

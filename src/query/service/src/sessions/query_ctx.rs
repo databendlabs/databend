@@ -126,7 +126,7 @@ use crate::catalogs::Catalog;
 use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
-use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::QueryHandle;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::ProcessInfo;
@@ -326,8 +326,8 @@ impl QueryContext {
         *self.shared.init_query_id.write() = id;
     }
 
-    pub fn set_executor(&self, weak_ptr: Arc<PipelineExecutor>) -> Result<()> {
-        self.shared.set_executor(weak_ptr)
+    pub fn set_query_handle(&self, handle: Arc<dyn QueryHandle>) -> Result<()> {
+        self.shared.set_query_handle(handle)
     }
 
     pub fn attach_stage(&self, attachment: StageAttachment) {

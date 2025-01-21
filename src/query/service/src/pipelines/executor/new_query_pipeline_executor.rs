@@ -1,3 +1,17 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Barrier;
@@ -22,14 +36,9 @@ use databend_common_pipeline_core::FinishedCallbackChain;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
-use futures_util::future::select;
-use futures_util::future::Either;
-use futures_util::FutureExt;
-use futures_util::StreamExt;
-use futures_util::TryStreamExt;
-use log::info;
 use parking_lot::Mutex;
 use petgraph::prelude::NodeIndex;
+use tokio::sync::watch::Receiver;
 
 use crate::pipelines::executor::executor_graph::ScheduleQueue;
 use crate::pipelines::executor::pipeline_executor::InitCallback;
@@ -51,7 +60,7 @@ impl NewQueryPipelineExecutor {
         let (tx, rx) = async_channel::bounded(4);
 
         GlobalIORuntime::instance().spawn(async move {
-            let mut background = QueryPipelineExecutorBackground::create(rx);
+            let background = QueryPipelineExecutorBackground::create(rx);
             background.work_loop().await
         });
 
@@ -74,7 +83,8 @@ impl NewPipelineExecutor for NewQueryPipelineExecutor {
     ) -> Result<Arc<dyn QueryHandle>> {
         let (tx, rx) = tokio::sync::oneshot::channel();
 
-        let query_task = QueryTask::try_create(pipelines, tx, settings)?;
+        let tracking_payload = ThreadTracker::new_tracking_payload();
+        let query_task = QueryTask::try_create(pipelines, tx, settings, tracking_payload)?;
 
         if let Err(_cause) = self.tx.send(query_task).await {
             return Err(ErrorCode::Internal(""));
@@ -98,9 +108,10 @@ impl QueryPipelineExecutorBackground {
 
     pub async fn work_loop(&self) {
         while let Ok(msg) = self.rx.recv().await {
-            if Self::recv_query_task(msg) {
-                continue;
-            }
+            let tracking_payload = msg.tracking_payload.clone();
+            let _tracking_payload_guard = ThreadTracker::tracking(tracking_payload);
+
+            Self::recv_query_task(msg);
         }
 
         log::info!("QueryPipelineExecutor background shutdown.");
@@ -121,16 +132,19 @@ impl QueryPipelineExecutorBackground {
         let thread_num = msg.max_threads_num;
         let tx = msg.tx.take().unwrap();
 
-        let (finish_tx, finish_rx) = tokio::sync::oneshot::channel();
+        let (finish_tx, finish_rx) = tokio::sync::watch::channel(None);
         let query_handle = QueryPipelineHandle::create(msg, finish_rx);
 
         if let Err(_send_error) = tx.send(Ok(query_handle.clone())) {
-            log::warn!("");
+            log::warn!(
+                "Ignore query {:?} in executor, because query may killed.",
+                &query_handle.settings.query_id
+            );
             return;
         }
 
-        let barrier = Arc::new(Barrier::new(thread_num));
-        let finish_tx = Arc::new(Mutex::new(Some(finish_tx)));
+        let finish_tx = finish_tx.clone();
+        let threads_barrier = Arc::new(Barrier::new(thread_num));
         for idx in 0..thread_num {
             #[allow(unused_mut)]
             let mut name = format!("PipelineExecutor-{}", thread_num);
@@ -145,27 +159,30 @@ impl QueryPipelineExecutorBackground {
                 }
             }
 
-            let barrier = barrier.clone();
             let finish_tx = finish_tx.clone();
+            let threads_barrier = threads_barrier.clone();
             let query_handle = query_handle.clone();
             Thread::named_spawn(Some(name), move || unsafe {
                 let _exit_guard = defer({
                     let query_handle = query_handle.clone();
 
                     move || {
-                        if barrier.wait().is_leader() {
-                            if let Some(finish_tx) = finish_tx.lock().take() {
-                                if finish_tx.send(query_handle.on_finish()).is_err() {
-                                    log::warn!("");
-                                }
-                            }
-                            // if let Err(cause) = finish_tx.send(query_handle.on_finish()) {}
-                            // finish_tx.close();
+                        if !threads_barrier.wait().is_leader() {
+                            return;
+                        }
+
+                        if let Err(_cause) = finish_tx.send(Some(query_handle.on_finish())) {
+                            log::warn!("");
                         }
                     }
                 });
 
                 if let Err(cause) = query_handle.run_query_worker(idx) {
+                    // We will ignore the abort query error, because returned by finished_error if abort query.
+                    if cause.code() == ErrorCode::ABORTED_QUERY {
+                        return;
+                    }
+
                     query_handle.finish(Some(cause.clone()));
                 }
             });
@@ -175,6 +192,7 @@ impl QueryPipelineExecutorBackground {
 
 pub struct QueryPipelineHandle {
     graph: Arc<RunningGraph>,
+    #[allow(dead_code)]
     query_holds: Vec<Arc<LockGuard>>,
     workers_condvar: Arc<WorkersCondvar>,
     global_tasks_queue: Arc<QueryExecutorTasksQueue>,
@@ -185,12 +203,13 @@ pub struct QueryPipelineHandle {
     daemon_handle: Mutex<Option<JoinHandle<()>>>,
     on_init_callback: Mutex<Option<InitCallback>>,
     on_finished_callback: Mutex<FinishedCallbackChain>,
-    finished_rx: Mutex<Arc<tokio::sync::oneshot::Receiver<Result<()>>>>,
+    finished_notify: Receiver<Option<Result<()>>>,
 }
 
 impl QueryPipelineHandle {
-    pub fn create(task: QueryTask, rx: tokio::sync::oneshot::Receiver<Result<()>>) -> Arc<Self> {
+    pub fn create(task: QueryTask, finished_notify: Receiver<Option<Result<()>>>) -> Arc<Self> {
         Arc::new(QueryPipelineHandle {
+            finished_notify,
             graph: task.graph,
             query_holds: task.holds,
             workers_condvar: WorkersCondvar::create(task.max_threads_num),
@@ -200,20 +219,19 @@ impl QueryPipelineHandle {
             settings: task.settings,
             daemon_handle: Mutex::new(None),
             finished_error: Mutex::new(None),
-            finished_rx: Mutex::new(Arc::new(rx)),
             on_init_callback: Mutex::new(Some(task.on_init_callback)),
             on_finished_callback: Mutex::new(task.on_finished_callback),
         })
     }
 
-    unsafe fn init_schedule(&self) -> Result<()> {
+    unsafe fn init_schedule(self: &Arc<Self>) -> Result<()> {
         let mut on_init_callback = self.on_init_callback.lock();
 
         if let Some(on_init_callback) = on_init_callback.take() {
             let instant = Instant::now();
             let query_id = self.settings.query_id.clone();
             let _timer_guard = defer(move || {
-                info!(
+                log::info!(
                     "Init pipeline successfully, query_id: {:?}, elapsed: {:?}",
                     query_id,
                     instant.elapsed()
@@ -284,7 +302,7 @@ impl QueryPipelineHandle {
         Ok(())
     }
 
-    pub unsafe fn run_query_worker(&self, worker_num: usize) -> Result<()> {
+    pub unsafe fn run_query_worker(self: &Arc<Self>, worker_num: usize) -> Result<()> {
         self.init_schedule()?;
 
         let mut node_index = NodeIndex::new(0);
@@ -346,6 +364,21 @@ impl QueryPipelineHandle {
     }
 
     fn on_finish(&self) -> Result<()> {
+        {
+            let finished_error_guard = self.finished_error.lock();
+            if let Some(error) = finished_error_guard.as_ref() {
+                let may_error = error.clone();
+                drop(finished_error_guard);
+
+                let profiling = self.fetch_profiling(true);
+                self.apply_finished_chain(ExecutionInfo::create(
+                    Err(may_error.clone()),
+                    profiling,
+                ))?;
+                return Err(may_error);
+            }
+        }
+
         if let Err(error) = self.graph.assert_finished_graph() {
             let profiling = self.fetch_profiling(true);
 
@@ -353,7 +386,7 @@ impl QueryPipelineHandle {
             return Err(error);
         }
 
-        let profiling = self.fetch_plans_profile(true);
+        let profiling = self.fetch_profiling(true);
         self.apply_finished_chain(ExecutionInfo::create(Ok(()), profiling))?;
         Ok(())
     }
@@ -362,16 +395,13 @@ impl QueryPipelineHandle {
 #[async_trait::async_trait]
 impl QueryHandle for QueryPipelineHandle {
     async fn wait(&self) -> Result<()> {
-        // tokio::sync::broadcast::channel()
-        // let finished_rx = self.finished_rx.lock().clone();
+        let mut finished_notify = self.finished_notify.clone();
 
-        // let _ignore = finished_rx.recv().await;
-
-        // if let Some(error) = self.finished_error.lock().clone() {
-        //     return Err(error);
-        // }
-        //
-        // Ok(())
+        let x = match finished_notify.wait_for(Option::is_some).await {
+            Err(_cause) => Err(ErrorCode::Internal("")),
+            Ok(res) => res.as_ref().unwrap().clone(),
+        };
+        x
     }
 
     fn is_finished(&self) -> bool {

@@ -858,7 +858,7 @@ impl TestFixture {
                 .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
         }
 
-        execute_pipeline(ctx, build_res)
+        execute_pipeline(ctx, build_res).await
     }
 
     pub async fn execute_command(&self, query: &str) -> Result<()> {

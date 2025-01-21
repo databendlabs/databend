@@ -26,7 +26,6 @@ use arrow_flight::FlightData;
 use async_channel::Receiver;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_config::GlobalConfig;
@@ -36,7 +35,6 @@ use databend_common_grpc::ConnectionFactory;
 use databend_common_pipeline_core::basic_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::PhysicalPlan;
-use fastrace::prelude::*;
 use log::warn;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -50,7 +48,7 @@ use super::exchange_params::ShuffleExchangeParams;
 use super::exchange_sink::ExchangeSink;
 use super::exchange_transform::ExchangeTransform;
 use super::statistics_receiver::StatisticsReceiver;
-use super::statistics_sender::StatisticsSender;
+use super::statistics_sender::DistributedQueryDaemon;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
 use crate::pipelines::executor::ExecutorSettings;
@@ -868,27 +866,26 @@ impl QueryCoordinator {
 
         let ctx = query_ctx.clone();
         let (_, request_server_exchange) = request_server_exchanges.into_iter().next().unwrap();
-        let mut statistics_sender = StatisticsSender::spawn(
-            &query_id,
-            ctx,
-            request_server_exchange,
-            executor.get_inner(),
-        );
+        let distributed_daemon = DistributedQueryDaemon::create(&query_id, ctx);
 
-        let span = if let Some(parent) = SpanContext::current_local_parent() {
-            Span::root("Distributed-Executor", parent)
-        } else {
-            Span::noop()
-        };
+        distributed_daemon.run(request_server_exchange, executor);
+        // let mut statistics_sender =
+        //     DistributedQueryDaemon::spawn(&query_id, ctx, request_server_exchange, executor);
 
-        Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
-            let _g = span.set_local_parent();
-            let error = executor.execute().err();
-            statistics_sender.shutdown(error.clone());
-            query_ctx
-                .get_exchange_manager()
-                .on_finished_query(&query_id, error);
-        });
+        // let span = if let Some(parent) = SpanContext::current_local_parent() {
+        //     Span::root("Distributed-Executor", parent)
+        // } else {
+        //     Span::noop()
+        // };
+
+        // Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
+        //     let _g = span.set_local_parent();
+        //     let error = executor.execute().err();
+        //     statistics_sender.shutdown(error.clone());
+        //     query_ctx
+        //         .get_exchange_manager()
+        //         .on_finished_query(&query_id, error);
+        // });
 
         Ok(())
     }

@@ -21,6 +21,7 @@ use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::defer;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::TrackingPayload;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -34,7 +35,6 @@ use futures_util::future::Either;
 use log::info;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
-use tokio::sync::oneshot::error::RecvError;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::GlobalQueriesExecutor;
@@ -311,7 +311,7 @@ pub trait QueryHandle: Send + Sync + 'static {
 }
 
 #[async_trait::async_trait]
-pub trait NewPipelineExecutor {
+pub trait NewPipelineExecutor: Send + Sync + 'static {
     async fn submit(
         &self,
         pipelines: Vec<Pipeline>,
@@ -326,6 +326,7 @@ pub struct QueryTask {
     pub on_finished_callback: FinishedCallbackChain,
     pub holds: Vec<Arc<LockGuard>>,
     pub max_threads_num: usize,
+    pub tracking_payload: TrackingPayload,
     pub tx: Option<tokio::sync::oneshot::Sender<Result<Arc<dyn QueryHandle>>>>,
 }
 
@@ -376,6 +377,7 @@ impl QueryTask {
         mut pipelines: Vec<Pipeline>,
         tx: tokio::sync::oneshot::Sender<Result<Arc<dyn QueryHandle>>>,
         settings: ExecutorSettings,
+        tracking_payload: TrackingPayload,
     ) -> Result<QueryTask> {
         let on_init_callback = Self::pipelines_on_init(&mut pipelines);
         let mut on_finished_callback = Self::pipelines_on_finish(&mut pipelines);
@@ -415,7 +417,8 @@ impl QueryTask {
             on_finished_callback,
             holds,
             graph: running_graph,
-            max_threads_num: 0,
+            max_threads_num: threads_num,
+            tracking_payload,
         })
     }
 }
