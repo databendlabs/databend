@@ -90,6 +90,9 @@ impl RulePushDownRankLimitAggregate {
             return Ok(());
         };
         count += limit.offset;
+        if count > self.max_limit {
+            return Ok(());
+        }
         let agg = s_expr.child(0)?;
         let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
 
@@ -106,11 +109,7 @@ impl RulePushDownRankLimitAggregate {
 
         let sort = Sort {
             items: sort_items.clone(),
-            limit: if count < self.max_limit {
-                Some(count)
-            } else {
-                None
-            },
+            limit: Some(count),
             after_exchange: None,
             pre_projection: None,
             window_partition: None,
