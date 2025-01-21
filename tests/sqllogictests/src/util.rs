@@ -249,6 +249,7 @@ pub async fn run_ttc_container(
     docker: &Docker,
     image: &str,
     port: u16,
+    http_server_port: u16,
     cs: &mut Vec<ContainerAsync<GenericImage>>,
 ) -> Result<()> {
     let mut images = image.split(":");
@@ -269,7 +270,10 @@ pub async fn run_ttc_container(
             .with_network("host")
             .with_env_var(
                 "DATABEND_DSN",
-                "databend://root:@127.0.0.1:8000?sslmode=disable",
+                format!(
+                    "databend://root:@127.0.0.1:{}?sslmode=disable",
+                    http_server_port
+                ),
             )
             .with_env_var("TTC_PORT", format!("{port}"))
             .with_container_name(&container_name)

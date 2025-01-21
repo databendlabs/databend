@@ -164,7 +164,7 @@ async fn run_hybrid_client(
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
             ClientType::Ttc(image, port) => {
-                run_ttc_container(&docker, image, *port, cs).await?;
+                run_ttc_container(&docker, image, *port, args.port, cs).await?;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
@@ -200,7 +200,7 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
             client = Client::MySQL(mysql_client);
         }
         ClientType::Http => {
-            client = Client::Http(HttpClient::create().await?);
+            client = Client::Http(HttpClient::create(args.port).await?);
         }
 
         ClientType::Ttc(image, port) => {

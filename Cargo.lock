@@ -3274,6 +3274,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "pretty_assertions",
+ "proptest",
  "rand",
  "recursive",
  "roaring",
@@ -3397,7 +3398,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "hickory-resolver",
- "hyper 0.14.30",
  "hyper 1.4.1",
  "hyper-util",
  "jwt-simple",
@@ -10227,8 +10227,7 @@ dependencies = [
 [[package]]
 name = "object_store_opendal"
 version = "0.49.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d47750d91b6d9fa245b3dff15d582dff8462d826cf6c2d5f2e91035d9a317f9"
+source = "git+https://github.com/apache/opendal?rev=78b6a9f#78b6a9f26dbeb5118990d3140f1c636d8e54e719"
 dependencies = [
  "async-trait",
  "bytes",
@@ -10309,8 +10308,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.51.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c9dcfa7a3615e3c60eb662ed6b46b6f244cf2658098f593c0c0915430b3a268"
+source = "git+https://github.com/apache/opendal?rev=78b6a9f#78b6a9f26dbeb5118990d3140f1c636d8e54e719"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -10532,7 +10530,7 @@ dependencies = [
 [[package]]
 name = "orc-rust"
 version = "0.5.0"
-source = "git+https://github.com/datafusion-contrib/orc-rust?rev=dfb1ede#dfb1ede8f875566372568346ad47b359e1a9c92a"
+source = "git+https://github.com/youngsofun/orc-rust?rev=6c5ac57#6c5ac578d8790e3f79bde4764ccea7e5e76a0f0d"
 dependencies = [
  "arrow",
  "async-trait",

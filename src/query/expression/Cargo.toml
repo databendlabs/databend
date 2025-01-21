@@ -69,6 +69,7 @@ arrow-ord = { workspace = true }
 criterion = { workspace = true }
 goldenfile = { workspace = true }
 pretty_assertions = { workspace = true }
+proptest = { workspace = true }
 rand = { workspace = true }
 
 [[bench]]

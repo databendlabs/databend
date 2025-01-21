@@ -18,7 +18,6 @@ anyerror = { workspace = true }
 hickory-resolver = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
-hyper_v014 = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }

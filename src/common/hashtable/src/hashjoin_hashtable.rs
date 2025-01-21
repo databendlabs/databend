@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
 use databend_common_column::bitmap::Bitmap;
 
 use super::traits::HashJoinHashtableLike;
@@ -101,7 +101,7 @@ pub fn hash_bits() -> u32 {
     }
 }
 
-pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = MmapAllocator> {
+pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = DefaultAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,

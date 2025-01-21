@@ -483,6 +483,15 @@ pub trait Table: Sync + Send {
     ) -> Result<u64> {
         Ok(0)
     }
+
+    async fn remove_inverted_index_files(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _index_name: String,
+        _index_version: String,
+    ) -> Result<u64> {
+        Ok(0)
+    }
 }
 
 #[async_trait::async_trait]

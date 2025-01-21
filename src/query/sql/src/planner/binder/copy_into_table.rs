@@ -182,15 +182,12 @@ impl Binder {
             files: stmt.files.clone(),
             pattern,
         };
-        let required_values_schema: DataSchemaRef = Arc::new(
-            match &stmt.dst_columns {
-                Some(cols) => self.schema_project(&table.schema(), cols)?,
-                None => self.schema_project(&table.schema(), &[])?,
-            }
-            .into(),
-        );
+        let stage_schema = match &stmt.dst_columns {
+            Some(cols) => self.schema_project(&table.schema(), cols)?,
+            None => self.schema_project(&table.schema(), &[])?,
+        };
 
-        let stage_schema = infer_table_schema(&required_values_schema)?;
+        let required_values_schema: DataSchemaRef = Arc::new(stage_schema.clone().into());
 
         let default_values = if stage_info.file_format_params.need_field_default() {
             Some(
@@ -226,6 +223,7 @@ impl Binder {
             write_mode: CopyIntoTableMode::Copy,
             query: None,
             enable_distributed: false,
+            files_collected: false,
         })
     }
 
@@ -403,6 +401,7 @@ impl Binder {
 
             enable_distributed: false,
             is_transform: false,
+            files_collected: true,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)

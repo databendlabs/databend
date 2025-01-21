@@ -57,6 +57,7 @@ use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -110,6 +111,7 @@ use databend_common_meta_types::SeqV;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
+use log::info;
 
 use crate::database::Database;
 use crate::table::Table;
@@ -168,13 +170,24 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
 
-    async fn get_marked_deleted_indexes(
+    async fn list_marked_deleted_indexes(
         &self,
         _tenant: &Tenant,
         _table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply> {
         Err(ErrorCode::Unimplemented(format!(
             "'list_marked_deleted_indexes' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_marked_deleted_table_indexes' not implemented for catalog {}",
             self.name()
         )))
     }
@@ -187,6 +200,18 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "'remove_marked_deleted_index_ids' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: u64,
+        _indexes: &[(String, String)],
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'remove_marked_deleted_table_indexes' not implemented for catalog {}",
             self.name()
         )))
     }
@@ -388,16 +413,21 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        self.retryable_update_multi_table_meta(req)
-            .await?
-            .map_err(|e| {
-                ErrorCode::TableVersionMismatched(format!(
-                    "Fail to update table metas, conflict tables: {:?}",
-                    e.iter()
-                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
-                        .collect::<Vec<_>>()
-                ))
-            })
+        let result = self.retryable_update_multi_table_meta(req).await?;
+        match result {
+            Ok(reply) => Ok(reply),
+            Err(failed_tables) => {
+                let err_msg = format!(
+                    "Due to concurrent transactions, transaction commit failed. Conflicting table IDs: {:?}",
+                    failed_tables.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
+                );
+                info!(
+                    "Due to concurrent transactions, transaction commit failed. Conflicting tables: {:?}",
+                    failed_tables
+                );
+                Err(ErrorCode::TableVersionMismatched(err_msg))
+            }
+        }
     }
 
     // update stream metas, currently used by "copy into location form stream"
