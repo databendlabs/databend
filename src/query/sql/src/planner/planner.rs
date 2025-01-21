@@ -275,6 +275,7 @@ impl Planner {
             .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
             .with_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
             .with_enable_dphyp(settings.get_enable_dphyp()?)
+            .with_max_push_down_limit(settings.get_max_push_down_limit()?)
             .with_sample_executor(self.query_executor.clone());
 
         let optimized_plan = optimize(opt_ctx, plan).await?;

@@ -319,6 +319,10 @@ impl Settings {
         Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
     }
 
+    pub fn get_max_push_down_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_push_down_limit")? as usize)
+    }
+
     pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
