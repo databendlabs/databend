@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::Datelike;
-use chrono::Days;
-use chrono::TimeZone as ChronoTimeZone;
-use chrono::Utc;
 use databend_common_exception::Result;
 use jiff::civil::date;
 use jiff::civil::datetime;
@@ -225,17 +221,17 @@ impl EvalMonthsImpl {
     }
 
     pub fn months_between(date_a: i32, date_b: i32) -> f64 {
-        let date_a = Utc
-            .timestamp_opt((date_a as i64) * 86400, 0)
+        let date_a = Date::new(1970, 1, 1)
             .unwrap()
-            .date_naive(); // Assuming date_a is in days
-        let date_b = Utc
-            .timestamp_opt((date_b as i64) * 86400, 0)
+            .checked_add(SignedDuration::from_hours(date_a as i64 * 24))
+            .unwrap();
+        let date_b = Date::new(1970, 1, 1)
             .unwrap()
-            .date_naive(); // Assuming date_b is in days
+            .checked_add(SignedDuration::from_hours(date_b as i64 * 24))
+            .unwrap();
 
         let year_diff = date_a.year() - date_b.year();
-        let month_diff = date_a.month() as i32 - date_b.month() as i32;
+        let month_diff = date_a.month() as i16 - date_b.month() as i16;
 
         // Calculate total months difference
         let total_months_diff = year_diff * 12 + month_diff;
@@ -243,13 +239,15 @@ impl EvalMonthsImpl {
         // Determine if special case for fractional part applies
         let is_same_day_of_month = date_a.day() == date_b.day();
         let are_both_end_of_month = date_a
-            .checked_add_days(Days::new(1))
-            .map(|d| d.month() != date_a.month())
-            .unwrap_or(false)
+            .checked_add(SignedDuration::from_hours(24))
+            .unwrap()
+            .month()
+            != date_a.month()
             && date_b
-                .checked_add_days(Days::new(1))
-                .map(|d| d.month() != date_b.month())
-                .unwrap_or(false);
+                .checked_add(SignedDuration::from_hours(24))
+                .unwrap()
+                .month()
+                != date_b.month();
 
         let day_fraction = if is_same_day_of_month || are_both_end_of_month {
             0.0
@@ -575,7 +573,7 @@ impl DateRounder {
     }
 }
 
-/// Convert `chrono::DateTime` to `i32` in `Scalar::Date(i32)` for `DateType`.
+/// Convert `jiff::Zoned` to `i32` in `Scalar::Date(i32)` for `DateType`.
 ///
 /// It's the days since 1970-01-01.
 #[inline]

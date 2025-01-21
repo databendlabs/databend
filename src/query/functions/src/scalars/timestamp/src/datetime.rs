@@ -15,12 +15,10 @@
 use std::io::Write;
 
 use chrono::format::parse_and_remainder;
-use chrono::format::Item;
 use chrono::format::Parsed;
 use chrono::format::StrftimeItems;
 use chrono::prelude::*;
 use chrono::Datelike;
-use chrono::TimeZone as ChronoTz;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::date::clamp_date;
@@ -698,24 +696,15 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<TimestampType, StringType, NullableType<StringType>>(
             |micros, format, output, ctx| {
-                if format.is_empty() {
-                    output.push_null();
-                } else {
-                    let items = StrftimeItems::new(format);
-                    if items.clone().any(|item| matches!(item, Item::Error)) {
-                        ctx.set_error(output.len(), "Invalid format string".to_string());
+                let ts = micros.to_timestamp(ctx.func_ctx.jiff_tz.clone());
+                match write!(output.builder.row_buffer, "{}", ts.strftime(format)) {
+                    Ok(_) => {
+                        output.builder.commit_row();
+                        output.validity.push(true);
+                    }
+                    Err(_) => {
+                        output.builder.row_buffer.clear();
                         output.push_null();
-                    } else {
-                        // Can't use `tz.timestamp_nanos(self.as_() * 1000)` directly, is may cause multiply with overflow.
-                        let (mut secs, mut nanos) =
-                            (micros / MICROS_PER_SEC, (micros % MICROS_PER_SEC) * 1_000);
-                        if nanos < 0 {
-                            secs -= 1;
-                            nanos += 1_000_000_000;
-                        }
-                        let ts = ctx.func_ctx.tz.timestamp_opt(secs, nanos as u32).unwrap();
-                        let res = ts.format(format).to_string();
-                        output.push(&res);
                     }
                 }
             },

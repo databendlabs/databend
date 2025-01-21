@@ -915,7 +915,6 @@ impl TableContext for QueryContext {
         let random_function_seed = settings.get_random_function_seed()?;
 
         Ok(FunctionContext {
-            tz,
             now,
             jiff_tz,
             rounding_mode,
