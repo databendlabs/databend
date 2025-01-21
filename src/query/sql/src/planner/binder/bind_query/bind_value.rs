@@ -402,6 +402,13 @@ pub fn bind_values(
     for (row_idx, row) in values.iter().enumerate() {
         for (column_idx, expr) in row.iter().enumerate() {
             let (scalar, data_type) = scalar_binder.bind(expr)?;
+            if !scalar.evaluable() {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Values can't contain subquery, aggregate functions, window functions, or UDFs"
+                ))
+                .set_span(span));
+            }
+
             let used_columns = scalar.used_columns();
             if !used_columns.is_empty() {
                 if let Some(expression_scan_info) = expression_scan_info.as_ref() {
