@@ -1193,6 +1193,21 @@ impl<'a> TypeChecker<'a> {
 
         let frame =
             self.resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())?;
+
+        if matches!(&frame.start_bound, WindowFuncFrameBound::Following(None)) {
+            return Err(ErrorCode::SemanticError(
+                "Frame start cannot be UNBOUNDED FOLLOWING".to_string(),
+            )
+            .set_span(span));
+        }
+
+        if matches!(&frame.end_bound, WindowFuncFrameBound::Preceding(None)) {
+            return Err(ErrorCode::SemanticError(
+                "Frame end cannot be UNBOUNDED PRECEDING".to_string(),
+            )
+            .set_span(span));
+        }
+
         let data_type = func.return_type();
         let window_func = WindowFunc {
             span,
