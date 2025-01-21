@@ -24,18 +24,17 @@ use databend_common_exception::Result;
 use log::info;
 use parking_lot::RwLock;
 
-use crate::caches::BlockMetaCache;
-use crate::caches::BloomIndexFilterCache;
+use crate::caches::{BloomIndexFilterCache, FileMetaDataCache};
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
-use crate::caches::ParquetMetaDataCache;
 use crate::caches::PrunePartitionsCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
+use crate::caches::BlockMetaCache;
 use crate::InMemoryLruCache;
 use crate::TableDataCache;
 use crate::TableDataCacheBuilder;
@@ -75,7 +74,7 @@ pub struct CacheManager {
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
     inverted_index_file_cache: CacheSlot<InvertedIndexFileCache>,
     prune_partitions_cache: CacheSlot<PrunePartitionsCache>,
-    parquet_meta_data_cache: CacheSlot<ParquetMetaDataCache>,
+    parquet_meta_data_cache: CacheSlot<FileMetaDataCache>,
     table_data_cache: CacheSlot<TableDataCache>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
     block_meta_cache: CacheSlot<BlockMetaCache>,
@@ -343,7 +342,7 @@ impl CacheManager {
         self.prune_partitions_cache.get()
     }
 
-    pub fn get_parquet_meta_data_cache(&self) -> Option<ParquetMetaDataCache> {
+    pub fn get_file_meta_data_cache(&self) -> Option<FileMetaDataCache> {
         self.parquet_meta_data_cache.get()
     }
 
