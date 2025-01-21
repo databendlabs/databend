@@ -112,6 +112,13 @@ select max(column1), max(column2), max(column3), count() from my_table
 ----
 value9_1 value9_2 value9_3 32
 
+statement error (?s)1005(.*)unexpected `AS`
+INSERT INTO my_table (column1, column2, column3) VALUES (
+  Rand() AS string, -- c24
+  Rand() AS string, -- c25
+  Rand() AS string  -- c26
+);
+
 statement ok
 drop table my_table
 
