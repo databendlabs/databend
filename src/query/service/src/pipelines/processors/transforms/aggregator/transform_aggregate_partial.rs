@@ -182,10 +182,15 @@ impl TransformPartialAggregate {
                 HashTable::AggregateHashTable(hashtable) => {
                     let (params_columns, states_index) = if is_agg_index_block {
                         let num_columns = block.num_columns();
-                        let functions_count = self.params.aggregate_functions.len();
+                        let states_count = self
+                            .params
+                            .states_layout
+                            .as_ref()
+                            .map(|layout| layout.states_loc.len())
+                            .unwrap_or(0);
                         (
                             vec![],
-                            (num_columns - functions_count..num_columns).collect::<Vec<_>>(),
+                            (num_columns - states_count..num_columns).collect::<Vec<_>>(),
                         )
                     } else {
                         (

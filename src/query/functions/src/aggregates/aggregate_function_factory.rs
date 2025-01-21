@@ -189,33 +189,30 @@ impl AggregateFunctionFactory {
             return Ok(agg);
         }
 
-        if !arguments.is_empty() && arguments.iter().any(|f| f.is_nullable_or_null()) {
-            let (new_params, new_arguments) = match name.to_lowercase().strip_suffix(STATE_SUFFIX) {
-                Some(_) => (params.clone(), arguments.clone()),
-                None => {
-                    let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
-                    let new_arguments =
-                        AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
-                    (new_params, new_arguments)
-                }
-            };
-
-            let nested = self.get_impl(name, new_params, new_arguments, &mut features)?;
-            let agg = AggregateFunctionCombinatorNull::try_create(
-                name,
-                params,
-                arguments,
-                nested,
-                features.clone(),
-            )?;
-            if or_null {
-                return AggregateFunctionOrNullAdaptor::create(agg, features);
+        if arguments.iter().all(|f| !f.is_nullable_or_null()) {
+            let agg = self.get_impl(name, params, arguments, &mut features)?;
+            return if or_null {
+                AggregateFunctionOrNullAdaptor::create(agg, features)
             } else {
-                return Ok(agg);
-            }
+                Ok(agg)
+            };
         }
 
-        let agg = self.get_impl(name, params, arguments, &mut features)?;
+        let nested = if name.to_lowercase().strip_suffix(STATE_SUFFIX).is_some() {
+            self.get_impl(name, params.clone(), arguments.clone(), &mut features)?
+        } else {
+            let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
+            let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
+            self.get_impl(name, new_params, new_arguments, &mut features)?
+        };
+
+        let agg = AggregateFunctionCombinatorNull::try_create(
+            name,
+            params,
+            arguments,
+            nested,
+            features.clone(),
+        )?;
         if or_null {
             AggregateFunctionOrNullAdaptor::create(agg, features)
         } else {

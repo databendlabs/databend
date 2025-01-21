@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::aggregate_function_factory::*;
+use super::*;
+
 mod aggregate_null_adaptor;
-mod aggregate_null_unary_adaptor;
-mod aggregate_null_variadic_adaptor;
 mod aggregate_ornull_adaptor;
 
 pub use aggregate_null_adaptor::*;
-pub use aggregate_null_unary_adaptor::*;
-pub use aggregate_null_variadic_adaptor::*;
 pub use aggregate_ornull_adaptor::*;
