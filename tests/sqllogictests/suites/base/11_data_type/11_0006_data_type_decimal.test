@@ -522,7 +522,7 @@ select count(*) from t_decimal_4_2;
 ----
 0
 
-statement error 1303
+statement error 1005
 insert into t_decimal_4_2 values (.);
 
 statement ok
