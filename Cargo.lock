@@ -4161,7 +4161,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "siphasher",
- "sys-info",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",

@@ -20,6 +20,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::ReclusterParts;
@@ -195,10 +196,13 @@ impl ReclusterMutator {
             }
         }
 
-        // Compute memory threshold and maximum number of blocks allowed for reclustering
-        let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-        let recluster_block_size = self.ctx.get_settings().get_recluster_block_size()? as usize;
-        let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 30 / 100);
+        // Compute memory threshold and maximum number of blocks allowed for reclustering.
+        let settings = self.ctx.get_settings();
+        let avail_memory_usage =
+            settings.get_max_memory_usage()? - GLOBAL_MEM_STAT.get_memory_usage().max(0) as u64;
+        let memory_threshold = settings
+            .get_recluster_block_size()?
+            .min(avail_memory_usage * 30 / 100) as usize;
         // specify a rather small value, so that `recluster_block_size` might be tuned to lower value.
         let max_blocks_num =
             (memory_threshold / self.block_thresholds.max_bytes_per_block).max(2) * self.max_tasks;
