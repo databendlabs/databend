@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -27,12 +28,14 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
@@ -51,6 +54,7 @@ use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -145,29 +149,35 @@ impl ModifyTableColumnInterpreter {
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
 
-        let mut modify_field_indices = HashSet::new();
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
-            let column = &field.name.to_string();
-            let data_type = &field.data_type;
-            if let Some((i, old_field)) = schema.column_with_name(column) {
-                modify_field_indices.insert(i);
+            if let Some((i, old_field)) = schema.column_with_name(&field.name) {
                 // if the field has different leaf column numbers, we need drop the old column
                 // and add a new one to generate new column id. otherwise, leaf column ids will conflict.
-                if field.data_type.num_leaf_columns() != old_field.data_type.num_leaf_columns() {
-                    let _ = new_schema.drop_column(column);
+                if old_field.data_type.num_leaf_columns() != field.data_type.num_leaf_columns() {
+                    let _ = new_schema.drop_column(&field.name);
                     let _ = new_schema.add_column(field, i);
+                } else {
+                    new_schema.fields[i] = field.clone();
                 }
                 if let Some(default_expr) = &field.default_expr {
                     let default_expr = default_expr.to_string();
-                    new_schema.fields[i].data_type = data_type.clone();
                     new_schema.fields[i].default_expr = Some(default_expr);
                     let _ = field_default_value(self.ctx.clone(), &new_schema.fields[i])?;
+                }
+                if old_field.data_type != field.data_type && field.computed_expr.is_none() {
+                    // Check if this column is referenced by computed columns.
+                    let data_schema = DataSchema::from(&new_schema);
+                    check_referenced_computed_columns(
+                        self.ctx.clone(),
+                        Arc::new(data_schema),
+                        &field.name,
+                    )?;
                 }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Cannot find column {}",
-                    column
+                    field.name
                 )));
             }
         }
@@ -192,27 +202,16 @@ impl ModifyTableColumnInterpreter {
         table_info.meta.fill_field_comments();
         let mut modify_comment = false;
         for (field, comment) in field_and_comments {
-            let column = &field.name.to_string();
-            let data_type = &field.data_type;
-            if let Some((i, old_field)) = schema.column_with_name(column) {
-                if data_type != &new_schema.fields[i].data_type {
-                    // Check if this column is referenced by computed columns.
-                    let mut data_schema: DataSchema = table_info.schema().into();
-                    data_schema.set_field_type(i, data_type.into());
-                    check_referenced_computed_columns(
-                        self.ctx.clone(),
-                        Arc::new(data_schema),
-                        column,
-                    )?;
-
+            if let Some((i, old_field)) = schema.column_with_name(&field.name) {
+                if old_field.data_type != field.data_type {
                     // If the column is defined in bloom index columns,
                     // check whether the data type is supported for bloom index.
-                    if bloom_index_cols.iter().any(|v| v.as_str() == column)
-                        && !BloomIndex::supported_type(data_type)
+                    if bloom_index_cols.iter().any(|v| v.as_str() == field.name)
+                        && !BloomIndex::supported_type(&field.data_type)
                     {
                         return Err(ErrorCode::TableOptionInvalid(format!(
                             "Unsupported data type '{}' for bloom index",
-                            data_type
+                            field.data_type
                         )));
                     }
                     // If the column is inverted index column, the type can't be changed.
@@ -224,12 +223,11 @@ impl ModifyTableColumnInterpreter {
                             {
                                 return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
                                     "column `{}` is referenced by inverted index, drop inverted index `{}` first",
-                                    column, index_name,
+                                    field.name, index_name,
                                 )));
                             }
                         }
                     }
-                    new_schema.fields[i].data_type = data_type.clone();
                 }
                 if table_info.meta.field_comments[i] != *comment {
                     table_info.meta.field_comments[i] = comment.to_string();
@@ -238,7 +236,7 @@ impl ModifyTableColumnInterpreter {
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Cannot find column {}",
-                    column
+                    field.name
                 )));
             }
         }
@@ -327,9 +325,27 @@ impl ModifyTableColumnInterpreter {
                             || is_string_to_binary(&old_field.data_type, &new_field.data_type))
                 });
 
-        if is_alter_column_string_to_binary {
-            table_info.meta.schema = new_schema.into();
+        let new_schema_without_virtual_fields = new_schema.remove_virtual_computed_fields();
+        let mut modified_field_indices = HashSet::new();
+        let mut modified_stored_field_indices = HashMap::new();
+        for (field, _) in field_and_comments {
+            if let Some(ComputedExpr::Virtual(_)) = field.computed_expr {
+                continue;
+            }
+            let field_index = new_schema_without_virtual_fields.index_of(&field.name)?;
+            if let Some(ComputedExpr::Stored(stored_expr)) = &field.computed_expr {
+                modified_stored_field_indices.insert(field_index, stored_expr.clone());
+                continue;
+            }
+            modified_field_indices.insert(field_index);
+        }
 
+        table_info.meta.schema = new_schema.clone().into();
+
+        if is_alter_column_string_to_binary
+            && modified_field_indices.is_empty()
+            && modified_stored_field_indices.is_empty()
+        {
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;
 
@@ -346,22 +362,24 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // 1. construct sql for selecting data from old table
-        let query_fields = schema
+        // construct sql for selecting data from old table
+        let query_fields = new_schema_without_virtual_fields
             .fields()
             .iter()
             .enumerate()
             .map(|(index, field)| {
-                if modify_field_indices.contains(&index) {
-                    let new_field = new_schema.field(index);
+                if let Some(stored_expr) = modified_stored_field_indices.remove(&index) {
+                    format!("{} AS `{}`", stored_expr, field.name)
+                } else if modified_field_indices.contains(&index) {
+                    let old_field = schema.field_with_name(&field.name).unwrap();
                     // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
                     // the auto cast to fail.
                     // We read the leaf column data, and then use build function to construct a new Tuple or Array(Tuple).
                     // Note: other nested types auto cast can still fail, we need a more general handling
                     // to solve this problem in the future.
                     match (
+                        old_field.data_type.remove_nullable(),
                         field.data_type.remove_nullable(),
-                        new_field.data_type.remove_nullable(),
                     ) {
                         (
                             TableDataType::Tuple {
@@ -489,60 +507,14 @@ impl ModifyTableColumnInterpreter {
             query_fields, self.plan.database, self.plan.table
         );
 
-        // 2. build plan by sql
-        let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _extras) = planner.plan_sql(&sql).await?;
-
-        let select_schema = plan.schema();
-
-        // 3. build physical plan by plan
-        let (select_plan, select_column_bindings) = match plan {
-            Plan::Query {
-                s_expr,
-                metadata,
-                bind_context,
-                ..
-            } => {
-                let mut builder1 =
-                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                (
-                    builder1.build(&s_expr, bind_context.column_set()).await?,
-                    bind_context.columns.clone(),
-                )
-            }
-            _ => unreachable!(),
-        };
-
-        // 4. define select schema and insert schema of DistributedInsertSelect plan
-        table_info.meta.schema = new_schema.clone().into();
-        let new_table = FuseTable::try_create(table_info)?;
-
-        // 5. build DistributedInsertSelect plan
-        let insert_plan =
-            PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
-                plan_id: select_plan.get_id(),
-                input: Box::new(select_plan),
-                table_info: new_table.get_table_info().clone(),
-                select_schema,
-                select_column_bindings,
-                insert_schema: Arc::new(Arc::new(new_schema).into()),
-                cast_needed: true,
-            }));
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan).await?;
-
-        // 6. commit new meta schema and snapshots
-        new_table.commit_insertion(
+        build_select_insert_plan(
             self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            None,
-            vec![],
-            true,
+            sql,
+            table_info,
+            new_schema.into(),
             prev_snapshot_id,
-            None,
-        )?;
-
-        Ok(build_res)
+        )
+        .await
     }
 
     // unset data mask policy to a column is a ee feature.
@@ -701,4 +673,63 @@ impl Interpreter for ModifyTableColumnInterpreter {
             .add_lock_guard(self.plan.lock_guard.clone());
         Ok(build_res)
     }
+}
+
+pub(crate) async fn build_select_insert_plan(
+    ctx: Arc<QueryContext>,
+    sql: String,
+    table_info: TableInfo,
+    new_schema: TableSchemaRef,
+    prev_snapshot_id: Option<SnapshotId>,
+) -> Result<PipelineBuildResult> {
+    // 1. build plan by sql
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _extras) = planner.plan_sql(&sql).await?;
+
+    let select_schema = plan.schema();
+
+    // 2. build physical plan by plan
+    let (select_plan, select_column_bindings) = match plan {
+        Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } => {
+            let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
+            (
+                builder.build(&s_expr, bind_context.column_set()).await?,
+                bind_context.columns.clone(),
+            )
+        }
+        _ => unreachable!(),
+    };
+
+    // 3. define select schema and insert schema of DistributedInsertSelect plan
+    let new_table = FuseTable::try_create(table_info)?;
+
+    // 4. build DistributedInsertSelect plan
+    let insert_plan = PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+        plan_id: select_plan.get_id(),
+        input: Box::new(select_plan),
+        table_info: new_table.get_table_info().clone(),
+        select_schema,
+        select_column_bindings,
+        insert_schema: Arc::new(new_schema.into()),
+        cast_needed: true,
+    }));
+    let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
+
+    // 5. commit new meta schema and snapshots
+    new_table.commit_insertion(
+        ctx.clone(),
+        &mut build_res.main_pipeline,
+        None,
+        vec![],
+        true,
+        prev_snapshot_id,
+        None,
+    )?;
+
+    Ok(build_res)
 }

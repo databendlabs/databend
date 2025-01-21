@@ -1533,11 +1533,15 @@ impl Binder {
                     )?;
                     field = field.with_computed_expr(Some(ComputedExpr::Virtual(expr)));
                 }
-                ColumnExpr::Stored(_) => {
-                    // TODO: support add stored computed expression column.
-                    return Err(ErrorCode::SemanticError(
-                        "can't add a stored computed column".to_string(),
-                    ));
+                ColumnExpr::Stored(stored_expr) => {
+                    let expr = parse_computed_expr_to_string(
+                        self.ctx.clone(),
+                        table_schema.clone(),
+                        &field,
+                        stored_expr,
+                    )?;
+                    field = field.with_computed_expr(Some(ComputedExpr::Stored(expr)));
+                    is_deterministic = false;
                 }
             }
         }
