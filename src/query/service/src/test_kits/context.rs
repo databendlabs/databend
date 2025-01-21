@@ -49,6 +49,7 @@ pub async fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResu
     let mut pipelines = res.sources_pipelines;
     pipelines.push(res.main_pipeline);
     let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+    let query_handle = executor.execute().await?;
     ctx.set_query_handle(executor.get_handle())?;
-    executor.execute().await.map(|_| ())
+    query_handle.wait().await
 }

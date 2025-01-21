@@ -132,8 +132,9 @@ pub trait Interpreter: Sync + Send {
 
             let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
+            let query_handle = complete_executor.execute().await?;
             ctx.set_query_handle(complete_executor.get_handle())?;
-            complete_executor.execute().await?;
+            query_handle.wait().await?;
             self.inject_result()
         } else {
             let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;

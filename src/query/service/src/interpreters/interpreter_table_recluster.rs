@@ -218,8 +218,10 @@ impl ReclusterTableInterpreter {
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
         self.ctx.clear_written_segment_locations()?;
+
+        let query_handle = complete_executor.execute().await?;
         self.ctx.set_query_handle(complete_executor.get_handle())?;
-        complete_executor.execute().await?;
+        query_handle.wait().await?;
         // make sure the executor is dropped before the next loop.
         drop(complete_executor);
         // make sure the lock guard is dropped before the next loop.

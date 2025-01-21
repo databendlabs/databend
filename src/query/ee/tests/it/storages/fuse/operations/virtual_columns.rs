@@ -91,8 +91,9 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
         pipelines.push(build_res.main_pipeline);
 
         let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+        let query_handle = complete_executor.execute().await?;
         table_ctx.set_query_handle(complete_executor.get_handle())?;
-        complete_executor.execute().await?;
+        query_handle.wait().await?;
     }
 
     let segment_reader =

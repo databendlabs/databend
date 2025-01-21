@@ -135,8 +135,9 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
 
                         let complete_executor =
                             PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+                        let query_handle = complete_executor.execute().await?;
                         ctx_cloned.set_query_handle(complete_executor.get_handle())?;
-                        complete_executor.execute().await.map(|_| ())
+                        query_handle.wait().await
                     } else {
                         Ok(())
                     }
@@ -162,8 +163,9 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
 
                         let complete_executor =
                             PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+                        let query_handle = complete_executor.execute().await?;
                         ctx_cloned.set_query_handle(complete_executor.get_handle())?;
-                        complete_executor.execute().await.map(|_| ())
+                        query_handle.wait().await
                     } else {
                         Ok(())
                     }
@@ -189,8 +191,9 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
 
                         let complete_executor =
                             PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+                        let query_handle = complete_executor.execute().await?;
                         ctx_cloned.set_query_handle(complete_executor.get_handle())?;
-                        complete_executor.execute().await.map(|_| ())
+                        query_handle.wait().await
                     } else {
                         Ok(())
                     }

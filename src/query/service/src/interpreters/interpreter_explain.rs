@@ -485,9 +485,10 @@ impl ExplainInterpreter {
                 pipelines.push(build_res.main_pipeline);
 
                 let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
-                executor.execute().await?;
+                let query_handle = executor.execute().await?;
                 self.ctx
                     .add_query_profiles(&executor.get_handle().fetch_profiling(false));
+                query_handle.wait().await?;
             }
             false => {
                 let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;

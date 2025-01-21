@@ -150,8 +150,9 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+        let query_handle = executor.execute().await?;
         ctx.set_query_handle(executor.get_handle())?;
-        executor.execute().await?;
+        query_handle.wait().await?;
         Ok(true)
     } else {
         Ok(false)
