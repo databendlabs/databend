@@ -148,6 +148,7 @@ impl Table for UdfEchoTable {
             .await?
             .with_tenant(ctx.get_tenant().tenant_name())?
             .with_func_name("builtin_echo")?
+            .with_handler_name("builtin_echo")?
             .with_query_id(&ctx.get_id())?;
 
         let array = arrow_array::LargeStringArray::from(vec![self.arg.clone()]);

@@ -24,5 +24,13 @@ SELECT id, v FROM t1 order by id LIMIT 100000000;
 3 616161
 4 616161
 
+query I
+SELECT id FROM t1 GROUP BY id ORDER BY id LIMIT 2147483649 OFFSET 0;
+----
+1
+2
+3
+4
+
 statement ok
 DROP DATABASE db_large_limit
