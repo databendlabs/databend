@@ -358,7 +358,8 @@ fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Builder> {
     let mut builder = services::Webhdfs::default()
         .endpoint(&v.endpoint_url)
         .root(&v.root)
-        .delegation(&v.delegation);
+        .delegation(&v.delegation)
+        .user_name(&v.user_name);
 
     if v.disable_list_batch {
         builder = builder.disable_list_batch();

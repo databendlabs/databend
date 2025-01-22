@@ -52,6 +52,7 @@ fn test_decode_v31_copy_max_file() -> anyhow::Result<()> {
                 root: "/path/to/stage/files".to_string(),
                 delegation: "<delegation_token>".to_string(),
                 disable_list_batch: false,
+                user_name: String::new(),
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(

@@ -411,12 +411,14 @@ fn parse_webhdfs_params(l: &mut UriLocation, root: String) -> Result<StoragePara
                 ),
             )
         })?;
+    let user_name = l.connection.get("user_name").cloned().unwrap_or_default();
 
     let sp = StorageParams::Webhdfs(StorageWebhdfsConfig {
         endpoint_url,
         root,
         delegation,
         disable_list_batch,
+        user_name,
     });
 
     l.connection

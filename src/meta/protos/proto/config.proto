@@ -96,8 +96,11 @@ message WebhdfsStorageConfig {
   string root = 2;
   string delegation = 3;
 
-  string username = 4; // reserved for future use
-  string password = 5; // reserved for future use
+  string user_name = 4;
+
+  // We used to have password (5) but removed later, keep those index reserved.
+  //  string password = 5;
+  reserved 5;
 
   bool disable_list_batch = 6;
 }
