@@ -111,7 +111,7 @@ impl Binder {
                     .await?
                     .with_tenant(self.ctx.get_tenant().tenant_name())?
                     .with_func_name(&name)?
-                    .with_handler_name(&handler)?
+                    .with_handler_name(handler)?
                     .with_query_id(&self.ctx.get_id())?;
                 client
                     .check_schema(handler, &arg_datatypes, &return_type)
