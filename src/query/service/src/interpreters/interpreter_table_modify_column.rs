@@ -272,9 +272,14 @@ impl ModifyTableColumnInterpreter {
             let old_field = schema.field_with_name(&field.name)?;
             let is_alter_column_string_to_binary =
                 is_string_to_binary(&old_field.data_type, &field.data_type);
-            // if alter column from string to binary in parquet, we don't need to rebuild table
-            if (table.storage_format_as_parquet() && is_alter_column_string_to_binary)
-                || old_field.data_type.remove_nullable() == field.data_type.remove_nullable()
+            // If two conditions are met, we don't need rebuild the table.
+            // As rebuild table can be a time-consuming job.
+            // 1. alter column from string to binary in parquet or data type not changed.
+            // 2. default expr not change. if default expr is changed, we need fill value for
+            //    new added column.
+            if ((table.storage_format_as_parquet() && is_alter_column_string_to_binary)
+                || old_field.data_type.remove_nullable() == field.data_type.remove_nullable())
+                && old_field.default_expr == field.default_expr
             {
                 continue;
             }
