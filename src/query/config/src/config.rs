@@ -1198,6 +1198,13 @@ pub struct WebhdfsStorageConfig {
     )]
     #[serde(rename = "disable_list_batch")]
     pub webhdfs_disable_list_batch: bool,
+    #[clap(
+        long = "storage-webhdfs-user-name",
+        value_name = "VALUE",
+        default_value_t
+    )]
+    #[serde(rename = "user_name")]
+    pub webhdfs_user_name: String,
 }
 
 impl Default for WebhdfsStorageConfig {
@@ -1210,7 +1217,8 @@ impl Debug for WebhdfsStorageConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("WebhdfsStorageConfig")
             .field("endpoint_url", &self.webhdfs_endpoint_url)
-            .field("webhdfs_root", &self.webhdfs_root)
+            .field("root", &self.webhdfs_root)
+            .field("user_name", &self.webhdfs_user_name)
             .field("delegation", &mask_string(&self.webhdfs_delegation, 3))
             .finish()
     }
@@ -1223,6 +1231,7 @@ impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
             webhdfs_endpoint_url: v.endpoint_url,
             webhdfs_root: v.root,
             webhdfs_disable_list_batch: v.disable_list_batch,
+            webhdfs_user_name: v.user_name,
         }
     }
 }
@@ -1236,6 +1245,7 @@ impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
             endpoint_url: value.webhdfs_endpoint_url,
             root: value.webhdfs_root,
             disable_list_batch: value.webhdfs_disable_list_batch,
+            user_name: value.webhdfs_user_name,
         })
     }
 }

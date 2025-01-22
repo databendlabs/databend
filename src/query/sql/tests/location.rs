@@ -390,6 +390,7 @@ async fn test_parse_uri_location() -> Result<()> {
                     ("https", "TrUE"),
                     ("delegation", "databendthebest"),
                     ("disable_list_batch", "true"),
+                    ("user_name", "test"),
                 ]
                 .into_iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -401,6 +402,7 @@ async fn test_parse_uri_location() -> Result<()> {
                     endpoint_url: "https://example.com".to_string(),
                     delegation: "databendthebest".to_string(),
                     disable_list_batch: true,
+                    user_name: "test".to_string(),
                 }),
                 "/".to_string(),
             ),
