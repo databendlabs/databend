@@ -72,9 +72,7 @@ impl RuleFactory {
             RuleID::PushDownFilterProjectSet => Ok(Box::new(RulePushDownFilterProjectSet::new())),
             RuleID::PushDownLimit => Ok(Box::new(RulePushDownLimit::new(ctx.metadata))),
             RuleID::PushDownLimitUnion => Ok(Box::new(RulePushDownLimitUnion::new())),
-            RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new(
-                ctx.max_push_down_limit,
-            ))),
+            RuleID::PushDownLimitScan => Ok(Box::new(RulePushDownLimitScan::new())),
             RuleID::PushDownSortScan => Ok(Box::new(RulePushDownSortScan::new())),
             RuleID::PushDownSortEvalScalar => {
                 Ok(Box::new(RulePushDownSortEvalScalar::new(ctx.metadata)))

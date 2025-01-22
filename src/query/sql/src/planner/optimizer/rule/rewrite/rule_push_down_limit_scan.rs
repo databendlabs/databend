@@ -38,11 +38,10 @@ use crate::plans::Scan;
 pub struct RulePushDownLimitScan {
     id: RuleID,
     matchers: Vec<Matcher>,
-    max_limit: usize,
 }
 
 impl RulePushDownLimitScan {
-    pub fn new(max_limit: usize) -> Self {
+    pub fn new() -> Self {
         Self {
             id: RuleID::PushDownLimitScan,
             matchers: vec![Matcher::MatchOp {
@@ -52,7 +51,6 @@ impl RulePushDownLimitScan {
                     children: vec![],
                 }],
             }],
-            max_limit,
         }
     }
 }
@@ -68,9 +66,6 @@ impl Rule for RulePushDownLimitScan {
             return Ok(());
         };
         count += limit.offset;
-        if count > self.max_limit {
-            return Ok(());
-        }
 
         let child = s_expr.child(0)?;
         let mut get: Scan = child.plan().clone().try_into()?;
