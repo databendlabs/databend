@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::optimizer::extract::Matcher;
@@ -76,54 +77,55 @@ impl Rule for RulePushDownFilterWindow {
         s_expr: &SExpr,
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
-        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let Filter { predicates } = s_expr.plan().clone().try_into()?;
         let window_expr = s_expr.child(0)?;
         let window: Window = window_expr.plan().clone().try_into()?;
-        let partition_by_columns = window.partition_by_columns()?;
+        let allowed = window.partition_by_columns()?;
+        let rejected = HashSet::from_iter(
+            window
+                .order_by_columns()?
+                .into_iter()
+                .chain(window.function.used_columns()),
+        );
 
-        let mut pushed_down_predicates = vec![];
-        let mut remaining_predicates = vec![];
-        for predicate in filter.predicates.into_iter() {
-            let predicate_used_columns = predicate.used_columns();
-            if predicate_used_columns.is_subset(&partition_by_columns) {
-                pushed_down_predicates.push(predicate);
-            } else {
-                remaining_predicates.push(predicate)
-            }
+        let (pushed_down, remaining): (Vec<_>, Vec<_>) =
+            predicates.into_iter().partition(|predicate| {
+                let used = predicate.used_columns();
+                used.is_subset(&allowed) && used.is_disjoint(&rejected)
+            });
+        if pushed_down.is_empty() {
+            return Ok(());
         }
 
-        if !pushed_down_predicates.is_empty() {
-            let pushed_down_filter = Filter {
-                predicates: pushed_down_predicates,
+        let pushed_down_filter = Filter {
+            predicates: pushed_down,
+        };
+        let result = if remaining.is_empty() {
+            SExpr::create_unary(
+                Arc::new(window.into()),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(pushed_down_filter.into()),
+                    Arc::new(window_expr.child(0)?.clone()),
+                )),
+            )
+        } else {
+            let remaining_filter = Filter {
+                predicates: remaining,
             };
-            let result = if remaining_predicates.is_empty() {
-                SExpr::create_unary(
+            let mut s_expr = SExpr::create_unary(
+                Arc::new(remaining_filter.into()),
+                Arc::new(SExpr::create_unary(
                     Arc::new(window.into()),
                     Arc::new(SExpr::create_unary(
                         Arc::new(pushed_down_filter.into()),
                         Arc::new(window_expr.child(0)?.clone()),
                     )),
-                )
-            } else {
-                let remaining_filter = Filter {
-                    predicates: remaining_predicates,
-                };
-                let mut s_expr = SExpr::create_unary(
-                    Arc::new(remaining_filter.into()),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(window.into()),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(pushed_down_filter.into()),
-                            Arc::new(window_expr.child(0)?.clone()),
-                        )),
-                    )),
-                );
-                s_expr.set_applied_rule(&self.id);
-                s_expr
-            };
-            state.add_result(result);
-        }
-
+                )),
+            );
+            s_expr.set_applied_rule(&self.id);
+            s_expr
+        };
+        state.add_result(result);
         Ok(())
     }
 

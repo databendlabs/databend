@@ -72,23 +72,20 @@ impl Window {
 
         used_columns.insert(self.index);
         used_columns.extend(self.function.used_columns());
-
-        for arg in self.arguments.iter() {
-            used_columns.insert(arg.index);
-            used_columns.extend(arg.scalar.used_columns())
-        }
-
-        for part in self.partition_by.iter() {
-            used_columns.insert(part.index);
-            used_columns.extend(part.scalar.used_columns())
-        }
-
-        for sort in self.order_by.iter() {
-            used_columns.insert(sort.order_by_item.index);
-            used_columns.extend(sort.order_by_item.scalar.used_columns())
-        }
+        used_columns.extend(self.arguments_columns()?);
+        used_columns.extend(self.partition_by_columns()?);
+        used_columns.extend(self.order_by_columns()?);
 
         Ok(used_columns)
+    }
+
+    pub fn arguments_columns(&self) -> Result<ColumnSet> {
+        let mut col_set = ColumnSet::new();
+        for arg in self.arguments.iter() {
+            col_set.insert(arg.index);
+            col_set.extend(arg.scalar.used_columns())
+        }
+        Ok(col_set)
     }
 
     // `Window.partition_by_columns` used in `RulePushDownFilterWindow` only consider `partition_by` field,
@@ -98,6 +95,15 @@ impl Window {
         for part in self.partition_by.iter() {
             col_set.insert(part.index);
             col_set.extend(part.scalar.used_columns())
+        }
+        Ok(col_set)
+    }
+
+    pub fn order_by_columns(&self) -> Result<ColumnSet> {
+        let mut col_set = ColumnSet::new();
+        for sort in self.order_by.iter() {
+            col_set.insert(sort.order_by_item.index);
+            col_set.extend(sort.order_by_item.scalar.used_columns())
         }
         Ok(col_set)
     }
