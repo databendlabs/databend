@@ -53,4 +53,6 @@ ignore = [
     "RUSTSEC-2024-0399",
     # `idna` accepts Punycode labels that do not produce any non-ASCII when decoded
     "RUSTSEC-2024-0421",
+    # gix-worktree-state nonexclusive checkout sets executable files world-writable
+    "RUSTSEC-2025-0001",
 ]

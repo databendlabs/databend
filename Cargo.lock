@@ -11113,7 +11113,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.49.0"
-source = "git+https://github.com/datafuse-extras/opendal-for-release-v1.2.636?rev=6c490a0#6c490a00e1a128edbbc15017cef47d010c3a47c0"
+source = "git+https://github.com/datafuse-extras/opendal-for-release-v1.2.636?tag=v0.49.0-xml-deser-retry#c94f73b8be7e86b4a9a71e49666f67363289c444"
 dependencies = [
  "anyhow",
  "async-backtrace",
