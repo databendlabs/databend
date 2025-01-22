@@ -16,6 +16,7 @@ use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::schema::VirtualField;
 use fastrace::func_name;
 
 use crate::common;
@@ -42,23 +43,27 @@ fn test_decode_v41_virtual_column() -> anyhow::Result<()> {
     let want = || {
         let table_id = 7;
         let virtual_columns = vec![
-            (
-                "v:k1:k2".to_string(),
-                TableDataType::Nullable(Box::new(TableDataType::Variant)),
-            ),
-            (
-                "v[1][2]".to_string(),
-                TableDataType::Nullable(Box::new(TableDataType::Variant)),
-            ),
+            VirtualField {
+                expr: "v:k1:k2".to_string(),
+                data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                alias_name: None,
+            },
+            VirtualField {
+                expr: "v[1][2]".to_string(),
+                data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                alias_name: None,
+            },
         ];
         let created_on = Utc.with_ymd_and_hms(2023, 3, 9, 10, 0, 0).unwrap();
         let updated_on = Some(Utc.with_ymd_and_hms(2023, 5, 29, 10, 0, 0).unwrap());
+        let auto_generated = false;
 
         VirtualColumnMeta {
             table_id,
             virtual_columns,
             created_on,
             updated_on,
+            auto_generated,
         }
     };
 

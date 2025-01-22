@@ -75,11 +75,11 @@ impl CollectStatisticsOptimizer {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
                         column_id,
-                        virtual_computed_expr,
+                        virtual_expr,
                         ..
                     }) = column
                     {
-                        if virtual_computed_expr.is_none() {
+                        if virtual_expr.is_none() {
                             if let Some(column_id) = *column_id {
                                 let col_stat = column_statistics_provider
                                     .column_statistics(column_id as ColumnId);

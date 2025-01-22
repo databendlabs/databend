@@ -27,19 +27,44 @@ use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct VirtualField {
+    pub expr: String,
+    pub data_type: TableDataType,
+    pub alias_name: Option<String>,
+}
+
+impl Display for VirtualField {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if let Some(alias_name) = &self.alias_name {
+            write!(
+                f,
+                "{}::{} AS {}",
+                self.expr,
+                self.data_type.remove_nullable(),
+                alias_name
+            )
+        } else {
+            write!(f, "{}::{}", self.expr, self.data_type.remove_nullable())
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct VirtualColumnMeta {
     pub table_id: MetaId,
 
-    pub virtual_columns: Vec<(String, TableDataType)>,
+    pub virtual_columns: Vec<VirtualField>,
     pub created_on: DateTime<Utc>,
     pub updated_on: Option<DateTime<Utc>>,
+    pub auto_generated: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateVirtualColumnReq {
     pub create_option: CreateOption,
     pub name_ident: VirtualColumnIdent,
-    pub virtual_columns: Vec<(String, TableDataType)>,
+    pub virtual_columns: Vec<VirtualField>,
+    pub auto_generated: bool,
 }
 
 impl Display for CreateVirtualColumnReq {
@@ -57,7 +82,8 @@ impl Display for CreateVirtualColumnReq {
 pub struct UpdateVirtualColumnReq {
     pub if_exists: bool,
     pub name_ident: VirtualColumnIdent,
-    pub virtual_columns: Vec<(String, TableDataType)>,
+    pub virtual_columns: Vec<VirtualField>,
+    pub auto_generated: bool,
 }
 
 impl Display for UpdateVirtualColumnReq {

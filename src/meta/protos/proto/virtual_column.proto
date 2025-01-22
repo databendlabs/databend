@@ -41,4 +41,11 @@ message VirtualColumnMeta {
 
   // virtual column data type
   repeated DataType data_types = 5;
+
+  // virtual column alias names
+  repeated string alias_names = 6;
+
+  // if true, virtual columns are auto generated,
+  // otherwise virtual columns are created by user.
+  optional bool auto_generated = 7;
 }

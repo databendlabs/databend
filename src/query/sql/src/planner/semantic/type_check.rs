@@ -52,7 +52,6 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::InvertedIndexOption;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -100,7 +99,6 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
@@ -169,7 +167,6 @@ use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::MetadataRef;
-use crate::TableEntry;
 use crate::Visibility;
 
 /// A helper for type checking.
@@ -274,8 +271,8 @@ impl<'a> TypeChecker<'a> {
 
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
-                        if let Some(virtual_computed_expr) = column.virtual_computed_expr {
-                            let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
+                        if let Some(virtual_expr) = column.virtual_expr {
+                            let sql_tokens = tokenize_sql(virtual_expr.as_str())?;
                             let expr = parse_expr(&sql_tokens, self.dialect)?;
                             return self.resolve(&expr);
                         } else {
@@ -297,21 +294,15 @@ impl<'a> TypeChecker<'a> {
                             self.metadata.clone(),
                             true,
                         )?;
-                        if let Some(virtual_computed_expr) = column.virtual_computed_expr {
-                            let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
-                            let expr = parse_expr(&sql_tokens, self.dialect)?;
-                            return self.resolve(&expr);
-                        } else {
-                            let data_type = *column.data_type.clone();
-                            (
-                                BoundColumnRef {
-                                    span: *span,
-                                    column,
-                                }
-                                .into(),
-                                data_type,
-                            )
-                        }
+                        let data_type = *column.data_type.clone();
+                        (
+                            BoundColumnRef {
+                                span: *span,
+                                column,
+                            }
+                            .into(),
+                            data_type,
+                        )
                     }
                     NameResolutionResult::Alias { scalar, .. } => {
                         (scalar.clone(), scalar.data_type()?)
@@ -4668,28 +4659,6 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
-    async fn get_virtual_columns(
-        &self,
-        table_entry: &TableEntry,
-        table: Arc<dyn Table>,
-    ) -> Result<Option<HashMap<String, TableDataType>>> {
-        let table_id = table.get_id();
-        let req = ListVirtualColumnsReq::new(self.ctx.get_tenant(), Some(table_id));
-        let catalog = self.ctx.get_catalog(table_entry.catalog()).await?;
-
-        if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {
-            if !virtual_column_metas.is_empty() {
-                let mut virtual_column_name_map =
-                    HashMap::with_capacity(virtual_column_metas[0].virtual_columns.len());
-                for (name, typ) in virtual_column_metas[0].virtual_columns.iter() {
-                    virtual_column_name_map.insert(name.clone(), typ.clone());
-                }
-                return Ok(Some(virtual_column_name_map));
-            }
-        }
-        Ok(None)
-    }
-
     fn try_rewrite_virtual_column(
         &mut self,
         base_column: &BaseTableColumn,
@@ -4698,42 +4667,6 @@ impl<'a> TypeChecker<'a> {
         if !self.bind_context.virtual_column_context.allow_pushdown {
             return Ok(None);
         }
-
-        let metadata = self.metadata.read().clone();
-        let table_entry = metadata.table(base_column.table_index);
-
-        let table = table_entry.table();
-        // Ignore tables that do not support virtual columns
-        if !table.support_virtual_columns() {
-            return Ok(None);
-        }
-        let schema = table.schema();
-
-        if !self
-            .bind_context
-            .virtual_column_context
-            .table_indices
-            .contains(&base_column.table_index)
-        {
-            let virtual_column_name_map = databend_common_base::runtime::block_on(
-                self.get_virtual_columns(table_entry, table),
-            )?;
-            self.bind_context
-                .virtual_column_context
-                .table_indices
-                .insert(base_column.table_index);
-            if let Some(virtual_column_name_map) = virtual_column_name_map {
-                self.bind_context
-                    .virtual_column_context
-                    .virtual_column_names
-                    .insert(base_column.table_index, virtual_column_name_map);
-                self.bind_context
-                    .virtual_column_context
-                    .next_column_ids
-                    .insert(base_column.table_index, schema.next_column_id);
-            }
-        }
-
         if let Some(virtual_column_name_map) = self
             .bind_context
             .virtual_column_context
@@ -4762,7 +4695,11 @@ impl<'a> TypeChecker<'a> {
 
             let mut index = 0;
             // Check for duplicate virtual columns
-            for table_column in metadata.virtual_columns_by_table_index(base_column.table_index) {
+            for table_column in self
+                .metadata
+                .read()
+                .virtual_columns_by_table_index(base_column.table_index)
+            {
                 if table_column.name() == name {
                     index = table_column.index();
                     break;

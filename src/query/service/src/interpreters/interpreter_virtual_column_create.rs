@@ -73,6 +73,7 @@ impl Interpreter for CreateVirtualColumnInterpreter {
             create_option: self.plan.create_option,
             name_ident: VirtualColumnIdent::new(tenant, table_id),
             virtual_columns: self.plan.virtual_columns.clone(),
+            auto_generated: self.plan.auto_generated,
         };
 
         let handler = get_virtual_column_handler();

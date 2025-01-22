@@ -79,7 +79,7 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
                 column_name,
                 data_type,
                 path_indices,
-                virtual_computed_expr,
+                virtual_expr,
                 ..
             }) => {
                 let visibility = if path_indices.is_some() {
@@ -96,7 +96,7 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
                 .database_name(Some("default".to_string()))
                 .table_name(Some(table.name().to_string()))
                 .table_index(Some(table.index()))
-                .virtual_computed_expr(virtual_computed_expr.clone())
+                .virtual_expr(virtual_expr.clone())
                 .build()
             }
             _ => {

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
@@ -21,12 +24,17 @@ use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_with_options::check_with_opt_valid;
 use databend_common_catalog::table_with_options::get_with_opt_consume;
 use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_meta_app::schema::VirtualField;
+use databend_common_meta_types::MetaId;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -34,6 +42,9 @@ use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::optimizer::SExpr;
 use crate::BindContext;
+use crate::ColumnBindingBuilder;
+use crate::IndexType;
+use crate::Visibility;
 
 impl Binder {
     /// Bind a base table.
@@ -271,9 +282,9 @@ impl Binder {
             }
             _ => {
                 let table_index = self.metadata.write().add_table(
-                    catalog,
+                    catalog.clone(),
                     database.clone(),
-                    table_meta,
+                    table_meta.clone(),
                     table_name_alias,
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
@@ -291,6 +302,16 @@ impl Binder {
                 if let Some(alias) = alias {
                     bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
                 }
+
+                self.bind_table_virtual_column(
+                    &mut bind_context,
+                    table_meta.clone(),
+                    table_index,
+                    catalog.as_str(),
+                    database.as_str(),
+                    table_name.as_str(),
+                )?;
+
                 Ok((s_expr, bind_context))
             }
         }
@@ -317,5 +338,97 @@ impl Binder {
             },
             _ => Ok(()),
         }
+    }
+
+    fn bind_table_virtual_column(
+        &mut self,
+        bind_context: &mut BindContext,
+        table_meta: Arc<dyn Table>,
+        table_index: IndexType,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+    ) -> Result<()> {
+        if !bind_context.virtual_column_context.allow_pushdown {
+            return Ok(());
+        }
+        // Ignore tables that do not support virtual columns
+        if !table_meta.support_virtual_columns() {
+            return Ok(());
+        }
+
+        // If the table creates virtual columns, add the information to the context,
+        // the matched variant path expression will be converted to a virtual column
+        // and pushed down to the storage layer for reading to speed up the query.
+        let schema = table_meta.schema();
+        if !bind_context
+            .virtual_column_context
+            .table_indices
+            .contains(&table_index)
+        {
+            let table_id = table_meta.get_id();
+            let virtual_column_fields = databend_common_base::runtime::block_on(
+                self.get_virtual_columns(catalog_name, table_id),
+            )?;
+            bind_context
+                .virtual_column_context
+                .table_indices
+                .insert(table_index);
+            if let Some(virtual_column_fields) = virtual_column_fields {
+                let mut virtual_column_name_map =
+                    HashMap::with_capacity(virtual_column_fields.len());
+                for virtual_field in virtual_column_fields.into_iter() {
+                    // Add optional virtual column alias names.
+                    // Don't need to set the column index, as the virtual expr
+                    // will be parsed as an expression and then bind to virtual column.
+                    if let Some(alias_name) = virtual_field.alias_name {
+                        let virtual_column_binding = ColumnBindingBuilder::new(
+                            alias_name.clone(),
+                            0,
+                            Box::new(DataType::from(&virtual_field.data_type)),
+                            Visibility::InVisible,
+                        )
+                        .database_name(Some(database_name.to_string()))
+                        .table_name(Some(table_name.to_string()))
+                        .table_index(Some(table_index))
+                        .virtual_expr(Some(virtual_field.expr.clone()))
+                        .build();
+
+                        bind_context
+                            .virtual_column_context
+                            .virtual_columns
+                            .push(virtual_column_binding);
+                    }
+                    virtual_column_name_map.insert(virtual_field.expr, virtual_field.data_type);
+                }
+                bind_context
+                    .virtual_column_context
+                    .virtual_column_names
+                    .insert(table_index, virtual_column_name_map);
+                bind_context
+                    .virtual_column_context
+                    .next_column_ids
+                    .insert(table_index, schema.next_column_id);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn get_virtual_columns(
+        &self,
+        catalog_name: &str,
+        table_id: MetaId,
+    ) -> Result<Option<Vec<VirtualField>>> {
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
+        let req = ListVirtualColumnsReq::new(tenant, Some(table_id));
+
+        if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {
+            if !virtual_column_metas.is_empty() {
+                return Ok(Some(virtual_column_metas[0].virtual_columns.clone()));
+            }
+        }
+        Ok(None)
     }
 }
