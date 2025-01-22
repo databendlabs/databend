@@ -417,7 +417,8 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "57795da" }
 ethnum = { git = "https://github.com/ariesdevil/ethnum-rs", rev = "4cb05f1" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 # patched opendal which categories the XML dersierialization errors as recoverable
-opendal = { git = "https://github.com/datafuse-extras/opendal-for-release-v1.2.636", rev = "6c490a0" }
+opendal = { git = "https://github.com/datafuse-extras/opendal-for-release-v1.2.636", tag = "v0.49.0-xml-deser-retry" }
+
 
 # till new version(> 0.7) of opensrv released, locked on commit hash
 opensrv-mysql = { git = "https://github.com/databendlabs/opensrv", rev = "6cbb806" }
