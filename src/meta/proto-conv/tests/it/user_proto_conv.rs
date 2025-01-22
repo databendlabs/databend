@@ -321,6 +321,7 @@ pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
                 endpoint_url: "https://webhdfs.example.com".to_string(),
                 root: "/path/to/stage/files".to_string(),
                 delegation: "<delegation_token>".to_string(),
+                disable_list_batch: false,
             }),
         },
         is_temporary: false,

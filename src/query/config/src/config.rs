@@ -1190,6 +1190,14 @@ pub struct WebhdfsStorageConfig {
     #[clap(long = "storage-webhdfs-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub webhdfs_root: String,
+    /// Disable list batch if hdfs doesn't support yet.
+    #[clap(
+        long = "storage-webhdfs-disable-list-batch",
+        value_name = "VALUE",
+        default_value_t
+    )]
+    #[serde(rename = "disable_list_batch")]
+    pub webhdfs_disable_list_batch: bool,
 }
 
 impl Default for WebhdfsStorageConfig {
@@ -1214,6 +1222,7 @@ impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
             webhdfs_delegation: v.delegation,
             webhdfs_endpoint_url: v.endpoint_url,
             webhdfs_root: v.root,
+            webhdfs_disable_list_batch: v.disable_list_batch,
         }
     }
 }
@@ -1226,6 +1235,7 @@ impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
             delegation: value.webhdfs_delegation,
             endpoint_url: value.webhdfs_endpoint_url,
             root: value.webhdfs_root,
+            disable_list_batch: value.webhdfs_disable_list_batch,
         })
     }
 }
