@@ -3556,6 +3556,72 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
+pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
+    #[derive(Clone)]
+    enum ColumnConstraint {
+        Nullable(bool),
+        DefaultExpr(Box<Expr>),
+    }
+
+    let nullable = alt((
+        value(ColumnConstraint::Nullable(true), rule! { NULL }),
+        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
+    ));
+    let expr = alt((map(
+        rule! {
+            DEFAULT ~ ^#subexpr(NOT_PREC)
+        },
+        |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
+    ),));
+
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
+
+    map_res(
+        rule! {
+            #ident
+            ~ #type_name
+            ~ ( #nullable | #expr )*
+            ~ ( #comment )?
+            : "`<column name> <type> [DEFAULT <expr>] [COMMENT '<comment>']`"
+        },
+        |(name, data_type, constraints, comment)| {
+            let mut def = ColumnDefinition {
+                name,
+                data_type,
+                expr: None,
+                comment,
+            };
+            for constraint in constraints {
+                match constraint {
+                    ColumnConstraint::Nullable(nullable) => {
+                        if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
+                            || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
+                        {
+                            return Err(nom::Err::Failure(ErrorKind::Other(
+                                "ambiguous NOT NULL constraint",
+                            )));
+                        }
+                        if nullable {
+                            def.data_type = def.data_type.wrap_nullable();
+                        } else {
+                            def.data_type = def.data_type.wrap_not_null();
+                        }
+                    }
+                    ColumnConstraint::DefaultExpr(default_expr) => {
+                        def.expr = Some(ColumnExpr::Default(default_expr))
+                    }
+                }
+            }
+            Ok(def)
+        },
+    )(i)
+}
+
 pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
     let set_mask_policy = map(
         rule! {
@@ -3582,7 +3648,7 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
 
     let modify_column_type = map(
         rule! {
-            #column_def ~ ("," ~ COLUMN? ~ #column_def)*
+            #modify_column_type ~ ("," ~ COLUMN? ~ #modify_column_type)*
         },
         |(column_def, column_def_vec)| {
             let mut column_defs = vec![column_def];

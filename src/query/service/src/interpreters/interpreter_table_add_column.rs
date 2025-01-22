@@ -113,27 +113,21 @@ impl Interpreter for AddTableColumnInterpreter {
             .meta
             .add_column(&field, &self.plan.comment, index)?;
 
-        if let Some(ComputedExpr::Stored(stored_expr)) = field.computed_expr {
+        // if the new column is a stored computed field,
+        // need rebuild the table to generate stored computed column.
+        if let Some(ComputedExpr::Stored(_)) = field.computed_expr {
             let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
             let prev_snapshot_id = fuse_table
                 .read_table_snapshot()
                 .await
                 .map_or(None, |v| v.map(|snapshot| snapshot.snapshot_id));
 
-            let new_schema = table_info.meta.schema.remove_virtual_computed_fields();
-            let field_index = new_schema.index_of(&field.name)?;
-
+            // computed columns will generated from other columns.
+            let new_schema = table_info.meta.schema.remove_computed_fields();
             let query_fields = new_schema
                 .fields()
                 .iter()
-                .enumerate()
-                .map(|(index, field)| {
-                    if index == field_index {
-                        format!("{} AS `{}`", stored_expr, field.name)
-                    } else {
-                        format!("`{}`", field.name)
-                    }
-                })
+                .map(|field| format!("`{}`", field.name))
                 .collect::<Vec<_>>()
                 .join(", ");
 

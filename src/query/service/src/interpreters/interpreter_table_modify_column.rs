@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -148,7 +147,6 @@ impl ModifyTableColumnInterpreter {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
-
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
@@ -158,14 +156,17 @@ impl ModifyTableColumnInterpreter {
                     let _ = new_schema.drop_column(&field.name);
                     let _ = new_schema.add_column(field, i);
                 } else {
-                    new_schema.fields[i] = field.clone();
+                    // new field don't have `column_id`, assign field directly will cause `column_id` lost.
+                    new_schema.fields[i].data_type = field.data_type.clone();
+                    new_schema.fields[i].default_expr = field.default_expr.clone();
+                    new_schema.fields[i].computed_expr = field.computed_expr.clone();
                 }
                 if let Some(default_expr) = &field.default_expr {
                     let default_expr = default_expr.to_string();
                     new_schema.fields[i].default_expr = Some(default_expr);
                     let _ = field_default_value(self.ctx.clone(), &new_schema.fields[i])?;
                 }
-                if old_field.data_type != field.data_type && field.computed_expr.is_none() {
+                if old_field.data_type != field.data_type {
                     // Check if this column is referenced by computed columns.
                     let data_schema = DataSchema::from(&new_schema);
                     check_referenced_computed_columns(
@@ -264,88 +265,24 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // if alter column from string to binary in parquet, we don't need to rebuild table
-        let is_alter_column_string_to_binary = table.storage_format_as_parquet()
-            && schema
-                .fields()
-                .iter()
-                .zip(new_schema.fields())
-                .all(|(old_field, new_field)| {
-                    fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
-                        match (old_ty, new_ty) {
-                            (TableDataType::String, TableDataType::Binary) => true,
-                            (TableDataType::Nullable(old_ty), TableDataType::Nullable(new_ty)) => {
-                                is_string_to_binary(old_ty, new_ty)
-                            }
-                            (TableDataType::Map(old_ty), TableDataType::Map(new_ty)) => {
-                                is_string_to_binary(old_ty, new_ty)
-                            }
-                            (TableDataType::Array(old_ty), TableDataType::Array(new_ty)) => {
-                                is_string_to_binary(old_ty, new_ty)
-                            }
-                            (
-                                TableDataType::Tuple {
-                                    fields_type: old_tys,
-                                    ..
-                                },
-                                TableDataType::Tuple {
-                                    fields_type: new_tys,
-                                    ..
-                                },
-                            ) => {
-                                old_tys.len() == new_tys.len()
-                                    && old_tys
-                                        .iter()
-                                        .zip(new_tys)
-                                        .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
-                            }
-                            _ => false,
-                        }
-                    }
-
-                    let TableField {
-                        name: old_name,
-                        default_expr: old_default_expr,
-                        data_type: old_data_type,
-                        column_id: old_column_id,
-                        computed_expr: old_computed_expr,
-                    } = old_field;
-                    let TableField {
-                        name: new_name,
-                        default_expr: new_default_expr,
-                        data_type: new_data_type,
-                        column_id: new_column_id,
-                        computed_expr: new_computed_expr,
-                    } = new_field;
-                    old_name == new_name
-                        && old_default_expr == new_default_expr
-                        && old_column_id == new_column_id
-                        && old_computed_expr == new_computed_expr
-                        && (old_data_type == new_data_type
-                            || is_string_to_binary(&old_field.data_type, &new_field.data_type))
-                });
-
-        let new_schema_without_virtual_fields = new_schema.remove_virtual_computed_fields();
         let mut modified_field_indices = HashSet::new();
-        let mut modified_stored_field_indices = HashMap::new();
+        let new_schema_without_computed_fields = new_schema.remove_computed_fields();
         for (field, _) in field_and_comments {
-            if let Some(ComputedExpr::Virtual(_)) = field.computed_expr {
-                continue;
-            }
-            let field_index = new_schema_without_virtual_fields.index_of(&field.name)?;
-            if let Some(ComputedExpr::Stored(stored_expr)) = &field.computed_expr {
-                modified_stored_field_indices.insert(field_index, stored_expr.clone());
+            let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
+            let old_field = schema.field_with_name(&field.name)?;
+            let is_alter_column_string_to_binary =
+                is_string_to_binary(&old_field.data_type, &field.data_type);
+            // if alter column from string to binary in parquet, we don't need to rebuild table
+            if (table.storage_format_as_parquet() && is_alter_column_string_to_binary)
+                || old_field.data_type.remove_nullable() == field.data_type.remove_nullable()
+            {
                 continue;
             }
             modified_field_indices.insert(field_index);
         }
 
         table_info.meta.schema = new_schema.clone().into();
-
-        if is_alter_column_string_to_binary
-            && modified_field_indices.is_empty()
-            && modified_stored_field_indices.is_empty()
-        {
+        if modified_field_indices.is_empty() {
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;
 
@@ -363,14 +300,12 @@ impl ModifyTableColumnInterpreter {
         }
 
         // construct sql for selecting data from old table
-        let query_fields = new_schema_without_virtual_fields
+        let query_fields = new_schema_without_computed_fields
             .fields()
             .iter()
             .enumerate()
             .map(|(index, field)| {
-                if let Some(stored_expr) = modified_stored_field_indices.remove(&index) {
-                    format!("{} AS `{}`", stored_expr, field.name)
-                } else if modified_field_indices.contains(&index) {
+                if modified_field_indices.contains(&index) {
                     let old_field = schema.field_with_name(&field.name).unwrap();
                     // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
                     // the auto cast to fail.
@@ -511,7 +446,7 @@ impl ModifyTableColumnInterpreter {
             self.ctx.clone(),
             sql,
             table_info,
-            new_schema.into(),
+            new_schema_without_computed_fields.into(),
             prev_snapshot_id,
         )
         .await
@@ -675,6 +610,38 @@ impl Interpreter for ModifyTableColumnInterpreter {
     }
 }
 
+fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
+    match (old_ty, new_ty) {
+        (TableDataType::String, TableDataType::Binary) => true,
+        (TableDataType::Nullable(old_ty), TableDataType::Nullable(new_ty)) => {
+            is_string_to_binary(old_ty, new_ty)
+        }
+        (TableDataType::Map(old_ty), TableDataType::Map(new_ty)) => {
+            is_string_to_binary(old_ty, new_ty)
+        }
+        (TableDataType::Array(old_ty), TableDataType::Array(new_ty)) => {
+            is_string_to_binary(old_ty, new_ty)
+        }
+        (
+            TableDataType::Tuple {
+                fields_type: old_tys,
+                ..
+            },
+            TableDataType::Tuple {
+                fields_type: new_tys,
+                ..
+            },
+        ) => {
+            old_tys.len() == new_tys.len()
+                && old_tys
+                    .iter()
+                    .zip(new_tys)
+                    .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
+        }
+        _ => false,
+    }
+}
+
 pub(crate) async fn build_select_insert_plan(
     ctx: Arc<QueryContext>,
     sql: String,
@@ -685,7 +652,6 @@ pub(crate) async fn build_select_insert_plan(
     // 1. build plan by sql
     let mut planner = Planner::new(ctx.clone());
     let (plan, _extras) = planner.plan_sql(&sql).await?;
-
     let select_schema = plan.schema();
 
     // 2. build physical plan by plan
