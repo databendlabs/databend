@@ -41,10 +41,11 @@ use crate::plans::SortItem;
 pub struct RulePushDownRankLimitAggregate {
     id: RuleID,
     matchers: Vec<Matcher>,
+    max_limit: usize,
 }
 
 impl RulePushDownRankLimitAggregate {
-    pub fn new() -> Self {
+    pub fn new(max_limit: usize) -> Self {
         Self {
             id: RuleID::RulePushDownRankLimitAggregate,
             matchers: vec![
@@ -73,6 +74,7 @@ impl RulePushDownRankLimitAggregate {
                     }],
                 },
             ],
+            max_limit,
         }
     }
 
@@ -84,40 +86,44 @@ impl RulePushDownRankLimitAggregate {
         state: &mut TransformResult,
     ) -> databend_common_exception::Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
-        if let Some(mut count) = limit.limit {
-            count += limit.offset;
-            let agg = s_expr.child(0)?;
-            let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
-
-            let sort_items = agg_limit
-                .group_items
-                .iter()
-                .map(|g| SortItem {
-                    index: g.index,
-                    asc: true,
-                    nulls_first: false,
-                })
-                .collect::<Vec<_>>();
-            agg_limit.rank_limit = Some((sort_items.clone(), count));
-
-            let sort = Sort {
-                items: sort_items.clone(),
-                limit: Some(count),
-                after_exchange: None,
-                pre_projection: None,
-                window_partition: None,
-            };
-
-            let agg = SExpr::create_unary(
-                Arc::new(RelOperator::Aggregate(agg_limit)),
-                Arc::new(agg.child(0)?.clone()),
-            );
-            let sort = SExpr::create_unary(Arc::new(RelOperator::Sort(sort)), agg.into());
-            let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
-
-            result.set_applied_rule(&self.id);
-            state.add_result(result);
+        let Some(mut count) = limit.limit else {
+            return Ok(());
+        };
+        count += limit.offset;
+        if count > self.max_limit {
+            return Ok(());
         }
+        let agg = s_expr.child(0)?;
+        let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
+
+        let sort_items = agg_limit
+            .group_items
+            .iter()
+            .map(|g| SortItem {
+                index: g.index,
+                asc: true,
+                nulls_first: false,
+            })
+            .collect::<Vec<_>>();
+        agg_limit.rank_limit = Some((sort_items.clone(), count));
+
+        let sort = Sort {
+            items: sort_items.clone(),
+            limit: Some(count),
+            after_exchange: None,
+            pre_projection: None,
+            window_partition: None,
+        };
+
+        let agg = SExpr::create_unary(
+            Arc::new(RelOperator::Aggregate(agg_limit)),
+            Arc::new(agg.child(0)?.clone()),
+        );
+        let sort = SExpr::create_unary(Arc::new(RelOperator::Sort(sort)), agg.into());
+        let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
+
+        result.set_applied_rule(&self.id);
+        state.add_result(result);
         Ok(())
     }
 
@@ -137,53 +143,55 @@ impl RulePushDownRankLimitAggregate {
             _ => return Ok(()),
         };
 
+        let Some(limit) = sort.limit else {
+            return Ok(());
+        };
+
         let mut agg_limit: Aggregate = agg_limit_expr.plan().clone().try_into()?;
 
-        if let Some(limit) = sort.limit {
-            let is_order_subset = sort
-                .items
-                .iter()
-                .all(|k| agg_limit.group_items.iter().any(|g| g.index == k.index));
-
-            if !is_order_subset {
-                return Ok(());
-            }
-            let mut sort_items = Vec::with_capacity(agg_limit.group_items.len());
-            let mut not_found_sort_items = vec![];
-            for i in 0..agg_limit.group_items.len() {
-                let group_item = &agg_limit.group_items[i];
-                if let Some(sort_item) = sort.items.iter().find(|k| k.index == group_item.index) {
-                    sort_items.push(SortItem {
-                        index: group_item.index,
-                        asc: sort_item.asc,
-                        nulls_first: sort_item.nulls_first,
-                    });
-                } else {
-                    not_found_sort_items.push(SortItem {
-                        index: group_item.index,
-                        asc: true,
-                        nulls_first: false,
-                    });
-                }
-            }
-            sort_items.extend(not_found_sort_items);
-
-            agg_limit.rank_limit = Some((sort_items, limit));
-
-            let agg = SExpr::create_unary(
-                Arc::new(RelOperator::Aggregate(agg_limit)),
-                Arc::new(agg_limit_expr.child(0)?.clone()),
-            );
-
-            let mut result = if has_eval_scalar {
-                let eval_scalar = s_expr.child(0)?.replace_children(vec![Arc::new(agg)]);
-                s_expr.replace_children(vec![Arc::new(eval_scalar)])
-            } else {
-                s_expr.replace_children(vec![Arc::new(agg)])
-            };
-            result.set_applied_rule(&self.id);
-            state.add_result(result);
+        let is_order_subset = sort
+            .items
+            .iter()
+            .all(|k| agg_limit.group_items.iter().any(|g| g.index == k.index));
+        if !is_order_subset {
+            return Ok(());
         }
+
+        let mut sort_items = Vec::with_capacity(agg_limit.group_items.len());
+        let mut not_found_sort_items = vec![];
+        for i in 0..agg_limit.group_items.len() {
+            let group_item = &agg_limit.group_items[i];
+            if let Some(sort_item) = sort.items.iter().find(|k| k.index == group_item.index) {
+                sort_items.push(SortItem {
+                    index: group_item.index,
+                    asc: sort_item.asc,
+                    nulls_first: sort_item.nulls_first,
+                });
+            } else {
+                not_found_sort_items.push(SortItem {
+                    index: group_item.index,
+                    asc: true,
+                    nulls_first: false,
+                });
+            }
+        }
+        sort_items.extend(not_found_sort_items);
+
+        agg_limit.rank_limit = Some((sort_items, limit));
+
+        let agg = SExpr::create_unary(
+            Arc::new(RelOperator::Aggregate(agg_limit)),
+            Arc::new(agg_limit_expr.child(0)?.clone()),
+        );
+
+        let mut result = if has_eval_scalar {
+            let eval_scalar = s_expr.child(0)?.replace_children(vec![Arc::new(agg)]);
+            s_expr.replace_children(vec![Arc::new(eval_scalar)])
+        } else {
+            s_expr.replace_children(vec![Arc::new(agg)])
+        };
+        result.set_applied_rule(&self.id);
+        state.add_result(result);
         Ok(())
     }
 }
