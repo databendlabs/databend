@@ -107,7 +107,7 @@ impl IcebergTable {
     /// We will never persist the `engine_options` to storage, so it's safe to change the implementation.
     /// As long as you make sure both [`build_engine_options`] and [`parse_engine_options`] been updated.
     pub fn build_engine_options(table: &iceberg::table::Table) -> Result<BTreeMap<String, String>> {
-        let (file_io_scheme, file_io_props) = table.file_io().clone().into_props();
+        let (file_io_scheme, file_io_props) = table.file_io().clone().into_builder().into_parts();
         let file_io_props = serde_json::to_string(&file_io_props)?;
         let metadata_location = table
             .metadata_location()
