@@ -147,7 +147,7 @@ impl QueryPipelineExecutorBackground {
         let threads_barrier = Arc::new(Barrier::new(thread_num));
         for idx in 0..thread_num {
             #[allow(unused_mut)]
-            let mut name = format!("PipelineExecutor-{}", thread_num);
+            let mut name = format!("PipelineExecutor-{}", idx);
 
             #[cfg(debug_assertions)]
             {
@@ -177,7 +177,7 @@ impl QueryPipelineExecutorBackground {
                     }
                 });
 
-                if let Err(cause) = query_handle.run_query_worker(idx) {
+                if let Err(cause) = query_handle.run_query_worker(idx, thread_num) {
                     // We will ignore the abort query error, because returned by finished_error if abort query.
                     if cause.code() == ErrorCode::ABORTED_QUERY {
                         return;
@@ -224,7 +224,7 @@ impl QueryPipelineHandle {
         })
     }
 
-    unsafe fn init_schedule(self: &Arc<Self>) -> Result<()> {
+    unsafe fn init_schedule(self: &Arc<Self>, threads: usize) -> Result<()> {
         let mut on_init_callback = self.on_init_callback.lock();
 
         if let Some(on_init_callback) = on_init_callback.take() {
@@ -255,8 +255,7 @@ impl QueryPipelineHandle {
                 return Err(cause.add_message_back("(while in query pipeline init)"));
             }
 
-            let threads_num = self.settings.max_threads as usize;
-            let mut init_schedule_queue = self.graph.init_schedule_queue(threads_num)?;
+            let mut init_schedule_queue = self.graph.init_schedule_queue(threads)?;
 
             let mut wakeup_worker_id = 0;
             while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
@@ -270,7 +269,7 @@ impl QueryPipelineHandle {
                 );
                 wakeup_worker_id += 1;
 
-                if wakeup_worker_id == threads_num {
+                if wakeup_worker_id == threads {
                     wakeup_worker_id = 0;
                 }
             }
@@ -302,12 +301,12 @@ impl QueryPipelineHandle {
         Ok(())
     }
 
-    pub unsafe fn run_query_worker(self: &Arc<Self>, worker_num: usize) -> Result<()> {
-        self.init_schedule()?;
+    pub unsafe fn run_query_worker(self: &Arc<Self>, worker: usize, threads: usize) -> Result<()> {
+        self.init_schedule(threads)?;
 
         let mut node_index = NodeIndex::new(0);
         let workers_condvar = self.workers_condvar.clone();
-        let mut context = ExecutorWorkerContext::create(worker_num, workers_condvar);
+        let mut context = ExecutorWorkerContext::create(worker, workers_condvar);
 
         let execute_result = catch_unwind({
             let node_index = &mut node_index;
