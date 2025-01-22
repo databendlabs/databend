@@ -127,9 +127,10 @@ impl UDFFlightClient {
     ) -> Result<Self> {
         for (key, value) in headers.into_iter() {
             let key = MetadataKey::from_str(key)
-                .map_err(|err| ErrorCode::UDFDataError(format!("Parse key error: {err}")))?;
-            let value = MetadataValue::from_str(value)
-                .map_err(|err| ErrorCode::UDFDataError(format!("Parse value error: {err}")))?;
+                .map_err(|err| ErrorCode::UDFDataError(format!("Parse key {key} error: {err}")))?;
+            let value = MetadataValue::from_str(value).map_err(|err| {
+                ErrorCode::UDFDataError(format!("Parse value {value} error: {err}"))
+            })?;
             self.headers.insert(key, value);
         }
         Ok(self)
