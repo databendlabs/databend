@@ -419,7 +419,6 @@ openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev =
 # patched opendal which categories the XML dersierialization errors as recoverable
 opendal = { git = "https://github.com/datafuse-extras/opendal-for-release-v1.2.636", tag = "v0.49.0-xml-deser-retry" }
 
-
 # till new version(> 0.7) of opensrv released, locked on commit hash
 opensrv-mysql = { git = "https://github.com/databendlabs/opensrv", rev = "6cbb806" }
 orc-rust = { git = "https://github.com/youngsofun/datafusion-orc", rev = "1745375" }
