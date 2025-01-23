@@ -163,7 +163,7 @@ impl QueryPipelineExecutorBackground {
             let threads_barrier = threads_barrier.clone();
             let query_handle = query_handle.clone();
             Thread::named_spawn(Some(name), move || unsafe {
-                let _exit_guard = defer({
+                let _shutdown_guard = defer({
                     let query_handle = query_handle.clone();
 
                     move || {
