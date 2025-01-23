@@ -24,6 +24,15 @@ pub struct ProgressValues {
     pub bytes: usize,
 }
 
+impl ProgressValues {
+    pub fn add(&self, other: &ProgressValues) -> ProgressValues {
+        ProgressValues {
+            rows: self.rows + other.rows,
+            bytes: self.bytes + other.bytes,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Progress {
     rows: AtomicUsize,
