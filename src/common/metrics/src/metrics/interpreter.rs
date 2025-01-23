@@ -41,6 +41,8 @@ const METRIC_QUERY_RESULT_BYTES: &str = "query_result_bytes";
 
 pub const METRIC_QUERY_SCAN_PROGRESS_ROWS: &str = "query_scan_progress_rows";
 pub const METRIC_QUERY_SCAN_PROGRESS_BYTES: &str = "query_scan_progress_bytes";
+pub const METRIC_QUERY_WRITE_PROGRESS_ROWS: &str = "query_write_progress_rows";
+pub const METRIC_QUERY_WRITE_PROGRESS_BYTES: &str = "query_write_progress_bytes";
 
 pub static QUERY_START: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_START));
