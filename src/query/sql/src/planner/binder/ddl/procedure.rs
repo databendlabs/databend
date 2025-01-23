@@ -18,6 +18,7 @@ use databend_common_ast::ast::CreateProcedureStmt;
 use databend_common_ast::ast::DescProcedureStmt;
 use databend_common_ast::ast::DropProcedureStmt;
 use databend_common_ast::ast::ExecuteImmediateStmt;
+use databend_common_ast::ast::ProcedureIdentity as AstProcedureIdentity;
 use databend_common_ast::ast::ProcedureLanguage;
 use databend_common_ast::ast::ProcedureType;
 use databend_common_ast::ast::ShowOptions;
@@ -28,6 +29,7 @@ use databend_common_meta_app::principal::GetProcedureReq;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureMeta;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::UserApiProvider;
 
 use crate::binder::show::get_show_options;
@@ -39,6 +41,7 @@ use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::SubqueryType;
 use crate::resolve_type_name;
+use crate::resolve_type_name_by_str;
 use crate::BindContext;
 use crate::Binder;
 use crate::ScalarExpr;
@@ -73,10 +76,11 @@ impl Binder {
         // 2. need check script's return type and stmt.return_type
 
         let meta = self.procedure_meta(return_type, script, comment, language, args)?;
+
         Ok(Plan::CreateProcedure(Box::new(CreateProcedurePlan {
             create_option: create_option.clone().into(),
             tenant: tenant.to_owned(),
-            name: ProcedureNameIdent::new(&tenant, ProcedureIdentity::from(name.clone())),
+            name: generate_procedure_name_ident(&tenant, name)?,
             meta,
         })))
     }
@@ -88,7 +92,8 @@ impl Binder {
         Ok(Plan::DropProcedure(Box::new(DropProcedurePlan {
             if_exists: *if_exists,
             tenant: tenant.to_owned(),
-            name: ProcedureNameIdent::new(tenant, ProcedureIdentity::from(name.clone())),
+            name: generate_procedure_name_ident(&tenant, name)?,
+            old_name: ProcedureNameIdent::new(tenant, ProcedureIdentity::from(name.clone())),
         })))
     }
 
@@ -208,4 +213,30 @@ impl Binder {
             },
         })
     }
+}
+
+fn generate_procedure_name_ident(
+    tenant: &Tenant,
+    name: &AstProcedureIdentity,
+) -> Result<ProcedureNameIdent> {
+    if name.args_type.is_empty() {
+        return Ok(ProcedureNameIdent::new(tenant, name.clone().into()));
+    }
+
+    let mut args_type = vec![];
+    for arg in name.args_type.split(',') {
+        args_type.push(DataType::from(&resolve_type_name_by_str(arg, true)?));
+    }
+    let new_name = databend_common_ast::ast::ProcedureIdentity {
+        name: name.name.to_string(),
+        args_type: args_type
+            .iter()
+            .map(|arg| arg.to_string())
+            .collect::<Vec<String>>()
+            .join(","),
+    };
+    Ok(ProcedureNameIdent::new(
+        tenant,
+        ProcedureIdentity::from(new_name),
+    ))
 }
