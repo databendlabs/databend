@@ -103,7 +103,7 @@ impl FixedLengthEncoding for months_days_micros {
     type Encoded = [u8; 8];
 
     fn encode(self) -> [u8; 8] {
-        self.total_micros().to_be_bytes()
+        self.total_micros().encode()
     }
 }
 

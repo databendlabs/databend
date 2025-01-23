@@ -141,6 +141,10 @@ where
             }
         }
 
+        if self.is_finished() {
+            return Ok(vec![]);
+        }
+
         Ok(self.build_task())
     }
 
