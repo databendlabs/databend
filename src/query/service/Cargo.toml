@@ -178,6 +178,7 @@ url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { workspace = true }
+prometheus-client = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
