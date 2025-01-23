@@ -73,7 +73,7 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::read_block;
 use crate::operations::replace_into::meta::DeletionByColumn;
-use crate::operations::replace_into::meta::MergeIntoOperation;
+use crate::operations::replace_into::meta::ReplaceIntoOperation;
 use crate::operations::replace_into::meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::row_hash_of_columns;
 use crate::operations::replace_into::mutator::DeletionAccumulator;
@@ -104,12 +104,12 @@ struct AggregationContext {
 }
 
 // Apply MergeIntoOperations to segments
-pub struct MergeIntoOperationAggregator {
+pub struct ReplaceIntoOperationAggregator {
     deletion_accumulator: DeletionAccumulator,
     aggregation_ctx: Arc<AggregationContext>,
 }
 
-impl MergeIntoOperationAggregator {
+impl ReplaceIntoOperationAggregator {
     #[allow(clippy::too_many_arguments)] // TODO fix this
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
@@ -216,15 +216,15 @@ impl MergeIntoOperationAggregator {
 }
 
 // aggregate mutations (currently, deletion only)
-impl MergeIntoOperationAggregator {
+impl ReplaceIntoOperationAggregator {
     #[async_backtrace::framed]
-    pub async fn accumulate(&mut self, merge_into_operation: MergeIntoOperation) -> Result<()> {
+    pub async fn accumulate(&mut self, replace_into_operation: ReplaceIntoOperation) -> Result<()> {
         let aggregation_ctx = &self.aggregation_ctx;
         metrics_inc_replace_number_accumulated_merge_action();
 
         let start = Instant::now();
-        match merge_into_operation {
-            MergeIntoOperation::Delete(partitions) => {
+        match replace_into_operation {
+            ReplaceIntoOperation::Delete(partitions) => {
                 for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
                     // segment level
                     let load_param = LoadParams {
@@ -280,7 +280,7 @@ impl MergeIntoOperationAggregator {
                     }
                 }
             }
-            MergeIntoOperation::None => {}
+            ReplaceIntoOperation::None => {}
         }
 
         metrics_inc_replace_accumulated_merge_action_time_ms(start.elapsed().as_millis() as u64);
@@ -289,7 +289,7 @@ impl MergeIntoOperationAggregator {
 }
 
 // apply the mutations and generate mutation log
-impl MergeIntoOperationAggregator {
+impl ReplaceIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
         metrics_inc_replace_number_apply_deletion();
