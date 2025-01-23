@@ -3,6 +3,7 @@ use std::sync::Arc;
 use databend_common_metrics::interpreter::METRIC_QUERY_SCAN_PROGRESS_BYTES;
 use databend_common_metrics::interpreter::METRIC_QUERY_SCAN_PROGRESS_ROWS;
 use prometheus_client::collector::Collector;
+use prometheus_client::encoding::EncodeMetric;
 use prometheus_client::metrics::counter::ConstCounter;
 
 use super::SessionManager;
@@ -12,8 +13,8 @@ pub struct SessionManagerMetricsCollector {
 }
 
 impl SessionManagerMetricsCollector {
-    pub fn new(session_mgr: Arc<SessionManager>) -> Box<Self> {
-        Box::new(Self { session_mgr })
+    pub fn new(session_mgr: Arc<SessionManager>) -> Self {
+        Self { session_mgr }
     }
 }
 

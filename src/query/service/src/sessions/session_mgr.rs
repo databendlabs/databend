@@ -24,6 +24,7 @@ use std::time::Duration;
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
+use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_catalog::table_context::ProcessInfoState;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -38,6 +39,7 @@ use log::info;
 use parking_lot::RwLock;
 
 use crate::sessions::session::Session;
+use crate::sessions::session_mgr_metrics::SessionManagerMetricsCollector;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
@@ -56,6 +58,9 @@ pub struct SessionManager {
 impl SessionManager {
     pub fn init(conf: &InnerConfig) -> Result<()> {
         GlobalInstance::set(Self::create(conf));
+        GLOBAL_METRICS_REGISTRY.register_collector(Box::new(SessionManagerMetricsCollector::new(
+            GlobalInstance::get(),
+        )));
 
         Ok(())
     }
