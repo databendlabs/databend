@@ -24,7 +24,7 @@ use databend_common_exception::Result;
 use log::info;
 use parking_lot::RwLock;
 
-use crate::caches::{BlockMetaCache, SegmentBlockMetasCache};
+use crate::caches::BlockMetaCache;
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
@@ -34,6 +34,7 @@ use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::ParquetMetaDataCache;
 use crate::caches::PrunePartitionsCache;
+use crate::caches::SegmentBlockMetasCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::InMemoryLruCache;
