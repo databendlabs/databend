@@ -1193,6 +1193,21 @@ impl<'a> TypeChecker<'a> {
 
         let frame =
             self.resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())?;
+
+        if matches!(&frame.start_bound, WindowFuncFrameBound::Following(None)) {
+            return Err(ErrorCode::SemanticError(
+                "Frame start cannot be UNBOUNDED FOLLOWING".to_string(),
+            )
+            .set_span(span));
+        }
+
+        if matches!(&frame.end_bound, WindowFuncFrameBound::Preceding(None)) {
+            return Err(ErrorCode::SemanticError(
+                "Frame end cannot be UNBOUNDED PRECEDING".to_string(),
+            )
+            .set_span(span));
+        }
+
         let data_type = func.return_type();
         let window_func = WindowFunc {
             span,
@@ -1729,19 +1744,14 @@ impl<'a> TypeChecker<'a> {
             && arguments.len() == 2
             && params.is_empty()
         {
-            let max_num_buckets = ConstantExpr::try_from(arguments[1].clone());
+            let max_num_buckets: u64 = check_number(
+                None,
+                &FunctionContext::default(),
+                &arguments[1].as_expr()?,
+                &BUILTIN_FUNCTIONS,
+            )?;
 
-            let is_positive_integer = match &max_num_buckets {
-                Ok(v) => v.value.is_positive(),
-                Err(_) => false,
-            } && arg_types[1].is_integer();
-            if !is_positive_integer {
-                return Err(ErrorCode::SemanticError(
-                    "The max_num_buckets of `histogram` must be a constant positive int",
-                ));
-            }
-
-            vec![max_num_buckets.unwrap().value]
+            vec![Scalar::Number(NumberScalar::UInt64(max_num_buckets))]
         } else {
             params
         };

@@ -13,6 +13,9 @@ CREATE DATABASE db2;
 statement ok
 USE db1;
 
+statement error 1065
+explain VALUES(2), (3), (COUNT(*) OVER ()), (4), (5)
+
 statement ok
 CREATE TABLE IF NOT EXISTS t1(a Int8 null, b UInt32 null, c Date null, d DateTime null, e String null, f Float64 null) Engine = Fuse
 
@@ -33,6 +36,7 @@ select sum(a),sum(b) from t1
 ----
 401 367
 
+
 statement ok
 CREATE TABLE IF NOT EXISTS t_str(a Varchar)
 
@@ -41,6 +45,9 @@ INSERT INTO t_str(a) values( 'a"b\"c\'d')
 
 statement ok
 INSERT INTO t_str(a) values( 'a"b\"c\\\'d')
+
+statement error (?s)1005
+INSERT INTO t_str values('aaa','bbb'''sssd...);
 
 onlyif mysql
 query T
@@ -108,6 +115,13 @@ query TTTI
 select max(column1), max(column2), max(column3), count() from my_table
 ----
 value9_1 value9_2 value9_3 32
+
+statement error (?s)1005(.*)unexpected `AS`
+INSERT INTO my_table (column1, column2, column3) VALUES (
+  Rand() AS string, -- c24
+  Rand() AS string, -- c25
+  Rand() AS string  -- c26
+);
 
 statement ok
 drop table my_table

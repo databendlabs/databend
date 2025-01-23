@@ -76,7 +76,7 @@ INSERT INTO t0(c2varchar, c1varchar) VALUES ('diu7Pk', '')
 statement error 1065
 INSERT INTO t0(c2varchar) VALUES (max('1'))
 
-statement error 1065
+statement error 1005
 INSERT INTO t0(c2varchar) VALUES (max('1') partition by('1'))
 
 statement error 1065

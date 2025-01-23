@@ -277,19 +277,16 @@ impl PhysicalPlanBuilder {
 
                         let keys = {
                             let schema = aggregate_partial.output_schema()?;
-                            let start = aggregate_partial.agg_funcs.len();
                             let end = schema.num_fields();
-                            let mut groups = Vec::with_capacity(end - start);
-                            for idx in start..end {
-                                let group_key = RemoteExpr::ColumnRef {
+                            let start = end - aggregate_partial.group_by.len();
+                            (start..end)
+                                .map(|id| RemoteExpr::ColumnRef {
                                     span: None,
-                                    id: idx,
-                                    data_type: schema.field(idx).data_type().clone(),
-                                    display_name: (idx - start).to_string(),
-                                };
-                                groups.push(group_key);
-                            }
-                            groups
+                                    id,
+                                    data_type: schema.field(id).data_type().clone(),
+                                    display_name: (id - start).to_string(),
+                                })
+                                .collect()
                         };
 
                         PhysicalPlan::Exchange(Exchange {

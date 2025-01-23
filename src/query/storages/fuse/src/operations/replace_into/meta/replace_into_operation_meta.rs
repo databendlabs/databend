@@ -19,14 +19,8 @@ use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 
-// This mod need to be refactored, since it not longer aiming to be
-// used in the implementation of `MERGE INTO` statement in the future.
-//
-// unfortunately, distributed `replace-into` is being implemented in parallel,
-// to avoid the potential heavy merge conflicts, the refactoring is postponed.
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub enum MergeIntoOperation {
+pub enum ReplaceIntoOperation {
     Delete(Vec<DeletionByColumn>),
     None,
 }
@@ -43,8 +37,8 @@ pub struct DeletionByColumn {
     pub bloom_hashes: Vec<RowBloomHashes>,
 }
 
-#[typetag::serde(name = "merge_into_operation_meta")]
-impl BlockMetaInfo for MergeIntoOperation {
+#[typetag::serde(name = "replace_into_operation_meta")]
+impl BlockMetaInfo for ReplaceIntoOperation {
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
         Self::downcast_ref_from(info).is_some_and(|other| self == other)
     }
@@ -54,16 +48,16 @@ impl BlockMetaInfo for MergeIntoOperation {
     }
 }
 
-impl TryFrom<DataBlock> for MergeIntoOperation {
+impl TryFrom<DataBlock> for ReplaceIntoOperation {
     type Error = ErrorCode;
 
     fn try_from(value: DataBlock) -> Result<Self, Self::Error> {
         let meta = value.get_owned_meta().ok_or_else(|| {
             ErrorCode::Internal(
-                "convert MergeIntoOperation from data block failed, no block meta found",
+                "convert ReplaceIntoOperation from data block failed, no block meta found",
             )
         })?;
-        MergeIntoOperation::downcast_from(meta).ok_or_else(|| {
+        ReplaceIntoOperation::downcast_from(meta).ok_or_else(|| {
             ErrorCode::Internal(
                 "downcast block meta to MutationIntoOperation failed, type mismatch",
             )

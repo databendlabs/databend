@@ -39,6 +39,7 @@
 #![feature(try_blocks)]
 #![feature(let_chains)]
 #![feature(trait_upcasting)]
+#![feature(alloc_layout_extra)]
 
 #[allow(dead_code)]
 mod block;

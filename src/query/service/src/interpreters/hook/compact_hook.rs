@@ -203,6 +203,7 @@ async fn compact_table(
                     &compact_target.database,
                     &compact_target.table,
                 )?;
+                ctx.set_enable_sort_spill(false);
                 let recluster = RelOperator::Recluster(Recluster {
                     catalog: compact_target.catalog,
                     database: compact_target.database,

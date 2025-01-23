@@ -3274,6 +3274,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "pretty_assertions",
+ "proptest",
  "rand",
  "recursive",
  "roaring",
@@ -3307,6 +3308,7 @@ dependencies = [
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "geozero",
+ "goldenfile",
  "hex",
  "jiff",
  "jsonb",
@@ -3397,7 +3399,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "hickory-resolver",
- "hyper 0.14.30",
  "hyper 1.4.1",
  "hyper-util",
  "jwt-simple",
@@ -4161,7 +4162,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "siphasher",
- "sys-info",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",
@@ -10227,7 +10227,7 @@ dependencies = [
 [[package]]
 name = "object_store_opendal"
 version = "0.49.0"
-source = "git+https://github.com/apache/opendal?rev=78b6a9f#78b6a9f26dbeb5118990d3140f1c636d8e54e719"
+source = "git+https://github.com/apache/opendal?rev=b8a3b7a#b8a3b7aa093d8695d89d579e146907850bb6565c"
 dependencies = [
  "async-trait",
  "bytes",
@@ -10308,7 +10308,7 @@ dependencies = [
 [[package]]
 name = "opendal"
 version = "0.51.1"
-source = "git+https://github.com/apache/opendal?rev=78b6a9f#78b6a9f26dbeb5118990d3140f1c636d8e54e719"
+source = "git+https://github.com/apache/opendal?rev=b8a3b7a#b8a3b7aa093d8695d89d579e146907850bb6565c"
 dependencies = [
  "anyhow",
  "async-backtrace",

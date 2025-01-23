@@ -121,4 +121,11 @@ pub struct SqlLogicTestArgs {
         help = "Specify the database to connnect, the default database is 'default'"
     )]
     pub database: String,
+
+    #[arg(
+        long = "port",
+        default_value = "8000",
+        help = "The databend server http port"
+    )]
+    pub port: u16,
 }
