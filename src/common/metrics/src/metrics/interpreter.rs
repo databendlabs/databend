@@ -32,14 +32,15 @@ const METRIC_QUERY_WRITE_IO_BYTES: &str = "query_write_io_bytes";
 const METRIC_QUERY_WRITE_IO_BYTES_COST_MS: &str = "query_write_io_bytes_cost_ms";
 const METRIC_QUERY_SCAN_ROWS: &str = "query_scan_rows";
 const METRIC_QUERY_SCAN_BYTES: &str = "query_scan_bytes";
-const METRIC_QUERY_SCAN_PROGRESS_ROWS: &str = "query_scan_progress_rows";
-const METRIC_QUERY_SCAN_PROGRESS_BYTES: &str = "query_scan_progress_bytes";
 const METRIC_QUERY_SCAN_IO_BYTES: &str = "query_scan_io_bytes";
 const METRIC_QUERY_SCAN_IO_BYTES_COST_MS: &str = "query_scan_io_bytes_cost_ms";
 const METRIC_QUERY_SCAN_PARTITIONS: &str = "query_scan_partitions";
 const METRIC_QUERY_TOTAL_PARTITIONS: &str = "query_total_partitions";
 const METRIC_QUERY_RESULT_ROWS: &str = "query_result_rows";
 const METRIC_QUERY_RESULT_BYTES: &str = "query_result_bytes";
+
+pub const METRIC_QUERY_SCAN_PROGRESS_ROWS: &str = "query_scan_progress_rows";
+pub const METRIC_QUERY_SCAN_PROGRESS_BYTES: &str = "query_scan_progress_bytes";
 
 pub static QUERY_START: LazyLock<FamilyCounter<VecLabels>> =
     LazyLock::new(|| register_counter_family(METRIC_QUERY_START));

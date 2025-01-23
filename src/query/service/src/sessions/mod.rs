@@ -19,7 +19,7 @@ mod queue_mgr;
 mod session;
 mod session_ctx;
 mod session_info;
-mod session_metrics_collector;
+mod session_mgr_metrics;
 mod session_mgr;
 mod session_mgr_status;
 mod session_privilege_mgr;
