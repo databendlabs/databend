@@ -15,11 +15,14 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::atomic::AtomicI64;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bytesize::ByteSize;
 use log::info;
+
+use crate::runtime::memory::stat_buffer::BYTES_BUCKET;
 
 /// The program mem stat
 ///
@@ -45,6 +48,9 @@ pub struct MemStat {
     /// Set to 0 to disable the limit.
     limit: AtomicI64,
 
+    // histogram for alloc
+    bytes_bucket: [AtomicUsize; 23],
+
     parent_memory_stat: Vec<Arc<MemStat>>,
 }
 
@@ -56,6 +62,31 @@ impl MemStat {
             limit: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
             parent_memory_stat: vec![],
+            bytes_bucket: [
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+            ],
         }
     }
 
@@ -70,7 +101,40 @@ impl MemStat {
             limit: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
             parent_memory_stat,
+            bytes_bucket: [
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+            ],
         })
+    }
+
+    pub fn get_memory_alloc_buckets(&self) -> Vec<(usize, usize)> {
+        let mut res = Vec::with_capacity(23);
+        for (count, size) in self.bytes_bucket.iter().zip(BYTES_BUCKET) {
+            res.push((size, count.load(Ordering::Relaxed)));
+        }
+        res
     }
 
     pub fn get_parent_memory_stat(&self) -> Vec<Arc<MemStat>> {
@@ -84,6 +148,12 @@ impl MemStat {
         }
 
         self.limit.store(size, Ordering::Relaxed);
+    }
+
+    pub fn record_bytes_buckets(&self, buckets: [usize; 23]) {
+        for (idx, bucket) in buckets.into_iter().enumerate() {
+            self.bytes_bucket[idx].fetch_add(bucket, Ordering::Relaxed);
+        }
     }
 
     /// Feed memory usage stat to MemStat and return if it exceeds the limit.

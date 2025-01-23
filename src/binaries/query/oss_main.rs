@@ -17,9 +17,13 @@
 
 mod entry;
 
+use std::time::Duration;
+
+use databend_common_base::base::convert_byte_size;
 use databend_common_base::mem_allocator::GlobalAllocator;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -63,6 +67,18 @@ fn main() {
 }
 
 async fn main_entrypoint() -> Result<(), MainError> {
+    databend_common_base::runtime::spawn(async {
+        loop {
+            let buckets = GLOBAL_MEM_STAT.get_memory_alloc_buckets();
+
+            for (size, count) in buckets {
+                log::info!("Memory alloc {}, {}", convert_byte_size(size as f64), count);
+            }
+
+            tokio::time::sleep(Duration::from_secs(60)).await;
+        }
+    });
+
     let make_error = || "an fatal error occurred in query";
 
     let conf: InnerConfig = InnerConfig::load().await.with_context(make_error)?;

@@ -26,6 +26,11 @@ static mut STAT_BUFFER: StatBuffer = StatBuffer::empty(&GLOBAL_MEM_STAT);
 
 static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
 
+pub static BYTES_BUCKET: [usize; 23] = [
+    2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072,
+    262144, 524288, 1048576, 2097152, 4194304, 8388608,
+];
+
 /// Buffering memory allocation stats.
 ///
 /// A StatBuffer buffers stats changes in local variables, and periodically flush them to other storage such as an `Arc<T>` shared by several threads.
@@ -36,6 +41,7 @@ pub struct StatBuffer {
     unlimited_flag: bool,
     global_mem_stat: &'static MemStat,
     destroyed_thread_local_macro: bool,
+    bytes_buckets: [usize; 23],
 }
 
 impl StatBuffer {
@@ -45,6 +51,7 @@ impl StatBuffer {
             global_mem_stat,
             unlimited_flag: false,
             destroyed_thread_local_macro: false,
+            bytes_buckets: [0; 23],
         }
     }
 
@@ -75,6 +82,8 @@ impl StatBuffer {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
             usage => {
+                let buckets = std::mem::take(&mut self.bytes_buckets);
+                self.global_mem_stat.record_bytes_buckets(buckets);
                 if let Err(e) = self.global_mem_stat.record_memory::<ROLLBACK>(usage, alloc) {
                     if !ROLLBACK {
                         let _ = ThreadTracker::record_memory::<false>(usage, alloc);
@@ -98,6 +107,10 @@ impl StatBuffer {
     pub fn alloc(&mut self, memory_usage: i64) -> std::result::Result<(), OutOfLimit> {
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
         // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
+
+        let idx = BYTES_BUCKET.iter().position(|x| memory_usage < *x as i64);
+        self.bytes_buckets[idx.unwrap_or(22)] += 1;
+
         if self.destroyed_thread_local_macro {
             let used = self
                 .global_mem_stat
