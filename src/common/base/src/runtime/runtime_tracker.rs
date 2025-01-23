@@ -43,9 +43,11 @@
 //! and will be restored when `poll()` returns.
 
 use std::alloc::AllocError;
+use std::alloc::Layout;
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
+use std::ptr::NonNull;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
@@ -222,6 +224,58 @@ impl ThreadTracker {
             borrow_mut.out_of_limit_desc = desc;
             old
         })
+    }
+
+    pub fn pack_layout(layout: Layout) -> Layout {
+        if layout.size() <= 512 {
+            return layout;
+        }
+
+        unsafe {
+            Layout::from_size_align_unchecked(layout.size() + size_of::<usize>(), layout.align())
+        }
+    }
+
+    pub fn pack_tracker(layout: Layout, pack_ptr: NonNull<[u8]>) -> NonNull<[u8]> {
+        if layout.size() <= 512 {
+            return pack_ptr;
+        }
+
+        unsafe {
+            let addr = pack_ptr.as_non_null_ptr();
+            addr.add(layout.size()).cast::<usize>().write(1);
+            NonNull::from_raw_parts(pack_ptr.to_raw_parts().0, layout.size())
+        }
+    }
+
+    pub fn grow_pack(old: Layout, new: Layout, ptr: NonNull<[u8]>) -> NonNull<[u8]> {
+        unsafe {
+            let address = ptr.as_non_null_ptr();
+
+            let mut old_ptr = address.add(old.size());
+            let mut new_ptr = address.add(new.size());
+
+            for _idx in 0..size_of::<usize>() {
+                std::ptr::swap(old_ptr.as_mut(), new_ptr.as_mut());
+                old_ptr = old_ptr.add(1);
+                new_ptr = new_ptr.add(1);
+            }
+
+            NonNull::from_raw_parts(ptr.to_raw_parts().0, new.size())
+        }
+    }
+
+    pub fn shrink_pack(old: Layout, new: Layout, ptr: NonNull<u8>) {
+        unsafe {
+            let mut old_ptr = ptr.add(old.size());
+            let mut new_ptr = ptr.add(new.size());
+
+            for _idx in 0..size_of::<usize>() {
+                std::ptr::swap(old_ptr.as_mut(), new_ptr.as_mut());
+                old_ptr = old_ptr.add(1);
+                new_ptr = new_ptr.add(1);
+            }
+        }
     }
 
     /// Accumulate stat about allocated memory.

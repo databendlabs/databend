@@ -36,59 +36,89 @@ impl StdAllocator {
 
 unsafe impl Allocator for StdAllocator {
     #[inline(always)]
-    fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+    fn allocate(&self, raw_layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        let layout = ThreadTracker::pack_layout(raw_layout);
         ThreadTracker::alloc(layout.size() as i64)?;
-        System.allocate(layout)
+        let allocate_ptr = System.allocate(layout)?;
+        Ok(ThreadTracker::pack_tracker(raw_layout, allocate_ptr))
     }
 
     #[inline(always)]
-    fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+    fn allocate_zeroed(&self, raw_layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        let layout = ThreadTracker::pack_layout(raw_layout);
         ThreadTracker::alloc(layout.size() as i64)?;
-        System.allocate_zeroed(layout)
+        let allocate_ptr = System.allocate_zeroed(layout)?;
+        Ok(ThreadTracker::pack_tracker(raw_layout, allocate_ptr))
     }
 
     #[inline(always)]
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+    unsafe fn deallocate(&self, ptr: NonNull<u8>, raw_layout: Layout) {
+        let layout = ThreadTracker::pack_layout(raw_layout);
         ThreadTracker::dealloc(layout.size() as i64);
-        System.deallocate(ptr, layout)
+        System.deallocate(ptr, layout);
     }
 
     #[inline(always)]
     unsafe fn grow(
         &self,
         ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
+        raw_old_layout: Layout,
+        raw_new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        let old_layout = ThreadTracker::pack_layout(raw_old_layout);
+        let new_layout = ThreadTracker::pack_layout(raw_new_layout);
+
         ThreadTracker::dealloc(old_layout.size() as i64);
         ThreadTracker::alloc(new_layout.size() as i64)?;
 
-        System.grow(ptr, old_layout, new_layout)
+        let grow_ptr = System.grow(ptr, old_layout, new_layout)?;
+
+        Ok(ThreadTracker::grow_pack(
+            raw_old_layout,
+            raw_new_layout,
+            grow_ptr,
+        ))
     }
 
     #[inline(always)]
     unsafe fn grow_zeroed(
         &self,
         ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
+        raw_old_layout: Layout,
+        raw_new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        let old_layout = ThreadTracker::pack_layout(raw_old_layout);
+        let new_layout = ThreadTracker::pack_layout(raw_new_layout);
         ThreadTracker::dealloc(old_layout.size() as i64);
         ThreadTracker::alloc(new_layout.size() as i64)?;
 
-        System.grow_zeroed(ptr, old_layout, new_layout)
+        let grow_ptr = System.grow_zeroed(ptr, old_layout, new_layout)?;
+        Ok(ThreadTracker::grow_pack(
+            raw_old_layout,
+            raw_new_layout,
+            grow_ptr,
+        ))
     }
 
     #[inline(always)]
     unsafe fn shrink(
         &self,
         ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
+        raw_old_layout: Layout,
+        raw_new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        let old_layout = ThreadTracker::pack_layout(raw_old_layout);
+        let new_layout = ThreadTracker::pack_layout(raw_new_layout);
+
+        ThreadTracker::shrink_pack(raw_old_layout, raw_new_layout, ptr);
+
         ThreadTracker::dealloc(old_layout.size() as i64);
         ThreadTracker::alloc(new_layout.size() as i64)?;
 
-        System.shrink(ptr, old_layout, new_layout)
+        let shrink_ptr = System.shrink(ptr, old_layout, new_layout)?;
+        Ok(NonNull::from_raw_parts(
+            shrink_ptr.to_raw_parts().0,
+            raw_new_layout.size(),
+        ))
     }
 }
