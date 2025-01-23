@@ -160,6 +160,7 @@ where
 
     fn build_task(&mut self) -> Vec<DataBlock> {
         let partition = self.calc_partition_point();
+        assert!(partition.total > 0);
 
         let id = self.next_task_id();
         self.total_rows += partition.total;

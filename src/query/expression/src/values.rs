@@ -1325,17 +1325,20 @@ impl Column {
                     .map(|_| rng.gen_range(DATE_MIN..=DATE_MAX))
                     .collect::<Vec<i32>>(),
             ),
-            DataType::Interval => IntervalType::from_data(
-                (0..len)
-                    .map(|_| {
-                        months_days_micros::new(
-                            rng.gen::<i32>(),
-                            rng.gen::<i32>(),
-                            rng.gen::<i64>(),
-                        )
-                    })
-                    .collect::<Vec<months_days_micros>>(),
-            ),
+            DataType::Interval => IntervalType::from_data(Vec::from_iter(
+                std::iter::repeat_with(|| {
+                    let normal = rand_distr::Normal::new(0.001, 1.0).unwrap();
+                    const MAX_MONTHS: i64 = i64::MAX / months_days_micros::MICROS_PER_MONTH;
+                    const MAX_DAYS: i64 = i64::MAX / months_days_micros::MICROS_PER_DAY;
+                    months_days_micros::new(
+                        (rng.sample(normal) * 0.3 * MAX_MONTHS as f64) as i32,
+                        (rng.sample(normal) * 0.3 * MAX_DAYS as f64) as i32,
+                        (rng.sample(normal) * 2.0 * months_days_micros::MICROS_PER_DAY as f64)
+                            as i64,
+                    )
+                })
+                .take(len),
+            )),
             DataType::Nullable(ty) => NullableColumn::new_column(
                 Column::random(ty, len, options),
                 Bitmap::from((0..len).map(|_| rng.gen_bool(0.5)).collect::<Vec<bool>>()),
