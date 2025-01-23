@@ -322,6 +322,7 @@ pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
                 root: "/path/to/stage/files".to_string(),
                 delegation: "<delegation_token>".to_string(),
                 disable_list_batch: false,
+                user_name: String::new(),
             }),
         },
         is_temporary: false,

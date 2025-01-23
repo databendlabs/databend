@@ -25,10 +25,34 @@ statement ok
 create table t1(a string null default 'a', b string null as (concat(a, '-', c)) stored, c string null default 'c', d string null as (reverse(a)) virtual)
 
 statement ok
-alter table t1 add column f string null as (lower(c)) virtual
+insert into t1 values ('A1', 'C1'), ('A2', 'C2')
+
+query TTTT
+select * from t1
+----
+A1 A1-C1 C1 1A
+A2 A2-C2 C2 2A
+
+statement ok
+alter table t1 add column e string null as (lower(c)) virtual
+
+query TTTTT
+select * from t1
+----
+A1 A1-C1 C1 1A c1
+A2 A2-C2 C2 2A c2
+
+statement ok
+alter table t1 add column f string null as (concat(lower(c), '-', a)) stored
+
+query TTTTTT
+select * from t1
+----
+A1 A1-C1 C1 1A c1 c1-A1
+A2 A2-C2 C2 2A c2 c2-A2
 
 statement error 1065
-alter table t1 add column e string null as (upper(c)) stored
+alter table t1 add column g string null as (concat(a, '-', b)) stored
 
 statement ok
 alter table t1 drop column b
@@ -41,6 +65,9 @@ alter table t1 drop column a
 
 statement ok
 alter table t1 drop column d
+
+statement ok
+alter table t1 drop column f
 
 statement ok
 alter table t1 rename column a to x

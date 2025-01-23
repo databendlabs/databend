@@ -66,6 +66,7 @@ pub struct DropProcedurePlan {
     pub if_exists: bool,
     pub tenant: Tenant,
     pub name: ProcedureNameIdent,
+    pub old_name: ProcedureNameIdent,
 }
 
 impl From<DropProcedurePlan> for DropProcedureReq {
