@@ -158,7 +158,7 @@ impl ModifyTableColumnInterpreter {
                 } else {
                     // new field don't have `column_id`, assign field directly will cause `column_id` lost.
                     new_schema.fields[i].data_type = field.data_type.clone();
-                    new_schema.fields[i].default_expr = field.default_expr.clone();
+                    // TODO: support set computed field.
                     new_schema.fields[i].computed_expr = field.computed_expr.clone();
                 }
                 if let Some(default_expr) = &field.default_expr {
@@ -247,46 +247,32 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // if schema is same and only modify comment, don't need to modify schema
-        if schema == new_schema && modify_comment {
-            let table_id = table_info.ident.table_id;
-            let table_version = table_info.ident.seq;
-
-            let req = UpdateTableMetaReq {
-                table_id,
-                seq: MatchSeq::Exact(table_version),
-                new_table_meta: table_info.meta,
-            };
-
-            let _resp = catalog
-                .update_single_table_meta(req, table.get_table_info())
-                .await?;
-
-            return Ok(PipelineBuildResult::create());
-        }
-
         let mut modified_field_indices = HashSet::new();
         let new_schema_without_computed_fields = new_schema.remove_computed_fields();
-        for (field, _) in field_and_comments {
-            let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
-            let old_field = schema.field_with_name(&field.name)?;
-            let is_alter_column_string_to_binary =
-                is_string_to_binary(&old_field.data_type, &field.data_type);
-            // If two conditions are met, we don't need rebuild the table.
-            // As rebuild table can be a time-consuming job.
-            // 1. alter column from string to binary in parquet or data type not changed.
-            // 2. default expr not change. if default expr is changed, we need fill value for
-            //    new added column.
-            if ((table.storage_format_as_parquet() && is_alter_column_string_to_binary)
-                || old_field.data_type.remove_nullable() == field.data_type.remove_nullable())
-                && old_field.default_expr == field.default_expr
-            {
-                continue;
+        if schema != new_schema {
+            for (field, _) in field_and_comments {
+                let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
+                let old_field = schema.field_with_name(&field.name)?;
+                let is_alter_column_string_to_binary =
+                    is_string_to_binary(&old_field.data_type, &field.data_type);
+                // If two conditions are met, we don't need rebuild the table,
+                // as rebuild table can be a time-consuming job.
+                // 1. alter column from string to binary in parquet or data type not changed.
+                // 2. default expr and computed expr not changed. Otherwise, we need fill value for
+                //    new added column.
+                if ((table.storage_format_as_parquet() && is_alter_column_string_to_binary)
+                    || old_field.data_type.remove_nullable() == field.data_type.remove_nullable())
+                    && old_field.default_expr == field.default_expr
+                    && old_field.computed_expr == field.computed_expr
+                {
+                    continue;
+                }
+                modified_field_indices.insert(field_index);
             }
-            modified_field_indices.insert(field_index);
+            table_info.meta.schema = new_schema.clone().into();
         }
 
-        table_info.meta.schema = new_schema.clone().into();
+        // if don't need rebuild table, only update table meta.
         if modified_field_indices.is_empty() {
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;
@@ -304,7 +290,8 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // construct sql for selecting data from old table
+        // construct sql for selecting data from old table.
+        // computed columns are ignored, as it is build from other columns.
         let query_fields = new_schema_without_computed_fields
             .fields()
             .iter()
