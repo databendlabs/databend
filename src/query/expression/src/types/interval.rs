@@ -166,7 +166,7 @@ impl ValueType for IntervalType {
 
     #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        lhs.0.cmp(&rhs.0)
+        lhs.cmp(&rhs)
     }
 
     #[inline(always)]
