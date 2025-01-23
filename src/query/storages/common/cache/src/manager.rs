@@ -283,6 +283,9 @@ impl CacheManager {
             MEMORY_CACHE_SEGMENT_BLOCK_METAS => {
                 Self::set_items_capacity(&self.segment_block_metas_cache, new_capacity, name);
             }
+            MEMORY_CACHE_BLOCK_META => {
+                Self::set_items_capacity(&self.block_meta_cache, new_capacity, name);
+            }
 
             crate::DISK_TABLE_DATA_CACHE_NAME => {
                 return Err(ErrorCode::BadArguments(format!(
