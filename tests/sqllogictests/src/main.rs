@@ -33,6 +33,7 @@ use sqllogictest::Runner;
 use sqllogictest::TestError;
 use testcontainers::ContainerAsync;
 use testcontainers::GenericImage;
+use testcontainers::Image;
 
 use crate::arg::SqlLogicTestArgs;
 use crate::client::Client;
@@ -62,12 +63,19 @@ use std::sync::LazyLock;
 static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|| {
     vec![
         (Box::new(ClientType::MySQL), 3),
+        // (
+        //     Box::new(ClientType::Ttc(
+        //         "datafuselabs/ttc-rust:latest".to_string(),
+        //         TTC_PORT_START,
+        //     )),
+        //     1,
+        // ),
         (
             Box::new(ClientType::Ttc(
-                "datafuselabs/ttc-rust:latest".to_string(),
+                "ghcr.io/forsaken628/ttc-go:latest".to_string(),
                 TTC_PORT_START,
             )),
-            7,
+            6,
         ),
     ]
 });
@@ -151,22 +159,30 @@ async fn run_hybrid_client(
 ) -> Result<()> {
     println!("Hybird client starts to run with: {:?}", args);
 
-    // preparse docker envs
-    let mut port_start = TTC_PORT_START;
-
     let docker = Docker::connect_with_local_defaults().unwrap();
     for (c, _) in HYBRID_CONFIGS.iter() {
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
-            ClientType::Ttc(image, _) => {
-                run_ttc_container(&docker, image, port_start, args.port, cs).await?;
-                port_start += 1;
+            ClientType::Ttc(image, port) => {
+                run_ttc_container(&docker, image, *port, args.port, cs).await?;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
     }
 
-    run_suits(args, ClientType::Hybird).await?;
+    if let Err(e) = run_suits(args, ClientType::Hybird).await {
+        for c in cs {
+            println!("{}", c.id());
+            println!("{}", c.image().name());
+            if let Ok(log) = c.stderr_to_vec().await {
+                println!("stderr: {}", String::from_utf8_lossy(&log));
+            }
+            if let Ok(log) = c.stdout_to_vec().await {
+                println!("stdout: {}", String::from_utf8_lossy(&log));
+            }
+        }
+        Err(e)?
+    }
     Ok(())
 }
 
@@ -326,7 +342,7 @@ async fn run_parallel_async(
             .filter_map(|result| async { result.err() })
             .collect()
             .await;
-        handle_error_records(errors, no_fail_fast, num_of_tests)?;
+        handle_error_records(errors, no_fail_fast, num_of_tests)
     } else {
         let errors: Vec<Vec<TestError>> = tasks
             .filter_map(|result| async { result.ok() })
@@ -336,9 +352,8 @@ async fn run_parallel_async(
             errors.into_iter().flatten().collect(),
             no_fail_fast,
             num_of_tests,
-        )?;
+        )
     }
-    Ok(())
 }
 
 async fn run_file_async(
