@@ -28,7 +28,7 @@ use databend_common_expression::SEGMENT_NAME_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::field_default_value;
 use databend_common_sql::BloomIndexColumns;
-use databend_storages_common_cache::BlockMetaCache;
+use databend_storages_common_cache::SegmentBlockMetasCache;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_index::RangeIndex;
@@ -209,7 +209,7 @@ pub struct FusePruner {
     pub push_down: Option<PushDownInfo>,
     pub inverse_range_index: Option<RangeIndex>,
     pub deleted_segments: Vec<DeletedSegmentInfo>,
-    pub block_meta_cache: Option<BlockMetaCache>,
+    pub block_meta_cache: Option<SegmentBlockMetasCache>,
 }
 
 impl FusePruner {
@@ -283,7 +283,7 @@ impl FusePruner {
             pruning_ctx,
             inverse_range_index: None,
             deleted_segments: vec![],
-            block_meta_cache: CacheManager::instance().get_block_meta_cache(),
+            block_meta_cache: CacheManager::instance().get_segment_block_metas_cache(),
         })
     }
 
@@ -448,7 +448,7 @@ impl FusePruner {
         segment: &CompactSegmentInfo,
         populate_cache: bool,
     ) -> Result<Arc<Vec<Arc<BlockMeta>>>> {
-        if let Some(cache) = CacheManager::instance().get_block_meta_cache() {
+        if let Some(cache) = CacheManager::instance().get_segment_block_metas_cache() {
             if let Some(metas) = cache.get(segment_path) {
                 Ok(metas)
             } else {

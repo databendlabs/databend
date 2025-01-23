@@ -77,7 +77,7 @@ impl SyncSystemTable for CachesTable {
         let segment_info_cache = cache_manager.get_table_segment_cache();
         let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache();
         let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache();
-        let block_meta_cache = cache_manager.get_block_meta_cache();
+        let block_meta_cache = cache_manager.get_segment_block_metas_cache();
         let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
         let inverted_index_file_cache = cache_manager.get_inverted_index_file_cache();
         let prune_partitions_cache = cache_manager.get_prune_partitions_cache();
