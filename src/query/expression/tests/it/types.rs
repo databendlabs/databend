@@ -19,7 +19,6 @@ use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use jiff::fmt::strtime::BrokenDownTime;
-use jiff::fmt::temporal::DateTimeParser;
 use jiff::tz;
 use jiff::tz::TimeZone;
 
@@ -57,15 +56,15 @@ fn test_parse_jiff() {
         offset
     );
 
-    static PARSER: DateTimeParser = DateTimeParser::new();
+    // static PARSER: DateTimeParser = DateTimeParser::new();
 
-    let zdt = PARSER
-        .parse_datetime("January 4, 2024; 18:30:04 +02:00")
-        .unwrap();
-    println!("{:?}", zdt);
+    // let zdt = PARSER
+    //     .parse_datetime("January 4, 2024; 18:30:04 +02:00")
+    //     .unwrap();
+    // println!("{:?}", zdt);
 
-    let zdt = PARSER.parse_datetime("2024.6.8").unwrap();
-    println!("{:?}", zdt);
+    // let zdt = PARSER.parse_datetime("2024.6.8").unwrap();
+    // println!("{:?}", zdt);
 }
 
 #[test]

@@ -479,7 +479,7 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
                 parse(val)
                     .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
                     .and_then(|(naive_dt, _)| {
-                        string_to_date(&naive_dt.to_string(), &ctx.func_ctx.jiff_tz)
+                        string_to_date(naive_dt.to_string(), &ctx.func_ctx.jiff_tz)
                     })
             };
 
