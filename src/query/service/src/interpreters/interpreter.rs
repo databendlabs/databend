@@ -187,6 +187,16 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     let typ = session.get_type();
     if typ.is_user_session() {
         SessionManager::instance().status.write().query_finish(now);
+        SessionManager::instance()
+            .metrics_collector
+            .track_finished_query(
+                ctx.get_scan_progress_value(),
+                ctx.get_write_progress_value(),
+                ctx.get_join_spill_progress_value(),
+                ctx.get_aggregate_spill_progress_value(),
+                ctx.get_group_by_spill_progress_value(),
+                ctx.get_window_partition_spill_progress_value(),
+            );
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {

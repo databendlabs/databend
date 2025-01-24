@@ -44,15 +44,23 @@ impl SessionManagerMetricsCollector {
     }
 
     pub fn track_finished_query(
-        &mut self,
+        &self,
         scan: ProgressValues,
         write: ProgressValues,
-        spill: ProgressValues,
+        join_spill: ProgressValues,
+        aggregate_spill: ProgressValues,
+        group_by_spill: ProgressValues,
+        window_partition_spill: ProgressValues,
     ) {
         let mut guard = self.inner.lock();
         guard.finished_scan_total = guard.finished_scan_total.add(&scan);
         guard.finished_write_total = guard.finished_write_total.add(&write);
-        guard.finished_spill_total = guard.finished_spill_total.add(&spill);
+        guard.finished_spill_total = guard
+            .finished_spill_total
+            .add(&join_spill)
+            .add(&aggregate_spill)
+            .add(&group_by_spill)
+            .add(&window_partition_spill);
     }
 }
 
