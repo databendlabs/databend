@@ -63,19 +63,19 @@ use std::sync::LazyLock;
 static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|| {
     vec![
         (Box::new(ClientType::MySQL), 3),
-        // (
-        //     Box::new(ClientType::Ttc(
-        //         "datafuselabs/ttc-rust:latest".to_string(),
-        //         TTC_PORT_START,
-        //     )),
-        //     1,
-        // ),
         (
             Box::new(ClientType::Ttc(
-                "ghcr.io/forsaken628/ttc-go:latest".to_string(),
+                "datafuselabs/ttc-rust:latest".to_string(),
                 TTC_PORT_START,
             )),
-            6,
+            5,
+        ),
+        (
+            Box::new(ClientType::Ttc(
+                "ghcr.io/databendlabs/ttc-go:latest".to_string(),
+                TTC_PORT_START + 1,
+            )),
+            5,
         ),
     ]
 });
