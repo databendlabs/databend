@@ -150,6 +150,7 @@ paste = { workspace = true }
 petgraph = { workspace = true }
 pin-project-lite = { workspace = true }
 poem = { workspace = true }
+prometheus-client = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
 recursive = { workspace = true }
@@ -178,7 +179,6 @@ url = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
 xorf = { workspace = true }
-prometheus-client = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
