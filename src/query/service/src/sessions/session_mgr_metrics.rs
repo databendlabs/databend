@@ -7,6 +7,7 @@ use databend_common_metrics::interpreter::METRIC_QUERY_SPILL_PROGRESS_BYTES;
 use databend_common_metrics::interpreter::METRIC_QUERY_SPILL_PROGRESS_ROWS;
 use databend_common_metrics::interpreter::METRIC_QUERY_WRITE_PROGRESS_BYTES;
 use databend_common_metrics::interpreter::METRIC_QUERY_WRITE_PROGRESS_ROWS;
+use parking_lot::Mutex;
 use prometheus_client::collector::Collector;
 use prometheus_client::encoding::EncodeMetric;
 use prometheus_client::metrics::counter::ConstCounter;
@@ -14,20 +15,31 @@ use prometheus_client::metrics::counter::ConstCounter;
 use super::SessionManager;
 
 pub struct SessionManagerMetricsCollector {
-    session_mgr: Arc<SessionManager>,
+    inner: Arc<Mutex<SessionManagerMetricsCollectorInner>>,
+}
+
+pub(crate) struct SessionManagerMetricsCollectorInner {
+    session_mgr: Option<Arc<SessionManager>>,
     finished_scan_total: ProgressValues,
     finished_write_total: ProgressValues,
     finished_spill_total: ProgressValues,
 }
 
 impl SessionManagerMetricsCollector {
-    pub fn new(session_mgr: Arc<SessionManager>) -> Self {
+    pub fn new() -> Self {
         Self {
-            session_mgr,
-            finished_scan_total: ProgressValues::default(),
-            finished_write_total: ProgressValues::default(),
-            finished_spill_total: ProgressValues::default(),
+            inner: Arc::new(Mutex::new(SessionManagerMetricsCollectorInner {
+                session_mgr: None,
+                finished_scan_total: ProgressValues::default(),
+                finished_write_total: ProgressValues::default(),
+                finished_spill_total: ProgressValues::default(),
+            })),
         }
+    }
+
+    pub fn attach_session_manager(&self, session_mgr: Arc<SessionManager>) {
+        let mut guard = self.inner.lock();
+        guard.session_mgr.replace(session_mgr);
     }
 
     pub fn track_finished_query(
@@ -36,9 +48,10 @@ impl SessionManagerMetricsCollector {
         write: ProgressValues,
         spill: ProgressValues,
     ) {
-        self.finished_scan_total = self.finished_scan_total.add(&scan);
-        self.finished_write_total = self.finished_write_total.add(&write);
-        self.finished_spill_total = self.finished_spill_total.add(&spill);
+        let mut guard = self.inner.lock();
+        guard.finished_scan_total = guard.finished_scan_total.add(&scan);
+        guard.finished_write_total = guard.finished_write_total.add(&write);
+        guard.finished_spill_total = guard.finished_spill_total.add(&spill);
     }
 }
 
@@ -53,13 +66,20 @@ impl Collector for SessionManagerMetricsCollector {
         &self,
         mut encoder: prometheus_client::encoding::DescriptorEncoder,
     ) -> Result<(), std::fmt::Error> {
-        let processes = self.session_mgr.processes_info();
+        let processes = {
+            match self.inner.lock().session_mgr.as_ref() {
+                Some(mgr) => mgr.processes_info(),
+                None => return Ok(()),
+            }
+        };
+
         let mut scan_bytes = 0;
         let mut scan_rows = 0;
         let mut write_bytes = 0;
         let mut write_rows = 0;
         let mut spill_bytes = 0;
         let mut spill_rows = 0;
+        // TODO: ensure the process is RUNNING
         for process in processes {
             if let Some(scan) = &process.scan_progress_value {
                 scan_bytes += scan.bytes;
