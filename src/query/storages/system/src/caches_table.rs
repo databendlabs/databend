@@ -77,6 +77,7 @@ impl SyncSystemTable for CachesTable {
         let segment_info_cache = cache_manager.get_table_segment_cache();
         let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache();
         let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache();
+        let segment_block_metas_cache = cache_manager.get_segment_block_metas_cache();
         let block_meta_cache = cache_manager.get_block_meta_cache();
         let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
         let inverted_index_file_cache = cache_manager.get_inverted_index_file_cache();
@@ -104,6 +105,10 @@ impl SyncSystemTable for CachesTable {
 
         if let Some(bloom_index_meta_cache) = bloom_index_meta_cache {
             Self::append_row(&bloom_index_meta_cache, &local_node, &mut columns);
+        }
+
+        if let Some(segment_block_metas_cache) = segment_block_metas_cache {
+            Self::append_row(&segment_block_metas_cache, &local_node, &mut columns);
         }
 
         if let Some(block_meta_cache) = block_meta_cache {
