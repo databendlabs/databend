@@ -12,8 +12,12 @@ use prometheus_client::collector::Collector;
 use prometheus_client::encoding::EncodeMetric;
 use prometheus_client::metrics::counter::ConstCounter;
 
-use super::SessionManager;
+use crate::sessions::SessionManager;
 
+/// [`SessionManagerMetricsCollector`] dumps the progress metrics of scan/write/spills
+/// from the [`SessionManager`]'s running queries to the prometheus. To avoid the progress
+/// metrics being decreased, we also need to accumulate these progress values after the query
+/// is finished.
 #[derive(Clone)]
 pub struct SessionManagerMetricsCollector {
     inner: Arc<Mutex<SessionManagerMetricsCollectorInner>>,
@@ -82,81 +86,66 @@ impl Collector for SessionManagerMetricsCollector {
             }
         };
 
-        let mut scan_bytes = 0;
-        let mut scan_rows = 0;
-        let mut write_bytes = 0;
-        let mut write_rows = 0;
-        let mut spill_bytes = 0;
-        let mut spill_rows = 0;
-        // TODO: ensure the process is RUNNING
+        let (mut scan_progress, mut write_progress, mut spill_progress) = {
+            let guard = self.inner.lock();
+            (
+                guard.finished_scan_total.clone(),
+                guard.finished_write_total.clone(),
+                guard.finished_spill_total.clone(),
+            )
+        };
         for process in processes {
             if let Some(scan) = &process.scan_progress_value {
-                scan_bytes += scan.bytes;
-                scan_rows += scan.rows;
+                scan_progress = scan_progress.add(scan);
             }
             if let Some(write) = &process.write_progress_value {
-                write_bytes += write.bytes;
-                write_rows += write.rows;
+                write_progress = write_progress.add(write);
             }
             if let Some(spill) = &process.spill_progress_value {
-                spill_bytes += spill.bytes;
-                spill_rows += spill.rows;
+                spill_progress = spill_progress.add(spill);
             }
         }
 
-        let scan_rows_counter = ConstCounter::new(scan_rows as f64);
-        let scan_rows_encoder = encoder.encode_descriptor(
-            METRIC_QUERY_SCAN_PROGRESS_ROWS,
-            "Total scan rows in progress.",
-            None,
-            scan_rows_counter.metric_type(),
-        )?;
-        scan_rows_counter.encode(scan_rows_encoder)?;
+        let metrics = vec![
+            (
+                METRIC_QUERY_SCAN_PROGRESS_ROWS,
+                scan_progress.rows as f64,
+                "Total scan rows in progress.",
+            ),
+            (
+                METRIC_QUERY_SCAN_PROGRESS_BYTES,
+                scan_progress.bytes as f64,
+                "Total scan bytes in progress.",
+            ),
+            (
+                METRIC_QUERY_WRITE_PROGRESS_ROWS,
+                write_progress.rows as f64,
+                "Total write rows in progress.",
+            ),
+            (
+                METRIC_QUERY_WRITE_PROGRESS_BYTES,
+                write_progress.bytes as f64,
+                "Total write bytes in progress.",
+            ),
+            (
+                METRIC_QUERY_SPILL_PROGRESS_ROWS,
+                spill_progress.rows as f64,
+                "Total spill rows in progress.",
+            ),
+            (
+                METRIC_QUERY_SPILL_PROGRESS_BYTES,
+                spill_progress.bytes as f64,
+                "Total spill bytes in progress.",
+            ),
+        ];
 
-        let scan_bytes_counter = ConstCounter::new(scan_bytes as f64);
-        let scan_bytes_encoder = encoder.encode_descriptor(
-            METRIC_QUERY_SCAN_PROGRESS_BYTES,
-            "Total scan bytes in progress.",
-            None,
-            scan_bytes_counter.metric_type(),
-        )?;
-        scan_bytes_counter.encode(scan_bytes_encoder)?;
+        for (name, value, help) in metrics {
+            let counter = ConstCounter::new(value);
+            let counter_encoder =
+                encoder.encode_descriptor(name, help, None, counter.metric_type())?;
+            counter.encode(counter_encoder)?;
+        }
 
-        let write_rows_counter = ConstCounter::new(write_rows as f64);
-        let write_rows_encoder = encoder.encode_descriptor(
-            METRIC_QUERY_WRITE_PROGRESS_ROWS,
-            "Total write rows in progress.",
-            None,
-            write_rows_counter.metric_type(),
-        )?;
-        write_rows_counter.encode(write_rows_encoder)?;
-
-        let write_bytes_counter = ConstCounter::new(write_bytes as f64);
-        let write_bytes_encoder = encoder.encode_descriptor(
-            METRIC_QUERY_WRITE_PROGRESS_BYTES,
-            "Total write bytes in progress.",
-            None,
-            write_bytes_counter.metric_type(),
-        )?;
-        write_bytes_counter.encode(write_bytes_encoder)?;
-
-        let spill_rows_counter = ConstCounter::new(spill_rows as f64);
-        let spill_rows_encoder = encoder.encode_descriptor(
-            METRIC_QUERY_SPILL_PROGRESS_ROWS,
-            "Total spill rows in progress.",
-            None,
-            spill_rows_counter.metric_type(),
-        )?;
-        spill_rows_counter.encode(spill_rows_encoder)?;
-
-        let spill_bytes_counter = ConstCounter::new(spill_bytes as f64);
-        let spill_bytes_encoder = encoder.encode_descriptor(
-            METRIC_QUERY_SPILL_PROGRESS_BYTES,
-            "Total spill bytes in progress.",
-            None,
-            spill_bytes_counter.metric_type(),
-        )?;
-        spill_bytes_counter.encode(spill_bytes_encoder)?;
         Ok(())
     }
 }
