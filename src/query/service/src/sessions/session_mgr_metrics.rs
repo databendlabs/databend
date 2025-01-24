@@ -14,6 +14,7 @@ use prometheus_client::metrics::counter::ConstCounter;
 
 use super::SessionManager;
 
+#[derive(Clone)]
 pub struct SessionManagerMetricsCollector {
     inner: Arc<Mutex<SessionManagerMetricsCollectorInner>>,
 }

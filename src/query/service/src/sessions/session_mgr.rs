@@ -49,7 +49,7 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Weak<Session>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
-    pub(in crate::sessions) metrics_collector: Arc<SessionManagerMetricsCollector>,
+    pub(in crate::sessions) metrics_collector: SessionManagerMetricsCollector,
 
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
@@ -60,7 +60,8 @@ impl SessionManager {
     pub fn init(conf: &InnerConfig) -> Result<()> {
         let global_instance = Self::create(conf);
         GlobalInstance::set(global_instance.clone());
-        GLOBAL_METRICS_REGISTRY.register_collector(global_instance.metrics_collector.clone());
+        GLOBAL_METRICS_REGISTRY
+            .register_collector(Box::new(global_instance.metrics_collector.clone()));
 
         Ok(())
     }
@@ -73,9 +74,9 @@ impl SessionManager {
             status: Arc::new(RwLock::new(SessionManagerStatus::default())),
             mysql_conn_map: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
-            metrics_collector: Arc::new(SessionManagerMetricsCollector::new()),
+            metrics_collector: SessionManagerMetricsCollector::new(),
         });
-        mgr.metrics_collector.set_session_mgr(mgr.clone());
+        mgr.metrics_collector.attach_session_manager(mgr.clone());
         mgr
     }
 
