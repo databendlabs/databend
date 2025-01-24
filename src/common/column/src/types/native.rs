@@ -268,9 +268,6 @@ impl NativeType for days_ms {
 #[repr(C)]
 pub struct months_days_micros(pub i128);
 
-const MICROS_PER_DAY: i64 = 24 * 3600 * 1_000_000;
-const MICROS_PER_MONTH: i64 = 30 * MICROS_PER_DAY;
-
 impl Hash for months_days_micros {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.total_micros().hash(state)
@@ -296,6 +293,9 @@ impl Ord for months_days_micros {
 }
 
 impl months_days_micros {
+    pub const MICROS_PER_DAY: i64 = 24 * 3600 * 1_000_000;
+    pub const MICROS_PER_MONTH: i64 = 30 * Self::MICROS_PER_DAY;
+
     pub fn new(months: i32, days: i32, microseconds: i64) -> Self {
         let months_bits = (months as i128) << 96;
         // converting to u32 before i128 ensures we’re working with the raw, unsigned bit pattern of the i32 value,
@@ -320,21 +320,29 @@ impl months_days_micros {
     }
 
     pub fn total_micros(&self) -> i64 {
-        let months_micros = (self.months() as i64).checked_mul(MICROS_PER_MONTH);
-        let days_micros = (self.days() as i64).checked_mul(MICROS_PER_DAY);
+        self.try_total_micros().unwrap_or_else(|| {
+            error!(
+                "interval is out of range: months={}, days={}, micros={}",
+                self.months(),
+                self.days(),
+                self.microseconds()
+            );
+            0
+        })
+    }
 
-        months_micros
-            .and_then(|months_micros| days_micros.map(|days_micros| months_micros + days_micros))
-            .and_then(|total_micros| total_micros.checked_add(self.microseconds()))
-            .unwrap_or_else(|| {
-                error!(
-                    "interval is out of range: months={}, days={}, micros={}",
-                    self.months(),
-                    self.days(),
-                    self.microseconds()
-                );
-                0
-            })
+    pub fn try_total_micros(&self) -> Option<i64> {
+        [
+            (self.months() as i64).checked_mul(Self::MICROS_PER_MONTH),
+            (self.days() as i64).checked_mul(Self::MICROS_PER_DAY),
+            Some(self.microseconds()),
+        ]
+        .into_iter()
+        .reduce(|acc, x| match (acc, x) {
+            (Some(acc), Some(x)) => acc.checked_add(x),
+            (acc, None) => acc,
+            (None, x) => x,
+        })?
     }
 }
 

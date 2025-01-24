@@ -3276,6 +3276,7 @@ dependencies = [
  "pretty_assertions",
  "proptest",
  "rand",
+ "rand_distr",
  "recursive",
  "roaring",
  "rust_decimal",

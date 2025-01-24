@@ -419,6 +419,7 @@ prost-build = { version = "0.13" }
 prqlc = "0.11.3"
 raft-log = { version = "0.2.6" }
 rand = { version = "0.8.5", features = ["small_rng"] }
+rand_distr = "0.4.3"
 rayon = "1.9.0"
 recursive = "0.1.1"
 redis = { version = "0.27.5", features = ["tokio-comp", "connection-manager"] }
