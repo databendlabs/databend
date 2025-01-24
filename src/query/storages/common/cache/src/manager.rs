@@ -34,6 +34,7 @@ use crate::caches::FileMetaDataCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
 use crate::caches::PrunePartitionsCache;
+use crate::caches::SegmentBlockMetasCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::InMemoryLruCache;
@@ -78,6 +79,7 @@ pub struct CacheManager {
     parquet_meta_data_cache: CacheSlot<FileMetaDataCache>,
     table_data_cache: CacheSlot<TableDataCache>,
     in_memory_table_data_cache: CacheSlot<ColumnArrayCache>,
+    segment_block_metas_cache: CacheSlot<SegmentBlockMetasCache>,
     block_meta_cache: CacheSlot<BlockMetaCache>,
 }
 
@@ -151,6 +153,7 @@ impl CacheManager {
                 table_statistic_cache: CacheSlot::new(None),
                 table_data_cache,
                 in_memory_table_data_cache,
+                segment_block_metas_cache: CacheSlot::new(None),
                 block_meta_cache: CacheSlot::new(None),
             }));
         } else {
@@ -201,8 +204,14 @@ impl CacheManager {
                 DEFAULT_PARQUET_META_DATA_CACHE_ITEMS,
             );
 
+            let segment_block_metas_cache = Self::new_items_cache_slot(
+                MEMORY_CACHE_SEGMENT_BLOCK_METAS,
+                config.block_meta_count as usize,
+            );
+
             let block_meta_cache = Self::new_items_cache_slot(
                 MEMORY_CACHE_BLOCK_META,
+                // TODO replace this config
                 config.block_meta_count as usize,
             );
 
@@ -217,8 +226,9 @@ impl CacheManager {
                 table_statistic_cache,
                 table_data_cache,
                 in_memory_table_data_cache,
-                block_meta_cache,
+                segment_block_metas_cache,
                 parquet_meta_data_cache,
+                block_meta_cache,
             }));
         }
 
@@ -270,6 +280,9 @@ impl CacheManager {
             MEMORY_CACHE_TABLE_SNAPSHOT => {
                 Self::set_items_capacity(&self.table_snapshot_cache, new_capacity, name);
             }
+            MEMORY_CACHE_SEGMENT_BLOCK_METAS => {
+                Self::set_items_capacity(&self.segment_block_metas_cache, new_capacity, name);
+            }
             MEMORY_CACHE_BLOCK_META => {
                 Self::set_items_capacity(&self.block_meta_cache, new_capacity, name);
             }
@@ -309,6 +322,10 @@ impl CacheManager {
             let new_cache = Self::new_items_cache(name, new_capacity as usize);
             cache.set(new_cache)
         }
+    }
+
+    pub fn get_segment_block_metas_cache(&self) -> Option<SegmentBlockMetasCache> {
+        self.segment_block_metas_cache.get()
     }
 
     pub fn get_block_meta_cache(&self) -> Option<BlockMetaCache> {
@@ -426,4 +443,6 @@ const MEMORY_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
 const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
+const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";
+
 const MEMORY_CACHE_BLOCK_META: &str = "memory_cache_block_meta";
