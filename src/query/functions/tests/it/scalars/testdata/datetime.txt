@@ -70,6 +70,24 @@ output domain  : {315360000000000..=315360000000000}
 output         : '1979-12-30 00:00:00.000000'
 
 
+ast            : to_timestamp('2023-01-11')
+raw expr       : to_timestamp('2023-01-11')
+checked expr   : to_timestamp<String>("2023-01-11")
+optimized expr : 1673395200000000
+output type    : Timestamp
+output domain  : {1673395200000000..=1673395200000000}
+output         : '2023-01-11 00:00:00.000000'
+
+
+ast            : to_timestamp('2023-01-11')::int64::timestamp
+raw expr       : CAST(CAST(to_timestamp('2023-01-11') AS Int64) AS Timestamp)
+checked expr   : to_timestamp<Int64>(to_int64<Timestamp>(to_timestamp<String>("2023-01-11")))
+optimized expr : 1673395200000000
+output type    : Timestamp
+output domain  : {1673395200000000..=1673395200000000}
+output         : '2023-01-11 00:00:00.000000'
+
+
 ast            : to_timestamp(315360000000000)
 raw expr       : to_timestamp(315360000000000)
 checked expr   : to_timestamp<Int64>(to_int64<UInt64>(315360000000000_u64))
@@ -157,6 +175,24 @@ optimized expr : 0
 output type    : Date
 output domain  : {0..=0}
 output         : '1970-01-01'
+
+
+ast            : to_date('2023-01-11')
+raw expr       : to_date('2023-01-11')
+checked expr   : to_date<String>("2023-01-11")
+optimized expr : 19368
+output type    : Date
+output domain  : {19368..=19368}
+output         : '2023-01-11'
+
+
+ast            : to_int32(to_date('2023-01-11'))::date
+raw expr       : CAST(to_int32(to_date('2023-01-11')) AS Date)
+checked expr   : to_date<Int64>(to_int64<Int32>(to_int32<Int64>(to_int64<Date>(to_date<String>("2023-01-11")))))
+optimized expr : 19368
+output type    : Date
+output domain  : {19368..=19368}
+output         : '2023-01-11'
 
 
 ast            : to_date(100)

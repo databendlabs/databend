@@ -18,6 +18,9 @@ use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use jiff::fmt::strtime::BrokenDownTime;
+use jiff::fmt::temporal::DateTimeParser;
+use jiff::tz;
 use jiff::tz::TimeZone;
 
 use crate::get_all_test_data_types;
@@ -33,6 +36,36 @@ fn test_timestamp_to_string_formats() {
         timestamp_to_string(ts, &tz).to_string(),
         "2024-01-01 01:02:03.000000"
     );
+}
+
+#[test]
+fn test_parse_jiff() {
+    let (mut tm, offset) = BrokenDownTime::parse_prefix(
+        "%Y年%m月%d日，%H时%M分%S秒[America/New_York]Y",
+        "2022年02月04日，8时58分59秒[America/New_York]Yxxxxxxxxxxx",
+    )
+    .unwrap();
+
+    tm.set_offset(Some(tz::offset(0 as _)));
+    let ts = tm.to_timestamp().unwrap();
+    assert_eq!(ts.to_string(), "2022-02-04T08:58:59Z");
+    assert_eq!(ts.as_microsecond(), 1643965139000000);
+    assert_eq!(offset, 53);
+
+    assert_eq!(
+        "2022年02月04日，8时58分59秒[America/New_York]Y".len(),
+        offset
+    );
+
+    static PARSER: DateTimeParser = DateTimeParser::new();
+
+    let zdt = PARSER
+        .parse_datetime("January 4, 2024; 18:30:04 +02:00")
+        .unwrap();
+    println!("{:?}", zdt);
+
+    let zdt = PARSER.parse_datetime("2024.6.8").unwrap();
+    println!("{:?}", zdt);
 }
 
 #[test]

@@ -3329,7 +3329,6 @@ dependencies = [
  "borsh",
  "bstr",
  "bumpalo",
- "chrono",
  "comfy-table",
  "crc32fast",
  "criterion",
@@ -4826,7 +4825,6 @@ dependencies = [
 name = "databend-functions-scalar-datetime"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
@@ -8868,27 +8866,30 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.1.14"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9d9d414fc817d3e3d62b2598616733f76c4cc74fbac96069674739b881295c8"
+checksum = "e58800dee30ca82a1c107c64a0effca7ccb4e6106645c0e3af40d5aaba9f5457"
 dependencies = [
  "jiff-tzdb",
  "jiff-tzdb-platform",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
  "serde",
  "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "jiff-tzdb"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91335e575850c5c4c673b9bd467b0e025f164ca59d0564f69d0c2ee0ffad4653"
+checksum = "cf2cec2f5d266af45a071ece48b1fb89f3b00b2421ac3a5fe10285a6caaa60d3"
 
 [[package]]
 name = "jiff-tzdb-platform"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9835f0060a626fe59f160437bc725491a6af23133ea906500027d1bd2f8f4329"
+checksum = "a63c62e404e7b92979d2792352d885a7f8f83fd1d0d31eea582d77b2ceca697e"
 dependencies = [
  "jiff-tzdb",
 ]
@@ -11077,9 +11078,18 @@ dependencies = [
 
 [[package]]
 name = "portable-atomic"
-version = "1.7.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
+checksum = "280dc24453071f1b63954171985a0b0d30058d287960968b9b2aca264c8d4ee6"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
+dependencies = [
+ "portable-atomic",
+]
 
 [[package]]
 name = "postcard"

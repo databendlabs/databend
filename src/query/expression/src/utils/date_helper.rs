@@ -383,7 +383,7 @@ impl ToNumber<u32> for ToYYYYMM {
 
 impl ToNumber<u32> for ToWeekOfYear {
     fn to_number(dt: &Zoned) -> u32 {
-        dt.date().to_iso_week_date().week() as u32
+        dt.date().iso_week_date().week() as u32
     }
 }
 
@@ -648,13 +648,13 @@ impl ToNumber<i32> for ToStartOfYear {
 
 impl ToNumber<i32> for ToStartOfISOYear {
     fn to_number(dt: &Zoned) -> i32 {
-        let iso_year = dt.date().to_iso_week_date().year();
+        let iso_year = dt.date().iso_week_date().year();
         for i in 1..=7 {
             let new_dt = date(iso_year, 1, i)
                 .at(0, 0, 0, 0)
                 .to_zoned(dt.time_zone().clone())
                 .unwrap();
-            if new_dt.date().to_iso_week_date().weekday() == Weekday::Monday {
+            if new_dt.date().iso_week_date().weekday() == Weekday::Monday {
                 return datetime_to_date_inner_number(&new_dt);
             }
         }

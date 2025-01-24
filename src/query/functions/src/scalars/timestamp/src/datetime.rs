@@ -14,11 +14,6 @@
 
 use std::io::Write;
 
-use chrono::format::parse_and_remainder;
-use chrono::format::Parsed;
-use chrono::format::StrftimeItems;
-use chrono::prelude::*;
-use chrono::Datelike;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::date::clamp_date;
@@ -50,7 +45,6 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::F64;
 use databend_common_expression::utils::date_helper::*;
-use databend_common_expression::utils::serialize::EPOCH_DAYS_FROM_CE;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -62,9 +56,9 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 use dtparse::parse;
 use jiff::civil::date;
-use jiff::civil::datetime;
 use jiff::civil::Date;
-use jiff::tz::Offset;
+use jiff::fmt::strtime::BrokenDownTime;
+use jiff::tz;
 use jiff::tz::TimeZone;
 use jiff::Unit;
 use num_traits::AsPrimitive;
@@ -236,32 +230,10 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
             } else {
                 match parse(val) {
                     Ok((naive_dt, parse_tz)) => {
-                        let dt = datetime(
-                            naive_dt.year() as i16,
-                            naive_dt.month() as i8,
-                            naive_dt.day() as i8,
-                            naive_dt.hour() as i8,
-                            naive_dt.minute() as i8,
-                            naive_dt.second() as i8,
-                            naive_dt.nanosecond() as i32,
-                        );
-                        let tz = if let Some(parse_tz) = parse_tz {
-                            let offset = parse_tz.local_minus_utc();
-                            let offset = Offset::from_seconds(offset).unwrap();
-                            offset.to_time_zone()
-                        } else {
-                            ctx.func_ctx.jiff_tz.clone()
-                        };
-                        match dt.to_zoned(tz) {
-                            Ok(res) => output.push(res.timestamp().as_microsecond()),
-                            Err(e) => {
-                                ctx.set_error(
-                                    output.len(),
-                                    format!("cannot parse to type `TIMESTAMP`. {}", e),
-                                );
-                                output.push(0);
-                            }
+                        if let Some(offset) = parse_tz {
+                            naive_dt.checked_add_offset(offset).unwrap();
                         }
+                        output.push(naive_dt.and_utc().timestamp_micros());
                     }
                     Err(err) => {
                         ctx.set_error(
@@ -326,12 +298,11 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match NaiveDate::parse_from_str(date, format) {
-                        Ok(res) => {
-                            output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
+                    match string_to_format_timestamp(date, format, ctx) {
+                        Ok((res, false)) => {
+                            output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
                         }
-                        Err(e) => {
-                            ctx.set_error(output.len(), e.to_string());
+                        _ => {
                             output.push_null();
                         }
                     }
@@ -344,15 +315,15 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         "try_to_date",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, _| {
+            |date, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
-                    match NaiveDate::parse_from_str(date, format) {
-                        Ok(res) => {
-                            output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
+                    match string_to_format_timestamp(date, format, ctx) {
+                        Ok((res, false)) => {
+                            output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
                         }
-                        Err(_) => {
+                        _ => {
                             output.push_null();
                         }
                     }
@@ -370,103 +341,20 @@ fn string_to_format_timestamp(
     if format.is_empty() {
         return Ok((0, true));
     }
-    // Parse with extra checks for timezone
-    // %Z	ACST	Local time zone name. Skips all non-whitespace characters during parsing. Identical to %:z when formatting. 6
-    // %z	+0930	Offset from the local time to UTC (with UTC being +0000).
-    // %:z	+09:30	Same as %z but with a colon.
-    // %::z	+09:30:00	Offset from the local time to UTC with seconds.
-    // %:::z	+09	Offset from the local time to UTC without minutes.
-    // %#z	+09	Parsing only: Same as %z but allows minutes to be missing or present.
-    let timezone_strftime = ["%Z", "%z", "%:z", "%::z", "%:::z", "%#z"];
-    let parse_tz = timezone_strftime
-        .iter()
-        .any(|&pattern| format.contains(pattern));
-    if ctx.func_ctx.parse_datetime_ignore_remainder {
-        let mut parsed = Parsed::new();
-        if let Err(e) = parse_and_remainder(&mut parsed, timestamp, StrftimeItems::new(format)) {
-            return Err(Box::new(ErrorCode::BadArguments(format!("{}", e))));
-        }
-        // Additional checks and adjustments for parsed timestamp
-        // If parsed.timestamp is Some no need to pad default year.
-        if parsed.timestamp.is_none() {
-            if parsed.year.is_none() {
-                parsed.year = Some(1970);
-                parsed.year_div_100 = Some(19);
-                parsed.year_mod_100 = Some(70);
-            }
-            if parsed.month.is_none() {
-                parsed.month = Some(1);
-            }
-            if parsed.day.is_none() {
-                parsed.day = Some(1);
-            }
-            if parsed.hour_div_12.is_none() && parsed.hour_mod_12.is_none() {
-                parsed.hour_div_12 = Some(0);
-                parsed.hour_mod_12 = Some(0);
-            }
-            if parsed.minute.is_none() {
-                parsed.minute = Some(0);
-            }
-            if parsed.second.is_none() {
-                parsed.second = Some(0);
-            }
-        }
+    let (mut tm, offset) = BrokenDownTime::parse_prefix(format, timestamp)
+        .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))?;
 
-        if parse_tz {
-            parsed.offset.get_or_insert(0);
-            parsed
-                .to_datetime()
-                .map(|res| (res.timestamp_micros(), false))
-                .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))
-        } else {
-            parsed
-                .to_naive_datetime_with_offset(0)
-                .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))
-                .and_then(|res| {
-                    let dt = datetime(
-                        res.year() as i16,
-                        res.month() as i8,
-                        res.day() as i8,
-                        res.hour() as i8,
-                        res.minute() as i8,
-                        res.second() as i8,
-                        res.nanosecond() as i32,
-                    );
-                    match dt.to_zoned(ctx.func_ctx.jiff_tz.clone()) {
-                        Ok(res) => Ok((res.timestamp().as_microsecond(), false)),
-                        Err(e) => Err(Box::new(ErrorCode::BadArguments(format!(
-                            "Can not parse timestamp with error: {}",
-                            e
-                        )))),
-                    }
-                })
-        }
-    } else if parse_tz {
-        DateTime::parse_from_str(timestamp, format)
-            .map(|res| (res.timestamp_micros(), false))
-            .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{}", err))))
-    } else {
-        NaiveDateTime::parse_from_str(timestamp, format)
-            .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{}", err))))
-            .and_then(|res| {
-                let dt = datetime(
-                    res.year() as i16,
-                    res.month() as i8,
-                    res.day() as i8,
-                    res.hour() as i8,
-                    res.minute() as i8,
-                    res.second() as i8,
-                    res.nanosecond() as i32,
-                );
-                match dt.to_zoned(ctx.func_ctx.jiff_tz.clone()) {
-                    Ok(res) => Ok((res.timestamp().as_microsecond(), false)),
-                    Err(e) => Err(Box::new(ErrorCode::BadArguments(format!(
-                        "Can not parse timestamp with error: {}",
-                        e
-                    )))),
-                }
-            })
+    if !ctx.func_ctx.parse_datetime_ignore_remainder && offset != timestamp.len() {
+        return Err(Box::new(ErrorCode::BadArguments(format!(
+            "Can not fully parse timestamp {timestamp} by format {format}",
+        ))));
     }
+    if tm.offset().is_none() {
+        tm.set_offset(Some(tz::offset(0)));
+    }
+    tm.to_timestamp()
+        .map(|ts| (ts.as_microsecond(), false))
+        .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))
 }
 
 fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
@@ -585,32 +473,27 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
 
     fn eval_string_to_date(val: Value<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
-            if ctx.func_ctx.enable_strict_datetime_parser {
-                match string_to_date(val, &ctx.func_ctx.jiff_tz) {
-                    Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
-                        Ok(s) => output.push(s.get_days()),
-                        Err(e) => {
-                            ctx.set_error(
-                                output.len(),
-                                format!("cannot parse to type `DATE`. {}", e),
-                            );
-                            output.push(0);
-                        }
-                    },
-                    Err(e) => {
-                        ctx.set_error(output.len(), format!("cannot parse to type `DATE`. {}", e));
-                        output.push(0);
-                    }
-                }
+            let d = if ctx.func_ctx.enable_strict_datetime_parser {
+                string_to_date(val, &ctx.func_ctx.jiff_tz)
             } else {
-                match parse(val) {
-                    Ok((naive_dt, _)) => {
-                        output.push(naive_dt.date().num_days_from_ce() - EPOCH_DAYS_FROM_CE);
-                    }
+                parse(val)
+                    .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                    .and_then(|(naive_dt, _)| {
+                        string_to_date(&naive_dt.to_string(), &ctx.func_ctx.jiff_tz)
+                    })
+            };
+
+            match d {
+                Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
+                    Ok(s) => output.push(s.get_days()),
                     Err(e) => {
                         ctx.set_error(output.len(), format!("cannot parse to type `DATE`. {}", e));
                         output.push(0);
                     }
+                },
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `DATE`. {}", e));
+                    output.push(0);
                 }
             }
         })(val, ctx)
