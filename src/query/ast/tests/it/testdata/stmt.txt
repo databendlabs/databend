@@ -24722,8 +24722,10 @@ DESCRIBE PROCEDURE p1()
 ---------- AST ------------
 DescProcedure(
     DescProcedureStmt {
-        name: "p1",
-        args: [],
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
     },
 )
 
@@ -24731,15 +24733,14 @@ DescProcedure(
 ---------- Input ----------
 describe PROCEDURE p1(string, timestamp)
 ---------- Output ---------
-DESCRIBE PROCEDURE p1(STRING, TIMESTAMP)
+DESCRIBE PROCEDURE p1(STRING,TIMESTAMP)
 ---------- AST ------------
 DescProcedure(
     DescProcedureStmt {
-        name: "p1",
-        args: [
-            String,
-            Timestamp,
-        ],
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "STRING,TIMESTAMP",
+        },
     },
 )
 

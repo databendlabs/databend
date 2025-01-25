@@ -170,7 +170,9 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if let Some(top_n) = &window_partition.top_n {
+        if let Some(top_n) = &window_partition.top_n
+            && top_n.top < 10000
+        {
             self.main_pipeline.exchange(
                 num_processors,
                 WindowPartitionTopNExchange::create(

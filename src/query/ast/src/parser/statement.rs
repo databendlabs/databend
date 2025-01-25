@@ -2392,8 +2392,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, name, args)| {
             // TODO: modify to ProcedureIdentify
             Statement::DescProcedure(DescProcedureStmt {
-                name: name.to_string(),
-                args,
+                name: ProcedureIdentity {
+                    name: name.to_string(),
+                    args_type: if args.is_empty() {
+                        "".to_string()
+                    } else {
+                        args.iter()
+                            .map(|arg| arg.to_string())
+                            .collect::<Vec<String>>()
+                            .join(",")
+                    },
+                },
             })
         },
     );

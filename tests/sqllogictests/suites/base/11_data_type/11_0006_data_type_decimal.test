@@ -522,7 +522,7 @@ select count(*) from t_decimal_4_2;
 ----
 0
 
-statement error 1303
+statement error 1005
 insert into t_decimal_4_2 values (.);
 
 statement ok
@@ -533,7 +533,7 @@ select count(*) from t_decimal_4_2;
 ----
 0
 
-statement error 1303
+statement error 1005
 insert into t_decimal_4_2 values (+);
 
 statement ok
@@ -544,7 +544,7 @@ select count(*) from t_decimal_4_2;
 ----
 0
 
-statement error 1303
+statement error 1005
 insert into t_decimal_4_2 values (-);
 
 statement ok
@@ -708,13 +708,13 @@ create table t_decimal_76_2(a Decimal(76,2) not null);
 statement error 1065
 insert into t_decimal_76_2 values (1.1.1);
 
-statement error 1303
+statement error 1005
 insert into t_decimal_76_2 values (.);
 
-statement error 1303
+statement error 1005
 insert into t_decimal_76_2 values (+);
 
-statement error 1303
+statement error 1005
 insert into t_decimal_76_2 values (-);
 
 statement error 1303

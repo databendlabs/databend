@@ -146,6 +146,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (114, "2024-12-12: Add: New DataType Interval."),
     (115, "2024-12-16: Add: udf.proto: add UDAFScript and UDAFServer"),
     (116, "2025-01-09: Add: MarkedDeletedIndexMeta"),
+    (117, "2025-01-21: Add: config.proto: add disable_list_batch in WebhdfsConfig"),
+    (118, "2025-01-22: Add: config.proto: add user_name in WebhdfsConfig")
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
