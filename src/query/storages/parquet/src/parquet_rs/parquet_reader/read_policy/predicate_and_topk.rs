@@ -204,7 +204,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 num_rows,
             )?;
             let filter = self.predicate.evaluate_block(&block)?;
-            if filter.unset_bits() == num_rows {
+            if filter.null_count() == num_rows {
                 // All rows in current row group are filtered out.
                 return Ok(None);
             }

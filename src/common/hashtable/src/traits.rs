@@ -18,10 +18,10 @@ use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_base::base::OrderedFloat;
+use databend_common_column::bitmap::Bitmap;
 use ethnum::i256;
 use ethnum::U256;
-use ordered_float::OrderedFloat;
 
 use crate::RowPtr;
 
@@ -566,4 +566,7 @@ pub trait HashJoinHashtableLike {
         occupied: usize,
         capacity: usize,
     ) -> (usize, u64);
+
+    // Find the next matched ptr.
+    fn next_matched_ptr(&self, key: &Self::Key, ptr: u64) -> u64;
 }

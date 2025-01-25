@@ -12,16 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::datatypes::Field;
-use databend_common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use databend_common_arrow::arrow::io::flight::default_ipc_fields;
-use databend_common_arrow::arrow::io::flight::deserialize_batch;
-use databend_common_arrow::arrow::io::flight::deserialize_dictionary;
-use databend_common_arrow::arrow::io::ipc::read::Dictionaries;
-use databend_common_arrow::arrow::io::ipc::IpcSchema;
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::ArrayType;
@@ -45,39 +38,30 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
+use crate::servers::flight::v1::exchange::serde::deserialize_block;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
-pub struct TransformDeserializer<Method: HashMethodBounds, V: Send + Sync + 'static> {
+pub struct TransformDeserializer {
     schema: DataSchemaRef,
-    ipc_schema: IpcSchema,
     arrow_schema: Arc<ArrowSchema>,
-    _phantom: PhantomData<(Method, V)>,
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<Method, V> {
+impl TransformDeserializer {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         schema: &DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let arrow_schema = ArrowSchema::from(schema.as_ref());
-        let ipc_fields = default_ipc_fields(&arrow_schema.fields);
-        let ipc_schema = IpcSchema {
-            fields: ipc_fields,
-            is_little_endian: true,
-        };
 
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
-            TransformDeserializer::<Method, V> {
-                ipc_schema,
+            TransformDeserializer {
                 arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
-                _phantom: Default::default(),
             },
         )))
     }
@@ -95,42 +79,44 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
             return Ok(DataBlock::new_with_meta(vec![], 0, meta));
         }
 
-        let fields = &self.arrow_schema.fields;
-        let schema = &self.ipc_schema;
-
         let data_block = match &meta {
             None => {
-                self.deserialize_data_block(dict, &fragment_data, fields, schema, &self.schema)?
+                deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?
             }
             Some(meta) => match AggregateSerdeMeta::downcast_ref_from(meta) {
                 None => {
-                    self.deserialize_data_block(dict, &fragment_data, fields, schema, &self.schema)?
+                    deserialize_block(dict, fragment_data, &self.schema, self.arrow_schema.clone())?
                 }
                 Some(meta) => {
                     return match meta.typ == BUCKET_TYPE {
-                        true => Ok(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, V>::create_serialized(
-                                meta.bucket,
-                                self.deserialize_data_block(
-                                    dict,
-                                    &fragment_data,
-                                    fields,
-                                    schema,
-                                    &self.schema,
-                                )?,
-                                meta.max_partition_count,
-                            ),
-                        )),
-                        false => {
-                            let fields = exchange_defines::spilled_fields();
-                            let schema = exchange_defines::spilled_ipc_schema();
-                            let data_schema = Arc::new(exchange_defines::spilled_schema());
-                            let data_block = self.deserialize_data_block(
+                        true => {
+                            let mut block = deserialize_block(
                                 dict,
-                                &fragment_data,
-                                fields,
-                                schema,
+                                fragment_data,
+                                &self.schema,
+                                self.arrow_schema.clone(),
+                            )?;
+
+                            if meta.is_empty {
+                                block = block.slice(0..0);
+                            }
+
+                            Ok(DataBlock::empty_with_meta(
+                                AggregateMeta::create_serialized(
+                                    meta.bucket,
+                                    block,
+                                    meta.max_partition_count,
+                                ),
+                            ))
+                        }
+                        false => {
+                            let data_schema = Arc::new(exchange_defines::spilled_schema());
+                            let arrow_schema = Arc::new(exchange_defines::spilled_arrow_schema());
+                            let data_block = deserialize_block(
+                                dict,
+                                fragment_data,
                                 &data_schema,
+                                arrow_schema.clone(),
                             )?;
 
                             let columns = data_block
@@ -169,9 +155,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
                                 }
                             }
 
-                            Ok(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_spilled(buckets_payload),
-                            ))
+                            Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
+                                buckets_payload,
+                            )))
                         }
                     };
                 }
@@ -183,35 +169,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
             false => data_block.add_meta(meta),
         }
     }
-
-    fn deserialize_data_block(
-        &self,
-        dict: Vec<DataPacket>,
-        fragment_data: &FragmentData,
-        arrow_fields: &[Field],
-        ipc_schema: &IpcSchema,
-        data_schema: &DataSchemaRef,
-    ) -> Result<DataBlock> {
-        let mut dictionaries = Dictionaries::new();
-
-        for dict_packet in dict {
-            if let DataPacket::Dictionary(flight_data) = dict_packet {
-                deserialize_dictionary(&flight_data, arrow_fields, ipc_schema, &mut dictionaries)?;
-            }
-        }
-
-        let batch =
-            deserialize_batch(&fragment_data.data, arrow_fields, ipc_schema, &dictionaries)?;
-
-        DataBlock::from_arrow_chunk(&batch, data_schema)
-    }
 }
 
-impl<M, V> BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer<M, V>
-where
-    M: HashMethodBounds,
-    V: Send + Sync + 'static,
-{
+impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer {
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
     const NAME: &'static str = "TransformDeserializer";
 
@@ -229,5 +189,4 @@ where
     }
 }
 
-pub type TransformGroupByDeserializer<Method> = TransformDeserializer<Method, ()>;
-pub type TransformAggregateDeserializer<Method> = TransformDeserializer<Method, usize>;
+pub type TransformAggregateDeserializer = TransformDeserializer;

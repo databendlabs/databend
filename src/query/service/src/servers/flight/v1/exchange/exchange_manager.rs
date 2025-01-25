@@ -21,9 +21,9 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
+use arrow_flight::flight_service_client::FlightServiceClient;
+use arrow_flight::FlightData;
 use async_channel::Receiver;
-use databend_common_arrow::arrow_format::flight::data::FlightData;
-use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
@@ -33,6 +33,7 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
+use databend_common_pipeline_core::basic_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::executor::PhysicalPlan;
 use fastrace::prelude::*;
@@ -51,6 +52,7 @@ use super::exchange_transform::ExchangeTransform;
 use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -241,7 +243,13 @@ impl DataExchangeManager {
                 "Query {} cannot start command while in 180 seconds",
                 query_id
             );
-            self.on_finished_query(&query_id);
+            self.on_finished_query(
+                &query_id,
+                Some(ErrorCode::Internal(format!(
+                    "Query {} cannot start command while in 180 seconds",
+                    query_id
+                ))),
+            );
         }
     }
 
@@ -348,7 +356,7 @@ impl DataExchangeManager {
         &self,
         id: String,
         target: String,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -366,7 +374,7 @@ impl DataExchangeManager {
         query: String,
         target: String,
         fragment: usize,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -378,17 +386,17 @@ impl DataExchangeManager {
         }
     }
 
-    pub fn shutdown_query(&self, query_id: &str) {
+    pub fn shutdown_query(&self, query_id: &str, cause: Option<ErrorCode>) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         if let Some(query_coordinator) = queries_coordinator.get_mut(query_id) {
-            query_coordinator.shutdown_query();
+            query_coordinator.shutdown_query(cause);
         }
     }
 
     #[fastrace::trace]
-    pub fn on_finished_query(&self, query_id: &str) {
+    pub fn on_finished_query(&self, query_id: &str, cause: Option<ErrorCode>) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -396,7 +404,7 @@ impl DataExchangeManager {
             // Drop mutex guard to avoid deadlock during shutdown,
             drop(queries_coordinator_guard);
 
-            query_coordinator.shutdown_query();
+            query_coordinator.shutdown_query(cause);
             query_coordinator.on_finished();
         }
     }
@@ -409,13 +417,17 @@ impl DataExchangeManager {
         actions: QueryFragmentsActions,
     ) -> Result<PipelineBuildResult> {
         let settings = ctx.get_settings();
-        let timeout = settings.get_flight_client_timeout()?;
+        let flight_params = FlightParams {
+            timeout: settings.get_flight_client_timeout()?,
+            retry_times: settings.get_flight_max_retry_times()?,
+            retry_interval: settings.get_flight_retry_interval()?,
+        };
         let root_actions = actions.get_root_actions()?;
         let conf = GlobalConfig::instance();
 
         // Initialize query env between cluster nodes
         let query_env = actions.get_query_env()?;
-        query_env.init(&ctx, timeout).await?;
+        query_env.init(&ctx, flight_params).await?;
 
         // Submit distributed tasks to all nodes.
         let cluster = ctx.get_cluster();
@@ -424,7 +436,7 @@ impl DataExchangeManager {
         let local_fragments = query_fragments.remove(&conf.query.node_id);
 
         let _: HashMap<String, ()> = cluster
-            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, timeout)
+            .do_action(INIT_QUERY_FRAGMENTS, query_fragments, flight_params)
             .await?;
 
         self.set_ctx(&ctx.get_id(), ctx.clone())?;
@@ -437,7 +449,7 @@ impl DataExchangeManager {
 
         let prepared_query = actions.prepared_query()?;
         let _: HashMap<String, ()> = cluster
-            .do_action(START_PREPARED_QUERY, prepared_query, timeout)
+            .do_action(START_PREPARED_QUERY, prepared_query, flight_params)
             .await?;
 
         Ok(build_res)
@@ -469,16 +481,17 @@ impl DataExchangeManager {
                     Mutex::new(statistics_receiver);
 
                 // Interrupting the execution of finished callback if network error
-                build_res
-                    .main_pipeline
-                    .lift_on_finished(move |info: &ExecutionInfo| {
+                build_res.main_pipeline.set_on_finished(basic_callback(
+                    move |info: &ExecutionInfo| {
                         let query_id = ctx.get_id();
                         let mut statistics_receiver = statistics_receiver.lock();
 
                         statistics_receiver.shutdown(info.res.is_err());
-                        ctx.get_exchange_manager().on_finished_query(&query_id);
+                        ctx.get_exchange_manager()
+                            .on_finished_query(&query_id, info.res.clone().err());
                         statistics_receiver.wait_shutdown()
-                    });
+                    },
+                ));
 
                 // Return if it‘s an error returned by another query node
                 build_res
@@ -574,7 +587,7 @@ impl QueryCoordinator {
     pub fn add_statistics_exchange(
         &mut self,
         target: String,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
         match self
             .statistics_exchanges
@@ -606,7 +619,7 @@ impl QueryCoordinator {
         &mut self,
         target: String,
         fragment: usize,
-    ) -> Result<Receiver<Result<FlightData, Status>>> {
+    ) -> Result<Receiver<std::result::Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
         self.fragment_exchanges.insert(
             (target, fragment, FLIGHT_SENDER),
@@ -767,10 +780,10 @@ impl QueryCoordinator {
         Err(ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
     }
 
-    pub fn shutdown_query(&mut self) {
+    pub fn shutdown_query(&mut self, cause: Option<ErrorCode>) {
         if let Some(query_info) = &mut self.info {
             if let Some(query_executor) = &query_info.query_executor {
-                query_executor.finish(None);
+                query_executor.finish(cause);
             }
 
             if let Some(worker) = query_info.remove_leak_query_worker.take() {
@@ -870,10 +883,11 @@ impl QueryCoordinator {
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
-            statistics_sender.shutdown(executor.execute().err());
+            let error = executor.execute().err();
+            statistics_sender.shutdown(error.clone());
             query_ctx
                 .get_exchange_manager()
-                .on_finished_query(&query_id);
+                .on_finished_query(&query_id, error);
         });
 
         Ok(())
@@ -951,7 +965,15 @@ impl FragmentCoordinator {
         if !self.initialized {
             self.initialized = true;
 
-            let pipeline_ctx = QueryContext::create_from(ctx);
+            let pipeline_ctx = QueryContext::create_from(ctx.as_ref());
+
+            unsafe {
+                pipeline_ctx
+                    .get_settings()
+                    .unchecked_apply_changes(ctx.get_settings().changes());
+
+                drop(ctx);
+            }
 
             let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,

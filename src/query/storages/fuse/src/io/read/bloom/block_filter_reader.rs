@@ -99,7 +99,8 @@ async fn load_bloom_filter_by_columns<'a>(
     for column_name in column_needed {
         for (idx, (name, column_meta)) in index_column_chunk_metas.iter().enumerate() {
             if name == column_name {
-                col_metas.push((idx as ColumnId, (name, column_meta)))
+                col_metas.push((idx as ColumnId, (name, column_meta)));
+                break;
             }
         }
     }
@@ -208,7 +209,7 @@ where
     #[async_backtrace::framed]
     async fn execute_in_runtime(self, runtime: &Runtime) -> Result<T::Output> {
         runtime
-            .try_spawn(self)?
+            .try_spawn(self, None)?
             .await
             .map_err(|e| ErrorCode::TokioError(format!("runtime join error. {}", e)))
     }

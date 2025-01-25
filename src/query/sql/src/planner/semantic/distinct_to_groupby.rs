@@ -53,15 +53,19 @@ impl DistinctToGroupBy {
                                 distinct,
                                 name,
                                 args,
+                                window,
                                 ..
                             },
                     },
                 alias,
             } = &select_list[0]
             {
+                if window.is_some() {
+                    return;
+                }
                 let sub_query_name = "_distinct_group_by_subquery";
-                if ((name.name.to_ascii_lowercase() == "count" && *distinct)
-                    || name.name.to_ascii_lowercase() == "count_distinct")
+                if ((name.name.eq_ignore_ascii_case("count") && *distinct)
+                    || name.name.eq_ignore_ascii_case("count_distinct"))
                     && args.iter().all(|arg| !matches!(arg, Expr::Literal { .. }))
                 {
                     let subquery = Query {
@@ -128,6 +132,8 @@ impl DistinctToGroupBy {
                                 name: Identifier::from_name(None, sub_query_name),
                                 columns: vec![Identifier::from_name(None, "_1")],
                             }),
+                            pivot: None,
+                            unpivot: None,
                         }],
                         selection: None,
                         group_by: None,

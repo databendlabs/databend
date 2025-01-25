@@ -22,6 +22,7 @@ use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
 
+use crate::auth::Credential;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
@@ -30,6 +31,7 @@ use crate::sessions::SessionType;
 #[derive(Clone)]
 pub struct HttpQueryContext {
     pub session: Arc<Session>,
+    pub credential: Credential,
     pub query_id: String,
     pub node_id: String,
     pub expected_node_id: Option<String>,
@@ -40,7 +42,8 @@ pub struct HttpQueryContext {
     pub http_method: String,
     pub uri: String,
     pub client_host: Option<String>,
-    pub databend_token: Option<String>,
+    pub client_session_id: Option<String>,
+    pub user_name: String,
 }
 
 impl HttpQueryContext {

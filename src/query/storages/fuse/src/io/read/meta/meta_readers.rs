@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Read;
 use std::io::SeekFrom;
 
+use arrow_ipc::convert::try_schema_from_ipc_buffer;
 use bytes::Buf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::constants::DEFAULT_FOOTER_READ_SIZE;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::InMemoryItemCacheReader;
 use databend_storages_common_cache::LoadParams;
@@ -159,64 +160,94 @@ impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<InvertedIndexMeta> {
         let operator = &self.0;
-        let meta = operator.stat(&params.location).await.map_err(|err| {
-            ErrorCode::StorageOther(format!(
-                "read inverted index file meta failed, {}, {:?}",
-                params.location, err
-            ))
-        })?;
-        let file_size = meta.content_length();
-
-        if file_size < 36 {
-            return Err(ErrorCode::StorageOther(
-                "inverted index file must contain a footer with at least 36 bytes",
-            ));
-        }
-        let default_end_len = 36;
-
-        // read the end of the file
-        let data = operator
-            .read_with(&params.location)
-            .range(file_size - default_end_len as u64..file_size)
-            .await
-            .map_err(|err| {
+        let file_size = if let Some(len) = params.len_hint {
+            len
+        } else {
+            let meta = operator.stat(&params.location).await.map_err(|err| {
                 ErrorCode::StorageOther(format!(
-                    "read file meta failed, {}, {:?}",
+                    "read inverted index file meta failed, {}, {:?}",
                     params.location, err
                 ))
             })?;
+            meta.content_length()
+        };
 
-        let mut buf = vec![0u8; 4];
-        let mut reader = data.reader();
-        let mut offsets = Vec::with_capacity(8);
-        let fast_fields_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
-        let store_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
-        let field_norms_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
-        let positions_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
-        let postings_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
-        let terms_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
-        let meta_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
-        let managed_offset = read_u32(&mut reader, buf.as_mut_slice())? as u64;
+        // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
+        let end_len = std::cmp::min(DEFAULT_FOOTER_READ_SIZE, file_size) as usize;
 
-        offsets.push(("fast".to_string(), fast_fields_offset));
-        offsets.push(("store".to_string(), store_offset));
-        offsets.push(("fieldnorm".to_string(), field_norms_offset));
-        offsets.push(("pos".to_string(), positions_offset));
-        offsets.push(("idx".to_string(), postings_offset));
-        offsets.push(("term".to_string(), terms_offset));
-        offsets.push(("meta.json".to_string(), meta_offset));
-        offsets.push((".managed.json".to_string(), managed_offset));
+        // read the end of the file
+        let buffer = operator
+            .read_with(&params.location)
+            .range(file_size - end_len as u64..file_size)
+            .await
+            .map_err(|err| {
+                ErrorCode::StorageOther(format!(
+                    "read inverted index file meta failed, {}, {:?}",
+                    params.location, err
+                ))
+            })?
+            .to_vec();
+
+        let meta_len =
+            u32::from_le_bytes(buffer[end_len - 4..end_len].try_into().unwrap()) as usize;
+
+        // read legacy index file format
+        if meta_len == 8 {
+            let column_names = vec![
+                "fast".to_string(),
+                "store".to_string(),
+                "fieldnorm".to_string(),
+                "pos".to_string(),
+                "idx".to_string(),
+                "term".to_string(),
+                "meta.json".to_string(),
+                ".managed.json".to_string(),
+            ];
+
+            let mut prev_offset = 0;
+            let mut column_range = end_len - 36;
+            let mut columns = Vec::with_capacity(column_names.len());
+            for name in column_names {
+                let offset =
+                    u32::from_le_bytes(buffer[column_range..column_range + 4].try_into().unwrap())
+                        as u64;
+                column_range += 4;
+
+                let column_meta = SingleColumnMeta {
+                    offset: prev_offset,
+                    len: offset - prev_offset,
+                    num_values: 1,
+                };
+                prev_offset = offset;
+                columns.push((name, column_meta));
+            }
+            return Ok(InvertedIndexMeta { columns });
+        }
+
+        let schema_len =
+            u32::from_le_bytes(buffer[end_len - 8..end_len - 4].try_into().unwrap()) as usize;
+
+        let schema_range_start = end_len - meta_len;
+        let schema_range_end = schema_range_start + schema_len;
+        let index_schema =
+            try_schema_from_ipc_buffer(&buffer[schema_range_start..schema_range_end])?;
 
         let mut prev_offset = 0;
-        let mut columns = Vec::with_capacity(offsets.len());
-        for (name, offset) in offsets.into_iter() {
+        let mut column_range = schema_range_end;
+        let mut columns = Vec::with_capacity(index_schema.fields.len());
+        for field in &index_schema.fields {
+            let offset =
+                u32::from_le_bytes(buffer[column_range..column_range + 4].try_into().unwrap())
+                    as u64;
+            column_range += 4;
+
             let column_meta = SingleColumnMeta {
                 offset: prev_offset,
                 len: offset - prev_offset,
                 num_values: 1,
             };
             prev_offset = offset;
-            columns.push((name, column_meta));
+            columns.push((field.name().clone(), column_meta));
         }
 
         Ok(InvertedIndexMeta { columns })
@@ -233,7 +264,7 @@ async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Resul
 }
 
 mod thrift_file_meta_read {
-    use databend_common_arrow::parquet::error::Error;
+    use parquet::errors::ParquetError;
     use thrift::protocol::TCompactInputProtocol;
 
     use super::*;
@@ -277,7 +308,7 @@ mod thrift_file_meta_read {
             let meta = op
                 .stat(path)
                 .await
-                .map_err(|err| Error::OutOfSpec(err.to_string()))?;
+                .map_err(|err| ParquetError::General(err.to_string()))?;
             meta.content_length()
         };
 
@@ -295,7 +326,7 @@ mod thrift_file_meta_read {
             .read_with(path)
             .range(file_size - default_end_len as u64..file_size)
             .await
-            .map_err(|err| Error::OutOfSpec(err.to_string()))?
+            .map_err(|err| ParquetError::General(err.to_string()))?
             .to_vec();
 
         // check this is indeed a parquet file
@@ -337,10 +368,4 @@ mod thrift_file_meta_read {
             Ok(meta)
         }
     }
-}
-
-#[inline(always)]
-fn read_u32<R: Read>(r: &mut R, buf: &mut [u8]) -> Result<u32> {
-    r.read_exact(buf)?;
-    Ok(u32::from_le_bytes(buf.try_into().unwrap()))
 }

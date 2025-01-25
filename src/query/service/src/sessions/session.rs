@@ -32,7 +32,8 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::TempTblMgrRef;
+use databend_storages_common_session::TxnManagerRef;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -62,7 +63,7 @@ impl Session {
         session_ctx: Box<SessionContext>,
         mysql_connection_id: Option<u32>,
     ) -> Result<Session> {
-        let status = Arc::new(Default::default());
+        let status = Default::default();
         Ok(Session {
             id,
             typ: RwLock::new(typ),
@@ -135,7 +136,7 @@ impl Session {
         self.kill(/* shutdown io stream */);
     }
 
-    pub fn force_kill_query(&self, cause: ErrorCode) {
+    pub fn force_kill_query<C>(&self, cause: ErrorCode<C>) {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.kill(cause);
         }
@@ -197,6 +198,10 @@ impl Session {
 
     pub fn get_current_catalog(&self) -> String {
         self.session_ctx.get_current_catalog()
+    }
+
+    pub fn set_current_catalog(&self, catalog_name: String) {
+        self.session_ctx.set_current_catalog(catalog_name)
     }
 
     pub fn get_current_tenant(&self) -> Tenant {
@@ -280,6 +285,16 @@ impl Session {
     }
 
     #[async_backtrace::framed]
+    pub async fn set_current_warehouse(&self, w: Option<String>) -> Result<()> {
+        self.privilege_mgr().set_current_warehouse(w).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_current_warehouse(&self) -> Option<String> {
+        self.session_ctx.get_current_warehouse()
+    }
+
+    #[async_backtrace::framed]
     pub async fn validate_privilege(
         &self,
         object: &GrantObject,
@@ -309,8 +324,13 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
-        self.privilege_mgr().get_visibility_checker().await
+    pub async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker> {
+        self.privilege_mgr()
+            .get_visibility_checker(ignore_ownership)
+            .await
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -342,6 +362,13 @@ impl Session {
         self.session_ctx.set_txn_mgr(txn_mgr)
     }
 
+    pub fn temp_tbl_mgr(&self) -> TempTblMgrRef {
+        self.session_ctx.temp_tbl_mgr()
+    }
+    pub fn set_temp_tbl_mgr(&self, temp_tbl_mgr: TempTblMgrRef) {
+        self.session_ctx.set_temp_tbl_mgr(temp_tbl_mgr)
+    }
+
     pub fn set_query_priority(&self, priority: u8) {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.set_priority(priority);
@@ -361,6 +388,35 @@ impl Session {
 
     pub fn set_all_variables(&self, variables: HashMap<String, Scalar>) {
         self.session_ctx.set_all_variables(variables)
+    }
+
+    pub fn get_client_session_id(&self) -> Option<String> {
+        self.session_ctx.get_client_session_id()
+    }
+
+    pub fn set_client_session_id(&mut self, id: String) {
+        self.session_ctx.set_client_session_id(id)
+    }
+    pub fn get_temp_table_prefix(&self) -> Result<String> {
+        let typ = self.typ.read().clone();
+        let session_id = match typ {
+            SessionType::MySQL => self.id.clone(),
+            SessionType::HTTPQuery => {
+                if let Some(id) = self.get_client_session_id() {
+                    id
+                } else {
+                    return Err(ErrorCode::BadArguments(
+                        "can not use temp table in http handler if cookie is not enabled",
+                    ));
+                }
+            }
+            t => {
+                return Err(ErrorCode::BadArguments(format!(
+                    "can not use temp table in session type {t}"
+                )));
+            }
+        };
+        Ok(format!("{}/{session_id}", self.get_current_user()?.name))
     }
 }
 

@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::Display;
+use std::time::Instant;
 
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::BackgroundJobAlreadyExists;
-use databend_common_meta_app::app_error::UnknownBackgroundJob;
+use databend_common_meta_app::background::background_job_id_ident::BackgroundJobId;
 use databend_common_meta_app::background::BackgroundJobIdIdent;
 use databend_common_meta_app::background::BackgroundJobIdent;
 use databend_common_meta_app::background::BackgroundJobInfo;
@@ -41,36 +40,30 @@ use databend_common_meta_app::background::UpdateBackgroundTaskReq;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_kvapi::kvapi::DirName;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
-use databend_common_meta_types::ConditionResult::Eq;
-use databend_common_meta_types::InvalidReply;
-use databend_common_meta_types::MatchSeq;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::MatchSeq::Any;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaSpec;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnRequest;
-use databend_common_meta_types::With;
+use databend_common_meta_types::UpsertKV;
 use fastrace::func_name;
+use futures::TryStreamExt;
 use log::debug;
 
 use crate::background_api::BackgroundApi;
-use crate::deserialize_struct;
 use crate::fetch_id;
-use crate::get_pb_value;
-use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
 use crate::send_txn;
 use crate::serialize_struct;
-use crate::serialize_u64;
 use crate::txn_backoff::txn_backoff;
-use crate::txn_cond_seq;
-use crate::txn_op_put;
-use crate::util::deserialize_u64;
+use crate::util::txn_op_put_pb;
+use crate::util::txn_replace_exact;
 
 /// BackgroundApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls BackgroundApi.
@@ -90,53 +83,38 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             trials.next().unwrap()?.await;
 
             // Get db mask by name to ensure absence
-            let (seq, id) = get_u64_value(self, name_key).await?;
-            debug!(seq = seq, id = id, name_key :? =(name_key); "create_background_job");
+            let job_id = self.get_pb(name_key).await?;
 
-            if seq > 0 {
+            debug!(res :? = job_id, name_key :? =(name_key); "get existing, when create_background_job");
+
+            if let Some(seq_id) = job_id {
                 return if req.if_not_exists {
-                    Ok(CreateBackgroundJobReply { id })
+                    Ok(CreateBackgroundJobReply { id: *seq_id.data })
                 } else {
-                    Err(KVAppError::AppError(AppError::BackgroundJobAlreadyExists(
-                        BackgroundJobAlreadyExists::new(
-                            name_key.name(),
-                            format!("create background job: {:?}", req.job_name),
-                        ),
-                    )))
+                    Err(
+                        AppError::BackgroundJobAlreadyExists(name_key.exist_error(func_name!()))
+                            .into(),
+                    )
                 };
-            }
+            };
 
             let id = fetch_id(self, IdGenerator::background_job_id()).await?;
-            let id_key = BackgroundJobIdIdent::new(name_key.tenant(), id);
+            let id = BackgroundJobId::new(id);
+            let id_key = BackgroundJobIdIdent::new_generic(name_key.tenant(), id);
 
-            debug!(
-                id :? =(&id_key),
-                name_key :? =(name_key);
-                "new backgroundjob id"
-            );
+            debug!(id :? =(&id_key),name_key :? =(name_key); "{}", func_name!());
 
             {
+                let mut txn = TxnRequest::default();
+
                 let meta: BackgroundJobInfo = req.job_info.clone();
-                let condition = vec![txn_cond_seq(name_key, Eq, 0)];
-                let if_then = vec![
-                    txn_op_put(name_key, serialize_u64(id)?), // name -> background_job_id
-                    txn_op_put(&id_key, serialize_struct(&meta)?), // id -> meta
-                ];
 
-                let txn_req = TxnRequest {
-                    condition,
-                    if_then,
-                    else_then: vec![],
-                };
+                txn_replace_exact(&mut txn, name_key, 0, &id)?; // name -> background_job_id
+                txn.if_then.push(txn_op_put_pb(&id_key, &meta, None)?); // id -> meta
 
-                let (succ, _responses) = send_txn(self, txn_req).await?;
+                let (succ, _responses) = send_txn(self, txn).await?;
 
-                debug!(
-                    name :? =(name_key),
-                    id :? =(&id_key),
-                    succ = succ;
-                    "create_background_job"
-                );
+                debug!(name :? =(name_key),id :? =(&id_key),succ = succ;"{}", func_name!());
 
                 if succ {
                     break id;
@@ -144,7 +122,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             }
         };
 
-        Ok(CreateBackgroundJobReply { id })
+        Ok(CreateBackgroundJobReply { id: *id })
     }
 
     // TODO(zhihanz): needs to drop both background job and related background tasks, also needs to gracefully shutdown running queries
@@ -200,34 +178,35 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
 
         let name_key = &req.name;
 
-        let (id_ident, _, job) =
-            get_background_job_or_error(self, name_key, format!("get_: {:?}", name_key)).await?;
+        let (seq_id, seq_job) = self
+            .get_id_and_value(name_key)
+            .await?
+            .ok_or_else(|| AppError::from(name_key.unknown_error("get_background_job")))?;
 
-        Ok(GetBackgroundJobReply::new(id_ident, job))
+        Ok(GetBackgroundJobReply::new(
+            seq_id.data.into_t_ident(name_key.tenant()),
+            seq_job,
+        ))
     }
 
     #[fastrace::trace]
     async fn list_background_jobs(
         &self,
         req: ListBackgroundJobsReq,
-    ) -> Result<Vec<(u64, String, BackgroundJobInfo)>, KVAppError> {
+    ) -> Result<Vec<(String, SeqV<BackgroundJobInfo>)>, KVAppError> {
         let ident = BackgroundJobIdent::new(&req.tenant, "dummy");
-        let prefix = ident.tenant_prefix();
 
-        let reply = self.prefix_list_kv(&prefix).await?;
+        let strm = self.list_pb(&DirName::new(ident)).await?;
+        let name_and_ids = strm.try_collect::<Vec<_>>().await?;
+
         let mut res = vec![];
-        for (k, v) in reply {
-            let ident = BackgroundJobIdent::from_str_key(k.as_str())
-                .map_err(|e| MetaError::from(InvalidReply::new("list_background_jobs", &e)))?;
+        for itm in name_and_ids {
+            let id_ident = itm.seqv.data.into_t_ident(&req.tenant);
 
-            let job_id = deserialize_u64(&v.data)?;
+            let seq_info = self.get_pb(&id_ident).await?;
 
-            let req = BackgroundJobIdIdent::new(&req.tenant, job_id.0);
-            let seq_info = self.get_pb(&req).await?;
-
-            // filter none and get the task info
             if let Some(sv) = seq_info {
-                res.push((sv.seq(), ident.job_name().to_string(), sv.data));
+                res.push((itm.key.job_name().to_string(), sv));
             }
         }
         Ok(res)
@@ -245,18 +224,18 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         let meta = req.task_info.clone();
 
         let resp = self
-            .upsert_kv(UpsertKVReq::new(
+            .upsert_kv(UpsertKV::new(
                 name_key.to_string_key().as_str(),
                 Any,
                 Operation::Update(serialize_struct(&meta)?),
-                Some(MetaSpec::new_expire(req.expire_at)),
+                Some(MetaSpec::new_ttl(req.ttl)),
             ))
             .await?;
         // confirm a successful update
         assert!(resp.is_changed());
         Ok(UpdateBackgroundTaskReply {
             last_updated: Utc::now(),
-            expire_at: req.expire_at,
+            expire_at: Instant::now() + req.ttl,
         })
     }
 
@@ -264,22 +243,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
     async fn list_background_tasks(
         &self,
         req: ListBackgroundTasksReq,
-    ) -> Result<Vec<(u64, String, BackgroundTaskInfo)>, KVAppError> {
+    ) -> Result<Vec<(BackgroundTaskIdent, SeqV<BackgroundTaskInfo>)>, KVAppError> {
         let ident = BackgroundTaskIdent::new(&req.tenant, "dummy");
-        let prefix = ident.tenant_prefix();
-
-        let reply = self.prefix_list_kv(&prefix).await?;
-        let mut res = vec![];
-        for (k, v) in reply {
-            let ident = BackgroundTaskIdent::from_str_key(k.as_str()).map_err(|e| {
-                KVAppError::MetaError(MetaError::from(InvalidReply::new(
-                    "list_background_tasks",
-                    &e,
-                )))
-            })?;
-            let val: BackgroundTaskInfo = deserialize_struct(&v.data)?;
-            res.push((v.seq, ident.name().to_string(), val));
-        }
+        let dir = DirName::new(ident);
+        let res = self.list_pb_vec(&dir).await?;
         Ok(res)
     }
 
@@ -293,75 +260,34 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             "BackgroundTaskApi: {}",
             func_name!()
         );
-        let name = &req.name;
-        let (_, resp) = get_background_task_by_name(self, name).await?;
-        Ok(GetBackgroundTaskReply { task_info: resp })
+
+        let resp = self.get_pb(&req.name).await?;
+        Ok(GetBackgroundTaskReply {
+            task_info: resp.into_value(),
+        })
     }
-}
-
-async fn get_background_job_id(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_key: &BackgroundJobIdent,
-) -> Result<BackgroundJobIdIdent, KVAppError> {
-    let (id_seq, id) = get_u64_value(kv_api, name_key).await?;
-    assert_background_job_exist(id_seq, name_key)?;
-
-    Ok(BackgroundJobIdIdent::new(name_key.tenant(), id))
-}
-
-async fn get_background_job_or_error(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_ident: &BackgroundJobIdent,
-    _msg: impl Display,
-) -> Result<(BackgroundJobIdIdent, u64, BackgroundJobInfo), KVAppError> {
-    let id_ident = get_background_job_id(kv_api, name_ident).await?;
-
-    let (id_seq, job_info) = get_pb_value(kv_api, &id_ident).await?;
-    assert_background_job_exist(id_seq, name_ident)?;
-
-    // Safe unwrap(): background_job_seq > 0 implies background_job is not None.
-    Ok((id_ident, id_seq, job_info.unwrap()))
-}
-
-/// Return OK if a db_id or db_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownBackgroundJob error
-pub fn assert_background_job_exist(
-    seq: u64,
-    name_ident: &BackgroundJobIdent,
-) -> Result<(), AppError> {
-    if seq == 0 {
-        debug!(seq = seq, name_ident :? =(name_ident); "background job does not exist");
-        let unknown = UnknownBackgroundJob::new(name_ident.job_name(), format!("{:?}", name_ident));
-        Err(AppError::UnknownBackgroundJob(unknown))
-    } else {
-        Ok(())
-    }
-}
-
-async fn get_background_task_by_name(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    id: &BackgroundTaskIdent,
-) -> Result<(u64, Option<BackgroundTaskInfo>), KVAppError> {
-    let (seq, res) = get_pb_value(kv_api, id).await?;
-    Ok((seq, res))
 }
 
 async fn update_background_job<F: FnOnce(&mut BackgroundJobInfo) -> bool>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name: &BackgroundJobIdent,
+    name_ident: &BackgroundJobIdent,
     mutation: F,
 ) -> Result<UpdateBackgroundJobReply, KVAppError> {
-    debug!(req :? =(name); "BackgroundApi: {}", func_name!());
-    let (id_ident, id_val_seq, mut info) =
-        get_background_job_or_error(kv_api, name, "update_background_job").await?;
+    debug!(req :? =(name_ident); "BackgroundApi: {}", func_name!());
 
-    let should_update = mutation(&mut info);
+    let (seq_id, mut seq_meta) = kv_api
+        .get_id_and_value(name_ident)
+        .await?
+        .ok_or_else(|| AppError::from(name_ident.unknown_error("update_background_job")))?;
+
+    let id_ident = seq_id.data.into_t_ident(name_ident.tenant());
+
+    let should_update = mutation(&mut seq_meta.data);
     if !should_update {
         return Ok(UpdateBackgroundJobReply::new(id_ident.clone()));
     }
 
-    let req = UpsertPB::update(id_ident.clone(), info).with(MatchSeq::Exact(id_val_seq));
+    let req = UpsertPB::update_exact(id_ident.clone(), seq_meta);
     let resp = kv_api.upsert_pb(&req).await?;
 
     assert!(resp.is_changed());

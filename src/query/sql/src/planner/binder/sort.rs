@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -33,7 +32,6 @@ use crate::optimizer::SExpr;
 use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
@@ -44,7 +42,6 @@ use crate::plans::UDFCall;
 use crate::plans::VisitorMut as _;
 use crate::BindContext;
 use crate::IndexType;
-use crate::WindowChecker;
 
 #[derive(Debug)]
 pub struct OrderItems {
@@ -70,14 +67,7 @@ impl Binder {
         distinct: bool,
     ) -> Result<OrderItems> {
         bind_context.set_expr_context(ExprContext::OrderByClause);
-        // null is the largest value in databend, smallest in hive
-        // TODO: rewrite after https://github.com/jorgecarleitao/arrow2/pull/1286 is merged
-        let default_nulls_first = !self
-            .ctx
-            .get_settings()
-            .get_sql_dialect()
-            .unwrap()
-            .is_null_biggest();
+        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
 
         let mut order_items = Vec::with_capacity(order_by.len());
         for order in order_by {
@@ -97,11 +87,15 @@ impl Binder {
 
                     let index = index - 1;
                     let projection = &projections[index];
+
+                    let asc = order.asc.unwrap_or(true);
                     order_items.push(OrderItem {
                         index: projection.index,
                         name: projection.column_name.clone(),
-                        asc: order.asc.unwrap_or(true),
-                        nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                        asc,
+                        nulls_first: order
+                            .nulls_first
+                            .unwrap_or_else(|| default_nulls_first(asc)),
                     });
                 }
                 _ => {
@@ -111,8 +105,6 @@ impl Binder {
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
                         aliases,
-                        self.m_cte_bound_ctx.clone(),
-                        self.ctes_map.clone(),
                     );
                     let (bound_expr, _) = scalar_binder.bind(&order.expr)?;
 
@@ -122,11 +114,14 @@ impl Binder {
                         .find(|(_, (_, scalar))| bound_expr.eq(scalar))
                     {
                         // The order by expression is in the select list.
+                        let asc = order.asc.unwrap_or(true);
                         order_items.push(OrderItem {
                             index: projections[idx].index,
                             name: alias.clone(),
-                            asc: order.asc.unwrap_or(true),
-                            nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                            asc,
+                            nulls_first: order
+                                .nulls_first
+                                .unwrap_or_else(|| default_nulls_first(asc)),
                         });
                     } else if distinct {
                         return Err(ErrorCode::SemanticError(
@@ -153,6 +148,10 @@ impl Binder {
                             )
                             .map_err(|e| ErrorCode::SemanticError(e.message()))?;
 
+                        if let ScalarExpr::ConstantExpr(..) = rewrite_scalar {
+                            continue;
+                        }
+
                         let column_binding =
                             if let ScalarExpr::BoundColumnRef(col) = &rewrite_scalar {
                                 col.column.clone()
@@ -168,11 +167,14 @@ impl Binder {
                             index: column_binding.index,
                         };
                         scalar_items.insert(column_binding.index, item);
+                        let asc = order.asc.unwrap_or(true);
                         order_items.push(OrderItem {
                             index: column_binding.index,
                             name: column_binding.column_name,
-                            asc: order.asc.unwrap_or(true),
-                            nulls_first: order.nulls_first.unwrap_or(default_nulls_first),
+                            asc,
+                            nulls_first: order
+                                .nulls_first
+                                .unwrap_or_else(|| default_nulls_first(asc)),
                         });
                     }
                 }
@@ -186,12 +188,9 @@ impl Binder {
         from_context: &BindContext,
         order_by: OrderItems,
         select_list: &SelectList<'_>,
-        scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,
     ) -> Result<SExpr> {
         let mut order_by_items = Vec::with_capacity(order_by.items.len());
-        let mut scalars = vec![];
-
         for order in order_by.items {
             if from_context.in_grouping {
                 let mut group_checker = GroupingChecker::new(from_context);
@@ -206,23 +205,6 @@ impl Binder {
                 }
             }
 
-            if let Entry::Occupied(entry) = scalar_items.entry(order.index) {
-                let need_eval = !matches!(entry.get().scalar, ScalarExpr::BoundColumnRef(_));
-                if need_eval {
-                    // Remove the entry to avoid bind again in later process (bind_projection).
-                    let (index, item) = entry.remove_entry();
-                    let mut scalar = item.scalar;
-                    if from_context.in_grouping {
-                        let mut group_checker = GroupingChecker::new(from_context);
-                        group_checker.visit(&mut scalar)?;
-                    } else if !from_context.windows.window_functions.is_empty() {
-                        let mut window_checker = WindowChecker::new(from_context);
-                        window_checker.visit(&mut scalar)?;
-                    }
-                    scalars.push(ScalarItem { scalar, index });
-                }
-            }
-
             let order_by_item = SortItem {
                 index: order.index,
                 asc: order.asc,
@@ -232,21 +214,14 @@ impl Binder {
             order_by_items.push(order_by_item);
         }
 
-        let mut new_expr = if !scalars.is_empty() {
-            let eval_scalar = EvalScalar { items: scalars };
-            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child))
-        } else {
-            child
-        };
-
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
             after_exchange: None,
             pre_projection: None,
-            window_partition: vec![],
+            window_partition: None,
         };
-        new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
+        let new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child));
         Ok(new_expr)
     }
 
@@ -337,7 +312,7 @@ impl Binder {
                     Ok(UDFCall {
                         span: udf.span,
                         name: udf.name.clone(),
-                        func_name: udf.func_name.clone(),
+                        handler: udf.handler.clone(),
                         display_name: udf.display_name.clone(),
                         udf_type: udf.udf_type.clone(),
                         arg_types: udf.arg_types.clone(),

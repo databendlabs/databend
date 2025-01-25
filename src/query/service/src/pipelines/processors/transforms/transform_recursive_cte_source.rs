@@ -301,7 +301,6 @@ async fn create_memory_table_for_cte_scan(
                 engine: Engine::Memory,
                 engine_options: Default::default(),
                 storage_params: None,
-                part_prefix: "".to_string(),
                 options: Default::default(),
                 field_comments: vec![],
                 cluster_key: None,
@@ -319,8 +318,6 @@ async fn create_memory_table_for_cte_scan(
             create_memory_table_for_cte_scan(ctx, plan.input.as_ref()).await?;
         }
         PhysicalPlan::TableScan(_)
-        | PhysicalPlan::CteScan(_)
-        | PhysicalPlan::MaterializedCte(_)
         | PhysicalPlan::ConstantTableScan(_)
         | PhysicalPlan::ExpressionScan(_)
         | PhysicalPlan::CacheScan(_)
@@ -342,6 +339,7 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::CompactSource(_)
         | PhysicalPlan::CommitSink(_)
         | PhysicalPlan::Recluster(_)
+        | PhysicalPlan::HilbertSerialize(_)
         | PhysicalPlan::Duplicate(_)
         | PhysicalPlan::ChunkFilter(_)
         | PhysicalPlan::ChunkEvalScalar(_)

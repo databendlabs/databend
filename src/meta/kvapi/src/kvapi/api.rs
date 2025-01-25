@@ -17,20 +17,20 @@ use std::ops::Deref;
 use async_trait::async_trait;
 use databend_common_meta_types::errors;
 use databend_common_meta_types::protobuf::StreamItem;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::Change;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use futures_util::stream::BoxStream;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::debug;
 
 use crate::kvapi;
-use crate::kvapi::GetKVReply;
 use crate::kvapi::ListKVReply;
 use crate::kvapi::MGetKVReply;
 use crate::kvapi::UpsertKVReply;
-use crate::kvapi::UpsertKVReq;
 
 /// Build an API impl instance or a cluster of API impl
 #[async_trait]
@@ -56,11 +56,11 @@ pub trait KVApi: Send + Sync {
     type Error: std::error::Error + From<errors::IncompleteStream> + Send + Sync + 'static;
 
     /// Update or insert a key-value record.
-    async fn upsert_kv(&self, req: UpsertKVReq) -> Result<UpsertKVReply, Self::Error>;
+    async fn upsert_kv(&self, req: UpsertKV) -> Result<Change<Vec<u8>>, Self::Error>;
 
     /// Get a key-value record by key.
     // TODO: #[deprecated(note = "use get_kv_stream() instead")]
-    async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
+    async fn get_kv(&self, key: &str) -> Result<Option<SeqV>, Self::Error> {
         let mut strm = self.get_kv_stream(&[key.to_string()]).await?;
 
         let strm_item = strm
@@ -91,6 +91,8 @@ pub trait KVApi: Send + Sync {
                     .into(),
             );
         }
+
+        debug!("mget: keys: {:?}; values: {:?}", keys, seq_values);
 
         Ok(seq_values)
     }
@@ -135,7 +137,7 @@ pub trait KVApi: Send + Sync {
 impl<U: kvapi::KVApi, T: Deref<Target = U> + Send + Sync> kvapi::KVApi for T {
     type Error = U::Error;
 
-    async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
+    async fn upsert_kv(&self, act: UpsertKV) -> Result<UpsertKVReply, Self::Error> {
         self.deref().upsert_kv(act).await
     }
 

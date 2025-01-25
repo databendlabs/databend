@@ -30,7 +30,7 @@ use unicode_segmentation::UnicodeSegmentation;
 /// let new_key = escape_for_key(&key);
 /// assert_eq!(Ok("data_bend%21%21".to_string()), new_key);
 /// ```
-pub fn escape_for_key(key: &str) -> Result<String, FromUtf8Error> {
+pub fn escape_for_key(key: &str) -> std::result::Result<String, FromUtf8Error> {
     let mut new_key = Vec::with_capacity(key.len());
 
     fn hex(num: u8) -> u8 {
@@ -64,7 +64,7 @@ pub fn escape_for_key(key: &str) -> Result<String, FromUtf8Error> {
 /// let original_key = unescape_for_key(&key);
 /// assert_eq!(Ok("data_bend!!".to_string()), original_key);
 /// ```
-pub fn unescape_for_key(key: &str) -> Result<String, FromUtf8Error> {
+pub fn unescape_for_key(key: &str) -> std::result::Result<String, FromUtf8Error> {
     let mut new_key = Vec::with_capacity(key.len());
 
     fn unhex(num: u8) -> u8 {
@@ -193,8 +193,7 @@ pub fn mask_connection_info(sql: &str) -> String {
 /// Maximum length of the SQL query to be displayed or log.
 /// If the query exceeds this length and starts with keywords,
 /// it will be truncated and appended with the remaining length.
-pub fn short_sql(sql: String) -> String {
-    const MAX_LENGTH: usize = 128;
+pub fn short_sql(sql: String, max_length: u64) -> String {
     let keywords = ["INSERT"];
 
     fn starts_with_any(query: &str, keywords: &[&str]) -> bool {
@@ -209,10 +208,10 @@ pub fn short_sql(sql: String) -> String {
     // of multiple Unicode code points.
     // This ensures that we handle complex characters like emojis or
     // accented characters properly.
-    if query.graphemes(true).count() > MAX_LENGTH && starts_with_any(query, &keywords) {
-        let truncated: String = query.graphemes(true).take(MAX_LENGTH).collect();
+    if query.graphemes(true).count() > max_length as usize && starts_with_any(query, &keywords) {
+        let truncated: String = query.graphemes(true).take(max_length as usize).collect();
         let original_length = query.graphemes(true).count();
-        let remaining_length = original_length.saturating_sub(MAX_LENGTH);
+        let remaining_length = original_length.saturating_sub(max_length as usize);
         // Append the remaining length indicator
         truncated + &format!("...[{} more characters]", remaining_length)
     } else {

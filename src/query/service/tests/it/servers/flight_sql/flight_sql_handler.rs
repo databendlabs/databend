@@ -34,6 +34,7 @@ use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use goldenfile::Mint;
+use hyper_util::rt::TokioIo;
 use log::debug;
 use tempfile::NamedTempFile;
 use tokio::net::UnixListener;
@@ -48,7 +49,13 @@ const TEST_USER: &str = "test_user";
 const TEST_PASSWORD: &str = "test_password";
 
 async fn client_with_uds(path: String) -> FlightSqlServiceClient<Channel> {
-    let connector = service_fn(move |_| UnixStream::connect(path.clone()));
+    let connector = service_fn(move |_| {
+        let path = path.clone();
+        async move {
+            let s = UnixStream::connect(path).await?;
+            Ok::<_, std::io::Error>(TokioIo::new(s))
+        }
+    });
     let channel = Endpoint::try_from("http://example.com")
         .unwrap()
         .connect_with_connector(connector)

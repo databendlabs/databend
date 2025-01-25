@@ -44,6 +44,7 @@ impl FieldEncoderJSON {
                     inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                     timezone: options.timezone,
+                    jiff_timezone: options.jiff_timezone.clone(),
                     binary_format: Default::default(),
                     geometry_format: Default::default(),
                 },
@@ -69,7 +70,10 @@ impl FieldEncoderJSON {
                 self.write_string(buf.as_bytes(), out_buf);
             }
 
-            Column::Date(..) | Column::Timestamp(..) | Column::Bitmap(..) => {
+            Column::Date(..)
+            | Column::Timestamp(..)
+            | Column::Bitmap(..)
+            | Column::Interval(..) => {
                 let mut buf = Vec::new();
                 self.simple.write_field(column, row_index, &mut buf, false);
                 self.write_string(&buf, out_buf);
@@ -81,7 +85,11 @@ impl FieldEncoderJSON {
             }
             Column::Geometry(c) => {
                 let v = unsafe { c.index_unchecked(row_index) };
-                out_buf.extend_from_slice(Ewkb(v.to_vec()).to_json().unwrap().as_bytes())
+                out_buf.extend_from_slice(Ewkb(v).to_json().unwrap().as_bytes())
+            }
+            Column::Geography(c) => {
+                let v = unsafe { c.index_unchecked(row_index) };
+                out_buf.extend_from_slice(Ewkb(v.0).to_json().unwrap().as_bytes())
             }
 
             Column::Array(box c) => self.write_array(c, row_index, out_buf),

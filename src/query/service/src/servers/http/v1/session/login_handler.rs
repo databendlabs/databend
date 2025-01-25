@@ -14,40 +14,41 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_config::QUERY_SEMVER;
+use databend_common_config::DATABEND_SEMVER;
 use databend_common_storages_fuse::TableContext;
 use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
+use poem::web::Query;
 use poem::IntoResponse;
 
-use crate::servers::http::v1::session::token_manager::TokenManager;
-use crate::servers::http::v1::session::token_manager::REFRESH_TOKEN_VALIDITY;
+use crate::auth::Credential;
+use crate::servers::http::error::HttpErrorCode;
+use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
+use crate::servers::http::v1::session::consts::SESSION_TOKEN_TTL;
 use crate::servers::http::v1::HttpQueryContext;
-use crate::servers::http::v1::QueryError;
 
 #[derive(Deserialize, Clone)]
 struct LoginRequest {
     pub database: Option<String>,
     pub role: Option<String>,
-    pub secondary_roles: Option<Vec<String>>,
     pub settings: Option<BTreeMap<String, String>>,
 }
 
+#[derive(Serialize, Clone, Debug)]
+pub(crate) struct TokensInfo {
+    pub(crate) session_token_ttl_in_secs: u64,
+    pub(crate) session_token: String,
+    pub(crate) refresh_token: String,
+}
+
 #[derive(Serialize, Debug, Clone)]
-#[serde(untagged)]
-pub enum LoginResponse {
-    Ok {
-        version: String,
-        session_id: String,
-        session_token: String,
-        refresh_token: String,
-        refresh_token_validity_in_secs: u64,
-    },
-    Error {
-        error: QueryError,
-    },
+pub struct LoginResponse {
+    version: String,
+    session_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tokens: Option<TokensInfo>,
 }
 
 /// Although theses can be checked for each /v1/query for now,
@@ -67,9 +68,6 @@ async fn check_login(
     if let Some(role_name) = &req.role {
         session.set_current_role_checked(role_name).await?;
     }
-    session
-        .set_secondary_roles_checked(req.secondary_roles.clone())
-        .await?;
 
     if let Some(conf_settings) = &req.settings {
         let settings = session.get_settings();
@@ -80,39 +78,59 @@ async fn check_login(
     Ok(())
 }
 
-///  # For SQL driver implementer:
+#[derive(Deserialize)]
+struct LoginQuery {
+    disable_session_token: Option<bool>,
+}
+
+///  # For client/driver developer:
 /// - It is encouraged to call `/v1/session/login` when establishing connection, not mandatory for now.
 /// - May get 404 when talk to old server, may check `/health` (no `/v1` prefix) to ensure the host:port is not wrong.
-///
-///  # TODO (need design):
-/// - (optional) check client version.
-/// - Return token for auth in the following queries from this session, to make it a real login.
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn login_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<LoginRequest>,
+    Query(query): Query<LoginQuery>,
 ) -> PoemResult<impl IntoResponse> {
-    let version = QUERY_SEMVER.to_string();
-    if let Err(error) = check_login(ctx, &req).await {
-        return Ok(Json(LoginResponse::Error {
-            error: QueryError::from_error_code(error),
-        }));
-    }
-
-    match TokenManager::instance()
-        .new_token_pair(&ctx.session, None)
+    let session_id = ctx
+        .client_session_id
+        .as_ref()
+        .expect("login_handler expect session id in ctx")
+        .clone();
+    let version = DATABEND_SEMVER.to_string();
+    check_login(ctx, &req)
         .await
-    {
-        Ok((session_id, token_pair)) => Ok(Json(LoginResponse::Ok {
-            version,
-            session_id,
-            session_token: token_pair.session,
-            refresh_token: token_pair.refresh,
-            refresh_token_validity_in_secs: REFRESH_TOKEN_VALIDITY.as_secs(),
-        })),
-        Err(e) => Ok(Json(LoginResponse::Error {
-            error: QueryError::from_error_code(e),
-        })),
+        .map_err(HttpErrorCode::bad_request)?;
+    let id_only = || {
+        Ok(Json(LoginResponse {
+            version: version.clone(),
+            session_id: session_id.clone(),
+            tokens: None,
+        }))
+    };
+
+    match ctx.credential {
+        Credential::Jwt { .. } => id_only(),
+        Credential::Password { .. } => {
+            if query.disable_session_token.unwrap_or(false) {
+                id_only()
+            } else {
+                let (session_id, token_pair) = ClientSessionManager::instance()
+                    .new_token_pair(&ctx.session, session_id, None, None)
+                    .await
+                    .map_err(HttpErrorCode::server_error)?;
+                Ok(Json(LoginResponse {
+                    version,
+                    session_id,
+                    tokens: Some(TokensInfo {
+                        session_token_ttl_in_secs: SESSION_TOKEN_TTL.as_secs(),
+                        session_token: token_pair.session.clone(),
+                        refresh_token: token_pair.refresh.clone(),
+                    }),
+                }))
+            }
+        }
+        _ => unreachable!("/session/login expect password or JWT"),
     }
 }

@@ -13,13 +13,17 @@
 // limitations under the License.
 
 use std::net::Ipv4Addr;
+use std::path::Path;
 use std::sync::LazyLock;
 
 use databend_common_exception::Result;
 use databend_common_grpc::DNSResolver;
+use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::MetaStartupError;
-use databend_common_meta_types::NodeId;
+
+use crate::ondisk::DATA_VERSION;
+use crate::raft_log_v004;
 
 pub static DATABEND_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let build_semver = option_env!("VERGEN_BUILD_SEMVER");
@@ -60,6 +64,18 @@ pub struct RaftConfig {
     /// No-sync brings risks of data loss during a crash.
     /// You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING.
     pub no_sync: bool,
+
+    /// The maximum number of log entries for log entries cache.
+    pub log_cache_max_items: u64,
+
+    /// The maximum memory in bytes for the log entries cache.
+    pub log_cache_capacity: u64,
+
+    /// Maximum number of records in a chunk of raft-log WAL.
+    pub log_wal_chunk_max_records: u64,
+
+    /// Maximum size in bytes for a chunk of raft-log WAL.
+    pub log_wal_chunk_max_size: u64,
 
     /// The number of logs since the last snapshot to trigger next snapshot.
     pub snapshot_logs_since_last: u64,
@@ -119,12 +135,6 @@ pub struct RaftConfig {
     ///  Otherwise this argument is ignored.
     pub id: NodeId,
 
-    /// For test only: specifies the tree name prefix
-    pub sled_tree_prefix: String,
-
-    /// The maximum memory in MB that sled can use for caching.
-    pub sled_max_cache_size_mb: u64,
-
     ///  The node name. If the user specifies a name,
     /// the user-supplied name is used, if not, the default name is used.
     pub cluster_name: String,
@@ -152,6 +162,12 @@ impl Default for RaftConfig {
             raft_api_port: 28004,
             raft_dir: "./.databend/meta".to_string(),
             no_sync: false,
+
+            log_cache_max_items: 1_000_000,
+            log_cache_capacity: 1024 * 1024 * 1024,
+            log_wal_chunk_max_records: 100_000,
+            log_wal_chunk_max_size: 256 * 1024 * 1024,
+
             snapshot_logs_since_last: 1024,
             heartbeat_interval: 1000,
             install_snapshot_timeout: 4000,
@@ -168,8 +184,6 @@ impl Default for RaftConfig {
             leave_via: vec![],
             leave_id: None,
             id: 0,
-            sled_tree_prefix: "".to_string(),
-            sled_max_cache_size_mb: 10 * 1024,
             cluster_name: "foo_cluster".to_string(),
             wait_leader_timeout: 70000,
         }
@@ -189,6 +203,26 @@ impl RaftConfig {
                     .with_max_items(self.snapshot_db_block_cache_item as usize)
                     .with_capacity(self.snapshot_db_block_cache_size as usize),
             )
+    }
+
+    /// Build [`RaftLogV004`](crate::raft_log_v004::RaftLogV004) config from [`RaftConfig`].
+    pub fn to_raft_log_config(&self) -> raft_log_v004::RaftLogConfig {
+        let p = Path::new(&self.raft_dir)
+            .join("df_meta")
+            .join(format!("{}", DATA_VERSION))
+            .join("log");
+
+        let dir = p.to_str().unwrap().to_string();
+
+        raft_log_v004::RaftLogConfig {
+            dir,
+            log_cache_max_items: Some(self.log_cache_max_items as usize),
+            log_cache_capacity: Some(self.log_cache_capacity as usize),
+            chunk_max_records: Some(self.log_wal_chunk_max_records as usize),
+            chunk_max_size: Some(self.log_wal_chunk_max_size as usize),
+            read_buffer_size: None,
+            truncate_incomplete_record: None,
+        }
     }
 
     pub fn raft_api_listen_host_string(&self) -> String {
@@ -255,17 +289,5 @@ impl RaftConfig {
             )));
         }
         Ok(())
-    }
-
-    /// Create a unique sled::Tree name by prepending a unique prefix.
-    /// So that multiple instance that depends on a sled::Tree can be used in one process.
-    /// sled does not allow to open multiple `sled::Db` in one process.
-    pub fn tree_name(&self, name: impl std::fmt::Display) -> String {
-        format!("{}{}", self.sled_tree_prefix, name)
-    }
-
-    /// Return the size of sled cache in bytes.
-    pub fn sled_cache_size(&self) -> u64 {
-        self.sled_max_cache_size_mb * 1024 * 1024
     }
 }

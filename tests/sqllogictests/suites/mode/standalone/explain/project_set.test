@@ -23,8 +23,8 @@ AggregateFinal
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
     └── ProjectSet
-        ├── output columns: [unnest (#2)]
-        ├── estimated rows: 1.00
+        ├── output columns: [unnest(fold_count.id (#0)) (#2)]
+        ├── estimated rows: 3.00
         ├── set returning functions: unnest(fold_count.id (#0))
         └── TableScan
             ├── table: default.default.fold_count
@@ -53,8 +53,8 @@ query T
 explain select number from (select unnest([1,2,3]), number from numbers(10)) t
 ----
 ProjectSet
-├── output columns: [numbers.number (#0), unnest (#1)]
-├── estimated rows: 10.00
+├── output columns: [numbers.number (#0), unnest([1, 2, 3]) (#1)]
+├── estimated rows: 30.00
 ├── set returning functions: unnest([1, 2, 3])
 └── TableScan
     ├── table: default.system.numbers
@@ -70,8 +70,8 @@ query T
 explain select number from (select unnest([1,2,3,number]), number from numbers(10)) t
 ----
 ProjectSet
-├── output columns: [numbers.number (#0), unnest (#1)]
-├── estimated rows: 10.00
+├── output columns: [numbers.number (#0), unnest(array(1, 2, 3, numbers.number (#0))) (#1)]
+├── estimated rows: 30.00
 ├── set returning functions: unnest(CAST(array(1, 2, 3, numbers.number (#0)) AS Array(UInt64 NULL)))
 └── TableScan
     ├── table: default.system.numbers
@@ -94,10 +94,10 @@ EXPLAIN SELECT t.a, f.seq, f.value FROM t, LATERAL FLATTEN(input => t.b) f
 ----
 EvalScalar
 ├── output columns: [t.a (#0), seq (#3), value (#7)]
-├── expressions: [get(1)(flatten (#2)), get(5)(flatten (#2))]
+├── expressions: [get(1)(flatten(t.b (#1)) (#2)), get(5)(flatten(t.b (#1)) (#2))]
 ├── estimated rows: 0.00
 └── ProjectSet
-    ├── output columns: [t.a (#0), flatten (#2)]
+    ├── output columns: [t.a (#0), flatten(t.b (#1)) (#2)]
     ├── estimated rows: 0.00
     ├── set returning functions: flatten(1, 5)(t.b (#1))
     └── TableScan
@@ -114,11 +114,11 @@ query T
 EXPLAIN SELECT json_each(t.b), unnest(t.b) FROM t
 ----
 EvalScalar
-├── output columns: [json_each (#2), unnest(t.b) (#4)]
-├── expressions: [get(1)(unnest (#3))]
+├── output columns: [json_each(t.b (#1)) (#2), unnest(t.b) (#4)]
+├── expressions: [get(1)(unnest(t.b (#1)) (#3))]
 ├── estimated rows: 0.00
 └── ProjectSet
-    ├── output columns: [json_each (#2), unnest (#3)]
+    ├── output columns: [json_each(t.b (#1)) (#2), unnest(t.b (#1)) (#3)]
     ├── estimated rows: 0.00
     ├── set returning functions: json_each(t.b (#1)), unnest(t.b (#1))
     └── TableScan
@@ -130,6 +130,43 @@ EvalScalar
         ├── partitions scanned: 0
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 0.00
+
+query T
+explain select * from (select unnest([1,2,3]), number from numbers(10)) t1(a) inner join (select * from numbers(15)) t2(a) on t1.a = t2.a;
+----
+HashJoin
+├── output columns: [numbers.number (#0), a (#2), numbers.number (#3)]
+├── join type: INNER
+├── build keys: [CAST(t2.a (#3) AS UInt64 NULL)]
+├── probe keys: [CAST(t1.a (#2) AS UInt64 NULL)]
+├── filters: []
+├── estimated rows: 450.00
+├── TableScan(Build)
+│   ├── table: default.system.numbers
+│   ├── output columns: [number (#3)]
+│   ├── read rows: 15
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 15.00
+└── EvalScalar(Probe)
+    ├── output columns: [numbers.number (#0), a (#2)]
+    ├── expressions: [get(1)(unnest([1, 2, 3]) (#1))]
+    ├── estimated rows: 30.00
+    └── ProjectSet
+        ├── output columns: [numbers.number (#0), unnest([1, 2, 3]) (#1)]
+        ├── estimated rows: 30.00
+        ├── set returning functions: unnest([1, 2, 3])
+        └── TableScan
+            ├── table: default.system.numbers
+            ├── output columns: [number (#0)]
+            ├── read rows: 10
+            ├── read size: < 1 KiB
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 10.00
 
 statement ok
 drop database project_set

@@ -20,12 +20,12 @@
 #![feature(read_buf)]
 #![feature(slice_internals)]
 #![feature(maybe_uninit_slice)]
-#![feature(new_uninit)]
-#![feature(cursor_remaining)]
+#![feature(cursor_split)]
 #![feature(buf_read_has_data_left)]
 
 pub mod constants;
 pub mod format_diagnostic;
+pub mod number;
 pub mod prelude;
 
 mod binary_read;
@@ -38,9 +38,13 @@ pub mod cursor_ext;
 mod decimal;
 mod escape;
 mod format_settings;
-mod geometry;
+pub mod geography;
+pub mod geometry;
 mod position;
 mod stat_buffer;
+
+pub mod interval;
+pub mod wkb;
 
 pub use bitmap::deserialize_bitmap;
 pub use bitmap::parse_bitmap;
@@ -48,9 +52,18 @@ pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;
 pub use escape::escape_string_with_quote;
+pub use geometry::ewkb_to_geo;
+pub use geometry::geo_to_ewkb;
+pub use geometry::geo_to_ewkt;
+pub use geometry::geo_to_json;
+pub use geometry::geo_to_wkb;
+pub use geometry::geo_to_wkt;
 pub use geometry::geometry_format;
-pub use geometry::parse_to_ewkb;
-pub use geometry::parse_to_subtype;
+pub use geometry::geometry_from_ewkt;
+pub use geometry::geometry_type_name;
+pub use geometry::parse_bytes_to_ewkb;
+pub use geometry::read_srid;
 pub use geometry::Axis;
 pub use geometry::Extremum;
 pub use geometry::GeometryDataType;
+pub use interval::Interval;

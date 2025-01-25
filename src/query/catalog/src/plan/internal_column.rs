@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::Path;
-
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::F32;
@@ -23,6 +20,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::Float32Type;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
@@ -44,6 +42,7 @@ use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_expression::SEGMENT_NAME_COLUMN_ID;
 use databend_common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use databend_storages_common_table_meta::meta::try_extract_uuid_str_from_path;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 
 // Segment and Block id Bits when generate internal column `_row_id`
@@ -227,47 +226,37 @@ impl InternalColumn {
                 )
             }
             InternalColumnType::BlockName => {
-                let mut builder = StringColumnBuilder::with_capacity(1, meta.block_location.len());
-                builder.put_str(&meta.block_location);
-                builder.commit_row();
+                let mut builder = StringColumnBuilder::with_capacity(1);
+                builder.put_and_commit(&meta.block_location);
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(builder.build_scalar())),
                 )
             }
             InternalColumnType::SegmentName => {
-                let mut builder =
-                    StringColumnBuilder::with_capacity(1, meta.segment_location.len());
-                builder.put_str(&meta.segment_location);
-                builder.commit_row();
+                let mut builder = StringColumnBuilder::with_capacity(1);
+                builder.put_and_commit(&meta.segment_location);
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(builder.build_scalar())),
                 )
             }
             InternalColumnType::SnapshotName => {
-                let mut builder = StringColumnBuilder::with_capacity(
-                    1,
-                    meta.snapshot_location
-                        .clone()
-                        .unwrap_or("".to_string())
-                        .len(),
-                );
-                builder.put_str(&meta.snapshot_location.clone().unwrap_or("".to_string()));
-                builder.commit_row();
+                let mut builder = StringColumnBuilder::with_capacity(1);
+                builder.put_and_commit(meta.snapshot_location.clone().unwrap_or("".to_string()));
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(builder.build_scalar())),
                 )
             }
             InternalColumnType::BaseRowId => {
-                let file_stem = Path::new(&meta.block_location).file_stem().unwrap();
-                let file_strs = file_stem
-                    .to_str()
-                    .unwrap_or("")
-                    .split('_')
-                    .collect::<Vec<&str>>();
-                let uuid = file_strs[0];
+                let uuid =
+                    try_extract_uuid_str_from_path(&meta.block_location).unwrap_or_else(|e| {
+                        panic!(
+                            "Internal error: block_location {} should be a valid table object key: {}",
+                            &meta.block_location, e
+                        )
+                    });
                 let mut row_ids = Vec::with_capacity(num_rows);
                 if let Some(offsets) = &meta.offsets {
                     for i in offsets {

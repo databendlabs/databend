@@ -16,16 +16,29 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use databend_common_base::runtime::metrics::register_counter;
+use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::register_gauge;
 use databend_common_base::runtime::metrics::register_histogram_in_milliseconds;
 use databend_common_base::runtime::metrics::Counter;
+use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::Gauge;
 use databend_common_base::runtime::metrics::Histogram;
+use prometheus_client::encoding::EncodeLabelSet;
 
 // Common metrics.
 static OMIT_FILTER_ROWGROUPS: LazyLock<Counter> =
     LazyLock::new(|| register_counter("omit_filter_rowgroups"));
 static OMIT_FILTER_ROWS: LazyLock<Counter> = LazyLock::new(|| register_counter("omit_filter_rows"));
+
+/// Storage Http metrics.
+#[derive(Clone, Debug, EncodeLabelSet, Hash, PartialEq, Eq)]
+struct StorageHttpLabels {
+    host: String,
+    method: String,
+}
+
+static STORAGE_HTTP_REQUESTS_COUNT: LazyLock<FamilyCounter<StorageHttpLabels>> =
+    LazyLock::new(|| register_counter_family("storage_http_requests_count"));
 
 // COPY metrics.
 static COPY_PURGE_FILE_COUNTER: LazyLock<Counter> =
@@ -288,6 +301,15 @@ static AGG_INDEX_WRITE_BYTES: LazyLock<Counter> =
 static AGG_INDEX_WRITE_MILLISECONDS: LazyLock<Histogram> =
     LazyLock::new(|| register_histogram_in_milliseconds("fuse_aggregate_index_write_milliseconds"));
 
+// Virtual column metrics.
+static BLOCK_VIRTUAL_COLUMN_WRITE_NUMS: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_virtual_column_write_nums"));
+static BLOCK_VIRTUAL_COLUMN_WRITE_BYTES: LazyLock<Counter> =
+    LazyLock::new(|| register_counter("fuse_block_virtual_column_write_bytes"));
+static BLOCK_VIRTUAL_COLUMN_WRITE_MILLISECONDS: LazyLock<Histogram> = LazyLock::new(|| {
+    register_histogram_in_milliseconds("fuse_block_virtual_column_write_milliseconds")
+});
+
 /// Common metrics.
 pub fn metrics_inc_omit_filter_rowgroups(c: u64) {
     OMIT_FILTER_ROWGROUPS.inc_by(c);
@@ -295,6 +317,13 @@ pub fn metrics_inc_omit_filter_rowgroups(c: u64) {
 
 pub fn metrics_inc_omit_filter_rows(c: u64) {
     OMIT_FILTER_ROWS.inc_by(c);
+}
+
+/// Storage Http metrics.
+pub fn metrics_inc_storage_http_requests_count(host: String, method: String) {
+    STORAGE_HTTP_REQUESTS_COUNT
+        .get_or_create(&StorageHttpLabels { host, method })
+        .inc();
 }
 
 /// COPY
@@ -789,4 +818,17 @@ pub fn metrics_inc_agg_index_write_bytes(c: u64) {
 
 pub fn metrics_inc_agg_index_write_milliseconds(c: u64) {
     AGG_INDEX_WRITE_MILLISECONDS.observe(c as f64);
+}
+
+/// Virtual column metrics.
+pub fn metrics_inc_block_virtual_column_write_nums(c: u64) {
+    BLOCK_VIRTUAL_COLUMN_WRITE_NUMS.inc_by(c);
+}
+
+pub fn metrics_inc_block_virtual_column_write_bytes(c: u64) {
+    BLOCK_VIRTUAL_COLUMN_WRITE_BYTES.inc_by(c);
+}
+
+pub fn metrics_inc_block_virtual_column_write_milliseconds(c: u64) {
+    BLOCK_VIRTUAL_COLUMN_WRITE_MILLISECONDS.observe(c as f64);
 }

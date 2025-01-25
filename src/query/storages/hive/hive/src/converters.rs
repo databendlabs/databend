@@ -23,7 +23,6 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::DatabaseIdent;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::TableIdent;
@@ -43,18 +42,17 @@ use crate::hive_table_options::HiveTableOptions;
 impl From<hms::Database> for HiveDatabase {
     fn from(hms_database: hms::Database) -> Self {
         HiveDatabase {
-            database_info: DatabaseInfo {
-                ident: DatabaseIdent { db_id: 0, seq: 0 },
-                name_ident: DatabaseNameIdent::new(
+            database_info: DatabaseInfo::without_id_seq(
+                DatabaseNameIdent::new(
                     Tenant::new_literal("dummy"),
                     hms_database.name.unwrap_or_default().to_string(),
                 ),
-                meta: DatabaseMeta {
+                DatabaseMeta {
                     engine: HIVE_DATABASE_ENGINE.to_owned(),
                     created_on: Utc::now(),
                     ..Default::default()
                 },
-            },
+            ),
         }
     }
 }

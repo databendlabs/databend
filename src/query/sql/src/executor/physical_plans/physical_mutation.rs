@@ -186,7 +186,7 @@ impl PhysicalPlanBuilder {
                 table_info: mutation_build_info.table_info.clone(),
                 mutation_expr,
                 computed_expr,
-                mutation_type: mutation_type.clone(),
+                mutation_kind,
                 field_id_to_schema_index,
                 input_num_columns: mutation_input_schema.fields().len(),
                 has_filter_column: predicate_column_index.is_some(),
@@ -370,8 +370,10 @@ impl PhysicalPlanBuilder {
 
         let mut field_index_of_input_schema = HashMap::<FieldIndex, usize>::new();
         for (field_index, value) in field_index_map {
-            field_index_of_input_schema
-                .insert(*field_index, output_schema.index_of(value).unwrap());
+            // Safe to set field index, to fix issue #16588.
+            if let Ok(value) = output_schema.index_of(value) {
+                field_index_of_input_schema.insert(*field_index, value);
+            }
         }
 
         plan = PhysicalPlan::MutationManipulate(Box::new(MutationManipulate {

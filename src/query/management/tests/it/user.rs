@@ -28,13 +28,13 @@ use databend_common_meta_kvapi::kvapi::KVStream;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use mockall::predicate::*;
 use mockall::*;
 
@@ -47,7 +47,7 @@ mock! {
 
         async fn upsert_kv(
             &self,
-            act: UpsertKVReq,
+            act: UpsertKV,
         ) -> Result<UpsertKVReply, MetaError>;
 
         async fn get_kv(&self, key: &str) -> Result<GetKVReply,MetaError>;
@@ -112,7 +112,7 @@ mod add {
             let test_key = test_key.clone();
             let mut api = MockKV::new();
             api.expect_upsert_kv()
-                .with(predicate::eq(UpsertKVReq::new(
+                .with(predicate::eq(UpsertKV::new(
                     &test_key,
                     test_seq,
                     value.clone(),
@@ -132,7 +132,7 @@ mod add {
             let test_key = test_key.clone();
             let mut api = MockKV::new();
             api.expect_upsert_kv()
-                .with(predicate::eq(UpsertKVReq::new(
+                .with(predicate::eq(UpsertKV::new(
                     &test_key,
                     test_seq,
                     value.clone(),
@@ -408,7 +408,7 @@ mod drop {
             escape_for_key(&format_user_key(test_user, test_hostname))?
         );
         kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKVReq::new(
+            .with(predicate::eq(UpsertKV::new(
                 &test_key,
                 MatchSeq::GE(1),
                 Operation::Delete,
@@ -434,7 +434,7 @@ mod drop {
             escape_for_key(&format_user_key(test_user, test_hostname))?
         );
         kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKVReq::new(
+            .with(predicate::eq(UpsertKV::new(
                 &test_key,
                 MatchSeq::GE(1),
                 Operation::Delete,
@@ -509,7 +509,7 @@ mod update {
             serialize_struct(&new_user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKVReq::new(
+            .with(predicate::eq(UpsertKV::new(
                 &test_key,
                 MatchSeq::Exact(1),
                 Operation::Update(new_value_with_old_salt.clone()),
@@ -530,8 +530,8 @@ mod update {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_update_user_with_conflict_when_writing_back()
-    -> databend_common_exception::Result<()> {
+    async fn test_update_user_with_conflict_when_writing_back(
+    ) -> databend_common_exception::Result<()> {
         let test_user_name = "name";
         let test_hostname = "localhost";
         let test_key = format!(
@@ -583,7 +583,7 @@ mod update {
 
         // upsert should be called
         kv.expect_upsert_kv()
-            .with(predicate::function(move |act: &UpsertKVReq| {
+            .with(predicate::function(move |act: &UpsertKV| {
                 act.key == test_key.as_str() && act.seq == MatchSeq::Exact(2)
             }))
             .times(1)
@@ -638,7 +638,7 @@ mod set_user_privileges {
         let new_value = serialize_struct(&user_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
         kv.expect_upsert_kv()
-            .with(predicate::eq(UpsertKVReq::new(
+            .with(predicate::eq(UpsertKV::new(
                 &test_key,
                 MatchSeq::Exact(1),
                 Operation::Update(new_value),

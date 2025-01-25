@@ -187,6 +187,12 @@ statement ok
 DROP TABLE IF EXISTS `05_0028_at_t0`
 
 statement ok
+DROP TABLE IF EXISTS `05_0028_at_t0_3`
+
+statement ok
+DROP TABLE IF EXISTS `05_0028_at_t0_4`
+
+statement ok
 CREATE TABLE `05_0028_at_t0_3`(c int not null)
 
 statement ok
@@ -255,7 +261,7 @@ ALTER TABLE `05_0028_at_t0_4` MODIFY COLUMN d uint64 COMMENT 'middle'
 query TT
 SHOW CREATE TABLE `05_0028_at_t0_4`
 ----
-05_0028_at_t0_4 CREATE TABLE "05_0028_at_t0_4" ( a FLOAT NOT NULL, d BIGINT UNSIGNED NULL COMMENT 'middle', e INT NULL COMMENT 'end' ) ENGINE=FUSE
+05_0028_at_t0_4 CREATE TABLE "05_0028_at_t0_4" ( a FLOAT NULL, d BIGINT UNSIGNED NULL COMMENT 'middle', e INT NULL COMMENT 'end' ) ENGINE=FUSE
 
 query IIT
 SELECT * FROM `05_0028_at_t0_4` order by a

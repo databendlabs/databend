@@ -82,6 +82,29 @@ pub fn parse_db_tb_opt_args(
     }
 }
 
+pub fn parse_opt_opt_args(
+    table_args: &TableArgs,
+    func_name: &str,
+) -> Result<(Option<String>, Option<String>)> {
+    let args = table_args.expect_all_positioned(func_name, None)?;
+    match args.len() {
+        2 => {
+            let arg1 = string_value(&args[0])?;
+            let arg2 = string_value(&args[1])?;
+            Ok((Some(arg1), Some(arg2)))
+        }
+        1 => {
+            let arg1 = string_value(&args[0])?;
+            Ok((Some(arg1), None))
+        }
+        0 => Ok((None, None)),
+        _ => Err(ErrorCode::BadArguments(format!(
+            "expecting <opt_arg1> and <opt_arg2> (as string literals), but got {:?}",
+            args
+        ))),
+    }
+}
+
 pub fn parse_db_tb_col_args(table_args: &TableArgs, func_name: &str) -> Result<String> {
     let args = table_args.expect_all_positioned(func_name, Some(1))?;
     let db = string_value(&args[0])?;

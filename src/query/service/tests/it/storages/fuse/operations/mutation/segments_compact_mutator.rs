@@ -36,7 +36,6 @@ use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::io::CompactSegmentInfoReader;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
-use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::io::WriteSettings;
@@ -664,13 +663,13 @@ impl CompactSegmentTestFixture {
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
         let max_theads = self.ctx.get_settings().get_max_threads()? as usize;
 
-        let segment_writer = SegmentWriter::new(data_accessor, location_gen);
         let seg_acc = SegmentCompactor::new(
             block_per_seg,
             cluster_key_id,
             max_theads,
             &fuse_segment_io,
-            segment_writer.clone(),
+            data_accessor,
+            location_gen,
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
@@ -735,11 +734,10 @@ impl CompactSegmentTestFixture {
                     } else {
                         cluster_key_id.map(|v| {
                             let val = block.get_by_offset(0);
-                            let val_ref = val.value.as_ref();
-                            let left = vec![unsafe { val_ref.index_unchecked(0) }.to_owned()];
-                            let right = vec![
-                                unsafe { val_ref.index_unchecked(val_ref.len() - 1) }.to_owned(),
-                            ];
+                            let left = vec![unsafe { val.value.index_unchecked(0) }.to_owned()];
+                            let right =
+                                vec![unsafe { val.value.index_unchecked(val.value.len() - 1) }
+                                    .to_owned()];
                             let level = if left.eq(&right) && block.num_rows() >= block_per_seg {
                                 -1
                             } else {
@@ -974,7 +972,6 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
     settings.set_max_threads(2)?;
     settings.set_max_storage_io_requests(4)?;
 
-    let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
     let compact_segment_reader =
         MetaReaders::segment_info_reader(data_accessor.clone(), schema.clone());
     let fuse_segment_io = SegmentsIO::create(ctx.clone(), data_accessor.clone(), schema);
@@ -1027,7 +1024,8 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
             Some(cluster_key_id),
             chunk_size,
             &fuse_segment_io,
-            segment_writer.clone(),
+            &data_accessor,
+            &location_gen,
         );
         let state = seg_acc
             .compact(locations, limit, |status| {

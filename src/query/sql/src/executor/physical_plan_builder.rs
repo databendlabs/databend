@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Partitions;
@@ -29,8 +28,6 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::RelOperator;
-use crate::ColumnBinding;
-use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct PhysicalPlanBuilder {
@@ -38,8 +35,6 @@ pub struct PhysicalPlanBuilder {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) func_ctx: FunctionContext,
     pub(crate) dry_run: bool,
-    // Record cte_idx and the cte's output columns
-    pub(crate) cte_output_columns: HashMap<IndexType, Vec<ColumnBinding>>,
     // DataMutation info, used to build MergeInto physical plan
     pub(crate) mutation_build_info: Option<MutationBuildInfo>,
 }
@@ -52,7 +47,6 @@ impl PhysicalPlanBuilder {
             ctx,
             func_ctx,
             dry_run,
-            cte_output_columns: Default::default(),
             mutation_build_info: None,
         }
     }
@@ -111,10 +105,6 @@ impl PhysicalPlanBuilder {
                 self.build_project_set(s_expr, project_set, required, stat_info)
                     .await
             }
-            RelOperator::CteScan(cte_scan) => self.build_cte_scan(cte_scan, required).await,
-            RelOperator::MaterializedCte(cte) => {
-                self.build_materialized_cte(s_expr, cte, required).await
-            }
             RelOperator::ConstantTableScan(scan) => {
                 self.build_constant_table_scan(scan, required).await
             }
@@ -136,13 +126,19 @@ impl PhysicalPlanBuilder {
             RelOperator::MutationSource(mutation_source) => {
                 self.build_mutation_source(mutation_source).await
             }
-            RelOperator::Recluster(recluster) => self.build_recluster(recluster).await,
+            RelOperator::Recluster(recluster) => {
+                self.build_recluster(s_expr, recluster, required).await
+            }
             RelOperator::CompactBlock(compact) => self.build_compact_block(compact).await,
         }
     }
 
     pub fn set_mutation_build_info(&mut self, mutation_build_info: MutationBuildInfo) {
         self.mutation_build_info = Some(mutation_build_info);
+    }
+
+    pub fn set_metadata(&mut self, metadata: MetadataRef) {
+        self.metadata = metadata;
     }
 }
 

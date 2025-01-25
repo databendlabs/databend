@@ -13,9 +13,10 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt::Debug;
 
-use databend_common_ast::ast::Sample;
+use databend_common_ast::ast::SampleConfig;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::DataSchema;
@@ -24,6 +25,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_storages_common_table_meta::table::ChangeType;
 
 use super::AggIndexInfo;
@@ -34,14 +36,37 @@ use crate::plan::Projection;
 /// Generated from the source column by the paths.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct VirtualColumnInfo {
-    /// Source column name
+    /// The schema of virtual columns.
+    pub schema: TableSchemaRef,
+    /// The source column ids of virtual columns.
+    /// If the virtual columns are not generated,
+    /// we can read data from source column to generate them.
+    pub source_column_ids: HashSet<u32>,
+    /// The virtual column fields info.
+    pub virtual_column_fields: Vec<VirtualColumnField>,
+}
+
+/// The virtual column field info.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct VirtualColumnField {
+    /// The source column id.
+    pub source_column_id: u32,
+    /// The source column name.
     pub source_name: String,
-    /// Virtual column name
+    /// The virtual column id, it is not a real column,
+    /// but is used to identify a virtual column when reading data.
+    pub column_id: u32,
+    /// The virtual column name.
     pub name: String,
-    /// Paths to generate virtual column from source column
+    /// Paths to generate virtual column from source column.
     pub key_paths: Scalar,
-    /// Virtual column data type
+    /// optional cast function name, used to cast value to other type.
+    pub cast_func_name: Option<String>,
+    /// Virtual column data type.
     pub data_type: Box<TableDataType>,
+    /// Is the virtual column is created,
+    /// if not, reminder user to create it.
+    pub is_created: bool,
 }
 
 /// Information about prewhere optimization.
@@ -68,8 +93,24 @@ pub struct PrewhereInfo {
     /// filter for prewhere
     /// Assumption: expression's data type must be `DataType::Boolean`.
     pub filter: RemoteExpr<String>,
-    /// Optional prewhere virtual columns
-    pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
+    /// Optional prewhere virtual column ids
+    pub virtual_column_ids: Option<Vec<u32>>,
+}
+
+/// Inverted index option for additional search functions configuration.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct InvertedIndexOption {
+    /// Fuzzy query match terms within Levenshtein distance
+    /// https://en.wikipedia.org/wiki/Levenshtein_distance
+    /// For example: if fuzziness is 1, and query text if `fox`,
+    /// the term `box` will be matched.
+    pub fuzziness: Option<u8>,
+    /// Operator: true is AND, false is OR, default is OR.
+    /// For example: query text `happy tax payer` is equals to `happy OR tax OR payer`,
+    /// but if operator is true, it will equals to `happy AND tax AND payer`.
+    pub operator: bool,
+    /// Parse a query leniently, ignore invalid query, default is false.
+    pub lenient: bool,
 }
 
 /// Information about inverted index.
@@ -91,8 +132,10 @@ pub struct InvertedIndexInfo {
     pub query_fields: Vec<(String, Option<F32>)>,
     /// The search query text with query syntax.
     pub query_text: String,
-    /// whether search with score function
+    /// Whether search with score function.
     pub has_score: bool,
+    /// Optional search configuration option, like fuzziness, lenient, ..
+    pub inverted_index_option: Option<InvertedIndexOption>,
 }
 
 /// Extras is a wrapper for push down items.
@@ -116,16 +159,17 @@ pub struct PushDownInfo {
     /// Optional order_by expression plan, asc, null_first.
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
     /// Optional virtual columns
-    pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
+    pub virtual_column: Option<VirtualColumnInfo>,
     /// If lazy materialization is enabled in this query.
     pub lazy_materialization: bool,
     /// Aggregating index information.
     pub agg_index: Option<AggIndexInfo>,
     /// Identifies the type of data change we are looking for
     pub change_type: Option<ChangeType>,
+    /// Optional inverted index
     pub inverted_index: Option<InvertedIndexInfo>,
     /// Used by table sample
-    pub sample: Option<Sample>,
+    pub sample: Option<SampleConfig>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -180,21 +224,17 @@ impl PushDownInfo {
                 if !TopK::support_type(data_type) {
                     return None;
                 }
-
                 let leaf_fields = schema.leaf_fields();
-                let (leaf_id, f) = leaf_fields
+                leaf_fields
                     .iter()
                     .enumerate()
                     .find(|&(_, p)| p.name() == id)
-                    .unwrap();
-
-                let top_k = TopK {
-                    limit: self.limit.unwrap(),
-                    field: f.clone(),
-                    asc: order.1,
-                    leaf_id,
-                };
-                Some(top_k)
+                    .map(|(leaf_id, f)| TopK {
+                        limit: self.limit.unwrap(),
+                        field: f.clone(),
+                        asc: order.1,
+                        leaf_id,
+                    })
             } else {
                 None
             }
@@ -229,31 +269,9 @@ impl PushDownInfo {
 
     pub fn virtual_columns_of_push_downs(
         push_downs: &Option<PushDownInfo>,
-    ) -> Option<Vec<VirtualColumnInfo>> {
-        if let Some(PushDownInfo {
-            virtual_columns,
-            prewhere,
-            ..
-        }) = push_downs
-        {
-            if let Some(PrewhereInfo {
-                virtual_columns: prewhere_virtual_columns,
-                ..
-            }) = prewhere
-            {
-                match (virtual_columns, prewhere_virtual_columns) {
-                    (Some(virtual_columns), Some(prewhere_virtual_columns)) => {
-                        let mut virtual_columns = virtual_columns.clone();
-                        let mut prewhere_virtual_columns = prewhere_virtual_columns.clone();
-                        virtual_columns.append(&mut prewhere_virtual_columns);
-                        Some(virtual_columns)
-                    }
-                    (None, Some(_)) => prewhere_virtual_columns.clone(),
-                    (_, _) => virtual_columns.clone(),
-                }
-            } else {
-                virtual_columns.clone()
-            }
+    ) -> Option<VirtualColumnInfo> {
+        if let Some(PushDownInfo { virtual_column, .. }) = push_downs {
+            virtual_column.clone()
         } else {
             None
         }

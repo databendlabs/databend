@@ -37,14 +37,27 @@ pub enum ProfileStatisticsName {
     ScanBytes,
     ScanCacheBytes,
     ScanPartitions,
-    SpillWriteCount,
-    SpillWriteBytes,
-    SpillWriteTime,
-    SpillReadCount,
-    SpillReadBytes,
-    SpillReadTime,
+
+    RemoteSpillWriteCount,
+    RemoteSpillWriteBytes,
+    RemoteSpillWriteTime,
+
+    RemoteSpillReadCount,
+    RemoteSpillReadBytes,
+    RemoteSpillReadTime,
+
+    LocalSpillWriteCount,
+    LocalSpillWriteBytes,
+    LocalSpillWriteTime,
+
+    LocalSpillReadCount,
+    LocalSpillReadBytes,
+    LocalSpillReadTime,
+
     RuntimeFilterPruneParts,
     MemoryUsage,
+    ExternalServerRetryCount,
+    ExternalServerRequestCount,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq, serde::Serialize, serde::Deserialize, Debug)]
@@ -105,8 +118,8 @@ pub static PROFILES_INDEX: OnceCell<
     Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]>,
 > = OnceCell::new();
 
-pub fn get_statistics_name_index()
--> Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]> {
+pub fn get_statistics_name_index(
+) -> Arc<[Option<ProfileStatisticsName>; std::mem::variant_count::<ProfileStatisticsName>()]> {
     PROFILES_INDEX
         .get_or_init(|| {
             let statistics_desc = get_statistics_desc();
@@ -187,45 +200,87 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 unit: StatisticsUnit::Count,
                 plain_statistics: true,
             }),
-            (ProfileStatisticsName::SpillWriteCount, ProfileDesc {
-                display_name: "numbers spilled by write",
-                desc: "The number of spilled by write",
-                index: ProfileStatisticsName::SpillWriteCount as usize,
+            (ProfileStatisticsName::RemoteSpillWriteCount, ProfileDesc {
+                display_name: "numbers remote spilled by write",
+                desc: "The number of remote spilled by write",
+                index: ProfileStatisticsName::RemoteSpillWriteCount as usize,
                 unit: StatisticsUnit::Count,
                 plain_statistics: true,
             }),
-            (ProfileStatisticsName::SpillWriteBytes, ProfileDesc {
-                display_name: "bytes spilled by write",
-                desc: "The bytes spilled by write",
-                index: ProfileStatisticsName::SpillWriteBytes as usize,
+            (ProfileStatisticsName::RemoteSpillWriteBytes, ProfileDesc {
+                display_name: "bytes remote spilled by write",
+                desc: "The bytes remote spilled by write",
+                index: ProfileStatisticsName::RemoteSpillWriteBytes as usize,
                 unit: StatisticsUnit::Bytes,
                 plain_statistics: true,
             }),
-            (ProfileStatisticsName::SpillWriteTime, ProfileDesc {
-                display_name: "spilled time by write",
-                desc: "The time spent to write spill in millisecond",
-                index: ProfileStatisticsName::SpillWriteTime as usize,
+            (ProfileStatisticsName::RemoteSpillWriteTime, ProfileDesc {
+                display_name: "remote spilled time by write",
+                desc: "The time spent to write remote spill in millisecond",
+                index: ProfileStatisticsName::RemoteSpillWriteTime as usize,
                 unit: StatisticsUnit::MillisSeconds,
                 plain_statistics: false,
             }),
-            (ProfileStatisticsName::SpillReadCount, ProfileDesc {
-                display_name: "numbers spilled by read",
-                desc: "The number of spilled by read",
-                index: ProfileStatisticsName::SpillReadCount as usize,
+            (ProfileStatisticsName::RemoteSpillReadCount, ProfileDesc {
+                display_name: "numbers remote spilled by read",
+                desc: "The number of remote spilled by read",
+                index: ProfileStatisticsName::RemoteSpillReadCount as usize,
                 unit: StatisticsUnit::Count,
                 plain_statistics: true,
             }),
-            (ProfileStatisticsName::SpillReadBytes, ProfileDesc {
-                display_name: "bytes spilled by read",
-                desc: "The bytes spilled by read",
-                index: ProfileStatisticsName::SpillReadBytes as usize,
+            (ProfileStatisticsName::RemoteSpillReadBytes, ProfileDesc {
+                display_name: "bytes remote spilled by read",
+                desc: "The bytes remote spilled by read",
+                index: ProfileStatisticsName::RemoteSpillReadBytes as usize,
                 unit: StatisticsUnit::Bytes,
                 plain_statistics: true,
             }),
-            (ProfileStatisticsName::SpillReadTime, ProfileDesc {
-                display_name: "spilled time by read",
-                desc: "The time spent to read spill in millisecond",
-                index: ProfileStatisticsName::SpillReadTime as usize,
+            (ProfileStatisticsName::RemoteSpillReadTime, ProfileDesc {
+                display_name: "remote spilled time by read",
+                desc: "The time spent to read remote spill in millisecond",
+                index: ProfileStatisticsName::RemoteSpillReadTime as usize,
+                unit: StatisticsUnit::MillisSeconds,
+                plain_statistics: false,
+            }),
+            (ProfileStatisticsName::LocalSpillWriteCount, ProfileDesc {
+                display_name: "numbers local spilled by write",
+                desc: "The number of local spilled by write",
+                index: ProfileStatisticsName::LocalSpillWriteCount as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::LocalSpillWriteBytes, ProfileDesc {
+                display_name: "bytes local spilled by write",
+                desc: "The bytes local spilled by write",
+                index: ProfileStatisticsName::LocalSpillWriteBytes as usize,
+                unit: StatisticsUnit::Bytes,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::LocalSpillWriteTime, ProfileDesc {
+                display_name: "local spilled time by write",
+                desc: "The time spent to write local spill in millisecond",
+                index: ProfileStatisticsName::LocalSpillWriteTime as usize,
+                unit: StatisticsUnit::MillisSeconds,
+                plain_statistics: false,
+            }),
+            (ProfileStatisticsName::LocalSpillReadCount, ProfileDesc {
+                display_name: "numbers local spilled by read",
+                desc: "The number of local spilled by read",
+                index: ProfileStatisticsName::LocalSpillReadCount as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::LocalSpillReadBytes, ProfileDesc {
+                display_name: "bytes local spilled by read",
+                desc: "The bytes local spilled by read",
+                index: ProfileStatisticsName::LocalSpillReadBytes as usize,
+                unit: StatisticsUnit::Bytes,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::LocalSpillReadTime, ProfileDesc {
+                display_name: "local spilled time by read",
+                desc: "The time spent to read local spill in millisecond",
+                index: ProfileStatisticsName::LocalSpillReadTime as usize,
                 unit: StatisticsUnit::MillisSeconds,
                 plain_statistics: false,
             }),
@@ -242,7 +297,21 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 index: ProfileStatisticsName::MemoryUsage as usize,
                 unit: StatisticsUnit::Bytes,
                 plain_statistics: false,
-            })
+            }),
+            (ProfileStatisticsName::ExternalServerRetryCount, ProfileDesc {
+                display_name: "external server retry count",
+                desc: "The count of external server retry times",
+                index: ProfileStatisticsName::ExternalServerRetryCount as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::ExternalServerRequestCount, ProfileDesc {
+                display_name: "external server request count",
+                desc: "The count of external server request times",
+                index: ProfileStatisticsName::ExternalServerRequestCount as usize,
+                unit: StatisticsUnit::Count,
+                plain_statistics: true,
+            }),
         ]))
     }).clone()
 }

@@ -17,12 +17,16 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_exception::Result;
+use databend_common_expression::row::RowConverter as CommonConverter;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::TimestampType;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
@@ -30,37 +34,32 @@ use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use match_template::match_template;
 
+use super::sort::utils::ORDER_COL_NAME;
+use super::sort::CommonRows;
 use super::sort::RowConverter;
 use super::sort::Rows;
 use super::sort::SimpleRowConverter;
-use super::sort::SimpleRows;
+use super::sort::SimpleRowsAsc;
+use super::sort::SimpleRowsDesc;
 use super::sort::SortSpillMeta;
+use super::sort::SortSpillMetaWithParams;
 use super::AccumulatingTransform;
 use super::AccumulatingTransformer;
-use super::MergeSortCommon;
-use super::MergeSortCommonImpl;
-use super::MergeSortDate;
-use super::MergeSortDateImpl;
-use super::MergeSortLimitCommon;
-use super::MergeSortLimitCommonImpl;
-use super::MergeSortLimitDate;
-use super::MergeSortLimitDateImpl;
-use super::MergeSortLimitString;
-use super::MergeSortLimitStringImpl;
-use super::MergeSortLimitTimestamp;
-use super::MergeSortLimitTimestampImpl;
-use super::MergeSortString;
-use super::MergeSortStringImpl;
-use super::MergeSortTimestamp;
-use super::MergeSortTimestampImpl;
 use super::TransformSortMerge;
 use super::TransformSortMergeLimit;
-use crate::processors::sort::utils::ORDER_COL_NAME;
-use crate::processors::sort::SortSpillMetaWithParams;
 
 /// The memory will be doubled during merging.
 const MERGE_RATIO: usize = 2;
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy)]
+pub struct SortSpillParams {
+    /// The number of rows of each spilled block.
+    pub batch_rows: usize,
+    /// The number of spilled blocks in each merge of the spill processor.
+    pub num_merge: usize,
+}
 
 pub trait MergeSort<R: Rows> {
     const NAME: &'static str;
@@ -110,12 +109,10 @@ pub struct TransformSortMergeBase<M, R, Converter> {
     max_memory_usage: usize,
     spilling_bytes_threshold: usize,
     spilling_batch_bytes: usize,
-    // The following two fields will be passed to the spill processor.
-    // If these two fields are not zero, it means we need to spill.
-    /// The number of rows of each spilled block.
-    spill_batch_rows: usize,
-    /// The number of spilled blocks in each merge of the spill processor.
-    spill_num_merge: usize,
+
+    // The spill_params will be passed to the spill processor.
+    // If spill_params is Some, it means we need to spill.
+    spill_params: Option<SortSpillParams>,
 
     _r: PhantomData<R>,
 }
@@ -149,43 +146,43 @@ where
             max_memory_usage,
             spilling_bytes_threshold,
             spilling_batch_bytes,
-
-            spill_batch_rows: 0,
-            spill_num_merge: 0,
+            spill_params: None,
             may_spill,
             _r: PhantomData,
         })
     }
 
     fn prepare_spill(&mut self) -> Result<Vec<DataBlock>> {
-        let mut spill_meta = Box::new(SortSpillMeta {}) as Box<dyn BlockMetaInfo>;
-        if self.spill_batch_rows == 0 {
-            debug_assert_eq!(self.spill_num_merge, 0);
+        let mut spill_params = if self.spill_params.is_none() {
             // We use the first memory calculation to estimate the batch size and the number of merge.
-            self.spill_num_merge = self
+            let num_merge = self
                 .inner
                 .num_bytes()
                 .div_ceil(self.spilling_batch_bytes)
                 .max(2);
-            self.spill_batch_rows = self.inner.num_rows().div_ceil(self.spill_num_merge);
+            let batch_rows = self.inner.num_rows().div_ceil(num_merge);
             // The first block to spill will contain the parameters of spilling.
             // Later blocks just contain a empty struct `SortSpillMeta` to save memory.
-            spill_meta = Box::new(SortSpillMetaWithParams {
-                batch_rows: self.spill_batch_rows,
-                num_merge: self.spill_num_merge,
-            }) as Box<dyn BlockMetaInfo>;
+            let params = SortSpillParams {
+                batch_rows,
+                num_merge,
+            };
+            self.spill_params = Some(params);
+            Some(params)
         } else {
-            debug_assert!(self.spill_num_merge > 0);
-        }
+            None
+        };
 
-        let mut blocks = self.inner.prepare_spill(self.spill_batch_rows)?;
+        let mut blocks = self
+            .inner
+            .prepare_spill(self.spill_params.unwrap().batch_rows)?;
 
         // Fill the spill meta.
-        if let Some(b) = blocks.first_mut() {
-            b.replace_meta(spill_meta);
-        }
-        for b in blocks.iter_mut().skip(1) {
-            b.replace_meta(Box::new(SortSpillMeta {}));
+        for b in blocks.iter_mut() {
+            b.replace_meta(match spill_params.take() {
+                Some(params) => Box::new(SortSpillMetaWithParams(params)),
+                None => Box::new(SortSpillMeta {}),
+            });
         }
 
         debug_assert_eq!(self.inner.num_bytes(), 0);
@@ -200,14 +197,14 @@ where
 impl<M, R, Converter> AccumulatingTransform for TransformSortMergeBase<M, R, Converter>
 where
     M: MergeSort<R> + Send + Sync,
-    R: Rows + Send + Sync,
+    R: Rows + Sync,
     Converter: RowConverter<R> + Send + Sync,
 {
     const NAME: &'static str = M::NAME;
 
     fn transform(&mut self, mut block: DataBlock) -> Result<Vec<DataBlock>> {
         let rows = if self.order_col_generated {
-            let rows = R::from_column(block.get_last_column(), &self.sort_desc)?;
+            let rows = R::from_column(block.get_last_column())?;
             if !self.output_order_col {
                 // The next processor could be a sort spill processor which need order column.
                 // And the order column will be removed in that processor.
@@ -250,7 +247,7 @@ where
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
         // If the processor has started to spill blocks,
         // gather the final few data in one block.
-        self.inner.on_finish(self.spill_num_merge > 0)
+        self.inner.on_finish(self.spill_params.is_some())
     }
 }
 
@@ -340,263 +337,128 @@ impl TransformSortMergeBuilder {
             !self.schema.has_field(ORDER_COL_NAME)
         });
 
-        if self.limit.is_some() {
-            self.build_sort_merge_limit()
+        if self.limit.map(|limit| limit < 10000).unwrap_or_default() {
+            self.build_sort_limit()
         } else {
-            self.build_sort_merge()
+            self.build_sort()
         }
     }
 
-    fn build_sort_merge(self) -> Result<Box<dyn Processor>> {
-        let Self {
-            input,
-            output,
-            schema,
-            block_size,
-            sort_desc,
-            order_col_generated,
-            output_order_col,
-            max_memory_usage,
-            spilling_bytes_threshold_per_core,
-            spilling_batch_bytes,
-            enable_loser_tree,
-            ..
-        } = self;
+    fn build_sort(self) -> Result<Box<dyn Processor>> {
+        if self.sort_desc.len() == 1 {
+            let sort_type = self.schema.field(self.sort_desc[0].offset).data_type();
+            let asc = self.sort_desc[0].asc;
 
-        let processor = if sort_desc.len() == 1 {
-            let sort_type = schema.field(sort_desc[0].offset).data_type();
-            match sort_type {
-                DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                    NumberDataType::NUM_TYPE => AccumulatingTransformer::create(
-                        input,
-                        output,
-                        TransformSortMergeBase::<
-                            TransformSortMerge<SimpleRows<NumberType<NUM_TYPE>>>,
-                            SimpleRows<NumberType<NUM_TYPE>>,
-                            SimpleRowConverter<NumberType<NUM_TYPE>>,
-                        >::try_create(
-                            schema.clone(),
-                            sort_desc.clone(),
-                            order_col_generated,
-                            output_order_col,
-                            max_memory_usage,
-                            spilling_bytes_threshold_per_core,
-                            spilling_batch_bytes,
-                            TransformSortMerge::create(
-                                schema,
-                                sort_desc,
-                                block_size,
-                                enable_loser_tree
-                            ),
-                        )?,
-                    ),
-                }),
-                DataType::Date => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    MergeSortDate::try_create(
-                        schema.clone(),
-                        sort_desc.clone(),
-                        order_col_generated,
-                        output_order_col,
-                        max_memory_usage,
-                        spilling_bytes_threshold_per_core,
-                        spilling_batch_bytes,
-                        MergeSortDateImpl::create(schema, sort_desc, block_size, enable_loser_tree),
-                    )?,
-                ),
-                DataType::Timestamp => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    MergeSortTimestamp::try_create(
-                        schema.clone(),
-                        sort_desc.clone(),
-                        order_col_generated,
-                        output_order_col,
-                        max_memory_usage,
-                        spilling_bytes_threshold_per_core,
-                        spilling_batch_bytes,
-                        MergeSortTimestampImpl::create(
-                            schema,
-                            sort_desc,
-                            block_size,
-                            enable_loser_tree,
-                        ),
-                    )?,
-                ),
-                DataType::String => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    MergeSortString::try_create(
-                        schema.clone(),
-                        sort_desc.clone(),
-                        order_col_generated,
-                        output_order_col,
-                        max_memory_usage,
-                        spilling_bytes_threshold_per_core,
-                        spilling_batch_bytes,
-                        MergeSortStringImpl::create(
-                            schema,
-                            sort_desc,
-                            block_size,
-                            enable_loser_tree,
-                        ),
-                    )?,
-                ),
-                _ => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    MergeSortCommon::try_create(
-                        schema.clone(),
-                        sort_desc.clone(),
-                        order_col_generated,
-                        output_order_col,
-                        max_memory_usage,
-                        spilling_bytes_threshold_per_core,
-                        spilling_batch_bytes,
-                        MergeSortCommonImpl::create(
-                            schema,
-                            sort_desc,
-                            block_size,
-                            enable_loser_tree,
-                        ),
-                    )?,
-                ),
+            match_template! {
+                T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
+                match sort_type {
+                    DataType::T => self.build_sort_rows_simple::<T>(asc),
+                    DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                        NumberDataType::NUM_TYPE => {
+                            self.build_sort_rows_simple::<NumberType<NUM_TYPE>>(asc)
+                        }
+                    }),
+                    _ => self.build_sort_rows::<CommonRows, CommonConverter>(),
+                }
             }
         } else {
-            AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortCommon::try_create(
-                    schema.clone(),
-                    sort_desc.clone(),
-                    order_col_generated,
-                    output_order_col,
-                    max_memory_usage,
-                    spilling_bytes_threshold_per_core,
-                    spilling_batch_bytes,
-                    MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree),
-                )?,
-            )
-        };
-
-        Ok(processor)
+            self.build_sort_rows::<CommonRows, CommonConverter>()
+        }
     }
 
-    fn build_sort_merge_limit(self) -> Result<Box<dyn Processor>> {
-        let Self {
-            input,
-            output,
-            schema,
-            block_size,
-            sort_desc,
-            order_col_generated,
-            output_order_col,
-            limit,
-            spilling_bytes_threshold_per_core,
-            spilling_batch_bytes,
-            max_memory_usage,
-            ..
-        } = self;
-        let limit = limit.unwrap();
+    fn build_sort_rows_simple<T>(self, asc: bool) -> Result<Box<dyn Processor>>
+    where
+        T: ArgType + Send + Sync,
+        T::Column: Send + Sync,
+        for<'a> T::ScalarRef<'a>: Ord + Send,
+    {
+        if asc {
+            self.build_sort_rows::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
+        } else {
+            self.build_sort_rows::<SimpleRowsDesc<T>, SimpleRowConverter<T>>()
+        }
+    }
 
-        let processor = if sort_desc.len() == 1 {
-            let sort_type = schema.field(sort_desc[0].offset).data_type();
-            match sort_type {
-                DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                    NumberDataType::NUM_TYPE => AccumulatingTransformer::create(
-                        input,
-                        output,
-                        TransformSortMergeBase::<
-                            TransformSortMergeLimit<SimpleRows<NumberType<NUM_TYPE>>>,
-                            SimpleRows<NumberType<NUM_TYPE>>,
-                            SimpleRowConverter<NumberType<NUM_TYPE>>,
-                        >::try_create(
-                            schema,
-                            sort_desc,
-                            order_col_generated,
-                            output_order_col,
-                            max_memory_usage,
-                            spilling_bytes_threshold_per_core,
-                            spilling_batch_bytes,
-                            TransformSortMergeLimit::create(block_size, limit),
-                        )?,
-                    ),
-                }),
-                DataType::Date => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    MergeSortLimitDate::try_create(
-                        schema,
-                        sort_desc,
-                        order_col_generated,
-                        output_order_col,
-                        max_memory_usage,
-                        spilling_bytes_threshold_per_core,
-                        spilling_batch_bytes,
-                        MergeSortLimitDateImpl::create(block_size, limit),
-                    )?,
+    fn build_sort_rows<R, C>(self) -> Result<Box<dyn Processor>>
+    where
+        R: Rows + Sync + 'static,
+        C: RowConverter<R> + Send + Sync + 'static,
+    {
+        Ok(AccumulatingTransformer::create(
+            self.input,
+            self.output,
+            TransformSortMergeBase::<TransformSortMerge<R>, R, C>::try_create(
+                self.schema.clone(),
+                self.sort_desc.clone(),
+                self.order_col_generated,
+                self.output_order_col,
+                self.max_memory_usage,
+                self.spilling_bytes_threshold_per_core,
+                self.spilling_batch_bytes,
+                TransformSortMerge::create(
+                    self.schema,
+                    self.sort_desc,
+                    self.block_size,
+                    self.enable_loser_tree,
+                    self.limit,
                 ),
-                DataType::Timestamp => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    MergeSortLimitTimestamp::try_create(
-                        schema,
-                        sort_desc,
-                        order_col_generated,
-                        output_order_col,
-                        max_memory_usage,
-                        spilling_bytes_threshold_per_core,
-                        spilling_batch_bytes,
-                        MergeSortLimitTimestampImpl::create(block_size, limit),
-                    )?,
-                ),
-                DataType::String => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    MergeSortLimitString::try_create(
-                        schema,
-                        sort_desc,
-                        order_col_generated,
-                        output_order_col,
-                        max_memory_usage,
-                        spilling_bytes_threshold_per_core,
-                        spilling_batch_bytes,
-                        MergeSortLimitStringImpl::create(block_size, limit),
-                    )?,
-                ),
-                _ => AccumulatingTransformer::create(
-                    input,
-                    output,
-                    MergeSortLimitCommon::try_create(
-                        schema,
-                        sort_desc,
-                        order_col_generated,
-                        output_order_col,
-                        max_memory_usage,
-                        spilling_bytes_threshold_per_core,
-                        spilling_batch_bytes,
-                        MergeSortLimitCommonImpl::create(block_size, limit),
-                    )?,
-                ),
+            )?,
+        ))
+    }
+
+    fn build_sort_limit(self) -> Result<Box<dyn Processor>> {
+        if self.sort_desc.len() == 1 {
+            let sort_type = self.schema.field(self.sort_desc[0].offset).data_type();
+            let asc = self.sort_desc[0].asc;
+
+            match_template! {
+                T = [ Date => DateType, Timestamp => TimestampType, String => StringType ],
+                match sort_type {
+                    DataType::T => self.build_sort_limit_simple::<T>(asc),
+                    DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                        NumberDataType::NUM_TYPE => {
+                            self.build_sort_limit_simple::<NumberType<NUM_TYPE>>(asc)
+                        }
+                    }),
+                    _ => self.build_sort_limit_rows::<CommonRows, CommonConverter>(),
+                }
             }
         } else {
-            AccumulatingTransformer::create(
-                input,
-                output,
-                MergeSortLimitCommon::try_create(
-                    schema,
-                    sort_desc,
-                    order_col_generated,
-                    output_order_col,
-                    max_memory_usage,
-                    spilling_bytes_threshold_per_core,
-                    spilling_batch_bytes,
-                    MergeSortLimitCommonImpl::create(block_size, limit),
-                )?,
-            )
-        };
+            self.build_sort_limit_rows::<CommonRows, CommonConverter>()
+        }
+    }
 
-        Ok(processor)
+    fn build_sort_limit_simple<T>(self, asc: bool) -> Result<Box<dyn Processor>>
+    where
+        T: ArgType + Send + Sync,
+        T::Column: Send + Sync,
+        for<'a> T::ScalarRef<'a>: Ord + Send,
+    {
+        if asc {
+            self.build_sort_limit_rows::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
+        } else {
+            self.build_sort_limit_rows::<SimpleRowsDesc<T>, SimpleRowConverter<T>>()
+        }
+    }
+
+    fn build_sort_limit_rows<R, C>(self) -> Result<Box<dyn Processor>>
+    where
+        R: Rows + Sync + 'static,
+        C: RowConverter<R> + Send + Sync + 'static,
+    {
+        Ok(AccumulatingTransformer::create(
+            self.input,
+            self.output,
+            TransformSortMergeBase::<TransformSortMergeLimit<R>, R, C>::try_create(
+                self.schema,
+                self.sort_desc,
+                self.order_col_generated,
+                self.output_order_col,
+                self.max_memory_usage,
+                self.spilling_bytes_threshold_per_core,
+                self.spilling_batch_bytes,
+                TransformSortMergeLimit::create(self.block_size, self.limit.unwrap()),
+            )?,
+        ))
     }
 }

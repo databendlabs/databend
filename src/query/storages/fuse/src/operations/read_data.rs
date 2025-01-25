@@ -14,14 +14,17 @@
 
 use std::sync::Arc;
 
+use async_channel::Receiver;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::TrySpawn;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_core::Pipeline;
@@ -34,10 +37,10 @@ use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
-use crate::pruning::SegmentLocation;
 use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
+use crate::SegmentLocation;
 
 impl FuseTable {
     pub fn create_block_reader(
@@ -79,7 +82,7 @@ impl FuseTable {
         )
     }
 
-    fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
+    pub(crate) fn adjust_io_request(&self, ctx: &Arc<dyn TableContext>) -> Result<usize> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
@@ -152,32 +155,6 @@ impl FuseTable {
                 });
             }
         }
-        if !lazy_init_segments.is_empty() {
-            let table = self.clone();
-            let table_schema = self.schema_with_stream();
-            let push_downs = plan.push_downs.clone();
-            let query_ctx = ctx.clone();
-
-            // TODO: need refactor
-            pipeline.set_on_init(move || {
-                let table = table.clone();
-                let table_schema = table_schema.clone();
-                let ctx = query_ctx.clone();
-                let push_downs = push_downs.clone();
-                // let lazy_init_segments = lazy_init_segments.clone();
-
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = table
-                        .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
-                        .await?;
-
-                    Result::<_, ErrorCode>::Ok(partitions)
-                })?;
-
-                query_ctx.set_partitions(partitions)?;
-                Ok(())
-            });
-        }
 
         let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
@@ -207,19 +184,71 @@ impl FuseTable {
         let virtual_reader = Arc::new(
             PushDownInfo::virtual_columns_of_push_downs(&plan.push_downs)
                 .as_ref()
-                .map(|virtual_columns| {
+                .map(|virtual_column| {
                     VirtualColumnReader::try_create(
                         ctx.clone(),
                         self.operator.clone(),
                         block_reader.schema(),
                         plan,
-                        virtual_columns.clone(),
+                        virtual_column.clone(),
                         self.table_compression,
-                        put_cache,
                     )
                 })
                 .transpose()?,
         );
+
+        let enable_prune_pipeline = ctx.get_settings().get_enable_prune_pipeline()?;
+        let rx = if !enable_prune_pipeline && !lazy_init_segments.is_empty() {
+            // If the prune pipeline is disabled and is lazy init segments, we need to fallback
+            let table = self.clone();
+            let table_schema = self.schema_with_stream();
+            let push_downs = plan.push_downs.clone();
+            let ctx = ctx.clone();
+            let (tx, rx) = async_channel::bounded(max_io_requests);
+            pipeline.set_on_init(move || {
+                // We cannot use the runtime associated with the query to avoid increasing its lifetime.
+                GlobalIORuntime::instance().spawn(async move {
+                    // avoid block global io runtime
+                    let runtime =
+                        Runtime::with_worker_threads(2, Some("prune-snap-blk".to_string()))?;
+                    let handler = runtime.spawn(async move {
+                        match table
+                            .prune_snapshot_blocks(
+                                ctx,
+                                push_downs,
+                                table_schema,
+                                lazy_init_segments,
+                                0,
+                            )
+                            .await
+                        {
+                            Ok((_, partitions)) => {
+                                for part in partitions.partitions {
+                                    // the sql may be killed or early stop, ignore the error
+                                    if let Err(_e) = tx.send(Ok(part)).await {
+                                        break;
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                let _ = tx.send(Err(err)).await;
+                            }
+                        }
+                    });
+
+                    if let Err(cause) = handler.await {
+                        log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
+                    }
+
+                    Result::Ok(())
+                });
+
+                Ok(())
+            });
+            Some(rx)
+        } else {
+            self.pruned_result_receiver.lock().take()
+        };
 
         self.build_fuse_source_pipeline(
             ctx.clone(),
@@ -231,10 +260,11 @@ impl FuseTable {
             max_io_requests,
             index_reader,
             virtual_reader,
+            rx,
         )?;
 
         // replace the column which has data mask if needed
-        self.apply_data_mask_policy_if_needed(ctx, plan, pipeline)?;
+        self.apply_data_mask_policy_if_needed(ctx.clone(), plan, pipeline)?;
 
         Ok(())
     }
@@ -251,6 +281,7 @@ impl FuseTable {
         max_io_requests: usize,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
+        receiver: Option<Receiver<Result<PartInfoPtr>>>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let table_schema = self.schema_with_stream();
@@ -266,6 +297,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                receiver,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,
@@ -277,6 +309,7 @@ impl FuseTable {
                 max_io_requests,
                 index_reader,
                 virtual_reader,
+                receiver,
             ),
         }
     }

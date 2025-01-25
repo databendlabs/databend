@@ -15,9 +15,13 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
@@ -28,6 +32,7 @@ use serde::Serialize;
 
 use super::Plan;
 use crate::plans::CopyIntoTablePlan;
+use crate::INSERT_NAME;
 
 #[derive(Clone, Debug, EnumAsInner)]
 pub enum InsertInputSource {
@@ -116,6 +121,13 @@ impl Insert {
         result.push(DataBlock::new_from_columns(vec![formatted_plan]));
         Ok(vec![DataBlock::concat(&result)?])
     }
+
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![DataField::new(
+            INSERT_NAME,
+            DataType::Number(NumberDataType::UInt64),
+        )])
+    }
 }
 
 pub(crate) fn format_insert_source(
@@ -163,7 +175,6 @@ pub(crate) fn format_insert_source(
                     required_source_schema,
                     write_mode,
                     validation_mode,
-                    force,
                     stage_table_info,
                     enable_distributed,
                     ..
@@ -191,7 +202,6 @@ pub(crate) fn format_insert_source(
                     )),
                     FormatTreeNode::new(format!("write_mode: {write_mode}")),
                     FormatTreeNode::new(format!("validation_mode: {validation_mode}")),
-                    FormatTreeNode::new(format!("force: {force}")),
                     FormatTreeNode::new(format!("stage_table_info: {stage_table_info}")),
                     FormatTreeNode::new(format!("enable_distributed: {enable_distributed}")),
                 ];

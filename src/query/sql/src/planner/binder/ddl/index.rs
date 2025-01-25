@@ -37,7 +37,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_license::license::Feature::AggregateIndex;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
@@ -149,9 +149,8 @@ impl Binder {
                 && table.support_index()
                 && !matches!(table.engine(), "VIEW" | "STREAM")
             {
-                let license_manager = get_license_manager();
-                if license_manager
-                    .manager
+                #[allow(clippy::collapsible_if)]
+                if LicenseManagerSwitch::instance()
                     .check_enterprise_enabled(self.ctx.get_license_key(), AggregateIndex)
                     .is_ok()
                 {
@@ -260,6 +259,13 @@ impl Binder {
             )));
         }
 
+        if table.is_temp() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is temporary table, creating index not allowed",
+                table.name()
+            )));
+        }
+
         let table_id = table.get_id();
         Self::rewrite_query_with_database(&mut original_query, table_entry.database());
         Self::rewrite_query_with_database(&mut query, table_entry.database());
@@ -358,7 +364,8 @@ impl Binder {
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+                .with_planning_agg_index();
             Ok(optimize(opt_ctx, select_plan).await?)
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
@@ -435,6 +442,12 @@ impl Binder {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table engine {} does not support create inverted index",
                 table.engine()
+            )));
+        }
+        if table.is_temp() {
+            return Err(ErrorCode::UnsupportedIndex(format!(
+                "Table {} is temporary table, creating inverted index not allowed",
+                table.name()
             )));
         }
         let table_schema = table.schema();

@@ -16,8 +16,8 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Not;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_hashtable::FastHash;
@@ -203,10 +203,7 @@ where T: Clone
                     let bitmap = col.not();
                     column.push_fix_len_binaries(&reader[offsize..], step, rows)?;
                     let inner = column.build();
-                    Column::Nullable(Box::new(NullableColumn {
-                        column: inner,
-                        validity: bitmap,
-                    }))
+                    NullableColumn::new_column(inner, bitmap)
                 }
             };
 
@@ -275,16 +272,24 @@ macro_rules! impl_hash_method_fixed_keys {
                 }
             }
 
-            fn build_keys_accessor_and_hashes(
+            fn build_keys_accessor(
                 &self,
                 keys_state: KeysState,
-                hashes: &mut Vec<u64>,
             ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
                 use crate::types::ArgType;
                 match keys_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
-                        hashes.extend(col.iter().map(|key| key.fast_hash()));
                         Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(col)))
+                    }
+                    other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
+                }
+            }
+
+            fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
+                use crate::types::ArgType;
+                match keys_state {
+                    KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
+                        hashes.extend(col.iter().map(|key| key.fast_hash()));
                     }
                     other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
                 }
@@ -345,15 +350,20 @@ macro_rules! impl_hash_method_fixed_large_keys {
                 }
             }
 
-            fn build_keys_accessor_and_hashes(
+            fn build_keys_accessor(
                 &self,
                 keys_state: KeysState,
-                hashes: &mut Vec<u64>,
             ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
+                match keys_state {
+                    KeysState::$name(v) => Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(v))),
+                    _ => unreachable!(),
+                }
+            }
+
+            fn build_keys_hashes(&self, keys_state: &KeysState, hashes: &mut Vec<u64>) {
                 match keys_state {
                     KeysState::$name(v) => {
                         hashes.extend(v.iter().map(|key| key.fast_hash()));
-                        Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(v)))
                     }
                     _ => unreachable!(),
                 }

@@ -33,6 +33,8 @@ pub mod s_expr;
 mod statistics;
 mod util;
 
+mod dynamic_sample;
+
 pub use cascades::CascadesOptimizer;
 pub use decorrelate::FlattenInfo;
 pub use decorrelate::SubqueryRewriter;

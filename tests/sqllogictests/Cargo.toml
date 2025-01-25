@@ -14,20 +14,28 @@ version = "0.1.0"
 name = "databend-sqllogictests"
 
 [dependencies]
+async-recursion = { workspace = true }
 async-trait = { workspace = true }
+bollard = { workspace = true }
 clap = { workspace = true }
+cookie = { workspace = true }
 databend-common-exception = { workspace = true }
-env_logger = "0.10.0"
+env_logger = { workspace = true }
 futures-util = { workspace = true }
 mysql_async = { workspace = true }
 rand = { workspace = true }
+recursive = { workspace = true }
+redis = { workspace = true }
 regex = { workspace = true }
-reqwest = { workspace = true }
-serde = "1.0.150"
+reqwest = { workspace = true, features = ["cookies"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
-sqllogictest = "0.19.1"
+sqllogictest = { workspace = true }
+testcontainers = { workspace = true }
+testcontainers-modules = { workspace = true, features = ["mysql", "redis"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+url = { workspace = true }
 walkdir = { workspace = true }
 
 [lints]

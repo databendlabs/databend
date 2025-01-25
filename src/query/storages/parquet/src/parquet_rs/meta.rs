@@ -21,12 +21,33 @@ use databend_common_catalog::plan::FullParquetMeta;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableField;
+use databend_storages_common_cache::CacheManager;
+use databend_storages_common_cache::InMemoryItemCacheReader;
+use databend_storages_common_cache::LoadParams;
+use databend_storages_common_cache::Loader;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
 
 use crate::parquet_rs::statistics::collect_row_group_stats;
+
+pub async fn read_metadata_async_cached(
+    path: &str,
+    operator: &Operator,
+    file_size: Option<u64>,
+) -> Result<Arc<ParquetMetaData>> {
+    let info = operator.info();
+    let location = format!("{}/{}/{}", info.name(), info.root(), path);
+    let reader = MetaReader::meta_data_reader(operator.clone(), location.len() - path.len());
+    let load_params = LoadParams {
+        location,
+        len_hint: file_size,
+        ver: 0,
+        put_cache: true,
+    };
+    reader.read(&load_params).await
+}
 
 #[async_backtrace::framed]
 pub async fn read_metas_in_parallel(
@@ -82,7 +103,7 @@ pub async fn read_metas_in_parallel(
     Ok(metas)
 }
 
-fn check_parquet_schema(
+pub(crate) fn check_parquet_schema(
     expect: &SchemaDescriptor,
     actual: &SchemaDescriptor,
     path: &str,
@@ -153,15 +174,14 @@ async fn load_and_check_parquet_meta(
     expect: &SchemaDescriptor,
     schema_from: &str,
 ) -> Result<Arc<ParquetMetaData>> {
-    let metadata =
-        databend_common_storage::parquet_rs::read_metadata_async(file, &op, Some(size)).await?;
+    let metadata = read_metadata_async_cached(file, &op, Some(size)).await?;
     check_parquet_schema(
         expect,
         metadata.file_metadata().schema_descr(),
         file,
         schema_from,
     )?;
-    Ok(Arc::new(metadata))
+    Ok(metadata)
 }
 
 pub async fn read_parquet_metas_batch(
@@ -200,10 +220,7 @@ pub async fn read_parquet_metas_batch_for_copy(
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     let mut metas = Vec::with_capacity(file_infos.len());
     for (location, size) in file_infos {
-        let meta = Arc::new(
-            databend_common_storage::parquet_rs::read_metadata_async(&location, &op, Some(size))
-                .await?,
-        );
+        let meta = read_metadata_async_cached(&location, &op, Some(size)).await?;
         if unlikely(meta.file_metadata().num_rows() == 0) {
             // Don't collect empty files
             continue;
@@ -229,4 +246,31 @@ fn check_memory_usage(max_memory_usage: u64) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+pub struct LoaderWrapper<T>(T, usize);
+pub type ParquetMetaReader = InMemoryItemCacheReader<ParquetMetaData, LoaderWrapper<Operator>>;
+
+pub struct MetaReader;
+impl MetaReader {
+    pub fn meta_data_reader(dal: Operator, prefix_len: usize) -> ParquetMetaReader {
+        ParquetMetaReader::new(
+            CacheManager::instance().get_parquet_meta_data_cache(),
+            LoaderWrapper(dal, prefix_len),
+        )
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<ParquetMetaData> for LoaderWrapper<Operator> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<ParquetMetaData> {
+        let location = &params.location[self.1..];
+        let size = match params.len_hint {
+            Some(v) => v,
+            None => self.0.stat(location).await?.content_length(),
+        };
+        databend_common_storage::parquet_rs::read_metadata_async(location, &self.0, Some(size))
+            .await
+    }
 }

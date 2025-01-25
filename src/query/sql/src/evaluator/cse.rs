@@ -37,10 +37,10 @@ pub fn apply_cse(
                     count_expressions(expr, &mut cse_counter);
                 }
 
-                let mut cse_candidates: Vec<Expr> = cse_counter
+                let mut cse_candidates: Vec<&Expr> = cse_counter
                     .iter()
                     .filter(|(_, count)| **count > 1)
-                    .map(|(expr, _)| expr.clone())
+                    .map(|(expr, _)| expr)
                     .collect();
 
                 // Make sure the smaller expr goes firstly
@@ -52,7 +52,7 @@ pub fn apply_cse(
                     let mut cse_replacements = HashMap::new();
 
                     let candidates_nums = cse_candidates.len();
-                    for cse_candidate in &cse_candidates {
+                    for cse_candidate in cse_candidates.iter() {
                         let temp_var = format!("__temp_cse_{}", temp_var_counter);
                         let temp_expr = Expr::ColumnRef {
                             span: None,
@@ -61,7 +61,7 @@ pub fn apply_cse(
                             display_name: temp_var.clone(),
                         };
 
-                        let mut expr_cloned = cse_candidate.clone();
+                        let mut expr_cloned = (*cse_candidate).clone();
                         perform_cse_replacement(&mut expr_cloned, &cse_replacements);
 
                         debug!(

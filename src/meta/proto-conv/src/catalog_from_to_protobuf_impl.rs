@@ -37,9 +37,9 @@ impl FromToProto for mt::CatalogMeta {
     fn from_pb(p: pb::CatalogMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let option = p.option.ok_or_else(|| Incompatible {
-            reason: "CatalogMeta.option is None".to_string(),
-        })?;
+        let option = p
+            .option
+            .ok_or_else(|| Incompatible::new("CatalogMeta.option is None".to_string()))?;
 
         let v = Self {
             catalog_option: mt::CatalogOption::from_pb(option)?,
@@ -87,9 +87,7 @@ impl FromToProto for mt::CatalogOption {
                 }
                 mt::CatalogOption::Iceberg(mt::IcebergCatalogOption::from_pb(v)?)
             }
-            pb::catalog_option::CatalogOption::Share(v) => {
-                mt::CatalogOption::Share(mt::ShareCatalogOption::from_pb(v)?)
-            }
+            pb::catalog_option::CatalogOption::Share(_v) => mt::CatalogOption::Default,
         })
     }
 
@@ -99,9 +97,6 @@ impl FromToProto for mt::CatalogOption {
             mt::CatalogOption::Hive(v) => Some(pb::catalog_option::CatalogOption::Hive(v.to_pb()?)),
             mt::CatalogOption::Iceberg(v) => {
                 Some(pb::catalog_option::CatalogOption::Iceberg(v.to_pb()?))
-            }
-            mt::CatalogOption::Share(v) => {
-                Some(pb::catalog_option::CatalogOption::Share(v.to_pb()?))
             }
         };
 
@@ -120,9 +115,9 @@ impl FromToProto for mt::IcebergCatalogOption {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let option = p.iceberg_catalog_option.ok_or_else(|| Incompatible {
-            reason: "IcebergCatalogOption.option is None".to_string(),
-        })?;
+        let option = p
+            .iceberg_catalog_option
+            .ok_or_else(|| Incompatible::new("IcebergCatalogOption.option is None".to_string()))?;
 
         Ok(match option {
             pb::iceberg_catalog_option::IcebergCatalogOption::RestCatalog(v) => {
@@ -130,6 +125,9 @@ impl FromToProto for mt::IcebergCatalogOption {
             }
             pb::iceberg_catalog_option::IcebergCatalogOption::HmsCatalog(v) => {
                 mt::IcebergCatalogOption::Hms(mt::IcebergHmsCatalogOption::from_pb(v)?)
+            }
+            pb::iceberg_catalog_option::IcebergCatalogOption::GlueCatalog(v) => {
+                mt::IcebergCatalogOption::Glue(mt::IcebergGlueCatalogOption::from_pb(v)?)
             }
         })
     }
@@ -144,6 +142,9 @@ impl FromToProto for mt::IcebergCatalogOption {
                 }
                 mt::IcebergCatalogOption::Hms(v) => {
                     pb::iceberg_catalog_option::IcebergCatalogOption::HmsCatalog(v.to_pb()?)
+                }
+                mt::IcebergCatalogOption::Glue(v) => {
+                    pb::iceberg_catalog_option::IcebergCatalogOption::GlueCatalog(v.to_pb()?)
                 }
             }),
         })
@@ -210,6 +211,39 @@ impl FromToProto for mt::IcebergHmsCatalogOption {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             address: self.address.clone(),
+            warehouse: self.warehouse.clone(),
+            props: self
+                .props
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        })
+    }
+}
+
+impl FromToProto for mt::IcebergGlueCatalogOption {
+    type PB = pb::IcebergGlueCatalogOption;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(Self {
+            warehouse: p.warehouse,
+            props: p
+                .props
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(pb::IcebergGlueCatalogOption {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
             warehouse: self.warehouse.clone(),
             props: self
                 .props

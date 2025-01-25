@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -23,6 +24,7 @@ use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;
+use super::physical_plans::HilbertSerialize;
 use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSource;
@@ -46,7 +48,6 @@ use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
 use crate::executor::physical_plans::CopyIntoTableSource;
-use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::Duplicate;
 use crate::executor::physical_plans::EvalScalar;
@@ -57,7 +58,6 @@ use crate::executor::physical_plans::ExpressionScan;
 use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
-use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::ProjectSet;
 use crate::executor::physical_plans::RangeJoin;
@@ -94,8 +94,6 @@ pub enum PhysicalPlan {
     RangeJoin(RangeJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
-    CteScan(CteScan),
-    MaterializedCte(MaterializedCte),
     ConstantTableScan(ConstantTableScan),
     ExpressionScan(ExpressionScan),
     CacheScan(CacheScan),
@@ -135,6 +133,7 @@ pub enum PhysicalPlan {
 
     /// Recluster
     Recluster(Box<Recluster>),
+    HilbertSerialize(Box<HilbertSerialize>),
 
     /// Multi table insert
     Duplicate(Box<Duplicate>),
@@ -244,15 +243,7 @@ impl PhysicalPlan {
                 plan.left.adjust_plan_id(next_id);
                 plan.right.adjust_plan_id(next_id);
             }
-            PhysicalPlan::CteScan(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
             PhysicalPlan::RecursiveCteScan(plan) => {
-                plan.plan_id = *next_id;
-                *next_id += 1;
-            }
-            PhysicalPlan::MaterializedCte(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
@@ -360,6 +351,10 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
+            PhysicalPlan::HilbertSerialize(plan) => {
+                plan.plan_id = *next_id;
+                *next_id += 1;
+            }
             PhysicalPlan::Duplicate(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
@@ -431,8 +426,6 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
             PhysicalPlan::ExchangeSource(v) => v.plan_id,
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
-            PhysicalPlan::CteScan(v) => v.plan_id,
-            PhysicalPlan::MaterializedCte(v) => v.plan_id,
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
             PhysicalPlan::ExpressionScan(v) => v.plan_id,
             PhysicalPlan::CacheScan(v) => v.plan_id,
@@ -452,6 +445,7 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(v) => v.plan_id,
             PhysicalPlan::CompactSource(v) => v.plan_id,
             PhysicalPlan::Recluster(v) => v.plan_id,
+            PhysicalPlan::HilbertSerialize(v) => v.plan_id,
             PhysicalPlan::Duplicate(v) => v.plan_id,
             PhysicalPlan::Shuffle(v) => v.plan_id,
             PhysicalPlan::ChunkFilter(v) => v.plan_id,
@@ -488,8 +482,6 @@ impl PhysicalPlan {
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoLocation(plan) => plan.output_schema(),
-            PhysicalPlan::CteScan(plan) => plan.output_schema(),
-            PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::ExpressionScan(plan) => plan.output_schema(),
             PhysicalPlan::CacheScan(plan) => plan.output_schema(),
@@ -508,7 +500,8 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
-            | PhysicalPlan::Recluster(_) => Ok(DataSchemaRef::default()),
+            | PhysicalPlan::Recluster(_)
+            | PhysicalPlan::HilbertSerialize(_) => Ok(DataSchemaRef::default()),
             PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
             PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
             PhysicalPlan::ChunkFilter(plan) => plan.input.output_schema(),
@@ -563,13 +556,12 @@ impl PhysicalPlan {
             PhysicalPlan::MutationManipulate(_) => "MutationManipulate".to_string(),
             PhysicalPlan::MutationOrganize(_) => "MutationOrganize".to_string(),
             PhysicalPlan::AddStreamColumn(_) => "AddStreamColumn".to_string(),
-            PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::RecursiveCteScan(_) => "RecursiveCteScan".to_string(),
-            PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
             PhysicalPlan::ExpressionScan(_) => "ExpressionScan".to_string(),
             PhysicalPlan::CacheScan(_) => "CacheScan".to_string(),
             PhysicalPlan::Recluster(_) => "Recluster".to_string(),
+            PhysicalPlan::HilbertSerialize(_) => "HilbertSerialize".to_string(),
             PhysicalPlan::Udf(_) => "Udf".to_string(),
             PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
             PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
@@ -586,16 +578,14 @@ impl PhysicalPlan {
     pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_)
-            | PhysicalPlan::CteScan(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::CacheScan(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::CompactSource(_)
-            | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
-            | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::HilbertSerialize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -636,10 +626,8 @@ impl PhysicalPlan {
             }
             PhysicalPlan::MutationOrganize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AddStreamColumn(plan) => Box::new(std::iter::once(plan.input.as_ref())),
-            PhysicalPlan::MaterializedCte(plan) => Box::new(
-                std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
-            ),
             PhysicalPlan::Udf(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::AsyncFunction(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::CopyIntoLocation(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Duplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Shuffle(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -652,6 +640,10 @@ impl PhysicalPlan {
             PhysicalPlan::ChunkAppendData(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkMerge(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ChunkCommitInsert(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::CopyIntoTable(v) => match &v.source {
+                CopyIntoTableSource::Query(v) => Box::new(std::iter::once(v.as_ref())),
+                CopyIntoTableSource::Stage(v) => Box::new(std::iter::once(v.as_ref())),
+            },
         }
     }
 
@@ -671,12 +663,12 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::RowFetch(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Udf(plan) => plan.input.try_find_single_data_source(),
+            PhysicalPlan::AsyncFunction(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::CopyIntoLocation(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
             | PhysicalPlan::RangeJoin(_)
-            | PhysicalPlan::MaterializedCte(_)
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
@@ -696,9 +688,9 @@ impl PhysicalPlan {
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::ExpressionScan(_)
             | PhysicalPlan::CacheScan(_)
-            | PhysicalPlan::CteScan(_)
             | PhysicalPlan::RecursiveCteScan(_)
             | PhysicalPlan::Recluster(_)
+            | PhysicalPlan::HilbertSerialize(_)
             | PhysicalPlan::Duplicate(_)
             | PhysicalPlan::Shuffle(_)
             | PhysicalPlan::ChunkFilter(_)
@@ -707,7 +699,6 @@ impl PhysicalPlan {
             | PhysicalPlan::ChunkFillAndReorder(_)
             | PhysicalPlan::ChunkAppendData(_)
             | PhysicalPlan::ChunkMerge(_)
-            | PhysicalPlan::AsyncFunction(_)
             | PhysicalPlan::ChunkCommitInsert(_) => None,
         }
     }
@@ -718,6 +709,12 @@ impl PhysicalPlan {
                 self,
                 Self::ExchangeSource(_) | Self::ExchangeSink(_) | Self::Exchange(_)
             )
+    }
+
+    pub fn is_warehouse_distributed_plan(&self) -> bool {
+        self.children()
+            .any(|child| child.is_warehouse_distributed_plan())
+            || matches!(self, Self::TableScan(v) if v.source.parts.kind == PartitionsShuffleKind::BroadcastWarehouse)
     }
 
     pub fn get_desc(&self) -> Result<String> {
@@ -857,16 +854,17 @@ impl PhysicalPlan {
                 .iter()
                 .map(|x| format!("{}({})", x.func_name, x.arg_exprs.join(", ")))
                 .join(", "),
-            PhysicalPlan::CteScan(v) => {
-                format!("CTE index: {}, sub index: {}", v.cte_idx.0, v.cte_idx.1)
-            }
             PhysicalPlan::UnionAll(v) => v
                 .left_outputs
                 .iter()
                 .zip(v.right_outputs.iter())
                 .map(|(l, r)| format!("#{} <- #{}", l.0, r.0))
                 .join(", "),
-            PhysicalPlan::AsyncFunction(async_func) => async_func.display_name.to_string(),
+            PhysicalPlan::AsyncFunction(v) => v
+                .async_func_descs
+                .iter()
+                .map(|x| x.display_name.clone())
+                .join(", "),
             _ => String::new(),
         })
     }
@@ -893,9 +891,11 @@ impl PhysicalPlan {
                     ),
                     v.name_mapping.keys().cloned().collect(),
                 );
-                labels.insert(String::from("Total partitions"), vec![
-                    v.source.statistics.partitions_total.to_string(),
-                ]);
+                labels.insert(String::from("Total partitions"), vec![v
+                    .source
+                    .statistics
+                    .partitions_total
+                    .to_string()]);
             }
             PhysicalPlan::Filter(v) => {
                 labels.insert(

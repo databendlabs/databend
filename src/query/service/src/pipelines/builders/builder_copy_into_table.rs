@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use databend_common_catalog::table::AppendMode;
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -27,7 +27,6 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::ParquetFileFormatParams;
-use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
@@ -180,7 +179,6 @@ impl PipelineBuilder {
                     main_pipeline,
                     to_table.clone(),
                     plan_required_values_schema.clone(),
-                    AppendMode::Copy,
                 )?
             }
             CopyIntoTableMode::Replace => {}
@@ -189,7 +187,6 @@ impl PipelineBuilder {
                 main_pipeline,
                 to_table.clone(),
                 plan_required_values_schema.clone(),
-                AppendMode::Copy,
             )?,
         }
         Ok(())
@@ -198,9 +195,8 @@ impl PipelineBuilder {
     pub(crate) fn build_upsert_copied_files_to_meta_req(
         ctx: Arc<QueryContext>,
         to_table: &dyn Table,
-        stage_info: &StageInfo,
         copied_files: &[StageFileInfo],
-        force: bool,
+        options: &CopyIntoTableOptions,
     ) -> Result<Option<UpsertTableCopiedFileReq>> {
         let mut copied_file_tree = BTreeMap::new();
         for file in copied_files {
@@ -219,7 +215,7 @@ impl PipelineBuilder {
         let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
 
         let upsert_copied_files_request = {
-            if stage_info.copy_options.purge && force {
+            if options.purge && options.force {
                 // if `purge-after-copy` is enabled, and in `force` copy mode,
                 // we do not need to upsert copied files into meta server
                 info!(
@@ -234,7 +230,7 @@ impl PipelineBuilder {
                 let req = UpsertTableCopiedFileReq {
                     file_info: copied_file_tree,
                     ttl: Some(Duration::from_hours(expire_hours)),
-                    fail_if_duplicated: !force,
+                    insert_if_not_exists: !options.force,
                 };
                 Some(req)
             }

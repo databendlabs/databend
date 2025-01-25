@@ -6,8 +6,11 @@
 >>>> drop connection if exists my_conn;
 >>>> create connection my_conn storage_type = 's3' access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900'
 >>>> insert into table_from(a) values(0)
+1
 >>>> insert into table_from(a) values(1)
+1
 >>>> insert into table_from(a) values(2)
+1
 #### attaching table
 #### select attach table
 >>>> select * from table_to order by a;
@@ -27,7 +30,7 @@ ATTACH
 <<<<
 #### delete should fail
 >>>> delete from table_to where a=1;
-Error: APIError: ResponseError with 3905: Modification not permitted: Table 'table_to' is READ ONLY, preventing any changes or updates.
+Error: APIError: QueryFailed: [3905]Modification not permitted: Table 'table_to' is READ ONLY, preventing any changes or updates.
 <<<<
 #### select after deletion
 >>>> select * from table_to order by a;

@@ -1,0 +1,22 @@
+>>>> create or replace database test_vacuum_drop_table_continue
+>>>> create table test_vacuum_drop_table_continue.a(c int) 'fs:///tmp/test_vacuum_drop_table_continue/'
+>>>> create table test_vacuum_drop_table_continue.b(c int)
+>>>> create table test_vacuum_drop_table_continue.c(c int)
+>>>> create table test_vacuum_drop_table_continue.d(c int)
+>>>> insert into test_vacuum_drop_table_continue.a values (1)
+1
+>>>> insert into test_vacuum_drop_table_continue.b values (1)
+1
+>>>> insert into test_vacuum_drop_table_continue.c values (1)
+1
+>>>> insert into test_vacuum_drop_table_continue.d values (1)
+1
+>>>> drop database test_vacuum_drop_table_continue
+>>>> set data_retention_time_in_days=0; vacuum drop table
+>>>> undrop database test_vacuum_drop_table_continue
+>>>> use test_vacuum_drop_table_continue;show tables
+a
+<<<<
+>>>> select * from test_vacuum_drop_table_continue.a
+1
+<<<<

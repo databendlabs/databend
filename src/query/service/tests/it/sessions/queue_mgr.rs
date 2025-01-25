@@ -18,6 +18,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::Planner;
@@ -75,7 +76,7 @@ async fn test_passed_acquire() -> Result<()> {
                     .acquire(TestData::<true>(format!("TestData{}", index)))
                     .await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                Result::<(), ErrorCode>::Ok(())
+                Result::<()>::Ok(())
             })
         })
     }
@@ -114,7 +115,7 @@ async fn test_serial_acquire() -> Result<()> {
                     .acquire(TestData(format!("TestData{}", index)))
                     .await?;
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                Result::<(), ErrorCode>::Ok(())
+                Result::<()>::Ok(())
             })
         })
     }
@@ -154,7 +155,7 @@ async fn test_concurrent_acquire() -> Result<()> {
                     .await?;
 
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                Result::<(), ErrorCode>::Ok(())
+                Result::<()>::Ok(())
             })
         })
     }
@@ -195,7 +196,7 @@ async fn test_list_acquire() -> Result<()> {
                     .await?;
 
                 tokio::time::sleep(Duration::from_secs(10)).await;
-                Result::<(), ErrorCode>::Ok(())
+                Result::<()>::Ok(())
             })
         })
     }
@@ -307,6 +308,7 @@ async fn test_heavy_actions() -> Result<()> {
 
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_enable_table_lock(0)?;
 
     // Create table and stage.
     {

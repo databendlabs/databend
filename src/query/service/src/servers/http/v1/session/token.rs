@@ -17,12 +17,13 @@ use std::time::Duration;
 use base64::prelude::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::user_token::TokenType;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use serde::Deserialize;
 use serde::Serialize;
 
-const TOKEN_PREFIX: &str = "bend-v1-";
+const TOKEN_PREFIX: &str = "bend-v1";
 fn generate_secure_nonce() -> String {
     let mut random_bytes = [0u8; 16];
     OsRng.fill_bytes(&mut random_bytes);
@@ -49,7 +50,7 @@ pub fn unix_ts() -> Duration {
 
 impl SessionClaim {
     pub fn new(
-        session_id: Option<String>,
+        session_id: String,
         tenant: &str,
         user: &str,
         auth_role: &Option<String>,
@@ -59,7 +60,7 @@ impl SessionClaim {
             tenant: tenant.to_string(),
             user: user.to_string(),
             auth_role: auth_role.clone(),
-            session_id: session_id.unwrap_or(uuid::Uuid::new_v4().to_string()),
+            session_id,
             nonce: generate_secure_nonce(),
             expire_at_in_secs: (unix_ts() + ttl).as_secs(),
         }
@@ -68,23 +69,30 @@ impl SessionClaim {
         token.starts_with(TOKEN_PREFIX)
     }
 
-    pub(crate) fn encode(&self) -> String {
-        let token = BASE64_STANDARD.encode(serde_json::to_vec(&self).unwrap());
-        format!("{TOKEN_PREFIX}{token}")
+    pub fn get_type(token: &str) -> Result<TokenType> {
+        TokenType::try_from(token.as_bytes()[TOKEN_PREFIX.len() + 1])
     }
 
-    pub fn decode(token: &str) -> Result<Self> {
+    pub(crate) fn encode(&self, token_type: TokenType) -> String {
+        let token = BASE64_STANDARD.encode(serde_json::to_vec(&self).unwrap());
+        let t = token_type.to_string();
+        format!("{TOKEN_PREFIX}-{t}-{token}")
+    }
+
+    pub fn decode(token: &str) -> Result<(Self, TokenType)> {
         let fmt_err = |reason: String| {
-            ErrorCode::Internal(format!("fail to decode token({reason}): {token}"))
+            ErrorCode::AuthenticateFailure(format!("fail to decode token({reason}): {token}"))
         };
+        let t = Self::get_type(token)?;
         if token.len() < TOKEN_PREFIX.len() {
             return Err(fmt_err("too short".to_string()));
         }
-        let token = &token.as_bytes()[TOKEN_PREFIX.len()..];
+        let token = &token.as_bytes()[TOKEN_PREFIX.len() + 3..];
         let json = BASE64_STANDARD
             .decode(token)
             .map_err(|e| fmt_err(format!("base64 decode error: {e}")))?;
-        serde_json::from_slice::<SessionClaim>(&json)
-            .map_err(|e| fmt_err(format!("json decode error: {e}")))
+        let claim = serde_json::from_slice::<SessionClaim>(&json)
+            .map_err(|e| fmt_err(format!("json decode error: {e}")))?;
+        Ok((claim, t))
     }
 }

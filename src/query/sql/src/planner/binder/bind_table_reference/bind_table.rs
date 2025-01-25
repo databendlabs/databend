@@ -13,17 +13,20 @@
 // limitations under the License.
 
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::Sample;
+use databend_common_ast::ast::SampleConfig;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
+use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
 use databend_common_catalog::table::TimeNavigation;
+use databend_common_catalog::table_with_options::check_with_opt_valid;
+use databend_common_catalog::table_with_options::get_with_opt_consume;
+use databend_common_catalog::table_with_options::get_with_opt_max_batch_size;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::DatabaseType;
 use databend_common_storages_view::view_table::QUERY;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -45,8 +48,8 @@ impl Binder {
         table: &Identifier,
         alias: &Option<TableAlias>,
         temporal: &Option<TemporalClause>,
-        consume: bool,
-        sample: &Option<Sample>,
+        with_options: &Option<WithOptions>,
+        sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
         let table_identifier = TableIdentifier::new(self, catalog, database, table, alias);
         let (catalog, database, table_name, table_name_alias) = (
@@ -56,54 +59,62 @@ impl Binder {
             table_identifier.table_name_alias(),
         );
 
-        // Check and bind common table expression
-        let ctes_map = self.ctes_map.clone();
-        if let Some(cte_info) = ctes_map.get(&table_name) {
-            if self
-                .metadata
-                .read()
-                .get_table_index(Some(&database), &table_name)
-                .is_some()
-            {
-                return Err(ErrorCode::SyntaxException(format!(
-                    "Table name `{}` is misleading, please distinguish it.",
-                    table_name
-                ))
-                .set_span(*span));
-            }
-            return if cte_info.materialized {
-                self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
-            } else if cte_info.recursive {
-                if self.bind_recursive_cte {
-                    self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
-                } else {
-                    self.bind_r_cte(bind_context, cte_info, &table_name, alias)
-                }
-            } else {
-                self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-            };
-        }
+        let (consume, max_batch_size, with_opts_str) = if let Some(with_options) = with_options {
+            check_with_opt_valid(with_options)?;
+            let consume = get_with_opt_consume(with_options)?;
+            let max_batch_size = get_with_opt_max_batch_size(with_options)?;
+            let with_opts_str = with_options.to_change_query_with_clause();
+            (consume, max_batch_size, with_opts_str)
+        } else {
+            (false, None, String::new())
+        };
 
-        let tenant = self.ctx.get_tenant();
+        // Check and bind common table expression
+        let mut cte_suffix_name = None;
+        let cte_map = bind_context.cte_context.cte_map.clone();
+        if let Some(cte_info) = cte_map.get(&table_name) {
+            if cte_info.materialized {
+                cte_suffix_name = Some(self.ctx.get_id().replace("-", ""));
+            } else {
+                if self
+                    .metadata
+                    .read()
+                    .get_table_index(Some(&database), &table_name)
+                    .is_some()
+                {
+                    return Err(ErrorCode::SyntaxException(format!(
+                        "Table name `{}` is misleading, please distinguish it.",
+                        table_name
+                    ))
+                    .set_span(*span));
+                }
+                return if cte_info.recursive {
+                    if self.bind_recursive_cte {
+                        self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
+                    } else {
+                        self.bind_r_cte(*span, bind_context, cte_info, &table_name, alias)
+                    }
+                } else {
+                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                };
+            }
+        }
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
 
         // Resolve table with catalog
-        let table_meta = if let Some(share_params) = &bind_context.share_paramas {
-            self.resolve_share_reference_data_source(
-                share_params,
-                tenant.tenant_name(),
-                catalog.as_str(),
-                database.as_str(),
-                table_name.as_str(),
-            )?
-        } else {
+        let table_meta = {
+            let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
+                format!("{}${}", &table_name, cte_suffix_name)
+            } else {
+                table_name.clone()
+            };
             match self.resolve_data_source(
-                tenant.tenant_name(),
                 catalog.as_str(),
                 database.as_str(),
                 table_name.as_str(),
                 navigation.as_ref(),
+                max_batch_size,
                 self.ctx.clone().get_abort_checker(),
             ) {
                 Ok(table) => table,
@@ -114,13 +125,15 @@ impl Binder {
                             break;
                         }
                         let bind_context = parent.unwrap().as_mut();
-                        let ctes_map = self.ctes_map.clone();
-                        if let Some(cte_info) = ctes_map.get(&table_name) {
-                            return if !cte_info.materialized {
-                                self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
-                            } else {
-                                self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
-                            };
+                        let cte_map = bind_context.cte_context.cte_map.clone();
+                        if let Some(cte_info) = cte_map.get(&table_name) {
+                            return self.bind_cte(
+                                *span,
+                                bind_context,
+                                &table_name,
+                                alias,
+                                cte_info,
+                            );
                         }
                         parent = bind_context.parent.as_mut();
                     }
@@ -129,14 +142,14 @@ impl Binder {
             }
         };
 
-        if consume && table_meta.engine() != "STREAM" {
+        if consume && !table_meta.is_stream() {
             return Err(ErrorCode::StorageUnsupported(
                 "WITH CONSUME only support in STREAM",
             ));
         }
 
         if navigation.is_some_and(|n| matches!(n, TimeNavigation::Changes { .. }))
-            || table_meta.engine() == "STREAM"
+            || table_meta.is_stream()
         {
             let change_type = get_change_type(&table_name_alias);
             if change_type.is_some() {
@@ -148,7 +161,7 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    consume,
+                    None,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
@@ -169,9 +182,13 @@ impl Binder {
                     self.ctx.clone(),
                     database.as_str(),
                     table_name.as_str(),
-                    consume,
+                    &with_opts_str,
                 ))?;
 
+            if table_meta.is_stream() {
+                self.ctx
+                    .add_streams_ref(&catalog, &database, &table_name, consume);
+            }
             let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
             let tokens = tokenize_sql(query.as_str())?;
             let (stmt, _) = parse_sql(&tokens, self.dialect)?;
@@ -179,6 +196,9 @@ impl Binder {
                 unreachable!()
             };
             let (s_expr, mut new_bind_context) = self.bind_query(&mut new_bind_context, query)?;
+            bind_context
+                .cte_context
+                .set_cte_context(new_bind_context.cte_context.clone());
 
             let cols = table_meta
                 .schema()
@@ -205,14 +225,6 @@ impl Binder {
 
         match table_meta.engine() {
             "VIEW" => {
-                // if it is a share view, save Share Params to child bind context to resolve reference tables
-                let share_paramas =
-                    if let DatabaseType::ShareDB(params) = &table_meta.get_table_info().db_type {
-                        Some(params.clone())
-                    } else {
-                        None
-                    };
-
                 // TODO(leiysky): this check is error-prone,
                 // we should find a better way to do this.
                 Self::check_view_dep(bind_context, &database, &table_name)?;
@@ -224,7 +236,6 @@ impl Binder {
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                new_bind_context.share_paramas = share_paramas;
                 new_bind_context.view_info = Some((database.clone(), table_name));
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(
@@ -235,7 +246,7 @@ impl Binder {
                         false,
                         false,
                         false,
-                        false,
+                        None,
                     );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
@@ -267,7 +278,7 @@ impl Binder {
                     bind_context.view_info.is_some(),
                     bind_context.planning_agg_index,
                     false,
-                    false,
+                    cte_suffix_name,
                 );
 
                 let (s_expr, mut bind_context) = self.bind_base_table(

@@ -47,6 +47,7 @@ pub struct DataSourcePlan {
     pub data_mask_policy: Option<BTreeMap<FieldIndex, RemoteExpr>>,
 
     pub table_index: usize,
+    pub scan_id: usize,
 }
 
 impl DataSourcePlan {

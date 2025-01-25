@@ -1,5 +1,5 @@
 statement ok
-create or replace table t1 as select * from numbers(1000);
+settings (ddl_column_type_nullable=0) create or replace table t1 as select * from numbers(1000);
 
 # selectivity == 0.0
 query T

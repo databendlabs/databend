@@ -42,7 +42,6 @@ use databend_common_storage::STDIN_FD;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
 use opendal::Scheme;
-use percent_encoding::percent_decode_str;
 
 /// secure_omission will fix omitted endpoint url schemes into 'https://'
 #[inline]
@@ -192,7 +191,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     Ok(sp)
 }
 
-fn parse_gcs_params(l: &mut UriLocation) -> Result<StorageParams> {
+fn parse_gcs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let endpoint = l
         .connection
         .get("endpoint_url")
@@ -201,7 +200,7 @@ fn parse_gcs_params(l: &mut UriLocation) -> Result<StorageParams> {
     let sp = StorageParams::Gcs(StorageGcsConfig {
         endpoint_url: secure_omission(endpoint),
         bucket: l.name.clone(),
-        root: l.path.clone(),
+        root: root.clone(),
         credential: l.connection.get("credential").cloned().unwrap_or_default(),
     });
 
@@ -212,7 +211,7 @@ fn parse_gcs_params(l: &mut UriLocation) -> Result<StorageParams> {
     Ok(sp)
 }
 
-fn parse_ipfs_params(l: &mut UriLocation) -> Result<StorageParams> {
+fn parse_ipfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let endpoint = l
         .connection
         .get("endpoint_url")
@@ -220,7 +219,7 @@ fn parse_ipfs_params(l: &mut UriLocation) -> Result<StorageParams> {
         .unwrap_or_else(|| STORAGE_IPFS_DEFAULT_ENDPOINT.to_string());
     let sp = StorageParams::Ipfs(StorageIpfsConfig {
         endpoint_url: secure_omission(endpoint),
-        root: "/ipfs/".to_string() + l.name.as_str(),
+        root: "/ipfs".to_string() + root.as_str(),
     });
 
     l.connection
@@ -336,7 +335,7 @@ fn parse_cos_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
 /// For databend user can specify <namenode> in connection options.
 /// refer to https://www.vertica.com/docs/9.3.x/HTML/Content/Authoring/HadoopIntegrationGuide/libhdfs/HdfsURL.htm
 #[cfg(feature = "storage-hdfs")]
-fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
+fn parse_hdfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let name_node_from_uri = if l.name.is_empty() {
         None
     } else {
@@ -369,7 +368,7 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     };
     let sp = StorageParams::Hdfs(databend_common_meta_app::storage::StorageHdfsConfig {
         name_node,
-        root: l.path.clone(),
+        root,
     });
     l.connection
         .check()
@@ -379,7 +378,7 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
 
 // The FileSystem scheme of WebHDFS is “webhdfs://”. A WebHDFS FileSystem URI has the following format.
 // webhdfs://<HOST>:<HTTP_PORT>/<PATH>
-fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
+fn parse_webhdfs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let is_https = l
         .connection
         .get("https")
@@ -397,14 +396,29 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     let prefix = if is_https { "https" } else { "http" };
     let endpoint_url = format!("{prefix}://{}", l.name);
 
-    let root = l.path.clone();
-
     let delegation = l.connection.get("delegation").cloned().unwrap_or_default();
+    let disable_list_batch = l
+        .connection
+        .get("disable_list_batch")
+        .map(|v| v.to_lowercase().parse::<bool>())
+        .unwrap_or(Ok(true))
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "disable_list_batch should be `TRUE` or `FALSE`, parse error with: {:?}",
+                    e,
+                ),
+            )
+        })?;
+    let user_name = l.connection.get("user_name").cloned().unwrap_or_default();
 
     let sp = StorageParams::Webhdfs(StorageWebhdfsConfig {
         endpoint_url,
         root,
         delegation,
+        disable_list_batch,
+        user_name,
     });
 
     l.connection
@@ -530,20 +544,19 @@ pub async fn parse_uri_location(
 
     let sp = match protocol {
         Scheme::Azblob => parse_azure_params(l, root)?,
-        Scheme::Gcs => parse_gcs_params(l)?,
+        Scheme::Gcs => parse_gcs_params(l, root)?,
         #[cfg(feature = "storage-hdfs")]
-        Scheme::Hdfs => parse_hdfs_params(l)?,
-        Scheme::Ipfs => parse_ipfs_params(l)?,
+        Scheme::Hdfs => parse_hdfs_params(l, root)?,
+        Scheme::Ipfs => parse_ipfs_params(l, root)?,
         Scheme::S3 => parse_s3_params(l, root)?,
         Scheme::Obs => parse_obs_params(l, root)?,
         Scheme::Oss => parse_oss_params(l, root)?,
         Scheme::Cos => parse_cos_params(l, root)?,
         Scheme::Http => {
             // Make sure path has been percent decoded before parse pattern.
-            let path = percent_decode_str(&l.path).decode_utf8_lossy();
             let cfg = StorageHttpConfig {
                 endpoint_url: format!("{}://{}", l.protocol, l.name),
-                paths: globiter::Pattern::parse(&path)
+                paths: globiter::Pattern::parse(&l.path)
                     .map_err(|err| {
                         Error::new(
                             ErrorKind::InvalidInput,
@@ -565,7 +578,7 @@ pub async fn parse_uri_location(
                 StorageParams::Fs(cfg)
             }
         }
-        Scheme::Webhdfs => parse_webhdfs_params(l)?,
+        Scheme::Webhdfs => parse_webhdfs_params(l, root)?,
         Scheme::Huggingface => parse_huggingface_params(l, root)?,
         v => {
             return Err(Error::new(
@@ -596,11 +609,7 @@ pub async fn get_storage_params_from_options(
 
     let mut location = if let Some(connection) = connection {
         let connection = ctx.get_connection(connection).await?;
-        let location = UriLocation::from_uri(
-            location.to_string(),
-            "".to_string(),
-            connection.storage_params,
-        )?;
+        let location = UriLocation::from_uri(location.to_string(), connection.storage_params)?;
         if location.protocol.to_lowercase() != connection.storage_type {
             return Err(ErrorCode::BadArguments(format!(
                 "Incorrect CREATE query: protocol in location {:?} is not equal to connection {:?}",
@@ -609,7 +618,7 @@ pub async fn get_storage_params_from_options(
         };
         location
     } else {
-        UriLocation::from_uri(location.to_string(), "".to_string(), BTreeMap::new())?
+        UriLocation::from_uri(location.to_string(), BTreeMap::new())?
     };
     let sp = parse_storage_params_from_uri(
         &mut location,

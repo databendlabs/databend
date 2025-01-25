@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnPosition;
@@ -26,26 +28,28 @@ use databend_common_ast::ast::JoinCondition;
 use databend_common_ast::ast::JoinOperator;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::OrderByExpr;
+use databend_common_ast::ast::Pivot;
+use databend_common_ast::ast::PivotValues;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::ScalarRef;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
 
-use crate::binder::project_set::SrfCollector;
 use crate::optimizer::SExpr;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::planner::query_executor::QueryExecutor;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
-use crate::UdfRewriter;
-use crate::VirtualColumnRewriter;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -68,6 +72,7 @@ impl Binder {
                 );
             }
         }
+
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             let select_list = &stmt.select_list;
             self.bind_dummy_table(bind_context, select_list)?
@@ -95,26 +100,19 @@ impl Binder {
             self.bind_table_reference(bind_context, &cross_joins)?
         };
 
+        // whether allow rewrite virtual column and pushdown
+        let allow_pushdown = LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
+            .is_ok();
+        from_context.virtual_column_context.allow_pushdown = allow_pushdown;
+
         let mut rewriter = SelectRewriter::new(
             from_context.all_column_bindings(),
             self.name_resolution_ctx.unquoted_ident_case_sensitive,
-        );
+        )
+        .with_subquery_executor(self.subquery_executor.clone());
         let new_stmt = rewriter.rewrite(stmt)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
-
-        // Collect set returning functions
-        let set_returning_functions = {
-            let mut collector = SrfCollector::new();
-            stmt.select_list.iter().for_each(|item| {
-                if let SelectTarget::AliasedExpr { expr, .. } = item {
-                    collector.visit(expr);
-                }
-            });
-            collector.into_srfs()
-        };
-
-        // Bind set returning functions
-        s_expr = self.bind_project_set(&mut from_context, &set_returning_functions, s_expr)?;
 
         // Try put window definitions into bind context.
         // This operation should be before `normalize_select_list` because window functions can be used in select list.
@@ -122,6 +120,9 @@ impl Binder {
 
         // Generate a analyzed select list with from context
         let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
+
+        // analyze set returning functions
+        self.analyze_project_set_select(&mut from_context, &mut select_list)?;
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
@@ -139,6 +140,17 @@ impl Binder {
             .iter()
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
+
+        // Rewrite Set-returning functions, if the argument contains aggregation function or group item,
+        // set as lazy Set-returning functions.
+        if !from_context.srf_info.srfs.is_empty() {
+            self.rewrite_project_set_select(&mut from_context)?;
+        }
+
+        // Bind Set-returning functions before filter plan and aggregate plan.
+        if !from_context.srf_info.srfs.is_empty() {
+            s_expr = self.bind_project_set(&mut from_context, s_expr, false)?;
+        }
 
         // To support using aliased column in `WHERE` clause,
         // we should bind where after `select_list` is rewritten.
@@ -179,7 +191,7 @@ impl Binder {
         )?;
 
         // After all analysis is done.
-        if set_returning_functions.is_empty() {
+        if from_context.srf_info.srfs.is_empty() {
             // Ignore SRFs.
             self.analyze_lazy_materialization(
                 &from_context,
@@ -208,6 +220,11 @@ impl Binder {
             s_expr = self.bind_window_function(window_info, s_expr)?;
         }
 
+        // Bind lazy Set-returning functions after aggregate plan.
+        if !from_context.srf_info.lazy_srf_set.is_empty() {
+            s_expr = self.bind_project_set(&mut from_context, s_expr, true)?;
+        }
+
         if let Some(qualify) = qualify {
             s_expr = self.bind_qualify(&mut from_context, qualify, s_expr)?;
         }
@@ -215,18 +232,8 @@ impl Binder {
         if stmt.distinct {
             s_expr = self.bind_distinct(
                 stmt.span,
-                &from_context,
+                &mut from_context,
                 &projections,
-                &mut scalar_items,
-                s_expr,
-            )?;
-        }
-
-        if !order_by.is_empty() {
-            s_expr = self.bind_order_by(
-                &from_context,
-                order_items,
-                &select_list,
                 &mut scalar_items,
                 s_expr,
             )?;
@@ -234,35 +241,36 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        // rewrite async function to async function plan
-        let mut async_func_rewriter = AsyncFunctionRewriter::new();
-        s_expr = async_func_rewriter.rewrite(&s_expr)?;
+        if !order_items.items.is_empty() {
+            s_expr = self.bind_order_by(&from_context, order_items, &select_list, s_expr)?;
+        }
 
-        // rewrite udf for interpreter udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
+        if from_context.have_async_func {
+            // rewrite async function to async function plan
+            let mut async_func_rewriter = AsyncFunctionRewriter::new(self.metadata.clone());
+            s_expr = async_func_rewriter.rewrite(&s_expr)?;
+        }
 
-        // rewrite udf for server udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
+        // rewrite async function and udf
+        s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
         // rewrite variant inner fields as virtual columns
-        let mut virtual_column_rewriter =
-            VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
-        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
-
-        // check inverted index license
-        if !from_context.inverted_index_map.is_empty() {
-            let license_manager = get_license_manager();
-            license_manager
-                .manager
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+        if !from_context
+            .virtual_column_context
+            .virtual_column_indices
+            .is_empty()
+        {
+            s_expr = self.rewrite_virtual_column(&mut from_context, s_expr)?;
         }
+
         // add internal column binding into expr
-        s_expr = from_context.add_internal_column_into_expr(s_expr)?;
+        s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
+        output_context
+            .cte_context
+            .set_cte_context(from_context.cte_context.clone());
         output_context.columns = from_context.columns;
 
         Ok((s_expr, output_context))
@@ -278,10 +286,11 @@ struct SelectRewriter<'a> {
     column_binding: &'a [ColumnBinding],
     new_stmt: Option<SelectStmt>,
     is_unquoted_ident_case_sensitive: bool,
+    subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 // helper functions to SelectRewriter
-impl<'a> SelectRewriter<'a> {
+impl SelectRewriter<'_> {
     fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
         if self.is_unquoted_ident_case_sensitive {
             a == b
@@ -385,7 +394,16 @@ impl<'a> SelectRewriter<'a> {
             column_binding,
             new_stmt: None,
             is_unquoted_ident_case_sensitive,
+            subquery_executor: None,
         }
+    }
+
+    pub fn with_subquery_executor(
+        mut self,
+        subquery_executor: Option<Arc<dyn QueryExecutor>>,
+    ) -> Self {
+        self.subquery_executor = subquery_executor;
+        self
     }
 
     fn rewrite(&mut self, stmt: &SelectStmt) -> Result<Option<SelectStmt>> {
@@ -444,19 +462,46 @@ impl<'a> SelectRewriter<'a> {
             name: format!("{}_if", aggregate_name.name),
             ..aggregate_name.clone()
         };
-        for value in &pivot.values {
-            let mut args = aggregate_args.to_vec();
-            args.push(Self::expr_eq_from_col_and_value(
-                pivot.value_column.clone(),
-                value.clone(),
-            ));
-            let alias = Self::raw_string_from_literal_expr(value)
-                .ok_or_else(|| ErrorCode::SyntaxException("Pivot value should be literal"))?;
-            new_select_list.push(Self::target_func_from_name_args(
-                new_aggregate_name.clone(),
-                args,
-                Some(Identifier::from_name(stmt.span, &alias)),
-            ));
+
+        // The values of pivot are divided into two categories: Column(Vec<Expr>) and Subquery.
+        // For Column, it must be literal. For Subquery, it should first be executed,
+        // and the processing of the result will be consistent with that of Column.
+        // Therefore, the subquery can only return one column, and only return a string type.
+        match &pivot.values {
+            PivotValues::ColumnValues(values) => {
+                self.process_pivot_column_values(
+                    pivot,
+                    values,
+                    &new_aggregate_name,
+                    aggregate_args,
+                    &mut new_select_list,
+                    stmt,
+                )?;
+            }
+            PivotValues::Subquery(subquery) => {
+                let query_sql = subquery.to_string();
+                if let Some(subquery_executor) = &self.subquery_executor {
+                    let data_blocks = databend_common_base::runtime::block_on(async move {
+                        subquery_executor
+                            .execute_query_with_sql_string(&query_sql)
+                            .await
+                    })?;
+                    let values =
+                        self.extract_column_values_from_data_blocks(&data_blocks, subquery.span)?;
+                    self.process_pivot_column_values(
+                        pivot,
+                        &values,
+                        &new_aggregate_name,
+                        aggregate_args,
+                        &mut new_select_list,
+                        stmt,
+                    )?;
+                } else {
+                    return Err(ErrorCode::Internal(
+                        "SelectRewriter's Subquery executor is not set",
+                    ));
+                };
+            }
         }
 
         if let Some(ref mut new_stmt) = self.new_stmt {
@@ -470,6 +515,67 @@ impl<'a> SelectRewriter<'a> {
             });
         }
         Ok(())
+    }
+
+    fn process_pivot_column_values(
+        &self,
+        pivot: &Pivot,
+        values: &[Expr],
+        new_aggregate_name: &Identifier,
+        aggregate_args: &[Expr],
+        new_select_list: &mut Vec<SelectTarget>,
+        stmt: &SelectStmt,
+    ) -> Result<()> {
+        for value in values {
+            let mut args = aggregate_args.to_vec();
+            args.push(Self::expr_eq_from_col_and_value(
+                pivot.value_column.clone(),
+                value.clone(),
+            ));
+            let alias = Self::raw_string_from_literal_expr(value)
+                .ok_or_else(|| ErrorCode::SyntaxException("Pivot value should be literal"))?;
+            new_select_list.push(Self::target_func_from_name_args(
+                new_aggregate_name.clone(),
+                args,
+                Some(Identifier::from_name(stmt.span, &alias)),
+            ));
+        }
+        Ok(())
+    }
+
+    fn extract_column_values_from_data_blocks(
+        &self,
+        data_blocks: &[DataBlock],
+        span: Span,
+    ) -> Result<Vec<Expr>> {
+        let mut values: Vec<Expr> = vec![];
+        for block in data_blocks {
+            if block.num_columns() != 1 {
+                return Err(ErrorCode::SemanticError(
+                    "The subquery of `pivot in` must return one column",
+                )
+                .set_span(span));
+            }
+            let columns = block.columns();
+            for row in 0..block.num_rows() {
+                match columns[0].value.index(row).unwrap() {
+                    ScalarRef::String(s) => {
+                        let literal = Expr::Literal {
+                            span,
+                            value: Literal::String(s.to_string()),
+                        };
+                        values.push(literal);
+                    }
+                    _ => {
+                        return Err(ErrorCode::SemanticError(
+                            "The subquery of `pivot in` must return a string type",
+                        )
+                        .set_span(span));
+                    }
+                }
+            }
+        }
+        Ok(values)
     }
 
     fn rewrite_unpivot(&mut self, stmt: &SelectStmt) -> Result<()> {

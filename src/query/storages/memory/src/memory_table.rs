@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::LazyLock;
 
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -28,8 +26,9 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::table::AppendMode;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -50,19 +49,15 @@ use databend_common_pipeline_sinks::Sinker;
 use databend_common_pipeline_sources::SyncSource;
 use databend_common_pipeline_sources::SyncSourcer;
 use databend_common_storage::StorageMetrics;
+use databend_storages_common_blocks::memory::InMemoryDataKey;
+use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::memory_part::MemoryPartInfo;
-
-/// Shared store to support memory tables.
-///
-/// Indexed by table id etc.
-pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
-
-static IN_MEMORY_DATA: LazyLock<Arc<RwLock<InMemoryData<u64>>>> =
-    LazyLock::new(|| Arc::new(Default::default()));
 
 #[derive(Clone)]
 pub struct MemoryTable {
@@ -74,13 +69,18 @@ pub struct MemoryTable {
 
 impl MemoryTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
-        let table_id = &table_info.ident.table_id;
+        let table_id = table_info.ident.table_id;
+        let temp_prefix = table_info.options().get(OPT_KEY_TEMP_PREFIX).cloned();
         let blocks = {
             let mut in_mem_data = IN_MEMORY_DATA.write();
-            let x = in_mem_data.get(table_id);
+            let key = InMemoryDataKey {
+                temp_prefix,
+                table_id,
+            };
+            let x = in_mem_data.get(&key);
             x.cloned().unwrap_or_else(|| {
                 let blocks = Arc::new(RwLock::new(vec![]));
-                in_mem_data.insert(*table_id, blocks.clone());
+                in_mem_data.insert(key, blocks.clone());
                 blocks
             })
         };
@@ -126,31 +126,6 @@ impl MemoryTable {
 
         Arc::new(Mutex::new(read_data_blocks))
     }
-
-    pub fn generate_memory_parts(start: usize, workers: usize, total: usize) -> Partitions {
-        let part_size = total / workers;
-        let part_remain = total % workers;
-
-        let mut partitions = Vec::with_capacity(workers);
-        if part_size == 0 {
-            partitions.push(MemoryPartInfo::create(start, total, total));
-        } else {
-            for part in 0..workers {
-                let mut part_begin = part * part_size;
-                if part == 0 && start > 0 {
-                    part_begin = start;
-                }
-                let mut part_end = (part + 1) * part_size;
-                if part == (workers - 1) && part_remain > 0 {
-                    part_end += part_remain;
-                }
-
-                partitions.push(MemoryPartInfo::create(part_begin, part_end, total));
-            }
-        }
-
-        Partitions::create(PartitionsShuffleKind::Seq, partitions)
-    }
 }
 
 #[async_trait::async_trait]
@@ -161,6 +136,12 @@ impl Table for MemoryTable {
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
+    }
+
+    /// MemoryTable could be distributed table, yet we only insert data in one node per query
+    /// Because commit_insert did not support distributed transaction
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn support_column_projection(&self) -> bool {
@@ -179,8 +160,7 @@ impl Table for MemoryTable {
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let blocks = self.blocks.read();
-
-        let statistics = match push_downs {
+        let mut statistics = match push_downs {
             Some(push_downs) => {
                 let projection_filter: Box<dyn Fn(usize) -> bool> = match push_downs.projection {
                     Some(prj) => {
@@ -217,12 +197,19 @@ impl Table for MemoryTable {
             }
         };
 
-        let parts = Self::generate_memory_parts(
-            0,
-            ctx.get_settings().get_max_threads()? as usize,
-            blocks.len(),
-        );
-        Ok((statistics, parts))
+        let cluster = ctx.get_cluster();
+        if !cluster.is_empty() {
+            statistics.read_bytes = statistics.read_bytes.max(cluster.nodes.len());
+            statistics.read_rows = statistics.read_rows.max(cluster.nodes.len());
+            statistics.partitions_total = statistics.partitions_total.max(cluster.nodes.len());
+            statistics.partitions_scanned = statistics.partitions_scanned.max(cluster.nodes.len());
+        }
+
+        let parts = vec![MemoryPartInfo::create()];
+        return Ok((
+            statistics,
+            Partitions::create(PartitionsShuffleKind::BroadcastCluster, parts),
+        ));
     }
 
     fn read_data(
@@ -249,12 +236,7 @@ impl Table for MemoryTable {
         )
     }
 
-    fn append_data(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _pipeline: &mut Pipeline,
-        _: AppendMode,
-    ) -> Result<()> {
+    fn append_data(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         Ok(())
     }
 
@@ -284,6 +266,25 @@ impl Table for MemoryTable {
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
         self.truncate();
         Ok(())
+    }
+
+    async fn table_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _require_fresh: bool,
+        _change_type: Option<ChangeType>,
+    ) -> Result<Option<TableStatistics>> {
+        let blocks = self.blocks.read();
+        let num_rows = blocks.iter().map(|b| b.num_rows() as u64).sum();
+        let data_bytes = blocks.iter().map(|b| b.memory_size() as u64).sum();
+        Ok(Some(TableStatistics {
+            num_rows: Some(num_rows),
+            data_size: Some(data_bytes),
+            data_size_compressed: Some(data_bytes),
+            index_size: None,
+            number_of_blocks: None,
+            number_of_segments: None,
+        }))
     }
 }
 

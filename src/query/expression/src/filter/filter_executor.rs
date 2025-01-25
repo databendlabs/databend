@@ -15,15 +15,18 @@
 use core::ops::Range;
 use std::collections::HashSet;
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 
 use crate::filter::SelectExpr;
 use crate::filter::Selector;
 use crate::DataBlock;
 use crate::Evaluator;
+use crate::Expr;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
+use crate::SelectExprBuilder;
+use crate::SELECTIVITY_THRESHOLD;
 
 // FilterExecutor is used to filter `DataBlock` by `SelectExpr`.
 pub struct FilterExecutor {
@@ -41,14 +44,15 @@ pub struct FilterExecutor {
 
 impl FilterExecutor {
     pub fn new(
-        select_expr: SelectExpr,
+        expr: Expr,
         func_ctx: FunctionContext,
-        has_or: bool,
         max_block_size: usize,
         projections: Option<HashSet<usize>>,
         fn_registry: &'static FunctionRegistry,
         keep_order: bool,
     ) -> Self {
+        let (select_expr, has_or) = SelectExprBuilder::new().build(&expr).into();
+
         let true_selection = vec![0; max_block_size];
         let false_selection = if has_or {
             vec![0; max_block_size]
@@ -111,7 +115,7 @@ impl FilterExecutor {
         // (3) Otherwise, use `take` to generate a new `DataBlock`.
         if result_count == origin_count {
             Ok(data_block)
-        } else if result_count as f64 > data_block.num_rows() as f64 * 0.8
+        } else if result_count as f64 > data_block.num_rows() as f64 * SELECTIVITY_THRESHOLD
             && data_block.num_columns() > 1
         {
             let range_count = self.build_selection_range(result_count);
@@ -122,7 +126,7 @@ impl FilterExecutor {
             if self.keep_order && self.has_or {
                 self.true_selection[0..result_count].sort();
             }
-            data_block.take(&self.true_selection[0..result_count], &mut None)
+            data_block.take_with_optimize_size(&self.true_selection[0..result_count])
         }
     }
 

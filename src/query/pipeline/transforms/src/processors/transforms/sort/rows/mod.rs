@@ -14,16 +14,21 @@
 
 mod common;
 mod simple;
+mod utils;
+
+use std::fmt::Debug;
 
 pub use common::*;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
 pub use simple::*;
+pub use utils::*;
 
 /// Convert columns to rows.
 pub trait RowConverter<T: Rows>
@@ -38,29 +43,44 @@ where Self: Sized
 
 /// Rows can be compared.
 pub trait Rows
-where Self: Sized + Clone
+where Self: Sized + Clone + Debug + Send
 {
-    type Item<'a>: Ord
+    const IS_ASC_COLUMN: bool;
+    type Item<'a>: Ord + Debug
     where Self: 'a;
+    type Type: ArgType;
 
     fn len(&self) -> usize;
     fn row(&self, index: usize) -> Self::Item<'_>;
     fn to_column(&self) -> Column;
 
-    fn from_column(col: &Column, desc: &[SortColumnDescription]) -> Result<Self> {
-        Self::try_from_column(col, desc).ok_or_else(|| {
+    fn from_column(col: &Column) -> Result<Self> {
+        Self::try_from_column(col).ok_or_else(|| {
             ErrorCode::BadDataValueType(format!(
-                "Order column type mismatched. Expecetd {} but got {}",
+                "Order column type mismatched. Expected {} but got {}",
                 Self::data_type(),
                 col.data_type()
             ))
         })
     }
-    fn try_from_column(col: &Column, desc: &[SortColumnDescription]) -> Option<Self>;
 
-    fn data_type() -> DataType;
+    fn try_from_column(col: &Column) -> Option<Self>;
+
+    fn data_type() -> DataType {
+        Self::Type::data_type()
+    }
 
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    fn first(&self) -> Self::Item<'_> {
+        self.row(0)
+    }
+
+    fn last(&self) -> Self::Item<'_> {
+        self.row(self.len() - 1)
+    }
+
+    fn slice(&self, range: std::ops::Range<usize>) -> Self;
 }

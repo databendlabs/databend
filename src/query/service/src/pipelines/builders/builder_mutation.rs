@@ -20,13 +20,16 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
+use databend_common_pipeline_core::processors::create_resize_item;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
-use databend_common_pipeline_transforms::processors::BlockCompactor;
-use databend_common_pipeline_transforms::processors::TransformCompact;
+use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_pipeline_transforms::processors::BlockCompactBuilder;
+use databend_common_pipeline_transforms::processors::BlockMetaTransformer;
+use databend_common_pipeline_transforms::processors::TransformCompactBlock;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::executor::physical_plans::Mutation;
@@ -237,13 +240,48 @@ impl PipelineBuilder {
     ) -> Result<()> {
         // we should avoid too much little block write, because for s3 write, there are too many
         // little blocks, it will cause high latency.
+        let mut origin_len = transform_len;
+        let mut resize_len = 1;
+        let mut pipe_items = Vec::with_capacity(2);
+        if need_match {
+            origin_len += 1;
+            resize_len += 1;
+            pipe_items.push(create_dummy_item());
+        }
+        pipe_items.push(create_resize_item(transform_len, 1));
+        self.main_pipeline
+            .add_pipe(Pipe::create(origin_len, resize_len, pipe_items));
+
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
             |transform_input_port, transform_output_port| {
-                Ok(ProcessorPtr::create(TransformCompact::try_create(
+                Ok(ProcessorPtr::create(AccumulatingTransformer::create(
                     transform_input_port,
                     transform_output_port,
-                    BlockCompactor::new(block_thresholds),
-                )?))
+                    BlockCompactBuilder::new(block_thresholds),
+                )))
+            },
+            1,
+        )?;
+        if need_match {
+            builder.add_items_prepend(vec![create_dummy_item()]);
+        }
+        self.main_pipeline.add_pipe(builder.finalize());
+
+        let mut pipe_items = Vec::with_capacity(2);
+        if need_match {
+            pipe_items.push(create_dummy_item());
+        }
+        pipe_items.push(create_resize_item(1, transform_len));
+        self.main_pipeline
+            .add_pipe(Pipe::create(resize_len, origin_len, pipe_items));
+
+        let mut builder = self.main_pipeline.add_transform_with_specified_len(
+            |transform_input_port, transform_output_port| {
+                Ok(ProcessorPtr::create(BlockMetaTransformer::create(
+                    transform_input_port,
+                    transform_output_port,
+                    TransformCompactBlock::default(),
+                )))
             },
             transform_len,
         )?;

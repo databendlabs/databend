@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use arrow_array::RecordBatch;
 use databend_common_base::base::tokio::sync::mpsc::Sender;
 use databend_common_base::base::tokio::sync::Mutex;
 use databend_common_base::base::uuid::Uuid;
@@ -22,8 +21,9 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_api::BackgroundApi;
 use databend_common_meta_app::background::BackgroundJobIdent;
 use databend_common_meta_app::background::BackgroundJobInfo;
@@ -37,6 +37,7 @@ use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::SeqV;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_background_service::background_service::BackgroundServiceHandlerWrapper;
 use databend_enterprise_background_service::BackgroundServiceHandler;
@@ -60,7 +61,7 @@ pub struct RealBackgroundService {
 #[async_trait::async_trait]
 impl BackgroundServiceHandler for RealBackgroundService {
     #[async_backtrace::framed]
-    async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>> {
+    async fn execute_sql(&self, sql: String) -> Result<Option<DataBlock>> {
         let session = create_session(&self.conf).await?;
         let ctx = session.create_query_context().await?;
         SuggestedBackgroundTasksSource::do_execute_sql(ctx, sql).await
@@ -229,7 +230,7 @@ impl RealBackgroundService {
         meta: Arc<MetaStore>,
         id: &BackgroundJobIdent,
         suspend: bool,
-    ) -> Result<BackgroundJobInfo> {
+    ) -> Result<SeqV<BackgroundJobInfo>> {
         // create job if not exist
         let info = meta
             .get_background_job(GetBackgroundJobReq { name: id.clone() })
@@ -274,7 +275,7 @@ impl RealBackgroundService {
         let settings = session.get_settings();
 
         // check for valid license
-        get_license_manager().manager.check_enterprise_enabled(
+        LicenseManagerSwitch::instance().check_enterprise_enabled(
             unsafe { settings.get_enterprise_license().unwrap_or_default() },
             Feature::BackgroundService,
         )

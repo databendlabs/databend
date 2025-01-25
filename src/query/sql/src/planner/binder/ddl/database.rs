@@ -23,6 +23,7 @@ use databend_common_ast::ast::DropDatabaseStmt;
 use databend_common_ast::ast::SQLProperty;
 use databend_common_ast::ast::ShowCreateDatabaseStmt;
 use databend_common_ast::ast::ShowDatabasesStmt;
+use databend_common_ast::ast::ShowDropDatabasesStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::UndropDatabaseStmt;
 use databend_common_exception::Result;
@@ -90,6 +91,47 @@ impl Binder {
         debug!("show databases rewrite to: {:?}", query);
 
         self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowDatabases)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_drop_databases(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowDropDatabasesStmt,
+    ) -> Result<Plan> {
+        let ShowDropDatabasesStmt { catalog, limit } = stmt;
+        let mut select_builder = SelectBuilder::from("system.databases_with_history");
+
+        let ctl = if let Some(ctl) = catalog {
+            normalize_identifier(ctl, &self.name_resolution_ctx).name
+        } else {
+            self.ctx.get_current_catalog().to_string()
+        };
+
+        select_builder.with_filter(format!("catalog = '{ctl}'"));
+
+        select_builder.with_column("catalog");
+        select_builder.with_column("name");
+        select_builder.with_column("database_id");
+        select_builder.with_column("dropped_on");
+
+        select_builder.with_order_by("catalog");
+        select_builder.with_order_by("name");
+
+        match limit {
+            Some(ShowLimit::Like { pattern }) => {
+                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+            }
+            Some(ShowLimit::Where { selection }) => {
+                select_builder.with_filter(format!("({selection})"));
+            }
+            None => (),
+        }
+        let query = select_builder.build();
+        debug!("show databases rewrite to: {:?}", query);
+
+        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowDropDatabases)
             .await
     }
 
@@ -251,8 +293,6 @@ impl Binder {
             engine: engine.to_string(),
             engine_options,
             options,
-            from_share: None,
-            using_share_endpoint: None,
             ..Default::default()
         })
     }

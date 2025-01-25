@@ -17,8 +17,8 @@ use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqV;
 
 #[async_trait::async_trait]
 pub trait RoleApi: Sync + Send {

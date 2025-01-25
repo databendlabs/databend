@@ -27,15 +27,14 @@ fastrace = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 prost = { workspace = true }
-serde = "1.0.150"
+serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
 databend-common-expression = { workspace = true }
 databend-common-meta-embedded = { workspace = true }
-databend-common-storage = { workspace = true }
-mockall = "0.11.2"
+mockall = { workspace = true }
 
 [lints]
 workspace = true

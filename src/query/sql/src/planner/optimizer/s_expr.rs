@@ -314,6 +314,13 @@ impl SExpr {
                     });
                 }
             }
+            RelOperator::AsyncFunction(async_func) => {
+                for item in &async_func.items {
+                    get_udf_names(&item.scalar)?.iter().for_each(|udf| {
+                        udfs.insert(*udf);
+                    });
+                }
+            }
             RelOperator::MutationSource(mutation_source) => {
                 if let Some(filter) = &mutation_source.filter {
                     get_udf_names(filter)?.iter().for_each(|udf| {
@@ -325,12 +332,9 @@ impl SExpr {
             | RelOperator::UnionAll(_)
             | RelOperator::Sort(_)
             | RelOperator::DummyTableScan(_)
-            | RelOperator::CteScan(_)
-            | RelOperator::MaterializedCte(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
-            | RelOperator::AsyncFunction(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::Recluster(_)
@@ -426,8 +430,6 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::UnionAll(_)
         | RelOperator::Sort(_)
         | RelOperator::DummyTableScan(_)
-        | RelOperator::CteScan(_)
-        | RelOperator::MaterializedCte(_)
         | RelOperator::ConstantTableScan(_)
         | RelOperator::ExpressionScan(_)
         | RelOperator::CacheScan(_)

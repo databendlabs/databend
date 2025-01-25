@@ -40,13 +40,13 @@ impl<'a> std::ops::Deref for Input<'a> {
     }
 }
 
-impl<'a> nom::InputLength for Input<'a> {
+impl nom::InputLength for Input<'_> {
     fn input_len(&self) -> usize {
         self.tokens.input_len()
     }
 }
 
-impl<'a> nom::Offset for Input<'a> {
+impl nom::Offset for Input<'_> {
     fn offset(&self, second: &Self) -> usize {
         let fst = self.tokens.as_ptr();
         let snd = second.tokens.as_ptr();
@@ -55,7 +55,7 @@ impl<'a> nom::Offset for Input<'a> {
     }
 }
 
-impl<'a> nom::Slice<Range<usize>> for Input<'a> {
+impl nom::Slice<Range<usize>> for Input<'_> {
     fn slice(&self, range: Range<usize>) -> Self {
         Input {
             tokens: &self.tokens[range],
@@ -64,7 +64,7 @@ impl<'a> nom::Slice<Range<usize>> for Input<'a> {
     }
 }
 
-impl<'a> nom::Slice<RangeTo<usize>> for Input<'a> {
+impl nom::Slice<RangeTo<usize>> for Input<'_> {
     fn slice(&self, range: RangeTo<usize>) -> Self {
         Input {
             tokens: &self.tokens[range],
@@ -73,7 +73,7 @@ impl<'a> nom::Slice<RangeTo<usize>> for Input<'a> {
     }
 }
 
-impl<'a> nom::Slice<RangeFrom<usize>> for Input<'a> {
+impl nom::Slice<RangeFrom<usize>> for Input<'_> {
     fn slice(&self, range: RangeFrom<usize>) -> Self {
         Input {
             tokens: &self.tokens[range],
@@ -82,7 +82,7 @@ impl<'a> nom::Slice<RangeFrom<usize>> for Input<'a> {
     }
 }
 
-impl<'a> nom::Slice<RangeFull> for Input<'a> {
+impl nom::Slice<RangeFull> for Input<'_> {
     fn slice(&self, _: RangeFull) -> Self {
         *self
     }
@@ -126,14 +126,6 @@ impl Dialect {
             Dialect::MySQL => c == '\'' || c == '"',
             Dialect::Hive => c == '\'' || c == '"',
             Dialect::Experimental | Dialect::PostgreSQL | Dialect::PRQL => c == '\'',
-        }
-    }
-
-    pub fn is_null_biggest(&self) -> bool {
-        match self {
-            Dialect::MySQL => false,
-            Dialect::Hive => false,
-            Dialect::Experimental | Dialect::PostgreSQL | Dialect::PRQL => true,
         }
     }
 

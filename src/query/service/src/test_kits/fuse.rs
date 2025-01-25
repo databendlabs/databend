@@ -27,9 +27,9 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_sql::optimizer::SExpr;
+use databend_common_sql::plans::Mutation;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::io::MetaWriter;
-use databend_common_storages_fuse::io::SegmentWriter;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::merge_statistics;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -56,7 +56,6 @@ use crate::interpreters::MutationInterpreter;
 use crate::sessions::QueryContext;
 
 /// This file contains some helper functions for testing fuse table.
-
 pub async fn generate_snapshot_with_segments(
     fuse_table: &FuseTable,
     segment_locations: Vec<Location>,
@@ -132,9 +131,11 @@ pub async fn generate_segments(
         let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfo::new(block_metas, summary);
-        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
-        let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
-        segs.push((segment_location, segment_info))
+        let location = fuse_table
+            .meta_location_generator()
+            .gen_segment_info_location();
+        segment_info.write_meta(dal, &location).await?;
+        segs.push(((location, SegmentInfo::VERSION), segment_info))
     }
     Ok(segs)
 }
@@ -210,7 +211,6 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         Statistics::default(),
         locations,
         None,
-        None,
     );
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary =
@@ -261,7 +261,6 @@ pub async fn query_count(result_stream: SendableDataBlockStream) -> Result<u64> 
     let mut count: u64 = 0;
     for block in blocks {
         let value = &block.get_by_offset(0).value;
-        let value = value.as_ref();
         let value = unsafe { value.index_unchecked(0) };
         if let ScalarRef::Number(NumberScalar::UInt64(v)) = value {
             count += v;
@@ -288,7 +287,9 @@ pub async fn do_mutation(
     s_expr: SExpr,
     schema: DataSchemaRef,
 ) -> Result<()> {
-    let interpreter = MutationInterpreter::try_create(ctx.clone(), s_expr, schema)?;
+    let mutation: Mutation = s_expr.plan().clone().try_into()?;
+    let interpreter =
+        MutationInterpreter::try_create(ctx.clone(), s_expr, schema, mutation.metadata.clone())?;
     let _ = interpreter.execute(ctx).await?;
     Ok(())
 }

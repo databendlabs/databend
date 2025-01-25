@@ -53,6 +53,8 @@ use databend_common_sql::analyze_cluster_keys;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::table::ClusterType;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use jsonb::Value as JsonbValue;
 use log::warn;
 use serde_json::json;
@@ -144,6 +146,7 @@ pub struct ClusteringInformation<'a> {
 
 struct ClusteringStatistics {
     cluster_key: String,
+    cluster_type: String,
     timestamp: i64,
     total_block_count: u64,
     constant_block_count: u64,
@@ -186,7 +189,7 @@ impl<'a> ClusteringInformation<'a> {
                 (cluster_key, exprs)
             }
             (Some(a), None) => {
-                let exprs = self.table.cluster_keys(self.ctx.clone());
+                let exprs = self.table.linear_cluster_keys(self.ctx.clone());
                 let exprs = exprs
                     .iter()
                     .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
@@ -202,6 +205,18 @@ impl<'a> ClusteringInformation<'a> {
             }
         };
 
+        if default_cluster_key_id.is_some() {
+            let typ = self
+                .table
+                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+            if matches!(typ, ClusterType::Hilbert) {
+                return Err(ErrorCode::UnsupportedClusterType(
+                    "Unsupported 'hilbert' type, please use `hilbert_clustering_information` instead",
+                ));
+            }
+        }
+        let cluster_type = "linear".to_string();
+
         let snapshot = self.table.read_table_snapshot().await?;
         let now = Utc::now();
         let timestamp = snapshot
@@ -211,6 +226,7 @@ impl<'a> ClusteringInformation<'a> {
         if snapshot.is_none() {
             return self.build_block(ClusteringStatistics {
                 cluster_key,
+                cluster_type,
                 timestamp,
                 total_block_count: 0,
                 constant_block_count: 0,
@@ -284,7 +300,14 @@ impl<'a> ClusteringInformation<'a> {
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
         let cluster_key_types = exprs
             .into_iter()
-            .map(|v| v.data_type().clone())
+            .map(|v| {
+                let data_type = v.data_type();
+                if matches!(*data_type, DataType::String) {
+                    data_type.wrap_nullable()
+                } else {
+                    data_type.clone()
+                }
+            })
             .collect::<Vec<_>>();
         let indices = compare_scalars(keys, &cluster_key_types)?;
         for idx in indices.into_iter() {
@@ -336,6 +359,7 @@ impl<'a> ClusteringInformation<'a> {
         let block_depth_histogram = JsonValue::Object(objects);
         let info = ClusteringStatistics {
             cluster_key,
+            cluster_type,
             timestamp,
             total_block_count,
             constant_block_count,
@@ -353,6 +377,10 @@ impl<'a> ClusteringInformation<'a> {
                 BlockEntry::new(
                     DataType::String,
                     Value::Scalar(Scalar::String(info.cluster_key)),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(info.cluster_type)),
                 ),
                 BlockEntry::new(
                     DataType::Timestamp,
@@ -394,6 +422,7 @@ impl<'a> ClusteringInformation<'a> {
     pub fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("cluster_key", TableDataType::String),
+            TableField::new("type", TableDataType::String),
             TableField::new("timestamp", TableDataType::Timestamp),
             TableField::new(
                 "total_block_count",
@@ -435,6 +464,12 @@ fn get_min_max_stats(
     let mut maxs = Vec::with_capacity(exprs.len());
     let col_stats = &block.col_stats;
     for expr in exprs {
+        // Since the hilbert index does not calc domain, set min max directly.
+        if expr.data_type().remove_nullable() == DataType::Binary {
+            mins.push(Scalar::Binary(vec![]));
+            maxs.push(Scalar::Binary(vec![0xFF, 40]));
+            continue;
+        }
         let input_domains = expr
             .column_refs()
             .into_iter()
@@ -526,6 +561,9 @@ fn domain_to_minmax(domain: &Domain) -> (Scalar, Scalar) {
             (Scalar::Timestamp(*min), Scalar::Timestamp(*max))
         }
         Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
+        Domain::Interval(SimpleDomain { min, max }) => {
+            (Scalar::Interval(*min), Scalar::Interval(*max))
+        }
         Domain::Nullable(NullableDomain { has_null, value }) => {
             if let Some(v) = value {
                 let (min, mut max) = domain_to_minmax(v);

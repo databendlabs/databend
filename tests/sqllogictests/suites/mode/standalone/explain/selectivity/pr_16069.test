@@ -1,5 +1,5 @@
 statement ok
-create or replace table t as select * from numbers(100);
+settings (ddl_column_type_nullable=0) create or replace table t as select * from numbers(100);
 
 statement ok
 analyze table t;
@@ -9,7 +9,7 @@ explain select * from t where 10 < number or 20 < number;
 ----
 Filter
 ├── output columns: [t.number (#0)]
-├── filters: [10 < t.number (#0) OR 20 < t.number (#0)]
+├── filters: [(10 < t.number (#0) OR 20 < t.number (#0))]
 ├── estimated rows: 97.69
 └── TableScan
     ├── table: default.default.t
@@ -19,7 +19,7 @@ Filter
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [10 < t.number (#0) OR 20 < t.number (#0)], limit: NONE]
+    ├── push downs: [filters: [(10 < t.number (#0) OR 20 < t.number (#0))], limit: NONE]
     └── estimated rows: 100.00
 
 statement ok

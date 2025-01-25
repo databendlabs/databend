@@ -14,13 +14,13 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use kvapi_impl::Resource;
+pub use kvapi_impl::SequenceRsc;
 
 use super::CreateOption;
 use crate::tenant_key::ident::TIdent;
 
 /// Defines the meta-service key for sequence.
-pub type SequenceIdent = TIdent<Resource>;
+pub type SequenceIdent = TIdent<SequenceRsc>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SequenceMeta {
@@ -99,16 +99,48 @@ mod kvapi_impl {
     use super::SequenceMeta;
     use crate::tenant_key::resource::TenantResource;
 
-    pub struct Resource;
-    impl TenantResource for Resource {
+    pub struct SequenceRsc;
+    impl TenantResource for SequenceRsc {
         const PREFIX: &'static str = "__fd_sequence";
         const HAS_TENANT: bool = true;
         type ValueType = SequenceMeta;
     }
 
     impl kvapi::Value for SequenceMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = super::SequenceIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_kvapi::kvapi::Key;
+
+    use crate::schema::SequenceIdent;
+    use crate::tenant::Tenant;
+
+    #[test]
+    fn test_sequence_ident() {
+        let tenant = Tenant::new_literal("dummy");
+        let ident = SequenceIdent::new_generic(tenant, "3".to_string());
+
+        let key = ident.to_string_key();
+        assert_eq!(key, "__fd_sequence/dummy/3");
+
+        assert_eq!(ident, SequenceIdent::from_str_key(&key).unwrap());
+    }
+
+    #[test]
+    fn test_sequence_ident_with_key_space() {
+        // TODO(xp): implement this test
+        // let tenant = Tenant::new_literal("test");
+        // let ident = IndexIdIdent::new(tenant, 3);
+        //
+        // let key = ident.to_string_key();
+        // assert_eq!(key, "__fd_catalog_by_id/3");
+        //
+        // assert_eq!(ident, IndexIdIdent::from_str_key(&key).unwrap());
     }
 }

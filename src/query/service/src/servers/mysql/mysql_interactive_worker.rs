@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::convert_byte_size;
@@ -32,7 +33,7 @@ use databend_common_meta_app::principal::UserIdentity;
 use databend_common_metrics::mysql::*;
 use databend_common_users::CertifiedInfo;
 use databend_common_users::UserApiProvider;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::StreamExt;
 use log::error;
@@ -55,9 +56,7 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::servers::mysql::MySQLFederated;
 use crate::servers::mysql::MYSQL_VERSION;
-use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
-use crate::sessions::QueryEntry;
 use crate::sessions::Session;
 use crate::sessions::TableContext;
 use crate::stream::DataBlockStream;
@@ -71,6 +70,7 @@ pub struct InteractiveWorker {
     version: String,
     salt: [u8; 20],
     client_addr: String,
+    keep_alive_task_started: bool,
 }
 
 #[async_trait::async_trait]
@@ -191,7 +191,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
         let query_id = Uuid::new_v4().to_string();
-        let root = Span::root(full_name!(), SpanContext::random())
+        let root = Span::root(func_path!(), SpanContext::random())
             .with_properties(|| self.base.session.to_fastrace_properties());
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
@@ -213,6 +213,9 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             }
 
             let mut writer = DFQueryResultWriter::create(writer, self.base.session.clone());
+            if !self.keep_alive_task_started {
+                self.start_keep_alive().await
+            }
 
             let instant = Instant::now();
             let query_result = self
@@ -266,24 +269,36 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
 impl InteractiveWorkerBase {
     #[async_backtrace::framed]
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
+        let user_api = UserApiProvider::instance();
         let ctx = self.session.create_query_context().await?;
+        let tenant = ctx.get_tenant();
         let identity = UserIdentity::new(&info.user_name, "%");
         let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
-        let mut user = UserApiProvider::instance()
-            .get_user_with_client_ip(&ctx.get_tenant(), identity.clone(), Some(client_ip))
+        let mut user = user_api
+            .get_user_with_client_ip(&tenant, identity.clone(), Some(client_ip))
             .await?;
 
+        // check global network policy if user is not account admin
+        if !user.is_account_admin() {
+            let global_network_policy = ctx.get_settings().get_network_policy().unwrap_or_default();
+            if !global_network_policy.is_empty() {
+                user_api
+                    .enforce_network_policy(&tenant, &global_network_policy, Some(client_ip))
+                    .await?;
+            }
+        }
+
         // Check password policy for login
-        let need_change = UserApiProvider::instance()
-            .check_login_password(&ctx.get_tenant(), identity.clone(), &user)
+        let need_change = user_api
+            .check_login_password(&tenant, identity.clone(), &user)
             .await?;
         if need_change {
             user.update_auth_need_change_password();
         }
 
         let authed = user.auth_info.auth_mysql(&info.user_password, salt)?;
-        UserApiProvider::instance()
-            .update_user_login_result(ctx.get_tenant(), identity, authed, &user)
+        user_api
+            .update_user_login_result(tenant, identity, authed, &user)
             .await?;
         if authed {
             self.session.set_authed_user(user, None).await?;
@@ -369,13 +384,10 @@ impl InteractiveWorkerBase {
             None => {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context().await?;
-                context.set_id(query_id);
+                context.update_init_query_id(query_id);
 
                 // Use interpreter_plan_sql, we can write the query log if an error occurs.
-                let (plan, extras) = interpreter_plan_sql(context.clone(), query).await?;
-
-                let entry = QueryEntry::create(&context, &plan, &extras)?;
-                let _guard = QueriesQueueManager::instance().acquire(entry).await?;
+                let (plan, _, _guard) = interpreter_plan_sql(context.clone(), query, true).await?;
 
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
                 let has_result_set = plan.has_result_set();
@@ -408,29 +420,33 @@ impl InteractiveWorkerBase {
     )> {
         let instant = Instant::now();
 
-        let query_result = context.try_spawn({
-            let ctx = context.clone();
-            async move {
-                let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                observe_mysql_interpreter_used_time(instant.elapsed());
+        let query_result = context.try_spawn(
+            {
+                let ctx = context.clone();
+                async move {
+                    let mut data_stream = interpreter.execute(ctx.clone()).await?;
+                    observe_mysql_interpreter_used_time(instant.elapsed());
 
-                // Wrap the data stream, log finish event at the end of stream
-                let intercepted_stream = async_stream::stream! {
+                    // Wrap the data stream, log finish event at the end of stream
+                    let intercepted_stream = async_stream::stream! {
 
-                    while let Some(item) = data_stream.next().await {
-                        yield item
+                        while let Some(item) = data_stream.next().await {
+                            yield item
+                        };
                     };
-                };
 
-                Ok::<_, ErrorCode>(intercepted_stream.boxed())
-            }
-            .in_span(Span::enter_with_local_parent(full_name!()))
-        })?;
-
-        let query_result = query_result.await.map_err_to_code(
-            ErrorCode::TokioError,
-            || "Cannot join handle from context's runtime",
+                    Ok::<_, ErrorCode>(intercepted_stream.boxed())
+                }
+                .in_span(Span::enter_with_local_parent(func_path!()))
+            },
+            None,
         )?;
+
+        let query_result = query_result
+            .await
+            .map_err_to_code(ErrorCode::TokioError, || {
+                "Cannot join handle from context's runtime"
+            })?;
         let reporter = Box::new(ContextProgressReporter::new(context.clone(), instant))
             as Box<dyn ProgressReporter + Send>;
         query_result.map(|data| (data, Some(reporter)))
@@ -476,7 +492,34 @@ impl InteractiveWorker {
             salt: scramble,
             version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             client_addr,
+            keep_alive_task_started: false,
         }
+    }
+
+    async fn start_keep_alive(&mut self) {
+        let session = &self.base.session;
+        let tenant = session.get_current_tenant();
+        let session_id = session.get_id();
+        let user_name = session
+            .get_current_user()
+            .expect("mysql handler should be authed when call")
+            .name;
+        self.keep_alive_task_started = true;
+
+        databend_common_base::runtime::spawn(async move {
+            loop {
+                UserApiProvider::instance()
+                    .client_session_api(&tenant)
+                    .upsert_client_session_id(
+                        &session_id,
+                        &user_name,
+                        Duration::from_secs(3600 + 600),
+                    )
+                    .await
+                    .ok();
+                tokio::time::sleep(Duration::from_secs(3600)).await;
+            }
+        });
     }
 }
 

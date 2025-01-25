@@ -724,14 +724,14 @@ impl Compiler {
     fn compile_case(
         &mut self,
         span: Span,
-        oprand: &Expr,
+        operand: &Expr,
         conditions: &[Expr],
         results: &[Vec<ScriptStatement>],
         else_result: &Option<Vec<ScriptStatement>>,
     ) -> Result<Vec<ScriptIR>> {
         let conditions = conditions
             .iter()
-            .map(|condition| wrap_eq(condition.span(), oprand.clone(), condition.clone()))
+            .map(|condition| wrap_eq(condition.span(), operand.clone(), condition.clone()))
             .collect::<Vec<_>>();
         self.compile_if(span, &conditions, results, else_result)
     }

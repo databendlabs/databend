@@ -15,27 +15,27 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::array::Array;
+use arrow_array::ArrayRef;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_storages_common_cache::SizedColumnArray;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;
 
 use super::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
-use crate::io::ReadSettings;
+use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
-use crate::MergeIOReadResult;
 
 pub enum DeserializedArray<'a> {
     Cached(&'a Arc<SizedColumnArray>),
-    Deserialized((ColumnId, Box<dyn Array>, usize)),
-    NoNeedToCache(Box<dyn Array>),
+    Deserialized((ColumnId, ArrayRef, usize)),
+    NoNeedToCache(ArrayRef),
 }
 
 pub struct FieldDeserializationContext<'a> {
@@ -106,7 +106,7 @@ impl BlockReader {
         &self,
         meta: &BlockMeta,
         storage_format: &FuseStorageFormat,
-        data: MergeIOReadResult,
+        data: BlockReadResult,
     ) -> Result<DataBlock> {
         // Get the columns chunk.
         let column_chunks = data.columns_chunks()?;

@@ -17,9 +17,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
-use databend_storages_common_table_meta::meta::ClusterKey;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManagerRef;
 
 use crate::operations::common::ConflictResolveContext;
 
@@ -41,14 +40,20 @@ pub trait SnapshotGenerator {
     fn generate_new_snapshot(
         &self,
         schema: TableSchema,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_id: Option<u32>,
         previous: Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
         txn_mgr: TxnManagerRef,
         table_id: u64,
+        table_name: &str,
     ) -> Result<TableSnapshot> {
-        let mut snapshot =
-            self.do_generate_new_snapshot(schema, cluster_key_meta, &previous, prev_table_seq)?;
+        let mut snapshot = self.do_generate_new_snapshot(
+            schema,
+            cluster_key_id,
+            &previous,
+            prev_table_seq,
+            table_name,
+        )?;
 
         let has_pending_transactional_mutations = {
             let guard = txn_mgr.lock();
@@ -70,8 +75,9 @@ pub trait SnapshotGenerator {
     fn do_generate_new_snapshot(
         &self,
         schema: TableSchema,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        table_name: &str,
     ) -> Result<TableSnapshot>;
 }

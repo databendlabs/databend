@@ -40,7 +40,7 @@ impl Display for Hint {
             write!(f, "{}", hint.name)?;
             write!(f, "=")?;
             write!(f, "{}", hint.expr)?;
-            write!(f, ") ")?;
+            write!(f, ")")?;
         }
         write!(f, "*/")
     }

@@ -173,7 +173,7 @@ impl SimpleTableFunc for FuseSnapshotFunc {
         })?;
 
         let meta_location_generator = table.meta_location_generator.clone();
-        let snapshot_location = table.snapshot_loc().await?;
+        let snapshot_location = table.snapshot_loc();
         let snapshot = table.read_table_snapshot().await?;
         if let Some(snapshot_location) = snapshot_location {
             let snapshot_version =

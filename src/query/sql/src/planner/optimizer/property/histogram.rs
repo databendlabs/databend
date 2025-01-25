@@ -14,11 +14,14 @@
 
 use std::cmp::Ordering;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
 use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::HistogramBucket;
+
+pub type F64 = OrderedFloat<f64>;
 
 /// Construct a histogram from NDV and total number of rows.
 ///
@@ -32,7 +35,7 @@ pub fn histogram_from_ndv(
     num_rows: u64,
     bound: Option<(Datum, Datum)>,
     num_buckets: usize,
-) -> Result<Histogram, String> {
+) -> std::result::Result<Histogram, String> {
     if ndv <= 2 {
         return if num_rows != 0 {
             Err(format!(
@@ -59,7 +62,7 @@ pub fn histogram_from_ndv(
     }
 
     let (min, max) = match bound {
-        Some((min, max)) => (min, max),
+        Some((min, max)) => (min.to_float(), max.to_float()),
         None => {
             return Err(format!(
                 "Must have min and max value when NDV is greater than 0, got NDV: {}",
@@ -77,13 +80,13 @@ pub fn histogram_from_ndv(
     let mut buckets: Vec<HistogramBucket> = Vec::with_capacity(num_buckets);
     let sample_set = UniformSampleSet { min, max };
 
-    for idx in 0..num_buckets + 1 {
-        let upper_bound = sample_set.get_upper_bound(num_buckets, idx)?;
+    for idx in 0..num_buckets {
         let lower_bound = if idx == 0 {
             sample_set.min.clone()
         } else {
             buckets[idx - 1].upper_bound().clone()
         };
+        let upper_bound = sample_set.get_upper_bound(num_buckets, idx + 1)?;
         let bucket = HistogramBucket::new(
             lower_bound,
             upper_bound,
@@ -100,7 +103,11 @@ pub fn histogram_from_ndv(
 }
 
 trait SampleSet {
-    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum, String>;
+    fn get_upper_bound(
+        &self,
+        num_buckets: usize,
+        bucket_index: usize,
+    ) -> std::result::Result<Datum, String>;
 }
 
 pub struct UniformSampleSet {
@@ -152,7 +159,11 @@ impl UniformSampleSet {
 }
 
 impl SampleSet for UniformSampleSet {
-    fn get_upper_bound(&self, num_buckets: usize, bucket_index: usize) -> Result<Datum, String> {
+    fn get_upper_bound(
+        &self,
+        num_buckets: usize,
+        bucket_index: usize,
+    ) -> std::result::Result<Datum, String> {
         match (&self.min, &self.max) {
             (Datum::Int(min), Datum::Int(max)) => {
                 let min = *min;
@@ -174,7 +185,7 @@ impl SampleSet for UniformSampleSet {
 
             (Datum::Float(min), Datum::Float(max)) => {
                 let min = *min;
-                let max = *max;
+                let max = (*max).checked_add(F64::from(1.0)).ok_or("overflowed")?;
                 // TODO(xudong): better histogram computation.
                 let bucket_range = max.checked_sub(min).ok_or("overflowed")? / num_buckets as f64;
                 let upper_bound = min + bucket_range * bucket_index as f64;

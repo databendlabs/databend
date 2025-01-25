@@ -30,7 +30,7 @@ runs:
       uses: ./.github/actions/setup_build_tool
       with:
         target: ${{ inputs.target }}
-        bypass_env_vars: RUSTFLAGS,RUST_LOG
+        bypass_env_vars: RUSTFLAGS,RUST_LOG,DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY
 
     - name: Cross setup
       if: startsWith(inputs.target, 'aarch64-')
@@ -58,61 +58,48 @@ runs:
             flags=""
             ;;
         esac
-        echo "RUSTFLAGS=${flags} -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
+        if [[ ! -z "${flags}" ]]; then
+          echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
+        fi
         target=${{ inputs.target }}
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
 
-    # build all binaries for debug
-    - name: Build Debug
-      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
+    - name: Build Release
+      if: inputs.artifacts == 'all'
       shell: bash
       run: |
         artifacts="meta,metactl,metabench,query,sqllogictests"
+        binaries=""
         for artifact in ${artifacts//,/ }; do
-          echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+          binaries="${binaries} --bin databend-$artifact"
         done
-        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }}
+        cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} ${binaries}
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
-    - name: Build Debug for specific artifacts
-      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts != 'all'
-      shell: bash
-      run: |
-        artifacts="${{ inputs.artifacts }}"
-        for artifact in ${artifacts//,/ }; do
-          echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
-        done
-        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
-
-    - name: Build Release
-      if: env.BUILD_PROFILE == 'release' && inputs.artifacts == 'all'
-      shell: bash
-      run: |
-        artifacts="meta,metactl,metabench,query,sqllogictests"
-        for artifact in ${artifacts//,/ }; do
-          echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
-        done
-        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
-
     - name: Build Release for specific artifacts
-      if: env.BUILD_PROFILE == 'release' && inputs.artifacts != 'all'
+      if: inputs.artifacts != 'all'
       shell: bash
       run: |
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
-          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
+          cargo -Zgitoxide=fetch -Zgit=shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --profile ${{ env.BUILD_PROFILE }} --bin databend-$artifact
+          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
-        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
     - name: Check Binary Info
       shell: bash
       run: |
         readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
         ldd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query || true
+
+    - name: Spilt Binary Symbols
+      shell: bash
+      run: |
+        objcopy --only-keep-debug ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
+        chmod 0644 ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query.debug
+        strip --strip-debug --remove-section=.comment --remove-section=.note ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+        pushd ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }} && objcopy --add-gnu-debuglink databend-query.debug databend-query && popd
 
     # - name: Compress Binaries with UPX
     #   if: env.BUILD_PROFILE == 'debug'

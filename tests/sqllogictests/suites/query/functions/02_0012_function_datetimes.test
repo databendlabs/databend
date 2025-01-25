@@ -93,6 +93,11 @@ select to_date('9999-12-31')
 ----
 9999-12-31
 
+query T
+select to_date('9999-12-30')
+----
+9999-12-30
+
 
 statement error 1006
 select to_date('10000-12-31')
@@ -100,47 +105,51 @@ select to_date('10000-12-31')
 query T
 select to_date('0999-12-31')
 ----
-1000-01-01
+0999-12-31
 
 query T
 select to_datetime('1000-01-01 00:00:00')
 ----
 1000-01-01 00:00:00.000000
 
-query T
+statement error 1046
 select to_datetime('9999-12-31 23:59:59')
+
+# Max datetime in UTC
+query T
+select to_datetime('9999-12-30 22:00:00')
 ----
-9999-12-31 23:59:59.000000
+9999-12-30 22:00:00.000000
 
 query T
-select to_datetime('9999-12-31 ')
+select to_datetime('9999-12-30 ')
 ----
-9999-12-31 00:00:00.000000
+9999-12-30 00:00:00.000000
 
 query T
-select to_datetime('9999-12-31T')
+select to_datetime('9999-12-30T')
 ----
-9999-12-31 00:00:00.000000
+9999-12-30 00:00:00.000000
 
 query T
-select to_datetime('9999-12-31 23')
+select to_datetime('9999-12-30 22')
 ----
-9999-12-31 23:00:00.000000
+9999-12-30 22:00:00.000000
 
 query T
-select to_datetime('9999-12-31 23:')
+select to_datetime('9999-12-30 22:')
 ----
-9999-12-31 23:00:00.000000
+9999-12-30 22:00:00.000000
 
 query T
-select to_datetime('9999-12-31 23:59')
+select to_datetime('9999-12-30 21:59')
 ----
-9999-12-31 23:59:00.000000
+9999-12-30 21:59:00.000000
 
 query T
-select to_datetime('9999-12-31 23:59:')
+select to_datetime('9999-12-30 21:59:')
 ----
-9999-12-31 23:59:00.000000
+9999-12-30 21:59:00.000000
 
 query T
 select to_unix_timestamp('2022-12-31T23:59:59+00:00')
@@ -171,7 +180,7 @@ select to_datetime('10000-01-01 00:00:00')
 query T
 select to_datetime('0999-12-31 23:59:59')
 ----
-1000-01-01 00:00:00.000000
+0999-12-31 23:59:59.000000
 
 query T
 select to_datetime('2022-12-31T23:59:59+00:00')
@@ -302,11 +311,15 @@ SELECT MONTHS_BETWEEN('2024-01-01'::DATE, '2024-01-01'::DATE),
 ----
 0.0 1.0 1.6774193548387097 1.0 1.0 0.03225806451612903 -12.0
 
-statement error 1006
+query T
 select to_date('2023-01-01') + 100000000
+----
+1000-01-01
 
-statement error 1006
+query T
 select to_date('2023-01-01') - 100000000
+----
+1000-01-01
 
 
 query B
@@ -658,11 +671,16 @@ select add_years(to_datetime(1582970400000000), cast(-50, INT8))
 1970-02-28 10:00:00.000000
 
 
-statement error 1006
-select add_years(to_date('9999-12-31'), 1)
+# years gap: -9999..=9999
+query T
+select add_years(to_date('9998-12-30'), 1)
+----
+9999-12-30
 
-statement error 1006
-select add_years(to_datetime('9999-12-31 23:59:59'), 1)
+query T
+select add_years(to_datetime('9998-12-30 21:59:59'), 1)
+----
+9999-12-30 21:59:59.000000
 
 # 2020-2-29 - 13 months
 query T
@@ -677,11 +695,15 @@ select subtract_months(to_datetime(1582970400000000), cast(122, INT16))
 2009-12-29 10:00:00.000000
 
 
-statement error 1006
+query T
 select subtract_months(to_date('1000-01-01'), 1)
+----
+1000-01-01
 
-statement error 1006
+query T
 select subtract_months(to_datetime('1000-01-01 00:00:00'), 1)
+----
+1000-01-01 00:00:00.000000
 
 # 2020-2-29 + 1 day
 query T
@@ -695,11 +717,15 @@ select add_days(to_datetime(1582970400000000), cast(-1, INT16))
 ----
 2020-02-28 10:00:00.000000
 
-statement error 1006
-select add_days(to_date('9999-12-31'), 1)
+query T
+select add_days(to_date('9999-12-30'), 1)
+----
+9999-12-31
 
-statement error 1006
-select add_days(to_datetime('9999-12-31 23:59:59'), 1)
+query T
+select add_days(to_datetime('9999-12-30 21:59:59'), 1)
+----
+9999-12-30 22:00:00.000000
 
 # 2020-2-29T10:00:00 + 25 hours
 query T
@@ -714,11 +740,15 @@ select add_hours(to_date(18321), 1)
 2020-02-29 01:00:00.000000
 
 
-statement error 1006
-select add_hours(to_date('9999-12-31'), 24)
+query T
+select add_hours(to_date('9999-12-30'), 24)
+----
+9999-12-30 22:00:00.000000
 
-statement error 1006
-select add_hours(to_datetime('9999-12-31 23:59:59'), 1)
+query T
+select add_hours(to_datetime('9999-12-29 23:59:59'), 1)
+----
+9999-12-30 00:59:59.000000
 
 # 2020-2-29T10:00:00 - 1 minutes
 query T
@@ -726,11 +756,15 @@ select subtract_minutes(to_datetime(1582970400000000), cast(1, INT32))
 ----
 2020-02-29 09:59:00.000000
 
-statement error 1006
+query T
 select subtract_minutes(to_date('1000-01-01'), 1)
+----
+1000-01-01 00:00:00.000000
 
-statement error 1006
+query T
 select subtract_minutes(to_datetime('1000-01-01 00:00:00'), 1)
+----
+1000-01-01 00:00:00.000000
 
 # 2020-2-29T10:00:00 + 61 seconds
 query T
@@ -748,11 +782,15 @@ select to_datetime('2023-01-01 00:00:00') - 10000000000
 ----
 2022-12-31 21:13:20.000000
 
-statement error 1006
+query T
 select to_datetime('2023-01-01 00:00:00') + 1000000000000000000
+----
+1000-01-01 00:00:00.000000
 
-statement error 1006
+query T
 select to_datetime('2023-01-01 00:00:00') - 1000000000000000000
+----
+1000-01-01 00:00:00.000000
 
 query I
 select to_month(to_datetime(1633081817000000))
@@ -902,6 +940,176 @@ select date_add(QUARTER, 1, to_date('2018-01-02'))
 2018-04-02
 
 query T
+SELECT DATE_ADD(WEEK, 1, TODAY())=DATE_ADD('day', 7, TODAY())
+----
+1
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2000-01-02'), to_date('2024-01-01'))
+----
+24
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2023-12-31'), to_date('2024-01-01'))
+----
+1
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2024-01-01'), to_date('2023-12-31'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2023-12-30'), to_date('2023-12-31'))
+----
+0
+
+query T
+SELECT DATE_DIFF(YEAR, to_date('2023-12-31'), to_date('2023-12-30'))
+----
+0
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-06-01'), to_date('2024-01-01'))
+----
+3
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2024-01-01'), to_date('2023-06-01'))
+----
+-3
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-01-01'), to_date('2023-02-28'))
+----
+0
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-01-01'), to_date('2023-06-01'))
+----
+1
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-06-01'), to_date('2023-01-01'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-02-01'), to_date('2023-07-01'))
+----
+2
+
+query T
+SELECT DATE_DIFF(QUARTER, to_date('2023-07-01'), to_date('2023-02-01'))
+----
+-2
+
+query T
+SELECT DATE_DIFF(MONTH, to_date('2000-01-02'), to_date('2024-01-01'))
+----
+288
+
+query T
+SELECT DATE_DIFF(MONTH, to_date('2012-02-29'), to_date('2013-03-28'))
+----
+13
+
+query T
+SELECT DATE_DIFF(MONTH, to_date('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2016-12-31'), to_timestamp('2017-01-01'))
+----
+0
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-01'), to_date('2017-01-02'))
+----
+1
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-01'), to_date('2017-01-05'))
+----
+1
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-05'), to_date('2017-01-01'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-01'), to_date('2017-12-30'))
+----
+52
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-12-30'), to_date('2017-01-01'))
+----
+-52
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-01-01'), to_date('2017-12-31'))
+----
+52
+
+query T
+SELECT DATE_DIFF(WEEK, to_date('2017-12-31'), to_date('2017-01-01'))
+----
+-52
+
+query T
+SELECT DATE_DIFF(DAY, to_date('2000-01-02'), to_date('2024-01-01'))
+----
+8765
+
+query T
+SELECT DATE_DIFF(DAY, to_date('2012-02-29'), to_date('2013-02-28'))
+----
+365
+
+query T
+SELECT DATE_DIFF(DAY, to_timestamp('2023-12-31 09:38:18.165575'), to_timestamp('2024-01-01 21:01:35.423179'))
+----
+1
+
+query T
+SELECT DATE_DIFF(DAY, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-1
+
+query T
+SELECT DATE_DIFF(HOUR, to_timestamp('2023-12-31 09:38:18.165575'), to_timestamp('2024-01-01 21:01:35.423179'))
+----
+36
+
+query T
+SELECT DATE_DIFF(HOUR, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-36
+
+query T
+SELECT DATE_DIFF(MINUTE, to_timestamp('2023-12-31 09:38:18.165575'), to_timestamp('2024-01-01 21:01:35.423179'))
+----
+2123
+
+query T
+SELECT DATE_DIFF(MINUTE, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-2123
+
+query T
+SELECT DATE_DIFF(SECOND, to_timestamp('2023-12-31 09:38:18.165575'), to_timestamp('2024-01-01 21:01:35.423179'))
+----
+127397
+
+query T
+SELECT DATE_DIFF(SECOND, to_timestamp('2024-01-01 21:01:35.423179'), to_timestamp('2023-12-31 09:38:18.165575'))
+----
+-127397
+
+query T
 select date_sub(QUARTER, 1, to_date('2018-01-02'))
 ----
 2017-10-02
@@ -972,6 +1180,116 @@ select to_datetime('2022-04-01 06:50:20')   < '2022-04-02 04:50:20'
 ----
 1
 
+query T
+select last_day(to_date('2024-10-22'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_date('2024-10-27'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_date('2024-02-01'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_date('2024-02-01'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_date('2024-02-01'), year);
+----
+2024-12-31
+
+query T
+select last_day(to_timestamp('2024-10-24 09:38:18.165575'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-10-27 09:38:18.165575'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-02-11 09:38:18.165575'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_timestamp('2024-02-11 09:38:18.165575'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_timestamp('2024-02-11 09:38:18.165575'), year);
+----
+2024-12-31
+
+query T
+select previous_day(to_date('2024-10-25'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_date('2024-10-25'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_date('2024-10-25'), saturday);
+----
+2024-10-19
+
+query T
+select previous_day(to_timestamp('2024-10-25 09:38:18.165575'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_timestamp('2024-10-25 09:38:18.165575'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_timestamp('2024-10-25 09:38:18.165575'), sunday);
+----
+2024-10-20
+
+query T
+select next_day(to_date('2024-10-25'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_date('2024-10-25'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_date('2024-10-25'), saturday);
+----
+2024-10-26
+
+query T
+select next_day(to_timestamp('2024-10-25 09:38:18.165575'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_timestamp('2024-10-25 09:38:18.165575'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_timestamp('2024-10-25 09:38:18.165575'), sunday);
+----
+2024-10-27
+
 statement ok
 drop table if exists ts
 
@@ -1020,6 +1338,7 @@ insert into t values('2022-04-02T15:10:28-08:13', '2022-04-02T15:10:28.223+08:00
 statement error 1006
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10')
 
+# ignore minute offset
 query TTT
 select * from t order by b
 ----
@@ -1047,6 +1366,10 @@ query T
 select to_date('精彩的2022年，美丽的02month,激动の02d', '精彩的%Y年，美丽的%mmonth,激动の%dd');
 ----
 2022-02-02
+
+
+statement error 1006
+select date_format('2022-2-04T03:58:59', '%i');
 
 statement error 1006
 select date_format('', '');
@@ -1132,3 +1455,40 @@ query T
 select to_timestamp('2022-03-27 07:54:31.12');
 ----
 2022-03-27 07:54:31.120000
+
+query T
+select TO_TIMESTAMP(-7233803000000+1, 6), TO_TIMESTAMP(-7233803000, 3), TO_TIMESTAMP(-7233803000000-1, 6);
+----
+1969-10-09 06:36:37.000001 1969-10-09 06:36:37.000000 1969-10-09 06:36:36.999999
+
+query T
+select TO_TIMESTAMP(1, 0), TO_TIMESTAMP(1, 1), TO_TIMESTAMP(1, 2), TO_TIMESTAMP(1, 3), TO_TIMESTAMP(1, 4), TO_TIMESTAMP(1, 5), TO_TIMESTAMP(1, 6);
+----
+1970-01-01 00:00:01.000000 1970-01-01 00:00:00.100000 1970-01-01 00:00:00.010000 1970-01-01 00:00:00.001000 1970-01-01 00:00:00.000100 1970-01-01 00:00:00.000010 1970-01-01 00:00:00.000001
+
+query T
+select TRY_TO_TIMESTAMP(1, 0), TRY_TO_TIMESTAMP(1, null);
+----
+1970-01-01 00:00:01.000000 NULL
+
+query T
+SELECT add_hours(to_date(710455), 1512263452497496403);
+----
+1000-01-01 00:00:00.000000
+
+query T
+SELECT add_hours(to_timestamp(710455), 1512263452497496403);
+----
+1000-01-01 00:00:00.000000
+
+query T
+SELECT add_hours(to_date(710455), 2147483647);
+----
+1000-01-01 00:00:00.000000
+
+query T
+SELECT add_hours(to_timestamp(710455), 2147483647);
+----
+1000-01-01 00:00:00.000000
+
+

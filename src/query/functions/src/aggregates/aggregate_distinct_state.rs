@@ -23,12 +23,12 @@ use std::sync::Arc;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use bumpalo::Bump;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -70,7 +70,6 @@ pub struct AggregateDistinctState {
     set: HashSet<Vec<u8>, RandomState>,
 }
 
-// Tried to use StackHash<T, 4> but performance is improved in Q14 of hits benchmark
 pub struct AggregateDistinctNumberState<T: Number + HashtableKeyable> {
     set: CommonHashSet<T>,
 }
@@ -232,10 +231,9 @@ impl DistinctStateFunc for AggregateDistinctStringState {
     }
 
     fn build_columns(&mut self, _types: &[DataType]) -> Result<Vec<Column>> {
-        let mut builder = StringColumnBuilder::with_capacity(self.set.len(), self.set.len() * 2);
+        let mut builder = StringColumnBuilder::with_capacity(self.set.len());
         for key in self.set.iter() {
-            builder.put_str(unsafe { std::str::from_utf8_unchecked(key.key()) });
-            builder.commit_row();
+            builder.put_and_commit(unsafe { std::str::from_utf8_unchecked(key.key()) });
         }
         Ok(vec![Column::String(builder.build())])
     }
@@ -321,7 +319,7 @@ where T: Number + BorshSerialize + BorshDeserialize + HashtableKeyable
 
 // For count(distinct string) and uniq(string)
 pub struct AggregateUniqStringState {
-    set: StackHashSet<u128, 16>,
+    set: StackHashSet<u128>,
 }
 
 impl DistinctStateFunc for AggregateUniqStringState {

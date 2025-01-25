@@ -15,9 +15,9 @@
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::NonEmptyItem;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
 use databend_common_meta_types::Operation;
-use databend_common_meta_types::SeqV;
 use databend_common_proto_conv::FromToProto;
 
 use crate::kv_pb_api::errors::NoneValue;
@@ -36,30 +36,60 @@ where T: FromToProto {
             Ok(Operation::Update(buf))
         }
         Operation::Delete => Ok(Operation::Delete),
-        Operation::AsIs => Ok(Operation::AsIs),
+        _ => {
+            unreachable!("Operation::AsIs is not supported")
+        }
     }
 }
 
 /// Decode Change<Vec<u8>> into Change<T>, with FromToProto.
-pub fn decode_transition<T>(seqv: Change<Vec<u8>>) -> Result<Change<T>, PbDecodeError>
+pub fn decode_transition<T>(transition: Change<Vec<u8>>) -> Result<Change<T>, PbDecodeError>
 where T: FromToProto {
+    let prev = transition
+        .prev
+        .map(|seqv| {
+            decode_seqv::<T>(seqv, || {
+                format!("decode `prev` value of {:?}", transition.ident)
+            })
+        })
+        .transpose()?;
+
+    let result = transition
+        .result
+        .map(|seqv| {
+            decode_seqv::<T>(seqv, || {
+                format!("decode `result` value of {:?}", transition.ident)
+            })
+        })
+        .transpose()?;
+
     let c = Change {
-        ident: seqv.ident,
-        prev: seqv.prev.map(decode_seqv::<T>).transpose()?,
-        result: seqv.result.map(decode_seqv::<T>).transpose()?,
+        ident: transition.ident,
+        prev,
+        result,
     };
 
     Ok(c)
 }
 
 /// Deserialize SeqV<Vec<u8>> into SeqV<T>, with FromToProto.
-pub fn decode_seqv<T>(seqv: SeqV) -> Result<SeqV<T>, PbDecodeError>
-where T: FromToProto {
+///
+/// A context function is used to provide a context for error messages, when decoding fails.
+pub fn decode_seqv<T>(
+    seqv: SeqV,
+    context: impl FnOnce() -> String,
+) -> Result<SeqV<T>, PbDecodeError>
+where
+    T: FromToProto,
+{
     let buf = &seqv.data;
-    let p: T::PB = prost::Message::decode(buf.as_ref())?;
-    let v: T = FromToProto::from_pb(p)?;
+    let x: Result<_, PbDecodeError> = try {
+        let p: T::PB = prost::Message::decode(buf.as_ref())?;
+        let v: T = FromToProto::from_pb(p)?;
+        SeqV::with_meta(seqv.seq, seqv.meta, v)
+    };
 
-    Ok(SeqV::with_meta(seqv.seq, seqv.meta, v))
+    x.map_err(|e| e.with_context(context()))
 }
 
 /// Decode key and protobuf encoded value from `StreamItem`.
@@ -77,7 +107,9 @@ where
             let k = K::from_str_key(&item.key)?;
 
             let raw = item.value.ok_or_else(|| NoneValue::new(item.key))?;
-            let v = decode_seqv::<K::ValueType>(SeqV::from(raw))?;
+            let v = decode_seqv::<K::ValueType>(SeqV::from(raw), || {
+                format!("decode value of {}", k.to_string_key())
+            })?;
 
             Ok(NonEmptyItem::new(k, v))
         }

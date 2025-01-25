@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_raft_store::key_spaces::RaftStoreEntry;
-use databend_common_meta_sled_store::get_sled_db;
-use databend_common_meta_sled_store::init_sled_db;
+use databend_common_meta_sled_store::init_get_sled_db;
 
 use crate::examples::Config;
 
@@ -26,9 +25,7 @@ pub fn process_sled_db<F>(config: &Config, convert: F) -> anyhow::Result<()>
 where F: Fn(RaftStoreEntry) -> Result<Option<RaftStoreEntry>, anyhow::Error> {
     let raft_config = &config.raft_config;
 
-    init_sled_db(raft_config.raft_dir.clone(), 64 * 1024 * 1024 * 1024);
-
-    let db = get_sled_db();
+    let db = init_get_sled_db(raft_config.raft_dir.clone(), 1024 * 1024 * 1024);
 
     let mut tree_names = db.tree_names();
     tree_names.sort();

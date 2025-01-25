@@ -25,6 +25,7 @@ use crate::BlockMetaIndex;
 
 /// TopN pruner.
 /// Pruning for order by x limit N.
+#[derive(Clone)]
 pub struct TopNPrunner {
     schema: TableSchemaRef,
     sort: Vec<(RemoteExpr<String>, bool, bool)>,

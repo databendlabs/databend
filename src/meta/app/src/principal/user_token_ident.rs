@@ -24,6 +24,7 @@ mod kvapi_impl {
     use databend_common_meta_kvapi::kvapi;
 
     use crate::principal::user_token::QueryTokenInfo;
+    use crate::principal::user_token_ident::TokenIdent;
     use crate::tenant_key::resource::TenantResource;
 
     pub struct Resource;
@@ -35,7 +36,8 @@ mod kvapi_impl {
     }
 
     impl kvapi::Value for QueryTokenInfo {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
+        type KeyType = TokenIdent;
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
     }

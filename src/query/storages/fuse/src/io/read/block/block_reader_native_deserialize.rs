@@ -15,27 +15,17 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::chunk::Chunk;
-use databend_common_arrow::arrow::datatypes::DataType as ArrowType;
-use databend_common_arrow::arrow::datatypes::Field;
-use databend_common_arrow::arrow::datatypes::Field as ArrowField;
-use databend_common_arrow::native::read::batch_read::batch_read_array;
-use databend_common_arrow::native::read::column_iter_to_arrays;
-use databend_common_arrow::native::read::reader::NativeReader;
-use databend_common_arrow::native::read::ArrayIter;
-use databend_common_arrow::parquet::metadata::ColumnDescriptor;
-use databend_common_arrow::parquet::metadata::Descriptor;
-use databend_common_arrow::parquet::schema::types::FieldInfo;
-use databend_common_arrow::parquet::schema::types::ParquetType;
-use databend_common_arrow::parquet::schema::types::PhysicalType;
-use databend_common_arrow::parquet::schema::types::PrimitiveType;
-use databend_common_arrow::parquet::schema::Repetition;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
 use databend_common_metrics::storage::*;
+use databend_common_native::read::reader::NativeReader;
+use databend_common_native::read::ColumnIter;
+use databend_common_native::read::NativeColumnsReader;
 use databend_common_storage::ColumnNode;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
@@ -125,23 +115,19 @@ impl BlockReader {
         for array in &deserialized_column_arrays {
             match array {
                 DeserializedArray::Deserialized((_, array, ..)) => {
-                    chunk_arrays.push(array);
+                    chunk_arrays.push(array.clone());
                 }
                 DeserializedArray::NoNeedToCache(array) => {
-                    chunk_arrays.push(array);
+                    chunk_arrays.push(array.clone());
                 }
                 DeserializedArray::Cached(sized_column) => {
-                    chunk_arrays.push(&sized_column.0);
+                    chunk_arrays.push(sized_column.0.clone());
                 }
             }
         }
 
         // build data block
-        let chunk = Chunk::try_new(chunk_arrays)?;
-        let data_block = if !need_to_fill_default_val {
-            DataBlock::from_arrow_chunk(&chunk, &self.data_schema())
-        } else {
-            let data_schema = self.data_schema();
+        let data_block = if need_to_fill_default_val {
             let mut default_vals = Vec::with_capacity(need_default_vals.len());
             for (i, need_default_val) in need_default_vals.iter().enumerate() {
                 if !need_default_val {
@@ -150,12 +136,21 @@ impl BlockReader {
                     default_vals.push(Some(self.default_vals[i].clone()));
                 }
             }
-            DataBlock::create_with_default_value_and_chunk(
-                &data_schema,
-                &chunk,
+            DataBlock::create_with_opt_default_value(
+                chunk_arrays,
+                &self.data_schema(),
                 &default_vals,
                 num_rows,
-            )
+            )?
+        } else {
+            debug_assert!(chunk_arrays.len() == self.projected_schema.num_fields());
+            let cols = chunk_arrays
+                .into_iter()
+                .zip(self.data_schema().fields())
+                .map(|(arr, f)| Column::from_arrow_rs(arr, f.data_type()))
+                .collect::<Result<Vec<_>>>()?;
+
+            DataBlock::new_from_columns(cols)
         };
 
         // populate cache if necessary
@@ -172,17 +167,15 @@ impl BlockReader {
                 }
             }
         }
-        data_block
+        Ok(data_block)
     }
 
-    fn chunks_to_native_array(
-        column_node: &ColumnNode,
+    fn chunks_to_native_column(
+        &self,
         metas: Vec<&ColumnMeta>,
         chunks: Vec<&[u8]>,
-        column_descriptors: Vec<ColumnDescriptor>,
-        field: Field,
-    ) -> Result<Box<dyn Array>> {
-        let is_nested = column_node.is_nested;
+        field: TableField,
+    ) -> Result<Column> {
         let mut page_metas = Vec::with_capacity(chunks.len());
         let mut readers = Vec::with_capacity(chunks.len());
         for (chunk, meta) in chunks.into_iter().zip(metas.into_iter()) {
@@ -192,7 +185,11 @@ impl BlockReader {
             page_metas.push(meta.pages.clone());
         }
 
-        match batch_read_array(readers, column_descriptors, field, is_nested, page_metas) {
+        match self.native_columns_reader.batch_read_column(
+            readers,
+            field.data_type().clone(),
+            page_metas,
+        ) {
             Ok(array) => Ok(array),
             Err(err) => Err(err.into()),
         }
@@ -201,30 +198,28 @@ impl BlockReader {
     fn deserialize_native_field<'a>(
         &self,
         deserialization_context: &'a FieldDeserializationContext,
-        column: &ColumnNode,
+        column_node: &ColumnNode,
     ) -> Result<Option<DeserializedArray<'a>>> {
-        let indices = &column.leaf_indices;
+        let indices = &column_node.leaf_indices;
         let column_chunks = deserialization_context.column_chunks;
         // column passed in may be a compound field (with sub leaves),
         // or a leaf column of compound field
-        let is_nested = column.has_children();
+        let is_nested = column_node.has_children();
         let estimated_cap = indices.len();
         let mut field_column_metas = Vec::with_capacity(estimated_cap);
         let mut field_column_data = Vec::with_capacity(estimated_cap);
-        let mut field_column_descriptors = Vec::with_capacity(estimated_cap);
+        let mut field_leaf_ids = Vec::with_capacity(estimated_cap);
         let mut field_uncompressed_size = 0;
 
         for (i, leaf_index) in indices.iter().enumerate() {
-            let column_id = column.leaf_column_ids[i];
+            let column_id = column_node.leaf_column_ids[i];
             if let Some(column_meta) = deserialization_context.column_metas.get(&column_id) {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
                         DataItem::RawData(data) => {
-                            let column_descriptor =
-                                &self.parquet_schema_descriptor.columns()[*leaf_index];
                             field_column_metas.push(column_meta);
                             field_column_data.push(data.as_ref());
-                            field_column_descriptors.push(column_descriptor.clone());
+                            field_leaf_ids.push(*leaf_index);
                             field_uncompressed_size += data.len();
                         }
                         DataItem::ColumnArray(column_array) => {
@@ -250,13 +245,12 @@ impl BlockReader {
         }
 
         if !field_column_metas.is_empty() {
-            let array = Self::chunks_to_native_array(
-                column,
+            let column = self.chunks_to_native_column(
                 field_column_metas,
                 field_column_data,
-                field_column_descriptors,
-                column.field.clone(),
+                column_node.table_field.clone(),
             )?;
+            let array = column.clone().into_arrow_rs();
             // mark the array
             if is_nested {
                 // the array is not intended to be cached
@@ -264,7 +258,7 @@ impl BlockReader {
                 Ok(Some(DeserializedArray::NoNeedToCache(array)))
             } else {
                 // the array is deserialized from raw bytes, should be cached
-                let column_id = column.leaf_column_ids[0];
+                let column_id = column_node.leaf_column_ids[0];
                 Ok(Some(DeserializedArray::Deserialized((
                     column_id,
                     array,
@@ -276,58 +270,31 @@ impl BlockReader {
         }
     }
 
-    pub(crate) fn build_array_iter(
+    pub(crate) fn build_column_iter(
+        &self,
         column_node: &ColumnNode,
-        leaves: Vec<ColumnDescriptor>,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
-    ) -> Result<ArrayIter<'static>> {
-        let field = column_node.field.clone();
-        let is_nested = column_node.is_nested;
-        match column_iter_to_arrays(readers, leaves, field, is_nested) {
-            Ok(array_iter) => Ok(array_iter),
+    ) -> Result<ColumnIter<'static>> {
+        match self.native_columns_reader.column_iters(
+            readers,
+            column_node.table_field.clone(),
+            column_node.init.clone(),
+        ) {
+            Ok(column_iter) => Ok(column_iter),
             Err(err) => Err(err.into()),
         }
     }
 
-    pub(crate) fn build_virtual_array_iter(
+    pub(crate) fn build_virtual_column_iter(
         name: String,
+        data_type: TableDataType,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
-    ) -> Result<ArrayIter<'static>> {
-        // TODO(b41sh): support other data types
-        // The data type of virtual columns are always Nullable Variant,
-        // so we can directly construct `ColumnDescriptor`
-        let primitive_type = PrimitiveType {
-            field_info: FieldInfo {
-                name: name.clone(),
-                repetition: Repetition::Optional,
-                id: None,
-            },
-            logical_type: None,
-            converted_type: None,
-            physical_type: PhysicalType::ByteArray,
-        };
-        let descriptor = Descriptor {
-            primitive_type: primitive_type.clone(),
-            max_def_level: 1,
-            max_rep_level: 0,
-        };
-        let path_in_schema = vec![name.clone()];
-        let base_type = ParquetType::PrimitiveType(primitive_type);
+    ) -> Result<ColumnIter<'static>> {
+        let field = TableField::new(&name, data_type);
 
-        let is_nested = false;
-        let leaves = vec![ColumnDescriptor::new(descriptor, path_in_schema, base_type)];
-        let field = ArrowField::new(
-            name,
-            ArrowType::Extension(
-                "Variant".to_string(),
-                Box::new(ArrowType::LargeBinary),
-                None,
-            ),
-            true,
-        );
-
-        match column_iter_to_arrays(readers, leaves, field, is_nested) {
-            Ok(array_iter) => Ok(array_iter),
+        let native_column_reader = NativeColumnsReader::new()?;
+        match native_column_reader.column_iters(readers, field, vec![]) {
+            Ok(iter) => Ok(iter),
             Err(err) => Err(err.into()),
         }
     }

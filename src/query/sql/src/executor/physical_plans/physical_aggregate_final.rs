@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
 
+use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFunctionDesc;
@@ -45,8 +45,6 @@ pub struct AggregateFinal {
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub before_group_by_schema: DataSchemaRef,
-    pub limit: Option<usize>,
-
     pub group_by_display: Vec<String>,
 
     // Only used for explain
@@ -57,7 +55,7 @@ impl AggregateFinal {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
-            let data_type = agg.sig.return_type()?;
+            let data_type = agg.sig.return_type.clone();
             fields.push(DataField::new(&agg.output_column.to_string(), data_type));
         }
         for id in self.group_by.iter() {
@@ -105,7 +103,7 @@ impl PhysicalPlanBuilder {
             aggregate_functions: used,
             from_distinct: agg.from_distinct,
             mode: agg.mode,
-            limit: agg.limit,
+            rank_limit: agg.rank_limit.clone(),
             grouping_sets: agg.grouping_sets.clone(),
         };
 
@@ -122,38 +120,90 @@ impl PhysicalPlanBuilder {
                     .map(|item| Ok(item.scalar.as_expr()?.sql_display()))
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
-                    if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
-                        Ok(AggregateFunctionDesc {
-                            sig: AggregateFunctionSignature {
-                                name: agg.func_name.clone(),
-                                args: agg.args.iter().map(|s| {
-                                    if let ScalarExpr::BoundColumnRef(col) = s {
-                                        Ok(input_schema.field_with_name(&col.column.index.to_string())?.data_type().clone())
+                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg
+                    .aggregate_functions
+                    .iter()
+                    .map(|v| match &v.scalar {
+                        ScalarExpr::AggregateFunction(agg) => {
+                            let arg_indices = agg
+                                .args
+                                .iter()
+                                .map(|arg| {
+                                    if let ScalarExpr::BoundColumnRef(col) = arg {
+                                        Ok(col.column.index)
                                     } else {
                                         Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            "Aggregate function argument must be a BoundColumnRef"
+                                                .to_string(),
                                         ))
                                     }
-                                }).collect::<Result<_>>()?,
-                                params: agg.params.clone(),
-                            },
-                            output_column: v.index,
-                            arg_indices: agg.args.iter().map(|arg| {
-                                if let ScalarExpr::BoundColumnRef(col) = arg {
-                                    Ok(col.column.index)
-                                } else {
-                                    Err(ErrorCode::Internal(
-                                        "Aggregate function argument must be a BoundColumnRef".to_string()
-                                    ))
-                                }
-                            }).collect::<Result<_>>()?,
-                            display: v.scalar.as_expr()?.sql_display(),
-                        })
-                    } else {
-                        Err(ErrorCode::Internal("Expected aggregate function".to_string()))
-                    }
-                }).collect::<Result<_>>()?;
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+                            let args = arg_indices
+                                .iter()
+                                .map(|i| {
+                                    Ok(input_schema
+                                        .field_with_name(&i.to_string())?
+                                        .data_type()
+                                        .clone())
+                                })
+                                .collect::<Result<_>>()?;
+                            Ok(AggregateFunctionDesc {
+                                sig: AggregateFunctionSignature {
+                                    name: agg.func_name.clone(),
+                                    udaf: None,
+                                    return_type: *agg.return_type.clone(),
+                                    args,
+                                    params: agg.params.clone(),
+                                },
+                                output_column: v.index,
+                                arg_indices,
+                                display: v.scalar.as_expr()?.sql_display(),
+                            })
+                        }
+                        ScalarExpr::UDAFCall(udaf) => {
+                            let arg_indices = udaf
+                                .arguments
+                                .iter()
+                                .map(|arg| {
+                                    if let ScalarExpr::BoundColumnRef(col) = arg {
+                                        Ok(col.column.index)
+                                    } else {
+                                        Err(ErrorCode::Internal(
+                                            "Aggregate function argument must be a BoundColumnRef"
+                                                .to_string(),
+                                        ))
+                                    }
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+                            let args = arg_indices
+                                .iter()
+                                .map(|i| {
+                                    Ok(input_schema
+                                        .field_with_name(&i.to_string())?
+                                        .data_type()
+                                        .clone())
+                                })
+                                .collect::<Result<_>>()?;
+
+                            Ok(AggregateFunctionDesc {
+                                sig: AggregateFunctionSignature {
+                                    name: udaf.name.clone(),
+                                    udaf: Some((udaf.udf_type.clone(), udaf.state_fields.clone())),
+                                    return_type: *udaf.return_type.clone(),
+                                    args,
+                                    params: vec![],
+                                },
+                                output_column: v.index,
+                                arg_indices,
+                                display: v.scalar.as_expr()?.sql_display(),
+                            })
+                        }
+                        _ => Err(ErrorCode::Internal(
+                            "Expected aggregate function".to_string(),
+                        )),
+                    })
+                    .collect::<Result<_>>()?;
 
                 let settings = self.ctx.get_settings();
                 let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
@@ -162,12 +212,12 @@ impl PhysicalPlanBuilder {
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
-                    // If the aggregation function argument if a group item,
-                    // we cannot use the group item directly.
-                    // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
-                    // which will cause panic while executing aggregation function.
-                    // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
-                    // we should use these columns instead.
+                                                                                            // If the aggregation function argument if a group item,
+                                                                                            // we cannot use the group item directly.
+                                                                                            // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
+                                                                                            // which will cause panic while executing aggregation function.
+                                                                                            // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
+                                                                                            // we should use these columns instead.
                     for func in agg_funcs.iter_mut() {
                         for arg in func.arg_indices.iter_mut() {
                             if let Some(pos) = group_items.iter().position(|g| g == arg) {
@@ -176,6 +226,19 @@ impl PhysicalPlanBuilder {
                         }
                     }
                 }
+
+                let rank_limit = agg.rank_limit.map(|(item, limit)| {
+                    let desc = item
+                        .iter()
+                        .map(|v| SortDesc {
+                            asc: v.asc,
+                            nulls_first: v.nulls_first,
+                            order_by: v.index,
+                            display_name: self.metadata.read().column(v.index).name(),
+                        })
+                        .collect::<Vec<_>>();
+                    (desc, limit)
+                });
 
                 match input {
                     PhysicalPlan::Exchange(Exchange { input, kind, .. })
@@ -197,6 +260,7 @@ impl PhysicalPlanBuilder {
                                 group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
+                                rank_limit: None,
                             }
                         } else {
                             AggregatePartial {
@@ -207,46 +271,22 @@ impl PhysicalPlanBuilder {
                                 group_by_display,
                                 group_by: group_items,
                                 stat_info: Some(stat_info),
+                                rank_limit,
                             }
                         };
 
-                        let settings = self.ctx.get_settings();
-                        let efficiently_memory = settings.get_efficiently_memory_group_by()?;
-                        let enable_experimental_aggregate_hashtable =
-                            settings.get_enable_experimental_aggregate_hashtable()?;
-
-                        let keys = if enable_experimental_aggregate_hashtable {
+                        let keys = {
                             let schema = aggregate_partial.output_schema()?;
-                            let start = aggregate_partial.agg_funcs.len();
                             let end = schema.num_fields();
-                            let mut groups = Vec::with_capacity(end - start);
-                            for idx in start..end {
-                                let group_key = RemoteExpr::ColumnRef {
+                            let start = end - aggregate_partial.group_by.len();
+                            (start..end)
+                                .map(|id| RemoteExpr::ColumnRef {
                                     span: None,
-                                    id: idx,
-                                    data_type: schema.field(idx).data_type().clone(),
-                                    display_name: (idx - start).to_string(),
-                                };
-                                groups.push(group_key);
-                            }
-                            groups
-                        } else {
-                            let group_by_key_index =
-                                aggregate_partial.output_schema()?.num_fields() - 1;
-                            let group_by_key_data_type = DataBlock::choose_hash_method_with_types(
-                                &agg.group_items
-                                    .iter()
-                                    .map(|v| v.scalar.data_type())
-                                    .collect::<Result<Vec<_>>>()?,
-                                efficiently_memory,
-                            )?
-                            .data_type();
-                            vec![RemoteExpr::ColumnRef {
-                                span: None,
-                                id: group_by_key_index,
-                                data_type: group_by_key_data_type,
-                                display_name: "_group_by_key".to_string(),
-                            }]
+                                    id,
+                                    data_type: schema.field(id).data_type().clone(),
+                                    display_name: (id - start).to_string(),
+                                })
+                                .collect()
                         };
 
                         PhysicalPlan::Exchange(Exchange {
@@ -275,6 +315,7 @@ impl PhysicalPlanBuilder {
                                 group_by: group_items,
                                 input: Box::new(PhysicalPlan::AggregateExpand(expand)),
                                 stat_info: Some(stat_info),
+                                rank_limit: None,
                             })
                         } else {
                             PhysicalPlan::AggregatePartial(AggregatePartial {
@@ -285,6 +326,7 @@ impl PhysicalPlanBuilder {
                                 group_by: group_items,
                                 input: Box::new(input),
                                 stat_info: Some(stat_info),
+                                rank_limit,
                             })
                         }
                     }
@@ -309,38 +351,90 @@ impl PhysicalPlanBuilder {
                     }
                 };
 
-                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
-                    if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
-                        Ok(AggregateFunctionDesc {
-                            sig: AggregateFunctionSignature {
-                                name: agg.func_name.clone(),
-                                args: agg.args.iter().map(|s| {
-                                    if let ScalarExpr::BoundColumnRef(col) = s {
-                                        Ok(input_schema.field_with_name(&col.column.index.to_string())?.data_type().clone())
+                let mut agg_funcs: Vec<AggregateFunctionDesc> = agg
+                    .aggregate_functions
+                    .iter()
+                    .map(|v| match &v.scalar {
+                        ScalarExpr::AggregateFunction(agg) => {
+                            let arg_indices = agg
+                                .args
+                                .iter()
+                                .map(|arg| {
+                                    if let ScalarExpr::BoundColumnRef(col) = arg {
+                                        Ok(col.column.index)
                                     } else {
                                         Err(ErrorCode::Internal(
-                                            "Aggregate function argument must be a BoundColumnRef".to_string()
+                                            "Aggregate function argument must be a BoundColumnRef"
+                                                .to_string(),
                                         ))
                                     }
-                                }).collect::<Result<_>>()?,
-                                params: agg.params.clone(),
-                            },
-                            output_column: v.index,
-                            arg_indices: agg.args.iter().map(|arg| {
-                                if let ScalarExpr::BoundColumnRef(col) = arg {
-                                    Ok(col.column.index)
-                                } else {
-                                    Err(ErrorCode::Internal(
-                                        "Aggregate function argument must be a BoundColumnRef".to_string()
-                                    ))
-                                }
-                            }).collect::<Result<_>>()?,
-                            display: v.scalar.as_expr()?.sql_display(),
-                        })
-                    } else {
-                        Err(ErrorCode::Internal("Expected aggregate function".to_string()))
-                    }
-                }).collect::<Result<_>>()?;
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+                            let args = arg_indices
+                                .iter()
+                                .map(|i| {
+                                    Ok(input_schema
+                                        .field_with_name(&i.to_string())?
+                                        .data_type()
+                                        .clone())
+                                })
+                                .collect::<Result<_>>()?;
+                            Ok(AggregateFunctionDesc {
+                                sig: AggregateFunctionSignature {
+                                    name: agg.func_name.clone(),
+                                    udaf: None,
+                                    return_type: *agg.return_type.clone(),
+                                    args,
+                                    params: agg.params.clone(),
+                                },
+                                output_column: v.index,
+                                arg_indices,
+                                display: v.scalar.as_expr()?.sql_display(),
+                            })
+                        }
+                        ScalarExpr::UDAFCall(udaf) => {
+                            let arg_indices = udaf
+                                .arguments
+                                .iter()
+                                .map(|arg| {
+                                    if let ScalarExpr::BoundColumnRef(col) = arg {
+                                        Ok(col.column.index)
+                                    } else {
+                                        Err(ErrorCode::Internal(
+                                            "Aggregate function argument must be a BoundColumnRef"
+                                                .to_string(),
+                                        ))
+                                    }
+                                })
+                                .collect::<Result<Vec<_>>>()?;
+                            let args = arg_indices
+                                .iter()
+                                .map(|i| {
+                                    Ok(input_schema
+                                        .field_with_name(&i.to_string())?
+                                        .data_type()
+                                        .clone())
+                                })
+                                .collect::<Result<_>>()?;
+
+                            Ok(AggregateFunctionDesc {
+                                sig: AggregateFunctionSignature {
+                                    name: udaf.name.clone(),
+                                    udaf: Some((udaf.udf_type.clone(), udaf.state_fields.clone())),
+                                    return_type: *udaf.return_type.clone(),
+                                    args,
+                                    params: vec![],
+                                },
+                                output_column: v.index,
+                                arg_indices,
+                                display: v.scalar.as_expr()?.sql_display(),
+                            })
+                        }
+                        _ => Err(ErrorCode::Internal(
+                            "Expected aggregate function".to_string(),
+                        )),
+                    })
+                    .collect::<Result<_>>()?;
 
                 if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
                     // The argument types are wrapped nullable due to `AggregateExpand` plan. We should recover them to original types.
@@ -358,7 +452,7 @@ impl PhysicalPlanBuilder {
                 match input {
                     PhysicalPlan::AggregatePartial(ref partial) => {
                         let before_group_by_schema = partial.input.output_schema()?;
-                        let limit = agg.limit;
+
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: 0,
                             group_by_display: partial.group_by_display.clone(),
@@ -368,7 +462,6 @@ impl PhysicalPlanBuilder {
                             before_group_by_schema,
 
                             stat_info: Some(stat_info),
-                            limit,
                         })
                     }
 
@@ -377,7 +470,6 @@ impl PhysicalPlanBuilder {
                         ..
                     }) => {
                         let before_group_by_schema = partial.input.output_schema()?;
-                        let limit = agg.limit;
 
                         PhysicalPlan::AggregateFinal(AggregateFinal {
                             plan_id: 0,
@@ -388,7 +480,6 @@ impl PhysicalPlanBuilder {
                             before_group_by_schema,
 
                             stat_info: Some(stat_info),
-                            limit,
                         })
                     }
 

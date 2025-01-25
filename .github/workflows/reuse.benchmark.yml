@@ -44,7 +44,7 @@ env:
 jobs:
   local:
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 8c32g, "${{ inputs.runner_provider }}"]
     strategy:
       matrix:
         dataset:
@@ -90,7 +90,7 @@ jobs:
           source_id: ${{ inputs.source_id }}
 
   load:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
         if: inputs.source == 'release'
@@ -126,7 +126,7 @@ jobs:
           echo "DROP WAREHOUSE IF EXISTS 'benchmark-${{ inputs.run_id }}';" | bendsql
 
   cloud:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
     needs: load
     strategy:
       matrix:

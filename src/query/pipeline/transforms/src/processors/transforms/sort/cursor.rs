@@ -15,8 +15,6 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
-use databend_common_expression::Column;
-
 use super::rows::Rows;
 
 /// A cursor point to a certain row in a data block.
@@ -29,7 +27,6 @@ where
     pub input_index: usize,
     pub row_index: usize,
 
-    num_rows: usize,
     _o: PhantomData<O>,
 
     /// rows within [`Cursor`] should be monotonic.
@@ -54,7 +51,7 @@ where
 
     #[inline]
     pub fn is_finished(&self) -> bool {
-        self.num_rows == self.row_index
+        self.rows.len() == self.row_index
     }
 
     #[inline]
@@ -64,17 +61,12 @@ where
 
     #[inline]
     pub fn last(&self) -> R::Item<'_> {
-        self.rows.row(self.num_rows - 1)
+        self.rows.last()
     }
 
     #[inline]
     pub fn num_rows(&self) -> usize {
-        self.num_rows
-    }
-
-    #[inline]
-    pub fn to_column(&self) -> Column {
-        self.rows.to_column()
+        self.rows.len()
     }
 
     pub fn cursor_mut(&self) -> CursorMut<'_, R, O> {
@@ -94,7 +86,6 @@ pub trait CursorOrder<R: Rows>: Sized + Copy {
         Cursor::<R, Self> {
             input_index,
             row_index: 0,
-            num_rows: rows.len(),
             rows,
             _o: PhantomData,
         }
@@ -160,7 +151,7 @@ where
     }
 
     pub fn is_finished(&self) -> bool {
-        self.row_index == self.cursor.num_rows
+        self.row_index == self.cursor.rows.len()
     }
 
     pub fn current<'b>(&'b self) -> R::Item<'a> {

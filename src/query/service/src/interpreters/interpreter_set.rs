@@ -50,7 +50,7 @@ impl SetInterpreter {
     }
 
     async fn set_settings(&self, var: String, value: String, is_global: bool) -> Result<()> {
-        let settings = self.ctx.get_shared_settings();
+        let settings = self.ctx.get_session_settings();
 
         match is_global {
             true => settings.set_global_setting(var, value).await,
@@ -81,6 +81,16 @@ impl SetInterpreter {
                         ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", scalar))
                     })?;
                     self.set_settings(var.to_string(), tz.to_string(), is_global)
+                        .await?;
+                    true
+                }
+                "network_policy" => {
+                    // check if the network policy exists
+                    let tenant = self.ctx.get_tenant();
+                    let _ = UserApiProvider::instance()
+                        .get_network_policy(&tenant, scalar)
+                        .await?;
+                    self.set_settings(var.to_string(), scalar.clone(), is_global)
                         .await?;
                     true
                 }
@@ -204,6 +214,11 @@ impl Interpreter for SetInterpreter {
             SetType::SettingsGlobal => self.execute_settings(scalars, true).await?,
             SetType::SettingsSession => self.execute_settings(scalars, false).await?,
             SetType::Variable => self.execute_variables(scalars).await?,
+            SetType::SettingsQuery => {
+                return Err(ErrorCode::BadArguments(
+                    "Query level setting can not be set",
+                ));
+            }
         }
 
         Ok(PipelineBuildResult::create())

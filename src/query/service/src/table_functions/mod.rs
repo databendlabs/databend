@@ -21,6 +21,7 @@ mod numbers;
 mod openai;
 mod others;
 mod show_grants;
+mod show_variables;
 mod srf;
 mod sync_crash_me;
 mod table_function;

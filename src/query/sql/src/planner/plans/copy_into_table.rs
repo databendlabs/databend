@@ -61,7 +61,7 @@ impl Display for ValidationMode {
 
 impl FromStr for ValidationMode {
     type Err = String;
-    fn from_str(s: &str) -> Result<Self, String> {
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
         match s.to_uppercase().as_str() {
             "" => Ok(ValidationMode::None),
             "RETURN_ERRORS" => Ok(ValidationMode::ReturnErrors),
@@ -130,7 +130,6 @@ pub struct CopyIntoTablePlan {
 
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,
-    pub force: bool,
 
     pub stage_table_info: StageTableInfo,
     pub query: Option<Box<Plan>>,
@@ -138,15 +137,21 @@ pub struct CopyIntoTablePlan {
     pub is_transform: bool,
 
     pub enable_distributed: bool,
+
+    pub files_collected: bool,
 }
 
 impl CopyIntoTablePlan {
     pub async fn collect_files(&mut self, ctx: &dyn TableContext) -> Result<()> {
+        if self.files_collected {
+            return Ok(());
+        }
+        self.files_collected = true;
         ctx.set_status_info("begin to list files");
         let start = Instant::now();
 
         let stage_table_info = &self.stage_table_info;
-        let max_files = stage_table_info.stage_info.copy_options.max_files;
+        let max_files = stage_table_info.copy_into_table_options.max_files;
         let max_files = if max_files == 0 {
             None
         } else {
@@ -155,15 +160,16 @@ impl CopyIntoTablePlan {
 
         let thread_num = ctx.get_settings().get_max_threads()? as usize;
         let operator = init_stage_operator(&stage_table_info.stage_info)?;
+        let options = &stage_table_info.copy_into_table_options;
         let all_source_file_infos = if operator.info().native_capability().blocking {
-            if self.force {
+            if options.force {
                 stage_table_info
                     .files_info
                     .blocking_list(&operator, max_files)
             } else {
                 stage_table_info.files_info.blocking_list(&operator, None)
             }
-        } else if self.force {
+        } else if options.force {
             stage_table_info
                 .files_info
                 .list(&operator, thread_num, max_files)
@@ -187,10 +193,8 @@ impl CopyIntoTablePlan {
             start.elapsed()
         ));
 
-        let (need_copy_file_infos, duplicated) = if self.force {
-            if !self.stage_table_info.stage_info.copy_options.purge
-                && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT
-            {
+        let (need_copy_file_infos, duplicated) = if options.force {
+            if !options.purge && all_source_file_infos.len() > COPY_MAX_FILES_PER_COMMIT {
                 return Err(ErrorCode::Internal(COPY_MAX_FILES_COMMIT_MSG));
             }
             info!(
@@ -261,7 +265,6 @@ impl Debug for CopyIntoTablePlan {
             table_name,
             no_file_to_copy,
             validation_mode,
-            force,
             stage_table_info,
             query,
             ..
@@ -274,15 +277,12 @@ impl Debug for CopyIntoTablePlan {
         write!(f, ", no_file_to_copy: {no_file_to_copy:?}")?;
         write!(f, ", validation_mode: {validation_mode:?}")?;
         write!(f, ", from: {stage_table_info:?}")?;
-        write!(f, " force: {force}")?;
-        write!(f, " is_from: {force}")?;
         write!(f, " query: {query:?}")?;
         Ok(())
     }
 }
 
 /// CopyPlan supports CopyIntoTable & CopyIntoStage
-
 impl CopyIntoTablePlan {
     fn copy_into_table_schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![

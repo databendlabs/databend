@@ -94,7 +94,7 @@ pub fn split_equivalent_predicate(scalar: &ScalarExpr) -> Option<(ScalarExpr, Sc
 }
 
 pub fn satisfied_by(scalar: &ScalarExpr, prop: &RelationalProperty) -> bool {
-    scalar.used_columns().is_subset(&prop.output_columns)
+    scalar.used_columns().is_subset(&prop.output_columns) && !scalar.used_columns().is_empty()
 }
 
 /// Helper to determine join condition type from a scalar expression.
@@ -128,38 +128,40 @@ impl<'a> JoinPredicate<'a> {
             return Self::ALL(scalar);
         }
 
+        if let ScalarExpr::FunctionCall(func) = scalar {
+            if func.arguments.len() > 2 {
+                return Self::Other(scalar);
+            }
+
+            if func.arguments.len() == 2 {
+                let is_equal_op = func.func_name.as_str() == "eq";
+                let left = &func.arguments[0];
+                let right = &func.arguments[1];
+
+                if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
+                    return Self::Both {
+                        left,
+                        right,
+                        is_equal_op,
+                    };
+                }
+
+                if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
+                    return Self::Both {
+                        left: right,
+                        right: left,
+                        is_equal_op,
+                    };
+                }
+            }
+        }
+
         if satisfied_by(scalar, left_prop) {
             return Self::Left(scalar);
         }
 
         if satisfied_by(scalar, right_prop) {
             return Self::Right(scalar);
-        }
-
-        if let ScalarExpr::FunctionCall(func) = scalar {
-            if func.arguments.len() != 2 {
-                return Self::Other(scalar);
-            }
-
-            let is_equal_op = func.func_name.as_str() == "eq";
-            let left = &func.arguments[0];
-            let right = &func.arguments[1];
-
-            if satisfied_by(left, left_prop) && satisfied_by(right, right_prop) {
-                return Self::Both {
-                    left,
-                    right,
-                    is_equal_op,
-                };
-            }
-
-            if satisfied_by(right, left_prop) && satisfied_by(left, right_prop) {
-                return Self::Both {
-                    left: right,
-                    right: left,
-                    is_equal_op,
-                };
-            }
         }
 
         Self::Other(scalar)
@@ -231,4 +233,18 @@ pub fn wrap_cast(scalar: &ScalarExpr, target_type: &DataType) -> ScalarExpr {
         argument: Box::new(scalar.clone()),
         target_type: Box::new(target_type.clone()),
     })
+}
+
+pub fn wrap_nullable(scalar: ScalarExpr, source_type: &DataType) -> ScalarExpr {
+    if source_type.is_nullable_or_null() {
+        scalar
+    } else {
+        let target_type = source_type.wrap_nullable();
+        ScalarExpr::CastExpr(CastExpr {
+            span: scalar.span(),
+            is_try: false,
+            argument: Box::new(scalar),
+            target_type: Box::new(target_type),
+        })
+    }
 }

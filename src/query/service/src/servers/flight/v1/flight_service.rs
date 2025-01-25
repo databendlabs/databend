@@ -14,23 +14,24 @@
 
 use std::pin::Pin;
 
-use databend_common_arrow::arrow_format::flight::data::Action;
-use databend_common_arrow::arrow_format::flight::data::ActionType;
-use databend_common_arrow::arrow_format::flight::data::Criteria;
-use databend_common_arrow::arrow_format::flight::data::Empty;
-use databend_common_arrow::arrow_format::flight::data::FlightData;
-use databend_common_arrow::arrow_format::flight::data::FlightDescriptor;
-use databend_common_arrow::arrow_format::flight::data::FlightInfo;
-use databend_common_arrow::arrow_format::flight::data::HandshakeRequest;
-use databend_common_arrow::arrow_format::flight::data::HandshakeResponse;
-use databend_common_arrow::arrow_format::flight::data::PutResult;
-use databend_common_arrow::arrow_format::flight::data::Result as FlightResult;
-use databend_common_arrow::arrow_format::flight::data::SchemaResult;
-use databend_common_arrow::arrow_format::flight::data::Ticket;
-use databend_common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
+use arrow_flight::flight_service_server::FlightService;
+use arrow_flight::Action;
+use arrow_flight::ActionType;
+use arrow_flight::Criteria;
+use arrow_flight::Empty;
+use arrow_flight::FlightData;
+use arrow_flight::FlightDescriptor;
+use arrow_flight::FlightInfo;
+use arrow_flight::HandshakeRequest;
+use arrow_flight::HandshakeResponse;
+use arrow_flight::PollInfo;
+use arrow_flight::PutResult;
+use arrow_flight::Result as FlightResult;
+use arrow_flight::SchemaResult;
+use arrow_flight::Ticket;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use futures_util::stream;
 use tokio_stream::Stream;
@@ -90,6 +91,13 @@ impl FlightService for DatabendQueryFlightService {
     }
 
     #[async_backtrace::framed]
+    async fn poll_flight_info(&self, _request: Request<FlightDescriptor>) -> Response<PollInfo> {
+        Err(Status::unimplemented(
+            "DatabendQuery does not implement poll_flight_info.",
+        ))
+    }
+
+    #[async_backtrace::framed]
     async fn get_schema(&self, _: Request<FlightDescriptor>) -> Response<SchemaResult> {
         Err(Status::unimplemented(
             "DatabendQuery does not implement get_schema.",
@@ -100,7 +108,7 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
         let _guard = root.set_local_parent();
 
         match request.get_metadata("x-type")?.as_str() {
@@ -149,7 +157,7 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
-        let root = databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+        let root = databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
         let secret = request.get_metadata("secret")?;
 
@@ -170,7 +178,7 @@ impl FlightService for DatabendQueryFlightService {
         {
             Err(cause) => Err(cause.into()),
             Ok(body) => Ok(RawResponse::new(
-                Box::pin(tokio_stream::once(Ok(FlightResult { body })))
+                Box::pin(tokio_stream::once(Ok(FlightResult { body: body.into() })))
                     as FlightStream<FlightResult>,
             )),
         }

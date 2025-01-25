@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::base::GlobalUniqName;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
@@ -27,7 +26,6 @@ use databend_common_expression::arrow::serialize_column;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::PartitionedPayload;
-use databend_common_hashtable::HashtableLike;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -36,56 +34,58 @@ use futures_util::future::BoxFuture;
 use log::info;
 use opendal::Operator;
 
-use crate::pipelines::processors::transforms::aggregator::serialize_aggregate;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
-use crate::pipelines::processors::transforms::aggregator::HashTablePayload;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
-use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::sessions::QueryContext;
+use crate::spillers::Spiller;
+use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerType;
 
-pub struct TransformAggregateSpillWriter<Method: HashMethodBounds> {
+pub struct TransformAggregateSpillWriter {
     ctx: Arc<QueryContext>,
-    method: Method,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    params: Arc<AggregatorParams>,
+    _params: Arc<AggregatorParams>,
 
-    operator: Operator,
-    location_prefix: String,
+    spiller: Arc<Spiller>,
     spilled_block: Option<DataBlock>,
-    spilling_meta: Option<AggregateMeta<Method, usize>>,
+    spilling_meta: Option<AggregateMeta>,
     spilling_future: Option<BoxFuture<'static, Result<DataBlock>>>,
 }
 
-impl<Method: HashMethodBounds> TransformAggregateSpillWriter<Method> {
-    pub fn create(
+impl TransformAggregateSpillWriter {
+    pub fn try_create(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        method: Method,
         operator: Operator,
         params: Arc<AggregatorParams>,
         location_prefix: String,
-    ) -> Box<dyn Processor> {
-        Box::new(TransformAggregateSpillWriter::<Method> {
+    ) -> Result<Box<dyn Processor>> {
+        let config = SpillerConfig {
+            spiller_type: SpillerType::Aggregation,
+            location_prefix,
+            disk_spill: None,
+            use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+        };
+
+        let spiller = Spiller::create(ctx.clone(), operator, config.clone())?;
+        Ok(Box::new(TransformAggregateSpillWriter {
             ctx,
-            method,
             input,
             output,
-            params,
-            operator,
-            location_prefix,
+            _params: params,
+            spiller: Arc::new(spiller),
             spilled_block: None,
             spilling_meta: None,
             spilling_future: None,
-        })
+        }))
     }
 }
 
 #[async_trait::async_trait]
-impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Method> {
+impl Processor for TransformAggregateSpillWriter {
     fn name(&self) -> String {
         String::from("TransformAggregateSpillWriter")
     }
@@ -127,19 +127,12 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
 
             if let Some(block_meta) = data_block
                 .get_meta()
-                .and_then(AggregateMeta::<Method, usize>::downcast_ref_from)
+                .and_then(AggregateMeta::downcast_ref_from)
             {
-                if matches!(block_meta, AggregateMeta::Spilling(_)) {
-                    self.input.set_not_need_data();
-                    let block_meta = data_block.take_meta().unwrap();
-                    self.spilling_meta = AggregateMeta::<Method, usize>::downcast_from(block_meta);
-                    return Ok(Event::Sync);
-                }
-
                 if matches!(block_meta, AggregateMeta::AggregateSpilling(_)) {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
-                    self.spilling_meta = AggregateMeta::<Method, usize>::downcast_from(block_meta);
+                    self.spilling_meta = AggregateMeta::downcast_from(block_meta);
                     return Ok(Event::Sync);
                 }
             }
@@ -160,29 +153,15 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
     fn process(&mut self) -> Result<()> {
         if let Some(spilling_meta) = self.spilling_meta.take() {
             match spilling_meta {
-                AggregateMeta::Spilling(payload) => {
-                    self.spilling_future = Some(spilling_aggregate_payload(
-                        self.ctx.clone(),
-                        self.operator.clone(),
-                        &self.method,
-                        &self.location_prefix,
-                        &self.params,
-                        payload,
-                    )?);
-
-                    return Ok(());
-                }
                 AggregateMeta::AggregateSpilling(payload) => {
-                    self.spilling_future = Some(agg_spilling_aggregate_payload::<Method>(
+                    self.spilling_future = Some(agg_spilling_aggregate_payload(
                         self.ctx.clone(),
-                        self.operator.clone(),
-                        &self.location_prefix,
+                        self.spiller.clone(),
                         payload,
                     )?);
 
                     return Ok(());
                 }
-
                 _ => {
                     return Err(ErrorCode::Internal(""));
                 }
@@ -202,21 +181,18 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSpillWriter<Metho
     }
 }
 
-pub fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
+pub fn agg_spilling_aggregate_payload(
     ctx: Arc<QueryContext>,
-    operator: Operator,
-    location_prefix: &str,
+    spiller: Arc<Spiller>,
     partitioned_payload: PartitionedPayload,
 ) -> Result<BoxFuture<'static, Result<DataBlock>>> {
-    let unique_name = GlobalUniqName::unique();
-    let location = format!("{}/{}", location_prefix, unique_name);
-
     let mut write_size = 0;
     let partition_count = partitioned_payload.partition_count();
     let mut write_data = Vec::with_capacity(partition_count);
     let mut spilled_buckets_payloads = Vec::with_capacity(partition_count);
     // Record how many rows are spilled.
     let mut rows = 0;
+    let location = spiller.create_unique_location();
     for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
         if payload.len() == 0 {
             continue;
@@ -249,147 +225,40 @@ pub fn agg_spilling_aggregate_payload<Method: HashMethodBounds>(
 
     Ok(Box::pin(async move {
         let instant = Instant::now();
-
-        let mut write_bytes = 0;
-
         if !write_data.is_empty() {
-            let mut writer = operator
-                .writer_with(&location)
-                .chunk(8 * 1024 * 1024)
+            let (location, write_bytes) = spiller
+                .spill_stream_aggregate_buffer(Some(location), write_data)
                 .await?;
-            for write_bucket_data in write_data.into_iter() {
-                for data in write_bucket_data.into_iter() {
-                    write_bytes += data.len();
-                    writer.write(data).await?;
-                }
+            // perf
+            {
+                Profile::record_usize_profile(ProfileStatisticsName::RemoteSpillWriteCount, 1);
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::RemoteSpillWriteBytes,
+                    write_bytes,
+                );
+                Profile::record_usize_profile(
+                    ProfileStatisticsName::RemoteSpillWriteTime,
+                    instant.elapsed().as_millis() as usize,
+                );
             }
 
-            writer.close().await?;
-        }
+            {
+                let progress_val = ProgressValues {
+                    rows,
+                    bytes: write_bytes,
+                };
+                ctx.get_aggregate_spill_progress().incr(&progress_val);
+            }
 
-        // perf
-        {
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::SpillWriteTime,
-                instant.elapsed().as_millis() as usize,
+            info!(
+                "Write aggregate spill {} successfully, elapsed: {:?}",
+                location,
+                instant.elapsed()
             );
         }
 
-        {
-            let progress_val = ProgressValues {
-                rows,
-                bytes: write_bytes,
-            };
-            ctx.get_aggregate_spill_progress().incr(&progress_val);
-        }
-
-        info!(
-            "Write aggregate spill {} successfully, elapsed: {:?}",
-            location,
-            instant.elapsed()
-        );
-
-        Ok(DataBlock::empty_with_meta(
-            AggregateMeta::<Method, usize>::create_spilled(spilled_buckets_payloads),
-        ))
-    }))
-}
-
-pub fn spilling_aggregate_payload<Method: HashMethodBounds>(
-    ctx: Arc<QueryContext>,
-    operator: Operator,
-    method: &Method,
-    location_prefix: &str,
-    params: &Arc<AggregatorParams>,
-    mut payload: HashTablePayload<PartitionedHashMethod<Method>, usize>,
-) -> Result<BoxFuture<'static, Result<DataBlock>>> {
-    let unique_name = GlobalUniqName::unique();
-    let location = format!("{}/{}", location_prefix, unique_name);
-
-    let mut write_size = 0;
-    let mut write_data = Vec::with_capacity(256);
-    let mut spilled_buckets_payloads = Vec::with_capacity(256);
-    // Record how many rows are spilled.
-    let mut rows = 0;
-    for (bucket, inner_table) in payload.cell.hashtable.iter_tables_mut().enumerate() {
-        if inner_table.len() == 0 {
-            continue;
-        }
-
-        let data_block = serialize_aggregate(method, params, inner_table)?;
-        rows += data_block.num_rows();
-
-        let begin = write_size;
-        let columns = data_block.columns().to_vec();
-        let mut columns_data = Vec::with_capacity(columns.len());
-        let mut columns_layout = Vec::with_capacity(columns.len());
-
-        for column in columns.into_iter() {
-            let column = column.to_column(data_block.num_rows());
-            let column_data = serialize_column(&column);
-            write_size += column_data.len() as u64;
-            columns_layout.push(column_data.len() as u64);
-            columns_data.push(column_data);
-        }
-
-        write_data.push(columns_data);
-        spilled_buckets_payloads.push(BucketSpilledPayload {
-            bucket: bucket as isize,
-            location: location.clone(),
-            data_range: begin..write_size,
-            columns_layout,
-            max_partition_count: 0,
-        });
-    }
-
-    Ok(Box::pin(async move {
-        let instant = Instant::now();
-
-        let mut write_bytes = 0;
-
-        if !write_data.is_empty() {
-            let mut writer = operator
-                .writer_with(&location)
-                .chunk(8 * 1024 * 1024)
-                .await?;
-            for write_bucket_data in write_data.into_iter() {
-                for data in write_bucket_data.into_iter() {
-                    write_bytes += data.len();
-                    writer.write(data).await?;
-                }
-            }
-
-            writer.close().await?;
-        }
-
-        // perf
-        {
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteCount, 1);
-            Profile::record_usize_profile(ProfileStatisticsName::SpillWriteBytes, write_bytes);
-            Profile::record_usize_profile(
-                ProfileStatisticsName::SpillWriteTime,
-                instant.elapsed().as_millis() as usize,
-            );
-        }
-
-        {
-            let progress_val = ProgressValues {
-                rows,
-                bytes: write_bytes,
-            };
-            ctx.get_aggregate_spill_progress().incr(&progress_val);
-        }
-
-        info!(
-            "Write aggregate spill {} successfully, elapsed: {:?}",
-            location,
-            instant.elapsed()
-        );
-
-        Ok(DataBlock::empty_with_meta(
-            AggregateMeta::<Method, usize>::create_spilled(spilled_buckets_payloads),
-        ))
+        Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
+            spilled_buckets_payloads,
+        )))
     }))
 }

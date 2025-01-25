@@ -25,9 +25,9 @@ use log::debug;
 use log::info;
 use parking_lot::RwLock;
 
+use super::string_block::block_to_strings;
+use super::string_block::StringBlock;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;
-use crate::servers::http::v1::string_block::block_to_strings;
-use crate::servers::http::v1::StringBlock;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Wait {
@@ -143,6 +143,9 @@ impl PageManager {
                 i += 1;
             } else {
                 *remain_size = 0;
+                if res.is_empty() && i == 0 {
+                    i += 1
+                }
             }
         }
         res.extend_from_slice(&rows[..i]);
@@ -163,6 +166,11 @@ impl PageManager {
                     remain_size -= size;
                     remain_rows -= 1;
                 } else {
+                    if res.is_empty() {
+                        res.push(row);
+                    } else {
+                        self.row_buffer.push_front(row);
+                    }
                     remain_size = 0;
                 }
             } else {

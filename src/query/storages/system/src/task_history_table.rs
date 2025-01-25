@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use chrono_tz::Tz::UTC;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -41,6 +40,7 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_run_schema;
+use jiff::tz::TimeZone;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -163,14 +163,16 @@ impl AsyncSystemTable for TaskHistoryTable {
                 find_lt_filter(&expr, &mut |col_name, scalar| {
                     if col_name == "scheduled_time" {
                         if let Scalar::Timestamp(s) = scalar {
-                            scheduled_time_end = Some(s.to_timestamp(UTC).to_rfc3339());
+                            scheduled_time_end =
+                                Some(s.to_timestamp(TimeZone::UTC).timestamp().to_string());
                         }
                     }
                 });
                 find_gt_filter(&expr, &mut |col_name, scalar| {
                     if col_name == "scheduled_time" {
                         if let Scalar::Timestamp(s) = scalar {
-                            scheduled_time_start = Some(s.to_timestamp(UTC).to_rfc3339());
+                            scheduled_time_start =
+                                Some(s.to_timestamp(TimeZone::UTC).timestamp().to_string());
                         }
                     }
                 });

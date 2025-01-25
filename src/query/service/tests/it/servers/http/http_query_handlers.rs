@@ -21,27 +21,28 @@ use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
 use databend_common_base::base::tokio;
+use databend_common_base::headers::HEADER_VERSION;
 use databend_common_config::UserAuthConfig;
 use databend_common_config::UserConfig;
+use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::PasswordHashMethod;
 use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
-use databend_query::servers::http::middleware::get_client_ip;
+use databend_query::servers::http::error::QueryError;
 use databend_query::servers::http::middleware::json_response;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSessionConf;
-use databend_query::servers::http::v1::QueryError;
 use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
-use databend_storages_common_txn::TxnState;
+use databend_storages_common_session::TxnState;
 use futures_util::future::try_join_all;
 use headers::Header;
 use headers::HeaderMapExt;
@@ -184,6 +185,10 @@ impl TestHttpQueryRequest {
             .await
             .map_err(|e| ErrorCode::Internal(e.to_string()))
             .unwrap();
+        assert_eq!(
+            resp.header(HEADER_VERSION),
+            Some(DATABEND_SEMVER.to_string().as_str())
+        );
 
         let status_code = resp.status();
         let body = resp.into_body().into_string().await.unwrap();
@@ -197,7 +202,7 @@ impl TestHttpQueryRequest {
 
 #[derive(Debug, Clone)]
 struct TestHttpQueryFetchReply {
-    resps: Vec<(StatusCode, QueryResponse)>,
+    pub resps: Vec<(StatusCode, QueryResponse)>,
 }
 
 impl TestHttpQueryFetchReply {
@@ -285,7 +290,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 21, "{:?}", result);
+    assert_eq!(result.schema.len(), 23, "{:?}", result);
 
     // get state
     let uri = result.stats_uri.unwrap();
@@ -324,7 +329,7 @@ async fn test_simple_sql() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"wrong page number 2"}}"#
+        r#"{"error":{"code":404,"message":"wrong page number 2"}}"#
     );
 
     // final
@@ -588,7 +593,7 @@ async fn test_pagination() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     assert_eq!(
         body,
-        r#"{"error":{"code":"404","message":"wrong page number 6"}}"#
+        r#"{"error":{"code":404,"message":"wrong page number 6"}}"#
     );
 
     let mut next_uri = result.next_uri.clone().unwrap();
@@ -705,7 +710,7 @@ async fn test_insert() -> Result<()> {
 
     let sqls = vec![
         ("create table t(a int) engine=fuse", 0, 0),
-        ("insert into t(a) values (1),(2)", 0, 2),
+        ("insert into t(a) values (1),(2)", 1, 2),
         ("select * from t", 2, 0),
     ];
 
@@ -855,10 +860,7 @@ async fn post_sql(sql: &str, wait_time_secs: u64) -> Result<(StatusCode, QueryRe
 }
 
 pub fn create_endpoint() -> Result<EndpointType> {
-    Ok(Route::new().nest(
-        "/v1/query",
-        query_route(HttpHandlerKind::Query).around(json_response),
-    ))
+    Ok(Route::new().nest("/v1", query_route().around(json_response)))
 }
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
@@ -1321,7 +1323,7 @@ async fn test_func_object_keys() -> Result<()> {
         ),
         (
             "INSERT INTO objects_test1 VALUES (1, parse_json('{\"a\": 1, \"b\": [1,2,3]}'), parse_json('{\"1\": 2}'));",
-            0,
+            1,
         ),
         (
             "SELECT id, object_keys(obj), object_keys(var) FROM objects_test1;",
@@ -1347,9 +1349,9 @@ async fn test_multi_partition() -> Result<()> {
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", 0),
-        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", 0),
-        ("insert into tb2 values(2, 'mysql'),(2, 'databend')", 0),
-        ("insert into tb2 values(3, 'mysql'),(3, 'databend')", 0),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", 1),
+        ("insert into tb2 values(2, 'mysql'),(2, 'databend')", 1),
+        ("insert into tb2 values(3, 'mysql'),(3, 'databend')", 1),
         ("select * from tb2;", 6),
     ];
 
@@ -1382,6 +1384,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1391,6 +1394,8 @@ async fn test_affect() -> Result<()> {
                     ("timezone".to_string(), "Asia/Shanghai".to_string()),
                 ])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1405,6 +1410,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1414,6 +1420,8 @@ async fn test_affect() -> Result<()> {
                     "6".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1423,6 +1431,7 @@ async fn test_affect() -> Result<()> {
             serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1432,6 +1441,8 @@ async fn test_affect() -> Result<()> {
                     "6".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1443,6 +1454,7 @@ async fn test_affect() -> Result<()> {
                 name: "db2".to_string(),
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("db2".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1452,6 +1464,8 @@ async fn test_affect() -> Result<()> {
                     "6".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1465,6 +1479,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![true],
             }),
             Some(HttpSessionConf {
+                catalog: Some("default".to_string()),
                 database: Some("default".to_string()),
                 role: Some("account_admin".to_string()),
                 secondary_roles: None,
@@ -1474,6 +1489,8 @@ async fn test_affect() -> Result<()> {
                     "Asia/Shanghai".to_string(),
                 )])),
                 txn_state: Some(TxnState::AutoCommit),
+                need_sticky: false,
+                need_keep_alive: false,
                 last_server_info: None,
                 last_query_ids: vec![],
                 internal: None,
@@ -1512,13 +1529,11 @@ async fn test_session_secondary_roles() -> Result<()> {
     let json = serde_json::json!({"sql":  "SELECT 1", "session": {"secondary_roles": vec!["role1".to_string()]}});
     let (_, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
     assert!(result.error.is_some());
-    assert!(
-        result
-            .error
-            .unwrap()
-            .message
-            .contains("only ALL or NONE is allowed on setting secondary roles")
-    );
+    assert!(result
+        .error
+        .unwrap()
+        .message
+        .contains("only ALL or NONE is allowed on setting secondary roles"));
     assert_eq!(result.state, ExecuteStateKind::Failed);
 
     let json = serde_json::json!({"sql":  "select 1", "session": {"role": "public", "secondary_roles": Vec::<String>::new()}});
@@ -1661,23 +1676,13 @@ async fn test_txn_timeout() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_parse_ip() -> Result<()> {
-    let req = poem::Request::builder()
-        .header("X-Forwarded-For", "1.2.3.4")
-        .finish();
-    let ip = get_client_ip(&req);
-    assert_eq!(ip, Some("1.2.3.4".to_string()));
-    Ok(())
-}
-
 #[tokio::test(flavor = "current_thread")]
 async fn test_has_result_set() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
     let sqls = vec![
         ("create table tb2(id int, c1 varchar) Engine=Fuse;", false),
-        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", false),
+        ("insert into tb2 values(1, 'mysql'),(1, 'databend')", true),
         ("select * from tb2;", true),
     ];
 
@@ -1710,6 +1715,20 @@ async fn test_max_size_per_page() -> Result<()> {
     let target = 10485760; // 10M
     assert!(len < target);
     assert!(len > target - 2000);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_max_size_per_page_total_rows() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    // bytes_limit / rows_limit = 1024 * 1024 * 10 / 10000 = 1048.567
+    let sql = "select repeat('1', 1050) as a from numbers(20000)";
+    let wait_time_secs = 5;
+    let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
+    let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+    assert!(reply.error().is_none(), "{:?}", reply.error());
+    assert_eq!(reply.resps.len(), 3);
+    assert_eq!(reply.data().len(), 20000, "{:?}", reply.error());
     Ok(())
 }
 

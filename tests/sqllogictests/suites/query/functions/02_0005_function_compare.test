@@ -72,6 +72,16 @@ select '\%' not like '\%'
 ----
 1
 
+query B
+select ('PROMO' || number::string) a, a like 'PROMO%',
+	a < 'PROMO1', a > 'PROMO1',
+	a <= 'PROMO1' , a >= 'PROMO1',
+	a = 'PROMO1'  from numbers(3) order by a
+----
+PROMO0	1	1	0	1	0	0
+PROMO1	1	0	0	1	1	1
+PROMO2	1	0	1	0	1	0
+
 statement ok
 select * from numbers(10) where null = true
 
@@ -1063,6 +1073,11 @@ query B
 SELECT parse_json('"cd"') not regexp '.*'
 ----
 0
+
+query BB
+SELECT parse_json('{"a":111}') = parse_json('{"a":123,"b":"xxx"}'), parse_json('{"a":123,"b":"xxx"}') = parse_json('{"a":111}')
+----
+0 0
 
 statement ok
 drop table if exists t

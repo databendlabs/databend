@@ -279,12 +279,17 @@ pub struct ConfigViaEnv {
     pub grpc_tls_server_cert: String,
     pub grpc_tls_server_key: String,
 
-    pub config_id: String,
     pub kvsrv_listen_host: String,
     pub kvsrv_advertise_host: String,
     pub kvsrv_api_port: u16,
     pub kvsrv_raft_dir: String,
     pub kvsrv_no_sync: bool,
+
+    pub kvsrv_log_cache_max_items: u64,
+    pub kvsrv_log_cache_capacity: u64,
+    pub kvsrv_log_wal_chunk_max_records: u64,
+    pub kvsrv_log_wal_chunk_max_size: u64,
+
     pub kvsrv_snapshot_logs_since_last: u64,
     pub kvsrv_heartbeat_interval: u64,
     pub kvsrv_install_snapshot_timeout: u64,
@@ -300,8 +305,6 @@ pub struct ConfigViaEnv {
     pub kvsrv_single: bool,
     pub metasrv_join: Vec<String>,
     pub kvsrv_id: u64,
-    pub sled_tree_prefix: String,
-    pub sled_max_cache_size_mb: u64,
     pub cluster_name: String,
 }
 
@@ -332,12 +335,17 @@ impl From<Config> for ConfigViaEnv {
             metasrv_grpc_api_advertise_host: cfg.grpc_api_advertise_host,
             grpc_tls_server_cert: cfg.grpc_tls_server_cert,
             grpc_tls_server_key: cfg.grpc_tls_server_key,
-            config_id: cfg.raft_config.config_id,
             kvsrv_listen_host: cfg.raft_config.raft_listen_host,
             kvsrv_advertise_host: cfg.raft_config.raft_advertise_host,
             kvsrv_api_port: cfg.raft_config.raft_api_port,
             kvsrv_raft_dir: cfg.raft_config.raft_dir,
             kvsrv_no_sync: cfg.raft_config.no_sync,
+
+            kvsrv_log_cache_max_items: 1_000_000,
+            kvsrv_log_cache_capacity: 1024 * 1024 * 1024,
+            kvsrv_log_wal_chunk_max_records: 100_000,
+            kvsrv_log_wal_chunk_max_size: 256 * 1024 * 1024,
+
             kvsrv_snapshot_logs_since_last: cfg.raft_config.snapshot_logs_since_last,
             kvsrv_heartbeat_interval: cfg.raft_config.heartbeat_interval,
             kvsrv_install_snapshot_timeout: cfg.raft_config.install_snapshot_timeout,
@@ -353,8 +361,6 @@ impl From<Config> for ConfigViaEnv {
             kvsrv_single: cfg.raft_config.single,
             metasrv_join: cfg.raft_config.join,
             kvsrv_id: cfg.raft_config.id,
-            sled_tree_prefix: cfg.raft_config.sled_tree_prefix,
-            sled_max_cache_size_mb: cfg.raft_config.sled_max_cache_size_mb,
             cluster_name: cfg.raft_config.cluster_name,
         }
     }
@@ -365,12 +371,17 @@ impl From<Config> for ConfigViaEnv {
 impl Into<Config> for ConfigViaEnv {
     fn into(self) -> Config {
         let raft_config = RaftConfig {
-            config_id: self.config_id,
             raft_listen_host: self.kvsrv_listen_host,
             raft_advertise_host: self.kvsrv_advertise_host,
             raft_api_port: self.kvsrv_api_port,
             raft_dir: self.kvsrv_raft_dir,
             no_sync: self.kvsrv_no_sync,
+
+            log_cache_max_items: self.kvsrv_log_cache_max_items,
+            log_cache_capacity: self.kvsrv_log_cache_capacity,
+            log_wal_chunk_max_records: self.kvsrv_log_wal_chunk_max_records,
+            log_wal_chunk_max_size: self.kvsrv_log_wal_chunk_max_size,
+
             snapshot_logs_since_last: self.kvsrv_snapshot_logs_since_last,
             heartbeat_interval: self.kvsrv_heartbeat_interval,
             install_snapshot_timeout: self.kvsrv_install_snapshot_timeout,
@@ -390,8 +401,6 @@ impl Into<Config> for ConfigViaEnv {
             // Do not allow to leave via environment variable
             leave_id: None,
             id: self.kvsrv_id,
-            sled_tree_prefix: self.sled_tree_prefix,
-            sled_max_cache_size_mb: self.sled_max_cache_size_mb,
             cluster_name: self.cluster_name,
         };
         let log_config = LogConfig {
@@ -439,11 +448,6 @@ impl Into<Config> for ConfigViaEnv {
 #[clap(about, version, author)]
 #[serde(default)]
 pub struct RaftConfig {
-    /// Identify a config.
-    /// This is only meant to make debugging easier with more than one Config involved.
-    #[clap(long, default_value = "")]
-    pub config_id: String,
-
     /// The local listening host for metadata communication.
     /// This config does not need to be stored in raft-store,
     /// only used when metasrv startup and listen to.
@@ -457,7 +461,7 @@ pub struct RaftConfig {
     #[clap(long, default_value_t = get_default_raft_advertise_host())]
     pub raft_advertise_host: String,
 
-    /// The listening port for metadata communication.
+    /// The listening port for raft communication.
     #[clap(long, default_value = "28004")]
     pub raft_api_port: u16,
 
@@ -470,6 +474,22 @@ pub struct RaftConfig {
     /// You should only use this in a testing environment, unless YOU KNOW WHAT YOU ARE DOING.
     #[clap(long)]
     pub no_sync: bool,
+
+    /// The maximum number of log entries for log entries cache. Default value is 1_000_000.
+    #[clap(long, default_value = "1000000")]
+    pub log_cache_max_items: u64,
+
+    /// The maximum memory in bytes for the log entries cache. Default value is 1G.
+    #[clap(long, default_value = "1073741824")]
+    pub log_cache_capacity: u64,
+
+    /// Maximum number of records in a chunk of raft-log WAL. Default value is 100_000.
+    #[clap(long, default_value = "100000")]
+    pub log_wal_chunk_max_records: u64,
+
+    /// Maximum size in bytes for a chunk of raft-log WAL. Default value si 256M
+    #[clap(long, default_value = "268435456")]
+    pub log_wal_chunk_max_size: u64,
 
     /// The number of logs since the last snapshot to trigger next snapshot.
     #[clap(long, default_value = "1024")]
@@ -513,7 +533,7 @@ pub struct RaftConfig {
 
     /// The total cache size for snapshot blocks.
     ///
-    /// By default it is 1GB.
+    /// By default, it is 1GB.
     #[clap(long, default_value = "1073741824")]
     pub snapshot_db_block_cache_size: u64,
 
@@ -548,14 +568,6 @@ pub struct RaftConfig {
     #[clap(long, default_value = "0")]
     pub id: u64,
 
-    /// For test only: specifies the tree name prefix
-    #[clap(long, default_value = "")]
-    pub sled_tree_prefix: String,
-
-    /// The maximum memory in MB that sled can use for caching. Default is 10GB
-    #[clap(long, default_value = "10240")]
-    pub sled_max_cache_size_mb: u64,
-
     /// The node name. If the user specifies a name, the user-supplied name is used,
     /// if not, the default name is used
     #[clap(long, default_value = "foo_cluster")]
@@ -576,12 +588,18 @@ impl Default for RaftConfig {
 impl From<RaftConfig> for InnerRaftConfig {
     fn from(x: RaftConfig) -> InnerRaftConfig {
         InnerRaftConfig {
-            config_id: x.config_id,
+            config_id: "".to_string(),
             raft_listen_host: x.raft_listen_host,
             raft_advertise_host: x.raft_advertise_host,
             raft_api_port: x.raft_api_port,
             raft_dir: x.raft_dir,
             no_sync: x.no_sync,
+
+            log_cache_max_items: x.log_cache_max_items,
+            log_cache_capacity: x.log_cache_capacity,
+            log_wal_chunk_max_records: x.log_wal_chunk_max_records,
+            log_wal_chunk_max_size: x.log_wal_chunk_max_size,
+
             snapshot_logs_since_last: x.snapshot_logs_since_last,
             heartbeat_interval: x.heartbeat_interval,
             install_snapshot_timeout: x.install_snapshot_timeout,
@@ -598,8 +616,6 @@ impl From<RaftConfig> for InnerRaftConfig {
             leave_via: x.leave_via,
             leave_id: x.leave_id,
             id: x.id,
-            sled_tree_prefix: x.sled_tree_prefix,
-            sled_max_cache_size_mb: x.sled_max_cache_size_mb,
             cluster_name: x.cluster_name,
             wait_leader_timeout: x.wait_leader_timeout,
         }
@@ -609,12 +625,17 @@ impl From<RaftConfig> for InnerRaftConfig {
 impl From<InnerRaftConfig> for RaftConfig {
     fn from(inner: InnerRaftConfig) -> Self {
         Self {
-            config_id: inner.config_id,
             raft_listen_host: inner.raft_listen_host,
             raft_advertise_host: inner.raft_advertise_host,
             raft_api_port: inner.raft_api_port,
             raft_dir: inner.raft_dir,
             no_sync: inner.no_sync,
+
+            log_cache_max_items: inner.log_cache_max_items,
+            log_cache_capacity: inner.log_cache_capacity,
+            log_wal_chunk_max_records: inner.log_wal_chunk_max_records,
+            log_wal_chunk_max_size: inner.log_wal_chunk_max_size,
+
             snapshot_logs_since_last: inner.snapshot_logs_since_last,
             heartbeat_interval: inner.heartbeat_interval,
             install_snapshot_timeout: inner.install_snapshot_timeout,
@@ -631,8 +652,6 @@ impl From<InnerRaftConfig> for RaftConfig {
             leave_via: inner.leave_via,
             leave_id: inner.leave_id,
             id: inner.id,
-            sled_tree_prefix: inner.sled_tree_prefix,
-            sled_max_cache_size_mb: inner.sled_max_cache_size_mb,
             cluster_name: inner.cluster_name,
             wait_leader_timeout: inner.wait_leader_timeout,
         }

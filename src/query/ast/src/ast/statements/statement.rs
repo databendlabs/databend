@@ -27,7 +27,9 @@ use super::*;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::connection::CreateConnectionStmt;
 use crate::ast::statements::pipe::CreatePipeStmt;
+use crate::ast::statements::settings::Settings;
 use crate::ast::statements::task::CreateTaskStmt;
+use crate::ast::statements::warehouse::ShowWarehousesStmt;
 use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
@@ -38,6 +40,10 @@ use crate::ast::Query;
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum Statement {
     Query(Box<Query>),
+    StatementWithSettings {
+        settings: Option<Settings>,
+        stmt: Box<Statement>,
+    },
     Explain {
         kind: ExplainKind,
         options: Vec<ExplainOption>,
@@ -46,6 +52,7 @@ pub enum Statement {
     ExplainAnalyze {
         // if partial is true, only scan/filter/join will be shown.
         partial: bool,
+        graphical: bool,
         query: Box<Statement>,
     },
 
@@ -86,14 +93,14 @@ pub enum Statement {
     },
 
     SetStmt {
-        set_type: SetType,
-        identifiers: Vec<Identifier>,
-        values: SetValues,
+        settings: Settings,
+    },
+    UnSetStmt {
+        settings: Settings,
     },
 
-    UnSetStmt {
-        unset_type: SetType,
-        identifiers: Vec<Identifier>,
+    ShowVariables {
+        show_options: Option<ShowOptions>,
     },
 
     SetRole {
@@ -118,9 +125,29 @@ pub enum Statement {
     ShowCreateCatalog(ShowCreateCatalogStmt),
     CreateCatalog(CreateCatalogStmt),
     DropCatalog(DropCatalogStmt),
+    UseCatalog {
+        catalog: Identifier,
+    },
+
+    // Warehouses
+    ShowOnlineNodes(ShowOnlineNodesStmt),
+    UseWarehouse(UseWarehouseStmt),
+    ShowWarehouses(ShowWarehousesStmt),
+    DropWarehouse(DropWarehouseStmt),
+    CreateWarehouse(CreateWarehouseStmt),
+    RenameWarehouse(RenameWarehouseStmt),
+    ResumeWarehouse(ResumeWarehouseStmt),
+    SuspendWarehouse(SuspendWarehouseStmt),
+    InspectWarehouse(InspectWarehouseStmt),
+    AddWarehouseCluster(AddWarehouseClusterStmt),
+    DropWarehouseCluster(DropWarehouseClusterStmt),
+    RenameWarehouseCluster(RenameWarehouseClusterStmt),
+    AssignWarehouseNodes(AssignWarehouseNodesStmt),
+    UnassignWarehouseNodes(UnassignWarehouseNodesStmt),
 
     // Databases
     ShowDatabases(ShowDatabasesStmt),
+    ShowDropDatabases(ShowDropDatabasesStmt),
     ShowCreateDatabase(ShowCreateDatabaseStmt),
     CreateDatabase(CreateDatabaseStmt),
     DropDatabase(DropDatabaseStmt),
@@ -154,9 +181,8 @@ pub enum Statement {
     CreateDictionary(CreateDictionaryStmt),
     DropDictionary(DropDictionaryStmt),
     ShowCreateDictionary(ShowCreateDictionaryStmt),
-    ShowDictionaries {
-        show_options: Option<ShowOptions>,
-    },
+    ShowDictionaries(ShowDictionariesStmt),
+    RenameDictionary(RenameDictionaryStmt),
 
     // Columns
     ShowColumns(ShowColumnsStmt),
@@ -191,6 +217,9 @@ pub enum Statement {
 
     // User
     ShowUsers,
+    DescribeUser {
+        user: UserIdentity,
+    },
     CreateUser(CreateUserStmt),
     AlterUser(AlterUserStmt),
     DropUser {
@@ -259,20 +288,6 @@ pub enum Statement {
     ShowFileFormats,
     Presign(PresignStmt),
 
-    // share
-    CreateShareEndpoint(CreateShareEndpointStmt),
-    ShowShareEndpoint(ShowShareEndpointStmt),
-    DropShareEndpoint(DropShareEndpointStmt),
-    CreateShare(CreateShareStmt),
-    DropShare(DropShareStmt),
-    GrantShareObject(GrantShareObjectStmt),
-    RevokeShareObject(RevokeShareObjectStmt),
-    AlterShareTenants(AlterShareTenantsStmt),
-    DescShare(DescShareStmt),
-    ShowShares(ShowSharesStmt),
-    ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt),
-    ShowGrantsOfShare(ShowGrantsOfShareStmt),
-
     // data mask
     CreateDatamaskPolicy(CreateDatamaskPolicyStmt),
     DropDatamaskPolicy(DropDatamaskPolicyStmt),
@@ -323,6 +338,13 @@ pub enum Statement {
 
     // Stored procedures
     ExecuteImmediate(ExecuteImmediateStmt),
+    CreateProcedure(CreateProcedureStmt),
+    DropProcedure(DropProcedureStmt),
+    ShowProcedures {
+        show_options: Option<ShowOptions>,
+    },
+    DescProcedure(DescProcedureStmt),
+    CallProcedure(CallProcedureStmt),
 
     // Sequence
     CreateSequence(CreateSequenceStmt),
@@ -374,6 +396,190 @@ impl Statement {
             _ => format!("{}", self),
         }
     }
+
+    pub fn allowed_in_multi_statement(&self) -> bool {
+        match self {
+            Statement::Query(..)
+            | Statement::Explain { .. }
+            | Statement::ExplainAnalyze { .. }
+            | Statement::CopyIntoTable(..)
+            | Statement::CopyIntoLocation(..)
+            | Statement::Call(..)
+            | Statement::ShowSettings { .. }
+            | Statement::ShowProcessList { .. }
+            | Statement::ShowMetrics { .. }
+            | Statement::ShowEngines { .. }
+            | Statement::ShowFunctions { .. }
+            | Statement::ShowUserFunctions { .. }
+            | Statement::ShowTableFunctions { .. }
+            | Statement::ShowIndexes { .. }
+            | Statement::ShowLocks(..)
+            | Statement::SetPriority { .. }
+            | Statement::System(..)
+            | Statement::KillStmt { .. }
+            | Statement::SetStmt { .. }
+            | Statement::UnSetStmt { .. }
+            | Statement::ShowVariables { .. }
+            | Statement::SetRole { .. }
+            | Statement::SetSecondaryRoles { .. }
+            | Statement::Insert(..)
+            | Statement::InsertMultiTable(..)
+            | Statement::Replace(..)
+            | Statement::MergeInto(..)
+            | Statement::Delete(..)
+            | Statement::Update(..)
+            | Statement::ShowCatalogs(..)
+            | Statement::ShowCreateCatalog(..)
+            | Statement::UseCatalog { .. }
+            | Statement::ShowDatabases(..)
+            | Statement::ShowDropDatabases(..)
+            | Statement::ShowCreateDatabase(..)
+            | Statement::UseDatabase { .. }
+            | Statement::ShowTables(..)
+            | Statement::ShowCreateTable(..)
+            | Statement::DescribeTable(..)
+            | Statement::ShowTablesStatus(..)
+            | Statement::ShowDropTables(..)
+            | Statement::OptimizeTable(..)
+            | Statement::VacuumTable(..)
+            | Statement::VacuumDropTable(..)
+            | Statement::VacuumTemporaryFiles(..)
+            | Statement::AnalyzeTable(..)
+            | Statement::ExistsTable(..)
+            | Statement::ShowCreateDictionary(..)
+            | Statement::ShowDictionaries(..)
+            | Statement::ShowColumns(..)
+            | Statement::ShowViews(..)
+            | Statement::DescribeView(..)
+            | Statement::ShowStreams(..)
+            | Statement::DescribeStream(..)
+            | Statement::RefreshIndex(..)
+            | Statement::RefreshInvertedIndex(..)
+            | Statement::RefreshVirtualColumn(..)
+            | Statement::ShowVirtualColumns(..)
+            | Statement::ShowUsers
+            | Statement::DescribeUser { .. }
+            | Statement::ShowRoles
+            | Statement::ShowGrants { .. }
+            | Statement::ShowObjectPrivileges(..)
+            | Statement::ShowStages
+            | Statement::DescribeStage { .. }
+            | Statement::RemoveStage { .. }
+            | Statement::ListStage { .. }
+            | Statement::DescribeConnection(..)
+            | Statement::ShowConnections(..)
+            | Statement::ShowFileFormats
+            | Statement::Presign(..)
+            | Statement::DescDatamaskPolicy(..)
+            | Statement::DescNetworkPolicy(..)
+            | Statement::ShowNetworkPolicies
+            | Statement::DescPasswordPolicy(..)
+            | Statement::ShowPasswordPolicies { .. }
+            | Statement::ExecuteTask(..)
+            | Statement::DescribeTask(..)
+            | Statement::ShowTasks(..)
+            | Statement::DescribePipe(..)
+            | Statement::Begin
+            | Statement::Commit
+            | Statement::Abort
+            | Statement::DescribeNotification(..)
+            | Statement::ExecuteImmediate(..)
+            | Statement::ShowProcedures { .. }
+            | Statement::DescProcedure(..)
+            | Statement::CallProcedure(..)
+            | Statement::ShowWarehouses(..)
+            | Statement::ShowOnlineNodes(..)
+            | Statement::InspectWarehouse(..) => true,
+
+            Statement::CreateDatabase(..)
+            | Statement::CreateTable(..)
+            | Statement::CreateView(..)
+            | Statement::CreateIndex(..)
+            | Statement::CreateStage(..)
+            | Statement::CreateSequence(..)
+            | Statement::CreateDictionary(..)
+            | Statement::CreateConnection(..)
+            | Statement::CreatePipe(..)
+            | Statement::AlterTable(..)
+            | Statement::AlterView(..)
+            | Statement::AlterUser(..)
+            | Statement::AlterDatabase(..)
+            | Statement::DropDatabase(..)
+            | Statement::DropTable(..)
+            | Statement::DropView(..)
+            | Statement::DropIndex(..)
+            | Statement::DropSequence(..)
+            | Statement::DropDictionary(..)
+            | Statement::TruncateTable(..)
+            | Statement::AttachTable(..)
+            | Statement::RenameTable(..)
+            | Statement::CreateCatalog(..)
+            | Statement::DropCatalog(..)
+            | Statement::UndropDatabase(..)
+            | Statement::UndropTable(..)
+            | Statement::RenameDictionary(..)
+            | Statement::CreateStream(..)
+            | Statement::DropStream(..)
+            | Statement::CreateInvertedIndex(..)
+            | Statement::DropInvertedIndex(..)
+            | Statement::CreateVirtualColumn(..)
+            | Statement::AlterVirtualColumn(..)
+            | Statement::DropVirtualColumn(..)
+            | Statement::CreateUser(..)
+            | Statement::DropUser { .. }
+            | Statement::CreateRole { .. }
+            | Statement::DropRole { .. }
+            | Statement::Grant(..)
+            | Statement::Revoke(..)
+            | Statement::CreateUDF(..)
+            | Statement::DropUDF { .. }
+            | Statement::AlterUDF(..)
+            | Statement::DropStage { .. }
+            | Statement::DropConnection(..)
+            | Statement::CreateFileFormat { .. }
+            | Statement::DropFileFormat { .. }
+            | Statement::CreateDatamaskPolicy(..)
+            | Statement::DropDatamaskPolicy(..)
+            | Statement::CreateNetworkPolicy(..)
+            | Statement::AlterNetworkPolicy(..)
+            | Statement::DropNetworkPolicy(..)
+            | Statement::CreatePasswordPolicy(..)
+            | Statement::AlterPasswordPolicy(..)
+            | Statement::DropPasswordPolicy(..)
+            | Statement::CreateTask(..)
+            | Statement::AlterTask(..)
+            | Statement::DropTask(..)
+            | Statement::CreateDynamicTable(..)
+            | Statement::DropPipe(..)
+            | Statement::AlterPipe(..)
+            | Statement::CreateNotification(..)
+            | Statement::AlterNotification(..)
+            | Statement::DropNotification(..)
+            | Statement::CreateProcedure(..)
+            | Statement::DropProcedure(..)
+            | Statement::CreateWarehouse(..)
+            | Statement::UseWarehouse(..)
+            | Statement::DropWarehouse(..)
+            | Statement::RenameWarehouse(..)
+            | Statement::AddWarehouseCluster(..)
+            | Statement::DropWarehouseCluster(..)
+            | Statement::RenameWarehouseCluster(..)
+            | Statement::AssignWarehouseNodes(..)
+            | Statement::UnassignWarehouseNodes(..)
+            | Statement::ResumeWarehouse(..)
+            | Statement::SuspendWarehouse(..) => false,
+            Statement::StatementWithSettings { stmt, settings: _ } => {
+                stmt.allowed_in_multi_statement()
+            }
+        }
+    }
+
+    pub fn is_transaction_command(&self) -> bool {
+        matches!(
+            self,
+            Statement::Commit | Statement::Abort | Statement::Begin
+        )
+    }
 }
 
 impl Display for Statement {
@@ -409,16 +615,41 @@ impl Display for Statement {
                     ExplainKind::Fragments => write!(f, " FRAGMENTS")?,
                     ExplainKind::Raw => write!(f, " RAW")?,
                     ExplainKind::Optimized => write!(f, " Optimized")?,
+                    ExplainKind::Decorrelated => write!(f, " DECORRELATED")?,
                     ExplainKind::Plan => (),
                     ExplainKind::AnalyzePlan => write!(f, " ANALYZE")?,
                     ExplainKind::Join => write!(f, " JOIN")?,
                     ExplainKind::Memo(_) => write!(f, " MEMO")?,
+                    ExplainKind::Graphical => write!(f, " GRAPHICAL")?,
                 }
                 write!(f, " {query}")?;
             }
-            Statement::ExplainAnalyze { partial, query } => {
+            Statement::StatementWithSettings { settings, stmt } => {
+                if let Some(setting) = settings {
+                    write!(f, "SETTINGS (")?;
+                    let ids = &setting.identifiers;
+                    if let SetValues::Expr(values) = &setting.values {
+                        let mut expr = Vec::with_capacity(ids.len());
+                        for (id, value) in ids.iter().zip(values.iter()) {
+                            expr.push(format!("{} = {}", id, value));
+                        }
+                        write_comma_separated_list(f, expr)?;
+                    } else {
+                        unreachable!();
+                    }
+                    write!(f, ") ")?;
+                }
+                write!(f, "{stmt}")?;
+            }
+            Statement::ExplainAnalyze {
+                partial,
+                graphical,
+                query,
+            } => {
                 if *partial {
                     write!(f, "EXPLAIN ANALYZE PARTIAL {query}")?;
+                } else if *graphical {
+                    write!(f, "EXPLAIN ANALYZE GRAPHICAL {query}")?;
                 } else {
                     write!(f, "EXPLAIN ANALYZE {query}")?;
                 }
@@ -434,6 +665,12 @@ impl Display for Statement {
             Statement::CopyIntoLocation(stmt) => write!(f, "{stmt}")?,
             Statement::ShowSettings { show_options } => {
                 write!(f, "SHOW SETTINGS")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowVariables { show_options } => {
+                write!(f, "SHOW VARIABLES")?;
                 if let Some(show_options) = show_options {
                     write!(f, " {show_options}")?;
                 }
@@ -492,71 +729,8 @@ impl Display for Statement {
                 }
                 write!(f, " '{object_id}'")?;
             }
-            Statement::SetStmt {
-                set_type,
-                identifiers,
-                values,
-            } => {
-                write!(f, "SET ")?;
-                match *set_type {
-                    SetType::SettingsGlobal => write!(f, "GLOBAL ")?,
-                    SetType::SettingsSession => {}
-                    SetType::Variable => write!(f, "VARIABLE ")?,
-                }
-
-                if identifiers.len() > 1 {
-                    write!(f, "(")?;
-                }
-                for (idx, variable) in identifiers.iter().enumerate() {
-                    if idx > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{variable}")?;
-                }
-                if identifiers.len() > 1 {
-                    write!(f, ")")?;
-                }
-
-                match values {
-                    SetValues::Expr(exprs) => {
-                        write!(f, " = ")?;
-                        if exprs.len() > 1 {
-                            write!(f, "(")?;
-                        }
-
-                        for (idx, value) in exprs.iter().enumerate() {
-                            if idx > 0 {
-                                write!(f, ", ")?;
-                            }
-                            write!(f, "{value}")?;
-                        }
-                        if exprs.len() > 1 {
-                            write!(f, ")")?;
-                        }
-                    }
-                    SetValues::Query(query) => {
-                        write!(f, " = {query}")?;
-                    }
-                }
-            }
-            Statement::UnSetStmt {
-                unset_type,
-                identifiers,
-            } => {
-                write!(f, "UNSET ")?;
-                match *unset_type {
-                    SetType::SettingsSession => write!(f, "SESSION ")?,
-                    SetType::SettingsGlobal => write!(f, "GLOBAL ")?,
-                    SetType::Variable => write!(f, "VARIABLE ")?,
-                }
-                if identifiers.len() == 1 {
-                    write!(f, "{}", identifiers[0])?;
-                } else {
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, identifiers)?;
-                    write!(f, ")")?;
-                }
-            }
+            Statement::SetStmt { settings } => write!(f, "SET {}", settings)?,
+            Statement::UnSetStmt { settings } => write!(f, "UNSET {}", settings)?,
             Statement::SetRole {
                 is_default,
                 role_name,
@@ -578,7 +752,9 @@ impl Display for Statement {
             Statement::ShowCreateCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::CreateCatalog(stmt) => write!(f, "{stmt}")?,
             Statement::DropCatalog(stmt) => write!(f, "{stmt}")?,
+            Statement::UseCatalog { catalog } => write!(f, "USE CATALOG {catalog}")?,
             Statement::ShowDatabases(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowDropDatabases(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatabase(stmt) => write!(f, "{stmt}")?,
@@ -607,12 +783,8 @@ impl Display for Statement {
             Statement::CreateDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::DropDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateDictionary(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowDictionaries { show_options } => {
-                write!(f, "SHOW DICTIONARIES")?;
-                if let Some(show_options) = show_options {
-                    write!(f, " {show_options}")?;
-                }
-            }
+            Statement::ShowDictionaries(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameDictionary(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
@@ -634,6 +806,7 @@ impl Display for Statement {
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
+            Statement::DescribeUser { user } => write!(f, "DESCRIBE USER {user}")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,
             Statement::AlterUser(stmt) => write!(f, "{stmt}")?,
@@ -743,18 +916,6 @@ impl Display for Statement {
             Statement::ShowFileFormats => write!(f, "SHOW FILE FORMATS")?,
             Statement::Call(stmt) => write!(f, "{stmt}")?,
             Statement::Presign(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateShareEndpoint(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowShareEndpoint(stmt) => write!(f, "{stmt}")?,
-            Statement::DropShareEndpoint(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateShare(stmt) => write!(f, "{stmt}")?,
-            Statement::DropShare(stmt) => write!(f, "{stmt}")?,
-            Statement::GrantShareObject(stmt) => write!(f, "{stmt}")?,
-            Statement::RevokeShareObject(stmt) => write!(f, "{stmt}")?,
-            Statement::AlterShareTenants(stmt) => write!(f, "{stmt}")?,
-            Statement::DescShare(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowObjectGrantPrivileges(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowGrantsOfShare(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
@@ -795,6 +956,15 @@ impl Display for Statement {
             Statement::DropNotification(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeNotification(stmt) => write!(f, "{stmt}")?,
             Statement::ExecuteImmediate(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateProcedure(stmt) => write!(f, "{stmt}")?,
+            Statement::DropProcedure(stmt) => write!(f, "{stmt}")?,
+            Statement::DescProcedure(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowProcedures { show_options } => {
+                write!(f, "SHOW PROCEDURES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::CreateSequence(stmt) => write!(f, "{stmt}")?,
             Statement::DropSequence(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDynamicTable(stmt) => write!(f, "{stmt}")?,
@@ -807,6 +977,22 @@ impl Display for Statement {
                 write!(f, " '{object_id}'")?;
             }
             Statement::System(stmt) => write!(f, "{stmt}")?,
+            Statement::CallProcedure(stmt) => write!(f, "{stmt}")?,
+
+            Statement::ShowOnlineNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowWarehouses(stmt) => write!(f, "{stmt}")?,
+            Statement::UseWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::DropWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::ResumeWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::SuspendWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::InspectWarehouse(stmt) => write!(f, "{stmt}")?,
+            Statement::AddWarehouseCluster(stmt) => write!(f, "{stmt}")?,
+            Statement::DropWarehouseCluster(stmt) => write!(f, "{stmt}")?,
+            Statement::RenameWarehouseCluster(stmt) => write!(f, "{stmt}")?,
+            Statement::AssignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
+            Statement::UnassignWarehouseNodes(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

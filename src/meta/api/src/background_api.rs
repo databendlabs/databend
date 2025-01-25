@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_app::background::BackgroundJobInfo;
+use databend_common_meta_app::background::BackgroundTaskIdent;
 use databend_common_meta_app::background::BackgroundTaskInfo;
 use databend_common_meta_app::background::CreateBackgroundJobReply;
 use databend_common_meta_app::background::CreateBackgroundJobReq;
@@ -29,6 +30,7 @@ use databend_common_meta_app::background::UpdateBackgroundJobReply;
 use databend_common_meta_app::background::UpdateBackgroundJobStatusReq;
 use databend_common_meta_app::background::UpdateBackgroundTaskReply;
 use databend_common_meta_app::background::UpdateBackgroundTaskReq;
+use databend_common_meta_types::SeqV;
 
 use crate::kv_app_error::KVAppError;
 
@@ -58,15 +60,18 @@ pub trait BackgroundApi: Send + Sync {
         &self,
         req: GetBackgroundJobReq,
     ) -> Result<GetBackgroundJobReply, KVAppError>;
+
+    /// Return a list of job name and job info
     async fn list_background_jobs(
         &self,
         req: ListBackgroundJobsReq,
-    ) -> Result<Vec<(u64, String, BackgroundJobInfo)>, KVAppError>;
-    // Return a list of background tasks (task_id, BackgroundInfo)
+    ) -> Result<Vec<(String, SeqV<BackgroundJobInfo>)>, KVAppError>;
+
+    /// Return a list of background tasks (task_id, BackgroundInfo)
     async fn list_background_tasks(
         &self,
         req: ListBackgroundTasksReq,
-    ) -> Result<Vec<(u64, String, BackgroundTaskInfo)>, KVAppError>;
+    ) -> Result<Vec<(BackgroundTaskIdent, SeqV<BackgroundTaskInfo>)>, KVAppError>;
 
     async fn update_background_task(
         &self,

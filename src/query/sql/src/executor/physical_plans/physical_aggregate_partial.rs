@@ -20,6 +20,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 
+use super::SortDesc;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::AggregateFunctionDesc;
 use crate::executor::PhysicalPlan;
@@ -35,6 +36,8 @@ pub struct AggregatePartial {
     pub enable_experimental_aggregate_hashtable: bool,
     pub group_by_display: Vec<String>,
 
+    // Order by keys if keys are subset of group by key, then we can use rank to filter data in previous
+    pub rank_limit: Option<(Vec<SortDesc>, usize)>,
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -43,55 +46,19 @@ impl AggregatePartial {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
 
-        if self.enable_experimental_aggregate_hashtable {
-            let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
-            for agg in self.agg_funcs.iter() {
-                fields.push(DataField::new(
-                    &agg.output_column.to_string(),
-                    DataType::Binary,
-                ));
-            }
+        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
 
-            let group_types = self
-                .group_by
+        fields.extend(self.agg_funcs.iter().map(|func| {
+            let name = func.output_column.to_string();
+            DataField::new(&name, DataType::Binary)
+        }));
+
+        for (idx, field) in self.group_by.iter().zip(
+            self.group_by
                 .iter()
-                .map(|index| {
-                    Ok(input_schema
-                        .field_with_name(&index.to_string())?
-                        .data_type()
-                        .clone())
-                })
-                .collect::<Result<Vec<_>>>()?;
-
-            for (idx, data_type) in self.group_by.iter().zip(group_types.iter()) {
-                fields.push(DataField::new(&idx.to_string(), data_type.clone()));
-            }
-            return Ok(DataSchemaRefExt::create(fields));
-        }
-
-        let mut fields =
-            Vec::with_capacity(self.agg_funcs.len() + self.group_by.is_empty() as usize);
-        for agg in self.agg_funcs.iter() {
-            fields.push(DataField::new(
-                &agg.output_column.to_string(),
-                DataType::Binary,
-            ));
-        }
-        if !self.group_by.is_empty() {
-            let method = DataBlock::choose_hash_method_with_types(
-                &self
-                    .group_by
-                    .iter()
-                    .map(|index| {
-                        Ok(input_schema
-                            .field_with_name(&index.to_string())?
-                            .data_type()
-                            .clone())
-                    })
-                    .collect::<Result<Vec<_>>>()?,
-                false,
-            )?;
-            fields.push(DataField::new("_group_by_key", method.data_type()));
+                .map(|index| input_schema.field_with_name(&index.to_string())),
+        ) {
+            fields.push(DataField::new(&idx.to_string(), field?.data_type().clone()));
         }
 
         Ok(DataSchemaRefExt::create(fields))

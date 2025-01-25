@@ -30,7 +30,7 @@ use databend_common_base::JoinHandle;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_storages_common_txn::TxnManagerRef;
+use databend_storages_common_session::TxnManagerRef;
 use parking_lot::Mutex;
 
 use super::HttpQueryContext;
@@ -39,7 +39,7 @@ use crate::servers::http::v1::query::http_query::HttpQuery;
 use crate::servers::http::v1::query::http_query::ServerInfo;
 use crate::servers::http::v1::query::HttpQueryRequest;
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, Eq, PartialEq)]
 pub(crate) enum RemoveReason {
     Timeout,
     Canceled,
@@ -151,10 +151,12 @@ impl HttpQueryManager {
                         _ = self_clone
                             .remove_query(
                                 &query_id_clone,
+                                &None,
                                 RemoveReason::Timeout,
                                 ErrorCode::AbortedQuery(&msg),
                             )
-                            .await;
+                            .await
+                            .ok();
                         break;
                     }
                     ExpireResult::Sleep(t) => {
@@ -172,12 +174,16 @@ impl HttpQueryManager {
     pub(crate) async fn remove_query(
         self: &Arc<Self>,
         query_id: &str,
+        client_session_id: &Option<String>,
         reason: RemoveReason,
         error: ErrorCode,
-    ) -> Option<Arc<HttpQuery>> {
+    ) -> poem::error::Result<Option<Arc<HttpQuery>>> {
         // deref at once to avoid holding DashMap shard guard for too long.
         let query = self.queries.get(query_id).map(|q| q.clone());
         if let Some(q) = &query {
+            if reason != RemoveReason::Timeout {
+                q.check_client_session_id(client_session_id)?;
+            }
             if q.mark_removed(reason) {
                 q.kill(error).await;
                 let mut queue = self.removed_queries.lock();
@@ -186,7 +192,7 @@ impl HttpQueryManager {
                 };
             }
         }
-        query
+        Ok(query)
     }
 
     #[async_backtrace::framed]
@@ -223,5 +229,52 @@ impl HttpQueryManager {
         } else {
             None
         }
+    }
+
+    pub(crate) fn check_sticky_for_txn(&self, last_server_info: &Option<ServerInfo>) -> Result<()> {
+        if let Some(ServerInfo { id, start_time }) = last_server_info {
+            if self.server_info.id != *id {
+                return Err(ErrorCode::InvalidSessionState(format!(
+                    "transaction is active, but the request routed to the wrong server: current server is {}, the last is {}.",
+                    self.server_info.id, id
+                )));
+            }
+            if self.server_info.start_time != *start_time {
+                return Err(ErrorCode::CurrentTransactionIsAborted(format!(
+                    "transaction is aborted because server restarted at {}.",
+                    start_time
+                )));
+            }
+        } else {
+            return Err(ErrorCode::InvalidSessionState(
+                "transaction is active but missing server_info".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_sticky_for_temp_table(
+        &self,
+        last_server_info: &Option<ServerInfo>,
+    ) -> Result<()> {
+        if let Some(ServerInfo { id, start_time }) = last_server_info {
+            if self.server_info.id != *id {
+                return Err(ErrorCode::InvalidSessionState(format!(
+                    "there are temp tables in session, but the request routed to the wrong server: current server is {}, the last is {}.",
+                    self.server_info.id, id
+                )));
+            }
+            if self.server_info.start_time != *start_time {
+                return Err(ErrorCode::InvalidSessionState(format!(
+                    "temp table lost because server restarted at {}.",
+                    start_time
+                )));
+            }
+        } else {
+            return Err(ErrorCode::InvalidSessionState(
+                "there are temp tables in session, but missing field server_info".to_string(),
+            ));
+        }
+        Ok(())
     }
 }

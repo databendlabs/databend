@@ -1,0 +1,58 @@
+statement ok
+set enable_parallel_multi_merge_sort = 0;
+
+statement ok
+CREATE OR REPLACE TABLE test_linear(a int, b int) cluster by(a,b) row_per_block = 2;
+
+statement ok
+INSERT INTO test_linear VALUES(1, 1), (1, 2);
+
+statement ok
+INSERT INTO test_linear VALUES(2, 1), (2, 2);
+
+statement ok
+ALTER TABLE test_linear RECLUSTER FINAL;
+
+query TTIIFFT
+select * exclude(timestamp) from clustering_information('default','test_linear')
+----
+(a, b) linear 2 0 0.0 1.0 {"00001":2}
+
+query T
+EXPLAIN SELECT * FROM test_linear WHERE a = 1;
+----
+Filter
+├── output columns: [test_linear.a (#0), test_linear.b (#1)]
+├── filters: [is_true(test_linear.a (#0) = 1)]
+├── estimated rows: 2.00
+└── TableScan
+    ├── table: default.default.test_linear
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 2 to 1, bloom pruning: 1 to 1>]
+    ├── push downs: [filters: [is_true(test_linear.a (#0) = 1)], limit: NONE]
+    └── estimated rows: 4.00
+
+query T
+EXPLAIN SELECT * FROM test_linear WHERE b = 1;
+----
+Filter
+├── output columns: [test_linear.a (#0), test_linear.b (#1)]
+├── filters: [is_true(test_linear.b (#1) = 1)]
+├── estimated rows: 2.00
+└── TableScan
+    ├── table: default.default.test_linear
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 2
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
+    ├── push downs: [filters: [is_true(test_linear.b (#1) = 1)], limit: NONE]
+    └── estimated rows: 4.00
+
+statement ok
+DROP TABLE test_linear ALL;

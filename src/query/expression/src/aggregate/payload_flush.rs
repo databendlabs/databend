@@ -19,6 +19,7 @@ use ethnum::i256;
 use super::partitioned_payload::PartitionedPayload;
 use super::payload::Payload;
 use super::probe_state::ProbeState;
+use super::AggrState;
 use crate::read;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -26,6 +27,7 @@ use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalType;
 use crate::types::nullable::NullableColumn;
 use crate::types::string::StringColumn;
+use crate::types::string::StringColumnBuilder;
 use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -36,7 +38,6 @@ use crate::types::NumberType;
 use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_number_mapped_type;
-use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::DataBlock;
@@ -121,46 +122,46 @@ impl Payload {
         }
 
         if blocks.is_empty() {
-            return Ok(self.empty_block());
+            return Ok(self.empty_block(None));
         }
         DataBlock::concat(&blocks)
     }
 
     pub fn aggregate_flush(&self, state: &mut PayloadFlushState) -> Result<Option<DataBlock>> {
-        if self.flush(state) {
-            let row_count = state.row_count;
+        if !self.flush(state) {
+            return Ok(None);
+        }
 
-            let mut state_builders: Vec<BinaryColumnBuilder> = self
-                .aggrs
-                .iter()
-                .map(|agg| state_serializer(agg, row_count))
-                .collect();
+        let row_count = state.row_count;
+
+        let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
+        if let Some(state_layout) = self.states_layout.as_ref() {
+            let mut builders = state_layout.serialize_builders(row_count);
 
             for place in state.state_places.as_slice()[0..row_count].iter() {
-                for (idx, (addr_offset, aggr)) in self
-                    .state_addr_offsets
+                for (idx, (loc, func)) in state_layout
+                    .states_loc
                     .iter()
                     .zip(self.aggrs.iter())
                     .enumerate()
                 {
-                    let arg_place = place.next(*addr_offset);
-                    aggr.serialize(arg_place, &mut state_builders[idx].data)
-                        .unwrap();
-                    state_builders[idx].commit_row();
+                    {
+                        let builder = &mut builders[idx];
+                        func.serialize(AggrState::new(*place, loc), &mut builder.data)?;
+                        builder.commit_row();
+                    }
                 }
             }
 
-            let mut cols = Vec::with_capacity(self.aggrs.len() + self.group_types.len());
-            for builder in state_builders.into_iter() {
-                let col = Column::Binary(builder.build());
-                cols.push(col);
-            }
-
-            cols.extend_from_slice(&state.take_group_columns());
-            return Ok(Some(DataBlock::new_from_columns(cols)));
+            cols.extend(
+                builders
+                    .into_iter()
+                    .map(|builder| Column::Binary(builder.build())),
+            );
         }
 
-        Ok(None)
+        cols.extend_from_slice(&state.take_group_columns());
+        Ok(Some(DataBlock::new_from_columns(cols)))
     }
 
     pub fn group_by_flush_all(&self) -> Result<DataBlock> {
@@ -173,7 +174,7 @@ impl Payload {
         }
 
         if blocks.is_empty() {
-            return Ok(self.empty_block());
+            return Ok(self.empty_block(None));
         }
 
         DataBlock::concat(&blocks)
@@ -260,10 +261,7 @@ impl Payload {
             let b = self.flush_type_column::<BooleanType>(validity_offset, state);
             let validity = b.into_boolean().unwrap();
 
-            Column::Nullable(Box::new(NullableColumn {
-                column: col,
-                validity,
-            }))
+            NullableColumn::new_column(col, validity)
         } else {
             col
         }
@@ -325,7 +323,21 @@ impl Payload {
         col_offset: usize,
         state: &mut PayloadFlushState,
     ) -> StringColumn {
-        unsafe { StringColumn::from_binary_unchecked(self.flush_binary_column(col_offset, state)) }
+        let len = state.probe_state.row_count;
+        let mut binary_builder = StringColumnBuilder::with_capacity(len);
+
+        unsafe {
+            for idx in 0..len {
+                let str_len = read::<u32>(state.addresses[idx].add(col_offset) as _) as usize;
+                let data_address = read::<u64>(state.addresses[idx].add(col_offset + 4) as _)
+                    as usize as *const u8;
+
+                let scalar = std::slice::from_raw_parts(data_address, str_len);
+
+                binary_builder.put_and_commit(std::str::from_utf8(scalar).unwrap());
+            }
+        }
+        binary_builder.build()
     }
 
     fn flush_generic_column(
@@ -351,9 +363,4 @@ impl Payload {
         }
         builder.build()
     }
-}
-
-fn state_serializer(func: &AggregateFunctionRef, row: usize) -> BinaryColumnBuilder {
-    let size = func.serialize_size_per_row().unwrap_or(4);
-    BinaryColumnBuilder::with_capacity(row, row * size)
 }

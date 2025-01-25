@@ -24,10 +24,9 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::DirName;
-use databend_common_meta_kvapi::kvapi::Key;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::With;
 use futures::TryStreamExt;
 
@@ -135,25 +134,15 @@ impl UdfMgr {
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn list_udf_fallback(&self) -> Result<Vec<UserDefinedFunction>, ErrorCode> {
-        let key = UdfIdent::new(&self.tenant, "");
-        let values = self.kv_api.prefix_list_kv(&key.to_string_key()).await?;
+        let key = UdfIdent::new(&self.tenant, "dummy");
+        let dir = DirName::new(key);
+        let udfs = self
+            .kv_api
+            .list_pb_values(&dir)
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
 
-        let mut udfs = Vec::with_capacity(values.len());
-        // At begin udf is serialize to json. https://github.com/datafuselabs/databend/pull/12729/files#diff-9c992028e59caebc313d761b8488b17f142618fb89db64c51c1655689d68c41b
-        // But we can not deserialize the UserDefinedFunction from json now,
-        // because add a new field created_on and the field `definition` refactor to a ENUM type.
-        for (name, value) in values {
-            let udf = crate::deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || {
-                format!(
-                    "Encountered invalid json data for LambdaUDF '{}', \
-                please drop this invalid udf and re-create it. \n\
-                Example: `DROP FUNCTION <invalid_udf>;` then `CREATE FUNCTION <invalid_udf> AS <udf_definition>;`\n\
-                ",
-                    name
-                )
-            })?;
-            udfs.push(udf);
-        }
         Ok(udfs)
     }
 

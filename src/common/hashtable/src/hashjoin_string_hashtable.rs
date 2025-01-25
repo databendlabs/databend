@@ -16,8 +16,8 @@ use std::alloc::Allocator;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
+use databend_common_column::bitmap::Bitmap;
 
 use super::traits::HashJoinHashtableLike;
 use crate::hashjoin_hashtable::combine_header;
@@ -37,7 +37,7 @@ pub struct StringRawEntry {
     pub next: u64,
 }
 
-pub struct HashJoinStringHashTable<A: Allocator + Clone = MmapAllocator> {
+pub struct HashJoinStringHashTable<A: Allocator + Clone = DefaultAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
     pub(crate) hash_shift: usize,
@@ -97,12 +97,12 @@ where A: Allocator + Clone + 'static
     fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
-            if bitmap.unset_bits() == bitmap.len() {
+            if bitmap.null_count() == bitmap.len() {
                 hashes.iter_mut().for_each(|hash| {
                     *hash = 0;
                 });
                 return 0;
-            } else if bitmap.unset_bits() > 0 {
+            } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
@@ -149,7 +149,7 @@ where A: Allocator + Clone + 'static
     ) -> (usize, usize) {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
-            if bitmap.unset_bits() == bitmap.len() {
+            if bitmap.null_count() == bitmap.len() {
                 unmatched_selection
                     .iter_mut()
                     .enumerate()
@@ -157,7 +157,7 @@ where A: Allocator + Clone + 'static
                         *val = idx as u32;
                     });
                 return (0, hashes.len());
-            } else if bitmap.unset_bits() > 0 {
+            } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
@@ -216,9 +216,9 @@ where A: Allocator + Clone + 'static
     ) -> usize {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
-            if bitmap.unset_bits() == bitmap.len() {
+            if bitmap.null_count() == bitmap.len() {
                 return 0;
-            } else if bitmap.unset_bits() > 0 {
+            } else if bitmap.null_count() > 0 {
                 valids = Some(bitmap);
             }
         }
@@ -324,5 +324,34 @@ where A: Allocator + Clone + 'static
         } else {
             (0, 0)
         }
+    }
+
+    fn next_matched_ptr(&self, key: &Self::Key, mut ptr: u64) -> u64 {
+        loop {
+            if ptr == 0 {
+                break;
+            }
+            let raw_entry = unsafe { &*(ptr as *mut StringRawEntry) };
+            // Compare `early` and the length of the string, the size of `early` is 4.
+            let min_len = std::cmp::min(
+                STRING_EARLY_SIZE,
+                std::cmp::min(key.len(), raw_entry.length as usize),
+            );
+            if raw_entry.length as usize == key.len()
+                && key[0..min_len] == raw_entry.early[0..min_len]
+            {
+                let key_ref = unsafe {
+                    std::slice::from_raw_parts(
+                        raw_entry.key as *const u8,
+                        raw_entry.length as usize,
+                    )
+                };
+                if key == key_ref {
+                    return ptr;
+                }
+            }
+            ptr = raw_entry.next;
+        }
+        0
     }
 }

@@ -30,7 +30,6 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Evaluator;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use indexmap::IndexMap;
 
 use crate::binder::wrap_cast;
 use crate::optimizer::ColumnSet;
@@ -346,10 +345,7 @@ impl Binder {
                             Aggregate {
                                 mode: AggregateMode::Initial,
                                 group_items,
-                                aggregate_functions: vec![],
-                                from_distinct: false,
-                                limit: None,
-                                grouping_sets: None,
+                                ..Default::default()
                             }
                             .into(),
                         ),
@@ -392,8 +388,6 @@ pub fn bind_values(
         name_resolution_ctx,
         metadata.clone(),
         &[],
-        HashMap::new(),
-        Box::new(IndexMap::new()),
     );
 
     let num_values = values.len();
@@ -408,6 +402,13 @@ pub fn bind_values(
     for (row_idx, row) in values.iter().enumerate() {
         for (column_idx, expr) in row.iter().enumerate() {
             let (scalar, data_type) = scalar_binder.bind(expr)?;
+            if !scalar.evaluable() {
+                return Err(ErrorCode::SemanticError(format!(
+                    "Values can't contain subquery, aggregate functions, window functions, or UDFs"
+                ))
+                .set_span(span));
+            }
+
             let used_columns = scalar.used_columns();
             if !used_columns.is_empty() {
                 if let Some(expression_scan_info) = expression_scan_info.as_ref() {

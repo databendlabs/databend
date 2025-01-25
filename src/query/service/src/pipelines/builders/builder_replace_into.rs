@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::parser::parse_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::table::Table;
@@ -35,6 +35,7 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_sources::AsyncSource;
 use databend_common_pipeline_sources::AsyncSourcer;
+use databend_common_pipeline_transforms::processors::build_compact_block_pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -324,10 +325,13 @@ impl PipelineBuilder {
             Arc::new(target_schema.clone().into()),
         )?;
 
+        let block_thresholds = table.get_block_thresholds();
+        build_compact_block_pipeline(&mut self.main_pipeline, block_thresholds)?;
+
         let _ = table.cluster_gen_for_append(
             self.ctx.clone(),
             &mut self.main_pipeline,
-            table.get_block_thresholds(),
+            block_thresholds,
             Some(modified_schema),
         )?;
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
@@ -355,7 +359,7 @@ impl PipelineBuilder {
         } else {
             None
         };
-        let cluster_keys = table.cluster_keys(self.ctx.clone());
+        let cluster_keys = table.linear_cluster_keys(self.ctx.clone());
         if *need_insert {
             let replace_into_processor = ReplaceIntoProcessor::create(
                 self.ctx.clone(),
@@ -484,12 +488,12 @@ impl AsyncSource for RawValueSource {
         }
 
         let format = self.ctx.get_format_settings()?;
-        let numeric_cast_option = self
+        let rounding_mode = self
             .ctx
             .get_settings()
             .get_numeric_cast_option()
-            .unwrap_or("rounding".to_string());
-        let rounding_mode = numeric_cast_option.as_str() == "rounding";
+            .map(|s| s == "rounding")
+            .unwrap_or(true);
         let field_decoder = FastFieldDecoderValues::create_for_insert(format, rounding_mode);
 
         let mut values_decoder = FastValuesDecoder::new(&self.data, &field_decoder);
@@ -524,7 +528,13 @@ impl FastValuesDecodeFallback for RawValueSource {
             let mut bind_context = self.bind_context.clone();
             let metadata = self.metadata.clone();
 
-            let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            let exprs = parse_values_with_placeholder(&tokens, sql_dialect)?
+                .into_iter()
+                .map(|expr| match expr {
+                    Some(expr) => Ok(expr),
+                    None => Err(ErrorCode::SyntaxException("unexpected placeholder")),
+                })
+                .collect::<Result<Vec<_>>>()?;
 
             bind_context
                 .exprs_to_scalar(

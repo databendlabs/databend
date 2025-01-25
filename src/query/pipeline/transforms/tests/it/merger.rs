@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 use databend_common_base::base::tokio;
 use databend_common_exception::Result;
@@ -26,12 +25,11 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_transforms::processors::sort::algorithm::HeapSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::LoserTreeSort;
 use databend_common_pipeline_transforms::processors::sort::algorithm::SortAlgorithm;
 use databend_common_pipeline_transforms::processors::sort::Merger;
-use databend_common_pipeline_transforms::processors::sort::SimpleRows;
+use databend_common_pipeline_transforms::processors::sort::SimpleRowsAsc;
 use databend_common_pipeline_transforms::processors::sort::SortedStream;
 use itertools::Itertools;
 use rand::rngs::ThreadRng;
@@ -72,8 +70,8 @@ impl SortedStream for TestStream {
 }
 
 type TestMerger<A> = Merger<A, TestStream>;
-type TestHeapSort = HeapSort<SimpleRows<Int32Type>>;
-type TestLoserTreeSort = LoserTreeSort<SimpleRows<Int32Type>>;
+type TestHeapSort = HeapSort<SimpleRowsAsc<Int32Type>>;
+type TestLoserTreeSort = LoserTreeSort<SimpleRowsAsc<Int32Type>>;
 
 fn prepare_input_and_result(
     data: Vec<Vec<Vec<i32>>>,
@@ -146,18 +144,12 @@ fn create_test_merger<A: SortAlgorithm>(
         "a",
         DataType::Number(NumberDataType::Int32),
     )]);
-    let sort_desc = Arc::new(vec![SortColumnDescription {
-        offset: 0,
-        asc: true,
-        nulls_first: true,
-        is_nullable: false,
-    }]);
     let streams = input
         .into_iter()
         .map(|v| TestStream::new(v.into_iter().collect::<VecDeque<_>>()))
         .collect::<Vec<_>>();
 
-    TestMerger::<A>::create(schema, streams, sort_desc, 4, limit)
+    TestMerger::<A>::create(schema, streams, 4, limit)
 }
 
 fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
@@ -224,11 +216,11 @@ fn test_basic(limit: Option<usize>) -> Result<()> {
 
 async fn async_test_basic(limit: Option<usize>) -> Result<()> {
     let (input, expected) = basic_test_data(limit);
-    let merger = create_test_merger::<HeapSort<SimpleRows<Int32Type>>>(input, limit);
+    let merger = create_test_merger::<HeapSort<SimpleRowsAsc<Int32Type>>>(input, limit);
     async_test(merger, expected).await?;
 
     let (input, expected) = basic_test_data(limit);
-    let merger = create_test_merger::<LoserTreeSort<SimpleRows<Int32Type>>>(input, limit);
+    let merger = create_test_merger::<LoserTreeSort<SimpleRowsAsc<Int32Type>>>(input, limit);
     async_test(merger, expected).await
 }
 

@@ -38,6 +38,11 @@ pub trait AsyncSource: Send {
     fn un_reacted(&self) -> Result<()> {
         Ok(())
     }
+
+    #[async_backtrace::framed]
+    async fn on_finish(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 // TODO: This can be refactored using proc macros
@@ -50,6 +55,7 @@ pub struct AsyncSourcer<T: 'static + AsyncSource> {
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
     generated_data: Option<DataBlock>,
+    called_on_finish: bool,
 }
 
 impl<T: 'static + AsyncSource> AsyncSourcer<T> {
@@ -65,6 +71,7 @@ impl<T: 'static + AsyncSource> AsyncSourcer<T> {
             scan_progress,
             is_finish: false,
             generated_data: None,
+            called_on_finish: false,
         })))
     }
 }
@@ -81,12 +88,16 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
 
     fn event(&mut self) -> Result<Event> {
         if self.is_finish {
+            if !self.called_on_finish {
+                return Ok(Event::Async);
+            }
             self.output.finish();
             return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
-            return Ok(Event::Finished);
+            self.is_finish = true;
+            return Ok(Event::Async);
         }
 
         if !self.output.can_push() {
@@ -112,12 +123,17 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
+        if self.is_finish {
+            if !self.called_on_finish {
+                self.called_on_finish = true;
+                self.inner.on_finish().await?;
+            }
+            return Ok(());
+        }
         match self.inner.generate().await? {
             None => self.is_finish = true,
             Some(data_block) => {
-                // Don't need to record the scan progress of `MaterializedCteSource`
-                // Because it reads data from memory.
-                if !data_block.is_empty() && self.name() != "MaterializedCteSource" {
+                if !data_block.is_empty() {
                     let progress_values = ProgressValues {
                         rows: data_block.num_rows(),
                         bytes: data_block.memory_size(),

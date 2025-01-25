@@ -16,19 +16,23 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::mem_allocator::JEAllocator;
-
 /// mmap allocator.
 /// For better performance, we use jemalloc as the inner allocator.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MmapAllocator {
-    allocator: JEAllocator,
+    #[cfg(feature = "jemalloc")]
+    allocator: crate::mem_allocator::JEAllocator,
+    #[cfg(not(feature = "jemalloc"))]
+    allocator: crate::mem_allocator::StdAllocator,
 }
 
 impl MmapAllocator {
     pub fn new() -> Self {
         Self {
-            allocator: JEAllocator,
+            #[cfg(feature = "jemalloc")]
+            allocator: crate::mem_allocator::JEAllocator,
+            #[cfg(not(feature = "jemalloc"))]
+            allocator: crate::mem_allocator::StdAllocator,
         }
     }
 }
@@ -282,6 +286,7 @@ pub mod linux {
             }
             // fallback to (5.13.0)
             let fallback_version = 5u32 << 16 | 13u32 << 8;
+            #[allow(clippy::unnecessary_cast)]
             let slice = unsafe { &*(&uname.release[..length] as *const _ as *const [u8]) };
             let result = match std::str::from_utf8(slice) {
                 Ok(ver) => match semver::Version::parse(ver) {

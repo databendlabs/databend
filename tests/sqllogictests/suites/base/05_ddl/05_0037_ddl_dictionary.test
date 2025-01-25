@@ -1,0 +1,147 @@
+statement ok
+DROP DICTIONARY IF EXISTS d
+
+statement ok
+DROP DICTIONARY IF EXISTS d2
+
+statement ok
+DROP DICTIONARY IF EXISTS d3
+
+statement ok
+DROP DICTIONARY IF EXISTS d4
+
+statement error 1006
+CREATE DICTIONARY d(c1 int, c2 Varchar) PRIMARY KEY c1 SOURCE(postgresql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement ok
+CREATE DICTIONARY d(c1 VARCHAR NOT NULL, c2 VARCHAR NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement ok
+CREATE DICTIONARY IF NOT EXISTS d(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement error 3113
+CREATE DICTIONARY d(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement error 1006
+CREATE DICTIONARY d(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1'))
+
+statement ok
+CREATE DICTIONARY d2(a int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement error 3113
+CREATE DICTIONARY d2(a int NOT NULL, b int NOT NULL) PRIMARY KEY b SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement error 1006
+create dictionary d3(`a` int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' table='test_table'))
+
+statement ok
+create dictionary d3(`a` int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement ok
+create or replace dictionary d3(a int NOT NULL, b Varchar NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table')) comment 'comment'
+
+statement error 1006
+create dictionary d4(a int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' name='dummy' table='test_table'))
+
+statement ok
+create or replace dictionary d4(a Varchar NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement ok
+CREATE or replace DICTIONARY d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
+statement error 1006
+create or replace dictionary d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379' db_index='19'))
+
+statement error 1006
+create or replace dictionary d5(key string not null, value string not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1'))
+
+statement error 1006
+create or replace dictionary d5(key int not null, value int not null) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
+query TT
+show create dictionary d
+----
+d CREATE DICTIONARY d ( c1 VARCHAR NOT NULL, c2 VARCHAR NOT NULL ) PRIMARY KEY c1 SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' table='test_table' username='root'))
+
+query TT
+show create dictionary d3
+----
+d3 CREATE DICTIONARY d3 ( a INT NOT NULL, b VARCHAR NOT NULL ) PRIMARY KEY a SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' table='test_table' username='root')) COMMENT 'comment'
+
+query TT
+show create dictionary d5
+----
+d5 CREATE DICTIONARY d5 ( key VARCHAR NOT NULL, value VARCHAR NOT NULL ) PRIMARY KEY key SOURCE(redis(host='127.0.0.1' port='6379'))
+
+statement error 3114
+show create dictionary test
+
+statement ok
+DROP DICTIONARY IF EXISTS d
+
+statement ok
+DROP DICTIONARY IF EXISTS d2
+
+statement ok
+DROP DICTIONARY IF EXISTS d3
+
+statement ok
+DROP DICTIONARY IF EXISTS d4
+
+statement ok
+DROP DICTIONARY IF EXISTS d5
+
+statement error 3114
+drop dictionary test
+
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+CREATE DICTIONARY db1.test1(a int NOT NULL, b int NOT NULL) PRIMARY KEY a SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement ok
+DROP DICTIONARY IF EXISTS db1.d
+
+statement ok
+DROP DICTIONARY IF EXISTS db1.dd
+
+statement ok
+CREATE DICTIONARY IF NOT EXISTS db1.d(c1 int NOT NULL, c2 Varchar NOT NULL) PRIMARY KEY c1 SOURCE(mysql(host='localhost' port='3306' username='root' password='1234' db='db1' table='test_table'))
+
+statement error 3113
+RENAME DICTIONARY db1.d TO db1.test1
+
+statement error 3114
+RENAME DICTIONARY db1.d0 TO db1.dd
+
+statement ok
+RENAME DICTIONARY db1.d TO db1.dd
+
+statement error 3114
+SHOW CREATE DICTIONARY db1.d
+
+query TT
+SHOW CREATE DICTIONARY db1.dd
+----
+dd CREATE DICTIONARY dd ( c1 INT NOT NULL, c2 VARCHAR NOT NULL ) PRIMARY KEY c1 SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' table='test_table' username='root'))
+
+statement ok
+DROP DICTIONARY IF EXISTS default.dd2
+
+statement ok
+rename dictionary db1.dd to default.dd2
+
+statement error 3114
+show create dictionary db1.dd
+
+query TT
+show create dictionary default.dd2
+----
+dd2 CREATE DICTIONARY dd2 ( c1 INT NOT NULL, c2 VARCHAR NOT NULL ) PRIMARY KEY c1 SOURCE(mysql(db='db1' host='localhost' password='[HIDDEN]' port='3306' table='test_table' username='root'))
+
+statement ok
+DROP DATABASE db1

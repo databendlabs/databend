@@ -290,7 +290,7 @@ impl<Index: ColumnIndex> PartialEq for Expr<Index> {
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
 /// up the function registry with the `FunctionID`.
-#[derive(Debug, Clone, Educe, Serialize, Deserialize)]
+#[derive(Debug, Clone, Educe, Serialize, Deserialize, EnumAsInner)]
 #[educe(PartialEq, Eq, Hash)]
 pub enum RemoteExpr<Index: ColumnIndex = usize> {
     Constant {
@@ -429,7 +429,7 @@ impl<Index: ColumnIndex> Expr<Index> {
     }
 
     pub fn runtime_filter_supported_types(&self) -> bool {
-        self.data_type().remove_nullable().is_numeric()
+        self.data_type().remove_nullable().is_number()
             || self.data_type().remove_nullable().is_string()
             || self.data_type().remove_nullable().is_date()
     }

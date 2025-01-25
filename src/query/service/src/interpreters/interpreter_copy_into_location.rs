@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::CopyIntoLocationOptions;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_exception::Result;
@@ -74,7 +75,7 @@ impl CopyIntoLocationInterpreter {
             false,
         )?;
 
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
 
         Ok((select_interpreter, update_stream_meta))
     }
@@ -86,6 +87,7 @@ impl CopyIntoLocationInterpreter {
         stage: &StageInfo,
         path: &str,
         query: &Plan,
+        options: &CopyIntoLocationOptions,
     ) -> Result<(PipelineBuildResult, Vec<UpdateStreamMetaReq>)> {
         let (query_interpreter, update_stream_meta_req) = self.build_query(query).await?;
         let query_physical_plan = query_interpreter.build_physical_plan().await?;
@@ -109,6 +111,8 @@ impl CopyIntoLocationInterpreter {
                 duplicated_files_detected: vec![],
                 is_select: false,
                 default_values: None,
+                copy_into_location_options: options.clone(),
+                copy_into_table_options: Default::default(),
             },
         }));
 
@@ -145,6 +149,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
                 &self.plan.stage,
                 &self.plan.path,
                 &self.plan.from,
+                &self.plan.options,
             )
             .await?;
 

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::Engine;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -22,18 +23,19 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_fuse::TableContext;
-use databend_common_storages_share::update_share_table_info;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 
-use super::interpreter_table_create::is_valid_block_per_segment;
-use super::interpreter_table_create::is_valid_bloom_index_columns;
-use super::interpreter_table_create::is_valid_create_opt;
-use super::interpreter_table_create::is_valid_data_retention_period;
-use super::interpreter_table_create::is_valid_row_per_block;
+use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
+use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
+use crate::interpreters::common::table_option_validation::is_valid_create_opt;
+use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
+use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -67,7 +69,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check row_per_block
         is_valid_row_per_block(&self.plan.set_options)?;
-        // check row_per_block
+        // check data_retention_period
         is_valid_data_retention_period(&self.plan.set_options)?;
 
         // check storage_format
@@ -86,15 +88,19 @@ impl Interpreter for SetOptionsInterpreter {
                 OPT_KEY_DATABASE_ID
             )));
         }
-        for table_option in self.plan.set_options.iter() {
-            let key = table_option.0.to_lowercase();
-            if !is_valid_create_opt(&key) {
-                error!("{}", &error_str);
-                return Err(ErrorCode::TableOptionInvalid(format!(
-                    "table option {key} is invalid for alter table statement",
-                )));
-            }
-            options_map.insert(key, Some(table_option.1.clone()));
+        if self.plan.set_options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            error!("{}", &error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_TEMP_PREFIX
+            )));
+        }
+        if self.plan.set_options.contains_key(OPT_KEY_CLUSTER_TYPE) {
+            error!("{}", &error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_CLUSTER_TYPE
+            )));
         }
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let database = self.plan.database.as_str();
@@ -102,6 +108,18 @@ impl Interpreter for SetOptionsInterpreter {
         let table = catalog
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
+
+        for table_option in self.plan.set_options.iter() {
+            let key = table_option.0.to_lowercase();
+            let engine = Engine::from(table.engine());
+            if !is_valid_create_opt(&key, &engine) {
+                error!("{}", &error_str);
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option {key} is invalid for alter table statement",
+                )));
+            }
+            options_map.insert(key, Some(table_option.1.clone()));
+        }
 
         let table_version = table.get_table_info().ident.seq;
         if let Some(value) = self.plan.set_options.get(OPT_KEY_CHANGE_TRACKING) {
@@ -128,19 +146,9 @@ impl Interpreter for SetOptionsInterpreter {
             options: options_map,
         };
 
-        let resp = catalog
+        let _resp = catalog
             .upsert_table_option(&self.ctx.get_tenant(), database, req)
             .await?;
-        if let Some((share_name_vec, db_id, share_table_info)) = resp.share_vec_table_info {
-            update_share_table_info(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &share_name_vec,
-                db_id,
-                &share_table_info,
-            )
-            .await?;
-        }
         Ok(PipelineBuildResult::create())
     }
 }

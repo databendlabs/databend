@@ -25,9 +25,9 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_embedded::MetaEmbedded;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
 use fastrace::func_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -138,8 +138,8 @@ fn create_test_stage_info() -> StageInfo {
     }
 }
 
-async fn new_stage_api() -> Result<(Arc<MetaEmbedded>, StageMgr)> {
-    let test_api = Arc::new(MetaEmbedded::new_temp().await?);
+async fn new_stage_api() -> Result<(Arc<MemMeta>, StageMgr)> {
+    let test_api = Arc::new(MemMeta::default());
     let mgr = StageMgr::create(
         test_api.clone(),
         &Tenant::new_or_err("admin", func_name!()).unwrap(),

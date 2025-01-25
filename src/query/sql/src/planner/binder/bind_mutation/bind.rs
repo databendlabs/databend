@@ -32,7 +32,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_VERSION_COL_NAME;
-use indexmap::IndexMap;
 
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::bind_mutation::mutation_expression::MutationExpressionBindResult;
@@ -53,7 +52,6 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
-use crate::UdfRewriter;
 
 #[derive(Default, Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum MutationType {
@@ -259,8 +257,6 @@ impl Binder {
             &name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
         );
 
         // Bind matched clause columns and add update fields and exprs
@@ -296,7 +292,7 @@ impl Binder {
             database_name,
             table_name,
             table_name_alias,
-            bind_context: Box::new(bind_context),
+            bind_context: Box::new(bind_context.clone()),
             metadata: self.metadata.clone(),
             mutation_type,
             required_columns: Box::new(required_columns),
@@ -325,13 +321,8 @@ impl Binder {
         let mut s_expr =
             SExpr::create_unary(Arc::new(RelOperator::Mutation(mutation)), Arc::new(input));
 
-        // rewrite udf for interpreter udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), true);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
-
-        // rewrite udf for server udf
-        let mut udf_rewriter = UdfRewriter::new(self.metadata.clone(), false);
-        s_expr = udf_rewriter.rewrite(&s_expr)?;
+        // rewrite async function and udf
+        s_expr = self.rewrite_udf(&mut bind_context, s_expr)?;
 
         Ok(Plan::DataMutation {
             s_expr: Box::new(s_expr),
@@ -361,9 +352,9 @@ impl Binder {
         false
     }
 
-    async fn bind_matched_clause<'a>(
+    async fn bind_matched_clause(
         &mut self,
-        scalar_binder: &mut ScalarBinder<'a>,
+        scalar_binder: &mut ScalarBinder<'_>,
         clause: &MatchedClause,
         schema: TableSchemaRef,
         all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,
@@ -449,9 +440,9 @@ impl Binder {
         Ok(MatchedEvaluator { condition, update })
     }
 
-    async fn bind_unmatched_clause<'a>(
+    async fn bind_unmatched_clause(
         &mut self,
-        scalar_binder: &mut ScalarBinder<'a>,
+        scalar_binder: &mut ScalarBinder<'_>,
         clause: &UnmatchedClause,
         table_schema: TableSchemaRef,
         all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,

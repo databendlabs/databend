@@ -18,14 +18,13 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
+use databend_common_expression::TableDataType;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_virtual_column::VirtualColumnHandler;
 use databend_enterprise_virtual_column::VirtualColumnHandlerWrapper;
@@ -42,7 +41,7 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         &self,
         catalog: Arc<dyn Catalog>,
         req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    ) -> Result<()> {
         catalog.create_virtual_column(req).await
     }
 
@@ -51,7 +50,7 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         &self,
         catalog: Arc<dyn Catalog>,
         req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    ) -> Result<()> {
         catalog.update_virtual_column(req).await
     }
 
@@ -60,7 +59,7 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
         &self,
         catalog: Arc<dyn Catalog>,
         req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    ) -> Result<()> {
         catalog.drop_virtual_column(req).await
     }
 
@@ -75,12 +74,13 @@ impl VirtualColumnHandler for RealVirtualColumnHandler {
 
     async fn do_refresh_virtual_column(
         &self,
-        fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
-        virtual_columns: Vec<String>,
+        fuse_table: &FuseTable,
+        virtual_columns: Vec<(String, TableDataType)>,
         segment_locs: Option<Vec<Location>>,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        do_refresh_virtual_column(fuse_table, ctx, virtual_columns, segment_locs).await
+        do_refresh_virtual_column(ctx, fuse_table, virtual_columns, segment_locs, pipeline).await
     }
 }
 

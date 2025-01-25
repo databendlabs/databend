@@ -1,0 +1,196 @@
+statement ok
+set global enable_experimental_procedure=1;
+
+statement ok
+drop procedure if exists p1(int);
+
+statement ok
+CREATE PROCEDURE if not exists p1(x int) RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    RETURN x;
+END;
+$$;
+
+query T
+desc procedure p1(int);
+----
+signature (x)
+returns (Int32)
+language SQL
+body BEGIN RETURN x; END;
+
+statement ok
+drop procedure if exists p1();
+
+statement ok
+drop procedure if exists p1(UInt8, UInt8);
+
+statement ok
+CREATE PROCEDURE if not exists p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 0;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+statement ok
+CREATE PROCEDURE if not exists p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 0;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+
+query T
+call procedure p1();
+----
+2
+
+statement ok
+CREATE or replace PROCEDURE p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 10;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+query T
+call procedure p1();
+----
+12
+
+statement ok
+CREATE PROCEDURE p1(x UInt8, sum UInt8) RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+statement error 3131
+CREATE PROCEDURE p1(x UInt8, sum UInt8) RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+statement ok
+CREATE OR REPLACE PROCEDURE p1() RETURNS int not null LANGUAGE SQL COMMENT='test' AS $$
+BEGIN
+    LET x := -1;
+    LET sum := 0;
+    FOR x IN x TO x + 3 DO
+        sum := sum + x;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+query T
+call procedure p1();
+----
+2
+
+query T
+call procedure p1(0, 0);
+----
+6
+
+query T
+call procedure p1(1,10);
+----
+20
+
+query T
+select name, arguments from system.procedures where name = 'p1';
+----
+p1 p1() RETURN (Int32)
+p1 p1(Int32) RETURN (Int32)
+p1 p1(UInt8,UInt8) RETURN (Int32)
+
+statement ok
+drop procedure p1();
+
+statement ok
+drop procedure p1(UInt8, UInt8);
+
+statement ok
+drop procedure p1(int);
+
+query T
+select count(name) from system.procedures
+----
+0
+
+statement ok
+drop procedure if exists not_exists_p();
+
+statement error 3130
+drop procedure not_exists_p();
+
+statement ok
+drop procedure if exists sum_even_numbers(Int, Int);
+
+statement ok
+CREATE PROCEDURE sum_even_numbers(start_val Int, end_val Int)
+RETURNS UInt8 NOT NULL
+LANGUAGE SQL
+COMMENT='Calculate the sum of all even numbers'
+AS $$
+BEGIN
+    LET sum := 0;
+    FOR i IN start_val TO end_val DO
+        IF i % 2 = 0 THEN
+            sum := sum + i;
+        END IF;
+    END FOR;
+    RETURN sum;
+END;
+$$;
+
+statement error 3130
+call procedure sum_even_numbers(1, 2)
+
+query T
+call procedure sum_even_numbers(1::INT, 2::INT)
+----
+2
+
+statement ok
+drop procedure sum_even_numbers(Int, Int);
+
+statement ok
+CREATE PROCEDURE if not exists p2(x STRING) RETURNS Int32 NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
+BEGIN
+    RETURN x;
+END;
+$$;
+
+query T
+call procedure p2('x');
+----
+'x'
+
+statement ok
+drop procedure p2(string);
+
+statement ok
+unset global enable_experimental_procedure;

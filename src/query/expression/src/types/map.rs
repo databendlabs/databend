@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Range;
-
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
 
 use super::ArrayType;
 use super::DecimalSize;
@@ -314,7 +313,7 @@ impl<'a, K: ValueType, V: ValueType> Iterator for KvIterator<'a, K, V> {
     }
 }
 
-unsafe impl<'a, K: ValueType, V: ValueType> TrustedLen for KvIterator<'a, K, V> {}
+unsafe impl<K: ValueType, V: ValueType> TrustedLen for KvIterator<'_, K, V> {}
 
 // Structurally equals to `Array(Tuple(K, V))` but treated distinct from `Array(Tuple(K, V))`
 // in unification.

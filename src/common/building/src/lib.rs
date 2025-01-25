@@ -57,6 +57,8 @@ pub fn add_building_env_vars() {
     add_env_credits_info();
     add_target_features();
     add_env_version();
+    add_env_license();
+    add_license_public_key();
 }
 
 pub fn set_env_config() {
@@ -85,6 +87,17 @@ fn discover_version() -> Result<String> {
             Ok(tag)
         }
     }
+}
+
+pub fn add_env_license() {
+    let v = env::var("DATABEND_ENTERPRISE_LICENSE_EMBEDDED").unwrap_or_default();
+    println!("cargo:rustc-env=DATABEND_ENTERPRISE_LICENSE_EMBEDDED={v}");
+}
+
+pub fn add_license_public_key() {
+    let v = env::var("DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY").unwrap_or_default();
+    let v = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, v.as_bytes());
+    println!("cargo:rustc-env=DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY={v}");
 }
 
 pub fn add_env_commit_authors(repo: &Repository) {

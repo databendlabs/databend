@@ -29,6 +29,11 @@ binary_url() {
 	echo "https://github.com/datafuselabs/databend/releases/download/v${ver}-nightly/databend-v${ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
 }
 
+test_suite_url() {
+	local ver="$1"
+	echo "https://github.com/databendlabs/databend/releases/download/v${ver}-nightly/databend-testsuite-v${ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
+}
+
 # output: 0.7.58
 # Without prefix `v` and `-nightly`
 find_min_query_ver() {
@@ -104,9 +109,20 @@ git_partial_clone() {
 download_test_suite() {
 	local ver="$1"
 
-	echo " === Download test suites from $ver:$query_test_path"
+	echo " === Download test suites $ver"
 
-	git_partial_clone "$bend_repo_url" "v$ver-nightly" "$query_test_path" old_suite
+	local url="$(test_suite_url $ver)"
+	local fn="databend-testsuite-v${ver}.tar.gz"
+
+	curl --connect-timeout 5 --retry-all-errors --retry 5 --retry-delay 1 -L "$url" -o "$fn"
+
+	mkdir -p ./testsuite/$ver
+	tar -xf "$fn" -C ./testsuite/$ver
+
+	echo " === Extracted test suites to ./testsuite/$ver:"
+	ls ./testsuite/$ver
+
+	chmod +x ./testsuite/$ver/bin/*
 }
 
 # Download config.toml for a specific version of query.
@@ -221,15 +237,15 @@ run_test() {
 		$sqllogictests --handlers mysql --run_dir 05_ddl
 	else
 		(
-			# download suites into ./old_suite
+			# download suites into ./testsuite/$query_ver/{bin/,suites/}
 			download_test_suite $query_ver
 		)
 
 		# Replace suites
 		rm -rf "tests/sqllogictests/suites"
-		mv "old_suite/tests/sqllogictests/suites" "tests/sqllogictests/suites"
+		mv "./testsuite/$query_ver/suites" "tests/sqllogictests/suites"
 
-		$sqllogictests --handlers mysql --run_dir 05_ddl
+    ./testsuite/$query_ver/bin/databend-sqllogictests --handlers mysql --run_dir 05_ddl
 		cd -
 	fi
 }

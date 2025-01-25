@@ -34,8 +34,8 @@ pub trait Client {
     async fn query(&self, query: &str) -> Result<Self::Set>;
     fn var_to_ast(&self, scalar: &Self::Var) -> Result<Expr>;
     fn read_from_set(&self, block: &Self::Set, row: usize, col: &ColumnAccess)
-    -> Result<Self::Var>;
-    fn set_len(&self, block: &Self::Set) -> usize;
+        -> Result<Self::Var>;
+    fn num_rows(&self, block: &Self::Set) -> usize;
     fn is_true(&self, scalar: &Self::Var) -> Result<bool>;
 }
 
@@ -132,7 +132,7 @@ impl<C: Client> Executor<C> {
                 let cursor = Cursor {
                     set: set.clone(),
                     row: 0,
-                    len: self.client.set_len(block),
+                    len: self.client.num_rows(block),
                 };
                 self.iters.insert(to_iter.clone(), cursor);
             }

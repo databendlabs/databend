@@ -16,10 +16,10 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
-use databend_storages_common_txn::TxnManager;
 use fastrace::func_name;
 use poem::web::Json;
 use poem::web::Path;
@@ -40,9 +40,12 @@ pub struct TenantTablesResponse {
 pub struct TenantTableInfo {
     pub table: String,
     pub database: String,
+    pub database_id: String,
     pub engine: String,
     pub created_on: DateTime<Utc>,
     pub updated_on: DateTime<Utc>,
+    pub is_local: bool,
+    pub is_external: bool,
     pub rows: u64,
     pub data_bytes: u64,
     pub compressed_data_bytes: u64,
@@ -54,7 +57,7 @@ pub struct TenantTableInfo {
 }
 
 async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
-    let catalog = CatalogManager::instance().get_default_catalog(TxnManager::init())?;
+    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
 
     let databases = catalog.list_databases(tenant).await?;
 
@@ -68,6 +71,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
     };
 
     for database in databases {
+        let database_info = database.get_db_info();
         let tables = match catalog.list_tables(tenant, database.name()).await {
             Ok(v) => v,
             Err(err) => {
@@ -104,9 +108,12 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
             table_infos.push(TenantTableInfo {
                 table: table.name().to_string(),
                 database: database.name().to_string(),
+                database_id: format!("{}", database_info.database_id),
                 engine: table.engine().to_string(),
                 created_on: table.get_table_info().meta.created_on,
                 updated_on: table.get_table_info().meta.updated_on,
+                is_local: matches!(table.distribution_level(), DistributionLevel::Local),
+                is_external: table.get_table_info().meta.storage_params.is_some(),
                 rows: stats.number_of_rows,
                 data_bytes: stats.data_bytes,
                 compressed_data_bytes: stats.compressed_data_bytes,

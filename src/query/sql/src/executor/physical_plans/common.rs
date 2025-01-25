@@ -15,26 +15,20 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
 
+use crate::plans::UDFField;
+use crate::plans::UDFType;
 use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionSignature {
     pub name: String,
+    pub udaf: Option<(UDFType, Vec<UDFField>)>,
+    pub return_type: DataType,
     pub params: Vec<Scalar>,
     pub args: Vec<DataType>,
-}
-
-impl AggregateFunctionSignature {
-    pub fn return_type(&self) -> Result<DataType> {
-        AggregateFunctionFactory::instance()
-            .get(&self.name, self.params.clone(), self.args.clone())?
-            .return_type()
-    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

@@ -17,5 +17,7 @@
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
 #![feature(let_chains)]
+#![feature(iter_map_windows)]
 
 pub mod processors;
+pub use processors::*;

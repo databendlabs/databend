@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::FormatTreeNode;
+use databend_common_base::runtime::profile::get_statistics_desc;
+use databend_common_base::runtime::profile::ProfileDesc;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -36,6 +40,8 @@ use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
+use serde::Serialize;
+use serde_json;
 
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
@@ -60,7 +66,15 @@ pub struct ExplainInterpreter {
     config: ExplainConfig,
     kind: ExplainKind,
     partial: bool,
+    graphical: bool,
     plan: Plan,
+}
+
+#[derive(Serialize)]
+pub struct GraphicalProfiles {
+    query_id: String,
+    profiles: Vec<PlanProfile>,
+    statistics_desc: Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>>,
 }
 
 #[async_trait::async_trait]
@@ -76,7 +90,9 @@ impl Interpreter for ExplainInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
-            ExplainKind::Raw | ExplainKind::Optimized => self.explain_plan(&self.plan)?,
+            ExplainKind::Raw | ExplainKind::Optimized | ExplainKind::Decorrelated => {
+                self.explain_plan(&self.plan)?
+            }
             ExplainKind::Plan if self.config.logical => self.explain_plan(&self.plan)?,
             ExplainKind::Plan => match &self.plan {
                 Plan::Query {
@@ -131,6 +147,7 @@ impl Interpreter for ExplainInterpreter {
                         self.ctx.clone(),
                         *s_expr.clone(),
                         schema.clone(),
+                        metadata.clone(),
                     )?;
                     let plan = interpreter.build_physical_plan(&mutation, None).await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
@@ -155,7 +172,7 @@ impl Interpreter for ExplainInterpreter {
                 ))?,
             },
 
-            ExplainKind::AnalyzePlan => match &self.plan {
+            ExplainKind::AnalyzePlan | ExplainKind::Graphical => match &self.plan {
                 Plan::Query {
                     s_expr,
                     metadata,
@@ -189,7 +206,7 @@ impl Interpreter for ExplainInterpreter {
             ExplainKind::Pipeline => {
                 // todo:(JackTan25), we need to make all execute2() just do `build pipeline` work,
                 // don't take real actions. for now we fix #13657 like below.
-                let pipeline = match &self.plan {
+                let mut pipeline = match &self.plan {
                     Plan::Query { .. } | Plan::DataMutation { .. } => {
                         let interpter =
                             InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
@@ -197,6 +214,15 @@ impl Interpreter for ExplainInterpreter {
                     }
                     _ => PipelineBuildResult::create(),
                 };
+
+                // The explain pipeline does not require executing on_init and on_finished.
+                let _ = pipeline.main_pipeline.take_on_init();
+                let _ = pipeline.main_pipeline.take_on_finished();
+
+                for pipeline in &mut pipeline.sources_pipelines {
+                    let _ = pipeline.take_on_init();
+                    let _ = pipeline.take_on_finished();
+                }
 
                 Self::format_pipeline(&pipeline)
             }
@@ -250,6 +276,7 @@ impl ExplainInterpreter {
         kind: ExplainKind,
         config: ExplainConfig,
         partial: bool,
+        graphical: bool,
     ) -> Result<Self> {
         Ok(ExplainInterpreter {
             ctx,
@@ -257,6 +284,7 @@ impl ExplainInterpreter {
             kind,
             config,
             partial,
+            graphical,
         })
     }
 
@@ -273,7 +301,10 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
-        if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
+        if self.ctx.get_settings().get_enable_query_result_cache()?
+            && self.ctx.get_cacheable()
+            && formatted_ast.is_some()
+        {
             let key = gen_result_cache_key(formatted_ast.as_ref().unwrap());
             let kv_store = UserApiProvider::instance().get_meta_store_client();
             let cache_reader = ResultCacheReader::create(
@@ -365,6 +396,40 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
+    fn graphical_profiles_to_datablocks(profiles: GraphicalProfiles) -> Vec<DataBlock> {
+        let json_string = serde_json::to_string_pretty(&profiles)
+            .unwrap_or_else(|_| "Failed to format profiles".to_string());
+
+        let line_split_result: Vec<&str> = json_string.lines().collect();
+        let formatted_block = StringType::from_data(line_split_result);
+
+        vec![DataBlock::new_from_columns(vec![formatted_block])]
+    }
+
+    #[async_backtrace::framed]
+    async fn explain_analyze_graphical(
+        &self,
+        s_expr: &SExpr,
+        metadata: &MetadataRef,
+        required: ColumnSet,
+        ignore_result: bool,
+    ) -> Result<GraphicalProfiles> {
+        let query_ctx = self.ctx.clone();
+
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
+        let plan = builder.build(s_expr, required).await?;
+        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
+
+        // Drain the data
+        let query_profiles = self.execute_and_get_profiles(build_res)?;
+
+        Ok(GraphicalProfiles {
+            query_id: query_ctx.get_id(),
+            profiles: query_profiles.values().cloned().collect(),
+            statistics_desc: get_statistics_desc(),
+        })
+    }
+
     #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
@@ -383,11 +448,21 @@ impl ExplainInterpreter {
         let result = if self.partial {
             format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
         } else {
-            plan.format(metadata.clone(), query_profiles)?
+            plan.format(metadata.clone(), query_profiles.clone())?
                 .format_pretty()?
         };
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
+
+        if self.graphical {
+            let profiles = GraphicalProfiles {
+                query_id: self.ctx.clone().get_id(),
+                profiles: query_profiles.clone().values().cloned().collect(),
+                statistics_desc: get_statistics_desc(),
+            };
+            return Ok(Self::graphical_profiles_to_datablocks(profiles));
+        }
+
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
@@ -455,7 +530,12 @@ impl ExplainInterpreter {
         schema: DataSchemaRef,
     ) -> Result<Vec<DataBlock>> {
         let mutation: Mutation = s_expr.plan().clone().try_into()?;
-        let interpreter = MutationInterpreter::try_create(self.ctx.clone(), s_expr, schema)?;
+        let interpreter = MutationInterpreter::try_create(
+            self.ctx.clone(),
+            s_expr,
+            schema,
+            mutation.metadata.clone(),
+        )?;
         let plan = interpreter.build_physical_plan(&mutation, None).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 

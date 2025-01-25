@@ -7,6 +7,12 @@ USE test_window_partition_spill
 statement ok
 set window_partition_spilling_bytes_threshold_per_proc = 1024 * 1024 * 1;
 
+statement ok
+set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
+
+statement ok
+set enable_dio = 1;
+
 query T
 SELECT SUM(number + a + b)
 FROM (
@@ -31,6 +37,37 @@ FROM (
 );
 ----
 1499998499576
+
+statement ok
+set enable_dio = 0;
+
+query T
+SELECT SUM(number + a + b)
+FROM (
+    SELECT
+        number,
+        LEAD(number, 1, 0) OVER (PARTITION BY number % 16 ORDER BY number + 1) AS a,
+        LEAD(number, 2, 0) OVER (PARTITION BY number % 16 ORDER BY number + 1) AS b
+    FROM numbers(5000000)
+);
+----
+37499992499384
+
+query I
+SELECT SUM(a + b + c)
+FROM (
+    SELECT
+        number,
+        LEAD(number, 1, 0) OVER (PARTITION BY number % 8 ORDER BY number + 2) a,
+        LEAD(number, 2, 0) OVER (PARTITION BY number % 8 ORDER BY number + 2) b,
+        LEAD(number, 3, 0) OVER (PARTITION BY number % 8 ORDER BY number + 2) c
+    FROM numbers(1000000)
+);
+----
+1499998499576
+
+statement ok
+unset enable_dio;
 
 statement ok
 DROP TABLE IF EXISTS customers;

@@ -15,10 +15,11 @@
 use std::alloc::Layout;
 use std::ptr::NonNull;
 
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use enum_as_inner::EnumAsInner;
 
 use super::AggregateFunctionRef;
+use crate::types::binary::BinaryColumnBuilder;
 
 #[derive(Clone, Copy, Debug)]
 pub struct StateAddr {
@@ -110,24 +111,241 @@ impl From<StateAddr> for usize {
     }
 }
 
-pub fn get_layout_offsets(
-    funcs: &[AggregateFunctionRef],
-    offsets: &mut Vec<usize>,
-) -> Result<Layout> {
-    let mut max_align = 0;
-    let mut total_size = 0;
-
+pub fn get_states_layout(funcs: &[AggregateFunctionRef]) -> Result<StatesLayout> {
+    let mut registry = AggrStateRegistry::default();
+    let mut serialize_size = Vec::with_capacity(funcs.len());
     for func in funcs {
-        let layout = func.state_layout();
-        let align = layout.align();
-
-        total_size = (total_size + align - 1) / align * align;
-
-        offsets.push(total_size);
-
-        max_align = max_align.max(align);
-        total_size += layout.size();
+        func.register_state(&mut registry);
+        registry.commit();
+        serialize_size.push(func.serialize_size_per_row());
     }
-    Layout::from_size_align(total_size, max_align)
-        .map_err(|e| ErrorCode::LayoutError(format!("Layout error: {}", e)))
+
+    let AggrStateRegistry { states, offsets } = registry;
+
+    let (layout, locs) = sort_states(states);
+
+    let states_loc = offsets
+        .windows(2)
+        .map(|w| locs[w[0]..w[1]].to_vec().into_boxed_slice())
+        .collect::<Vec<_>>();
+
+    Ok(StatesLayout {
+        layout,
+        states_loc,
+        serialize_size,
+    })
+}
+
+fn sort_states(states: Vec<AggrStateType>) -> (Layout, Vec<AggrStateLoc>) {
+    let mut states = states
+        .iter()
+        .enumerate()
+        .map(|(idx, state)| {
+            let layout = match state {
+                AggrStateType::Bool => (1, 1),
+                AggrStateType::Custom(layout) => (layout.align(), layout.pad_to_align().size()),
+            };
+            (idx, state, layout)
+        })
+        .collect::<Vec<_>>();
+
+    states.sort_by_key(|(_, _, (align, _))| std::cmp::Reverse(*align));
+
+    let mut locs = vec![AggrStateLoc::Bool(0, 0); states.len()];
+    let mut acc = 0;
+    let mut max_align = 0;
+    for (idx, state, (align, size)) in states {
+        max_align = max_align.max(align);
+        let offset = acc;
+        acc += size;
+        locs[idx] = match state {
+            AggrStateType::Bool => AggrStateLoc::Bool(idx, offset),
+            AggrStateType::Custom(_) => AggrStateLoc::Custom(idx, offset),
+        };
+    }
+
+    let layout = Layout::from_size_align(acc, max_align).unwrap();
+
+    (layout, locs)
+}
+
+#[derive(Debug, Clone, Copy, EnumAsInner)]
+pub enum AggrStateLoc {
+    Bool(usize, usize),   // index, offset
+    Custom(usize, usize), // index, offset
+}
+
+impl AggrStateLoc {
+    pub fn offset(&self) -> usize {
+        match self {
+            AggrStateLoc::Bool(_, offset) => *offset,
+            AggrStateLoc::Custom(_, offset) => *offset,
+        }
+    }
+
+    pub fn index(&self) -> usize {
+        match self {
+            AggrStateLoc::Bool(idx, _) => *idx,
+            AggrStateLoc::Custom(idx, _) => *idx,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StatesLayout {
+    pub layout: Layout,
+    pub states_loc: Vec<Box<[AggrStateLoc]>>,
+    serialize_size: Vec<Option<usize>>,
+}
+
+impl StatesLayout {
+    pub fn serialize_builders(&self, num_rows: usize) -> Vec<BinaryColumnBuilder> {
+        self.serialize_size
+            .iter()
+            .map(|size| BinaryColumnBuilder::with_capacity(num_rows, num_rows * size.unwrap_or(0)))
+            .collect()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AggrState<'a> {
+    pub addr: StateAddr,
+    pub loc: &'a [AggrStateLoc],
+}
+
+impl<'a> AggrState<'a> {
+    pub fn new(addr: StateAddr, loc: &'a [AggrStateLoc]) -> Self {
+        Self { addr, loc }
+    }
+
+    pub fn get<'b, T>(&self) -> &'b mut T {
+        debug_assert_eq!(self.loc.len(), 1);
+        self.addr
+            .next(self.loc[0].into_custom().unwrap().1)
+            .get::<T>()
+    }
+
+    pub fn write<T, F>(&self, f: F)
+    where F: FnOnce() -> T {
+        debug_assert_eq!(self.loc.len(), 1);
+        self.addr
+            .next(self.loc[0].into_custom().unwrap().1)
+            .write(f);
+    }
+
+    pub fn remove_last_loc(&self) -> Self {
+        debug_assert!(self.loc.len() >= 2);
+        Self {
+            addr: self.addr,
+            loc: &self.loc[..self.loc.len() - 1],
+        }
+    }
+
+    pub fn remove_first_loc(&self) -> Self {
+        debug_assert!(self.loc.len() >= 2);
+        Self {
+            addr: self.addr,
+            loc: &self.loc[1..],
+        }
+    }
+}
+
+pub struct AggrStateRegistry {
+    states: Vec<AggrStateType>,
+    offsets: Vec<usize>,
+}
+
+impl AggrStateRegistry {
+    pub fn new() -> Self {
+        Self {
+            states: vec![],
+            offsets: vec![0],
+        }
+    }
+
+    pub fn register(&mut self, state: AggrStateType) {
+        self.states.push(state);
+    }
+
+    pub fn commit(&mut self) {
+        self.offsets.push(self.states.len());
+    }
+
+    pub fn states(&self) -> &[AggrStateType] {
+        &self.states
+    }
+}
+
+impl Default for AggrStateRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AggrStateType {
+    Bool,
+    Custom(Layout),
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+    use proptest::strategy::ValueTree;
+    use proptest::test_runner::TestRunner;
+
+    use super::*;
+
+    prop_compose! {
+        fn arb_state_type()(size in 1..100_usize, align in 0..5_u8) -> AggrStateType {
+            let layout = Layout::from_size_align(size, 1 << align).unwrap();
+            AggrStateType::Custom(layout)
+        }
+    }
+
+    #[test]
+    fn test_sort_states() {
+        let mut runner = TestRunner::default();
+        let input_s = prop::collection::vec(arb_state_type(), 1..20);
+
+        for _ in 0..100 {
+            let input = input_s.new_tree(&mut runner).unwrap().current();
+            run_sort_states(input);
+        }
+    }
+
+    fn check_offset(layout: &Layout, offset: usize) -> bool {
+        let align = layout.align();
+        offset & (align - 1) == 0
+    }
+
+    fn run_sort_states(input: Vec<AggrStateType>) {
+        let (layout, locs) = sort_states(input.clone());
+
+        let is_aligned = input
+            .iter()
+            .zip(locs.iter())
+            .all(|(state, loc)| match state {
+                AggrStateType::Custom(layout) => check_offset(layout, loc.offset()),
+                _ => unreachable!(),
+            });
+
+        assert!(is_aligned, "states are not aligned, input: {input:?}");
+
+        let size = layout.size();
+        let mut memory = vec![false; size];
+        for (state, loc) in input.iter().zip(locs.iter()) {
+            match state {
+                AggrStateType::Custom(layout) => {
+                    let start = loc.offset();
+                    let end = start + layout.size();
+                    for i in start..end {
+                        assert!(!memory[i], "layout is overlap, input: {input:?}");
+                        memory[i] = true;
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
 }

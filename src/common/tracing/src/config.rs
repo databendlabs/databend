@@ -64,8 +64,8 @@ impl Display for FileConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, level={}, dir={}, format={}",
-            self.on, self.level, self.dir, self.format
+            "enabled={}, level={}, dir={}, format={}, limit={}, prefix_filter={}",
+            self.on, self.level, self.dir, self.format, self.limit, self.prefix_filter
         )
     }
 }
@@ -246,7 +246,7 @@ impl Default for TracingConfig {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OTLPProtocol {
     Http,
     Grpc,
@@ -288,6 +288,17 @@ impl<'de> serde::Deserialize<'de> for OTLPProtocol {
                 "unknown protocol: {}",
                 protocol
             ))),
+        }
+    }
+}
+
+impl From<OTLPProtocol> for logforth::append::opentelemetry::OpentelemetryWireProtocol {
+    fn from(protocol: OTLPProtocol) -> Self {
+        match protocol {
+            OTLPProtocol::Http => {
+                logforth::append::opentelemetry::OpentelemetryWireProtocol::HttpBinary
+            }
+            OTLPProtocol::Grpc => logforth::append::opentelemetry::OpentelemetryWireProtocol::Grpc,
         }
     }
 }

@@ -1,0 +1,71 @@
+# TPC-DS spill test
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpcds;
+
+statement ok
+set join_spilling_memory_ratio = 1;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 1;
+
+statement ok
+set sort_spilling_memory_ratio = 1;
+
+statement ok
+set sort_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
+set window_partition_spilling_memory_ratio = 1;
+
+statement ok
+set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
+
+statement ok
+set window_partition_spilling_bytes_threshold_per_proc = 1;
+
+# TPC-DS TEST
+include ./queries.test
+
+statement ok
+set max_block_size = 2;
+
+statement ok
+create or replace table t as select 0 AS c1, i_category as c2 from (select i_category, i_class from item group by i_category, i_class) limit 60;
+
+query T
+select sum(rank) from (select rank() over (partition by c1, c2) as rank FROM t);
+----
+60
+
+statement ok
+drop table if exists t;
+
+statement ok
+unset max_block_size;
+
+statement ok
+unset join_spilling_memory_ratio;
+
+statement ok
+unset join_spilling_bytes_threshold_per_proc;
+
+statement ok
+unset join_spilling_buffer_threshold_per_proc_mb;
+
+statement ok
+unset sort_spilling_memory_ratio;
+
+statement ok
+unset sort_spilling_bytes_threshold_per_proc;
+
+statement ok
+unset window_partition_spilling_memory_ratio;
+
+statement ok
+unset window_partition_spilling_bytes_threshold_per_proc;

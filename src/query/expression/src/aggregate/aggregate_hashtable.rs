@@ -49,6 +49,7 @@ pub struct AggregateHashTable {
     // use for append rows directly during deserialize
     pub direct_append: bool,
     pub config: HashTableConfig,
+
     current_radix_bits: u64,
     entries: Vec<Entry>,
     count: usize,
@@ -198,26 +199,26 @@ impl AggregateHashTable {
             }
 
             let state_places = &state.state_places.as_slice()[0..row_count];
-
+            let states_layout = self.payload.states_layout.as_ref().unwrap();
             if agg_states.is_empty() {
-                for ((aggr, params), addr_offset) in self
+                for ((func, params), loc) in self
                     .payload
                     .aggrs
                     .iter()
                     .zip(params.iter())
-                    .zip(self.payload.state_addr_offsets.iter())
+                    .zip(states_layout.states_loc.iter())
                 {
-                    aggr.accumulate_keys(state_places, *addr_offset, *params, row_count)?;
+                    func.accumulate_keys(state_places, loc, *params, row_count)?;
                 }
             } else {
-                for ((aggr, agg_state), addr_offset) in self
+                for ((func, state), loc) in self
                     .payload
                     .aggrs
                     .iter()
                     .zip(agg_states.iter())
-                    .zip(self.payload.state_addr_offsets.iter())
+                    .zip(states_layout.states_loc.iter())
                 {
-                    aggr.batch_merge(state_places, *addr_offset, agg_state)?;
+                    func.batch_merge(state_places, loc, state.as_binary().unwrap())?;
                 }
             }
         }
@@ -411,13 +412,10 @@ impl AggregateHashTable {
             let state = &mut flush_state.probe_state;
             let places = &state.state_places.as_slice()[0..row_count];
             let rhses = &flush_state.state_places.as_slice()[0..row_count];
-            for (aggr, addr_offset) in self
-                .payload
-                .aggrs
-                .iter()
-                .zip(self.payload.state_addr_offsets.iter())
-            {
-                aggr.batch_merge_states(places, rhses, *addr_offset)?;
+            if let Some(layout) = self.payload.states_layout.as_ref() {
+                for (aggr, loc) in self.payload.aggrs.iter().zip(layout.states_loc.iter()) {
+                    aggr.batch_merge_states(places, rhses, loc)?;
+                }
             }
         }
 
@@ -425,29 +423,31 @@ impl AggregateHashTable {
     }
 
     pub fn merge_result(&mut self, flush_state: &mut PayloadFlushState) -> Result<bool> {
-        if self.payload.flush(flush_state) {
-            let row_count = flush_state.row_count;
+        if !self.payload.flush(flush_state) {
+            return Ok(false);
+        }
 
-            flush_state.aggregate_results.clear();
-            for (aggr, addr_offset) in self
+        let row_count = flush_state.row_count;
+        flush_state.aggregate_results.clear();
+        if let Some(states_layout) = self.payload.states_layout.as_ref() {
+            for (aggr, loc) in self
                 .payload
                 .aggrs
                 .iter()
-                .zip(self.payload.state_addr_offsets.iter())
+                .zip(states_layout.states_loc.iter().cloned())
             {
                 let return_type = aggr.return_type()?;
                 let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
 
                 aggr.batch_merge_result(
                     &flush_state.state_places.as_slice()[0..row_count],
-                    *addr_offset,
+                    loc,
                     &mut builder,
                 )?;
                 flush_state.aggregate_results.push(builder.build());
             }
-            return Ok(true);
         }
-        Ok(false)
+        Ok(true)
     }
 
     fn maybe_repartition(&mut self) -> bool {
@@ -585,6 +585,7 @@ impl AggregateHashTable {
                 .iter()
                 .map(|arena| arena.allocated_bytes())
                 .sum::<usize>()
+            + self.entries.len() * std::mem::size_of::<Entry>()
     }
 }
 

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use arrow_schema::Schema;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 
@@ -21,7 +22,9 @@ use databend_common_meta_app::schema::TableInfo;
 pub struct ResultScanTableInfo {
     pub table_info: TableInfo,
     pub query_id: String,
-    pub block_raw_data: Vec<u8>,
+    pub location: String,
+    pub schema: Schema,
+    pub file_size: u64,
 }
 
 impl ResultScanTableInfo {

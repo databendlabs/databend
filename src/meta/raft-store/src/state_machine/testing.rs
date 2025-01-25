@@ -13,18 +13,16 @@
 // limitations under the License.
 
 use databend_common_meta_sled_store::openraft;
-use databend_common_meta_types::new_log_id;
+use databend_common_meta_types::raft_types::new_log_id;
+use databend_common_meta_types::raft_types::Entry;
+use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::Entry;
-use databend_common_meta_types::EntryPayload;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::RaftTxId;
 use databend_common_meta_types::UpsertKV;
 use maplit::btreeset;
+use openraft::entry::RaftEntry;
 use openraft::Membership;
-
-use crate::key_spaces::RaftStoreEntry;
-use crate::state_machine::SnapshotKeyValue;
 
 /// Logs and the expected snapshot for testing snapshot.
 pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
@@ -33,6 +31,8 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
             log_id: new_log_id(1, 0, 1),
             payload: EntryPayload::Membership(Membership::new(vec![btreeset![1, 2, 3]], ())),
         },
+        Entry::new_blank(new_log_id(1, 0, 2)),
+        Entry::new_blank(new_log_id(1, 0, 3)),
         Entry {
             log_id: new_log_id(1, 0, 4),
             payload: EntryPayload::Normal(LogEntry {
@@ -49,6 +49,7 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
             log_id: new_log_id(1, 0, 6),
             payload: EntryPayload::Blank,
         },
+        Entry::new_blank(new_log_id(1, 0, 7)),
         Entry {
             log_id: new_log_id(1, 0, 8),
             payload: EntryPayload::Blank,
@@ -77,29 +78,6 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
     .collect::<Vec<_>>();
 
     (logs, want)
-}
-
-pub fn pretty_snapshot(snap: &[SnapshotKeyValue]) -> Vec<String> {
-    let mut res = vec![];
-    for kv in snap.iter() {
-        let k = kv[0].clone();
-        let v = kv[1].clone();
-        let line = format!("{:?}:{}", k, String::from_utf8(v.to_vec()).unwrap());
-        res.push(line);
-    }
-    res
-}
-
-pub fn pretty_snapshot_entries<'a>(
-    snap: impl IntoIterator<Item = &'a RaftStoreEntry>,
-) -> Vec<String> {
-    let mut res = vec![];
-
-    for kv in snap.into_iter() {
-        let line = serde_json::to_string(kv).unwrap();
-        res.push(line);
-    }
-    res
 }
 
 // test cases fro Cmd::IncrSeq:

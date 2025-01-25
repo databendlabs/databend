@@ -50,7 +50,7 @@ pub enum MetaCompression {
 impl TryFrom<u8> for MetaCompression {
     type Error = ErrorCode;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             0 => Ok(MetaCompression::None),
             1 => Ok(MetaCompression::Zstd),
@@ -117,7 +117,7 @@ pub enum MetaEncoding {
 impl TryFrom<u8> for MetaEncoding {
     type Error = ErrorCode;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> std::result::Result<Self, Self::Error> {
         match value {
             1 => Ok(MetaEncoding::Bincode),
             2 => Ok(MetaEncoding::MessagePack),
@@ -133,7 +133,7 @@ impl TryFrom<u8> for MetaEncoding {
 pub fn encode<T: Serialize>(encoding: &MetaEncoding, data: &T) -> Result<Vec<u8>> {
     match encoding {
         MetaEncoding::Bincode => {
-            Ok(bincode::serialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
+            Ok(bincode_v1::serialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
         }
         MetaEncoding::MessagePack => {
             // using to_vec_named to keep the format backward compatible
@@ -148,7 +148,7 @@ pub fn encode<T: Serialize>(encoding: &MetaEncoding, data: &T) -> Result<Vec<u8>
 pub fn decode<'a, T: Deserialize<'a>>(encoding: &MetaEncoding, data: &'a [u8]) -> Result<T> {
     match encoding {
         MetaEncoding::Bincode => {
-            Ok(bincode::deserialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
+            Ok(bincode_v1::deserialize(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)
         }
         MetaEncoding::MessagePack => {
             Ok(rmp_serde::from_slice(data).map_err(|e| Error::new(ErrorKind::InvalidData, e))?)

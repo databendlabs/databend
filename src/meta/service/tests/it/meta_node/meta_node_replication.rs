@@ -15,27 +15,27 @@
 use std::fs;
 use std::io::Read;
 
-use databend_common_arrow::arrow::array::ViewType;
-use databend_common_meta_raft_store::sm_v003::SnapshotStoreV003;
+use databend_common_meta_raft_store::sm_v003::SnapshotStoreV004;
 use databend_common_meta_raft_store::state_machine::MetaSnapshotId;
+use databend_common_meta_raft_store::state_machine_api_ext::StateMachineApiExt;
 use databend_common_meta_sled_store::openraft::error::SnapshotMismatch;
 use databend_common_meta_sled_store::openraft::testing::log_id;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::ServerState;
 use databend_common_meta_types::protobuf::SnapshotChunkRequest;
 use databend_common_meta_types::protobuf::SnapshotChunkRequestV003;
+use databend_common_meta_types::raft_types::InstallSnapshotError;
+use databend_common_meta_types::raft_types::InstallSnapshotRequest;
+use databend_common_meta_types::raft_types::RaftError;
+use databend_common_meta_types::raft_types::SnapshotMeta;
+use databend_common_meta_types::raft_types::SnapshotResponse;
+use databend_common_meta_types::raft_types::StoredMembership;
+use databend_common_meta_types::raft_types::Vote;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::InstallSnapshotError;
-use databend_common_meta_types::InstallSnapshotRequest;
 use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::RaftError;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SnapshotMeta;
-use databend_common_meta_types::SnapshotResponse;
-use databend_common_meta_types::StoredMembership;
 use databend_common_meta_types::UpsertKV;
-use databend_common_meta_types::Vote;
 use databend_meta::meta_service::MetaNode;
 use futures::stream;
 use itertools::Itertools;
@@ -143,7 +143,7 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     for i in 0..n_req {
         let key = format!("test_meta_node_snapshot_replication-key-{}", i);
-        let sm = mn1.sto.get_state_machine().await;
+        let sm = mn1.raft_store.get_state_machine().await;
         let got = sm.get_maybe_expired_kv(&key).await?;
         match got {
             None => {
@@ -233,7 +233,7 @@ async fn test_raft_service_install_snapshot_v1() -> anyhow::Result<()> {
     let mut offset = 0;
 
     for (i, line) in snapshot_data.into_iter().enumerate() {
-        let mut chunk = line.to_bytes().to_vec();
+        let mut chunk = line.as_bytes().to_vec();
         let done = i == snapshot_data.len() - 1;
         if !done {
             chunk.push(b'\n');
@@ -288,7 +288,7 @@ async fn test_raft_service_install_snapshot_v003() -> anyhow::Result<()> {
     };
 
     // build a temp snapshot data
-    let ss_store = SnapshotStoreV003::new(tc0.config.raft_config.clone());
+    let ss_store = SnapshotStoreV004::new(tc0.config.raft_config.clone());
     let writer = ss_store.new_writer()?;
 
     let snapshot_data = {

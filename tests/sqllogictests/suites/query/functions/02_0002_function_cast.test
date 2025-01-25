@@ -477,5 +477,40 @@ select cast(position as String), cast(trim as String), cast(substring as String)
 ----
 3 3 3
 
+query TTT
+select '[1,2,"3"]'::Variant a, a::Array(Variant) b, b::Variant = a;
+----
+[1,2,"3"] ['1','2','"3"'] 1
+
+query TTT
+select '{"k1":"v1","k2":"v2"}'::Variant a, a::Map(String, String) b, b::Variant = a;
+----
+{"k1":"v1","k2":"v2"} {'k1':'v1','k2':'v2'} 1
+
+query TTT
+select '{"a":1,"b":2}'::Variant a, a::Map(String, Int) b, b::Variant = a;
+----
+{"a":1,"b":2} {'a':1,'b':2} 1
+
+query TTT
+select to_binary(parse_json('{"data":"bend","test":100}')), to_binary(parse_json('[1,2,3]')), to_binary(parse_json('100'));
+----
+4000000210000004100000041000000420000002646174617465737462656E645064 80000003200000022000000220000002500150025003 20000000200000025064
+
+query TT
+SELECT to_binary(to_bitmap('100,200,300')), to_binary(to_bitmap('1,2,3,4,5'));
+----
+0100000000000000000000003A3000000100000000000200100000006400C8002C01 0100000000000000000000003A30000001000000000004001000000001000200030004000500
+
+query TT
+SELECT to_binary(st_geometryfromwkt('SRID=4326;POINT(1.0 2.0)')), to_binary(st_geometryfromwkt('SRID=4326;LINESTRING(1.0 2.0, 3.0 4.0, 10.1 11.2)'));
+----
+0101000020E6100000000000000000F03F0000000000000040 0102000020E610000003000000000000000000F03F00000000000000400000000000000840000000000000104033333333333324406666666666662640
+
+query TT
+SELECT to_binary(st_geographyfromewkt('SRID=4326;POINT(-122.35 37.55)')), to_binary(st_geographyfromewkt('SRID=4326;LINESTRING(-122.35 37.5, -151.55 39.25)'));
+----
+0101000020E61000006666666666965EC06666666666C64240 0102000020E6100000020000006666666666965EC00000000000C042409A99999999F162C00000000000A04340
+
 statement ok
 drop table t

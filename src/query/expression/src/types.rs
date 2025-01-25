@@ -22,7 +22,9 @@ pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
 pub mod generic;
+pub mod geography;
 pub mod geometry;
+pub mod interval;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -34,30 +36,39 @@ pub mod variant;
 
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::iter::TrustedLen;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
 pub use self::any::AnyType;
+pub use self::array::ArrayColumn;
 pub use self::array::ArrayType;
+pub use self::binary::BinaryColumn;
 pub use self::binary::BinaryType;
 pub use self::bitmap::BitmapType;
+pub use self::boolean::Bitmap;
 pub use self::boolean::BooleanType;
+pub use self::boolean::MutableBitmap;
 pub use self::date::DateType;
-pub use self::decimal::DecimalDataType;
-pub use self::decimal::DecimalSize;
+pub use self::decimal::*;
 pub use self::empty_array::EmptyArrayType;
 pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
+pub use self::geography::GeographyColumn;
+pub use self::geography::GeographyType;
+pub use self::geometry::GeometryType;
+pub use self::interval::IntervalType;
 pub use self::map::MapType;
 pub use self::null::NullType;
+pub use self::nullable::NullableColumn;
 pub use self::nullable::NullableType;
 pub use self::number::*;
 pub use self::number_class::*;
+pub use self::string::StringColumn;
 pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
@@ -92,6 +103,8 @@ pub enum DataType {
     Tuple(Vec<DataType>),
     Variant,
     Geometry,
+    Interval,
+    Geography,
 
     // Used internally for generic types
     Generic(usize),
@@ -103,10 +116,6 @@ impl DataType {
             DataType::Null | DataType::Nullable(_) => self.clone(),
             _ => Self::Nullable(Box::new(self.clone())),
         }
-    }
-
-    pub fn is_nullable(&self) -> bool {
-        matches!(self, &DataType::Nullable(_))
     }
 
     pub fn is_nullable_or_null(&self) -> bool {
@@ -143,9 +152,11 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::Date
+            | DataType::Interval
             | DataType::Bitmap
             | DataType::Variant
-            | DataType::Geometry => false,
+            | DataType::Geometry
+            | DataType::Geography => false,
             DataType::Nullable(ty) => ty.has_generic(),
             DataType::Array(ty) => ty.has_generic(),
             DataType::Map(ty) => ty.has_generic(),
@@ -166,9 +177,11 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::Date
+            | DataType::Interval
             | DataType::Bitmap
             | DataType::Variant
             | DataType::Geometry
+            | DataType::Geography
             | DataType::Generic(_) => false,
             DataType::Nullable(box DataType::Nullable(_) | box DataType::Null) => true,
             DataType::Nullable(ty) => ty.has_nested_nullable(),
@@ -251,10 +264,6 @@ impl DataType {
         }
     }
 
-    pub fn is_numeric(&self) -> bool {
-        matches!(self, DataType::Number(_))
-    }
-
     #[inline]
     pub fn is_integer(&self) -> bool {
         match self {
@@ -269,11 +278,6 @@ impl DataType {
             DataType::Number(ty) => ALL_FLOAT_TYPES.contains(ty),
             _ => false,
         }
-    }
-
-    #[inline]
-    pub fn is_decimal(&self) -> bool {
-        matches!(self, DataType::Decimal(_ty))
     }
 
     #[inline]
@@ -365,12 +369,23 @@ impl DataType {
             _ => None,
         }
     }
+
+    pub fn is_physical_binary(&self) -> bool {
+        matches!(
+            self,
+            DataType::Binary
+                | DataType::Bitmap
+                | DataType::Variant
+                | DataType::Geometry
+                | DataType::Geography
+        )
+    }
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + PartialEq;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
-    type Column: Debug + Clone + PartialEq;
+    type Column: Debug + Clone + PartialEq + Send;
     type Domain: Debug + Clone + PartialEq;
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
     type ColumnBuilder: Debug + Clone;
@@ -423,6 +438,14 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_>;
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar {
+        Self::to_owned_scalar(Self::index_column_unchecked(col, index))
+    }
+
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;
@@ -443,46 +466,47 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
         Self::column_len(col) * std::mem::size_of::<Self::Scalar>()
     }
 
-    /// Compare two scalars and return the Ordering between them, some data types not support comparison.
+    /// This is default implementation yet it's not efficient.
     #[inline(always)]
-    fn compare(_: Self::ScalarRef<'_>, _: Self::ScalarRef<'_>) -> Option<Ordering> {
-        None
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        Self::upcast_scalar(Self::to_owned_scalar(lhs))
+            .cmp(&Self::upcast_scalar(Self::to_owned_scalar(rhs)))
     }
 
     /// Equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        matches!(Self::compare(left, right), Some(Ordering::Equal))
+        matches!(Self::compare(left, right), Ordering::Equal)
     }
 
     /// Not equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn not_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        !matches!(Self::compare(left, right), Some(Ordering::Equal))
+        !matches!(Self::compare(left, right), Ordering::Equal)
     }
 
     /// Greater than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn greater_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        matches!(Self::compare(left, right), Some(Ordering::Greater))
+        matches!(Self::compare(left, right), Ordering::Greater)
     }
 
     /// Less than comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn less_than(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        matches!(Self::compare(left, right), Some(Ordering::Less))
+        matches!(Self::compare(left, right), Ordering::Less)
     }
 
     /// Greater than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn greater_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        !matches!(Self::compare(left, right), Some(Ordering::Less))
+        !matches!(Self::compare(left, right), Ordering::Less)
     }
 
     /// Less than or equal comparison between two scalars, some data types not support comparison.
     #[inline(always)]
     fn less_than_equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
-        !matches!(Self::compare(left, right), Some(Ordering::Greater))
+        !matches!(Self::compare(left, right), Ordering::Greater)
     }
 }
 

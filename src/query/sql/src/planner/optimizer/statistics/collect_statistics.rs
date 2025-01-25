@@ -15,18 +15,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_ast::ast::SampleLevel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::F64;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
-use log::info;
 
-use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
@@ -34,7 +30,6 @@ use crate::plans::RelOperator;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
@@ -42,7 +37,6 @@ use crate::ScalarExpr;
 pub struct CollectStatisticsOptimizer {
     table_ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
-    cte_statistics: HashMap<IndexType, Arc<StatInfo>>,
 }
 
 impl CollectStatisticsOptimizer {
@@ -50,7 +44,6 @@ impl CollectStatisticsOptimizer {
         CollectStatisticsOptimizer {
             table_ctx,
             metadata,
-            cte_statistics: HashMap::new(),
         }
     }
 
@@ -81,25 +74,18 @@ impl CollectStatisticsOptimizer {
                 for column in columns.iter() {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
-                        path_indices,
-                        leaf_index,
+                        column_id,
                         virtual_computed_expr,
                         ..
                     }) = column
                     {
-                        if path_indices.is_none() && virtual_computed_expr.is_none() {
-                            if let Some(col_id) = *leaf_index {
+                        if virtual_computed_expr.is_none() {
+                            if let Some(column_id) = *column_id {
                                 let col_stat = column_statistics_provider
-                                    .column_statistics(col_id as ColumnId);
-                                if col_stat.is_none() {
-                                    info!("column {} doesn't have global statistics", col_id);
-                                }
+                                    .column_statistics(column_id as ColumnId);
                                 column_stats.insert(*column_index, col_stat.cloned());
                                 let histogram =
-                                    column_statistics_provider.histogram(col_id as ColumnId);
-                                if histogram.is_none() {
-                                    info!("column {} doesn't have accurate histogram", col_id);
-                                }
+                                    column_statistics_provider.histogram(column_id as ColumnId);
                                 histograms.insert(*column_index, histogram);
                             }
                         }
@@ -114,65 +100,45 @@ impl CollectStatisticsOptimizer {
                 });
                 let mut s_expr = s_expr.replace_plan(Arc::new(RelOperator::Scan(scan.clone())));
                 if let Some(sample) = &scan.sample {
-                    match sample.sample_level {
-                        SampleLevel::ROW => {
-                            if let Some(stats) = &table_stats
-                                && let Some(probability) = sample.sample_probability(stats.num_rows)
-                            {
-                                let rand_expr = ScalarExpr::FunctionCall(FunctionCall {
-                                    span: None,
-                                    func_name: "rand".to_string(),
-                                    params: vec![],
-                                    arguments: vec![],
-                                });
-                                let filter = ScalarExpr::FunctionCall(FunctionCall {
-                                    span: None,
-                                    func_name: "lte".to_string(),
-                                    params: vec![],
-                                    arguments: vec![
-                                        rand_expr,
-                                        ScalarExpr::ConstantExpr(ConstantExpr {
-                                            span: None,
-                                            value: Scalar::Number(NumberScalar::Float64(
-                                                F64::from(probability),
-                                            )),
-                                        }),
-                                    ],
-                                });
-                                s_expr = SExpr::create_unary(
-                                    Arc::new(
-                                        Filter {
-                                            predicates: vec![filter],
-                                        }
-                                        .into(),
-                                    ),
-                                    Arc::new(s_expr),
-                                );
-                            }
+                    // Only process row-level sampling in optimizer phase.
+                    if let Some(row_level) = &sample.row_level {
+                        if let Some(stats) = &table_stats
+                            && let Some(probability) =
+                                row_level.sample_probability(stats.num_rows)?
+                        {
+                            let rand_expr = ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "rand".to_string(),
+                                params: vec![],
+                                arguments: vec![],
+                            });
+                            let filter = ScalarExpr::FunctionCall(FunctionCall {
+                                span: None,
+                                func_name: "lte".to_string(),
+                                params: vec![],
+                                arguments: vec![
+                                    rand_expr,
+                                    ScalarExpr::ConstantExpr(ConstantExpr {
+                                        span: None,
+                                        value: Scalar::Number(NumberScalar::Float64(F64::from(
+                                            probability,
+                                        ))),
+                                    }),
+                                ],
+                            });
+                            s_expr = SExpr::create_unary(
+                                Arc::new(
+                                    Filter {
+                                        predicates: vec![filter],
+                                    }
+                                    .into(),
+                                ),
+                                Arc::new(s_expr),
+                            );
                         }
-                        SampleLevel::BLOCK => {}
                     }
                 }
                 Ok(s_expr)
-            }
-            RelOperator::MaterializedCte(materialized_cte) => {
-                // Collect the common table expression statistics first.
-                let left = Box::pin(self.collect(s_expr.child(0)?)).await?;
-                let cte_stat_info = RelExpr::with_s_expr(&left).derive_cardinality_child(0)?;
-                self.cte_statistics
-                    .insert(materialized_cte.cte_idx, cte_stat_info);
-                let right = Box::pin(self.collect(s_expr.child(1)?)).await?;
-                Ok(s_expr.replace_children(vec![Arc::new(left), Arc::new(right)]))
-            }
-            RelOperator::CteScan(cte_scan) => {
-                let stat_info = self
-                    .cte_statistics
-                    .get(&cte_scan.cte_idx.0)
-                    .unwrap()
-                    .clone();
-                let mut cte_scan = cte_scan.clone();
-                cte_scan.stat = stat_info;
-                Ok(s_expr.replace_plan(Arc::new(RelOperator::CteScan(cte_scan))))
             }
             _ => {
                 let mut children = Vec::with_capacity(s_expr.arity());

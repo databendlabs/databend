@@ -29,7 +29,7 @@ error:
   --> SQL:1:19
   |
 1 | create table a (c varch)
-  | ------          - ^^^^^ unexpected `varch`, expecting `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `SMALLINT`, `DATETIME`, `NULLABLE`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `TEXT`, `JSON`, or `GEOMETRY`
+  | ------          - ^^^^^ unexpected `varch`, expecting `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `GEOGRAPHY`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `SMALLINT`, `DATETIME`, `INTERVAL`, `NULLABLE`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `TEXT`, `JSON`, or `GEOMETRY`
   | |               |  
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
@@ -42,7 +42,7 @@ error:
   --> SQL:1:25
   |
 1 | create table a (c tuple())
-  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `NULLABLE`, <Ident>, <LiteralString>, or `IDENTIFIER`
+  | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, <Ident>, <LiteralString>, or `IDENTIFIER`
   | |               | |      
   | |               | while parsing type name
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
@@ -70,7 +70,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a (b tuple(c int, uint64));
-  | ------          - -----              ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, or `NULLABLE`
+  | ------          - -----              ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, or `NULLABLE`
   | |               | |                   
   | |               | while parsing TUPLE(<name> <type>, ...)
   | |               | while parsing type name
@@ -132,7 +132,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `DICTIONARY`, `VIEW`, `INVERTED`, `VIRTUAL`, `SEQUENCE`, `USER`, `ROLE`, `FUNCTION`, `STAGE`, `FILE`, `SHARE`, `STREAM`, `PIPE`, `NOTIFICATION`, or `CONNECTION`
+  |      ^ unexpected `a`, expecting `TASK`, `TABLE`, `MASKING`, `CATALOG`, `DATABASE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `SCHEMA`, `NETWORK`, `USER`, `ROLE`, `FUNCTION`, `DICTIONARY`, `VIEW`, `INVERTED`, `VIRTUAL`, `SEQUENCE`, `STAGE`, `FILE`, `STREAM`, `PIPE`, `NOTIFICATION`, `CONNECTION`, or `PROCEDURE`
 
 
 ---------- Input ----------
@@ -188,7 +188,7 @@ error:
 1 | create user 'test-e'@'localhost' identified by 'password';
   | ------               ^^^^^^^^^^^ unexpected `'localhost'`, expecting `'%'` or `IDENTIFIED`
   | |                     
-  | while parsing `CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`
+  | while parsing `CREATE [OR REPLACE] USER [IF NOT EXISTS] '<username>' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`
 
 
 ---------- Input ----------
@@ -198,7 +198,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j';
-  |      ^^^^ unexpected `usar`, expecting `USER`, `SHARE`, `STREAM`, `STAGE`, `PASSWORD`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `INVERTED`, `FUNCTION`, `TASK`, `NOTIFICATION`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
+  |      ^^^^ unexpected `usar`, expecting `USER`, `STREAM`, `STAGE`, `PASSWORD`, `WAREHOUSE`, `AGGREGATING`, `ROLE`, `TABLE`, `SCHEMA`, `NETWORK`, `VIRTUAL`, `CATALOG`, `DATABASE`, `FUNCTION`, `INVERTED`, `PROCEDURE`, `TASK`, `NOTIFICATION`, `MASKING`, `SEQUENCE`, `DICTIONARY`, `VIEW`, `FILE`, `PIPE`, or `CONNECTION`
 
 
 ---------- Input ----------
@@ -238,7 +238,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `TABLE`, `ROLES`, `SHARE`, `TASKS`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCESSLIST`, `STAGES`, `TABLES`, `SHARES`, `DICTIONARIES`, `ENGINES`, `METRICS`, `SETTINGS`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `USER`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`, expecting `GRANTS`, `CREATE`, `NETWORK`, `VIRTUAL`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `DROP`, `ROLES`, `TABLE`, `TASKS`, `ONLINE`, `INDEXES`, `COLUMNS`, `PASSWORD`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `ENGINES`, `METRICS`, `SETTINGS`, `VARIABLES`, `WAREHOUSES`, `LOCKS`, `SCHEMAS`, `USERS`, `USER`, `FIELDS`, `VIEWS`, `FILE`, or `FULL`
 
 
 ---------- Input ----------
@@ -283,7 +283,10 @@ error:
   --> SQL:1:17
   |
 1 | GRANT select ON UDF a TO 'test-grant';
-  |                 ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <Ident>, `FALSE`, `DATABASE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, `TRUE`, `TABLE`, or `VIEW`
+  | ----- ------    ^^^ unexpected `UDF`, expecting `IDENTIFIER`, <Ident>, `FALSE`, `*`, <LiteralString>, <LiteralInteger>, <MySQLLiteralHex>, <PGLiteralHex>, or `TRUE`
+  | |     |          
+  | |     while parsing <privileges> ON <privileges_level>
+  | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
 
 
 ---------- Input ----------
@@ -318,7 +321,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CONECTION= ();
-  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `RETURN_FAILED_ONLY`, `LOCATION_PREFIX`, `FORMAT`, `VALIDATION_MODE`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
+  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
@@ -328,7 +331,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CONNECTION = ();
-  |                                 ^^^^^^^^^^ unexpected `CONNECTION`, expecting `ON_ERROR`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `VALIDATION_MODE`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
+  |                                 ^^^^^^^^^^ unexpected `CONNECTION`, expecting `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
@@ -440,7 +443,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ unexpected `)`, expecting `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, or 30 more ...
+  | ------                                  ^ unexpected `)`, expecting `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, `POSITION`, `IdentVariable`, `DATE_ADD`, `DATE_DIFF`, `DATE_SUB`, or 34 more ...
   | |                                        
   | while parsing `SELECT ...`
 
@@ -591,7 +594,7 @@ error:
   --> SQL:1:57
   |
 1 | select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
-  | ------                                                  ^^^^^^^ unexpected `bad_arg`, expecting `PATTERN`, `FILE_FORMAT`, `)`, `,`, `FILES`, or `CONNECTION`
+  | ------                                                  ^^^^^^^ unexpected `bad_arg`, expecting `PATTERN`, `FILE_FORMAT`, `CASE_SENSITIVE`, `)`, `,`, `FILES`, or `CONNECTION`
   | |                                                        
   | while parsing `SELECT ...`
 
@@ -814,7 +817,9 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';
-  |        ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `REFERENCE_USAGE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+  | |       
+  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
 
 ---------- Input ----------
@@ -824,7 +829,9 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM USER A;
-  |        ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `REFERENCE_USAGE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+  | |       
+  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
 
 ---------- Input ----------
@@ -834,7 +841,9 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;
-  |        ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `REFERENCE_USAGE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, or `ALL`
+  | |       
+  | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
 
 ---------- Input ----------
@@ -856,12 +865,38 @@ error:
   --> SQL:1:65
   |
 1 | CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
-  | ------                                   --       ----          ^ unexpected end of input, expecting `)`, `IGNORE`, `RESPECT`, `OVER`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, or 35 more ...
+  | ------                                   --       ----          ^ unexpected end of input, expecting `)`, `IGNORE`, `RESPECT`, `OVER`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, `POSITION`, or 39 more ...
   | |                                        |        |  |          
   | |                                        |        |  while parsing `(<expr> [, ...])`
   | |                                        |        while parsing expression
   | |                                        while parsing AS (<parameter>, ...) -> <definition expr>
-  | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`
+  | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
+
+
+---------- Input ----------
+CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+error: 
+  --> SQL:1:85
+  |
+1 | CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';
+  | ------                 -                                                            ^^^^^^^ unexpected `HANDLER`, expecting `ADDRESS` or `AS`
+  | |                      |                                                             
+  | |                      while parsing (<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
+  | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
+
+
+---------- Input ----------
+CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+error: 
+  --> SQL:1:40
+  |
+1 | CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
+  | ------                 -               ^^^^^ unexpected `STRIN`, expecting `STRING`, `SIGNED`, `INTERVAL`, `TINYINT`, `VARIANT`, `SMALLINT`, `TINYBLOB`, `VARBINARY`, `INT8`, `JSON`, `INT16`, `INT32`, `INT64`, `UINT8`, `BIGINT`, `UINT16`, `UINT32`, `UINT64`, `BINARY`, `INTEGER`, `DATETIME`, `TIMESTAMP`, `UNSIGNED`, `DATE`, `CHAR`, `TEXT`, `ARRAY`, `TUPLE`, `BOOLEAN`, `DECIMAL`, `VARCHAR`, `LONGBLOB`, `NULLABLE`, `CHARACTER`, `GEOGRAPHY`, `MEDIUMBLOB`, `BITMAP`, `}`, `BOOL`, `INT`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `MAP`, `BLOB`, or `GEOMETRY`
+  | |                      |                
+  | |                      while parsing (<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
+  | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
 
 
 ---------- Input ----------
@@ -883,7 +918,7 @@ error:
   --> SQL:1:23
   |
 1 | drop table IDENTIFIER(a)
-  | ----                  ^ unexpected `a`, expecting `$` or `:`
+  | ----                  ^ unexpected `a`, expecting `IdentVariable` or `:`
   | |                      
   | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
@@ -946,9 +981,113 @@ error:
   | ------ while parsing `CREATE [OR REPLACE] DICTIONARY [IF NOT EXISTS] <dictionary_name> [(<column>, ...)] PRIMARY KEY [<primary_key>, ...] SOURCE (<source_name> ([<source_options>])) [COMMENT <comment>] `
 2 |         (
 3 |             user_name tuple(),
-  |             --------- ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `NULLABLE`, <Ident>, <LiteralString>, or `IDENTIFIER`
+  |             --------- ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, <Ident>, <LiteralString>, or `IDENTIFIER`
   |             |         |      
   |             |         while parsing type name
   |             while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
+
+
+---------- Input ----------
+desc procedure p1
+---------- Output ---------
+error: 
+  --> SQL:1:18
+  |
+1 | desc procedure p1
+  | ----             ^ unexpected end of input, expecting `(`
+  | |                
+  | while parsing `DESC PROCEDURE <procedure_name>()`
+
+
+---------- Input ----------
+desc procedure p1(array, c int)
+---------- Output ---------
+error: 
+  --> SQL:1:24
+  |
+1 | desc procedure p1(array, c int)
+  | ----             ------^ unexpected `,`, expecting `(`
+  | |                ||     
+  | |                |while parsing type name
+  | |                while parsing (<type_name>, ...)
+  | while parsing `DESC PROCEDURE <procedure_name>()`
+
+
+---------- Input ----------
+drop procedure p1
+---------- Output ---------
+error: 
+  --> SQL:1:18
+  |
+1 | drop procedure p1
+  | ----             ^ unexpected end of input, expecting `(`
+  | |                
+  | while parsing `DROP PROCEDURE <procedure_name>()`
+
+
+---------- Input ----------
+drop procedure p1(a int)
+---------- Output ---------
+error: 
+  --> SQL:1:19
+  |
+1 | drop procedure p1(a int)
+  | ----              ^ unexpected `a`, expecting `DATE`, `ARRAY`, `VARCHAR`, `VARIANT`, `SMALLINT`, `DATETIME`, `VARBINARY`, `CHARACTER`, `)`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `MAP`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `INTERVAL`, `BINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `CHAR`, `TEXT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, or `NULLABLE`
+  | |                  
+  | while parsing `DROP PROCEDURE <procedure_name>()`
+
+
+---------- Input ----------
+call procedure p1
+---------- Output ---------
+error: 
+  --> SQL:1:18
+  |
+1 | call procedure p1
+  | ----             ^ unexpected end of input, expecting `(`
+  | |                
+  | while parsing `CALL PROCEDURE <procedure_name>()`
+
+
+---------- Input ----------
+create PROCEDURE p1() returns table(string not null, int null) language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;
+---------- Output ---------
+error: 
+  --> SQL:1:44
+  |
+1 | create PROCEDURE p1() returns table(string not null, int null) language sql comment = 'test' as $$
+  | ------                        -----        ^^^ unexpected `not`, expecting `INT8`, `INT16`, `INT32`, `INT64`, `UINT16`, `UINT32`, `UINT64`, `INTEGER`, `FLOAT32`, `FLOAT64`, `INTERVAL`, `GEOMETRY`, `INT`, `BOOL`, `DATE`, `BLOB`, `TEXT`, `JSON`, `UINT8`, `FLOAT`, `TUPLE`, `DOUBLE`, `BITMAP`, `BINARY`, `STRING`, `BOOLEAN`, `UNSIGNED`, `DATETIME`, `NULLABLE`, `TIMESTAMP`, `GEOGRAPHY`, `TINYINT`, `LONGBLOB`, `TINYBLOB`, `SMALLINT`, `BIGINT`, `SIGNED`, `DECIMAL`, `ARRAY`, `MAP`, `VARBINARY`, `MEDIUMBLOB`, `VARCHAR`, `CHAR`, `CHARACTER`, or `VARIANT`
+  | |                             |             
+  | |                             while parsing TABLE(<var_name> <type_name>, ...)
+  | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
+
+
+---------- Input ----------
+create PROCEDURE p1(int, string) returns table(string not null, int null) language sql comment = 'test' as $$
+            BEGIN
+                LET sum := 0;
+                FOR x IN SELECT * FROM numbers(100) DO
+                    sum := sum + x.number;
+                END FOR;
+                RETURN sum;
+            END;
+            $$;
+---------- Output ---------
+error: 
+  --> SQL:1:24
+  |
+1 | create PROCEDURE p1(int, string) returns table(string not null, int null) language sql comment = 'test' as $$
+  | ------             -   ^ unexpected `,`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `INTERVAL`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, or `NULLABLE`
+  | |                  |    
+  | |                  while parsing (<var_name> <type_name>, ...)
+  | while parsing `CREATE [ OR REPLACE ] PROCEDURE <procedure_name>() RETURNS { <result_data_type> [ NOT NULL ] | TABLE(<var_name> <data_type>, ...)} LANGUAGE SQL [ COMMENT = '<string_literal>' ] AS <procedure_definition>`
 
 

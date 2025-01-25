@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::or_validities;
 use databend_common_expression::types::nullable::NullableColumn;
@@ -36,7 +36,6 @@ use super::HashJoinState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 
 /// Some common methods for hash join.
-
 impl HashJoinProbeState {
     // Merge build chunk and probe chunk that have the same number of rows
     pub(crate) fn merge_eq_block(
@@ -85,10 +84,7 @@ impl HashJoinProbeState {
             row_index += 1;
         }
         let boolean_column = Column::Boolean(boolean_bit_map.into());
-        let marker_column = Column::Nullable(Box::new(NullableColumn {
-            column: boolean_column,
-            validity: validity.into(),
-        }));
+        let marker_column = NullableColumn::new_column(boolean_column, validity.into());
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
@@ -137,10 +133,12 @@ impl HashJoinProbeState {
 
         match filter_vector {
             Column::Nullable(_) => Ok(filter_vector),
-            other => Ok(Column::Nullable(Box::new(NullableColumn {
-                validity: Bitmap::new_constant(true, other.len()),
-                column: other,
-            }))),
+            other => {
+                let validity = Bitmap::new_constant(true, other.len());
+                Ok(Column::Nullable(Box::new(NullableColumn::new(
+                    other, validity,
+                ))))
+            }
         }
     }
 }
@@ -157,7 +155,7 @@ impl HashJoinState {
                 match col {
                     Column::Nullable(c) => {
                         let bitmap = &c.validity;
-                        if bitmap.unset_bits() == 0 {
+                        if bitmap.null_count() == 0 {
                             valids = Some(Bitmap::new_constant(true, num_rows));
                             break;
                         } else {
@@ -196,10 +194,7 @@ pub fn wrap_true_validity(
     } else {
         let mut validity = true_validity.clone();
         validity.slice(0, num_rows);
-        let col = Column::Nullable(Box::new(NullableColumn {
-            column: col,
-            validity,
-        }));
+        let col = NullableColumn::new_column(col, validity);
         BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
     }
 }

@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+pub use databend_common_column::bitmap::*;
 
 use crate::property::Domain;
 use crate::types::ArgType;
@@ -37,7 +37,7 @@ impl ValueType for BooleanType {
     type ScalarRef<'a> = bool;
     type Column = Bitmap;
     type Domain = BooleanDomain;
-    type ColumnIterator<'a> = databend_common_arrow::arrow::bitmap::utils::BitmapIter<'a>;
+    type ColumnIterator<'a> = databend_common_column::bitmap::utils::BitmapIter<'a>;
     type ColumnBuilder = MutableBitmap;
 
     #[inline]
@@ -162,6 +162,11 @@ impl ValueType for BooleanType {
     fn build_scalar(builder: Self::ColumnBuilder) -> Self::Scalar {
         assert_eq!(builder.len(), 1);
         builder.get(0)
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
     }
 
     #[inline(always)]

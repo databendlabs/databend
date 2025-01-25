@@ -12,32 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::runtime::Runtime;
-use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
-use databend_common_catalog::plan::PartitionsShuffleKind;
-use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::CompactionLimits;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::ColumnId;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::FieldIndex;
-use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
-use databend_common_sql::executor::physical_plans::MutationKind;
-use databend_common_sql::StreamContext;
-use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
-use crate::operations::common::TableMutationAggregator;
-use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::BlockCompactMutator;
-use crate::operations::mutation::CompactLazyPartInfo;
-use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::FuseTable;
 use crate::Table;
@@ -118,125 +102,6 @@ impl FuseTable {
             partitions,
             mutator.compact_params.base_snapshot.clone(),
         )))
-    }
-
-    pub fn build_compact_source(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        parts: Partitions,
-        column_ids: HashSet<ColumnId>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let is_lazy = parts.partitions_type() == PartInfoType::LazyLevel;
-        let thresholds = self.get_block_thresholds();
-        let cluster_key_id = self.cluster_key_id();
-        let mut max_threads = ctx.get_settings().get_max_threads()? as usize;
-
-        if is_lazy {
-            let query_ctx = ctx.clone();
-
-            let lazy_parts = parts
-                .partitions
-                .into_iter()
-                .map(|v| {
-                    v.as_any()
-                        .downcast_ref::<CompactLazyPartInfo>()
-                        .unwrap()
-                        .clone()
-                })
-                .collect::<Vec<_>>();
-
-            pipeline.set_on_init(move || {
-                let ctx = query_ctx.clone();
-                let column_ids = column_ids.clone();
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let partitions = BlockCompactMutator::build_compact_tasks(
-                        ctx.clone(),
-                        column_ids,
-                        cluster_key_id,
-                        thresholds,
-                        lazy_parts,
-                    )
-                    .await?;
-
-                    Result::<_, ErrorCode>::Ok(partitions)
-                })?;
-
-                let partitions = Partitions::create(PartitionsShuffleKind::Mod, partitions);
-                query_ctx.set_partitions(partitions)?;
-                Ok(())
-            });
-        } else {
-            max_threads = max_threads.min(parts.len()).max(1);
-            ctx.set_partitions(parts)?;
-        }
-
-        let all_column_indices = self.all_column_indices();
-        let projection = Projection::Columns(all_column_indices);
-        let block_reader = self.create_block_reader(
-            ctx.clone(),
-            projection,
-            false,
-            self.change_tracking_enabled(),
-            false,
-        )?;
-        let stream_ctx = if self.change_tracking_enabled() {
-            Some(StreamContext::try_create(
-                ctx.get_function_context()?,
-                self.schema_with_stream(),
-                self.get_table_info().ident.seq,
-                false,
-                false,
-            )?)
-        } else {
-            None
-        };
-        // Add source pipe.
-        pipeline.add_source(
-            |output| {
-                CompactSource::try_create(
-                    ctx.clone(),
-                    self.storage_format,
-                    block_reader.clone(),
-                    stream_ctx.clone(),
-                    output,
-                )
-            },
-            max_threads,
-        )?;
-
-        // sort
-        let cluster_stats_gen =
-            self.cluster_gen_for_append(ctx.clone(), pipeline, thresholds, None)?;
-        pipeline.add_transform(
-            |input: Arc<databend_common_pipeline_core::processors::InputPort>, output| {
-                let proc = TransformSerializeBlock::try_create(
-                    ctx.clone(),
-                    input,
-                    output,
-                    self,
-                    cluster_stats_gen.clone(),
-                    MutationKind::Compact,
-                )?;
-                proc.into_processor()
-            },
-        )?;
-
-        if is_lazy {
-            pipeline.try_resize(1)?;
-            pipeline.add_async_accumulating_transformer(|| {
-                TableMutationAggregator::create(
-                    self,
-                    ctx.clone(),
-                    vec![],
-                    vec![],
-                    vec![],
-                    Statistics::default(),
-                    MutationKind::Compact,
-                )
-            });
-        }
-        Ok(())
     }
 
     async fn compact_options_with_segment_limit(

@@ -37,7 +37,8 @@ use databend_common_storages_system::ColumnsTable;
 use databend_common_storages_system::ConfigsTable;
 use databend_common_storages_system::ContributorsTable;
 use databend_common_storages_system::CreditsTable;
-use databend_common_storages_system::DatabasesTable;
+use databend_common_storages_system::DatabasesTableWithHistory;
+use databend_common_storages_system::DatabasesTableWithoutHistory;
 use databend_common_storages_system::EnginesTable;
 use databend_common_storages_system::FunctionsTable;
 use databend_common_storages_system::MetricsTable;
@@ -261,10 +262,28 @@ async fn test_databases_table() -> Result<()> {
     let fixture = TestFixture::setup_with_config(&config).await?;
     let ctx = fixture.new_query_ctx().await?;
 
-    let table = DatabasesTable::create(1);
+    let table = DatabasesTableWithoutHistory::create(1);
 
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("databases_table.txt").unwrap();
+    run_table_tests(file, ctx, table).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_databases_history_table() -> Result<()> {
+    let mut config = ConfigBuilder::create().build();
+    config.storage.params = StorageParams::Fs(StorageFsConfig::default());
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let ctx = fixture.new_query_ctx().await?;
+
+    let table = DatabasesTableWithHistory::create(1);
+
+    let mut mint = Mint::new("tests/it/storages/testdata");
+    let file = &mut mint
+        .new_goldenfile("databases_with_history_table.txt")
+        .unwrap();
     run_table_tests(file, ctx, table).await?;
 
     Ok(())
@@ -416,7 +435,7 @@ async fn test_users_table() -> Result<()> {
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
     let block = &result[0];
-    assert_eq!(block.num_columns(), 9);
+    assert_eq!(block.num_columns(), 12);
     assert!(block.num_rows() >= 2);
 
     let output = box_render(

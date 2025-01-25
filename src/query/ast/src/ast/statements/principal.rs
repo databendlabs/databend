@@ -96,7 +96,6 @@ pub enum CatalogType {
     Default,
     Hive,
     Iceberg,
-    Share,
 }
 
 impl Display for CatalogType {
@@ -105,7 +104,6 @@ impl Display for CatalogType {
             CatalogType::Default => write!(f, "DEFAULT"),
             CatalogType::Hive => write!(f, "HIVE"),
             CatalogType::Iceberg => write!(f, "ICEBERG"),
-            CatalogType::Share => write!(f, "SHARE"),
         }
     }
 }
@@ -185,32 +183,6 @@ impl Display for UserPrivilegeType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum ShareGrantObjectName {
-    // database name
-    Database(Identifier),
-    // database name, table name
-    Table(Identifier, Identifier),
-    // database name, table name
-    View(Identifier, Identifier),
-}
-
-impl Display for ShareGrantObjectName {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            ShareGrantObjectName::Database(db) => {
-                write!(f, "DATABASE {db}")
-            }
-            ShareGrantObjectName::Table(db, table) => {
-                write!(f, "TABLE {db}.{table}")
-            }
-            ShareGrantObjectName::View(db, table) => {
-                write!(f, "VIEW {db}.{table}")
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub enum ShareGrantObjectPrivilege {
     // For DATABASE or SCHEMA
     Usage,
@@ -226,66 +198,6 @@ impl Display for ShareGrantObjectPrivilege {
             ShareGrantObjectPrivilege::Usage => write!(f, "USAGE"),
             ShareGrantObjectPrivilege::ReferenceUsage => write!(f, "REFERENCE_USAGE"),
             ShareGrantObjectPrivilege::Select => write!(f, "SELECT"),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub struct CopyOptions {
-    pub on_error: OnErrorMode,
-    pub size_limit: usize,
-    pub max_files: usize,
-    pub split_size: usize,
-    pub purge: bool,
-    pub disable_variant_check: bool,
-    pub return_failed_only: bool,
-    pub max_file_size: usize,
-    pub single: bool,
-    pub detailed_output: bool,
-}
-
-impl Display for CopyOptions {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "OnErrorMode {}", self.on_error)?;
-        write!(f, "SizeLimit {}", self.size_limit)?;
-        write!(f, "MaxFiles {}", self.max_files)?;
-        write!(f, "SplitSize {}", self.split_size)?;
-        write!(f, "Purge {}", self.purge)?;
-        write!(f, "DisableVariantCheck {}", self.disable_variant_check)?;
-        write!(f, "ReturnFailedOnly {}", self.return_failed_only)?;
-        write!(f, "MaxFileSize {}", self.max_file_size)?;
-        write!(f, "Single {}", self.single)?;
-        write!(f, "DetailedOutput {}", self.detailed_output)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
-pub enum OnErrorMode {
-    Continue,
-    SkipFileNum(u64),
-    AbortNum(u64),
-}
-
-impl Display for OnErrorMode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            OnErrorMode::Continue => {
-                write!(f, "continue")
-            }
-            OnErrorMode::SkipFileNum(n) => {
-                if *n <= 1 {
-                    write!(f, "skipfile")
-                } else {
-                    write!(f, "skipfile_{}", n)
-                }
-            }
-            OnErrorMode::AbortNum(n) => {
-                if *n <= 1 {
-                    write!(f, "abort")
-                } else {
-                    write!(f, "abort_{}", n)
-                }
-            }
         }
     }
 }

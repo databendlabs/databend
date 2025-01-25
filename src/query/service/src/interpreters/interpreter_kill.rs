@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::KillPlan;
 
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::KILL_QUERY;
@@ -30,7 +31,7 @@ use crate::sessions::QueryContext;
 pub struct KillInterpreter {
     ctx: Arc<QueryContext>,
     plan: KillPlan,
-    proxy_to_cluster: bool,
+    proxy_to_warehouse: bool,
 }
 
 impl KillInterpreter {
@@ -38,7 +39,7 @@ impl KillInterpreter {
         Ok(KillInterpreter {
             ctx,
             plan,
-            proxy_to_cluster: true,
+            proxy_to_warehouse: true,
         })
     }
 
@@ -46,26 +47,31 @@ impl KillInterpreter {
         Ok(KillInterpreter {
             ctx,
             plan,
-            proxy_to_cluster: false,
+            proxy_to_warehouse: false,
         })
     }
 
     #[async_backtrace::framed]
-    async fn kill_cluster_query(&self) -> Result<PipelineBuildResult> {
-        let cluster = self.ctx.get_cluster();
+    async fn kill_warehouse_query(&self) -> Result<PipelineBuildResult> {
         let settings = self.ctx.get_settings();
-        let timeout = settings.get_flight_client_timeout()?;
+        let warehouse = self.ctx.get_warehouse_cluster().await?;
 
-        let mut message = HashMap::with_capacity(cluster.nodes.len());
+        let flight_params = FlightParams {
+            timeout: settings.get_flight_client_timeout()?,
+            retry_times: settings.get_flight_max_retry_times()?,
+            retry_interval: settings.get_flight_retry_interval()?,
+        };
 
-        for node_info in &cluster.nodes {
-            if node_info.id != cluster.local_id {
+        let mut message = HashMap::with_capacity(warehouse.nodes.len());
+
+        for node_info in &warehouse.nodes {
+            if node_info.id != warehouse.local_id {
                 message.insert(node_info.id.clone(), self.plan.clone());
             }
         }
 
-        let res = cluster
-            .do_action::<_, bool>(KILL_QUERY, message, timeout)
+        let res = warehouse
+            .do_action::<_, bool>(KILL_QUERY, message, flight_params)
             .await?;
 
         match res.values().any(|x| *x) {
@@ -80,8 +86,8 @@ impl KillInterpreter {
     #[async_backtrace::framed]
     async fn execute_kill(&self, session_id: &String) -> Result<PipelineBuildResult> {
         match self.ctx.get_session_by_id(session_id) {
-            None => match self.proxy_to_cluster {
-                true => self.kill_cluster_query().await,
+            None => match self.proxy_to_warehouse {
+                true => self.kill_warehouse_query().await,
                 false => Err(ErrorCode::UnknownSession(format!(
                     "Not found session id {}",
                     session_id

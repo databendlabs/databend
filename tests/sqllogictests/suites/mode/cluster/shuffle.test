@@ -1,0 +1,85 @@
+statement ok
+create or replace table t1 as select * from numbers(5);
+
+statement ok
+create or replace table t2(number uint64);
+
+statement ok
+insert into t2(number) select * from numbers(10);
+
+statement ok
+delete from t2 where number % 3 = 0;
+
+statement ok
+insert into t2 select * from numbers(8);
+
+statement ok
+set disable_join_reorder = 1;
+
+query T
+explain select * from (select t1.number, t2.number from t1 right outer join (SELECT number FROM t2 QUALIFY row_number() OVER (PARTITION BY number ORDER BY number DESC ) = 1) AS t2 ON t1.number = t2.number) as tt(a, b) order by a;
+----
+Sort
+├── output columns: [t1.number (#0), t2.number (#1)]
+├── sort keys: [number ASC NULLS LAST]
+├── estimated rows: 0.01
+└── Exchange
+    ├── output columns: [t1.number (#0), t2.number (#1), #_order_col]
+    ├── exchange type: Merge
+    └── Sort
+        ├── output columns: [t1.number (#0), t2.number (#1), #_order_col]
+        ├── sort keys: [number ASC NULLS LAST]
+        ├── estimated rows: 0.01
+        └── HashJoin
+            ├── output columns: [t1.number (#0), t2.number (#1)]
+            ├── join type: RIGHT OUTER
+            ├── build keys: [t2.number (#1)]
+            ├── probe keys: [t1.number (#0)]
+            ├── filters: []
+            ├── estimated rows: 0.01
+            ├── Filter(Build)
+            │   ├── output columns: [t2.number (#1)]
+            │   ├── filters: [row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2) = 1]
+            │   ├── estimated rows: 0.01
+            │   └── Window
+            │       ├── output columns: [t2.number (#1), row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2)]
+            │       ├── aggregate function: [row_number]
+            │       ├── partition by: [number]
+            │       ├── order by: [number]
+            │       ├── frame: [Range: Preceding(None) ~ CurrentRow]
+            │       └── WindowPartition
+            │           ├── output columns: [t2.number (#1)]
+            │           ├── hash keys: [number]
+            │           ├── estimated rows: 14.00
+            │           └── Exchange
+            │               ├── output columns: [t2.number (#1)]
+            │               ├── exchange type: Hash(t2.number (#1))
+            │               └── TableScan
+            │                   ├── table: default.default.t2
+            │                   ├── output columns: [number (#1)]
+            │                   ├── read rows: 14
+            │                   ├── read size: < 1 KiB
+            │                   ├── partitions total: 6
+            │                   ├── partitions scanned: 6
+            │                   ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 6 to 6>]
+            │                   ├── push downs: [filters: [], limit: NONE]
+            │                   └── estimated rows: 14.00
+            └── Exchange(Probe)
+                ├── output columns: [t1.number (#0)]
+                ├── exchange type: Hash(t1.number (#0))
+                └── TableScan
+                    ├── table: default.default.t1
+                    ├── output columns: [number (#0)]
+                    ├── read rows: 5
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 3
+                    ├── partitions scanned: 3
+                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 5.00
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;

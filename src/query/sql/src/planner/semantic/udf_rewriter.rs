@@ -117,6 +117,7 @@ impl UdfRewriter {
     }
 
     fn create_udf_expr(&mut self, mut child_expr: Arc<SExpr>) -> Arc<SExpr> {
+        // TODO: handle nested udf function as arguments.
         while !self.udf_functions.is_empty() {
             if !self.udf_arguments.is_empty() {
                 // Add an EvalScalar for the arguments of Udf.
@@ -159,6 +160,9 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
 
     fn visit_udf_call(&mut self, udf: &'a mut UDFCall) -> Result<()> {
         if !udf.udf_type.match_type(self.script_udf) {
+            return Ok(());
+        }
+        if self.udf_functions_map.contains_key(&udf.display_name) {
             return Ok(());
         }
 

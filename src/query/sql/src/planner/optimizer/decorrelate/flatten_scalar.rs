@@ -58,6 +58,7 @@ impl SubqueryRewriter {
                     args.push(self.flatten_scalar(arg, correlated_columns)?);
                 }
                 Ok(ScalarExpr::AggregateFunction(AggregateFunction {
+                    span: agg.span,
                     display_name: agg.display_name.clone(),
                     func_name: agg.func_name.clone(),
                     distinct: agg.distinct,
@@ -97,7 +98,7 @@ impl SubqueryRewriter {
                 Ok(ScalarExpr::UDFCall(UDFCall {
                     span: udf.span,
                     name: udf.name.clone(),
-                    func_name: udf.func_name.clone(),
+                    handler: udf.handler.clone(),
                     display_name: udf.display_name.clone(),
                     udf_type: udf.udf_type.clone(),
                     arg_types: udf.arg_types.clone(),

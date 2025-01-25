@@ -1,4 +1,5 @@
 <h1 align="center">Databend: The Next-Gen Cloud [Data+AI] Analytics</h1>
+<h2 align="center">The open-source, on-premise alternative to Snowflake</h2>
 
 <div align="center">
 
@@ -27,6 +28,10 @@
 
 <img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
 
+<a href="https://gurubase.io/g/databend">
+<img src="https://img.shields.io/badge/Gurubase-Ask%20Databend%20Guru-006BFF" alt="Gurubase" />
+</a>
+
 </div>
 </div>
 
@@ -35,6 +40,10 @@
 ## 🐋 Introduction
 
 **Databend**, built in Rust, is an open-source cloud data warehouse that serves as a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). With its focus on fast query execution and data ingestion, it's designed for complex analysis of the world's largest datasets.
+
+**Production-Proven Scale:**
+- 🤝 **Enterprise Adoption**: Trusted by over **50 organizations** processing more than **100 million queries daily**
+- 🗄️ **Massive Scale**: Successfully managing over **800 petabytes** of analytical data
 
 ## ⚡ Performance
 
@@ -54,29 +63,30 @@
 
 ![Databend vs. Snowflake](https://github.com/datafuselabs/databend/assets/172204/c61d7a40-f6fe-4fb9-83e8-06ea9599aeb4)
 
+
 ## 🚀 Why Databend
 
-- **Cloud-Native**: Integrates with AWS S3, Azure Blob, Google Cloud, and more.
+- **Full Control**: Deploy on **cloud** or **on-prem** to suit your needs.
+  
+- **Blazing-Fast Performance**: Built with **Rust** for high-speed query execution. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top)
+  
+- **Cost-Effective**: Scalable architecture that boosts **performance** and reduces **costs**. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch)
+  
+- **AI-Enhanced Analytics**: Leverage built-in **[AI Functions](https://docs.databend.com/guides/ai-functions/)** for smarter data insights.
+  
+- **Simplified ETL**: Direct **data ingestion** without the need for external ETL tools. 👉 [Data Loading](https://docs.databend.com/guides/load-data/)
+  
+- **Real-Time Data Updates**: Keep your analytics **up-to-date** with real-time incremental data updates. 👉 [Stream](https://docs.databend.com/guides/load-data/continuous-data-pipelines/stream)
+  
+- **Advanced Indexing**: Boost query performance with **[Virtual Column](https://docs.databend.com/guides/performance/virtual-column)**, **[Aggregating Index](https://docs.databend.com/guides/performance/aggregating-index)**, and **[Full-Text Index](https://docs.databend.com/guides/performance/fulltext-index)**.
+  
+- **ACID Compliance + Version Control**: Ensure reliable **transactions** with full ACID compliance and Git-like versioning.
+  
+- **Schema Flexibility**: Effortlessly handle **semi-structured data** with the flexible **[VARIANT](https://docs.databend.com/sql/sql-reference/data-types/variant)** data type.
+  
+- **Community-Driven Growth**: **Open-source** and continuously evolving with contributions from a global community.  
 
-- **High Performance**: Rust-built, with cutting-edge, high-speed vectorized execution. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top).
 
-- **Cost-Effective**: Designed for scalable storage and computation, reducing costs while enhancing performance. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch).
-
-- **AI-Powered Analytics**: Enables advanced analytics with [AI Functions](https://docs.databend.com/guides/ai-functions/).
-
-- **Data Simplification**: Streamlines data ingestion, no external ETL needed. 👉 [Data Loading](https://docs.databend.com/guides/load-data/).
-
-- **Format Flexibility**: Supports multiple data formats and types, including JSON, CSV, Parquet, GEO, and more.
-
-- **ACID Transactions**: Ensures data integrity with atomic, consistent, isolated, and durable operations.
-
-- **Version Control**: Provides Git-like version control for data, allowing querying, cloning, and reverting at any point.
-
-- **Schemaless**: [VARIANT data type](https://docs.databend.com/sql/sql-reference/data-types/data-type-variant) enabling schemaless data storage and flexible data modeling.
-
-- **Flexible Indexing**: [Virtual Column](https://docs.databend.com/guides/performance/virtual-column), [Aggregating Index](https://docs.databend.com/guides/performance/aggregating-index), and [Full-Text Index](https://docs.databend.com/guides/performance/fulltext-index), for faster data retrieval.
-
-- **Community-Driven**: Join a welcoming community for a user-friendly cloud analytics experience.
 
 ## 📐 Architecture
 
@@ -278,13 +288,7 @@ For guidance on using Databend, we recommend starting with the official document
 
 Stay updated with Databend's development journey. Here are our roadmap milestones:
 
-- [Roadmap 2024](https://github.com/datafuselabs/databend/issues/14167)
-- [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
-- [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
-- [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
-- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
-- [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
-- [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
+- [Roadmap 2025](https://github.com/datafuselabs/databend/issues/14167)
 
 ## 📜 License
 
@@ -298,6 +302,6 @@ For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https
 
 - **Inspiration**: Databend's design draws inspiration from industry leaders [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture).
 
-- **Computing Model**: Our computing foundation is built upon [Arrow2](https://github.com/jorgecarleitao/arrow2), a faster and more secure rendition of the Apache Arrow Columnar Format.
+- **Computing Model**: Our computing foundation is built upon apache arrow.
 
 - **Documentation Hosting**: The [Databend documentation website](https://docs.databend.com) proudly runs on [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).

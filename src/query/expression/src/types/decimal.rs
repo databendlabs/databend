@@ -17,9 +17,11 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Range;
 
+use arrow_data::ArrayData;
+use arrow_data::ArrayDataBuilder;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::display_decimal_128;
@@ -182,6 +184,11 @@ impl<Num: Decimal> ValueType for DecimalType<Num> {
     }
 
     #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
+    }
+
+    #[inline(always)]
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left == right
     }
@@ -340,20 +347,27 @@ pub trait Decimal:
     + Clone
     + PartialEq
     + Eq
+    + std::ops::AddAssign
     + PartialOrd
     + Ord
     + Sync
     + Send
     + 'static
 {
+    // the Layout align size of i128 and i256 have changed
+    // https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
+    // Here we keep this struct in aggregate state which minimize the align of the struct
+    type U64Array: Send + Sync + Copy + Default + Debug;
     fn zero() -> Self;
     fn one() -> Self;
     fn minus_one() -> Self;
 
     // 10**scale
     fn e(n: u32) -> Self;
-
     fn mem_size() -> usize;
+
+    fn to_u64_array(self) -> Self::U64Array;
+    fn from_u64_array(v: Self::U64Array) -> Self;
 
     fn checked_add(self, rhs: Self) -> Option<Self>;
     fn checked_sub(self, rhs: Self) -> Option<Self>;
@@ -422,6 +436,16 @@ pub trait Decimal:
 }
 
 impl Decimal for i128 {
+    type U64Array = [u64; 2];
+
+    fn to_u64_array(self) -> Self::U64Array {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    fn from_u64_array(v: Self::U64Array) -> Self {
+        unsafe { std::mem::transmute(v) }
+    }
+
     fn zero() -> Self {
         0_i128
     }
@@ -656,6 +680,16 @@ impl Decimal for i128 {
 }
 
 impl Decimal for i256 {
+    type U64Array = [u64; 4];
+
+    fn to_u64_array(self) -> Self::U64Array {
+        unsafe { std::mem::transmute(self) }
+    }
+
+    fn from_u64_array(v: Self::U64Array) -> Self {
+        unsafe { std::mem::transmute(v) }
+    }
+
     fn zero() -> Self {
         i256::ZERO
     }
@@ -1139,6 +1173,55 @@ impl DecimalColumn {
             }
         })
     }
+
+    pub fn arrow_buffer(&self) -> arrow_buffer::Buffer {
+        match self {
+            DecimalColumn::Decimal128(col, _) => col.clone().into(),
+            DecimalColumn::Decimal256(col, _) => {
+                let col = unsafe {
+                    std::mem::transmute::<_, Buffer<databend_common_column::types::i256>>(
+                        col.clone(),
+                    )
+                };
+                col.into()
+            }
+        }
+    }
+
+    pub fn arrow_data(&self, arrow_type: arrow_schema::DataType) -> ArrayData {
+        let buffer = self.arrow_buffer();
+        let builder = ArrayDataBuilder::new(arrow_type)
+            .len(self.len())
+            .buffers(vec![buffer]);
+        unsafe { builder.build_unchecked() }
+    }
+
+    pub fn try_from_arrow_data(array: ArrayData) -> Result<Self> {
+        let buffer = array.buffers()[0].clone();
+        match array.data_type() {
+            arrow_schema::DataType::Decimal128(p, s) => {
+                let decimal_size = DecimalSize {
+                    precision: *p,
+                    scale: *s as u8,
+                };
+                Ok(Self::Decimal128(buffer.into(), decimal_size))
+            }
+            arrow_schema::DataType::Decimal256(p, s) => {
+                let buffer: Buffer<databend_common_column::types::i256> = buffer.into();
+                let buffer = unsafe { std::mem::transmute::<_, Buffer<i256>>(buffer) };
+
+                let decimal_size = DecimalSize {
+                    precision: *p,
+                    scale: *s as u8,
+                };
+                Ok(Self::Decimal256(buffer, decimal_size))
+            }
+            data_type => Err(ErrorCode::Unimplemented(format!(
+                "Unsupported data type: {:?} into decimal column",
+                data_type
+            ))),
+        }
+    }
 }
 
 impl DecimalColumnBuilder {
@@ -1214,12 +1297,12 @@ impl DecimalColumnBuilder {
             }
             (DecimalColumnBuilder::Decimal128(_, _), DecimalColumn::Decimal256(_, _)) =>
                 unreachable!(
-                    "unable append column(data type: Decimal256) into builder(data type: Decimal128)"
-                ),
+                "unable append column(data type: Decimal256) into builder(data type: Decimal128)"
+            ),
             (DecimalColumnBuilder::Decimal256(_, _), DecimalColumn::Decimal128(_, _)) =>
                 unreachable!(
-                    "unable append column(data type: Decimal128) into builder(data type: Decimal256)"
-                ),
+                "unable append column(data type: Decimal128) into builder(data type: Decimal256)"
+            ),
         })
     }
 

@@ -20,6 +20,8 @@ use super::AsyncTransform;
 
 pub trait AsyncRetry: AsyncTransform {
     fn retry_on(&self, err: &databend_common_exception::ErrorCode) -> bool;
+    // record some log when retrying
+    fn retry_hook(&self);
     fn retry_strategy(&self) -> RetryStrategy;
 }
 
@@ -67,6 +69,7 @@ impl<T: AsyncRetry + 'static> AsyncTransform for AsyncRetryWrapper<T> {
                         tokio::time::sleep(duration).await;
                     }
                     self.retries += 1;
+                    self.t.retry_hook();
                 }
             }
         }

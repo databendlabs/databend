@@ -15,10 +15,9 @@
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::str::FromStr;
-use std::sync::Arc;
 
-use databend_common_arrow::arrow_format::flight::data::Empty;
-use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
+use arrow_flight::flight_service_client::FlightServiceClient;
+use arrow_flight::Empty;
 use databend_common_base::base::tokio;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -74,7 +73,7 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
             .rpc_tls_server_key("../tests/data/certs/none.key")
             .rpc_tls_server_cert("../tests/data/certs/none.pem")
             .build(),
-        abort_notify: Arc::new(Default::default()),
+        abort_notify: Default::default(),
     };
     let r = srv
         .start_with_incoming("127.0.0.1:0".parse().unwrap())
@@ -112,7 +111,7 @@ async fn test_rpc_server_port_used() -> Result<()> {
 
     let mut srv = FlightService {
         config: ConfigBuilder::create().build(),
-        abort_notify: Arc::new(Default::default()),
+        abort_notify: Default::default(),
     };
 
     let r = srv.start_with_incoming(local_socket).await;

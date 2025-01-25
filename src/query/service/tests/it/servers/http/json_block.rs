@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float64Type;
@@ -20,11 +20,10 @@ use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_io::prelude::FormatSettings;
-use databend_query::servers::http::v1::string_block::StringBlock;
+use databend_query::servers::http::v1::StringBlock;
 use pretty_assertions::assert_eq;
 
 fn test_data_block(is_nullable: bool) -> Result<()> {
@@ -39,12 +38,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
     if is_nullable {
         columns = columns
             .iter()
-            .map(|c| {
-                Column::Nullable(Box::new(NullableColumn {
-                    column: c.clone(),
-                    validity: Bitmap::new_constant(true, c.len()),
-                }))
-            })
+            .map(|c| NullableColumn::new_column(c.clone(), Bitmap::new_constant(true, c.len())))
             .collect();
     }
 

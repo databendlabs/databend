@@ -78,14 +78,10 @@ impl Interpreter for ShowCreateCatalogInterpreter {
                 IcebergCatalogOption::Hms(cfg) => {
                     format!("ADDRESS\n{}\nWAREHOUSE\n{}", cfg.address, cfg.warehouse)
                 }
+                IcebergCatalogOption::Glue(cfg) => {
+                    format!("WAREHOUSE\n{}", cfg.warehouse)
+                }
             }),
-            CatalogOption::Share(op) => (
-                String::from("share"),
-                format!(
-                    "SHARE\n{}.{}\nUSING\n{}",
-                    op.provider, op.share_name, op.share_endpoint,
-                ),
-            ),
         };
 
         let block = DataBlock::new(

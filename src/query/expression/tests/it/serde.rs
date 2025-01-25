@@ -79,10 +79,10 @@ fn test_serde_bin_column() -> Result<()> {
         StringType::from_data(vec!["SM CASE", "axx", "bxx", "xxe", "eef", "fg"]),
     ];
 
-    for col in columns {
-        let data = serialize_column(&col);
+    for col in &columns {
+        let data = serialize_column(col);
         let t = deserialize_column(&data).unwrap();
-        assert_eq!(col, t);
+        assert_eq!(col, &t);
     }
     Ok(())
 }

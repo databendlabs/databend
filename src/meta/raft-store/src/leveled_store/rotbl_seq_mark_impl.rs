@@ -16,7 +16,7 @@
 
 use std::io;
 
-use databend_common_meta_types::KVMeta;
+use databend_common_meta_types::seq_value::KVMeta;
 use rotbl::v001::SeqMarked;
 
 use crate::marked::Marked;

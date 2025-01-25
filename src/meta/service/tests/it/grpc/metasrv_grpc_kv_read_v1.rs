@@ -22,11 +22,11 @@ use databend_common_meta_client::Streamed;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_kvapi::kvapi::ListKVReq;
 use databend_common_meta_kvapi::kvapi::MGetKVReq;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::KvMeta;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaSpec;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use futures::stream::StreamExt;
 use futures::TryStreamExt;
@@ -130,10 +130,10 @@ async fn initialize_kvs(client: &Arc<ClientHandle>) -> anyhow::Result<()> {
     info!("--- prepare keys: a(meta),c,c1,c2");
 
     let updates = vec![
-        UpsertKVReq::insert("a", &b("a")).with(MetaSpec::new_ttl(Duration::from_secs(10))),
-        UpsertKVReq::insert("c", &b("c")),
-        UpsertKVReq::insert("c1", &b("c1")),
-        UpsertKVReq::insert("c2", &b("c2")),
+        UpsertKV::insert("a", &b("a")).with(MetaSpec::new_ttl(Duration::from_secs(10))),
+        UpsertKV::insert("c", &b("c")),
+        UpsertKV::insert("c1", &b("c1")),
+        UpsertKV::insert("c2", &b("c2")),
     ];
 
     for update in updates {

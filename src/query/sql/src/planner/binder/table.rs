@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
 
@@ -21,9 +22,7 @@ use chrono::Utc;
 use dashmap::DashMap;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
-use databend_common_ast::ast::Sample;
 use databend_common_ast::ast::SampleConfig;
-use databend_common_ast::ast::SampleLevel;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
@@ -35,6 +34,7 @@ use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TimeNavigation;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -42,24 +42,19 @@ use databend_common_expression::is_stream_column;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::AbortChecker;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesReq;
-use databend_common_meta_app::schema::ShareDBParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::MetaId;
-use databend_common_sharing::ShareEndpointClient;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
-use parking_lot::RwLock;
 
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
@@ -67,10 +62,8 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::CteScan;
 use crate::plans::DummyTableScan;
 use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
@@ -119,11 +112,18 @@ impl Binder {
         files_info: StageFilesInfo,
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
+        case_sensitive: bool,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
         let max_column_position = self.metadata.read().get_max_column_position();
         let table = table_ctx
-            .create_stage_table(stage_info, files_info, files_to_copy, max_column_position)
+            .create_stage_table(
+                stage_info,
+                files_info,
+                files_to_copy,
+                max_column_position,
+                case_sensitive,
+            )
             .await?;
 
         let table_alias_name = if let Some(table_alias) = alias {
@@ -140,7 +140,7 @@ impl Binder {
             false,
             false,
             true,
-            false,
+            None,
         );
 
         let (s_expr, mut bind_context) =
@@ -153,33 +153,6 @@ impl Binder {
         Ok((s_expr, bind_context))
     }
 
-    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
-        let blocks = Arc::new(RwLock::new(vec![]));
-        self.ctx
-            .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
-        // Get the fields in the cte
-        let mut fields = vec![];
-        let mut offsets = vec![];
-        for (idx, column) in cte_info.columns.iter().enumerate() {
-            fields.push(DataField::new(
-                column.index.to_string().as_str(),
-                *column.data_type.clone(),
-            ));
-            offsets.push(idx);
-        }
-        let cte_scan = SExpr::create_leaf(Arc::new(
-            CteScan {
-                cte_idx: (cte_info.cte_idx, cte_info.used_count),
-                fields,
-                // It is safe to unwrap here because we have checked that the cte is materialized.
-                offsets,
-                stat: Arc::new(StatInfo::default()),
-            }
-            .into(),
-        ));
-        Ok(cte_scan)
-    }
-
     pub(crate) fn bind_cte(
         &mut self,
         span: Span,
@@ -188,7 +161,7 @@ impl Binder {
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
-        if let Some(cte_name) = &bind_context.cte_name {
+        if let Some(cte_name) = &bind_context.cte_context.cte_name {
             // `cte_name` exists, which means the current cte is a nested cte
             // If the `cte_name` is the same as the current cte's name, it means the cte is recursive
             if cte_name == table_name {
@@ -204,17 +177,21 @@ impl Binder {
             columns: vec![],
             aggregate_info: Default::default(),
             windows: Default::default(),
-            cte_name: Some(table_name.to_string()),
-            cte_map_ref: Box::default(),
+            srf_info: Default::default(),
+            cte_context: bind_context.cte_context.clone(),
             in_grouping: false,
             view_info: None,
-            srfs: Default::default(),
+            have_async_func: false,
+            have_udf_script: false,
+            have_udf_server: false,
             inverted_index_map: Box::default(),
+            virtual_column_context: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
-            share_paramas: None,
         };
+
+        new_bind_context.cte_context.cte_name = Some(table_name.to_string());
 
         let (s_expr, mut res_bind_context) =
             self.bind_query(&mut new_bind_context, &cte_info.query)?;
@@ -250,54 +227,6 @@ impl Binder {
             res_bind_context.columns[index].column_name = column_name.clone();
         }
         Ok((s_expr, res_bind_context))
-    }
-
-    // Bind materialized cte
-    pub(crate) fn bind_m_cte(
-        &mut self,
-        bind_context: &mut BindContext,
-        cte_info: &CteInfo,
-        table_name: &String,
-        alias: &Option<TableAlias>,
-        span: &Span,
-    ) -> Result<(SExpr, BindContext)> {
-        let new_bind_context = if cte_info.used_count == 0 {
-            let (cte_s_expr, cte_bind_ctx) =
-                self.bind_cte(*span, bind_context, table_name, alias, cte_info)?;
-            self.ctes_map
-                .entry(table_name.clone())
-                .and_modify(|cte_info| {
-                    cte_info.columns = cte_bind_ctx.columns.clone();
-                });
-            self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
-            self.set_m_cte_bound_s_expr(cte_info.cte_idx, cte_s_expr);
-            cte_bind_ctx
-        } else {
-            // If the cte has been bound, get the bound context from `Binder`'s `m_cte_bound_ctx`
-            let mut bound_ctx = self.m_cte_bound_ctx.get(&cte_info.cte_idx).unwrap().clone();
-            // Resolve the alias name for the bound cte.
-            let alias_table_name = alias
-                .as_ref()
-                .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
-                .unwrap_or_else(|| table_name.to_string());
-            for column in bound_ctx.columns.iter_mut() {
-                column.database_name = None;
-                column.table_name = Some(alias_table_name.clone());
-            }
-            // Pass parent to bound_ctx
-            bound_ctx.parent = bind_context.parent.clone();
-            bound_ctx
-        };
-        // `bind_context` is the main BindContext for the whole query
-        // Update the `used_count` which will be used in runtime phase
-        self.ctes_map
-            .entry(table_name.clone())
-            .and_modify(|cte_info| {
-                cte_info.used_count += 1;
-            });
-        let cte_info = self.ctes_map.get(table_name).unwrap().clone();
-        let s_expr = self.bind_cte_scan(&cte_info)?;
-        Ok((s_expr, new_bind_context))
     }
 
     pub(crate) fn bind_r_cte_scan(
@@ -353,7 +282,9 @@ impl Binder {
             ));
         }
         // Update the cte_info of the recursive cte
-        self.ctes_map
+        bind_context
+            .cte_context
+            .cte_map
             .entry(cte_name.to_string())
             .and_modify(|cte_info| {
                 cte_info.columns = new_bind_ctx.columns.clone();
@@ -382,12 +313,12 @@ impl Binder {
 
     pub(crate) fn bind_r_cte(
         &mut self,
+        span: Span,
         bind_context: &mut BindContext,
         cte_info: &CteInfo,
         cte_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        // Recursive cte's query must be a union(all)
         match &cte_info.query.body {
             SetExpr::SetOperation(set_expr) => {
                 if set_expr.op != SetOperator::Union {
@@ -407,12 +338,14 @@ impl Binder {
                 self.set_bind_recursive_cte(false);
                 if let Some(alias) = alias {
                     new_bind_ctx.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                } else {
+                    for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
+                        new_bind_ctx.columns[index].column_name = column_name.clone();
+                    }
                 }
                 Ok((union_s_expr, new_bind_ctx.clone()))
             }
-            _ => Err(ErrorCode::SyntaxException(
-                "Recursive CTE must contain a UNION(ALL) query".to_string(),
-            )),
+            _ => self.bind_cte(span, bind_context, cte_name, alias, cte_info),
         }
     }
 
@@ -422,13 +355,15 @@ impl Binder {
         database_name: &str,
         table_index: IndexType,
         change_type: Option<ChangeType>,
-        sample: &Option<Sample>,
+        sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
         let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
 
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
         let columns = self.metadata.read().columns_by_table_index(table_index);
+        let scan_id = self.metadata.write().next_scan_id();
+        let mut base_column_scan_id = HashMap::new();
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -458,6 +393,7 @@ impl Binder {
                     .virtual_computed_expr(virtual_computed_expr.clone())
                     .build();
                     bind_context.add_column_binding(column_binding);
+                    base_column_scan_id.insert(*column_index, scan_id);
                 }
                 other => {
                     return Err(ErrorCode::Internal(format!(
@@ -468,6 +404,9 @@ impl Binder {
                 }
             }
         }
+        self.metadata
+            .write()
+            .add_base_column_scan_id(base_column_scan_id);
 
         Ok((
             SExpr::create_leaf(Arc::new(
@@ -476,7 +415,8 @@ impl Binder {
                     columns: columns.into_iter().map(|col| col.index()).collect(),
                     statistics: Arc::new(Statistics::default()),
                     change_type,
-                    sample: table_sample(sample)?,
+                    sample: sample.clone(),
+                    scan_id,
                     ..Default::default()
                 }
                 .into(),
@@ -485,38 +425,13 @@ impl Binder {
         ))
     }
 
-    pub fn resolve_share_reference_data_source(
-        &self,
-        share_params: &ShareDBParams,
-        tenant: &str,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        databend_common_base::runtime::block_on(async move {
-            let client = ShareEndpointClient::new();
-
-            let mut table_info = client
-                .get_reference_table_by_name(share_params, tenant, database_name, table_name)
-                .await?;
-            table_info.db_type = DatabaseType::ShareDB(share_params.clone());
-            let table = self
-                .ctx
-                .get_catalog(catalog_name)
-                .await?
-                .get_table_by_info(&table_info)?;
-
-            Ok(table)
-        })
-    }
-
     pub fn resolve_data_source(
         &self,
-        _tenant: &str,
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
         navigation: Option<&TimeNavigation>,
+        max_batch_size: Option<u64>,
         abort_checker: AbortChecker,
     ) -> Result<Arc<dyn Table>> {
         databend_common_base::runtime::block_on(async move {
@@ -526,7 +441,7 @@ impl Binder {
             // newest snapshot, we can't get consistent snapshot
             let mut table_meta = self
                 .ctx
-                .get_table(catalog_name, database_name, table_name)
+                .get_table_with_batch(catalog_name, database_name, table_name, max_batch_size)
                 .await?;
 
             if let Some(desc) = navigation {
@@ -663,7 +578,7 @@ impl Binder {
             self.normalize_object_identifier_triple(catalog, database, name);
         databend_common_base::runtime::block_on(async move {
             let stream = self.ctx.get_table(&catalog, &database, &name).await?;
-            if stream.engine() != "STREAM" {
+            if !stream.is_stream() {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
                     "{database}.{name} is not STREAM",
                 )));
@@ -682,7 +597,7 @@ impl Binder {
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
         let catalog = self
             .catalogs
-            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.txn_mgr())
+            .get_catalog(tenant.tenant_name(), catalog_name, self.ctx.session_state())
             .await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
@@ -690,17 +605,4 @@ impl Binder {
 
         Ok(index_metas)
     }
-}
-
-fn table_sample(sample: &Option<Sample>) -> Result<Option<Sample>> {
-    if let Some(sample) = sample {
-        if sample.sample_level == SampleLevel::BLOCK {
-            if let SampleConfig::RowsNum(_) = sample.sample_conf {
-                return Err(ErrorCode::SyntaxException(
-                    "BLOCK sampling doesn't support fixed rows.".to_string(),
-                ));
-            }
-        }
-    }
-    Ok(sample.clone())
 }

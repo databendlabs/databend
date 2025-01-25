@@ -16,6 +16,7 @@ use std::fmt;
 
 use databend_common_base::display::display_option::DisplayOptionExt;
 use databend_common_base::display::display_slice::DisplaySliceExt;
+use databend_common_exception::ErrorCode;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -72,6 +73,10 @@ pub enum Feature {
     StorageQuota(StorageQuota),
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
     AmendTable,
+    #[serde(alias = "system_management", alias = "SYSTEM_MANAGEMENT")]
+    SystemManagement,
+    #[serde(alias = "hilbert_clustering", alias = "HILBERT_CLUSTERING")]
+    HilbertClustering,
     #[serde(other)]
     Unknown,
 }
@@ -118,37 +123,43 @@ impl fmt::Display for Feature {
                 write!(f, ")")
             }
             Feature::AmendTable => write!(f, "amend_table"),
+            Feature::SystemManagement => write!(f, "system_management"),
+            Feature::HilbertClustering => write!(f, "hilbert_clustering"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }
 }
 
 impl Feature {
-    pub fn verify(&self, feature: &Feature) -> bool {
+    pub fn verify_default(&self, message: impl Into<String>) -> Result<(), ErrorCode> {
+        Err(ErrorCode::LicenseKeyInvalid(message.into()))
+    }
+
+    pub fn verify(&self, feature: &Feature) -> Result<bool, ErrorCode> {
         match (self, feature) {
             (Feature::ComputeQuota(c), Feature::ComputeQuota(v)) => {
                 if let Some(thread_num) = c.threads_num {
                     if thread_num <= v.threads_num.unwrap_or(usize::MAX) {
-                        return false;
+                        return Ok(false);
                     }
                 }
 
                 if let Some(max_memory_usage) = c.memory_usage {
                     if max_memory_usage <= v.memory_usage.unwrap_or(usize::MAX) {
-                        return false;
+                        return Ok(false);
                     }
                 }
 
-                true
+                Ok(true)
             }
             (Feature::StorageQuota(c), Feature::StorageQuota(v)) => {
                 if let Some(max_storage_usage) = c.storage_usage {
                     if max_storage_usage <= v.storage_usage.unwrap_or(usize::MAX) {
-                        return false;
+                        return Ok(false);
                     }
                 }
 
-                true
+                Ok(true)
             }
             (Feature::Test, Feature::Test)
             | (Feature::AggregateIndex, Feature::AggregateIndex)
@@ -161,8 +172,9 @@ impl Feature {
             | (Feature::InvertedIndex, Feature::InvertedIndex)
             | (Feature::VirtualColumn, Feature::VirtualColumn)
             | (Feature::AttacheTable, Feature::AttacheTable)
-            | (Feature::StorageEncryption, Feature::StorageEncryption) => true,
-            (_, _) => false,
+            | (Feature::StorageEncryption, Feature::StorageEncryption)
+            | (Feature::HilbertClustering, Feature::HilbertClustering) => Ok(true),
+            (_, _) => Ok(false),
         }
     }
 }
@@ -197,7 +209,7 @@ impl LicenseInfo {
         /// sort all features in alphabet order and ignore test feature
         struct DisplayFeatures<'a>(&'a LicenseInfo);
 
-        impl<'a> fmt::Display for DisplayFeatures<'a> {
+        impl fmt::Display for DisplayFeatures<'_> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let Some(features) = self.0.features.clone() else {
                     return write!(f, "Unlimited");
@@ -330,6 +342,11 @@ mod tests {
         );
 
         assert_eq!(
+            Feature::HilbertClustering,
+            serde_json::from_str::<Feature>("\"hilbert_clustering\"").unwrap()
+        );
+
+        assert_eq!(
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
         );
@@ -362,11 +379,12 @@ mod tests {
                     storage_usage: Some(1),
                 }),
                 Feature::AmendTable,
+                Feature::HilbertClustering,
             ]),
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,background_service,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,inverted_index,license_info,storage_encryption,storage_quota(storage_usage: 1),stream,vacuum,virtual_column] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,background_service,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,storage_encryption,storage_quota(storage_usage: 1),stream,vacuum,virtual_column] }",
             license_info.to_string()
         );
     }

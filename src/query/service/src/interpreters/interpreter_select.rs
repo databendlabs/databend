@@ -138,7 +138,7 @@ impl SelectInterpreter {
         .await?;
 
         // consume stream
-        let update_stream_metas = query_build_update_stream_req(&self.ctx, &self.metadata).await?;
+        let update_stream_metas = query_build_update_stream_req(&self.ctx).await?;
 
         let catalog = self.ctx.get_default_catalog()?;
         build_res
@@ -290,7 +290,10 @@ impl Interpreter for SelectInterpreter {
 
         info!("Query physical plan: \n{}", query_plan);
 
-        if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
+        if self.ctx.get_settings().get_enable_query_result_cache()?
+            && self.ctx.get_cacheable()
+            && self.formatted_ast.is_some()
+        {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
             let kv_store = UserApiProvider::instance().get_meta_store_client();

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::VirtualColumn;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::RefreshVirtualColumnPlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_virtual_column::get_virtual_column_handler;
@@ -50,19 +50,13 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)?;
 
-        let catalog_name = self.plan.catalog.clone();
-        let db_name = self.plan.database.clone();
-        let tbl_name = self.plan.table.clone();
         let table = self
             .ctx
-            .get_table(&catalog_name, &db_name, &tbl_name)
+            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
-
         // check mutability
         table.check_mutable()?;
 
@@ -70,11 +64,18 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
         let virtual_columns = self.plan.virtual_columns.clone();
         let segment_locs = self.plan.segment_locs.clone();
 
+        let mut build_res = PipelineBuildResult::create();
         let handler = get_virtual_column_handler();
         let _ = handler
-            .do_refresh_virtual_column(fuse_table, self.ctx.clone(), virtual_columns, segment_locs)
+            .do_refresh_virtual_column(
+                self.ctx.clone(),
+                fuse_table,
+                virtual_columns,
+                segment_locs,
+                &mut build_res.main_pipeline,
+            )
             .await?;
 
-        Ok(PipelineBuildResult::create())
+        Ok(build_res)
     }
 }

@@ -24,14 +24,12 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::CacheScan;
 use databend_common_sql::executor::physical_plans::ConstantTableScan;
-use databend_common_sql::executor::physical_plans::CteScan;
 use databend_common_sql::executor::physical_plans::ExpressionScan;
 use databend_common_sql::executor::physical_plans::TableScan;
 use databend_common_sql::plans::CacheSource;
 
 use crate::pipelines::processors::transforms::CacheSourceState;
 use crate::pipelines::processors::transforms::HashJoinCacheState;
-use crate::pipelines::processors::transforms::MaterializedCteSource;
 use crate::pipelines::processors::transforms::TransformAddInternalColumns;
 use crate::pipelines::processors::transforms::TransformCacheScan;
 use crate::pipelines::processors::transforms::TransformExpressionScan;
@@ -41,6 +39,17 @@ impl PipelineBuilder {
     pub(crate) fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.set_partitions(scan.source.parts.clone())?;
+        self.ctx
+            .set_wait_runtime_filter(scan.scan_id, self.contain_sink_processor);
+        if self.ctx.get_settings().get_enable_prune_pipeline()? {
+            if let Some(prune_pipeline) = table.build_prune_pipeline(
+                self.ctx.clone(),
+                &scan.source,
+                &mut self.main_pipeline,
+            )? {
+                self.pipelines.push(prune_pipeline);
+            }
+        }
         table.read_data(
             self.ctx.clone(),
             &scan.source,
@@ -72,22 +81,6 @@ impl PipelineBuilder {
         }
 
         Ok(())
-    }
-
-    pub(crate) fn build_cte_scan(&mut self, cte_scan: &CteScan) -> Result<()> {
-        let max_threads = self.settings.get_max_threads()?;
-        self.main_pipeline.add_source(
-            |output| {
-                MaterializedCteSource::create(
-                    self.ctx.clone(),
-                    output,
-                    cte_scan.cte_idx,
-                    self.cte_state.get(&cte_scan.cte_idx.0).unwrap().clone(),
-                    cte_scan.offsets.clone(),
-                )
-            },
-            max_threads as usize,
-        )
     }
 
     pub(crate) fn build_constant_table_scan(&mut self, scan: &ConstantTableScan) -> Result<()> {

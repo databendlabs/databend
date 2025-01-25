@@ -14,6 +14,7 @@
 
 use nom::branch::alt;
 use nom::combinator::map;
+use nom_rule::rule;
 
 use super::query::with;
 use crate::ast::CopyIntoLocationOption;
@@ -22,6 +23,7 @@ use crate::ast::CopyIntoLocationStmt;
 use crate::ast::CopyIntoTableOption;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
+use crate::ast::LiteralStringOrVariable;
 use crate::ast::Statement;
 use crate::ast::Statement::CopyIntoLocation;
 use crate::parser::common::comma_separated_list0;
@@ -29,6 +31,7 @@ use crate::parser::common::comma_separated_list1;
 use crate::parser::common::ident;
 use crate::parser::common::table_ref;
 use crate::parser::common::IResult;
+use crate::parser::common::*;
 use crate::parser::expr::literal_bool;
 use crate::parser::expr::literal_string;
 use crate::parser::expr::literal_u64;
@@ -38,8 +41,8 @@ use crate::parser::stage::file_location;
 use crate::parser::statement::hint;
 use crate::parser::token::TokenKind::COPY;
 use crate::parser::token::TokenKind::*;
+use crate::parser::ErrorKind;
 use crate::parser::Input;
-use crate::rule;
 
 pub fn copy_into_table(i: Input) -> IResult<Statement> {
     let copy_into_table_source = alt((
@@ -49,7 +52,7 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
         }),
     ));
 
-    map(
+    map_res(
         rule! {
             #with? ~ COPY
             ~ #hint?
@@ -67,20 +70,15 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
                 files: Default::default(),
                 pattern: Default::default(),
                 file_format: Default::default(),
-                validation_mode: Default::default(),
-                size_limit: Default::default(),
-                max_files: Default::default(),
-                split_size: Default::default(),
-                purge: Default::default(),
-                force: Default::default(),
-                disable_variant_check: Default::default(),
-                on_error: "abort".to_string(),
-                return_failed_only: Default::default(),
+
+                options: Default::default(),
             };
             for opt in opts {
-                copy_stmt.apply_option(opt);
+                copy_stmt
+                    .apply_option(opt)
+                    .map_err(|e| nom::Err::Failure(ErrorKind::Other(e)))?;
             }
-            Statement::CopyIntoTable(copy_stmt)
+            Ok(Statement::CopyIntoTable(copy_stmt))
         },
     )(i)
 }
@@ -108,9 +106,7 @@ fn copy_into_location(i: Input) -> IResult<Statement> {
                 src,
                 dst,
                 file_format: Default::default(),
-                single: Default::default(),
-                max_file_size: Default::default(),
-                detailed_output: false,
+                options: Default::default(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -137,6 +133,13 @@ pub fn copy_into(i: Input) -> IResult<Statement> {
     )(i)
 }
 
+pub fn literal_string_or_variable(i: Input) -> IResult<LiteralStringOrVariable> {
+    alt((
+        map(literal_string, LiteralStringOrVariable::Literal),
+        map(variable_ident, LiteralStringOrVariable::Variable),
+    ))(i)
+}
+
 fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
     alt((
         map(
@@ -144,16 +147,12 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             |(_, _, _, files, _)| CopyIntoTableOption::Files(files),
         ),
         map(
-            rule! { PATTERN ~ "=" ~ #literal_string },
+            rule! { PATTERN ~ ^"=" ~ ^#literal_string_or_variable },
             |(_, _, pattern)| CopyIntoTableOption::Pattern(pattern),
         ),
         map(rule! { #file_format_clause }, |options| {
             CopyIntoTableOption::FileFormat(options)
         }),
-        map(
-            rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
-            |(_, _, validation_mode)| CopyIntoTableOption::ValidationMode(validation_mode),
-        ),
         map(
             rule! { SIZE_LIMIT ~ "=" ~ #literal_u64 },
             |(_, _, size_limit)| CopyIntoTableOption::SizeLimit(size_limit as usize),
@@ -175,6 +174,10 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
         map(rule! { ON_ERROR ~ "=" ~ #ident }, |(_, _, on_error)| {
             CopyIntoTableOption::OnError(on_error.to_string())
         }),
+        map(
+            rule! { COLUMN_MATCH_MODE ~ "=" ~ #ident },
+            |(_, _, mode)| CopyIntoTableOption::ColumnMatchMode(mode.to_string()),
+        ),
         map(
             rule! { DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool },
             |(_, _, disable_variant_check)| {
@@ -200,6 +203,18 @@ fn copy_into_location_option(i: Input) -> IResult<CopyIntoLocationOption> {
         map(
             rule! { DETAILED_OUTPUT ~ "=" ~ #literal_bool },
             |(_, _, detailed_output)| CopyIntoLocationOption::DetailedOutput(detailed_output),
+        ),
+        map(
+            rule! { USE_RAW_PATH ~ "=" ~ #literal_bool },
+            |(_, _, use_raw_path)| CopyIntoLocationOption::UseRawPath(use_raw_path),
+        ),
+        map(
+            rule! {  INCLUDE_QUERY_ID ~ "=" ~ #literal_bool },
+            |(_, _, include_query_id)| CopyIntoLocationOption::IncludeQueryID(include_query_id),
+        ),
+        map(
+            rule! {  OVERWRITE ~ "=" ~ #literal_bool },
+            |(_, _, include_query_id)| CopyIntoLocationOption::OverWrite(include_query_id),
         ),
         map(rule! { #file_format_clause }, |options| {
             CopyIntoLocationOption::FileFormat(options)

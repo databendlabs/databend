@@ -32,6 +32,7 @@ use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_schedul
 use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::warn;
 use opendal::Operator;
 
@@ -41,6 +42,7 @@ use crate::operations::ReclusterMutator;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::SegmentLocation;
 
@@ -60,14 +62,12 @@ impl FuseTable {
             ctx.set_status_info(status);
         }
 
-        if self.cluster_key_meta.is_none() {
+        let cluster_type = self.cluster_type();
+        if cluster_type.is_none_or(|v| v != ClusterType::Linear) {
             return Ok(None);
         }
 
-        let snapshot_opt = self.read_table_snapshot().await?;
-        let snapshot = if let Some(val) = snapshot_opt {
-            val
-        } else {
+        let Some(snapshot) = self.read_table_snapshot().await? else {
             // no snapshot, no recluster.
             return Ok(None);
         };
@@ -82,12 +82,12 @@ impl FuseTable {
         let segment_locations = create_segment_location_vector(segment_locations, None);
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let limit = limit.unwrap_or(1000);
+        let segment_limit = limit.unwrap_or(1000);
         // The default limit might be too small, which makes
         // the scanning of recluster candidates slow.
-        let chunk_size = limit.max(max_threads * 4);
+        let chunk_size = segment_limit.max(max_threads * 4);
         // The max number of segments to be reclustered.
-        let max_seg_num = limit.min(max_threads * 2);
+        let max_seg_num = segment_limit.min(max_threads * 2);
 
         let mut recluster_seg_num = 0;
         let mut recluster_blocks_count = 0;
@@ -103,6 +103,7 @@ impl FuseTable {
                 self.schema_with_stream(),
                 self.get_operator(),
                 &push_downs,
+                self.get_storage_format(),
                 chunk.to_vec(),
             )
             .await?;
@@ -146,7 +147,7 @@ impl FuseTable {
                     .await?;
             }
 
-            if !parts.is_empty() {
+            if !parts.is_empty() || limit.is_some() {
                 recluster_seg_num = selected_seg_num;
                 break;
             }
@@ -225,6 +226,7 @@ impl FuseTable {
         schema: TableSchemaRef,
         dal: Operator,
         push_down: &Option<PushDownInfo>,
+        storage_format: FuseStorageFormat,
         mut segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
         let max_concurrency = {
@@ -252,6 +254,7 @@ impl FuseTable {
             BloomIndexColumns::None,
             max_concurrency,
             bloom_index_builder,
+            storage_format,
         )?;
 
         let segment_pruner = SegmentPruner::create(pruning_ctx.clone(), schema)?;
@@ -270,7 +273,7 @@ impl FuseTable {
 
                 async move {
                     let pruned_segments = segment_pruner.pruning(batch).await?;
-                    Result::<_, ErrorCode>::Ok(pruned_segments)
+                    Result::<_>::Ok(pruned_segments)
                 }
             }));
         }

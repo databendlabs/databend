@@ -40,7 +40,11 @@ default_compression = 'zstd'
 
 enable_udf_server = true
 udf_server_allow_list = ['http://0.0.0.0:8815']
+udf_server_allow_insecure = true
+
 cloud_control_grpc_server_address = "http://0.0.0.0:50051"
+
+# network_policy_whitelist = ['127.0.0.0/8']
 
 [[query.users]]
 name = "root"
@@ -151,3 +155,6 @@ data_cache_storage = "none"
 path = "./.databend/_cache"
 # max bytes of cached data 20G
 max_bytes = 21474836480
+
+[spill]
+spill_local_disk_path = "./.databend/temp/_query_spill"

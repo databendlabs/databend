@@ -23,7 +23,7 @@ use openraft::AnyError;
 
 use crate::ondisk::DataVersion;
 use crate::ondisk::OnDisk;
-use crate::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003;
+use crate::sm_v003::adapter::upgrade_snapshot_data_v002_to_v003_or_v004;
 use crate::sm_v003::SnapshotStoreV002;
 use crate::sm_v003::SnapshotStoreV003;
 use crate::state_machine::MetaSnapshotId;
@@ -49,22 +49,22 @@ impl OnDisk {
         let loaded = ss_store_v002.load_last_snapshot().await?;
 
         let Some((snapshot_id, snapshot_data)) = loaded else {
-            self.progress(format_args!("No V002 snapshot, skip upgrade"));
-            self.finish_upgrading().await?;
+            self.progress(format_args!("    No V002 snapshot, skip upgrade"));
+            self.finish_upgrading()?;
             return Ok(());
         };
 
         self.convert_snapshot_v002_to_v003(snapshot_id.clone(), snapshot_data)
             .await
             .map_err(|e| {
-                MetaStorageError::snapshot_error(&e, || {
+                MetaStorageError::damaged(&e, || {
                     format!("convert v002 snapshot to v003 {}", snapshot_id)
                 })
             })?;
 
         self.remove_v002_snapshot().await?;
 
-        self.finish_upgrading().await?;
+        self.finish_upgrading()?;
 
         Ok(())
     }
@@ -76,7 +76,7 @@ impl OnDisk {
 
         let last_snapshot = loader.load_last_snapshot().await.map_err(|e| {
             let ae = AnyError::new(&e).add_context(|| "load last snapshot");
-            MetaStorageError::SnapshotError(ae)
+            MetaStorageError(ae)
         })?;
 
         if last_snapshot.is_some() {
@@ -87,7 +87,7 @@ impl OnDisk {
             self.remove_v002_snapshot().await?;
 
             // Note that this will increase `header.version`.
-            self.finish_upgrading().await?;
+            self.finish_upgrading()?;
         }
 
         Ok(())
@@ -100,7 +100,7 @@ impl OnDisk {
     ) -> Result<(), io::Error> {
         let ss_store_v003 = SnapshotStoreV003::new(self.config.clone());
 
-        upgrade_snapshot_data_v002_to_v003(
+        upgrade_snapshot_data_v002_to_v003_or_v004(
             &ss_store_v003,
             Box::new(snapshot_data),
             snapshot_id.to_string(),
@@ -115,7 +115,7 @@ impl OnDisk {
         let dir = snapshot_config.snapshot_dir();
 
         fs::remove_dir_all(&dir).map_err(|e| {
-            MetaStorageError::snapshot_error(&e, || format!("removing v002 snapshot dir: {}", dir))
+            MetaStorageError::damaged(&e, || format!("removing v002 snapshot dir: {}", dir))
         })?;
         Ok(())
     }

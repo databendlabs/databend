@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Display;
 use std::io::Cursor;
 use std::ops::Range;
 
-use chrono::NaiveDate;
-use chrono_tz::Tz;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use jiff::civil::Date;
+use jiff::fmt::strtime;
+use jiff::tz::TimeZone;
+use log::error;
 use num_traits::AsPrimitive;
 
 use super::number::SimpleDomain;
@@ -45,12 +48,14 @@ pub const DATE_MIN: i32 = -354285;
 pub const DATE_MAX: i32 = 2932896;
 
 /// Check if date is within range.
+/// /// If days is invalid convert to DATE_MIN.
 #[inline]
-pub fn check_date(days: i64) -> Result<i32, String> {
+pub fn clamp_date(days: i64) -> i32 {
     if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
-        Ok(days as i32)
+        days as i32
     } else {
-        Err("date is out of range".to_string())
+        error!("{}", format!("date {} is out of range", days));
+        DATE_MIN
     }
 }
 
@@ -186,6 +191,11 @@ impl ValueType for DateType {
     }
 
     #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
+    }
+
+    #[inline(always)]
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left == right
     }
@@ -251,11 +261,10 @@ impl ArgType for DateType {
 #[inline]
 pub fn string_to_date(
     date_str: impl AsRef<[u8]>,
-    tz: Tz,
-    enable_dst_hour_fix: bool,
-) -> databend_common_exception::Result<NaiveDate> {
+    jiff_tz: &TimeZone,
+) -> databend_common_exception::Result<Date> {
     let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
-    match reader.read_date_text(&tz, enable_dst_hour_fix) {
+    match reader.read_date_text(jiff_tz) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Ok(d),
             Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),
@@ -268,6 +277,7 @@ pub fn string_to_date(
 }
 
 #[inline]
-pub fn date_to_string(date: impl AsPrimitive<i64>, tz: Tz) -> impl Display {
-    date.as_().to_date(tz).format(DATE_FORMAT)
+pub fn date_to_string(date: impl AsPrimitive<i64>, tz: &TimeZone) -> impl Display {
+    let res = date.as_().to_date(tz.clone());
+    strtime::format(DATE_FORMAT, res).unwrap()
 }

@@ -50,7 +50,6 @@ pub struct CreateTablePlan {
     pub engine: Engine,
     pub engine_options: TableOptions,
     pub storage_params: Option<StorageParams>,
-    pub part_prefix: String,
     pub options: TableOptions,
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
@@ -257,6 +256,20 @@ impl SetOptionsPlan {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct UnsetOptionsPlan {
+    pub options: Vec<String>,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl UnsetOptionsPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 // Table add column
 #[derive(Clone, Debug)]
 pub struct AddTableColumnPlan {
@@ -443,6 +456,7 @@ pub struct AlterTableClusterKeyPlan {
     pub database: String,
     pub table: String,
     pub cluster_keys: Vec<String>,
+    pub cluster_type: String,
 }
 
 impl AlterTableClusterKeyPlan {

@@ -20,11 +20,10 @@ use std::time::Duration;
 use anyerror::AnyError;
 use databend_common_base::base::StopHandle;
 use databend_common_base::base::Stoppable;
+use databend_common_base::version::DATABEND_COMMIT_VERSION;
 use databend_common_grpc::RpcClientConf;
 use databend_common_meta_raft_store::ondisk::OnDisk;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
-use databend_common_meta_sled_store::get_sled_db;
-use databend_common_meta_sled_store::init_sled_db;
 use databend_common_meta_sled_store::openraft::MessageSummary;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_common_meta_types::Cmd;
@@ -58,8 +57,9 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     if run_cmd(&conf).await {
         return Ok(());
     }
+    let binary_version = DATABEND_COMMIT_VERSION.clone();
 
-    set_panic_hook();
+    set_panic_hook(binary_version);
 
     // app name format: node_id@cluster_id
     let app_name_shuffle = format!(
@@ -89,15 +89,10 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    init_sled_db(
-        conf.raft_config.raft_dir.clone(),
-        conf.raft_config.sled_cache_size(),
-    );
-
     let single_or_join = if conf.raft_config.single {
         "single".to_string()
     } else {
-        format!("join {:#?}", conf.raft_config.join)
+        format!("join {:?}", conf.raft_config.join)
     };
 
     let grpc_advertise = if let Some(a) = conf.grpc_api_advertise_address() {
@@ -123,38 +118,34 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     info!("Initialize on-disk data at {}", conf.raft_config.raft_dir);
 
-    let db = get_sled_db();
-    let mut on_disk = OnDisk::open(&db, &conf.raft_config).await?;
+    let mut on_disk = OnDisk::open(&conf.raft_config).await?;
     on_disk.log_stderr(true);
 
-    println!("On Disk Data:");
-    println!("    Dir: {}", conf.raft_config.raft_dir);
-    println!("    DataVersion: {:?}", on_disk.header.version);
-    println!("    In-Upgrading: {:?}", on_disk.header.upgrading);
-    println!();
-    println!("Log:");
-    println!("    File: {}", conf.log.file);
-    println!("    Stderr: {}", conf.log.stderr);
-    if conf.log.otlp.on {
-        println!("    OpenTelemetry: {}", conf.log.otlp);
+    let h = &on_disk.header;
+
+    #[rustfmt::skip]
+    {
+        println!("Disk  Data: {:?}; Upgrading: {:?}", h.version, h.upgrading);
+        println!("      Dir: {}", conf.raft_config.raft_dir);
+        println!();
+        println!("Log   File:   {}", conf.log.file);
+        println!("      Stderr: {}", conf.log.stderr);
+        if conf.log.otlp.on {
+            println!("    OpenTelemetry: {}", conf.log.otlp);
+        }
+        if conf.log.tracing.on {
+            println!("    Tracing: {}", conf.log.tracing);
+        }
+        let r = &conf.raft_config;
+        println!("Raft  Id: {}; Cluster: {}", r.id, r.cluster_name);
+        println!("      Dir: {}", r.raft_dir);
+        println!("      Status: {}", single_or_join);
+        println!();
+        println!("HTTP API listen at: {}", conf.admin_api_address);
+        println!("gRPC API listen at: {} advertise: {}", conf.grpc_api_address, grpc_advertise);
+        println!("Raft API listen at: {} advertise: {}", raft_listen, raft_advertise,);
+        println!();
     }
-    if conf.log.tracing.on {
-        println!("    Tracing: {}", conf.log.tracing);
-    }
-    println!("Id: {}", conf.raft_config.id);
-    println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
-    println!("Raft Dir: {}", conf.raft_config.raft_dir);
-    println!("Raft Status: {}", single_or_join);
-    println!();
-    println!("HTTP API");
-    println!("   listening at {}", conf.admin_api_address);
-    println!("gRPC API");
-    println!("   listening at {}", conf.grpc_api_address);
-    println!("   advertise:  {}", grpc_advertise);
-    println!("Raft API");
-    println!("   listening at {}", raft_listen,);
-    println!("   advertise:  {}", raft_advertise,);
-    println!();
 
     on_disk.upgrade().await?;
 
@@ -208,7 +199,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 }
 
 async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), MetaAPIError> {
-    let node_id = meta_node.sto.id;
+    let node_id = meta_node.raft_store.id;
     let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
     let node = Node::new(node_id, raft_endpoint)
         .with_grpc_advertise_address(conf.grpc_api_advertise_address());

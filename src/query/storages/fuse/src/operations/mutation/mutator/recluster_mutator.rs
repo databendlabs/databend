@@ -20,6 +20,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::ReclusterParts;
@@ -39,7 +40,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::future::FutureExt;
 use fastrace::Span;
 use indexmap::IndexSet;
@@ -162,6 +163,7 @@ impl ReclusterMutator {
         &self,
         compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
     ) -> Result<(u64, ReclusterParts)> {
+        // Sort segments by cluster statistics
         let mut compact_segments = compact_segments;
         compact_segments.sort_by(|a, b| {
             sort_by_cluster_stats(
@@ -171,15 +173,19 @@ impl ReclusterMutator {
             )
         });
 
-        let mut selected_segments = Vec::with_capacity(compact_segments.len());
+        // Prepare for reclustering by collecting segment indices, statistics, and blocks
         let mut selected_segs_idx = Vec::with_capacity(compact_segments.len());
         let mut selected_statistics = Vec::with_capacity(compact_segments.len());
-        compact_segments.into_iter().for_each(|(loc, info)| {
-            selected_statistics.push(info.summary.clone());
-            selected_segments.push(info);
-            selected_segs_idx.push(loc.segment_idx);
-        });
+        let selected_segments = compact_segments
+            .into_iter()
+            .map(|(loc, info)| {
+                selected_statistics.push(info.summary.clone());
+                selected_segs_idx.push(loc.segment_idx);
+                info
+            })
+            .collect::<Vec<_>>();
 
+        // Gather blocks and create a block map categorized by clustering levels
         let blocks = self.gather_blocks(selected_segments).await?;
         let mut blocks_map: BTreeMap<i32, Vec<usize>> = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
@@ -190,22 +196,24 @@ impl ReclusterMutator {
             }
         }
 
-        let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-        let recluster_block_size = self.ctx.get_settings().get_recluster_block_size()? as usize;
-        let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 35 / 100);
+        // Compute memory threshold and maximum number of blocks allowed for reclustering.
+        let settings = self.ctx.get_settings();
+        let avail_memory_usage =
+            settings.get_max_memory_usage()? - GLOBAL_MEM_STAT.get_memory_usage().max(0) as u64;
+        let memory_threshold = settings
+            .get_recluster_block_size()?
+            .min(avail_memory_usage * 30 / 100) as usize;
+        // specify a rather small value, so that `recluster_block_size` might be tuned to lower value.
+        let max_blocks_num =
+            (memory_threshold / self.block_thresholds.max_bytes_per_block).max(2) * self.max_tasks;
 
-        let max_blocks_num = std::cmp::max(
-            memory_threshold / self.block_thresholds.max_bytes_per_block,
-            // specify a rather small value, so that setting `recluster_block_size`
-            // might be tuned to lower value.
-            2,
-        ) * self.max_tasks;
-
+        // Prepare task generation parameters
         let arrow_schema = self.schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema));
 
         let mut tasks = Vec::new();
         let mut selected_blocks_idx = IndexSet::new();
+        // Process blocks for reclustering based on their level
         for (level, indices) in blocks_map.into_iter() {
             if level == -1 || indices.len() < 2 {
                 continue;
@@ -213,26 +221,33 @@ impl ReclusterMutator {
 
             let mut total_rows = 0;
             let mut total_bytes = 0;
+            let mut small_blocks = IndexSet::new();
             let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
-            for i in indices.iter() {
-                if let Some(stats) = &blocks[*i].cluster_stats {
-                    points_map
-                        .entry(stats.min().clone())
-                        .and_modify(|v| v.0.push(*i))
-                        .or_insert((vec![*i], vec![]));
-                    points_map
-                        .entry(stats.max().clone())
-                        .and_modify(|v| v.1.push(*i))
-                        .or_insert((vec![], vec![*i]));
+
+            // Analyze each block's statistics and track min/max points
+            for &i in indices.iter() {
+                let block = &blocks[i];
+                if let Some(stats) = &block.cluster_stats {
+                    points_map.entry(stats.min().clone()).or_default().0.push(i);
+                    points_map.entry(stats.max().clone()).or_default().1.push(i);
                 }
-                total_rows += blocks[*i].row_count;
-                total_bytes += blocks[*i].block_size;
+
+                // Track small blocks for potential compaction
+                if self
+                    .block_thresholds
+                    .check_too_small(block.row_count as usize, block.block_size as usize)
+                {
+                    small_blocks.insert(i);
+                }
+
+                total_rows += block.row_count;
+                total_bytes += block.block_size;
             }
 
-            // If the statistics of blocks are too small, just merge them into one block.
+            // If total rows and bytes are too small, compact the blocks into one
             if self
                 .block_thresholds
-                .check_for_recluster(total_rows as usize, total_bytes as usize)
+                .check_for_compact(total_rows as usize, total_bytes as usize)
             {
                 debug!(
                     "recluster: the statistics of blocks are too small, just merge them into one block"
@@ -252,23 +267,29 @@ impl ReclusterMutator {
                 break;
             }
 
-            let selected_idx =
+            // Select blocks for reclustering based on depth threshold and max block size
+            let mut selected_idx =
                 self.fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
             if selected_idx.is_empty() {
-                continue;
+                if level != 0 || small_blocks.len() < 2 {
+                    continue;
+                }
+                selected_idx = IndexSet::from_iter(small_blocks);
             }
 
+            // Process selected blocks into recluster tasks based on memory threshold
             let mut task_bytes = 0;
             let mut task_rows = 0;
             let mut task_indices = Vec::new();
             let mut selected_blocks = Vec::new();
             for idx in selected_idx {
-                let block_meta = blocks[idx].clone();
-                let block_size = block_meta.block_size as usize;
-                let row_count = block_meta.row_count as usize;
+                let block = blocks[idx].clone();
+                let block_size = block.block_size as usize;
+                let row_count = block.row_count as usize;
+
+                // If memory threshold exceeded, generate a new task and reset accumulators
                 if task_bytes + block_size > memory_threshold && selected_blocks.len() > 1 {
-                    selected_blocks_idx.extend(task_indices.iter());
-                    task_indices.clear();
+                    selected_blocks_idx.extend(std::mem::take(&mut task_indices));
 
                     tasks.push(self.generate_task(
                         &selected_blocks,
@@ -282,6 +303,7 @@ impl ReclusterMutator {
                     task_bytes = 0;
                     selected_blocks.clear();
 
+                    // Break if maximum task limit is reached
                     if tasks.len() >= self.max_tasks {
                         break;
                     }
@@ -290,10 +312,10 @@ impl ReclusterMutator {
                 task_rows += row_count;
                 task_bytes += block_size;
                 task_indices.push(idx);
-                selected_blocks.push((None, block_meta));
+                selected_blocks.push((None, block));
             }
 
-            // the remains.
+            // Add remaining blocks as a final task if any
             if selected_blocks.len() > 1 {
                 selected_blocks_idx.extend(task_indices);
                 tasks.push(self.generate_task(
@@ -307,6 +329,7 @@ impl ReclusterMutator {
             break;
         }
 
+        // Determine if reclustering is needed
         let selected = if selected_blocks_idx.is_empty() {
             let unordered = || {
                 blocks.windows(2).any(|w| {
@@ -322,6 +345,7 @@ impl ReclusterMutator {
             true
         };
 
+        // Generate recluster parts based on selected segments
         let parts = if selected {
             selected_segs_idx.sort_by(|a, b| b.cmp(a));
 
@@ -332,11 +356,10 @@ impl ReclusterMutator {
             });
 
             let blocks_idx: IndexSet<usize> = IndexSet::from_iter(0..blocks.len());
-            let diff = blocks_idx.difference(&selected_blocks_idx);
-            let remained_blocks = diff
-                .into_iter()
-                .map(|v| blocks[*v].clone())
-                .collect::<Vec<_>>();
+            let remained_blocks = blocks_idx
+                .difference(&selected_blocks_idx)
+                .map(|&v| blocks[v].clone())
+                .collect();
 
             ReclusterParts::Recluster {
                 tasks,
@@ -347,6 +370,7 @@ impl ReclusterMutator {
         } else {
             ReclusterParts::new_recluster_parts()
         };
+
         Ok((selected_blocks_idx.len() as u64, parts))
     }
 
@@ -450,10 +474,14 @@ impl ReclusterMutator {
         let mut blocks_num = 0;
         let mut indices = IndexSet::new();
         let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
-        let mut unclustered_sg = IndexSet::new();
+        let mut unclustered_segments = IndexSet::new();
+        let mut small_segments = IndexSet::new();
+
+        // Iterate over all segments
         for (i, (loc, compact_segment)) in compact_segments.iter().enumerate() {
             let mut level = -1;
-            let clustered = compact_segment
+            // Check if the segment is clustered
+            let is_clustered = compact_segment
                 .summary
                 .cluster_stats
                 .as_ref()
@@ -461,22 +489,32 @@ impl ReclusterMutator {
                     level = v.level;
                     v.cluster_key_id == self.cluster_key_id
                 });
-            if !clustered {
+
+            // If not clustered, mark for compaction
+            if !is_clustered {
                 debug!(
-                    "recluster: segment '{}' is unclustered, need to be compacted",
+                    "recluster: segment '{}' is unclustered, needs to be compacted",
                     loc.location.0
                 );
-                unclustered_sg.insert(i);
+                unclustered_segments.insert(i);
                 continue;
             }
 
-            if level < 0 && (compact_segment.summary.block_count as usize) >= self.block_per_seg {
+            // Skip if segment has more blocks than required and no reclustering is needed
+            if level < 0 && compact_segment.summary.block_count as usize >= self.block_per_seg {
                 continue;
             }
 
+            // Process clustered segment
             if let Some(stats) = &compact_segment.summary.cluster_stats {
                 blocks_num += compact_segment.summary.block_count as usize;
+                // Track small segments for special handling later
+                if blocks_num < self.block_per_seg {
+                    small_segments.insert(i);
+                }
+                // Add to indices for potential reclustering
                 indices.insert(i);
+                // Update points_map with min and max points of the segment
                 points_map
                     .entry(stats.min().clone())
                     .and_modify(|v| v.0.push(i))
@@ -488,17 +526,24 @@ impl ReclusterMutator {
             }
         }
 
-        if !unclustered_sg.is_empty() {
-            return Ok((ReclusterMode::Compact, unclustered_sg));
+        // If there are unclustered segments, return early for compaction
+        if !unclustered_segments.is_empty() {
+            return Ok((ReclusterMode::Compact, unclustered_segments));
         }
 
-        let res = if indices.len() > 1 && blocks_num > self.block_per_seg {
-            self.fetch_max_depth(points_map, 1.0, max_len)?
+        let selected_segments = if indices.len() > 1 && blocks_num > self.block_per_seg {
+            let selected = self.fetch_max_depth(points_map, 1.0, max_len)?;
+            if selected.is_empty() && small_segments.len() > 1 {
+                // If no segments were selected but small segments exist, use those.
+                small_segments
+            } else {
+                selected
+            }
         } else {
             indices
         };
 
-        Ok((ReclusterMode::Recluster, res))
+        Ok((ReclusterMode::Recluster, selected_segments))
     }
 
     pub fn segment_can_recluster(&self, summary: &Statistics) -> bool {
@@ -523,7 +568,7 @@ impl ReclusterMutator {
                     v.block_metas()
                         .map_err(|_| ErrorCode::Internal("Failed to get block metas"))
                 }
-                .in_span(Span::enter_with_local_parent(full_name!()))
+                .in_span(Span::enter_with_local_parent(func_path!()))
             })
         });
 
@@ -555,7 +600,7 @@ impl ReclusterMutator {
         let mut max_point = 0;
         let mut interval_depths = HashMap::new();
         let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
-        let mut unfinished_intervals = HashMap::new();
+        let mut unfinished_intervals = BTreeMap::new();
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
         let indices = compare_scalars(keys, &self.cluster_key_types)?;
         for (i, idx) in indices.into_iter().enumerate() {

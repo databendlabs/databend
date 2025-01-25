@@ -68,20 +68,21 @@ impl PipelineBuilder {
                 segment_locations,
                 block_count: None,
             };
-            Runtime::with_worker_threads(2, None)?.block_on(async move {
-                let (partitions, _) = table_clone
-                    .do_mutation_block_pruning(
-                        ctx_clone,
-                        filters_clone,
-                        projection,
-                        prune_ctx,
-                        true,
-                        true,
-                    )
-                    .await?;
-                ctx.set_partitions(partitions)?;
-                Ok(())
-            })?;
+            Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
+                .block_on(async move {
+                    let (partitions, _) = table_clone
+                        .do_mutation_block_pruning(
+                            ctx_clone,
+                            filters_clone,
+                            projection,
+                            prune_ctx,
+                            true,
+                            true,
+                        )
+                        .await?;
+                    ctx.set_partitions(partitions)?;
+                    Ok(())
+                })?;
         } else {
             self.ctx
                 .set_partitions(mutation_source.partitions.clone())?;

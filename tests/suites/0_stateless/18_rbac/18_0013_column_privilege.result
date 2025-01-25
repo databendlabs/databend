@@ -1,0 +1,30 @@
+=== show grants for a ===
+SELECT default  USER a GRANT SELECT ON 'default'.'default'.* TO 'a'@'%'
+SELECT default.grant_db.t  USER a GRANT SELECT ON 'default'.'grant_db'.'t' TO 'a'@'%'
+=== show databases ===
+default
+grant_db
+information_schema
+system
+=== show tables ===
+Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
+t
+=== use db ===
+Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
+=== show columns ===
+dummy	TINYINT UNSIGNED	NO		NULL	NULL
+c1	INT	NO		NULL	NULL
+created_on	TIMESTAMP	NO		NULL	NULL
+inherited_roles	BIGINT UNSIGNED	NO		NULL	NULL
+inherited_roles_name	VARCHAR	NO		NULL	NULL
+name	VARCHAR	NO		NULL	NULL
+update_on	TIMESTAMP	NO		NULL	NULL
+keywords	VARCHAR	NO		NULL	NULL
+reserved	TINYINT UNSIGNED	NO		NULL	NULL
+Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
+Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for table 'nogrant.t'
+=== grant system to a ===
+0
+0
+1
+0

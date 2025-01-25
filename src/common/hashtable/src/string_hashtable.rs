@@ -19,7 +19,7 @@ use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
 
 use super::container::HeapContainer;
 use super::table0::Entry;
@@ -38,7 +38,7 @@ use crate::table_empty::TableEmptyIterMut;
 /// Simple unsized hashtable is used for storing unsized keys in arena. It can be worked with HashMethodSerializer.
 /// Different from `ShortStringHashTable`, it doesn't use adaptive sub hashtable to store key values via key size.
 /// It can be considered as a minimal hashtable implementation of ShortStringHashTable
-pub struct StringHashtable<K, V, A = MmapAllocator>
+pub struct StringHashtable<K, V, A = DefaultAllocator>
 where
     K: UnsizedKeyable + ?Sized,
     A: Allocator + Clone,
@@ -235,7 +235,7 @@ where K: UnsizedKeyable + ?Sized
     }
 }
 
-unsafe impl<'a, K, V> TrustedLen for StringHashtableIter<'a, K, V> where K: UnsizedKeyable + ?Sized {}
+unsafe impl<K, V> TrustedLen for StringHashtableIter<'_, K, V> where K: UnsizedKeyable + ?Sized {}
 
 pub struct StringHashtableIterMut<'a, K, V>
 where K: UnsizedKeyable + ?Sized
@@ -277,9 +277,9 @@ enum StringHashtableEntryRefInner<'a, K: ?Sized, V> {
     Table(&'a Entry<FallbackKey, V>),
 }
 
-impl<'a, K: ?Sized, V> Copy for StringHashtableEntryRefInner<'a, K, V> {}
+impl<K: ?Sized, V> Copy for StringHashtableEntryRefInner<'_, K, V> {}
 
-impl<'a, K: ?Sized, V> Clone for StringHashtableEntryRefInner<'a, K, V> {
+impl<K: ?Sized, V> Clone for StringHashtableEntryRefInner<'_, K, V> {
     fn clone(&self) -> Self {
         *self
     }
@@ -313,9 +313,9 @@ impl<'a, K: ?Sized + UnsizedKeyable, V> StringHashtableEntryRefInner<'a, K, V> {
 
 pub struct StringHashtableEntryRef<'a, K: ?Sized, V>(StringHashtableEntryRefInner<'a, K, V>);
 
-impl<'a, K: ?Sized, V> Copy for StringHashtableEntryRef<'a, K, V> {}
+impl<K: ?Sized, V> Copy for StringHashtableEntryRef<'_, K, V> {}
 
-impl<'a, K: ?Sized, V> Clone for StringHashtableEntryRef<'a, K, V> {
+impl<K: ?Sized, V> Clone for StringHashtableEntryRef<'_, K, V> {
     fn clone(&self) -> Self {
         *self
     }
@@ -444,11 +444,27 @@ where A: Allocator + Clone + Default
     type Key = [u8];
     type Value = V;
 
-    type EntryRef<'a> = StringHashtableEntryRef<'a, [u8], V> where Self: 'a, V: 'a;
-    type EntryMutRef<'a> = StringHashtableEntryMutRef<'a, [u8], V> where Self: 'a, V: 'a;
+    type EntryRef<'a>
+        = StringHashtableEntryRef<'a, [u8], V>
+    where
+        Self: 'a,
+        V: 'a;
+    type EntryMutRef<'a>
+        = StringHashtableEntryMutRef<'a, [u8], V>
+    where
+        Self: 'a,
+        V: 'a;
 
-    type Iterator<'a> = StringHashtableIter<'a, [u8], V> where Self: 'a, V: 'a;
-    type IteratorMut<'a> = StringHashtableIterMut<'a, [u8], V> where Self: 'a, V: 'a;
+    type Iterator<'a>
+        = StringHashtableIter<'a, [u8], V>
+    where
+        Self: 'a,
+        V: 'a;
+    type IteratorMut<'a>
+        = StringHashtableIterMut<'a, [u8], V>
+    where
+        Self: 'a,
+        V: 'a;
 
     fn len(&self) -> usize {
         self.len()

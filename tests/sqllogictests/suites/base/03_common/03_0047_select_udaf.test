@@ -1,0 +1,47 @@
+statement ok
+CREATE or replace FUNCTION weighted_avg (INT, INT) STATE {sum INT, weight INT} RETURNS FLOAT
+LANGUAGE javascript AS $$
+export function create_state() {
+    return {sum: 0, weight: 0};
+}
+export function accumulate(state, value, weight) {
+    state.sum += value * weight;
+    state.weight += weight;
+    return state;
+}
+export function retract(state, value, weight) {
+    state.sum -= value * weight;
+    state.weight -= weight;
+    return state;
+}
+export function merge(state1, state2) {
+    state1.sum += state2.sum;
+    state1.weight += state2.weight;
+    return state1;
+}
+export function finish(state) {
+    return state.sum / state.weight;
+}
+$$;
+
+query R
+select weighted_avg(number+1, number*2) from numbers(10);
+----
+7.3333335
+
+query RIR
+select weighted_avg(number+1, number*2), sum(number), avg(number) from numbers(10);
+----
+7.3333335 45 4.5
+
+query R
+select a + b from ( select weighted_avg(number+1, number*2) a, avg(number) b from numbers(10) );
+----
+11.833333492279053
+
+query IR
+select number % 3, weighted_avg(number, 1) from numbers(10) group by 1 order by 1;
+----
+0 4.5
+1 4.0
+2 5.0

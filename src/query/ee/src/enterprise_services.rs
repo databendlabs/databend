@@ -21,8 +21,10 @@ use crate::attach_table::RealAttachTableHandler;
 use crate::background_service::RealBackgroundService;
 use crate::data_mask::RealDatamaskHandler;
 use crate::fail_safe::RealFailSafeHandler;
+use crate::hilbert_clustering::RealHilbertClusteringHandler;
 use crate::inverted_index::RealInvertedIndexHandler;
 use crate::license::license_mgr::RealLicenseManager;
+use crate::resource_management::init_resources_management;
 use crate::storage_encryption::RealStorageEncryptionHandler;
 use crate::storage_quota::RealStorageQuotaHandler;
 use crate::storages::fuse::operations::RealVacuumHandler;
@@ -45,6 +47,8 @@ impl EnterpriseServices {
         RealInvertedIndexHandler::init()?;
         RealStorageQuotaHandler::init(&cfg)?;
         RealFailSafeHandler::init()?;
+        init_resources_management(&cfg).await?;
+        RealHilbertClusteringHandler::init()?;
         Ok(())
     }
 }

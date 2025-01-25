@@ -24,6 +24,8 @@ runs:
         BIN_LOCAL=$HOME/.cargo/bin
         mkdir -p $BIN_LOCAL
         echo "$BIN_LOCAL" >> $GITHUB_PATH
+        mkdir -p target
+        touch target/sccache.log
 
         cat <<EOF >$BIN_LOCAL/build-tool
         #!/bin/bash
@@ -41,10 +43,13 @@ runs:
             echo "setting up sccache for AWS S3..."
             cat <<EOF >>$BIN_LOCAL/build-tool
         export ENABLE_SCCACHE=true
+        export SCCACHE_IDLE_TIMEOUT=0
         export SCCACHE_BUCKET=databend-ci
         export SCCACHE_REGION=us-east-2
         export SCCACHE_S3_KEY_PREFIX="cache/sccache/"
         export SCCACHE_S3_USE_SSL="true"
+        export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
+        export SCCACHE_LOG=info
         EOF
             ;;
 
@@ -52,9 +57,12 @@ runs:
             echo "setting up sccache for Google Cloud Storage..."
             cat <<EOF >>$BIN_LOCAL/build-tool
         export ENABLE_SCCACHE=true
+        export SCCACHE_IDLE_TIMEOUT=0
         export SCCACHE_GCS_RW_MODE=READ_WRITE
         export SCCACHE_GCS_BUCKET=databend-ci
         export SCCACHE_GCS_KEY_PREFIX="cache/sccache/"
+        export SCCACHE_ERROR_LOG=/workspace/target/sccache.log
+        export SCCACHE_LOG=info
         EOF
             ;;
 

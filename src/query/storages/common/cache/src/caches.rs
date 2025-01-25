@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::parquet::metadata::FileMetaData;
+use arrow::array::ArrayRef;
 use databend_common_cache::MemSized;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -27,6 +27,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
+use parquet::file::metadata::ParquetMetaData;
 
 use crate::manager::CacheManager;
 use crate::CacheAccessor;
@@ -35,7 +36,15 @@ use crate::InMemoryLruCache;
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
 
-pub type BlockMetaCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
+/// In-memory cache for all the block metadata of individual segments.
+///
+/// Note that this cache may be memory-intensive, as each item of this cache
+/// contains ALL the BlockMeta of a segment, for well-compacted segment, the
+/// number of BlockMeta might be 1000 ~ 2000.
+pub type SegmentBlockMetasCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
+
+/// In-memory cache of individual BlockMeta.
+pub type BlockMetaCache = InMemoryLruCache<Arc<BlockMeta>>;
 
 /// In memory object cache of TableSnapshot
 pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
@@ -50,18 +59,15 @@ pub type BloomIndexMetaCache = InMemoryLruCache<BloomIndexMeta>;
 pub type InvertedIndexMetaCache = InMemoryLruCache<InvertedIndexMeta>;
 pub type InvertedIndexFileCache = InMemoryLruCache<InvertedIndexFile>;
 
-/// In memory object cache of parquet FileMetaData of external parquet files
-pub type FileMetaDataCache = InMemoryLruCache<FileMetaData>;
+/// In memory object cache of parquet FileMetaData of external parquet rs files
+pub type ParquetMetaDataCache = InMemoryLruCache<ParquetMetaData>;
 
 pub type PrunePartitionsCache = InMemoryLruCache<(PartStatistics, Partitions)>;
 
 /// In memory object cache of table column array
 pub type ColumnArrayCache = InMemoryLruCache<SizedColumnArray>;
 pub type ArrayRawDataUncompressedSize = usize;
-pub type SizedColumnArray = (
-    Box<dyn databend_common_arrow::arrow::array::Array>,
-    ArrayRawDataUncompressedSize,
-);
+pub type SizedColumnArray = (ArrayRef, ArrayRawDataUncompressedSize);
 
 // Bind Type of cached objects to Caches
 //
@@ -71,13 +77,6 @@ pub type SizedColumnArray = (
 pub trait CachedObject<T> {
     type Cache: CacheAccessor<V = T>;
     fn cache() -> Option<Self::Cache>;
-}
-
-impl CachedObject<CompactSegmentInfo> for CompactSegmentInfo {
-    type Cache = CompactSegmentInfoCache;
-    fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_table_segment_cache()
-    }
 }
 
 impl CachedObject<CompactSegmentInfo> for SegmentInfo {
@@ -95,9 +94,9 @@ impl CachedObject<TableSnapshot> for TableSnapshot {
 }
 
 impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
-    type Cache = BlockMetaCache;
+    type Cache = SegmentBlockMetasCache;
     fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_block_meta_cache()
+        CacheManager::instance().get_segment_block_metas_cache()
     }
 }
 
@@ -129,10 +128,10 @@ impl CachedObject<Xor8Filter> for Xor8Filter {
     }
 }
 
-impl CachedObject<FileMetaData> for FileMetaData {
-    type Cache = FileMetaDataCache;
+impl CachedObject<ParquetMetaData> for ParquetMetaData {
+    type Cache = ParquetMetaDataCache;
     fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_file_meta_data_cache()
+        CacheManager::instance().get_parquet_meta_data_cache()
     }
 }
 
@@ -156,6 +155,13 @@ pub struct CacheValue<T> {
 }
 
 impl<T> CacheValue<T> {
+    pub fn new(inner: T, mem_bytes: usize) -> Self {
+        Self {
+            inner: Arc::new(inner),
+            mem_bytes,
+        }
+    }
+
     pub fn get_inner(&self) -> Arc<T> {
         self.inner.clone()
     }
@@ -173,6 +179,15 @@ impl From<CompactSegmentInfo> for CacheValue<CompactSegmentInfo> {
 
 impl From<Vec<Arc<BlockMeta>>> for CacheValue<Vec<Arc<BlockMeta>>> {
     fn from(value: Vec<Arc<BlockMeta>>) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<Arc<BlockMeta>> for CacheValue<Arc<BlockMeta>> {
+    fn from(value: Arc<BlockMeta>) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,
@@ -234,8 +249,8 @@ impl From<InvertedIndexFile> for CacheValue<InvertedIndexFile> {
     }
 }
 
-impl From<FileMetaData> for CacheValue<FileMetaData> {
-    fn from(value: FileMetaData) -> Self {
+impl From<ParquetMetaData> for CacheValue<ParquetMetaData> {
+    fn from(value: ParquetMetaData) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,

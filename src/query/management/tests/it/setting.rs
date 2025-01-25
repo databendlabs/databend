@@ -20,10 +20,9 @@ use databend_common_management::*;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_embedded::MetaEmbedded;
+use databend_common_meta_embedded::MemMeta;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_types::MatchSeq;
-use databend_common_meta_types::SeqV;
+use databend_common_meta_types::seq_value::SeqV;
 use fastrace::func_name;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -82,13 +81,13 @@ async fn test_set_setting() -> Result<()> {
     // Get setting.
     {
         let expect = UserSetting::create("max_threads", UserSettingValue::UInt64(1));
-        let actual = mgr.get_setting("max_threads", MatchSeq::GE(0)).await?;
-        assert_eq!(actual.data, expect);
+        let actual = mgr.get_setting("max_threads").await?;
+        assert_eq!(actual.unwrap().data, expect);
     }
 
     // Drop setting.
     {
-        mgr.try_drop_setting("max_threads", MatchSeq::GE(1)).await?;
+        mgr.try_drop_setting("max_threads").await?;
     }
 
     // Get settings.
@@ -99,23 +98,21 @@ async fn test_set_setting() -> Result<()> {
 
     // Get setting.
     {
-        let res = mgr.get_setting("max_threads", MatchSeq::GE(0)).await;
-        assert!(res.is_err());
+        let res = mgr.get_setting("max_threads").await?;
+        assert!(res.is_none());
     }
 
     // Drop setting not exists.
     {
-        let res = mgr
-            .try_drop_setting("max_threads_not", MatchSeq::GE(1))
-            .await;
+        let res = mgr.try_drop_setting("max_threads_not").await;
         assert!(res.is_ok());
     }
 
     Ok(())
 }
 
-async fn new_setting_api() -> Result<(Arc<MetaEmbedded>, SettingMgr)> {
-    let test_api = Arc::new(MetaEmbedded::new_temp().await?);
+async fn new_setting_api() -> Result<(Arc<MemMeta>, SettingMgr)> {
+    let test_api = Arc::new(MemMeta::default());
     let mgr = SettingMgr::create(
         test_api.clone(),
         &Tenant::new_or_err("databend_query", func_name!()).unwrap(),

@@ -215,6 +215,7 @@ impl PhysicalPlanBuilder {
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
         let mut table_index = None;
+        let mut scan_id = None;
         for condition in join.equi_conditions.iter() {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -243,13 +244,19 @@ impl PhysicalPlanBuilder {
                                 .table_index()
                                 .unwrap(),
                         );
+                        scan_id = Some(
+                            self.metadata
+                                .read()
+                                .base_column_scan_id(*column_idx)
+                                .unwrap(),
+                        );
                     }
                     Some((
                         left_condition
                             .as_raw_expr()
                             .type_check(&*self.metadata.read())?
                             .project_column_ref(|col| col.column_name.clone()),
-                        table_index.unwrap(),
+                        scan_id.unwrap(),
                     ))
                 } else {
                     None

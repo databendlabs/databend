@@ -16,25 +16,25 @@ borsh = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
+enquote = { workspace = true }
+enumflags2 = { workspace = true }
 ethnum = { workspace = true }
 geo = { workspace = true }
-geos = { workspace = true }
 geozero = { workspace = true }
-lexical-core = "0.8.5"
-micromarshal = "0.5.0"
-ordered-float = { workspace = true }
-roaring = { version = "0.10.1", features = ["serde"] }
+hex = { workspace = true }
+jiff = { workspace = true }
+lexical-core = { workspace = true }
+micromarshal = { workspace = true }
+roaring = { workspace = true, features = ["serde"] }
+scroll = { workspace = true }
 serde = { workspace = true }
-wkt = "0.10.3"
+wkt = { workspace = true }
 
 [dev-dependencies]
-aho-corasick = { version = "1.0.1" }
-rand = { workspace = true }
-rmp-serde = "1.1.1"
-
-[package.metadata.cargo-machete]
-ignored = ["geos"]
+aho-corasick = { workspace = true }
+rmp-serde = { workspace = true }
 
 [lints]
 workspace = true

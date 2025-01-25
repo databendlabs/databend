@@ -25,6 +25,7 @@ use clap::Parser;
 use clap::Subcommand;
 use clap::ValueEnum;
 use databend_common_base::base::mask_string;
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSettingValue;
@@ -131,6 +132,10 @@ pub struct Config {
     // cache configs
     #[clap(flatten)]
     pub cache: CacheConfig,
+
+    // spill Config
+    #[clap(flatten)]
+    pub spill: SpillConfig,
 
     // background configs
     #[clap(flatten)]
@@ -471,7 +476,7 @@ pub struct HiveCatalogConfig {
 impl TryInto<InnerCatalogConfig> for CatalogConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerCatalogConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerCatalogConfig, Self::Error> {
         match self.ty.as_str() {
             "hive" => Ok(InnerCatalogConfig::Hive(self.hive.try_into()?)),
             ty => Err(ErrorCode::CatalogNotSupported(format!(
@@ -495,7 +500,7 @@ impl From<InnerCatalogConfig> for CatalogConfig {
 
 impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     type Error = ErrorCode;
-    fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerCatalogHiveConfig, Self::Error> {
         if self.meta_store_address.is_some() {
             return Err(ErrorCode::InvalidConfig(
                 "`meta_store_address` is deprecated, please use `address` instead",
@@ -529,7 +534,7 @@ impl Default for CatalogsHiveConfig {
 
 impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
     type Error = ErrorCode;
-    fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerCatalogHiveConfig, Self::Error> {
         if self.meta_store_address.is_some() {
             return Err(ErrorCode::InvalidConfig(
                 "`meta_store_address` is deprecated, please use `address` instead",
@@ -645,7 +650,7 @@ impl From<InnerStorageGcsConfig> for GcsStorageConfig {
 impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerStorageGcsConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerStorageGcsConfig, Self::Error> {
         Ok(InnerStorageGcsConfig {
             endpoint_url: self.gcs_endpoint_url,
             bucket: self.gcs_bucket,
@@ -1112,7 +1117,7 @@ impl From<InnerStorageOssConfig> for OssStorageConfig {
 impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
     type Error = ErrorCode;
 
-    fn try_into(self) -> Result<InnerStorageOssConfig, Self::Error> {
+    fn try_into(self) -> std::result::Result<InnerStorageOssConfig, Self::Error> {
         Ok(InnerStorageOssConfig {
             endpoint_url: self.oss_endpoint_url,
             presign_endpoint_url: self.oss_presign_endpoint_url,
@@ -1185,6 +1190,21 @@ pub struct WebhdfsStorageConfig {
     #[clap(long = "storage-webhdfs-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub webhdfs_root: String,
+    /// Disable list batch if hdfs doesn't support yet.
+    #[clap(
+        long = "storage-webhdfs-disable-list-batch",
+        value_name = "VALUE",
+        default_value_t
+    )]
+    #[serde(rename = "disable_list_batch")]
+    pub webhdfs_disable_list_batch: bool,
+    #[clap(
+        long = "storage-webhdfs-user-name",
+        value_name = "VALUE",
+        default_value_t
+    )]
+    #[serde(rename = "user_name")]
+    pub webhdfs_user_name: String,
 }
 
 impl Default for WebhdfsStorageConfig {
@@ -1197,7 +1217,8 @@ impl Debug for WebhdfsStorageConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("WebhdfsStorageConfig")
             .field("endpoint_url", &self.webhdfs_endpoint_url)
-            .field("webhdfs_root", &self.webhdfs_root)
+            .field("root", &self.webhdfs_root)
+            .field("user_name", &self.webhdfs_user_name)
             .field("delegation", &mask_string(&self.webhdfs_delegation, 3))
             .finish()
     }
@@ -1209,6 +1230,8 @@ impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
             webhdfs_delegation: v.delegation,
             webhdfs_endpoint_url: v.endpoint_url,
             webhdfs_root: v.root,
+            webhdfs_disable_list_batch: v.disable_list_batch,
+            webhdfs_user_name: v.user_name,
         }
     }
 }
@@ -1216,11 +1239,13 @@ impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
 impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
     type Error = ErrorCode;
 
-    fn try_from(value: WebhdfsStorageConfig) -> Result<Self, Self::Error> {
+    fn try_from(value: WebhdfsStorageConfig) -> std::result::Result<Self, Self::Error> {
         Ok(InnerStorageWebhdfsConfig {
             delegation: value.webhdfs_delegation,
             endpoint_url: value.webhdfs_endpoint_url,
             root: value.webhdfs_root,
+            disable_list_batch: value.webhdfs_disable_list_batch,
+            user_name: value.webhdfs_user_name,
         })
     }
 }
@@ -1295,7 +1320,7 @@ impl From<InnerStorageCosConfig> for CosStorageConfig {
 impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
     type Error = ErrorCode;
 
-    fn try_from(value: CosStorageConfig) -> Result<Self, Self::Error> {
+    fn try_from(value: CosStorageConfig) -> std::result::Result<Self, Self::Error> {
         Ok(InnerStorageCosConfig {
             secret_id: value.cos_secret_id,
             secret_key: value.cos_secret_key,
@@ -1313,7 +1338,7 @@ pub enum SettingValue {
 }
 
 impl Serialize for SettingValue {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where S: serde::Serializer {
         match self {
             SettingValue::UInt64(v) => serializer.serialize_u64(*v),
@@ -1323,7 +1348,7 @@ impl Serialize for SettingValue {
 }
 
 impl<'de> Deserialize<'de> for SettingValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where D: serde::Deserializer<'de> {
         deserializer.deserialize_any(SettingVisitor)
     }
@@ -1340,19 +1365,19 @@ impl From<SettingValue> for UserSettingValue {
 
 struct SettingVisitor;
 
-impl<'de> serde::de::Visitor<'de> for SettingVisitor {
+impl serde::de::Visitor<'_> for SettingVisitor {
     type Value = SettingValue;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "integer or string")
     }
 
-    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+    fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
     where E: serde::de::Error {
         Ok(SettingValue::UInt64(value))
     }
 
-    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
+    fn visit_i64<E>(self, value: i64) -> std::result::Result<Self::Value, E>
     where E: serde::de::Error {
         if value < 0 {
             return Err(E::custom("setting value must be positive"));
@@ -1360,7 +1385,7 @@ impl<'de> serde::de::Visitor<'de> for SettingVisitor {
         Ok(SettingValue::UInt64(value as u64))
     }
 
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+    fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
     where E: serde::de::Error {
         Ok(SettingValue::String(value.to_string()))
     }
@@ -1446,6 +1471,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
 
+    #[clap(long, value_name = "VALUE", default_value = "")]
+    pub discovery_address: String,
+
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1:8080")]
     pub admin_api_address: String,
 
@@ -1519,7 +1547,14 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value_t)]
     pub jwt_key_file: String,
 
-    /// If there are multiple trusted jwt provider put it into additional_jwt_key_files configuration
+    /// Interval in seconds to refresh jwks
+    #[clap(long, value_name = "VALUE", default_value = "600")]
+    pub jwks_refresh_interval: u64,
+
+    /// Timeout in seconds to refresh jwks
+    #[clap(long, value_name = "VALUE", default_value = "10")]
+    pub jwks_refresh_timeout: u64,
+
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 
@@ -1546,6 +1581,9 @@ pub struct QueryConfig {
 
     #[clap(long, value_name = "VALUE")]
     pub internal_enable_sandbox_tenant: bool,
+
+    #[clap(long, value_name = "VALUE")]
+    pub enable_meta_data_upgrade_json_to_pb_from_v307: bool,
 
     /// Experiment config options, DO NOT USE IT IN PRODUCTION ENV
     #[clap(long, value_name = "VALUE")]
@@ -1663,6 +1701,9 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE")]
     pub udf_server_allow_list: Vec<String>,
 
+    #[clap(long, value_name = "VALUE", default_value = "false")]
+    pub udf_server_allow_insecure: bool,
+
     #[clap(long)]
     pub cloud_control_grpc_server_address: Option<String>,
 
@@ -1672,8 +1713,15 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "50")]
     pub max_cached_queries_profiles: usize,
 
+    /// A list of network that not to be checked by network policy.
+    #[clap(long, value_name = "VALUE")]
+    pub network_policy_whitelist: Vec<String>,
+
     #[clap(skip)]
     pub settings: HashMap<String, SettingValue>,
+
+    #[clap(skip)]
+    pub resources_management: Option<ResourcesManagementConfig>,
 }
 
 impl Default for QueryConfig {
@@ -1708,6 +1756,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             http_handler_port: self.http_handler_port,
             http_handler_result_timeout_secs: self.http_handler_result_timeout_secs,
             flight_api_address: self.flight_api_address,
+            discovery_address: self.discovery_address,
             flight_sql_handler_host: self.flight_sql_handler_host,
             flight_sql_handler_port: self.flight_sql_handler_port,
             admin_api_address: self.admin_api_address,
@@ -1734,6 +1783,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             max_storage_io_requests: self.max_storage_io_requests,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
+            jwks_refresh_interval: self.jwks_refresh_interval,
+            jwks_refresh_timeout: self.jwks_refresh_timeout,
             default_storage_format: self.default_storage_format,
             default_compression: self.default_compression,
             builtin: BuiltInConfig {
@@ -1743,6 +1794,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: self.share_endpoint_address,
             share_endpoint_auth_token_file: self.share_endpoint_auth_token_file,
             tenant_quota: self.quota,
+            upgrade_to_pb: self.enable_meta_data_upgrade_json_to_pb_from_v307,
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             data_retention_time_in_days_max: self.data_retention_time_in_days_max,
@@ -1755,14 +1807,17 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             openai_api_version: self.openai_api_version,
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
+            udf_server_allow_insecure: self.udf_server_allow_insecure,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: self.cloud_control_grpc_timeout,
             max_cached_queries_profiles: self.max_cached_queries_profiles,
+            network_policy_whitelist: self.network_policy_whitelist,
             settings: self
                 .settings
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            resources_management: self.resources_management,
         })
     }
 }
@@ -1797,6 +1852,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             flight_api_address: inner.flight_api_address,
             flight_sql_handler_host: inner.flight_sql_handler_host,
             flight_sql_handler_port: inner.flight_sql_handler_port,
+            discovery_address: inner.discovery_address,
             admin_api_address: inner.admin_api_address,
             metric_api_address: inner.metric_api_address,
             http_handler_tls_server_cert: inner.http_handler_tls_server_cert,
@@ -1821,6 +1877,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             max_storage_io_requests: inner.max_storage_io_requests,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
+            jwks_refresh_interval: inner.jwks_refresh_interval,
+            jwks_refresh_timeout: inner.jwks_refresh_timeout,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
             users: inner.builtin.users,
@@ -1828,6 +1886,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
             quota: inner.tenant_quota,
+            enable_meta_data_upgrade_json_to_pb_from_v307: inner.upgrade_to_pb,
             internal_enable_sandbox_tenant: inner.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: false,
             data_retention_time_in_days_max: 90,
@@ -1854,10 +1913,13 @@ impl From<InnerQueryConfig> for QueryConfig {
             openai_api_embedding_model: inner.openai_api_embedding_model,
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
+            udf_server_allow_insecure: inner.udf_server_allow_insecure,
             cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
             cloud_control_grpc_timeout: inner.cloud_control_grpc_timeout,
             max_cached_queries_profiles: inner.max_cached_queries_profiles,
+            network_policy_whitelist: inner.network_policy_whitelist,
             settings: HashMap::new(),
+            resources_management: None,
         }
     }
 }
@@ -2686,6 +2748,15 @@ pub struct CacheConfig {
     )]
     pub block_meta_count: u64,
 
+    /// Max number of **segment** which all of its block meta will be cached.
+    /// Note that a segment may contain multiple block metadata entries.
+    #[clap(
+        long = "cache-segment-block-metas-count",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub segment_block_metas_count: u64,
+
     /// Max number of cached table statistic meta
     #[clap(
         long = "cache-table-meta-statistic-count",
@@ -2883,7 +2954,7 @@ impl Default for DiskCacheKeyReloadPolicy {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
@@ -2915,6 +2986,49 @@ pub struct DiskCacheConfig {
     pub sync_data: bool,
 }
 
+impl Default for DiskCacheConfig {
+    fn default() -> Self {
+        inner::DiskCacheConfig::default().into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default, deny_unknown_fields)]
+pub struct SpillConfig {
+    /// Path of spill to local disk. disable if it's empty.
+    #[clap(long, value_name = "VALUE", default_value = "")]
+    pub spill_local_disk_path: String,
+
+    #[clap(long, value_name = "VALUE", default_value = "30")]
+    /// Percentage of reserve disk space that won't be used for spill to local disk.
+    pub spill_local_disk_reserved_space_percentage: OrderedFloat<f64>,
+
+    #[clap(long, value_name = "VALUE", default_value = "18446744073709551615")]
+    /// Allow space in bytes to spill to local disk.
+    pub spill_local_disk_max_bytes: u64,
+
+    // TODO: We need to fix StorageConfig so that it supports environment variables and command line injections.
+    #[clap(skip)]
+    pub storage: Option<StorageConfig>,
+}
+
+impl Default for SpillConfig {
+    fn default() -> Self {
+        inner::SpillConfig::default().into()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
+#[serde(default, deny_unknown_fields)]
+pub struct ResourcesManagementConfig {
+    #[clap(long = "type", value_name = "VALUE", default_value = "self_managed")]
+    #[serde(rename = "type")]
+    pub typ: String,
+
+    #[clap(long, value_name = "VALUE")]
+    pub node_group: Option<String>,
+}
+
 mod cache_config_converters {
     use log::warn;
 
@@ -2938,6 +3052,7 @@ mod cache_config_converters {
                     .map(|(k, v)| (k, v.into()))
                     .collect(),
                 cache: inner.cache.into(),
+                spill: inner.spill.into(),
                 background: inner.background.into(),
             }
         }
@@ -2947,30 +3062,48 @@ mod cache_config_converters {
         type Error = ErrorCode;
 
         fn try_into(self) -> Result<InnerConfig> {
+            let Config {
+                subcommand,
+                config_file,
+                query,
+                log,
+                meta,
+                storage,
+                catalog,
+                cache,
+                spill,
+                background,
+                catalogs: input_catalogs,
+                ..
+            } = self;
+
             let mut catalogs = HashMap::new();
-            for (k, v) in self.catalogs.into_iter() {
+            for (k, v) in input_catalogs.into_iter() {
                 let catalog = v.try_into()?;
                 catalogs.insert(k, catalog);
             }
-            if !self.catalog.address.is_empty() || !self.catalog.protocol.is_empty() {
+            if !catalog.address.is_empty() || !catalog.protocol.is_empty() {
                 warn!(
                     "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
                 );
-                let hive = self.catalog.try_into()?;
+                let hive = catalog.try_into()?;
                 let catalog = InnerCatalogConfig::Hive(hive);
                 catalogs.insert(CATALOG_HIVE.to_string(), catalog);
             }
 
+            let spill = convert_local_spill_config(spill, &cache.disk_cache_config)?;
+
             Ok(InnerConfig {
-                subcommand: self.subcommand,
-                config_file: self.config_file,
-                query: self.query.try_into()?,
-                log: self.log.try_into()?,
-                meta: self.meta.try_into()?,
-                storage: self.storage.try_into()?,
+                subcommand,
+                config_file,
+                query: query.try_into()?,
+                log: log.try_into()?,
+                meta: meta.try_into()?,
+                storage: storage.try_into()?,
                 catalogs,
-                cache: self.cache.try_into()?,
-                background: self.background.try_into()?,
+                cache: cache.try_into()?,
+                spill,
+                background: background.try_into()?,
             })
         }
     }
@@ -2984,6 +3117,7 @@ mod cache_config_converters {
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
                 block_meta_count: value.block_meta_count,
+                segment_block_metas_count: value.segment_block_metas_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -3028,6 +3162,56 @@ mod cache_config_converters {
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
                 table_meta_segment_count: None,
+                segment_block_metas_count: value.segment_block_metas_count,
+            }
+        }
+    }
+
+    fn convert_local_spill_config(
+        spill: SpillConfig,
+        cache: &DiskCacheConfig,
+    ) -> Result<inner::SpillConfig> {
+        // Trick for cloud, perhaps we should introduce a new configuration for the local writeable root.
+        let local_writeable_root = if cache.path != DiskCacheConfig::default().path
+            && spill.spill_local_disk_path.is_empty()
+        {
+            Some(cache.path.clone())
+        } else {
+            None
+        };
+
+        let storage_params = spill
+            .storage
+            .map(|storage| {
+                let storage: InnerStorageConfig = storage.try_into()?;
+                Ok::<_, ErrorCode>(storage.params)
+            })
+            .transpose()?;
+
+        Ok(inner::SpillConfig {
+            local_writeable_root,
+            path: spill.spill_local_disk_path,
+            reserved_disk_ratio: spill.spill_local_disk_reserved_space_percentage / 100.0,
+            global_bytes_limit: spill.spill_local_disk_max_bytes,
+            storage_params,
+        })
+    }
+
+    impl From<inner::SpillConfig> for SpillConfig {
+        fn from(value: inner::SpillConfig) -> Self {
+            let storage = value.storage_params.map(|params| {
+                InnerStorageConfig {
+                    params,
+                    ..Default::default()
+                }
+                .into()
+            });
+
+            Self {
+                spill_local_disk_path: value.path,
+                spill_local_disk_reserved_space_percentage: value.reserved_disk_ratio * 100.0,
+                spill_local_disk_max_bytes: value.global_bytes_limit,
+                storage,
             }
         }
     }

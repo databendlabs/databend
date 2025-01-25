@@ -29,17 +29,20 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_storages_parquet::ParquetFileReader;
-use databend_common_storages_parquet::ParquetPart;
-use databend_common_storages_parquet::ParquetRSFullReader;
-use parquet::arrow::async_reader::ParquetRecordBatchStream;
+use databend_common_storages_parquet::transform_record_batch;
+use futures::stream;
+use futures::StreamExt;
+use iceberg::scan::ArrowRecordBatchStream;
 
 use crate::partition::IcebergPartInfo;
+use crate::IcebergTable;
 
 pub struct IcebergTableSource {
     // Source processor related fields.
+    table: IcebergTable,
     output: Arc<OutputPort>,
     scan_progress: Arc<Progress>,
+
     // Used for event transforming.
     ctx: Arc<dyn TableContext>,
     generated_data: Option<DataBlock>,
@@ -47,8 +50,7 @@ pub struct IcebergTableSource {
 
     // Used to read parquet.
     output_schema: DataSchemaRef,
-    parquet_reader: Arc<ParquetRSFullReader>,
-    stream: Option<ParquetRecordBatchStream<ParquetFileReader>>,
+    stream: Option<ArrowRecordBatchStream>,
 }
 
 impl IcebergTableSource {
@@ -56,14 +58,14 @@ impl IcebergTableSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         output_schema: DataSchemaRef,
-        parquet_reader: Arc<ParquetRSFullReader>,
+        table: IcebergTable,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(IcebergTableSource {
+            table,
             output,
             scan_progress,
             ctx,
-            parquet_reader,
             output_schema,
             stream: None,
             generated_data: None,
@@ -117,13 +119,14 @@ impl Processor for IcebergTableSource {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut stream) = self.stream.take() {
-            if let Some(block) = self
-                .parquet_reader
-                .read_block_from_stream(&mut stream)
-                .await?
-                .map(|b| check_block_schema(&self.output_schema, b))
-                .transpose()?
+            if let Some(batch) =
+                stream.next().await.transpose().map_err(|err| {
+                    ErrorCode::Internal(format!("iceberg data stream read: {err:?}"))
+                })?
             {
+                let block = transform_record_batch(&self.output_schema, &batch, &None)?;
+                let block = check_block_schema(&self.output_schema, block)?;
+
                 self.generated_data = Some(block);
                 self.stream = Some(stream);
             }
@@ -131,17 +134,20 @@ impl Processor for IcebergTableSource {
             // If `read_block` returns `None`, it means the stream is finished.
             // And we should try to build another stream (in next event loop).
         } else if let Some(part) = self.ctx.get_partition() {
-            match IcebergPartInfo::from_part(&part)? {
-                IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(files)) => {
-                    assert_eq!(files.files.len(), 1);
-                    let stream = self
-                        .parquet_reader
-                        .prepare_data_stream(&files.files[0].0, files.files[0].1, None)
-                        .await?;
-                    self.stream = Some(stream);
-                }
-                _ => unreachable!(),
-            }
+            let part = IcebergPartInfo::from_part(&part)?;
+            let reader = self
+                .table
+                .table
+                .reader_builder()
+                .with_batch_size(self.ctx.get_settings().get_parquet_max_block_size()? as usize)
+                .with_row_group_filtering_enabled(true)
+                .build();
+            // TODO: don't use stream here.
+            let stream = reader
+                .read(Box::pin(stream::iter([Ok(part.to_task())])))
+                .await
+                .map_err(|err| ErrorCode::Internal(format!("iceberg data stream read: {err:?}")))?;
+            self.stream = Some(stream);
         } else {
             self.is_finished = true;
         }

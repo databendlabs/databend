@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
@@ -62,7 +63,7 @@ impl SyncSystemTable for CachesTable {
     const NAME: &'static str = "system.caches";
 
     // Allow distributed query.
-    const IS_LOCAL: bool = false;
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
@@ -76,11 +77,12 @@ impl SyncSystemTable for CachesTable {
         let segment_info_cache = cache_manager.get_table_segment_cache();
         let bloom_index_filter_cache = cache_manager.get_bloom_index_filter_cache();
         let bloom_index_meta_cache = cache_manager.get_bloom_index_meta_cache();
+        let segment_block_metas_cache = cache_manager.get_segment_block_metas_cache();
         let block_meta_cache = cache_manager.get_block_meta_cache();
         let inverted_index_meta_cache = cache_manager.get_inverted_index_meta_cache();
         let inverted_index_file_cache = cache_manager.get_inverted_index_file_cache();
         let prune_partitions_cache = cache_manager.get_prune_partitions_cache();
-        let file_meta_data_cache = cache_manager.get_file_meta_data_cache();
+        let parquet_meta_data_cache = cache_manager.get_parquet_meta_data_cache();
         let table_data_cache = cache_manager.get_table_data_cache();
         let table_column_array_cache = cache_manager.get_table_data_array_cache();
 
@@ -105,6 +107,10 @@ impl SyncSystemTable for CachesTable {
             Self::append_row(&bloom_index_meta_cache, &local_node, &mut columns);
         }
 
+        if let Some(segment_block_metas_cache) = segment_block_metas_cache {
+            Self::append_row(&segment_block_metas_cache, &local_node, &mut columns);
+        }
+
         if let Some(block_meta_cache) = block_meta_cache {
             Self::append_row(&block_meta_cache, &local_node, &mut columns);
         }
@@ -121,8 +127,8 @@ impl SyncSystemTable for CachesTable {
             Self::append_row(&prune_partitions_cache, &local_node, &mut columns);
         }
 
-        if let Some(file_meta_data_cache) = file_meta_data_cache {
-            Self::append_row(&file_meta_data_cache, &local_node, &mut columns);
+        if let Some(parquet_meta_data_cache) = parquet_meta_data_cache {
+            Self::append_row(&parquet_meta_data_cache, &local_node, &mut columns);
         }
 
         if let Some(cache) = table_data_cache {

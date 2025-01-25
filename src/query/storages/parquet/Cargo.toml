@@ -18,7 +18,8 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
-databend-common-arrow = { workspace = true }
+
+databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -29,6 +30,7 @@ databend-common-metrics = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-settings = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-storages-common-cache = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
@@ -39,12 +41,8 @@ opendal = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
-thrift = "0.17.0"
+thrift = { workspace = true }
 typetag = { workspace = true }
-
-[dev-dependencies]
-databend-common-sql = { workspace = true }
-tempfile = "3.4.0"
 
 [lints]
 workspace = true

@@ -1,0 +1,28 @@
+>>>> create or replace database test_vacuum_table_only_orphans
+>>>> create or replace table test_vacuum_table_only_orphans.a(c int) 'fs:///tmp/test_vacuum_table_only_orphans/'
+>>>> insert into test_vacuum_table_only_orphans.a values (1)
+1
+>>>> insert into test_vacuum_table_only_orphans.a values (2)
+1
+>>>> insert into test_vacuum_table_only_orphans.a values (3)
+1
+before purge
+4
+4
+4
+>>>> truncate table test_vacuum_table_only_orphans.a
+>>>> truncate table test_vacuum_table_only_orphans.a
+>>>> truncate table test_vacuum_table_only_orphans.a
+>>>> set data_retention_time_in_days=0; optimize table test_vacuum_table_only_orphans.a purge
+after purge
+1
+1
+1
+after add pure orphan files
+4
+4
+4
+after vacuum
+1
+1
+1

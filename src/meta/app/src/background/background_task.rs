@@ -16,6 +16,7 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
+use std::time::Instant;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -156,7 +157,7 @@ impl BackgroundTaskInfo {
 pub struct UpdateBackgroundTaskReq {
     pub task_name: BackgroundTaskIdent,
     pub task_info: BackgroundTaskInfo,
-    pub expire_at: u64,
+    pub ttl: Duration,
 }
 
 impl Display for UpdateBackgroundTaskReq {
@@ -176,7 +177,7 @@ impl Display for UpdateBackgroundTaskReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundTaskReply {
     pub last_updated: DateTime<Utc>,
-    pub expire_at: u64,
+    pub expire_at: Instant,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

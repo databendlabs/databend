@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
-
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_meta_app::schema as mt;
@@ -50,10 +48,7 @@ fn test_decode_v2_database_meta() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         comment: "foo bar".to_string(),
         drop_on: None,
-        shared_by: BTreeSet::from_iter(vec![1]),
-        from_share: None,
-        using_share_endpoint: None,
-        from_share_db_id: None,
+        gc_in_progress: false,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

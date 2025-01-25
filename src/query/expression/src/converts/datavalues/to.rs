@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_datavalues::DataValue;
-use ordered_float::OrderedFloat;
 
 use crate::Scalar;
 
@@ -38,6 +38,7 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
         Scalar::Decimal(_) => unimplemented!("decimal type is not supported"),
         Scalar::Timestamp(x) => DataValue::Int64(*x),
         Scalar::Date(x) => DataValue::Int64(*x as i64),
+        Scalar::Interval(_) => unimplemented!("Interval type is not supported"),
         Scalar::Boolean(x) => DataValue::Boolean(*x),
         Scalar::Variant(x) => DataValue::String(x.clone()),
         Scalar::Geometry(x) => DataValue::String(x.clone()),
@@ -52,7 +53,11 @@ pub fn scalar_to_datavalue(scalar: &Scalar) -> DataValue {
             let values = x.iter().map(scalar_to_datavalue).collect();
             DataValue::Struct(values)
         }
-        Scalar::EmptyMap | Scalar::Binary(_) | Scalar::Map(_) | Scalar::Bitmap(_) => {
+        Scalar::EmptyMap
+        | Scalar::Binary(_)
+        | Scalar::Map(_)
+        | Scalar::Bitmap(_)
+        | Scalar::Geography(_) => {
             unimplemented!()
         }
     }

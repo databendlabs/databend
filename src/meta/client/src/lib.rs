@@ -105,6 +105,23 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2024-03-04: since: 1.2.361
 ///   👥 client: `MetaSpec` use `ttl`, remove `expire_at`, require 1.2.258
 ///
+/// - 2024-11-22: since 1.2.663
+///   🖥 server: remove `MetaGrpcReq::GetKV/MGetKV/ListKV`,
+///              require the client to call kv_read_v1 for get/mget/list,
+///              which is added `2024-01-07: since 1.2.287`
+///
+/// - 2024-11-23: since 1.2.663
+///   👥 client: remove use of `Operation::AsIs`
+///
+/// - 2024-12-1*: since 1.2.*
+///   🖥 server: add `txn_condition::Target::KeysWithPrefix`,
+///              to support matching the key count by a prefix.
+///
+/// - 2024-12-1*: since 1.2.*
+///   🖥 server: add `TxnRequest::condition_tree`,
+///              to specify a complex bool expression.
+///
+///
 /// Server feature set:
 /// ```yaml
 /// server_features:

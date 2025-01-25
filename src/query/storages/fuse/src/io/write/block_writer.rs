@@ -18,11 +18,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use databend_common_arrow::native::write::NativeWriter;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -41,27 +40,27 @@ use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_mil
 use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_nums;
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
+use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::table::TableCompression;
-use log::info;
 use opendal::Operator;
 
+use crate::io::block_to_inverted_index;
 use crate::io::write::WriteSettings;
 use crate::io::BlockReader;
 use crate::io::InvertedIndexWriter;
-use crate::io::ReadSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::column_parquet_metas;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseStorageFormat;
 
-// TODO rename this, it is serialization, or pass in a writer(if not rename)
 pub fn serialize_block(
     write_settings: &WriteSettings,
     schema: &TableSchemaRef,
@@ -77,7 +76,6 @@ pub fn serialize_block(
             Ok(meta)
         }
         FuseStorageFormat::Native => {
-            let arrow_schema = schema.as_ref().into();
             let leaf_column_ids = schema.to_leaf_column_ids();
 
             let mut default_compress_ratio = Some(2.10f64);
@@ -87,16 +85,21 @@ pub fn serialize_block(
 
             let mut writer = NativeWriter::new(
                 buf,
-                arrow_schema,
-                databend_common_arrow::native::write::WriteOptions {
+                schema.as_ref().clone(),
+                databend_common_native::write::WriteOptions {
                     default_compression: write_settings.table_compression.into(),
                     max_page_size: Some(write_settings.max_page_size),
                     default_compress_ratio,
                     forbidden_compressions: vec![],
                 },
-            );
+            )?;
 
-            let batch = ArrowChunk::try_from(block)?;
+            let block = block.consume_convert_to_full();
+            let batch: Vec<Column> = block
+                .columns()
+                .iter()
+                .map(|x| x.value.as_column().unwrap().clone())
+                .collect();
 
             writer.start()?;
             writer.write(&batch)?;
@@ -295,7 +298,10 @@ impl InvertedIndexState {
             &inverted_index_builder.options,
         )?;
         writer.add_block(source_schema, block)?;
-        let data = writer.finalize()?;
+        let (index_schema, index_block) = writer.finalize()?;
+
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        block_to_inverted_index(&index_schema, index_block, &mut data)?;
         let size = data.len() as u64;
 
         // Perf.
@@ -459,12 +465,6 @@ impl BlockWriter {
             metrics_inc_block_index_write_nums(1);
             metrics_inc_block_index_write_nums(index_state.size);
             metrics_inc_block_index_write_milliseconds(start.elapsed().as_millis() as u64);
-
-            info!(
-                "wrote down bloom index: {}, use {} secs",
-                location,
-                start.elapsed().as_secs_f32()
-            );
         }
         Ok(())
     }
@@ -482,8 +482,6 @@ impl BlockWriter {
             metrics_inc_block_inverted_index_write_nums(1);
             metrics_inc_block_inverted_index_write_bytes(index_size);
             metrics_inc_block_inverted_index_write_milliseconds(start.elapsed().as_millis() as u64);
-
-            info!("wrote down inverted index: {}", location);
         }
         Ok(())
     }

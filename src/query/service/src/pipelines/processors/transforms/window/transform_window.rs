@@ -45,6 +45,25 @@ use super::window_function::WindowFuncAggImpl;
 use super::window_function::WindowFunctionImpl;
 use super::WindowFunctionInfo;
 
+#[derive(Debug, Clone)]
+pub struct WindowSortDesc {
+    pub offset: usize,
+    pub asc: bool,
+    pub nulls_first: bool,
+    // Used for check null frame.
+    pub is_nullable: bool,
+}
+
+impl From<WindowSortDesc> for SortColumnDescription {
+    fn from(value: WindowSortDesc) -> Self {
+        SortColumnDescription {
+            offset: value.offset,
+            asc: value.asc,
+            nulls_first: value.nulls_first,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 struct RowPtr {
     pub block: usize,
@@ -77,7 +96,7 @@ pub struct TransformWindow<T: Number> {
 
     partition_indices: Vec<usize>,
     // The second field indicate if the order by column is nullable.
-    order_by: Vec<SortColumnDescription>,
+    order_by: Vec<WindowSortDesc>,
 
     /// A queue of data blocks that we need to process.
     /// If partition is ended, we may free the data block from front of the queue.
@@ -85,7 +104,7 @@ pub struct TransformWindow<T: Number> {
     /// A queue of data blocks that can be output.
     outputs: VecDeque<DataBlock>,
 
-    /// monotonically increasing index of the current block in the queue.
+    /// The monotonically increasing index of the current block in the queue.
     first_block: usize,
     next_output_block: usize,
 
@@ -229,7 +248,7 @@ impl<T: Number> TransformWindow<T> {
                 let compare_column = self.column_at(&self.partition_end, self.partition_indices[i]);
 
                 if unsafe {
-                    start_column.index_unchecked(self.partition_start.row)
+                    start_column.index_unchecked(index.row)
                         != compare_column.index_unchecked(self.partition_end.row)
                 } {
                     break;
@@ -730,7 +749,7 @@ impl TransformWindow<u64> {
         output: Arc<OutputPort>,
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
-        order_by: Vec<SortColumnDescription>,
+        order_by: Vec<WindowSortDesc>,
         bounds: (FrameBound<u64>, FrameBound<u64>),
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
@@ -801,7 +820,7 @@ where T: Number + ResultTypeOfUnary
         output: Arc<OutputPort>,
         func: WindowFunctionInfo,
         partition_indices: Vec<usize>,
-        order_by: Vec<SortColumnDescription>,
+        order_by: Vec<WindowSortDesc>,
         bounds: (FrameBound<T>, FrameBound<T>),
     ) -> Result<Self> {
         let func = WindowFunctionImpl::try_create(func)?;
@@ -1003,10 +1022,12 @@ where T: Number + ResultTypeOfUnary
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
         if let Some(data) = data {
             let num_rows = data.num_rows();
-            self.blocks.push_back(WindowBlock {
-                block: data.convert_to_full(),
-                builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
-            });
+            if num_rows != 0 {
+                self.blocks.push_back(WindowBlock {
+                    block: data.consume_convert_to_full(),
+                    builder: ColumnBuilder::with_capacity(&self.func.return_type()?, num_rows),
+                });
+            }
         }
 
         // Each loop will do:
@@ -1157,7 +1178,7 @@ macro_rules! impl_advance_frame_bound_method {
         paste::paste! {
             impl<T: Number + ResultTypeOfUnary> TransformWindow<T> {
                 fn [<advance_frame_ $bound _range>](&mut self, n: T, is_preceding: bool) {
-                    let SortColumnDescription {
+                    let WindowSortDesc {
                         offset,
                         asc,
                         ..
@@ -1193,7 +1214,7 @@ macro_rules! impl_advance_frame_bound_method {
                 }
 
                 fn [<advance_frame_ $bound _nullable_range>](&mut self, n: T, is_preceding: bool) {
-                    let SortColumnDescription {
+                    let WindowSortDesc {
                         offset: ref_idx,
                         asc,
                         nulls_first,
@@ -1348,7 +1369,6 @@ mod tests {
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
-    use databend_common_expression::SortColumnDescription;
     use databend_common_functions::aggregates::AggregateFunctionFactory;
     use databend_common_pipeline_core::processors::connect;
     use databend_common_pipeline_core::processors::Event;
@@ -1359,6 +1379,7 @@ mod tests {
 
     use super::TransformWindow;
     use super::WindowBlock;
+    use super::WindowSortDesc;
     use crate::pipelines::processors::transforms::window::transform_window::RowPtr;
     use crate::pipelines::processors::transforms::window::FrameBound;
     use crate::pipelines::processors::transforms::window::WindowFunctionInfo;
@@ -1372,7 +1393,7 @@ mod tests {
             OutputPort::create(),
             func,
             vec![],
-            vec![SortColumnDescription {
+            vec![WindowSortDesc {
                 offset: 0,
                 asc: false,
                 nulls_first: false,
@@ -1394,7 +1415,7 @@ mod tests {
             OutputPort::create(),
             func,
             vec![],
-            vec![SortColumnDescription {
+            vec![WindowSortDesc {
                 offset: 0,
                 asc: false,
                 nulls_first: false,

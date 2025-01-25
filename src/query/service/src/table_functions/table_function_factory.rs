@@ -25,17 +25,24 @@ use databend_common_storages_fuse::table_functions::FuseBlockFunc;
 use databend_common_storages_fuse::table_functions::FuseColumnFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
+use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
+use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
+use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
+use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
+use databend_common_storages_fuse::table_functions::HilbertClusteringInfoFunc;
+use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
+use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
+use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
+use super::others::UdfEchoTable;
 use super::ExecuteBackgroundJobTable;
 use super::LicenseInfoTable;
 use super::SuggestedBackgroundTasksTable;
 use super::TenantQuotaTable;
-use crate::catalogs::SYS_TBL_FUC_ID_END;
-use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
@@ -48,6 +55,7 @@ use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::show_grants::ShowGrants;
+use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
@@ -135,6 +143,14 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
+            "set_cache_capacity".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<SetCacheCapacity>::create),
+            ),
+        );
+
+        creators.insert(
             "fuse_segment".to_string(),
             (
                 next_id(),
@@ -179,6 +195,22 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<ClusteringStatisticsFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "hilbert_clustering_information".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<HilbertClusteringInfoFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_vacuum_temporary_table".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuumTemporaryTable>::create),
             ),
         );
 
@@ -272,6 +304,40 @@ impl TableFunctionFactory {
         creators.insert(
             "task_history".to_string(),
             (next_id(), Arc::new(TaskHistoryTable::create)),
+        );
+
+        creators.insert(
+            "show_variables".to_string(),
+            (next_id(), Arc::new(ShowVariables::create)),
+        );
+
+        creators.insert(
+            "udf_echo".to_string(),
+            (next_id(), Arc::new(UdfEchoTable::create)),
+        );
+
+        creators.insert(
+            "fuse_time_travel_size".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseTimeTravelSizeFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_vacuum_drop_aggregating_index".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuumDropAggregatingIndex>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_vacuum_drop_inverted_index".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuumDropInvertedIndex>::create),
+            ),
         );
 
         TableFunctionFactory {

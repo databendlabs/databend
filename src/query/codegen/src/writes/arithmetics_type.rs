@@ -248,6 +248,9 @@ fn arithmetic_coercion(a: NumberDataType, b: NumberDataType, op: OP) -> NumberDa
 }
 
 fn neg_coercion(a: NumberDataType) -> NumberDataType {
+    if a.is_float32() || a.is_float64() {
+        return a;
+    }
     let bit_width = next_bit_width(a.bit_width());
 
     NumberDataType::new(bit_width, true, a.is_float())
@@ -264,5 +267,9 @@ fn sum_coercion(a: NumberDataType) -> NumberDataType {
 }
 
 const fn next_bit_width(width: u8) -> u8 {
-    if width < 64 { width * 2 } else { 64 }
+    if width < 64 {
+        width * 2
+    } else {
+        64
+    }
 }

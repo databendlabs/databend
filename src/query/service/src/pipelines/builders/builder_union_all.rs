@@ -71,21 +71,20 @@ impl PipelineBuilder {
     }
 
     fn expand_union_all(&mut self, input: &PhysicalPlan) -> Result<Receiver<DataBlock>> {
-        let union_ctx = QueryContext::create_from(self.ctx.clone());
+        let union_ctx = QueryContext::create_from(self.ctx.as_ref());
         let mut pipeline_builder = PipelineBuilder::create(
             self.func_ctx.clone(),
             self.settings.clone(),
             union_ctx,
             self.main_pipeline.get_scopes(),
         );
-        pipeline_builder.cte_state = self.cte_state.clone();
         pipeline_builder.hash_join_states = self.hash_join_states.clone();
 
         let mut build_res = pipeline_builder.finalize(input)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
 
-        let (tx, rx) = async_channel::unbounded();
+        let (tx, rx) = async_channel::bounded(2);
 
         build_res.main_pipeline.add_sink(|input_port| {
             Ok(ProcessorPtr::create(UnionReceiveSink::create(

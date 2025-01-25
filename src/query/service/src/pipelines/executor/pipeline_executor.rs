@@ -196,7 +196,7 @@ impl PipelineExecutor {
                 query_wrapper.finished_notify.notify_waiters();
 
                 let may_error = query_wrapper.graph.get_error();
-                return match may_error {
+                match may_error {
                     None => {
                         let mut finished_chain = query_wrapper.on_finished_chain.lock();
                         let info = ExecutionInfo::create(Ok(()), self.fetch_profiling(true));
@@ -208,7 +208,7 @@ impl PipelineExecutor {
                         let info = ExecutionInfo::create(Err(cause.clone()), profiling);
                         finished_chain.apply(info).and_then(|_| Err(cause))
                     }
-                };
+                }
             }
         }
     }
@@ -236,7 +236,7 @@ impl PipelineExecutor {
         Ok(())
     }
 
-    pub fn finish(&self, cause: Option<ErrorCode>) {
+    pub fn finish<C>(&self, cause: Option<ErrorCode<C>>) {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.finish(cause),
             PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => match cause {
@@ -249,7 +249,7 @@ impl PipelineExecutor {
                 None => {
                     query_wrapper
                         .graph
-                        .should_finish(Ok(()))
+                        .should_finish::<()>(Ok(()))
                         .expect("executor cannot send error message");
                 }
             },

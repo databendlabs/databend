@@ -22,9 +22,13 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 use databend_common_license::license_manager::LicenseManager;
 use databend_common_license::license_manager::OssLicenseManager;
+use databend_common_tracing::pipe_file;
 use databend_common_tracing::set_crash_hook;
+use databend_common_tracing::SignalListener;
+use entry::MainError;
 
 use crate::entry::init_services;
 use crate::entry::run_cmd;
@@ -34,7 +38,14 @@ use crate::entry::start_services;
 pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 
 fn main() {
-    set_crash_hook((*databend_common_config::DATABEND_COMMIT_VERSION).clone());
+    let binary_version = (*databend_common_config::DATABEND_COMMIT_VERSION).clone();
+
+    // Crash tracker
+    let (input, output) = pipe_file().unwrap();
+    set_crash_hook(output);
+    SignalListener::spawn(input, binary_version);
+
+    // Thread tracker
     ThreadTracker::init();
 
     match Runtime::with_default_worker_threads() {
@@ -51,14 +62,17 @@ fn main() {
     }
 }
 
-async fn main_entrypoint() -> Result<()> {
-    let conf: InnerConfig = InnerConfig::load().await?;
-    if run_cmd(&conf).await? {
+async fn main_entrypoint() -> Result<(), MainError> {
+    let make_error = || "an fatal error occurred in query";
+
+    let conf: InnerConfig = InnerConfig::load().await.with_context(make_error)?;
+    if run_cmd(&conf).await.with_context(make_error)? {
         return Ok(());
     }
 
-    init_services(&conf).await?;
+    init_services(&conf, false).await?;
     // init oss license manager
-    OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string())?;
+    OssLicenseManager::init(conf.query.tenant_id.tenant_name().to_string())
+        .with_context(make_error)?;
     start_services(&conf).await
 }

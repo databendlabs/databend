@@ -145,8 +145,10 @@ pub fn run_parser<O>(
 }
 
 /// Check that the statement can be displayed and reparsed without loss
+#[allow(dead_code)]
 fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
     let stmt = reset_ast(stmt);
+
     let new_sql = stmt.to_string();
     let new_tokens = crate::parser::tokenize_sql(&new_sql).unwrap();
     let new_stmt = run_parser(
@@ -156,12 +158,14 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
         false,
         statement,
     )
-    .map_err(|err| panic!("{}", err.1))
+    .map_err(|err| panic!("{} in {}", err.1, new_sql))
     .unwrap();
+
     let new_stmt = reset_ast(new_stmt);
     assert_eq!(stmt, new_stmt, "\nleft:\n{}\nright:\n{}", sql, new_sql);
 }
 
+#[allow(dead_code)]
 fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
     #[derive(VisitorMut)]
     #[visitor(Range(enter), Literal(enter), ExplainKind(enter), SelectTarget(enter))]

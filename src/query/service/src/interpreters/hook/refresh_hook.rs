@@ -18,7 +18,6 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
@@ -175,13 +174,26 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                             ctx_cloned.clone(),
                             *virtual_column_plan,
                         )?;
-                    let build_res = refresh_virtual_column_interpreter.execute2().await?;
-                    if !build_res.main_pipeline.is_empty() {
-                        return Err(ErrorCode::Internal(
-                            "Logical error, refresh virtual column is an empty pipeline.",
-                        ));
+                    let mut build_res = refresh_virtual_column_interpreter.execute2().await?;
+                    if build_res.main_pipeline.is_empty() {
+                        return Ok(());
                     }
-                    Ok(())
+
+                    let settings = ctx_cloned.get_settings();
+                    build_res.set_max_threads(settings.get_max_threads()? as usize);
+                    let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
+
+                    if build_res.main_pipeline.is_complete_pipeline()? {
+                        let mut pipelines = build_res.sources_pipelines;
+                        pipelines.push(build_res.main_pipeline);
+
+                        let complete_executor =
+                            PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
+                        ctx_cloned.set_executor(complete_executor.get_inner())?;
+                        complete_executor.execute()
+                    } else {
+                        Ok(())
+                    }
                 }
                 _ => unreachable!(),
             }
@@ -197,7 +209,7 @@ async fn generate_refresh_index_plan(
     catalog: &str,
     table_id: MetaId,
 ) -> Result<Vec<Plan>> {
-    let segment_locs = ctx.get_segment_locations()?;
+    let segment_locs = ctx.get_written_segment_locations()?;
     let catalog = ctx.get_catalog(catalog).await?;
     let mut plans = vec![];
     let indexes = catalog
@@ -260,7 +272,7 @@ async fn generate_refresh_inverted_index_plan(
     desc: &RefreshDesc,
     table: Arc<dyn Table>,
 ) -> Result<Vec<Plan>> {
-    let segment_locs = ctx.get_segment_locations()?;
+    let segment_locs = ctx.get_written_segment_locations()?;
     let mut plans = vec![];
 
     let table_meta = &table.get_table_info().meta;
@@ -284,7 +296,7 @@ async fn generate_refresh_virtual_column_plan(
     ctx: Arc<QueryContext>,
     desc: &RefreshDesc,
 ) -> Result<Option<Plan>> {
-    let segment_locs = ctx.get_segment_locations()?;
+    let segment_locs = ctx.get_written_segment_locations()?;
 
     let table_info = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)

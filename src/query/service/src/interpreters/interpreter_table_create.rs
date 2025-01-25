@@ -12,26 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::collections::HashSet;
+use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::LazyLock;
 
-use chrono::Duration;
 use chrono::Utc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::is_internal_column;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
-use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
-use databend_common_io::constants::DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_license::license::Feature;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::InvertedIndex;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -44,41 +38,31 @@ use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
 use databend_common_pipeline_core::ExecutionInfo;
-use databend_common_settings::Settings;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
-use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::io::MetaReaders;
-use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
-use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
-use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
-use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
-use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
-use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
-use databend_common_storages_share::remove_share_table_info;
-use databend_common_storages_share::save_share_spec;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_attach_table::get_attach_table_handler;
 use databend_storages_common_cache::LoadParams;
-use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
-use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
-use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
-use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
-use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
-use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
 use log::info;
 
+use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
+use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
+use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
+use crate::interpreters::common::table_option_validation::is_valid_create_opt;
+use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
+use crate::interpreters::common::table_option_validation::is_valid_random_seed;
+use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -122,15 +106,11 @@ impl Interpreter for CreateTableInterpreter {
             .iter()
             .any(|f| f.computed_expr().is_some());
         if has_computed_column {
-            let license_manager = get_license_manager();
-            license_manager
-                .manager
+            LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
         if self.plan.inverted_indexes.is_some() {
-            let license_manager = get_license_manager();
-            license_manager
-                .manager
+            LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), InvertedIndex)?;
         }
 
@@ -209,21 +189,23 @@ impl CreateTableInterpreter {
             .expect("internal error: table_id_seq must have been set. CTAS(replace) of table");
         let db_id = reply.db_id;
 
-        // grant the ownership of the table to the current role.
-        let current_role = self.ctx.get_current_role();
-        if let Some(current_role) = current_role {
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .grant_ownership(
-                    &OwnershipObject::Table {
-                        catalog_name: self.plan.catalog.clone(),
-                        db_id,
-                        table_id,
-                    },
-                    &current_role.name,
-                )
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
+        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            // grant the ownership of the table to the current role.
+            let current_role = self.ctx.get_current_role();
+            if let Some(current_role) = current_role {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Table {
+                            catalog_name: self.plan.catalog.clone(),
+                            db_id,
+                            table_id,
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
         }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
@@ -253,28 +235,6 @@ impl CreateTableInterpreter {
             table_info: Some(table_info),
         };
 
-        // update share spec if needed
-        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &spec_vec,
-            )
-            .await?;
-
-            // remove table info file
-            for share_spec in spec_vec {
-                remove_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    &share_spec.name,
-                    db_id,
-                    revoke_table_id,
-                )
-                .await?;
-            }
-        }
-
         let mut pipeline = InsertInterpreter::try_create(self.ctx.clone(), insert_plan)?
             .execute2()
             .await?;
@@ -289,9 +249,11 @@ impl CreateTableInterpreter {
         //
         // If the un-drop fails, data inserted and the table will be invisible, and available for vacuum.
 
+        let ctx = self.ctx.clone();
         pipeline
             .main_pipeline
             .lift_on_finished(move |info: &ExecutionInfo| {
+                info!("{:?}", ctx.session_state().temp_tbl_mgr);
                 let qualified_table_name = format!("{}.{}", db_name, table_name);
 
                 if info.res.is_ok() {
@@ -318,6 +280,7 @@ impl CreateTableInterpreter {
                         info!("create {} as select failed. {:?}", qualified_table_name, e);
                         e
                     })?;
+                    info!("{:?}", ctx.session_state().temp_tbl_mgr);
                 }
 
                 Ok(())
@@ -363,45 +326,25 @@ impl CreateTableInterpreter {
 
         let reply = catalog.create_table(req.clone()).await?;
 
-        // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
-        if let Some(current_role) = self.ctx.get_current_role() {
-            let tenant = self.ctx.get_tenant();
-            let db = catalog.get_database(&tenant, &self.plan.database).await?;
-            let db_id = db.get_db_info().ident.db_id;
+        if !req.table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
+            // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
+            if let Some(current_role) = self.ctx.get_current_role() {
+                let tenant = self.ctx.get_tenant();
+                let db = catalog.get_database(&tenant, &self.plan.database).await?;
+                let db_id = db.get_db_info().database_id.db_id;
 
-            let role_api = UserApiProvider::instance().role_api(&tenant);
-            role_api
-                .grant_ownership(
-                    &OwnershipObject::Table {
-                        catalog_name: self.plan.catalog.clone(),
-                        db_id,
-                        table_id: reply.table_id,
-                    },
-                    &current_role.name,
-                )
-                .await?;
-            RoleCacheManager::instance().invalidate_cache(&tenant);
-        }
-
-        // update share spec if needed
-        if let Some((db_id, revoke_table_id, spec_vec)) = reply.spec_vec {
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &spec_vec,
-            )
-            .await?;
-
-            // remove table spec
-            for share_spec in spec_vec {
-                remove_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    &share_spec.name,
-                    db_id,
-                    revoke_table_id,
-                )
-                .await?;
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Table {
+                            catalog_name: self.plan.catalog.clone(),
+                            db_id,
+                            table_id: reply.table_id,
+                        },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
             }
         }
 
@@ -427,16 +370,18 @@ impl CreateTableInterpreter {
         };
         let schema = TableSchemaRefExt::create(fields);
         let mut options = self.plan.options.clone();
+        if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
+            FuseStorageFormat::from_str(storage_format)?;
+        }
         let comment = options.remove(OPT_KEY_COMMENT);
 
         let mut table_meta = TableMeta {
             schema: schema.clone(),
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
-            part_prefix: self.plan.part_prefix.clone(),
             options,
             engine_options: self.plan.engine_options.clone(),
-            default_cluster_key: None,
+            cluster_key: None,
             field_comments,
             drop_on: None,
             statistics: statistics.unwrap_or_default(),
@@ -457,7 +402,7 @@ impl CreateTableInterpreter {
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
-            if !is_valid_create_opt(&key) {
+            if !is_valid_create_opt(&key, &self.plan.engine) {
                 error!("invalid opt for fuse table in create table statement");
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "table option {key} is invalid for create table statement",
@@ -466,7 +411,8 @@ impl CreateTableInterpreter {
         }
 
         if let Some(cluster_key) = &self.plan.cluster_key {
-            table_meta = table_meta.push_cluster_key(cluster_key.clone());
+            table_meta.cluster_key = Some(cluster_key.clone());
+            table_meta.cluster_key_seq += 1;
         }
 
         let req = CreateTableReq {
@@ -484,9 +430,7 @@ impl CreateTableInterpreter {
     }
 
     async fn build_attach_request(&self, storage_prefix: &str) -> Result<CreateTableReq> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AttacheTable)?;
 
         let handler = get_attach_table_handler();
@@ -496,124 +440,12 @@ impl CreateTableInterpreter {
     }
 }
 
-/// Table option keys that can occur in 'create table statement'.
-pub static CREATE_TABLE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
-    let mut r = HashSet::new();
-    r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
-    r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
-    r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
-    r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
-    r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
-    r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
-
-    r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
-    r.insert(OPT_KEY_TABLE_COMPRESSION);
-    r.insert(OPT_KEY_STORAGE_FORMAT);
-    r.insert(OPT_KEY_DATABASE_ID);
-    r.insert(OPT_KEY_COMMENT);
-    r.insert(OPT_KEY_CHANGE_TRACKING);
-
-    r.insert(OPT_KEY_ENGINE);
-
-    r.insert(OPT_KEY_ENGINE);
-
-    r.insert(OPT_KEY_LOCATION);
-    r.insert(OPT_KEY_CONNECTION_NAME);
-
-    r.insert(OPT_KEY_RANDOM_SEED);
-
-    r.insert("transient");
-    r
-});
-
-pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
-    CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
-}
-
 pub fn is_valid_column(name: &str) -> Result<()> {
     if is_internal_column(name) {
         return Err(ErrorCode::TableWithInternalColumnName(format!(
             "Cannot create table has column with the same name as internal column: {}",
             name
         )));
-    }
-    Ok(())
-}
-
-pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<()> {
-    // check block_per_segment is not over 1000.
-    if let Some(value) = options.get(FUSE_OPT_KEY_BLOCK_PER_SEGMENT) {
-        let blocks_per_segment = value.parse::<u64>()?;
-        let error_str = "invalid block_per_segment option, can't be over 1000";
-        if blocks_per_segment > 1000 {
-            error!("{}", &error_str);
-            return Err(ErrorCode::TableOptionInvalid(error_str));
-        }
-    }
-
-    Ok(())
-}
-
-pub fn is_valid_row_per_block(options: &BTreeMap<String, String>) -> Result<()> {
-    // check row_per_block can not be over 1000000.
-    if let Some(value) = options.get(FUSE_OPT_KEY_ROW_PER_BLOCK) {
-        let row_per_block = value.parse::<u64>()?;
-        let error_str = "invalid row_per_block option, can't be over 1000000";
-
-        if row_per_block > DEFAULT_BLOCK_MAX_ROWS as u64 {
-            error!("{}", error_str);
-            return Err(ErrorCode::TableOptionInvalid(error_str));
-        }
-    }
-    Ok(())
-}
-
-pub fn is_valid_data_retention_period(options: &BTreeMap<String, String>) -> Result<()> {
-    if let Some(value) = options.get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS) {
-        let new_duration_in_hours = value.parse::<u64>()?;
-
-        if new_duration_in_hours < DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS {
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "Invalid data_retention_period_in_hours {:?}, it should not be lesser than {:?}",
-                new_duration_in_hours, DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS
-            )));
-        }
-
-        let default_max_period_in_days = Settings::get_max_data_retention_period_in_days();
-
-        let default_max_duration = Duration::days(default_max_period_in_days as i64);
-        let new_duration = Duration::hours(new_duration_in_hours as i64);
-
-        if new_duration > default_max_duration {
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "Invalid data_retention_period_in_hours {:?}, it should not be larger than {:?}",
-                new_duration, default_max_duration
-            )));
-        }
-    }
-    Ok(())
-}
-
-pub fn is_valid_bloom_index_columns(
-    options: &BTreeMap<String, String>,
-    schema: TableSchemaRef,
-) -> Result<()> {
-    if let Some(value) = options.get(OPT_KEY_BLOOM_INDEX_COLUMNS) {
-        BloomIndexColumns::verify_definition(value, schema, BloomIndex::supported_type)?;
-    }
-    Ok(())
-}
-
-pub fn is_valid_change_tracking(options: &BTreeMap<String, String>) -> Result<()> {
-    if let Some(value) = options.get(OPT_KEY_CHANGE_TRACKING) {
-        value.to_lowercase().parse::<bool>()?;
-    }
-    Ok(())
-}
-
-pub fn is_valid_random_seed(options: &BTreeMap<String, String>) -> Result<()> {
-    if let Some(value) = options.get(OPT_KEY_RANDOM_SEED) {
-        value.parse::<u64>()?;
     }
     Ok(())
 }

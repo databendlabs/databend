@@ -85,18 +85,19 @@ pub enum WindowFunction {
 
 impl WindowFunction {
     fn data_type(&self) -> Result<DataType> {
-        match self {
-            WindowFunction::Aggregate(agg) => agg.sig.return_type(),
+        let return_type = match self {
+            WindowFunction::Aggregate(agg) => agg.sig.return_type.clone(),
             WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
-                Ok(DataType::Number(NumberDataType::UInt64))
+                DataType::Number(NumberDataType::UInt64)
             }
             WindowFunction::PercentRank | WindowFunction::CumeDist => {
-                Ok(DataType::Number(NumberDataType::Float64))
+                DataType::Number(NumberDataType::Float64)
             }
-            WindowFunction::LagLead(f) => Ok(f.return_type.clone()),
-            WindowFunction::NthValue(f) => Ok(f.return_type.clone()),
-            WindowFunction::Ntile(f) => Ok(f.return_type.clone()),
-        }
+            WindowFunction::LagLead(f) => f.return_type.clone(),
+            WindowFunction::NthValue(f) => f.return_type.clone(),
+            WindowFunction::Ntile(f) => f.return_type.clone(),
+        };
+        Ok(return_type)
     }
 }
 
@@ -241,14 +242,19 @@ impl PhysicalPlanBuilder {
             }
         }
 
+        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
+
         let order_by_items = w
             .order_by
             .iter()
-            .map(|v| SortDesc {
-                asc: v.asc.unwrap_or(true),
-                nulls_first: v.nulls_first.unwrap_or(false),
-                order_by: v.order_by_item.index,
-                display_name: self.metadata.read().column(v.order_by_item.index).name(),
+            .map(|v| {
+                let asc = v.asc.unwrap_or(true);
+                SortDesc {
+                    asc,
+                    nulls_first: v.nulls_first.unwrap_or_else(|| default_nulls_first(asc)),
+                    order_by: v.order_by_item.index,
+                    display_name: self.metadata.read().column(v.order_by_item.index).name(),
+                }
             })
             .collect::<Vec<_>>();
         let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
@@ -257,6 +263,8 @@ impl PhysicalPlanBuilder {
             WindowFuncType::Aggregate(agg) => WindowFunction::Aggregate(AggregateFunctionDesc {
                 sig: AggregateFunctionSignature {
                     name: agg.func_name.clone(),
+                    udaf: None,
+                    return_type: *agg.return_type.clone(),
                     args: agg
                         .args
                         .iter()

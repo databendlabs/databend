@@ -14,6 +14,7 @@
 
 #![feature(try_blocks)]
 #![feature(thread_id_value)]
+#![feature(buf_read_has_data_left)]
 #![allow(clippy::uninlined_format_args)]
 
 mod config;
@@ -22,6 +23,9 @@ mod init;
 mod loggers;
 mod panic_hook;
 mod structlog;
+
+pub use crash_hook::pipe_file;
+pub use crash_hook::SignalListener;
 
 pub use crate::config::Config;
 pub use crate::config::FileConfig;
@@ -44,8 +48,8 @@ pub use crate::structlog::DummyReporter;
 pub use crate::structlog::StructLogReporter;
 
 pub fn closure_name<F: std::any::Any>() -> &'static str {
-    let full_name = std::any::type_name::<F>();
-    full_name
+    let func_path = std::any::type_name::<F>();
+    func_path
         .rsplit("::")
         .find(|name| *name != "{{closure}}")
         .unwrap()

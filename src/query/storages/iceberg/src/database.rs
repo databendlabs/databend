@@ -22,10 +22,11 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
-use databend_common_meta_app::schema::DatabaseIdent;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::seq_value::SeqV;
 
 use crate::table::IcebergTable;
 use crate::IcebergCatalog;
@@ -42,14 +43,14 @@ impl IcebergDatabase {
     pub fn create(ctl: IcebergCatalog, name: &str) -> Self {
         let ident = iceberg::NamespaceIdent::new(name.to_string());
         let info = DatabaseInfo {
-            ident: DatabaseIdent { db_id: 0, seq: 0 },
+            database_id: DatabaseId::new(0),
             name_ident: DatabaseNameIdent::new(Tenant::new_literal("dummy"), name),
-            meta: DatabaseMeta {
+            meta: SeqV::new(0, DatabaseMeta {
                 engine: "iceberg".to_string(),
                 created_on: chrono::Utc::now(),
                 updated_on: chrono::Utc::now(),
                 ..Default::default()
-            },
+            }),
         };
 
         Self { ctl, info, ident }

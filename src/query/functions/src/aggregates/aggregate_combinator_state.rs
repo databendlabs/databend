@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -27,6 +27,8 @@ use super::AggregateFunctionFactory;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::aggregate_function_factory::CombinatorDescription;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 
@@ -50,9 +52,7 @@ impl AggregateStateCombinator {
             .join(", ");
 
         let name = format!("StateCombinator({nested_name}, {arg_name})");
-
         let nested = AggregateFunctionFactory::instance().get(nested_name, params, arguments)?;
-
         Ok(Arc::new(AggregateStateCombinator { name, nested }))
     }
 
@@ -70,21 +70,17 @@ impl AggregateFunction for AggregateStateCombinator {
         Ok(DataType::Binary)
     }
 
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: AggrState) {
         self.nested.init_state(place);
     }
 
-    fn is_state(&self) -> bool {
-        true
-    }
-
-    fn state_layout(&self) -> Layout {
-        self.nested.state_layout()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        self.nested.register_state(registry);
     }
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -95,34 +91,35 @@ impl AggregateFunction for AggregateStateCombinator {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         input_rows: usize,
     ) -> Result<()> {
         self.nested
-            .accumulate_keys(places, offset, columns, input_rows)
+            .accumulate_keys(places, loc, columns, input_rows)
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         self.nested.accumulate_row(place, columns, row)
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         self.nested.serialize(place, writer)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    #[inline]
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         self.nested.merge(place, reader)
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         self.nested.merge_states(place, rhs)
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
-        let str_builder = builder.as_binary_mut().unwrap();
-        self.serialize(place, &mut str_builder.data)?;
-        str_builder.commit_row();
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+        let builder = builder.as_binary_mut().unwrap();
+        self.nested.serialize(place, &mut builder.data)?;
+        builder.commit_row();
         Ok(())
     }
 
@@ -130,7 +127,7 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.need_manual_drop_state()
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: AggrState) {
         self.nested.drop_state(place);
     }
 

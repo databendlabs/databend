@@ -22,9 +22,9 @@ use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationGenerator;
 use databend_common_storages_fuse::operations::SnapshotChanges;
 use databend_common_storages_fuse::operations::SnapshotGenerator;
+use databend_storages_common_session::TxnManager;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use databend_storages_common_txn::TxnManager;
 
 #[test]
 /// base snapshot contains segments 1, 2, 3,
@@ -65,6 +65,7 @@ fn test_unresolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
+        "test",
     );
     assert!(result.is_err());
 }
@@ -156,6 +157,7 @@ fn test_resolvable_delete_conflict() {
         None,
         TxnManager::init(),
         0,
+        "test",
     );
     let snapshot = result.unwrap();
     let expected = vec![("8".to_string(), 1), ("4".to_string(), 1)];
@@ -263,6 +265,7 @@ fn test_resolvable_replace_conflict() {
         None,
         TxnManager::init(),
         0,
+        "test",
     );
     let snapshot = result.unwrap();
     let expected = vec![

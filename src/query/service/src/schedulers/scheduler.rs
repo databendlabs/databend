@@ -14,8 +14,16 @@
 
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_sql::planner::query_executor::QueryExecutor;
+use databend_common_sql::Planner;
+use futures_util::TryStreamExt;
 
+use crate::interpreters::InterpreterFactory;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::schedulers::Fragmenter;
@@ -24,6 +32,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::executor::PhysicalPlan;
 use crate::sql::ColumnBinding;
+use crate::stream::PullingExecutorStream;
 
 /// Build query pipeline from physical plan.
 /// If plan is distributed plan it will build_distributed_pipeline
@@ -36,12 +45,8 @@ pub async fn build_query_pipeline(
     ignore_result: bool,
 ) -> Result<PipelineBuildResult> {
     let mut build_res = build_query_pipeline_without_render_result_set(ctx, plan).await?;
-    if matches!(plan, PhysicalPlan::UnionAll { .. }) {
-        // Union doesn't need to add extra processor to project the result.
-        // It will be handled in union processor.
-        return Ok(build_res);
-    }
     let input_schema = plan.output_schema()?;
+
     PipelineBuilder::build_result_projection(
         &ctx.get_function_context()?,
         input_schema,
@@ -60,6 +65,10 @@ pub async fn build_query_pipeline_without_render_result_set(
     let build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan).await
     } else {
+        if plan.is_warehouse_distributed_plan() {
+            ctx.set_cluster(ctx.get_warehouse_cluster().await?);
+        }
+
         build_distributed_pipeline(ctx, plan).await
     }?;
     Ok(build_res)
@@ -98,11 +107,54 @@ pub async fn build_distributed_pipeline(
 
     let exchange_manager = ctx.get_exchange_manager();
 
-    let mut build_res = exchange_manager
+    match exchange_manager
         .commit_actions(ctx.clone(), fragments_actions)
-        .await?;
+        .await
+    {
+        Ok(mut build_res) => {
+            let settings = ctx.get_settings();
+            build_res.set_max_threads(settings.get_max_threads()? as usize);
+            Ok(build_res)
+        }
+        Err(error) => {
+            exchange_manager.on_finished_query(&ctx.get_id(), Some(error.clone()));
+            Err(error)
+        }
+    }
+}
 
-    let settings = ctx.get_settings();
-    build_res.set_max_threads(settings.get_max_threads()? as usize);
-    Ok(build_res)
+pub struct ServiceQueryExecutor {
+    ctx: Arc<QueryContext>,
+}
+
+impl ServiceQueryExecutor {
+    pub fn new(ctx: Arc<QueryContext>) -> Self {
+        Self { ctx }
+    }
+}
+
+#[async_trait]
+impl QueryExecutor for ServiceQueryExecutor {
+    async fn execute_query_with_physical_plan(
+        &self,
+        plan: &PhysicalPlan,
+    ) -> Result<Vec<DataBlock>> {
+        let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
+        let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+        self.ctx.set_executor(pulling_executor.get_inner())?;
+
+        PullingExecutorStream::create(pulling_executor)?
+            .try_collect::<Vec<DataBlock>>()
+            .await
+    }
+
+    async fn execute_query_with_sql_string(&self, query_sql: &str) -> Result<Vec<DataBlock>> {
+        let mut planner = Planner::new(self.ctx.clone());
+        let (plan, _) = planner.plan_sql(query_sql).await?;
+        let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
+        let stream = interpreter.execute(self.ctx.clone()).await?;
+        let blocks = stream.try_collect::<Vec<_>>().await?;
+        Ok(blocks)
+    }
 }

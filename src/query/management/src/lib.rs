@@ -14,7 +14,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod cluster;
 mod connection;
 mod file_format;
 mod network_policy;
@@ -26,16 +25,18 @@ mod setting;
 mod stage;
 pub mod udf;
 mod user;
+mod warehouse;
 
+mod client_session;
 pub mod errors;
-mod token;
+mod procedure;
 
-pub use cluster::ClusterApi;
-pub use cluster::ClusterMgr;
+pub use client_session::ClientSessionMgr;
 pub use connection::ConnectionMgr;
 pub use file_format::FileFormatMgr;
 pub use network_policy::NetworkPolicyMgr;
 pub use password_policy::PasswordPolicyMgr;
+pub use procedure::ProcedureMgr;
 pub use quota::QuotaApi;
 pub use quota::QuotaMgr;
 pub use role::RoleApi;
@@ -43,10 +44,14 @@ pub use role::RoleMgr;
 pub use serde::check_and_upgrade_to_pb;
 pub use serde::deserialize_struct;
 pub use serde::serialize_struct;
-pub use setting::SettingApi;
 pub use setting::SettingMgr;
 pub use stage::StageApi;
 pub use stage::StageMgr;
-pub use token::TokenMgr;
 pub use user::UserApi;
 pub use user::UserMgr;
+pub use warehouse::SelectedNode;
+pub use warehouse::SystemManagedCluster;
+pub use warehouse::SystemManagedWarehouse;
+pub use warehouse::WarehouseApi;
+pub use warehouse::WarehouseInfo;
+pub use warehouse::WarehouseMgr;

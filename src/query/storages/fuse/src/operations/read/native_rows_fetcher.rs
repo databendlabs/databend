@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_arrow::parquet::metadata::ColumnDescriptor;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::block_idx_in_segment;
 use databend_common_catalog::plan::split_prefix;
@@ -27,7 +26,6 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::LoadParams;
@@ -49,7 +47,6 @@ pub(super) struct NativeRowsFetcher<const BLOCKING_IO: bool> {
     projection: Projection,
     schema: TableSchemaRef,
     reader: Arc<BlockReader>,
-    column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
 
     // The value contains part info and the page size of the corresponding block file.
     part_map: HashMap<u64, (PartInfoPtr, u64)>,
@@ -124,11 +121,7 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
                 .iter()
                 .map(|(idx, pages)| (self.part_map[idx].0.clone(), pages.clone()))
                 .collect::<Vec<_>>();
-            tasks.push(Self::fetch_blocks(
-                self.reader.clone(),
-                parts,
-                self.column_leaves.clone(),
-            ))
+            tasks.push(Self::fetch_blocks(self.reader.clone(), parts))
         }
 
         let num_task = tasks.len();
@@ -154,10 +147,6 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
 
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
     }
-
-    fn schema(&self) -> DataSchema {
-        self.reader.data_schema()
-    }
 }
 
 impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
@@ -165,7 +154,6 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         table: Arc<FuseTable>,
         projection: Projection,
         reader: Arc<BlockReader>,
-        column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
         max_threads: usize,
     ) -> Self {
         let schema = table.schema();
@@ -179,7 +167,6 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             projection,
             schema,
             reader,
-            column_leaves,
             part_map: HashMap::new(),
             segment_blocks_cache: HashMap::new(),
             max_threads,
@@ -240,15 +227,13 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         reader: &BlockReader,
         mut chunks: NativeSourceData,
         needed_pages: &[u64],
-        column_leaves: &[Vec<ColumnDescriptor>],
     ) -> Result<Vec<DataBlock>> {
         let mut array_iters = BTreeMap::new();
 
         for (index, column_node) in reader.project_column_nodes.iter().enumerate() {
             let readers = chunks.remove(&index).unwrap();
             if !readers.is_empty() {
-                let leaves = column_leaves.get(index).unwrap().clone();
-                let array_iter = BlockReader::build_array_iter(column_node, leaves, readers)?;
+                let array_iter = reader.build_column_iter(column_node, readers)?;
                 array_iters.insert(index, array_iter);
             }
         }
@@ -263,13 +248,13 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             // discarded, and also that calling `nth(0)` multiple times on the same iterator
             // will return different elements.
             let pos = *page - offset;
-            let mut arrays = Vec::with_capacity(array_iters.len());
+            let mut columns = Vec::with_capacity(array_iters.len());
             for (index, array_iter) in array_iters.iter_mut() {
                 let array = array_iter.nth(pos as usize).unwrap()?;
-                arrays.push((*index, array));
+                columns.push((*index, array));
             }
             offset = *page + 1;
-            let block = reader.build_block(&arrays, None)?;
+            let block = reader.build_block(&columns, None)?;
             blocks.push(block);
         }
 
@@ -281,7 +266,6 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
     async fn fetch_blocks(
         reader: Arc<BlockReader>,
         parts: Vec<(PartInfoPtr, Vec<u64>)>,
-        column_leaves: Arc<Vec<Vec<ColumnDescriptor>>>,
     ) -> Result<Vec<DataBlock>> {
         let mut chunks = Vec::with_capacity(parts.len());
         if BLOCKING_IO {
@@ -300,7 +284,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         let num_blocks = parts.iter().map(|(_, p)| p.len()).sum::<usize>();
         let mut blocks = Vec::with_capacity(num_blocks);
         for (chunk, (_, needed_pages)) in chunks.into_iter().zip(parts.iter()) {
-            let fetched_blocks = Self::build_blocks(&reader, chunk, needed_pages, &column_leaves)?;
+            let fetched_blocks = Self::build_blocks(&reader, chunk, needed_pages)?;
             blocks.extend(fetched_blocks);
         }
 

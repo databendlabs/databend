@@ -24,6 +24,7 @@ use databend_common_metrics::storage::metrics_inc_recluster_block_bytes_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_block_nums_to_read;
 use databend_common_metrics::storage::metrics_inc_recluster_row_nums_to_read;
 use databend_common_pipeline_sources::EmptySource;
+use databend_common_pipeline_transforms::processors::build_compact_block_no_split_pipeline;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -39,6 +40,26 @@ use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
+    /// The flow of Pipeline is as follows:
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┐
+    // └──────────┘     └───────────────┘     └─────────┘    │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │     ┌──────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┤────►│MultiSortMerge├────►│Resize(N)├───┐
+    // └──────────┘     └───────────────┘     └─────────┘    │     └──────────────┘     └─────────┘   │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │                                        │
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┘                                        │
+    // └──────────┘     └───────────────┘     └─────────┘                                             │
+    // ┌──────────────────────────────────────────────────────────────────────────────────────────────┘
+    // │         ┌──────────────┐
+    // │    ┌───►│SerializeBlock├───┐
+    // │    │    └──────────────┘   │
+    // │    │    ┌──────────────┐   │    ┌─────────┐    ┌────────────────┐     ┌─────────────┐     ┌──────────┐
+    // └───►│───►│SerializeBlock├───┤───►│Resize(1)├───►│SerializeSegment├────►│ReclusterAggr├────►│CommitSink│
+    //      │    └──────────────┘   │    └─────────┘    └────────────────┘     └─────────────┘     └──────────┘
+    //      │    ┌──────────────┐   │
+    //      └───►│SerializeBlock├───┘
+    //           └──────────────┘
     pub(crate) fn build_recluster(&mut self, recluster: &Recluster) -> Result<()> {
         match recluster.tasks.len() {
             0 => self.main_pipeline.add_source(EmptySource::create, 1),
@@ -67,6 +88,7 @@ impl PipelineBuilder {
                     update_stream_columns: table.change_tracking_enabled(),
                     data_mask_policy: None,
                     table_index: usize::MAX,
+                    scan_id: usize::MAX,
                 };
 
                 {
@@ -82,7 +104,6 @@ impl PipelineBuilder {
 
                 self.ctx.set_partitions(plan.parts.clone())?;
 
-                // ReadDataKind to avoid OOM.
                 table.read_data(self.ctx.clone(), &plan, &mut self.main_pipeline, false)?;
 
                 let num_input_columns = schema.fields().len();
@@ -116,18 +137,6 @@ impl PipelineBuilder {
                     });
                 }
 
-                // merge sort
-                let final_block_size =
-                    block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
-                let partial_block_size = if self.main_pipeline.output_len() > 1 {
-                    std::cmp::min(
-                        final_block_size,
-                        self.ctx.get_settings().get_max_block_size()? as usize,
-                    )
-                } else {
-                    final_block_size
-                };
-
                 // construct output fields
                 let output_fields = cluster_stats_gen.out_fields.clone();
                 let schema = DataSchemaRefExt::create(output_fields);
@@ -138,24 +147,27 @@ impl PipelineBuilder {
                         offset: *offset,
                         asc: true,
                         nulls_first: false,
-                        is_nullable: false, // This information is not needed here.
                     })
                     .collect();
 
-                self.ctx.set_enable_sort_spill(false);
+                // merge sort
+                let sort_block_size =
+                    block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
+
                 let sort_pipeline_builder =
-                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))
-                        .with_partial_block_size(partial_block_size)
-                        .with_final_block_size(final_block_size)
+                    SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))?
+                        .with_block_size_hit(sort_block_size)
                         .remove_order_col_at_last();
                 sort_pipeline_builder.build_merge_sort_pipeline(&mut self.main_pipeline, false)?;
 
-                let output_block_num = task.total_rows.div_ceil(final_block_size);
-                let max_threads = std::cmp::min(
-                    self.ctx.get_settings().get_max_threads()? as usize,
-                    output_block_num,
-                );
-                self.main_pipeline.try_resize(max_threads)?;
+                // Compact after merge sort.
+                let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+                build_compact_block_no_split_pipeline(
+                    &mut self.main_pipeline,
+                    block_thresholds,
+                    max_threads,
+                )?;
+
                 self.main_pipeline
                     .add_transform(|transform_input_port, transform_output_port| {
                         let proc = TransformSerializeBlock::try_create(

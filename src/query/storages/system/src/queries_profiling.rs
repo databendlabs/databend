@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -47,7 +48,7 @@ pub struct QueriesProfilingTable {
 impl SyncSystemTable for QueriesProfilingTable {
     const NAME: &'static str = "system.queries_profiling";
 
-    const IS_LOCAL: bool = false;
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info

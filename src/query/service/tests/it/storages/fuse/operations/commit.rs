@@ -31,10 +31,11 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
-use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
@@ -53,37 +54,38 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
 use databend_common_meta_app::schema::CreateDatabaseReq;
+use databend_common_meta_app::schema::CreateDictionaryReply;
+use databend_common_meta_app::schema::CreateDictionaryReq;
 use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableIndexReply;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
-use databend_common_meta_app::schema::CreateVirtualColumnReply;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
+use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
 use databend_common_meta_app::schema::DropDatabaseReq;
-use databend_common_meta_app::schema::DropIndexReply;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
-use databend_common_meta_app::schema::DropTableIndexReply;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
-use databend_common_meta_app::schema::DropVirtualColumnReply;
 use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
+use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
@@ -93,6 +95,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
@@ -102,6 +105,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -112,20 +116,20 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
-use databend_common_meta_app::schema::UndropTableReply;
 use databend_common_meta_app::schema::UndropTableReq;
+use databend_common_meta_app::schema::UpdateDictionaryReply;
+use databend_common_meta_app::schema::UpdateDictionaryReq;
 use databend_common_meta_app::schema::UpdateIndexReply;
 use databend_common_meta_app::schema::UpdateIndexReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateMultiTableMetaResult;
-use databend_common_meta_app::schema::UpdateVirtualColumnReply;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
-use databend_common_meta_types::SeqV;
 use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::PlanProfile;
@@ -142,12 +146,13 @@ use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
+use databend_storages_common_session::SessionState;
+use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
-use databend_storages_common_txn::TxnManagerRef;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -236,7 +241,7 @@ async fn test_last_snapshot_hint() -> Result<()> {
     // check last snapshot hit file
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let last_snapshot_location = fuse_table.snapshot_loc().await?.unwrap();
+    let last_snapshot_location = fuse_table.snapshot_loc().unwrap();
     let operator = fuse_table.get_operator();
     let location = fuse_table
         .meta_location_generator()
@@ -282,7 +287,6 @@ async fn test_commit_to_meta_server() -> Result<()> {
                 table.schema().as_ref().clone(),
                 Statistics::default(),
                 new_segments,
-                None,
                 None,
             );
 
@@ -480,22 +484,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_table_snapshot(&self, _snapshot: Arc<TableSnapshot>) {
-        todo!()
-    }
-
-    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>> {
-        todo!()
-    }
-
-    fn set_lazy_mutation_delete(&self, _lazy: bool) {
-        todo!()
-    }
-
-    fn get_lazy_mutation_delete(&self) -> bool {
-        todo!()
-    }
-
     fn add_partitions_sha(&self, _sha: String) {
         todo!()
     }
@@ -564,11 +552,11 @@ impl TableContext for CtxDelegation {
         "default".to_owned()
     }
 
-    fn check_aborting(&self) -> Result<()> {
+    fn check_aborting(&self) -> Result<(), ContextError> {
         todo!()
     }
 
-    fn get_error(&self) -> Option<ErrorCode> {
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
         todo!()
     }
 
@@ -603,7 +591,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+    async fn get_visibility_checker(
+        &self,
+        _ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
 
@@ -636,6 +627,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_shared_settings(&self) -> Arc<Settings> {
+        Settings::create(Tenant::new_literal("fake_shared_settings"))
+    }
+
+    fn get_session_settings(&self) -> Arc<Settings> {
         todo!()
     }
 
@@ -700,6 +695,20 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+        todo!()
+    }
+
+    async fn get_table_with_batch(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
     async fn filter_out_copied_files(
         &self,
         _catalog_name: &str,
@@ -717,42 +726,19 @@ impl TableContext for CtxDelegation {
         None
     }
 
-    fn set_materialized_cte(
-        &self,
-        _idx: (usize, usize),
-        _blocks: Arc<RwLock<Vec<DataBlock>>>,
-    ) -> Result<()> {
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        HashMap::new()
+    }
+
+    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
         todo!()
     }
 
-    fn get_materialized_cte(
-        &self,
-        _idx: (usize, usize),
-    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+    fn clear_written_segment_locations(&self) -> Result<()> {
         todo!()
     }
 
-    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
-        todo!()
-    }
-
-    fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {
-        todo!()
-    }
-
-    fn clear_segment_locations(&self) -> Result<()> {
-        todo!()
-    }
-
-    fn get_segment_locations(&self) -> Result<Vec<Location>> {
-        todo!()
-    }
-
-    fn set_compaction_num_block_hint(&self, _enable: u64) {
-        todo!()
-    }
-
-    fn get_compaction_num_block_hint(&self) -> u64 {
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
         todo!()
     }
 
@@ -808,6 +794,22 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn set_runtime_filter_ready(&self, _table_index: usize, _ready: Arc<RuntimeFilterReady>) {
+        todo!()
+    }
+
+    fn get_runtime_filter_ready(&self, _table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
+        todo!()
+    }
+
+    fn set_wait_runtime_filter(&self, _table_index: usize, _need_to_wait: bool) {
+        todo!()
+    }
+
+    fn get_wait_runtime_filter(&self, _table_index: usize) -> bool {
+        todo!()
+    }
+
     fn clear_runtime_filter(&self) {
         todo!()
     }
@@ -860,6 +862,33 @@ impl TableContext for CtxDelegation {
     ) -> Result<Option<Arc<LockGuard>>> {
         todo!()
     }
+
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        todo!()
+    }
+
+    fn session_state(&self) -> SessionState {
+        todo!()
+    }
+
+    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
+        false
+    }
+    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
+        todo!()
+    }
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
+
+    fn set_cluster(&self, _: Arc<Cluster>) {
+        todo!()
+    }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -883,6 +912,10 @@ impl Catalog for FakedCatalog {
     }
 
     async fn list_databases(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        todo!()
+    }
+
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         todo!()
     }
 
@@ -915,8 +948,11 @@ impl Catalog for FakedCatalog {
         &self,
         tenant: &Tenant,
         table_id: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
-        self.cat.mget_table_names_by_ids(tenant, table_id).await
+        self.cat
+            .mget_table_names_by_ids(tenant, table_id, get_dropped_table)
+            .await
     }
 
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
@@ -925,6 +961,14 @@ impl Catalog for FakedCatalog {
 
     async fn get_db_name_by_id(&self, db_id: MetaId) -> Result<String> {
         self.cat.get_db_name_by_id(db_id).await
+    }
+
+    async fn mget_databases(
+        &self,
+        tenant: &Tenant,
+        db_names: &[DatabaseNameIdent],
+    ) -> Result<Vec<Arc<dyn Database>>> {
+        self.cat.mget_databases(tenant, db_names).await
     }
 
     #[async_backtrace::framed]
@@ -942,6 +986,15 @@ impl Catalog for FakedCatalog {
         _db_name: &str,
         _table_name: &str,
     ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    async fn get_table_history(
+        &self,
+        _tenant: &Tenant,
+        _db_name: &str,
+        _table_name: &str,
+    ) -> Result<Vec<Arc<dyn Table>>> {
         todo!()
     }
 
@@ -965,7 +1018,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn undrop_table(&self, _req: UndropTableReq) -> Result<UndropTableReply> {
+    async fn undrop_table(&self, _req: UndropTableReq) -> Result<()> {
         todo!()
     }
 
@@ -994,12 +1047,12 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<CreateTableIndexReply> {
+    async fn create_table_index(&self, _req: CreateTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<DropTableIndexReply> {
+    async fn drop_table_index(&self, _req: DropTableIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -1026,7 +1079,7 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+    async fn drop_index(&self, _req: DropIndexReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -1059,26 +1112,17 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_virtual_column(
-        &self,
-        _req: CreateVirtualColumnReq,
-    ) -> Result<CreateVirtualColumnReply> {
+    async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn update_virtual_column(
-        &self,
-        _req: UpdateVirtualColumnReq,
-    ) -> Result<UpdateVirtualColumnReply> {
+    async fn update_virtual_column(&self, _req: UpdateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn drop_virtual_column(
-        &self,
-        _req: DropVirtualColumnReq,
-    ) -> Result<DropVirtualColumnReply> {
+    async fn drop_virtual_column(&self, _req: DropVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }
 
@@ -1141,5 +1185,38 @@ impl Catalog for FakedCatalog {
         } else {
             self.cat.retryable_update_multi_table_meta(req).await
         }
+    }
+
+    async fn create_dictionary(&self, _req: CreateDictionaryReq) -> Result<CreateDictionaryReply> {
+        todo!()
+    }
+
+    async fn update_dictionary(&self, _req: UpdateDictionaryReq) -> Result<UpdateDictionaryReply> {
+        todo!()
+    }
+
+    async fn drop_dictionary(
+        &self,
+        _dict_ident: DictionaryNameIdent,
+    ) -> Result<Option<SeqV<DictionaryMeta>>> {
+        todo!()
+    }
+
+    async fn get_dictionary(
+        &self,
+        _req: DictionaryNameIdent,
+    ) -> Result<Option<GetDictionaryReply>> {
+        todo!()
+    }
+
+    async fn list_dictionaries(
+        &self,
+        _req: ListDictionaryReq,
+    ) -> Result<Vec<(String, DictionaryMeta)>> {
+        todo!()
+    }
+
+    async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
+        todo!()
     }
 }

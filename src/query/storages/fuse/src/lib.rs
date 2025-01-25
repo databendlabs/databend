@@ -21,6 +21,7 @@
 #![feature(int_roundings)]
 #![feature(iterator_try_reduce)]
 #![feature(slice_take)]
+#![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]
 
 mod constants;
@@ -32,6 +33,7 @@ mod fuse_type;
 pub mod io;
 pub mod operations;
 pub mod pruning;
+mod pruning_pipeline;
 pub mod statistics;
 pub mod table_functions;
 
@@ -46,7 +48,7 @@ pub use fuse_part::FuseLazyPartInfo;
 pub use fuse_table::FuseTable;
 pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
-pub use io::MergeIOReadResult;
+pub use io::BlockReadResult;
 pub use pruning::SegmentLocation;
 
 mod sessions {

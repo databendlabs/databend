@@ -32,40 +32,13 @@ INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
 
 # query: eval-scan, index: eval-scan
 
-statement ok
+statement error 1601
 CREATE ASYNC AGGREGATING INDEX testi AS select c + 1 from t
-
-statement ok
-REFRESH AGGREGATING INDEX testi
-
-query T
-select to_string(c + 1) from t
-----
-5
-2
-5
-6
-
-statement ok
-DROP AGGREGATING INDEX testi
 
 # eval-filter-scan, index: eval-scan
 
-statement ok
+statement error 1601
 CREATE ASYNC AGGREGATING INDEX testi AS select a, b from t
-
-statement ok
-REFRESH AGGREGATING INDEX testi
-
-query T
-select a from t where b > 1
-----
-1
-1
-2
-
-statement ok
-DROP AGGREGATING INDEX testi
 
 # query: eval-agg-eval-scan, index: eval-scan
 # No available case for index scan.
@@ -92,25 +65,8 @@ statement ok
 DROP AGGREGATING INDEX testi
 
 # query: eval-agg-eval-scan, index: eval-filter-scan
-statement ok
+statement error 1601
 CREATE ASYNC AGGREGATING INDEX testi AS select a + 1, b from t
-
-statement ok
-REFRESH AGGREGATING INDEX testi
-
-query I
-select sum(a + 1) as s from t group by b order by s
-----
-2
-7
-
-query I
-select sum(a + 1) as s from t
-----
-9
-
-statement ok
-DROP AGGREGATING INDEX testi
 
 # query: eval-agg-eval-filter-scan, index: eval-filter-scan
 statement ok
@@ -458,13 +414,13 @@ Logout 2 2 5.0
 query T
 explain select event_name, user_id, max(user_id), avg(id) from t where user_id > 1 group by event_name, user_id order by event_name, user_id desc
 ----
-EvalScalar
+Sort
 ├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
-├── expressions: [sum(id) (#4) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS UInt64 NULL)]
+├── sort keys: [event_name ASC NULLS LAST, user_id DESC NULLS LAST]
 ├── estimated rows: 6.00
-└── Sort
-    ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), t.event_name (#2), t.user_id (#1)]
-    ├── sort keys: [event_name ASC NULLS LAST, user_id DESC NULLS LAST]
+└── EvalScalar
+    ├── output columns: [max(user_id) (#3), t.event_name (#2), t.user_id (#1), sum(id) / if(count(id) = 0, 1, count(id)) (#6)]
+    ├── expressions: [sum(id) (#4) / CAST(if(CAST(count(id) (#5) = 0 AS Boolean NULL), 1, count(id) (#5)) AS UInt64 NULL)]
     ├── estimated rows: 6.00
     └── AggregateFinal
         ├── output columns: [max(user_id) (#3), sum(id) (#4), count(id) (#5), t.event_name (#2), t.user_id (#1)]

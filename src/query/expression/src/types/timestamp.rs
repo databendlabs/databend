@@ -12,17 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::fmt::Display;
 use std::io::Cursor;
 use std::ops::Range;
 
-use chrono::DateTime;
-use chrono_tz::Tz;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
+use jiff::fmt::strtime;
+use jiff::tz::TimeZone;
+use jiff::Zoned;
+use log::error;
 
 use super::number::SimpleDomain;
 use crate::property::Domain;
@@ -44,20 +47,20 @@ pub const TIMESTAMP_MIN: i64 = -30610224000000000;
 /// Maximum valid timestamp `9999-12-31 23:59:59.999999`, represented by the microsecs offset from 1970-01-01.
 pub const TIMESTAMP_MAX: i64 = 253402300799999999;
 
-pub const MICROS_IN_A_SEC: i64 = 1_000_000;
-pub const MICROS_IN_A_MILLI: i64 = 1_000;
+pub const MICROS_PER_SEC: i64 = 1_000_000;
+pub const MICROS_PER_MILLI: i64 = 1_000;
 
 pub const PRECISION_MICRO: u8 = 6;
 pub const PRECISION_MILLI: u8 = 3;
 pub const PRECISION_SEC: u8 = 0;
 
 /// Check if the timestamp value is valid.
+/// If timestamp is invalid convert to TIMESTAMP_MIN.
 #[inline]
-pub fn check_timestamp(micros: i64) -> Result<i64, String> {
-    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&micros) {
-        Ok(micros)
-    } else {
-        Err("timestamp is out of range".to_string())
+pub fn clamp_timestamp(micros: &mut i64) {
+    if !(TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(micros) {
+        error!("{}", format!("timestamp {} is out of range", micros));
+        *micros = TIMESTAMP_MIN;
     }
 }
 
@@ -193,6 +196,11 @@ impl ValueType for TimestampType {
     }
 
     #[inline(always)]
+    fn compare(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> Ordering {
+        left.cmp(&right)
+    }
+
+    #[inline(always)]
     fn equal(left: Self::ScalarRef<'_>, right: Self::ScalarRef<'_>) -> bool {
         left == right
     }
@@ -256,7 +264,7 @@ impl ArgType for TimestampType {
 }
 
 pub fn microseconds_to_seconds(micros: i64) -> i64 {
-    micros / MICROS_IN_A_SEC
+    micros / MICROS_PER_SEC
 }
 
 pub fn microseconds_to_days(micros: i64) -> i32 {
@@ -266,11 +274,10 @@ pub fn microseconds_to_days(micros: i64) -> i32 {
 #[inline]
 pub fn string_to_timestamp(
     ts_str: impl AsRef<[u8]>,
-    tz: Tz,
-    enable_dst_hour_fix: bool,
-) -> databend_common_exception::Result<DateTime<Tz>> {
+    jiff_tz: &TimeZone,
+) -> databend_common_exception::Result<Zoned> {
     let mut reader = Cursor::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
-    match reader.read_timestamp_text(&tz, false, enable_dst_hour_fix) {
+    match reader.read_timestamp_text(jiff_tz) {
         Ok(dt) => match dt {
             DateTimeResType::Datetime(dt) => match reader.must_eof() {
                 Ok(..) => Ok(dt),
@@ -286,6 +293,7 @@ pub fn string_to_timestamp(
 }
 
 #[inline]
-pub fn timestamp_to_string(ts: i64, tz: Tz) -> impl Display {
-    ts.to_timestamp(tz).format(TIMESTAMP_FORMAT)
+pub fn timestamp_to_string(ts: i64, tz: &TimeZone) -> impl Display {
+    let zdt = ts.to_timestamp(tz.clone());
+    strtime::format(TIMESTAMP_FORMAT, &zdt).unwrap()
 }

@@ -23,16 +23,11 @@ use super::group_by_hash::HashMethodSerializer;
 use super::group_by_hash::HashMethodSingleBinary;
 use crate::types::DataType;
 use crate::DataBlock;
-use crate::HashMethodDictionarySerializer;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
 
 impl DataBlock {
-    pub fn choose_hash_method(
-        chunk: &DataBlock,
-        indices: &[usize],
-        efficiently_memory: bool,
-    ) -> Result<HashMethodKind> {
+    pub fn choose_hash_method(chunk: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {
         let hash_key_types = indices
             .iter()
             .map(|&offset| {
@@ -42,17 +37,14 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>();
 
         let hash_key_types = hash_key_types?;
-        Self::choose_hash_method_with_types(&hash_key_types, efficiently_memory)
+        Self::choose_hash_method_with_types(&hash_key_types)
     }
 
-    pub fn choose_hash_method_with_types(
-        hash_key_types: &[DataType],
-        efficiently_memory: bool,
-    ) -> Result<HashMethodKind> {
+    pub fn choose_hash_method_with_types(hash_key_types: &[DataType]) -> Result<HashMethodKind> {
         if hash_key_types.len() == 1
             && matches!(
                 hash_key_types[0],
-                DataType::Binary | DataType::String | DataType::Variant | DataType::Bitmap
+                DataType::Binary | DataType::Variant | DataType::Bitmap
             )
         {
             return Ok(HashMethodKind::SingleBinary(
@@ -64,7 +56,7 @@ impl DataBlock {
         for hash_key_type in hash_key_types {
             let not_null_type = hash_key_type.remove_nullable();
 
-            if not_null_type.is_numeric()
+            if not_null_type.is_number()
                 || not_null_type.is_date_or_date_time()
                 || not_null_type.is_decimal()
             {
@@ -74,14 +66,8 @@ impl DataBlock {
                 if hash_key_type.is_nullable() {
                     group_key_len += 1;
                 }
-            } else if !efficiently_memory || hash_key_types.len() == 1 {
-                return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
             } else {
-                return Ok(HashMethodKind::DictionarySerializer(
-                    HashMethodDictionarySerializer {
-                        dict_keys: hash_key_types.len(),
-                    },
-                ));
+                return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
             }
         }
 

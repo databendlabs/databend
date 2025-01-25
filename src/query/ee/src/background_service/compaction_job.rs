@@ -16,10 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use arrow_array::BooleanArray;
-use arrow_array::LargeStringArray;
-use arrow_array::RecordBatch;
-use arrow_array::UInt64Array;
 use chrono::Utc;
 use databend_common_base::base::tokio::sync::mpsc::Sender;
 use databend_common_base::base::tokio::sync::Mutex;
@@ -27,6 +23,10 @@ use databend_common_base::base::tokio::time::Instant;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
+use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::ValueType;
+use databend_common_expression::DataBlock;
 use databend_common_meta_api::BackgroundApi;
 use databend_common_meta_app::background::BackgroundJobIdent;
 use databend_common_meta_app::background::BackgroundJobInfo;
@@ -44,6 +44,7 @@ use databend_common_meta_app::background::UpdateBackgroundTaskReq;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStore;
+use databend_common_meta_types::SeqV;
 use databend_common_users::UserApiProvider;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
@@ -79,7 +80,7 @@ impl Job for CompactionJob {
             .expect("failed to do compaction job");
     }
 
-    async fn get_info(&self) -> Result<BackgroundJobInfo> {
+    async fn get_info(&self) -> Result<SeqV<BackgroundJobInfo>> {
         let job = self
             .meta_api
             .get_background_job(GetBackgroundJobReq {
@@ -165,37 +166,34 @@ impl CompactionJob {
         let ctx = session.create_query_context().await?;
         let job_info = self.get_info().await?;
 
-        let (params, manual) = Self::sync_compact_params(&job_info).await;
+        let (params, manual) = Self::sync_compact_params(&job_info.data).await;
         // guarantee at least once for maunal job
         self.update_job_params(params).await?;
 
         for records in Self::do_get_target_tables_from_config(&self.conf, ctx.clone()).await? {
             debug!(records :? =(&records); "target_tables");
-            let db_names = records
-                .column(0)
-                .as_any()
-                .downcast_ref::<arrow_array::LargeStringArray>()
-                .unwrap();
-            let db_ids = records
-                .column(1)
-                .as_any()
-                .downcast_ref::<UInt64Array>()
-                .unwrap();
-            let tb_names = records
-                .column(2)
-                .as_any()
-                .downcast_ref::<LargeStringArray>()
-                .unwrap();
-            let tb_ids = records
-                .column(3)
-                .as_any()
-                .downcast_ref::<UInt64Array>()
-                .unwrap();
+            let records = records.consume_convert_to_full();
+
+            let db_names =
+                StringType::try_downcast_column(records.columns()[0].value.as_column().unwrap())
+                    .unwrap();
+            let db_ids =
+                UInt64Type::try_downcast_column(records.columns()[1].value.as_column().unwrap())
+                    .unwrap();
+            let tb_names =
+                StringType::try_downcast_column(records.columns()[2].value.as_column().unwrap())
+                    .unwrap();
+
+            let tb_ids =
+                UInt64Type::try_downcast_column(records.columns()[3].value.as_column().unwrap())
+                    .unwrap();
+
             for i in 0..records.num_rows() {
-                let db_name = db_names.value(i).to_owned();
-                let db_id = db_ids.value(i);
-                let tb_name = tb_names.value(i).to_owned();
-                let tb_id = tb_ids.value(i);
+                let db_name: String = db_names.index(i).unwrap().to_string();
+                let db_id = db_ids[i];
+                let tb_name = tb_names.index(i).unwrap().to_string();
+                let tb_id = tb_ids[i];
+
                 match self
                     .compact_table(
                         session.clone(),
@@ -308,7 +306,7 @@ impl CompactionJob {
         let job_info = self.get_info().await?;
         let id = Uuid::new_v4().to_string();
 
-        let status = self.sync_compact_status(id.clone(), &job_info).await?;
+        let status = self.sync_compact_status(id.clone(), &job_info.data).await?;
         if status.is_none() {
             return Ok(());
         }
@@ -334,7 +332,7 @@ impl CompactionJob {
             .update_background_task(UpdateBackgroundTaskReq {
                 task_name: task_ident.clone(),
                 task_info: info.clone(),
-                expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
+                ttl: Duration::from_secs(EXPIRE_SEC),
             })
             .await?;
 
@@ -361,7 +359,7 @@ impl CompactionJob {
                     .update_background_task(UpdateBackgroundTaskReq {
                         task_name: task_ident,
                         task_info: info.clone(),
-                        expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
+                        ttl: Duration::from_secs(EXPIRE_SEC),
                     })
                     .await?;
             }
@@ -372,7 +370,7 @@ impl CompactionJob {
                     .update_background_task(UpdateBackgroundTaskReq {
                         task_name: task_ident,
                         task_info: info.clone(),
-                        expire_at: Utc::now().timestamp() as u64 + EXPIRE_SEC,
+                        ttl: Duration::from_secs(EXPIRE_SEC),
                     })
                     .await?;
             }
@@ -459,7 +457,7 @@ impl CompactionJob {
     pub async fn do_get_target_tables_from_config(
         config: &InnerConfig,
         ctx: Arc<QueryContext>,
-    ) -> Result<Vec<RecordBatch>> {
+    ) -> Result<Vec<DataBlock>> {
         if !config.background.compaction.has_target_tables() {
             let res =
                 SuggestedBackgroundTasksSource::do_get_all_suggested_compaction_tables(ctx).await;
@@ -528,7 +526,7 @@ impl CompactionJob {
     pub async fn do_get_target_tables(
         configs: &InnerConfig,
         ctx: Arc<QueryContext>,
-    ) -> Result<Vec<RecordBatch>> {
+    ) -> Result<Vec<DataBlock>> {
         let all_target_tables = configs.background.compaction.target_tables.as_ref();
         let all_target_tables = Self::parse_all_target_tables(all_target_tables);
         let future_res = all_target_tables
@@ -573,57 +571,55 @@ impl CompactionJob {
             return Ok((false, false, TableStatistics::default()));
         }
         let res = res.unwrap();
-        let need_segment_compact = res
-            .column(0)
-            .as_any()
-            .downcast_ref::<BooleanArray>()
-            .unwrap()
-            .value(0);
-        let need_block_compact = res
-            .column(1)
-            .as_any()
-            .downcast_ref::<BooleanArray>()
-            .unwrap()
-            .value(0);
+        let res = res.consume_convert_to_full();
+
+        let need_segment_compact = *res.value_at(0, 0).unwrap().as_boolean().unwrap();
+        let need_block_compact = *res.value_at(1, 0).unwrap().as_boolean().unwrap();
 
         let table_statistics = TableStatistics {
-            number_of_rows: res
-                .column(2)
-                .as_any()
-                .downcast_ref::<UInt64Array>()
+            number_of_rows: *res
+                .value_at(2, 0)
                 .unwrap()
-                .value(0),
-            data_bytes: res
-                .column(3)
-                .as_any()
-                .downcast_ref::<UInt64Array>()
+                .as_number()
                 .unwrap()
-                .value(0),
-            compressed_data_bytes: res
-                .column(4)
-                .as_any()
-                .downcast_ref::<UInt64Array>()
+                .as_u_int64()
+                .unwrap(),
+            data_bytes: *res
+                .value_at(3, 0)
                 .unwrap()
-                .value(0),
-            index_data_bytes: res
-                .column(5)
-                .as_any()
-                .downcast_ref::<UInt64Array>()
+                .as_number()
                 .unwrap()
-                .value(0),
+                .as_u_int64()
+                .unwrap(),
+            compressed_data_bytes: *res
+                .value_at(4, 0)
+                .unwrap()
+                .as_number()
+                .unwrap()
+                .as_u_int64()
+                .unwrap(),
+            index_data_bytes: *res
+                .value_at(5, 0)
+                .unwrap()
+                .as_number()
+                .unwrap()
+                .as_u_int64()
+                .unwrap(),
             number_of_segments: Some(
-                res.column(6)
-                    .as_any()
-                    .downcast_ref::<UInt64Array>()
+                *res.value_at(6, 0)
                     .unwrap()
-                    .value(0),
+                    .as_number()
+                    .unwrap()
+                    .as_u_int64()
+                    .unwrap(),
             ),
             number_of_blocks: Some(
-                res.column(7)
-                    .as_any()
-                    .downcast_ref::<UInt64Array>()
+                *res.value_at(7, 0)
                     .unwrap()
-                    .value(0),
+                    .as_number()
+                    .unwrap()
+                    .as_u_int64()
+                    .unwrap(),
             ),
         };
 

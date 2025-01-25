@@ -50,13 +50,7 @@ async fn test_transaction_follower_responds_leader_endpoint() -> anyhow::Result<
         assert_eq!(a1(), eclient.target_endpoint(),);
     }
 
-    let _res = client
-        .request(TxnRequest {
-            condition: vec![],
-            if_then: vec![],
-            else_then: vec![],
-        })
-        .await?;
+    let _res = client.request(TxnRequest::new(vec![], vec![])).await?;
 
     // Current leader endpoint updated, will connect to a0.
     {

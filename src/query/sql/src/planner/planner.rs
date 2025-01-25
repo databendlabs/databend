@@ -16,6 +16,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::InsertSource;
+use databend_common_ast::ast::InsertStmt;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_raw_insert_stmt;
@@ -39,13 +41,11 @@ use super::semantic::AggregateRewriter;
 use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerContext;
-use crate::plans::Insert;
-use crate::plans::InsertInputSource;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::Plan;
 use crate::Binder;
 use crate::CountSetOps;
 use crate::Metadata;
-use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::VariableNormalizer;
 
@@ -53,25 +53,44 @@ const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 const PROBE_INSERT_MAX_TOKENS: usize = 128 * 8;
 
 pub struct Planner {
-    ctx: Arc<dyn TableContext>,
+    pub(crate) ctx: Arc<dyn TableContext>,
+    pub(crate) query_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct PlanExtras {
-    pub metadata: MetadataRef,
     pub format: Option<String>,
     pub statement: Statement,
 }
 
 impl Planner {
     pub fn new(ctx: Arc<dyn TableContext>) -> Self {
-        Planner { ctx }
+        Planner {
+            ctx,
+            query_executor: None,
+        }
+    }
+
+    pub fn new_with_query_executor(
+        ctx: Arc<dyn TableContext>,
+        query_executor: Arc<dyn QueryExecutor>,
+    ) -> Self {
+        Planner {
+            ctx,
+            query_executor: Some(query_executor),
+        }
     }
 
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
-        let start = Instant::now();
+        let extras = self.parse_sql(sql)?;
+        let plan = self.plan_stmt(&extras.statement, true).await?;
+        Ok((plan, extras))
+    }
+
+    #[fastrace::trace]
+    pub fn parse_sql(&self, sql: &str) -> Result<PlanExtras> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         // compile prql to sql for prql dialect
@@ -133,7 +152,7 @@ impl Planner {
         };
 
         loop {
-            let res = async {
+            let res = try {
                 // Step 2: Parse the SQL.
                 let (mut stmt, format) = if is_insert_stmt {
                     (parse_raw_insert_stmt(&tokens, sql_dialect)?, None)
@@ -151,58 +170,33 @@ impl Planner {
 
                 self.replace_stmt(&mut stmt)?;
 
-                // Step 3: Bind AST with catalog, and generate a pure logical SExpr
-                let metadata = Arc::new(RwLock::new(Metadata::default()));
-                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-                let binder = Binder::new(
-                    self.ctx.clone(),
-                    CatalogManager::instance(),
-                    name_resolution_ctx,
-                    metadata.clone(),
-                );
-
-                // Indicate binder there is no need to collect column statistics for the binding table.
-                self.ctx
-                    .attach_query_str(get_query_kind(&stmt), stmt.to_mask_sql());
-                let plan = binder.bind(&stmt).await?;
-                // attach again to avoid the query kind is overwritten by the subquery
-                self.ctx
-                    .attach_query_str(get_query_kind(&stmt), stmt.to_mask_sql());
-
-                // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
-                let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
-                    .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
-                    .with_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
-                    .with_enable_dphyp(settings.get_enable_dphyp()?);
-
-                let optimized_plan = optimize(opt_ctx, plan).await?;
-                Ok((optimized_plan, PlanExtras {
-                    metadata,
+                PlanExtras {
                     format,
                     statement: stmt,
-                }))
-            }
-            .await;
+                }
+            };
 
             let mut maybe_partial_insert = false;
+
             if is_insert_or_replace_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
-                if let Ok((
-                    Plan::Insert(box Insert {
-                        source: InsertInputSource::SelectPlan(_),
-                        ..
-                    }),
-                    _,
-                )) = &res
+                if let Ok(PlanExtras {
+                    statement:
+                        Statement::Insert(InsertStmt {
+                            source: InsertSource::Select { .. },
+                            ..
+                        }),
+                    ..
+                }) = &res
                 {
                     maybe_partial_insert = true;
                 }
             }
 
-            if maybe_partial_insert || (res.is_err() && matches!(tokenizer.peek(), Some(Ok(_)))) {
+            if (maybe_partial_insert || res.is_err()) && matches!(tokenizer.peek(), Some(Ok(_))) {
                 // Remove the EOI.
                 tokens.pop();
                 // Tokenize more and try again.
-                if tokens.len() < PROBE_INSERT_MAX_TOKENS {
+                if !maybe_partial_insert && tokens.len() < PROBE_INSERT_MAX_TOKENS {
                     let iter = (&mut tokenizer)
                         .take(tokens.len() * 2)
                         .take_while(|token| token.is_ok())
@@ -211,6 +205,7 @@ impl Planner {
                         .chain(std::iter::once(Token::new_eoi(&final_sql)));
                     tokens.extend(iter);
                 } else {
+                    // Take the whole tokenizer
                     let iter = (&mut tokenizer)
                         .take_while(|token| token.is_ok())
                         .map(|token| token.unwrap())
@@ -219,10 +214,78 @@ impl Planner {
                     tokens.extend(iter);
                 };
             } else {
-                info!("logical plan built, time used: {:?}", start.elapsed());
                 return res;
             }
         }
+    }
+
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn plan_stmt(&mut self, stmt: &Statement, attach_query: bool) -> Result<Plan> {
+        let start = Instant::now();
+        let query_kind = get_query_kind(stmt);
+        let settings = self.ctx.get_settings();
+        // Step 3: Bind AST with catalog, and generate a pure logical SExpr
+        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let mut enable_planner_cache = self.ctx.get_settings().get_enable_planner_cache()?;
+        let planner_cache_key = if enable_planner_cache {
+            Some(Self::planner_cache_key(&stmt.to_string()))
+        } else {
+            None
+        };
+
+        if enable_planner_cache {
+            let (c, plan) = self.get_cache(
+                name_resolution_ctx.clone(),
+                planner_cache_key.as_ref().unwrap(),
+                stmt,
+            );
+            if let Some(plan) = plan {
+                info!("logical plan from cache, time used: {:?}", start.elapsed());
+                if attach_query {
+                    // update for clickhouse handler
+                    self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+                }
+                return Ok(plan.plan);
+            }
+            enable_planner_cache = c;
+        }
+
+        let metadata = Arc::new(RwLock::new(Metadata::default()));
+        let binder = Binder::new(
+            self.ctx.clone(),
+            CatalogManager::instance(),
+            name_resolution_ctx,
+            metadata.clone(),
+        )
+        .with_subquery_executor(self.query_executor.clone());
+
+        // must attach before bind, because ParquetRSTable::create used it.
+        if attach_query {
+            self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        }
+        let plan = binder.bind(stmt).await?;
+        // attach again to avoid the query kind is overwritten by the subquery
+        if attach_query {
+            self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
+        }
+
+        // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
+        let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
+            .with_enable_distributed_optimization(!self.ctx.get_cluster().is_empty())
+            .with_enable_join_reorder(unsafe { !settings.get_disable_join_reorder()? })
+            .with_enable_dphyp(settings.get_enable_dphyp()?)
+            .with_max_push_down_limit(settings.get_max_push_down_limit()?)
+            .with_sample_executor(self.query_executor.clone());
+
+        let optimized_plan = optimize(opt_ctx, plan).await?;
+
+        if enable_planner_cache {
+            self.set_cache(planner_cache_key.clone().unwrap(), optimized_plan.clone());
+        }
+
+        info!("logical plan built, time used: {:?}", start.elapsed());
+        Ok(optimized_plan)
     }
 
     fn add_max_rows_limit(&self, statement: &mut Statement) {
@@ -271,6 +334,7 @@ impl Planner {
 pub fn get_query_kind(stmt: &Statement) -> QueryKind {
     match stmt {
         Statement::Query { .. } => QueryKind::Query,
+        Statement::StatementWithSettings { stmt, .. } => get_query_kind(stmt),
         Statement::CopyIntoTable(_) => QueryKind::CopyIntoTable,
         Statement::CopyIntoLocation(_) => QueryKind::CopyIntoLocation,
         Statement::Explain { .. } => QueryKind::Explain,

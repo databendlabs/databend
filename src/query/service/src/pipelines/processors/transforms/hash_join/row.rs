@@ -65,7 +65,6 @@ impl RowSpace {
         build_columns: &[ColumnVec],
         build_columns_data_type: &[DataType],
         num_rows: &usize,
-        string_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Result<DataBlock> {
         if *num_rows != 0 {
             let data_block = DataBlock::take_column_vec(
@@ -73,7 +72,6 @@ impl RowSpace {
                 build_columns_data_type,
                 row_ptrs,
                 row_ptrs.len(),
-                string_items_buf,
             );
             Ok(data_block)
         } else {
@@ -84,6 +82,6 @@ impl RowSpace {
     pub fn reset(&self) {
         let mut buffer = self.buffer.write();
         buffer.clear();
-        self.buffer_row_size.store(0, Ordering::Relaxed);
+        self.buffer_row_size.store(0, Ordering::Release);
     }
 }

@@ -28,7 +28,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
-use databend_common_storages_fuse::io::SegmentWriter;
+use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterMode;
 use databend_common_storages_fuse::operations::ReclusterMutator;
@@ -36,6 +36,7 @@ use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_common_storages_fuse::FuseBlockPartInfo;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
@@ -60,7 +61,6 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
 
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
-    let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
 
     let cluster_key_id = 0;
     let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
@@ -88,7 +88,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         );
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
-        Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
+        let segment_location = location_generator.gen_segment_info_location();
+        segment
+            .write_meta(&data_accessor, &segment_location)
+            .await?;
+        Ok::<_, ErrorCode>(((segment_location, SegmentInfo::VERSION), location))
     };
 
     let mut test_segment_locations = vec![];
@@ -136,6 +140,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         schema.clone(),
         data_accessor.clone(),
         &None,
+        FuseStorageFormat::Parquet,
         segment_locations,
     )
     .await?;
@@ -252,7 +257,6 @@ async fn test_safety_for_recluster() -> Result<()> {
             summary,
             locations.clone(),
             None,
-            None,
         ));
 
         let mut block_ids = HashSet::new();
@@ -269,6 +273,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             schema.clone(),
             data_accessor.clone(),
             &None,
+            FuseStorageFormat::Parquet,
             segment_locations,
         )
         .await?;

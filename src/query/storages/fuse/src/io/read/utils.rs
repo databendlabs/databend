@@ -14,11 +14,11 @@
 
 use std::collections::HashMap;
 
-use databend_common_arrow::parquet::metadata::RowGroupMetaData;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
+use parquet::file::metadata::RowGroupMetaData;
 
-pub(crate) fn build_columns_meta(row_group: &RowGroupMetaData) -> HashMap<u32, ColumnMeta> {
+pub fn build_columns_meta(row_group: &RowGroupMetaData) -> HashMap<u32, ColumnMeta> {
     let mut columns_meta = HashMap::with_capacity(row_group.columns().len());
     for (index, c) in row_group.columns().iter().enumerate() {
         let (offset, len) = c.byte_range();

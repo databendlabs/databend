@@ -39,7 +39,6 @@ use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
-use crate::plans::MaterializedCte;
 use crate::plans::MutationSource;
 use crate::plans::RelOperator;
 use crate::plans::SubqueryExpr;
@@ -93,7 +92,7 @@ impl MutationExpression {
                 mutation_strategy,
             } => {
                 // Bind source table reference.
-                let (mut source_s_expr, mut source_context) =
+                let (source_s_expr, mut source_context) =
                     binder.bind_table_reference(bind_context, source)?;
 
                 // Bind target table reference.
@@ -119,9 +118,6 @@ impl MutationExpression {
                 for column_index in source_context.column_set().iter() {
                     required_columns.insert(*column_index);
                 }
-
-                // Wrap `LogicalMaterializedCte` to `source_expr`.
-                source_s_expr = binder.wrap_cte(source_s_expr);
 
                 // When there is "update *" or "insert *", prepare all source columns.
                 let all_source_columns = Self::all_source_columns(
@@ -285,8 +281,7 @@ impl MutationExpression {
                         Arc::new(s_expr),
                     );
 
-                    let mut rewriter =
-                        SubqueryRewriter::new(binder.ctx.clone(), binder.metadata.clone(), None);
+                    let mut rewriter = SubqueryRewriter::new(binder.metadata.clone(), None);
                     let s_expr = rewriter.rewrite(&s_expr)?;
 
                     Ok(MutationExpressionBindResult {
@@ -444,25 +439,6 @@ impl Binder {
         Ok(row_id_index)
     }
 
-    fn wrap_cte(&mut self, mut s_expr: SExpr) -> SExpr {
-        for (_, cte_info) in self.ctes_map.iter().rev() {
-            if !cte_info.materialized || cte_info.used_count == 0 {
-                continue;
-            }
-            let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-            let left_output_columns = cte_info.columns.clone();
-            s_expr = SExpr::create_binary(
-                Arc::new(RelOperator::MaterializedCte(MaterializedCte {
-                    left_output_columns,
-                    cte_idx: cte_info.cte_idx,
-                })),
-                Arc::new(cte_s_expr.clone()),
-                Arc::new(s_expr),
-            );
-        }
-        s_expr
-    }
-
     // Recursively flatten the AND expressions.
     pub fn flatten_and_scalar_expr(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
         if let ScalarExpr::FunctionCall(func) = scalar
@@ -489,8 +465,6 @@ impl Binder {
                 &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
-                self.m_cte_bound_ctx.clone(),
-                self.ctes_map.clone(),
             );
             let (scalar, _) = scalar_binder.bind(expr)?;
             if !self.check_allowed_scalar_expr_with_subquery(&scalar)? {

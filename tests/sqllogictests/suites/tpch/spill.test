@@ -1,0 +1,452 @@
+# TPC-H spill test
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpch_test;
+
+statement ok
+set join_spilling_memory_ratio = 1;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 1;
+
+statement ok
+set sort_spilling_memory_ratio = 1;
+
+statement ok
+set sort_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
+set window_partition_spilling_memory_ratio = 1;
+
+statement ok
+set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
+
+statement ok
+set window_partition_spilling_bytes_threshold_per_proc = 1;
+
+statement ok
+set aggregate_spilling_memory_ratio = 1;
+
+statement ok
+set aggregate_spilling_bytes_threshold_per_proc = 1;
+
+# TPC-H TEST
+include ./queries.test
+
+# CROSS JOIN
+query I
+SELECT    count(*),
+          sum(p_size),
+          sum(l_linenumber) > 30000000 -- cross join may have different order
+FROM      (
+          SELECT    *
+          FROM      lineitem,
+                    part
+          LIMIT     10000000
+          );
+----
+10000000 253667500 1
+
+
+# INNER JOIN
+query I
+SELECT    c_name,
+          c_custkey,
+          o_orderkey,
+          o_orderdate,
+          o_totalprice,
+          sum(l_quantity)
+FROM      customer,
+          orders,
+          lineitem
+WHERE     o_orderkey IN (
+          SELECT    l_orderkey
+          FROM      lineitem
+          GROUP BY  l_orderkey
+          HAVING    sum(l_quantity) > 300
+          ) AND
+          c_custkey=o_custkey AND
+          o_orderkey=l_orderkey
+GROUP BY  c_name,
+          c_custkey,
+          o_orderkey,
+          o_orderdate,
+          o_totalprice
+ORDER BY  o_totalprice DESC,
+          o_orderdate;
+----
+Customer#000001639 1639 502886 1994-04-12 456423.88 312.00
+Customer#000006655 6655 29158 1995-10-21 452805.02 305.00
+Customer#000014110 14110 565574 1995-09-24 425099.85 301.00
+Customer#000001775 1775 6882 1997-04-09 408368.10 303.00
+Customer#000011459 11459 551136 1993-05-19 386812.74 308.00
+
+
+# LEFT OUTER JOIN
+query I
+SELECT
+  c_count,
+  count(*) AS custdist
+FROM
+  (
+    SELECT
+      c_custkey,
+      count(o_orderkey) AS c_count
+    FROM
+      customer
+      RIGHT OUTER JOIN orders ON c_custkey = o_custkey
+      AND o_comment NOT LIKE '%pending%deposits%'
+    GROUP BY
+      c_custkey
+  ) c_orders
+GROUP BY
+  c_count
+ORDER BY
+  custdist DESC,
+  c_count DESC;
+----
+10 676
+9 651
+11 618
+12 554
+8 548
+13 514
+7 487
+19 485
+18 461
+14 454
+20 444
+16 442
+17 438
+15 430
+21 396
+22 378
+6 355
+23 322
+24 262
+25 188
+5 184
+26 162
+27 138
+28 103
+4 92
+29 59
+3 49
+30 29
+31 26
+32 19
+2 12
+33 8
+34 7
+35 5
+1 3
+1595 1
+36 1
+
+
+# LEFT SEMI JOIN
+query I
+select
+    sum(o_orderkey)
+from
+    orders
+where
+        o_orderkey in (
+        select
+            l_orderkey
+        from
+            lineitem
+        where
+                lineitem.l_receiptdate > lineitem.l_commitdate
+        );
+----
+41255300955
+
+
+# LEFT ANTI JOIN
+query I
+select
+    sum(o_orderkey)
+from
+    orders
+where not exists
+        (
+        select
+            *
+        from
+            lineitem
+        where
+          lineitem.l_orderkey = orders.o_orderkey and
+                lineitem.l_receiptdate > lineitem.l_commitdate
+        );
+----
+3743424045
+
+
+# LEFT MARK JOIN
+query I
+select
+    sum(l_orderkey)
+from
+    lineitem
+where lineitem.l_receiptdate > lineitem.l_commitdate and
+        l_orderkey not in (
+        select
+            o_orderkey
+        from
+            orders
+            where o_orderkey % 3 != 0
+        );
+----
+37938282612
+
+
+# RIGHT OUTER JOIN
+query I
+SELECT
+  c_count,
+  count(*) AS custdist
+FROM
+  (
+    SELECT
+      c_custkey,
+      count(o_orderkey) AS c_count
+    FROM
+      customer
+      LEFT OUTER JOIN orders ON c_custkey = o_custkey
+      AND o_comment NOT LIKE '%pending%deposits%'
+    GROUP BY
+      c_custkey
+  ) c_orders
+GROUP BY
+  c_count
+ORDER BY
+  custdist DESC,
+  c_count DESC;
+----
+0 5000
+10 676
+9 651
+11 618
+12 554
+8 548
+13 514
+7 487
+19 485
+18 461
+14 454
+20 444
+16 442
+17 438
+15 430
+21 396
+22 378
+6 355
+23 322
+24 262
+25 188
+5 184
+26 162
+27 138
+28 103
+4 92
+29 59
+3 49
+30 29
+31 26
+32 19
+2 12
+33 8
+34 7
+35 5
+1 3
+36 1
+
+
+# RIGHT SEMI JOIN
+query I
+select
+  sum(numwait)
+from
+  (
+    select
+      s_name,
+      truncate(
+        count(*),
+        4
+      ) as numwait
+    from
+      supplier,
+      lineitem l1,
+      orders
+    where
+      s_suppkey = l1.l_suppkey
+      and o_orderkey = l1.l_orderkey
+      and o_orderstatus = 'F'
+      and l1.l_receiptdate > l1.l_commitdate
+      and exists (
+        select
+          *
+        from
+          lineitem l2
+        where
+          l2.l_orderkey = l1.l_orderkey
+          and l2.l_suppkey <> l1.l_suppkey
+      )
+    group by
+      s_name
+    order by
+      numwait desc,
+      s_name
+  );
+----
+176271.0
+
+
+# RIGHT ANTI JOIN
+query I
+select
+  sum(numwait)
+from
+  (
+    select
+      s_name,
+      truncate(
+        count(*),
+        4
+      ) as numwait
+    from
+      supplier,
+      lineitem l1,
+      orders
+    where
+      s_suppkey = l1.l_suppkey
+      and o_orderkey = l1.l_orderkey
+      and o_orderstatus = 'F'
+      and l1.l_receiptdate > l1.l_commitdate
+      and not exists (
+        select
+          *
+        from
+          lineitem l3
+        where
+          l3.l_orderkey = l1.l_orderkey
+          and l3.l_suppkey <> l1.l_suppkey
+          and l3.l_receiptdate > l3.l_commitdate
+      )
+    group by
+      s_name
+    order by
+      numwait desc,
+      s_name
+  );
+----
+16532.0
+
+
+# RIGHT MARK JOIN
+query I
+select
+    sum(o_orderkey)
+from
+    orders
+where
+        o_orderkey not in (
+        select
+            l_orderkey
+        from
+            lineitem
+        where
+                lineitem.l_receiptdate > lineitem.l_commitdate
+        );
+----
+3743424045
+
+
+# FULL OUTER JOIN
+query I
+SELECT    c_count,
+          count(*) AS custdist
+FROM      (
+          SELECT    c_custkey,
+                    count(o_orderkey) AS c_count
+          FROM      customer
+          FULL      OUTER JOIN orders ON c_custkey=o_custkey AND
+                    o_comment NOT LIKE '%pending%deposits%'
+          GROUP BY  c_custkey
+          ) c_orders
+GROUP BY  c_count
+ORDER BY  custdist DESC,
+          c_count DESC;
+----
+0 5000
+10 676
+9 651
+11 618
+12 554
+8 548
+13 514
+7 487
+19 485
+18 461
+14 454
+20 444
+16 442
+17 438
+15 430
+21 396
+22 378
+6 355
+23 322
+24 262
+25 188
+5 184
+26 162
+27 138
+28 103
+4 92
+29 59
+3 49
+30 29
+31 26
+32 19
+2 12
+33 8
+34 7
+35 5
+1 3
+1595 1
+36 1
+
+
+statement ok
+set join_spilling_memory_ratio = 60;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 0;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 512;
+
+statement ok
+set sort_spilling_memory_ratio = 60;
+
+statement ok
+set sort_spilling_bytes_threshold_per_proc = 0;
+
+statement ok
+set window_partition_spilling_memory_ratio = 60;
+
+statement ok
+set window_partition_spilling_bytes_threshold_per_proc = 0;
+
+statement ok
+set aggregate_spilling_memory_ratio = 60;
+
+statement ok
+set aggregate_spilling_bytes_threshold_per_proc = 0;

@@ -1,0 +1,106 @@
+name: "Pack Binary"
+description: "Pack releases binaries"
+inputs:
+  target:
+    description: "Release target"
+    required: true
+  category:
+    description: "Release default/hdfs/udf/testsuite"
+    required: false
+    default: default
+  version:
+    description: "Release version"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        category: ${{ inputs.category }}
+        path: distro/bin
+        artifacts: metactl,meta,query,query.debug
+    - name: Get Latest BendSQL
+      id: bendsql
+      uses: pozetroninc/github-action-get-latest-release@master
+      with:
+        repository: databendlabs/bendsql
+    - name: Download BendSQL
+      shell: bash
+      run: |
+        curl -sSLfo /tmp/bendsql.tar.gz https://github.com/databendlabs/bendsql/releases/download/${{ steps.bendsql.outputs.release }}/bendsql-${{ inputs.target }}.tar.gz
+        mkdir -p distro/bin
+        tar -xzvf /tmp/bendsql.tar.gz -C distro/bin
+    - name: Pack Binaries
+      id: pack_binaries
+      shell: bash
+      run: |
+        target=${{ inputs.target }}
+        version=${{ inputs.version }}
+        case ${{ inputs.category }} in
+          default)
+            pkg_name="databend-${version}-${target}"
+            ;;
+          *)
+          pkg_name="databend-${{ inputs.category }}-${version}-${target}"
+            ;;
+        esac
+        mkdir -p distro/{bin,configs,systemd,scripts}
+        cp ./scripts/distribution/systemd/databend-* distro/systemd/
+        cp ./scripts/distribution/configs/databend-* distro/configs/
+        cp ./scripts/distribution/release-readme.txt distro/readme.txt
+        cp -r ./scripts/distribution/local-scripts/* distro/scripts/
+        cp -r ./scripts/distribution/package-scripts/* distro/scripts/
+        tar -C ./distro --exclude='*.debug' -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
+        sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
+        echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
+    - name: post sha256
+      uses: actions/upload-artifact@v4
+      with:
+        name: sha256sums-${{ inputs.category }}-${{ inputs.target }}
+        path: sha256-${{ steps.pack_binaries.outputs.pkg_name }}.txt
+        retention-days: 1
+    - name: post binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.pack_binaries.outputs.pkg_name }}.tar.gz
+        path: ${{ steps.pack_binaries.outputs.pkg_name }}.tar.gz
+        retention-days: 1
+    - name: Pack DBG Binaries
+      id: pack_dbg_binaries
+      shell: bash
+      run: |
+        target=${{ inputs.target }}
+        version=${{ inputs.version }}
+        case ${{ inputs.category }} in
+          default)
+            pkg_name="databend-${version}-${target}-dbg"
+            ;;
+          *)
+          pkg_name="databend-${{ inputs.category }}-${version}-${target}-dbg"
+            ;;
+        esac
+        mkdir -p distro/{bin,configs,systemd,scripts}
+        cp ./scripts/distribution/systemd/databend-* distro/systemd/
+        cp ./scripts/distribution/configs/databend-* distro/configs/
+        cp ./scripts/distribution/release-readme.txt distro/readme.txt
+        cp -r ./scripts/distribution/local-scripts/* distro/scripts/
+        cp -r ./scripts/distribution/package-scripts/* distro/scripts/
+        tar -C ./distro -czvf ${pkg_name}.tar.gz bin configs systemd scripts readme.txt
+        sha256sum ${pkg_name}.tar.gz >> sha256-${pkg_name}.txt
+        echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
+    - name: post dbg sha256
+      uses: actions/upload-artifact@v4
+      with:
+        name: sha256sums-${{ inputs.category }}-${{ inputs.target }}-gdb
+        path: sha256-${{ steps.pack_dbg_binaries.outputs.pkg_name }}.txt
+        retention-days: 1
+    - name: post dbg binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.pack_dbg_binaries.outputs.pkg_name }}.tar.gz
+        path: ${{ steps.pack_dbg_binaries.outputs.pkg_name }}.tar.gz
+        retention-days: 1

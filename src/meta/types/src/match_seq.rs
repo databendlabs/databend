@@ -18,8 +18,9 @@ use std::fmt::Formatter;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::protobuf as pb;
+use crate::seq_value::SeqV;
 use crate::ConflictSeq;
-use crate::SeqV;
 
 /// Describes what `seq` an operation must match to take effect.
 /// Every value written to meta data has a unique `seq` bound.
@@ -68,6 +69,13 @@ impl<U> MatchSeqExt<&Option<SeqV<U>>> for MatchSeq {
     }
 }
 
+impl MatchSeqExt<&Option<pb::SeqV>> for MatchSeq {
+    fn match_seq(&self, sv: &Option<pb::SeqV>) -> Result<(), ConflictSeq> {
+        let seq = sv.as_ref().map_or(0, |sv| sv.seq);
+        self.match_seq(seq)
+    }
+}
+
 impl<U> MatchSeqExt<&SeqV<U>> for MatchSeq {
     fn match_seq(&self, sv: &SeqV<U>) -> Result<(), ConflictSeq> {
         let seq = sv.seq;
@@ -92,10 +100,10 @@ impl MatchSeqExt<u64> for MatchSeq {
 #[cfg(test)]
 mod tests {
 
+    use crate::seq_value::SeqV;
     use crate::ConflictSeq;
     use crate::MatchSeq;
     use crate::MatchSeqExt;
-    use crate::SeqV;
 
     #[derive(serde::Serialize)]
     struct Foo {

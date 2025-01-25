@@ -1,0 +1,13 @@
+>>>> create or replace database test_fuse_time_travel_size
+>>>> create table test_fuse_time_travel_size.t(c int) 'fs:///tmp/test_fuse_time_travel_size/'
+>>>> insert into test_fuse_time_travel_size.t values (1),(2)
+2
+Size difference is less than 10 bytes
+>>>> alter table test_fuse_time_travel_size.t SET OPTIONS (data_retention_period_in_hours = 240);
+>>>> drop table test_fuse_time_travel_size.t
+>>>> select is_dropped from fuse_time_travel_size('test_fuse_time_travel_size')
+true
+<<<<
+>>>> select data_retention_period_in_hours from fuse_time_travel_size('test_fuse_time_travel_size')
+240
+<<<<

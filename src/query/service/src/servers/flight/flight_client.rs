@@ -15,17 +15,17 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use arrow_flight::flight_service_client::FlightServiceClient;
+use arrow_flight::Action;
+use arrow_flight::FlightData;
+use arrow_flight::Ticket;
 use async_channel::Receiver;
 use async_channel::Sender;
-use databend_common_arrow::arrow_format::flight::data::Action;
-use databend_common_arrow::arrow_format::flight::data::FlightData;
-use databend_common_arrow::arrow_format::flight::data::Ticket;
-use databend_common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use databend_common_base::base::tokio::time::Duration;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::future::FutureExt;
 use fastrace::Span;
 use futures::StreamExt;
@@ -82,7 +82,7 @@ impl FlightClient {
         drop(message);
         let mut request =
             databend_common_tracing::inject_span_to_tonic_request(Request::new(Action {
-                body,
+                body: body.into(),
                 r#type: path.to_string(),
             }));
 
@@ -195,7 +195,7 @@ impl FlightClient {
                 tx.close();
             }
         }
-        .in_span(Span::enter_with_local_parent(full_name!()));
+        .in_span(Span::enter_with_local_parent(func_path!()));
 
         databend_common_base::runtime::spawn(fut);
 
@@ -248,11 +248,11 @@ impl FlightReceiver {
 }
 
 pub struct FlightSender {
-    tx: Sender<Result<FlightData, Status>>,
+    tx: Sender<std::result::Result<FlightData, Status>>,
 }
 
 impl FlightSender {
-    pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
+    pub fn create(tx: Sender<std::result::Result<FlightData, Status>>) -> FlightSender {
         FlightSender { tx }
     }
 
@@ -282,11 +282,13 @@ pub enum FlightExchange {
         notify: Arc<WatchNotify>,
         receiver: Receiver<Result<FlightData>>,
     },
-    Sender(Sender<Result<FlightData, Status>>),
+    Sender(Sender<std::result::Result<FlightData, Status>>),
 }
 
 impl FlightExchange {
-    pub fn create_sender(sender: Sender<Result<FlightData, Status>>) -> FlightExchange {
+    pub fn create_sender(
+        sender: Sender<std::result::Result<FlightData, Status>>,
+    ) -> FlightExchange {
         FlightExchange::Sender(sender)
     }
 

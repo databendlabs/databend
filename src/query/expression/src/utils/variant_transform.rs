@@ -33,6 +33,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         | DataType::EmptyMap
         | DataType::Boolean
         | DataType::Binary
+        | DataType::Interval
         | DataType::String
         | DataType::Number(_)
         | DataType::Decimal(_)
@@ -40,6 +41,7 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         | DataType::Date
         | DataType::Bitmap
         | DataType::Geometry
+        | DataType::Geography
         | DataType::Generic(_) => false,
         DataType::Nullable(ty) => contains_variant(ty.as_ref()),
         DataType::Array(ty) => contains_variant(ty.as_ref()),
@@ -76,11 +78,13 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
         | ScalarRef::Decimal(_)
         | ScalarRef::Timestamp(_)
         | ScalarRef::Date(_)
+        | ScalarRef::Interval(_)
         | ScalarRef::Boolean(_)
         | ScalarRef::Binary(_)
         | ScalarRef::String(_)
         | ScalarRef::Bitmap(_)
-        | ScalarRef::Geometry(_) => scalar.to_owned(),
+        | ScalarRef::Geometry(_)
+        | ScalarRef::Geography(_) => scalar.to_owned(),
         ScalarRef::Array(col) => Scalar::Array(transform_column(&col, decode)?),
         ScalarRef::Map(col) => Scalar::Map(transform_column(&col, decode)?),
         ScalarRef::Tuple(scalars) => {

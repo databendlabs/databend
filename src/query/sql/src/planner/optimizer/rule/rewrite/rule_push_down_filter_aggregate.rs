@@ -89,7 +89,11 @@ impl Rule for RulePushDownFilterAggregate {
             if predicate_used_columns.is_subset(&aggregate_child_prop.output_columns)
                 && predicate_used_columns.is_subset(&aggregate_group_columns)
             {
-                pushed_down_predicates.push(predicate);
+                pushed_down_predicates.push(predicate.clone());
+                // Keep full remaining_predicates cause grouping_sets exists
+                if aggregate.grouping_sets.is_some() {
+                    remaining_predicates.push(predicate);
+                }
             } else {
                 remaining_predicates.push(predicate)
             }
@@ -98,6 +102,7 @@ impl Rule for RulePushDownFilterAggregate {
             let pushed_down_filter = Filter {
                 predicates: pushed_down_predicates,
             };
+
             let mut result = if remaining_predicates.is_empty() {
                 SExpr::create_unary(
                     Arc::new(aggregate.into()),

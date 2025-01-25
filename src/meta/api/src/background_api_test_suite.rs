@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::background::BackgroundJobIdent;
@@ -127,13 +129,11 @@ impl BackgroundApiTestSuite {
 
         info!("--- create a background task");
         let create_on = Utc::now();
-        // expire after 5 secs
-        let expire_at = create_on + chrono::Duration::seconds(5);
         {
             let req = UpdateBackgroundTaskReq {
                 task_name: task_ident.clone(),
                 task_info: new_background_task(BackgroundTaskState::STARTED, create_on),
-                expire_at: expire_at.timestamp() as u64,
+                ttl: Duration::from_secs(5),
             };
 
             let res = mt.update_background_task(req).await;
@@ -155,7 +155,7 @@ impl BackgroundApiTestSuite {
             let req = UpdateBackgroundTaskReq {
                 task_name: task_ident.clone(),
                 task_info: new_background_task(BackgroundTaskState::DONE, create_on),
-                expire_at: expire_at.timestamp() as u64,
+                ttl: Duration::from_secs(5),
             };
 
             let res = mt.update_background_task(req).await;
@@ -180,10 +180,10 @@ impl BackgroundApiTestSuite {
             info!("update log res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.len(), "there is one task");
-            assert_eq!(task_id, res[0].1, "task name");
+            assert_eq!(task_id, res[0].0.name(), "task name");
             assert_eq!(
                 BackgroundTaskState::DONE,
-                res[0].2.task_state,
+                res[0].1.task_state,
                 "first state is done"
             );
         }
@@ -231,7 +231,7 @@ impl BackgroundApiTestSuite {
             let res = res.unwrap();
             assert_eq!(
                 BackgroundJobState::RUNNING,
-                res.info.job_status.unwrap().job_state,
+                res.info.data.job_status.unwrap().job_state,
                 "first state is started"
             );
         }
@@ -271,14 +271,13 @@ impl BackgroundApiTestSuite {
                 std::time::Duration::from_secs(3600),
                 res.info.job_params.as_ref().unwrap().scheduled_job_interval
             );
-            assert!(
-                res.info
-                    .job_params
-                    .as_ref()
-                    .unwrap()
-                    .manual_trigger_params
-                    .is_some()
-            );
+            assert!(res
+                .info
+                .job_params
+                .as_ref()
+                .unwrap()
+                .manual_trigger_params
+                .is_some());
             assert_eq!(
                 res.info
                     .job_params
@@ -320,7 +319,7 @@ impl BackgroundApiTestSuite {
             );
             assert_eq!(
                 Some("newid".to_string()),
-                res.info.job_status.unwrap().last_task_id
+                res.info.data.job_status.unwrap().last_task_id
             )
         }
 
@@ -332,15 +331,15 @@ impl BackgroundApiTestSuite {
             assert!(res.is_ok());
             let resp = res.unwrap();
             assert_eq!(1, resp.len());
-            assert_eq!(*job_ident.name(), resp[0].1, "expect same ident name");
+            assert_eq!(*job_ident.name(), resp[0].0, "expect same ident name");
             assert_eq!(
                 BackgroundJobState::FAILED,
-                resp[0].2.job_status.clone().unwrap().job_state,
+                resp[0].1.job_status.clone().unwrap().job_state,
                 "first state is started"
             );
             assert_eq!(
                 INTERVAL,
-                resp[0].2.job_params.clone().unwrap().job_type,
+                resp[0].1.job_params.clone().unwrap().job_type,
                 "first state is started"
             );
         }

@@ -65,4 +65,3 @@ Filter
 
 statement ok
 drop table t1 all
-

@@ -122,7 +122,7 @@ statement ok
 set hide_options_in_show_create_table=1
 
 statement ok
-CREATE TABLE "05_0003_at_t4" ( a string not null, b string null, c array(string) null, d tuple(string, string) null ) ENGINE=FUSE COMPRESSION='zstd' STORAGE_FORMAT='native'
+CREATE OR REPLACE TABLE "05_0003_at_t4" ( a string not null, b string null, c array(string) null, d tuple(string, string) null ) ENGINE=FUSE COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement ok
 INSERT INTO TABLE `05_0003_at_t4` values('a', 'b', ['c1', 'c2'], ('d1', 'd2'))
@@ -130,7 +130,7 @@ INSERT INTO TABLE `05_0003_at_t4` values('a', 'b', ['c1', 'c2'], ('d1', 'd2'))
 query TT
 SHOW CREATE TABLE `05_0003_at_t4`
 ----
-05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a VARCHAR NOT NULL, b VARCHAR NULL, c ARRAY(STRING) NULL, d TUPLE(1 STRING, 2 STRING) NULL ) ENGINE=FUSE
+05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a VARCHAR NOT NULL, b VARCHAR NULL, c ARRAY(VARCHAR NULL) NULL, d TUPLE(1 VARCHAR NULL, 2 VARCHAR NULL) NULL ) ENGINE=FUSE
 
 query TTTT
 SELECT * FROM `05_0003_at_t4`
@@ -152,9 +152,9 @@ ALTER TABLE `05_0003_at_t4` MODIFY COLUMN d tuple(binary, binary) null
 query TT
 SHOW CREATE TABLE `05_0003_at_t4`
 ----
-05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a BINARY NOT NULL, b BINARY NULL, c ARRAY(BINARY) NULL, d TUPLE(1 BINARY, 2 BINARY) NULL ) ENGINE=FUSE
+05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a BINARY NOT NULL, b BINARY NULL, c ARRAY(BINARY NULL) NULL, d TUPLE(1 BINARY NULL, 2 BINARY NULL) NULL ) ENGINE=FUSE
 
-query 
+query
 SELECT * FROM `05_0003_at_t4`
 ----
 61 62 [6331,6332] (6431,6432)
@@ -169,20 +169,46 @@ statement ok
 ALTER TABLE `05_0003_at_t4` MODIFY COLUMN c array(string) null
 
 statement ok
-ALTER TABLE `05_0003_at_t4` MODIFY COLUMN d tuple(string, string) null
+ALTER TABLE `05_0003_at_t4` MODIFY COLUMN d tuple(string, string, int) null
 
 query TT
 SHOW CREATE TABLE `05_0003_at_t4`
 ----
-05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a VARCHAR NOT NULL, b VARCHAR NULL, c ARRAY(STRING) NULL, d TUPLE(1 STRING, 2 STRING) NULL ) ENGINE=FUSE
+05_0003_at_t4 CREATE TABLE "05_0003_at_t4" ( a VARCHAR NOT NULL, b VARCHAR NULL, c ARRAY(VARCHAR NULL) NULL, d TUPLE(1 VARCHAR NULL, 2 VARCHAR NULL, 3 INT NULL) NULL ) ENGINE=FUSE
 
 query TTTT
 SELECT * FROM `05_0003_at_t4`
 ----
-a b ['c1','c2'] ('d1','d2')
+a b ['c1','c2'] ('d1','d2',NULL)
 
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t4`
+
+statement ok
+CREATE OR REPLACE TABLE "05_0003_at_t5" ( a int, b array(tuple(int, int, string))) ENGINE=FUSE
+
+statement ok
+INSERT INTO `05_0003_at_t5` VALUES(1, null),(2, [(1,2,'x'),(3,4,'y')]),(3, [(5,null,null),(6,null,'z')]);
+
+query IT
+SELECT * FROM `05_0003_at_t5`
+----
+1 NULL
+2 [(1,2,'x'),(3,4,'y')]
+3 [(5,NULL,NULL),(6,NULL,'z')]
+
+statement ok
+ALTER TABLE `05_0003_at_t5` MODIFY COLUMN b array(tuple(int, float64, string, string));
+
+query IT
+SELECT * FROM `05_0003_at_t5`
+----
+1 NULL
+2 [(1,2.0,'x',NULL),(3,4.0,'y',NULL)]
+3 [(5,NULL,NULL,NULL),(6,NULL,'z',NULL)]
+
+statement ok
+DROP TABLE IF EXISTS `05_0003_at_t5`
 
 statement ok
 drop table if exists t;
@@ -205,8 +231,8 @@ alter table t modify c1 varchar comment 'c1-column', c2 int comment 'test';
 query TTTTT
 select database,table,name,data_type,comment from system.columns where table='t' and database='default';
 ----
-default t c1 VARCHAR 'c1-column'
-default t c2 INT 'test'
+default t c1 VARCHAR c1-column
+default t c2 INT test
 
 statement ok
 alter table t comment='s1';
@@ -255,3 +281,27 @@ DROP TABLE IF EXISTS t;
 
 statement ok
 DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE OR REPLACE TABLE t1 (id VARCHAR NULL, size VARCHAR NULL, create_time int NULL, path VARCHAR NULL);
+
+statement ok
+CREATE OR REPLACE TABLE t1_random like t1 Engine = Random;
+
+statement ok
+INSERT INTO  t1 SELECT * FROM t1_random LIMIT 10;
+
+statement ok
+ALTER TABLE t1 DROP COLUMN size;
+
+statement ok
+ALTER TABLE t1 DROP COLUMN path;
+
+statement ok
+SELECT * FROM t1 WHERE create_time > 111113;
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+DROP TABLE IF EXISTS t1_random;

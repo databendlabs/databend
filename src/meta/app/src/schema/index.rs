@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -25,34 +26,6 @@ use crate::schema::IndexNameIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 use crate::KeyWithTenant;
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct IndexIdToName {
-    pub index_id: u64,
-}
-
-impl Display for IndexIdToName {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}", self.index_id)
-    }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct IndexId {
-    pub index_id: u64,
-}
-
-impl IndexId {
-    pub fn new(index_id: u64) -> IndexId {
-        IndexId { index_id }
-    }
-}
-
-impl Display for IndexId {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.index_id)
-    }
-}
 
 #[derive(
     serde::Serialize,
@@ -93,6 +66,18 @@ pub struct IndexMeta {
     // if true, index will create after data written to databend,
     // no need execute refresh index manually.
     pub sync_creation: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, num_derive::FromPrimitive)]
+pub enum MarkedDeletedIndexType {
+    AGGREGATING = 1,
+    INVERTED = 2,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarkedDeletedIndexMeta {
+    pub dropped_on: DateTime<Utc>,
+    pub index_type: MarkedDeletedIndexType,
 }
 
 impl Default for IndexMeta {
@@ -167,9 +152,6 @@ impl Display for DropIndexReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropIndexReply {}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetIndexReq {
     pub name_ident: IndexNameIdent,
@@ -186,20 +168,26 @@ impl Display for GetIndexReq {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetIndexReply {
     pub index_id: u64,
     pub index_meta: IndexMeta,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+/// Maps table_id to a vector of (index_id, marked_deleted_index_meta) pairs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GetMarkedDeletedIndexesReply {
+    pub table_indexes: HashMap<u64, Vec<(u64, MarkedDeletedIndexMeta)>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateIndexReq {
+    pub tenant: Tenant,
     pub index_id: u64,
-    pub index_name: String,
     pub index_meta: IndexMeta,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateIndexReply {}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -228,73 +216,6 @@ impl ListIndexesByIdReq {
         Self {
             tenant: tenant.to_tenant(),
             table_id,
-        }
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_common_meta_kvapi::kvapi;
-
-    use crate::schema::IndexId;
-    use crate::schema::IndexIdToName;
-    use crate::schema::IndexMeta;
-    use crate::schema::IndexNameIdentRaw;
-
-    impl kvapi::KeyCodec for IndexId {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.index_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let index_id = parser.next_u64()?;
-
-            Ok(Self { index_id })
-        }
-    }
-
-    /// "<prefix>/<index_id>"
-    impl kvapi::Key for IndexId {
-        const PREFIX: &'static str = "__fd_index_by_id";
-
-        type ValueType = IndexMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
-    }
-
-    impl kvapi::KeyCodec for IndexIdToName {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.index_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let index_id = parser.next_u64()?;
-
-            Ok(Self { index_id })
-        }
-    }
-
-    /// "<prefix>/<index_id> -> IndexNameIdentRaw"
-    impl kvapi::Key for IndexIdToName {
-        const PREFIX: &'static str = "__fd_index_id_to_name";
-
-        type ValueType = IndexNameIdentRaw;
-
-        fn parent(&self) -> Option<String> {
-            Some(IndexId::new(self.index_id).to_string_key())
-        }
-    }
-
-    impl kvapi::Value for IndexMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for IndexNameIdentRaw {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
         }
     }
 }

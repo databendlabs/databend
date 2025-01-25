@@ -1,4 +1,7 @@
 statement ok
+set ddl_column_type_nullable=0;
+
+statement ok
 create or replace table t2 as select number as b from numbers(10);
 
 statement ok
@@ -7,7 +10,7 @@ create or replace table t1 as select number as a from numbers(10);
 query T
 explain analyze partial select * from t1 join t2 on t1.a = t2.b;
 ----
-HashJoin
+HashJoin: INNER
 ├── estimated rows: 10.00
 ├── output rows: 10
 ├── TableScan
@@ -36,7 +39,7 @@ explain analyze partial select * from t1 join t2 on t1.a = t2.b  union all selec
 ----
 UnionAll
 ├── Left
-│   └── HashJoin
+│   └── HashJoin: INNER
 │       ├── estimated rows: 10.00
 │       ├── output rows: 10
 │       ├── TableScan
@@ -48,7 +51,7 @@ UnionAll
 │           ├── estimated rows: 10.00
 │           └── output rows: 10
 └── Right
-    └── HashJoin
+    └── HashJoin: INNER
         ├── estimated rows: 10.00
         ├── output rows: 10
         ├── TableScan
@@ -64,7 +67,7 @@ UnionAll
 query T
 explain analyze partial select * from t1 join t2 on t1.a = t2.b where t1.a > 1;
 ----
-HashJoin
+HashJoin: INNER
 ├── estimated rows: 8.00
 ├── output rows: 8
 ├── Filter
@@ -89,7 +92,7 @@ HashJoin
 query T
 explain analyze partial select * from t1 join t2 on t1.a = t2.b where t1.a > 10;
 ----
-HashJoin
+HashJoin: INNER
 ├── estimated rows: 0.00
 ├── Filter
 │   ├── filters: [t2.b (#1) > 10]
@@ -110,3 +113,6 @@ drop table t1;
 
 statement ok
 drop table t2;
+
+statement ok
+unset ddl_column_type_nullable;

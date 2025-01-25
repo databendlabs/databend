@@ -34,13 +34,12 @@ use databend_common_pipeline_core::FinishedCallbackChain;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_core::PlanProfile;
-use fastrace::full_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
 use log::warn;
-use log::LevelFilter;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
@@ -208,7 +207,9 @@ impl QueryPipelineExecutor {
         on_finished_chain.apply(info)
     }
 
-    pub fn finish(&self, cause: Option<ErrorCode>) {
+    pub fn finish<C>(&self, cause: Option<ErrorCode<C>>) {
+        let cause = cause.map(|err| err.with_context("pipeline executor finished"));
+
         let mut finished_error = self.finished_error.lock();
         if let Some(cause) = cause {
             // We only save the cause of the first error.
@@ -369,26 +370,12 @@ impl QueryPipelineExecutor {
                 }
             }
 
-            let span = Span::enter_with_local_parent(full_name!())
+            let span = Span::enter_with_local_parent(func_path!())
                 .with_property(|| ("thread_name", name.clone()));
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
                 let this_clone = this.clone();
-                let try_result = catch_unwind(move || -> Result<()> {
-                    match this_clone.execute_single_thread(thread_num) {
-                        Ok(_) => Ok(()),
-                        Err(cause) => {
-                            if log::max_level() == LevelFilter::Trace {
-                                Err(cause.add_message_back(format!(
-                                    " (while in processor thread {})",
-                                    thread_num
-                                )))
-                            } else {
-                                Err(cause)
-                            }
-                        }
-                    }
-                });
+                let try_result = catch_unwind(|| this_clone.execute_single_thread(thread_num));
 
                 // finish the pipeline executor when has error or panic
                 if let Err(cause) = try_result.flatten() {
@@ -475,7 +462,7 @@ impl QueryPipelineExecutor {
 impl Drop for QueryPipelineExecutor {
     fn drop(&mut self) {
         drop_guard(move || {
-            self.finish(None);
+            self.finish::<()>(None);
 
             let cause = match self.finished_error.lock().as_ref() {
                 Some(cause) => cause.clone(),

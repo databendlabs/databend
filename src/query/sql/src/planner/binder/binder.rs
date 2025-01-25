@@ -13,31 +13,43 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
 use chrono_tz::Tz;
-use databend_common_ast::ast::format_statement;
 use databend_common_ast::ast::Hint;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Settings;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
+use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
+use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
-use indexmap::IndexMap;
+use databend_common_meta_app::principal::StageInfo;
+use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
+use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
+use databend_common_storage::init_stage_operator;
+use databend_storages_common_io::Files;
+use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::table::is_stream_name;
+use log::error;
+use log::info;
 use log::warn;
 
 use super::Finder;
@@ -45,29 +57,29 @@ use crate::binder::bind_query::ExpressionScanContext;
 use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
-use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
+use crate::planner::query_executor::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DescConnectionPlan;
+use crate::plans::DescUserPlan;
 use crate::plans::DropConnectionPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUserPlan;
-use crate::plans::MaterializedCte;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowRolesPlan;
+use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
 use crate::BindContext;
 use crate::ColumnBinding;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
@@ -88,18 +100,17 @@ pub struct Binder {
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
-    // Save the bound context for materialized cte, the key is cte_idx
-    pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
-    pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
-    /// Use `IndexMap` because need to keep the insertion order
-    /// Then wrap materialized ctes to main plan.
-    pub ctes_map: Box<IndexMap<String, CteInfo>>,
     /// The `ExpressionScanContext` is used to store the information of
     /// expression scan and hash join build cache.
     pub expression_scan_context: ExpressionScanContext,
     /// For the recursive cte, the cte table name occurs in the recursive cte definition and main query
     /// if meet recursive cte table name in cte definition, set `bind_recursive_cte` true and treat it as `CteScan`.
     pub bind_recursive_cte: bool,
+    pub m_cte_table_name: HashMap<String, String>,
+
+    pub enable_result_cache: bool,
+
+    pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
 impl<'a> Binder {
@@ -110,23 +121,44 @@ impl<'a> Binder {
         metadata: MetadataRef,
     ) -> Self {
         let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+        let enable_result_cache = ctx
+            .get_settings()
+            .get_enable_query_result_cache()
+            .unwrap_or_default();
         Binder {
             ctx,
             dialect,
             catalogs,
             name_resolution_ctx,
             metadata,
-            m_cte_bound_ctx: Default::default(),
-            m_cte_bound_s_expr: Default::default(),
-            ctes_map: Box::default(),
             expression_scan_context: ExpressionScanContext::new(),
             bind_recursive_cte: false,
+            m_cte_table_name: HashMap::new(),
+            enable_result_cache,
+            subquery_executor: None,
         }
+    }
+
+    pub fn with_subquery_executor(
+        mut self,
+        subquery_executor: Option<Arc<dyn QueryExecutor>>,
+    ) -> Self {
+        self.subquery_executor = subquery_executor;
+        self
     }
 
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
+        if !stmt.allowed_in_multi_statement() {
+            execute_commit_statement(self.ctx.clone()).await?;
+        }
+        if !stmt.is_transaction_command() && self.ctx.txn_mgr().lock().is_fail() {
+            let err = ErrorCode::CurrentTransactionIsAborted(
+                "current transaction is aborted, commands ignored until end of transaction block",
+            );
+            return Err(err);
+        }
         let start = Instant::now();
         self.ctx.set_status_info("binding");
         let mut bind_context = BindContext::new();
@@ -149,25 +181,10 @@ impl<'a> Binder {
             Statement::Query(query) => {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query)?;
 
-                // Wrap `LogicalMaterializedCte` to `s_expr`
-                for (_, cte_info) in self.ctes_map.iter().rev() {
-                    if !cte_info.materialized || cte_info.used_count == 0 {
-                        continue;
-                    }
-                    let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
-                    let left_output_columns = cte_info.columns.clone();
-                    s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx })),
-                        Arc::new(cte_s_expr.clone()),
-                        Arc::new(s_expr),
-                    );
-                }
-
                 // Remove unused cache columns and join conditions and construct ExpressionScan's child.
                 (s_expr, _) = self.construct_expression_scan(&s_expr, self.metadata.clone())?;
-
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
-                    Some(format_statement(stmt.clone())?)
+                    Some(stmt.to_string())
                 } else {
                     None
                 };
@@ -181,13 +198,20 @@ impl<'a> Binder {
                 }
             }
 
+            Statement::StatementWithSettings { settings, stmt } => {
+                self.bind_statement_settings(bind_context, settings, stmt).await?
+            }
+
             Statement::Explain { query, options, kind } => {
                 self.bind_explain(bind_context, kind, options, query).await?
             }
 
-            Statement::ExplainAnalyze {partial, query } => {
+            Statement::ExplainAnalyze { partial, graphical, query } => {
+                if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = query.as_ref() {
+                    return Err(ErrorCode::SyntaxException("Invalid statement"));
+                }
                 let plan = self.bind_statement(bind_context, query).await?;
-                Plan::ExplainAnalyze { partial: *partial, plan: Box::new(plan) }
+                Plan::ExplainAnalyze { partial: *partial, graphical: *graphical, plan: Box::new(plan) }
             }
 
             Statement::ShowFunctions { show_options } => {
@@ -224,6 +248,7 @@ impl<'a> Binder {
             Statement::ShowProcessList { show_options } => self.bind_show_process_list(bind_context, show_options).await?,
             Statement::ShowEngines { show_options } => self.bind_show_engines(bind_context, show_options).await?,
             Statement::ShowSettings { show_options } => self.bind_show_settings(bind_context, show_options).await?,
+            Statement::ShowVariables { show_options } => self.bind_show_variables(bind_context, show_options).await?,
             Statement::ShowIndexes { show_options } => self.bind_show_indexes(bind_context, show_options).await?,
             Statement::ShowLocks(stmt) => self.bind_show_locks(bind_context, stmt).await?,
             // Catalogs
@@ -231,9 +256,16 @@ impl<'a> Binder {
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,
             Statement::CreateCatalog(stmt) => self.bind_create_catalog(stmt).await?,
             Statement::DropCatalog(stmt) => self.bind_drop_catalog(stmt).await?,
+            Statement::UseCatalog { catalog } => {
+                let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
+                Plan::UseCatalog(Box::new(UseCatalogPlan {
+                    catalog,
+                }))
+            }
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,
+            Statement::ShowDropDatabases(stmt) => self.bind_show_drop_databases(bind_context, stmt).await?,
             Statement::ShowCreateDatabase(stmt) => self.bind_show_create_database(stmt).await?,
             Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
@@ -271,10 +303,11 @@ impl<'a> Binder {
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
             // Dictionaries
-            Statement::CreateDictionary(_stmt) => todo!(),
-            Statement::DropDictionary(_stmt) => todo!(),
-            Statement::ShowCreateDictionary(_stmt) => todo!(),
-            Statement::ShowDictionaries { show_options: _ } => todo!(),
+            Statement::CreateDictionary(stmt) => self.bind_create_dictionary(stmt).await?,
+            Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
+            Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
+            Statement::ShowDictionaries(stmt) => self.bind_show_dictionaries(bind_context, stmt).await?,
+            Statement::RenameDictionary(stmt) => self.bind_rename_dictionary(stmt).await?,
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
@@ -303,8 +336,11 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone().into(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
+            Statement::DescribeUser { user } => Plan::DescUser(Box::new(DescUserPlan {
+                user: user.clone().into(),
+            })),
 
             // Roles
             Statement::ShowRoles => Plan::ShowRoles(Box::new(ShowRolesPlan {})),
@@ -318,9 +354,10 @@ impl<'a> Binder {
                     ));
                 }
                 Plan::CreateRole(Box::new(CreateRolePlan {
-                if_not_exists: *if_not_exists,
-                role_name: role_name.to_string(),
-            }))},
+                    if_not_exists: *if_not_exists,
+                    role_name: role_name.to_string(),
+                }))
+            }
             Statement::DropRole {
                 if_exists,
                 role_name,
@@ -352,9 +389,10 @@ impl<'a> Binder {
                     ));
                 }
                 Plan::DropStage(Box::new(DropStagePlan {
-                if_exists: *if_exists,
-                name: stage_name.clone(),
-            }))},
+                    if_exists: *if_exists,
+                    name: stage_name.clone(),
+                }))
+            }
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
@@ -419,7 +457,7 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: create_option.clone().into(),
                     name: name.clone(),
-                    file_format_params: FileFormatParams::try_from_reader( FileFormatOptionsReader::from_ast(file_format_options), false)?,
+                    file_format_params: FileFormatParams::try_from_reader(FileFormatOptionsReader::from_ast(file_format_options), false)?,
                 }))
             }
             Statement::DropFileFormat {
@@ -440,7 +478,7 @@ impl<'a> Binder {
             Statement::DescribeConnection(stmt) => Plan::DescConnection(Box::new(DescConnectionPlan {
                 name: stmt.name.to_string(),
             })),
-            Statement::ShowConnections(_) => Plan::ShowConnections(Box::new(ShowConnectionsPlan{})),
+            Statement::ShowConnections(_) => Plan::ShowConnections(Box::new(ShowConnectionsPlan {})),
 
             // UDFs
             Statement::CreateUDF(stmt) => self.bind_create_udf(stmt).await?,
@@ -453,13 +491,15 @@ impl<'a> Binder {
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
-            Statement::SetStmt {set_type, identifiers, values } => {
+            Statement::SetStmt { settings } => {
+                let Settings { set_type, identifiers, values } = settings;
                 self.bind_set(bind_context, *set_type, identifiers, values)
                     .await?
             }
 
-            Statement::UnSetStmt{unset_type, identifiers } => {
-                self.bind_unset(bind_context, *unset_type, identifiers)
+            Statement::UnSetStmt { settings } => {
+                let Settings { set_type, identifiers, .. } = settings;
+                self.bind_unset(bind_context, *set_type, identifiers)
                     .await?
             }
 
@@ -478,43 +518,6 @@ impl<'a> Binder {
                     .await?
             }
 
-            // share statements
-            Statement::CreateShareEndpoint(stmt) => {
-                self.bind_create_share_endpoint(stmt).await?
-            }
-            Statement::ShowShareEndpoint(stmt) => {
-                self.bind_show_share_endpoint(stmt).await?
-            }
-            Statement::DropShareEndpoint(stmt) => {
-                self.bind_drop_share_endpoint(stmt).await?
-            }
-            Statement::CreateShare(stmt) => {
-                self.bind_create_share(stmt).await?
-            }
-            Statement::DropShare(stmt) => {
-                self.bind_drop_share(stmt).await?
-            }
-            Statement::GrantShareObject(stmt) => {
-                self.bind_grant_share_object(stmt).await?
-            }
-            Statement::RevokeShareObject(stmt) => {
-                self.bind_revoke_share_object(stmt).await?
-            }
-            Statement::AlterShareTenants(stmt) => {
-                self.bind_alter_share_accounts(stmt).await?
-            }
-            Statement::DescShare(stmt) => {
-                self.bind_desc_share(stmt).await?
-            }
-            Statement::ShowShares(stmt) => {
-                self.bind_show_shares(stmt).await?
-            }
-            Statement::ShowObjectGrantPrivileges(stmt) => {
-                self.bind_show_object_grant_privileges(stmt).await?
-            }
-            Statement::ShowGrantsOfShare(stmt) => {
-                self.bind_show_grants_of_share(stmt).await?
-            }
             Statement::CreateDatamaskPolicy(stmt) => {
                 self.bind_create_data_mask_policy(stmt).await?
             }
@@ -551,7 +554,7 @@ impl<'a> Binder {
             Statement::DescPasswordPolicy(stmt) => {
                 self.bind_desc_password_policy(stmt).await?
             }
-            Statement::ShowPasswordPolicies{ show_options } => self.bind_show_password_policies(bind_context, show_options).await?,
+            Statement::ShowPasswordPolicies { show_options } => self.bind_show_password_policies(bind_context, show_options).await?,
             Statement::CreateTask(stmt) => {
                 self.bind_create_task(stmt).await?
             }
@@ -614,23 +617,75 @@ impl<'a> Binder {
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
             Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?,
-            Statement::SetPriority {priority, object_id} => {
+            Statement::SetPriority { priority, object_id } => {
                 self.bind_set_priority(priority, object_id).await?
-            },
+            }
             Statement::System(stmt) => self.bind_system(stmt).await?,
+            Statement::CreateProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_create_procedure(stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("CREATE PROCEDURE, set enable_experimental_procedure=1"));
+                }
+            }
+            Statement::DropProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_drop_procedure(stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("DROP PROCEDURE, set enable_experimental_procedure=1"));
+                }
+            }
+            Statement::ShowProcedures { show_options } => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_show_procedures(bind_context, show_options).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("SHOW PROCEDURES, set enable_experimental_procedure=1"));
+                }
+            }
+            Statement::DescProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_desc_procedure(stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
+                }
+            }
+            Statement::CallProcedure(stmt) => {
+                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                    self.bind_call_procedure(bind_context, stmt).await?
+                } else {
+                    return Err(ErrorCode::SyntaxException("CALL PROCEDURE, set enable_experimental_procedure=1"));
+                }
+            }
+            Statement::ShowOnlineNodes(v) => self.bind_show_online_nodes(v)?,
+            Statement::ShowWarehouses(v) => self.bind_show_warehouses(v)?,
+            Statement::UseWarehouse(v) => self.bind_use_warehouse(v)?,
+            Statement::DropWarehouse(v) => self.bind_drop_warehouse(v)?,
+            Statement::CreateWarehouse(v) => self.bind_create_warehouse(v)?,
+            Statement::RenameWarehouse(v) => self.bind_rename_warehouse(v)?,
+            Statement::ResumeWarehouse(v) => self.bind_resume_warehouse(v)?,
+            Statement::SuspendWarehouse(v) => self.bind_suspend_warehouse(v)?,
+            Statement::InspectWarehouse(v) => self.bind_inspect_warehouse(v)?,
+            Statement::AddWarehouseCluster(v) => self.bind_add_warehouse_cluster(v)?,
+            Statement::DropWarehouseCluster(v) => self.bind_drop_warehouse_cluster(v)?,
+            Statement::RenameWarehouseCluster(v) => self.bind_rename_warehouse_cluster(v)?,
+            Statement::AssignWarehouseNodes(v) => self.bind_assign_warehouse_nodes(v)?,
+            Statement::UnassignWarehouseNodes(v) => self.bind_unassign_warehouse_nodes(v)?,
         };
 
-        match plan.kind() {
-            QueryKind::Query { .. } | QueryKind::Explain { .. } => {}
+        match &plan {
+            Plan::Explain { .. }
+            | Plan::ExplainAnalyze { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. }
+            | Plan::Query { .. } => {}
+            Plan::CreateTable(plan)
+                if is_stream_name(&plan.table, self.ctx.get_id().replace("-", "").as_str()) => {}
             _ => {
-                let meta_data_guard = self.metadata.read();
-                let tables = meta_data_guard.tables();
-                for t in tables {
-                    if t.is_consume() {
-                        return Err(ErrorCode::SyntaxException(
-                            "WITH CONSUME only allowed in query",
-                        ));
-                    }
+                let consume_streams = self.ctx.get_consume_streams(true)?;
+                if !consume_streams.is_empty() {
+                    return Err(ErrorCode::SyntaxException(
+                        "WITH CONSUME only allowed in query",
+                    ));
                 }
             }
         }
@@ -682,16 +737,9 @@ impl<'a> Binder {
             }
         }
 
-        self.ctx.get_settings().set_batch_settings(&hint_settings)
-    }
-
-    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
-    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
-        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
-    }
-
-    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
-        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
+        self.ctx
+            .get_settings()
+            .set_batch_settings(&hint_settings, true)
     }
 
     pub fn set_bind_recursive_cte(&mut self, val: bool) {
@@ -906,5 +954,156 @@ impl<'a> Binder {
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
         Ok(finder.scalars().is_empty())
+    }
+
+    pub(crate) fn add_internal_column_into_expr(
+        &mut self,
+        bind_context: &mut BindContext,
+        s_expr: SExpr,
+    ) -> Result<SExpr> {
+        if bind_context.bound_internal_columns.is_empty() {
+            return Ok(s_expr);
+        }
+        // check inverted index license
+        if !bind_context.inverted_index_map.is_empty() {
+            LicenseManagerSwitch::instance()
+                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::InvertedIndex)?;
+        }
+        let bound_internal_columns = &bind_context.bound_internal_columns;
+        let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
+        let mut s_expr = s_expr;
+
+        let mut has_score = false;
+        let mut has_matched = false;
+        for column_id in bound_internal_columns.keys() {
+            if *column_id == SEARCH_SCORE_COLUMN_ID {
+                has_score = true;
+            } else if *column_id == SEARCH_MATCHED_COLUMN_ID {
+                has_matched = true;
+            }
+        }
+        if has_score && !has_matched {
+            return Err(ErrorCode::SemanticError(
+                "score function must run with match or query function".to_string(),
+            ));
+        }
+
+        for (table_index, column_index) in bound_internal_columns.values() {
+            let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
+                i.has_score = has_score;
+                i
+            });
+            s_expr = SExpr::add_internal_column_index(
+                &s_expr,
+                *table_index,
+                *column_index,
+                &inverted_index,
+            );
+        }
+        Ok(s_expr)
+    }
+}
+
+struct ClearTxnManagerGuard(TxnManagerRef);
+
+impl Drop for ClearTxnManagerGuard {
+    fn drop(&mut self) {
+        self.0.lock().clear();
+    }
+}
+
+pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> {
+    // After commit statement, current session should be in auto commit mode, no matter update meta success or not.
+    // Use this guard to clear txn manager before return.
+    let _guard = ClearTxnManagerGuard(ctx.txn_mgr().clone());
+    let is_active = ctx.txn_mgr().lock().is_active();
+    if is_active {
+        let catalog = ctx.get_default_catalog()?;
+
+        let req = ctx.txn_mgr().lock().req();
+
+        let update_summary = {
+            let table_descriptions = req
+                .update_table_metas
+                .iter()
+                .map(|(req, _)| (req.table_id, req.seq, req.new_table_meta.engine.clone()))
+                .collect::<Vec<_>>();
+            let stream_descriptions = req
+                .update_stream_metas
+                .iter()
+                .map(|s| (s.stream_id, s.seq, "stream"))
+                .collect::<Vec<_>>();
+            (table_descriptions, stream_descriptions)
+        };
+
+        let mismatched_tids = {
+            ctx.txn_mgr().lock().set_auto_commit();
+            let ret = catalog.retryable_update_multi_table_meta(req).await;
+            if let Err(ref e) = ret {
+                // other errors may occur, especially the version mismatch of streams,
+                // let's log it here for the convenience of diagnostics
+                error!(
+                    "Non-recoverable fault occurred during updating tables. {}",
+                    e
+                );
+            }
+            ret?
+        };
+
+        match &mismatched_tids {
+            Ok(_) => {
+                info!(
+                    "COMMIT: Commit explicit transaction success, targets updated {:?}",
+                    update_summary
+                );
+            }
+            Err(e) => {
+                let err_msg = format!(
+                    "Due to concurrent transactions, explicit transaction commit failed. Conflicting table IDs: {:?}",
+                    e.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
+                );
+                info!(
+                    "Due to concurrent transactions, explicit transaction commit failed. Conflicting table IDs: {:?}",
+                    e
+                );
+                return Err(ErrorCode::TableVersionMismatched(err_msg));
+            }
+        }
+        let need_purge_files = ctx.txn_mgr().lock().need_purge_files();
+        for (stage_info, files) in need_purge_files {
+            try_purge_files(ctx.clone(), &stage_info, &files).await;
+        }
+    }
+    Ok(())
+}
+
+#[async_backtrace::framed]
+async fn try_purge_files(ctx: Arc<dyn TableContext>, stage_info: &StageInfo, files: &[String]) {
+    let start = Instant::now();
+    let op = init_stage_operator(stage_info);
+
+    match op {
+        Ok(op) => {
+            let file_op = Files::create(ctx, op);
+            if let Err(e) = file_op.remove_file_in_batch(files).await {
+                error!("Failed to delete file: {:?}, error: {}", files, e);
+            }
+        }
+        Err(e) => {
+            error!("Failed to get stage table op, error: {}", e);
+        }
+    }
+
+    let elapsed = start.elapsed();
+    info!(
+        "purged files: number {}, time used {:?} ",
+        files.len(),
+        elapsed
+    );
+
+    // Perf.
+    {
+        metrics_inc_copy_purge_files_counter(files.len() as u32);
+        metrics_inc_copy_purge_files_cost_milliseconds(elapsed.as_millis() as u32);
     }
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-const MAX_ARGS: usize = 5;
+const MAX_ARGS: usize = 4;
 
 use std::fmt::Write as _;
 use std::fs::File;
@@ -42,8 +42,8 @@ pub fn codegen_register() {
             use crate::types::nullable::NullableColumn;
             use crate::types::nullable::NullableDomain;
             use crate::types::*;
+            use crate::register_vectorize::*;
             use crate::values::Value;
-            use crate::values::ValueRef;
         "
     )
     .unwrap();
@@ -104,7 +104,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let arg_sig_type = (0..n_args)
             .map(|n| n + 1)
@@ -205,7 +205,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let arg_sig_type = (0..n_args)
             .map(|n| n + 1)
@@ -310,7 +310,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let arg_sig_type = (0..n_args)
             .map(|n| n + 1)
@@ -350,415 +350,6 @@ pub fn codegen_register() {
         .unwrap();
     }
     writeln!(source, "}}").unwrap();
-
-    // Write `vectorize_x_arg`.
-    for n_args in 1..=MAX_ARGS {
-        let arg_generics_bound = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("I{n}: ArgType, "))
-            .join("");
-        let arg_input_closure_sig = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("I{n}::ScalarRef<'_>, "))
-            .join("");
-        let arg_output_closure_sig = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef<I{n}>, "))
-            .join("");
-        let func_args = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("arg{n}, "))
-            .join("");
-        let args_tuple = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("arg{n}"))
-            .join(", ");
-        let arg_scalar = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(arg{n})"))
-            .join(", ");
-        let match_arms = (1..(1 << n_args))
-            .map(|idx| {
-                let columns = (0..n_args)
-                    .filter(|n| idx & (1 << n) != 0)
-                    .collect::<Vec<_>>();
-                let arm_pat = (0..n_args)
-                    .map(|n| {
-                        if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{})", n + 1)
-                        } else {
-                            format!("ValueRef::Scalar(arg{})", n + 1)
-                        }
-                    })
-                    .join(", ");
-                let arg_iter = (0..n_args)
-                    .filter(|n| columns.contains(n))
-                    .map(|n| n + 1)
-                    .map(|n| format!("let arg{n}_iter = I{n}::iter_column(&arg{n});"))
-                    .join("");
-                let zipped_iter = columns
-                    .iter()
-                    .map(|n| format!("arg{}_iter", n + 1))
-                    .reduce(|acc, item| format!("{acc}.zip({item})"))
-                    .unwrap();
-                let col_arg = columns
-                    .iter()
-                    .map(|n| format!("arg{}", n + 1))
-                    .reduce(|acc, item| format!("({acc}, {item})"))
-                    .unwrap();
-                let func_arg = (0..n_args)
-                    .map(|n| {
-                        if columns.contains(&n) {
-                            format!("arg{}, ", n + 1)
-                        } else {
-                            format!("arg{}.clone(), ", n + 1)
-                        }
-                    })
-                    .join("");
-
-                format!(
-                    "({arm_pat}) => {{
-                        let generics = &(ctx.generics.to_owned());
-                        {arg_iter}
-                        let iter = {zipped_iter}.map(|{col_arg}| func({func_arg} ctx));
-                        let col = O::column_from_iter(iter, generics);
-                        Value::Column(col)
-                    }}"
-                )
-            })
-            .join("");
-        writeln!(
-            source,
-            "
-                pub fn vectorize_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_input_closure_sig} &mut EvalContext) -> O::Scalar + Copy + Send + Sync,
-                ) -> impl Fn({arg_output_closure_sig} &mut EvalContext) -> Value<O> + Copy + Send + Sync {{
-                    move |{func_args} ctx| match ({args_tuple}) {{
-                        ({arg_scalar}) => Value::Scalar(func({func_args} ctx)),
-                        {match_arms}
-                    }}
-                }}
-            "
-        )
-        .unwrap();
-    }
-
-    // Write `vectorize_with_builder_x_arg`.
-    for n_args in 1..=MAX_ARGS {
-        let arg_generics_bound = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("I{n}: ArgType, "))
-            .join("");
-        let arg_input_closure_sig = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("I{n}::ScalarRef<'_>, "))
-            .join("");
-        let arg_output_closure_sig = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef<I{n}>, "))
-            .join("");
-        let func_args = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("arg{n}, "))
-            .join("");
-        let args_tuple = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("arg{n}"))
-            .join(", ");
-        let arg_scalar = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(arg{n})"))
-            .join(", ");
-        let match_arms = (1..(1 << n_args))
-            .map(|idx| {
-                let columns = (0..n_args)
-                    .filter(|n| idx & (1 << n) != 0)
-                    .collect::<Vec<_>>();
-                let arm_pat = (0..n_args)
-                    .map(|n| {
-                        if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{})", n + 1)
-                        } else {
-                            format!("ValueRef::Scalar(arg{})", n + 1)
-                        }
-                    })
-                    .join(", ");
-                let arg_iter = (0..n_args)
-                    .filter(|n| columns.contains(n))
-                    .map(|n| n + 1)
-                    .map(|n| format!("let arg{n}_iter = I{n}::iter_column(&arg{n});"))
-                    .join("");
-                let zipped_iter = columns
-                    .iter()
-                    .map(|n| format!("arg{}_iter", n + 1))
-                    .reduce(|acc, item| format!("{acc}.zip({item})"))
-                    .unwrap();
-                let col_arg = columns
-                    .iter()
-                    .map(|n| format!("arg{}", n + 1))
-                    .reduce(|acc, item| format!("({acc}, {item})"))
-                    .unwrap();
-                let func_arg = (0..n_args)
-                    .map(|n| {
-                        if columns.contains(&n) {
-                            format!("arg{}, ", n + 1)
-                        } else {
-                            format!("arg{}.clone(), ", n + 1)
-                        }
-                    })
-                    .join("");
-
-                format!(
-                    "({arm_pat}) => {{
-                        let generics = &(ctx.generics.to_owned());
-                        {arg_iter}
-                        let iter = {zipped_iter};
-                        let mut builder = O::create_builder(iter.size_hint().0, generics);
-                        for {col_arg} in iter {{
-                            func({func_arg} &mut builder, ctx);
-                        }}
-                        Value::Column(O::build_column(builder))
-                    }}"
-                )
-            })
-            .join("");
-        writeln!(
-            source,
-            "
-                pub fn vectorize_with_builder_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_input_closure_sig} &mut O::ColumnBuilder, &mut EvalContext) + Copy + Send + Sync,
-                ) -> impl Fn({arg_output_closure_sig} &mut EvalContext) -> Value<O> + Copy + Send + Sync {{
-                    move |{func_args} ctx| match ({args_tuple}) {{
-                        ({arg_scalar}) => {{
-                            let generics = &(ctx.generics.to_owned());
-                            let mut builder = O::create_builder(1, generics);
-                            func({func_args} &mut builder, ctx);
-                            Value::Scalar(O::build_scalar(builder))
-                        }}
-                        {match_arms}
-                    }}
-                }}
-            "
-        )
-        .unwrap();
-    }
-
-    // Write `passthrough_nullable_x_arg`.
-    for n_args in 1..=MAX_ARGS {
-        let arg_generics_bound = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("I{n}: ArgType, "))
-            .join("");
-        let arg_input_closure_sig = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
-            .join("");
-        let arg_output_closure_sig = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, NullableType<I{n}>>, "))
-            .join("");
-        let closure_args = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("arg{n}, "))
-            .join("");
-        let args_tuple = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("arg{n}"))
-            .join(", ");
-        let arg_scalar = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(Some(arg{n}))"))
-            .join(", ");
-        let scalar_func_args = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(arg{n}), "))
-            .join("");
-        let scalar_nones_pats = (0..n_args)
-            .map(|n| {
-                let pat = (0..n_args)
-                    .map(|nth| {
-                        if nth == n {
-                            "ValueRef::Scalar(None)"
-                        } else {
-                            "_"
-                        }
-                    })
-                    .join(",");
-                format!("({pat})")
-            })
-            .reduce(|acc, item| format!("{acc} | {item}"))
-            .unwrap();
-        let match_arms = (1..(1 << n_args))
-            .map(|idx| {
-                let columns = (0..n_args)
-                    .filter(|n| idx & (1 << n) != 0)
-                    .collect::<Vec<_>>();
-                let arm_pat = (0..n_args)
-                    .map(|n| {
-                        if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{})", n + 1)
-                        } else {
-                            format!("ValueRef::Scalar(Some(arg{}))", n + 1)
-                        }
-                    })
-                    .join(", ");
-                let and_validity = columns
-                    .iter()
-                    .map(|n| format!("arg{}.validity", n + 1))
-                    .reduce(|acc, item| {
-                        format!("common_arrow::arrow::bitmap::and(&{acc}, &{item})")
-                    })
-                    .unwrap();
-                let func_arg = (0..n_args)
-                    .map(|n| {
-                        if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{}.column), ", n + 1)
-                        } else {
-                            format!("ValueRef::Scalar(arg{}), ", n + 1)
-                        }
-                    })
-                    .join("");
-
-                format!(
-                    "({arm_pat}) => {{
-                        let and_validity = {and_validity};
-                        let validity = ctx.validity.as_ref().map(|valid| valid & (&and_validity)).unwrap_or(and_validity);
-                        ctx.validity = Some(validity.clone());
-                        let column = func({func_arg} ctx).into_column().unwrap();
-                        Value::Column(NullableColumn {{ column, validity }})
-                    }}"
-                )
-            })
-            .join("");
-        writeln!(
-            source,
-            "
-                pub fn passthrough_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl for <'a> Fn({arg_input_closure_sig} &mut EvalContext) -> Value<O> + Copy + Send + Sync,
-                ) -> impl for <'a> Fn({arg_output_closure_sig} &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync {{
-                    move |{closure_args} ctx| match ({args_tuple}) {{
-                        {scalar_nones_pats} => Value::Scalar(None),
-                        ({arg_scalar}) => Value::Scalar(Some(
-                            func({scalar_func_args} ctx)
-                                .into_scalar()
-                                .unwrap(),
-                        )),
-                        {match_arms}
-                    }}
-                }}
-            "
-        )
-        .unwrap();
-    }
-
-    // Write `combine_nullable_x_arg`.
-    for n_args in 1..=MAX_ARGS {
-        let arg_generics_bound = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("I{n}: ArgType, "))
-            .join("");
-        let arg_input_closure_sig = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
-            .join("");
-        let arg_output_closure_sig = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, NullableType<I{n}>>, "))
-            .join("");
-        let closure_args = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("arg{n}, "))
-            .join("");
-        let args_tuple = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("arg{n}"))
-            .join(", ");
-        let arg_scalar = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(Some(arg{n}))"))
-            .join(", ");
-        let scalar_func_args = (0..n_args)
-            .map(|n| n + 1)
-            .map(|n| format!("ValueRef::Scalar(arg{n}), "))
-            .join("");
-        let scalar_nones_pats = (0..n_args)
-            .map(|n| {
-                let pat = (0..n_args)
-                    .map(|nth| {
-                        if nth == n {
-                            "ValueRef::Scalar(None)"
-                        } else {
-                            "_"
-                        }
-                    })
-                    .join(",");
-                format!("({pat})")
-            })
-            .reduce(|acc, item| format!("{acc} | {item}"))
-            .unwrap();
-        let match_arms = (1..(1 << n_args))
-            .map(|idx| {
-                let columns = (0..n_args)
-                    .filter(|n| idx & (1 << n) != 0)
-                    .collect::<Vec<_>>();
-                let arm_pat = (0..n_args)
-                    .map(|n| {
-                        if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{})", n + 1)
-                        } else {
-                            format!("ValueRef::Scalar(Some(arg{}))", n + 1)
-                        }
-                    })
-                    .join(", ");
-                let and_validity = columns
-                    .iter()
-                    .map(|n| format!("arg{}.validity", n + 1))
-                    .reduce(|acc, item| {
-                        format!("common_arrow::arrow::bitmap::and(&{acc}, &{item})")
-                    })
-                    .unwrap();
-                let func_arg = (0..n_args)
-                    .map(|n| {
-                        if columns.contains(&n) {
-                            format!("ValueRef::Column(arg{}.column), ", n + 1)
-                        } else {
-                            format!("ValueRef::Scalar(arg{}), ", n + 1)
-                        }
-                    })
-                    .join("");
-
-                format!(
-                    "({arm_pat}) => {{
-                        let and_validity = {and_validity};
-                        let validity = ctx.validity.as_ref().map(|valid| valid & (&and_validity)).unwrap_or(and_validity);
-                        ctx.validity = Some(validity.clone());
-                        let nullable_column = func({func_arg} ctx).into_column().unwrap();
-                        let combine_validity = databend_common_arrow::arrow::bitmap::and(&validity, &nullable_column.validity);
-                        Value::Column(NullableColumn {{ column: nullable_column.column, validity: combine_validity }})
-                    }}"
-                )
-            })
-            .join("");
-        writeln!(
-            source,
-            "
-                pub fn combine_nullable_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl for <'a> Fn({arg_input_closure_sig} &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync,
-                ) -> impl for <'a> Fn({arg_output_closure_sig} &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync {{
-                    move |{closure_args} ctx| match ({args_tuple}) {{
-                        {scalar_nones_pats} => Value::Scalar(None),
-                        ({arg_scalar}) => Value::Scalar(
-                            func({scalar_func_args} ctx)
-                                .into_scalar()
-                                .unwrap(),
-                        ),
-                        {match_arms}
-                    }}
-                }}
-            "
-        )
-        .unwrap();
-    }
 
     // Write `erase_calc_domain_generic_x_arg`.
     for n_args in 0..=MAX_ARGS {
@@ -807,7 +398,7 @@ pub fn codegen_register() {
             .join("");
         let arg_g_closure_sig = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("ValueRef<'a, I{n}>, "))
+            .map(|n| format!("Value<I{n}>, "))
             .join("");
         let let_args = (0..n_args)
             .map(|n| n + 1)
@@ -822,7 +413,7 @@ pub fn codegen_register() {
             "
                 fn erase_function_generic_{n_args}_arg<{arg_generics_bound} O: ArgType>(
                     func: impl for <'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<O>,
-                ) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {{
+                ) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {{
                     move |args, ctx| {{
                         {let_args}
                         Value::upcast(func({func_args} ctx))

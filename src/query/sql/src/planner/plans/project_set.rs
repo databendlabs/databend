@@ -15,28 +15,31 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
+use databend_common_exception::Result;
+
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
-use crate::IndexType;
-use crate::ScalarExpr;
-
-/// An item of set-returning function.
-/// Contains definition of srf and its output columns.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct SrfItem {
-    pub scalar: ScalarExpr,
-    pub index: IndexType,
-}
+use crate::plans::ScalarItem;
 
 /// `ProjectSet` is a plan that evaluate a series of
 /// set-returning functions, zip the result together,
 /// and return the joined result with input relation.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ProjectSet {
-    pub srfs: Vec<SrfItem>,
+    pub srfs: Vec<ScalarItem>,
+}
+
+impl ProjectSet {
+    pub fn derive_project_set_stats(&self, input_stat: &mut StatInfo) -> Result<Arc<StatInfo>> {
+        // ProjectSet is set-returning functions, precise_cardinality set None
+        input_stat.statistics.precise_cardinality = None;
+        // We assume that the SRF function will expand by at least x3 per row.
+        input_stat.cardinality *= 3.0;
+        Ok(Arc::new(input_stat.clone()))
+    }
 }
 
 impl Operator for ProjectSet {
@@ -84,8 +87,6 @@ impl Operator for ProjectSet {
 
     fn derive_stats(&self, rel_expr: &RelExpr) -> databend_common_exception::Result<Arc<StatInfo>> {
         let mut input_stat = rel_expr.derive_cardinality_child(0)?.deref().clone();
-        // ProjectSet is set-returning functions, precise_cardinality set None
-        input_stat.statistics.precise_cardinality = None;
-        Ok(Arc::new(input_stat))
+        self.derive_project_set_stats(&mut input_stat)
     }
 }

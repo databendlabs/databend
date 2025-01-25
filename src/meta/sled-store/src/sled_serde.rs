@@ -13,17 +13,13 @@
 // limitations under the License.
 
 use std::mem::size_of_val;
-use std::ops::Bound;
-use std::ops::RangeBounds;
 
 use byteorder::BigEndian;
 use byteorder::ByteOrder;
-use databend_common_meta_types::Entry;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::IVec;
 
-use crate::SledAsRef;
 use crate::SledBytesError;
 
 /// Serialize/deserialize(ser/de) to/from sled values.
@@ -55,60 +51,6 @@ pub trait SledOrderedSerde: Serialize + DeserializeOwned {
     where Self: Sized;
 }
 
-/// Serialize/deserialize(ser/de) to/from range to sled IVec range.
-/// The type must impl SledOrderedSerde so that after serialization the order is preserved.
-pub trait SledRangeSerde<SD, V, R>
-where
-    SD: SledOrderedSerde,
-    V: RangeBounds<SD>,
-    R: RangeBounds<IVec>,
-{
-    /// (ser)ialize a range to range of `sled::IVec`.
-    fn ser(&self) -> Result<R, SledBytesError>;
-
-    // TODO(xp): do we need this?
-    // /// (de)serialize a value from `sled::IVec`.
-    // fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
-    //     where Self: Sized;
-}
-
-/// Impl ser/de for range of value that can be ser/de to `sled::IVec`
-impl<SD, V> SledRangeSerde<SD, V, (Bound<IVec>, Bound<IVec>)> for V
-where
-    SD: SledOrderedSerde,
-    V: RangeBounds<SD>,
-{
-    fn ser(&self) -> Result<(Bound<IVec>, Bound<IVec>), SledBytesError> {
-        let s = self.start_bound();
-        let e = self.end_bound();
-
-        let s = bound_ser(s)?;
-        let e = bound_ser(e)?;
-
-        Ok((s, e))
-    }
-}
-
-fn bound_ser<SD: SledOrderedSerde>(v: Bound<&SD>) -> Result<Bound<sled::IVec>, SledBytesError> {
-    let res = match v {
-        Bound::Included(v) => Bound::Included(v.ser()?),
-        Bound::Excluded(v) => Bound::Excluded(v.ser()?),
-        Bound::Unbounded => Bound::Unbounded,
-    };
-    Ok(res)
-}
-
-/// Extract log index from log entry
-impl SledAsRef<u64, Entry> for Entry {
-    fn as_key(&self) -> &u64 {
-        &self.log_id.index
-    }
-
-    fn as_value(&self) -> &Entry {
-        self
-    }
-}
-
 /// NodeId, LogIndex and Term need to be serialized with order preserved, for listing items.
 impl SledOrderedSerde for u64 {
     fn ser(&self) -> Result<IVec, SledBytesError> {
@@ -138,5 +80,3 @@ impl SledOrderedSerde for String {
         Ok(String::from_utf8(v.as_ref().to_vec())?)
     }
 }
-
-// impl<T> SledSerde for T where T: Serialize + DeserializeOwned {}

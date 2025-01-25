@@ -14,13 +14,12 @@
 
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_expression::passthrough_nullable;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::string::StringDomain;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::*;
 use databend_common_expression::Column;
@@ -33,7 +32,7 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
+use string::StringColumnBuilder;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("concat", |_, args_type| {
@@ -105,7 +104,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
                 eval: Box::new(|args, _| {
                     let len = args.iter().find_map(|arg| match arg {
-                        ValueRef::Column(col) => Some(col.len()),
+                        Value::Column(col) => Some(col.len()),
                         _ => None,
                     });
                     let args = args
@@ -114,10 +113,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                         .collect::<Vec<_>>();
 
                     let size = len.unwrap_or(1);
-                    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+                    let mut builder = StringColumnBuilder::with_capacity(size);
 
                     match &args[0] {
-                        ValueRef::Scalar(sep) => {
+                        Value::Scalar(sep) => {
                             for idx in 0..size {
                                 for (arg_index, arg) in args.iter().skip(1).enumerate() {
                                     if arg_index != 0 {
@@ -128,7 +127,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 builder.commit_row();
                             }
                         }
-                        ValueRef::Column(c) => {
+                        Value::Column(c) => {
                             for idx in 0..size {
                                 for (arg_index, arg) in args.iter().skip(1).enumerate() {
                                     if arg_index != 0 {
@@ -166,7 +165,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(|args, _| {
                     type T = NullableType<StringType>;
                     let len = args.iter().find_map(|arg| match arg {
-                        ValueRef::Column(col) => Some(col.len()),
+                        Value::Column(col) => Some(col.len()),
                         _ => None,
                     });
 
@@ -178,10 +177,10 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                     let mut nullable_builder = T::create_builder(size, &[]);
                     match &new_args[0] {
-                        ValueRef::Scalar(None) => {
+                        Value::Scalar(None) => {
                             return Value::Scalar(T::upcast_scalar(None));
                         }
-                        ValueRef::Scalar(Some(v)) => {
+                        Value::Scalar(Some(v)) => {
                             let builder = &mut nullable_builder.builder;
                             nullable_builder.validity.extend_constant(size, true);
 
@@ -200,7 +199,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 builder.commit_row();
                             }
                         }
-                        ValueRef::Column(_) => {
+                        Value::Column(_) => {
                             let builder = &mut nullable_builder.builder;
                             let validity = &mut nullable_builder.validity;
 
@@ -419,9 +418,9 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn concat_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+fn concat_fn(args: &[Value<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let args = args
@@ -430,7 +429,7 @@ fn concat_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> 
         .collect::<Vec<_>>();
 
     let size = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+    let mut builder = StringColumnBuilder::with_capacity(size);
     for idx in 0..size {
         for arg in &args {
             builder.put_str(unsafe { arg.index_unchecked(idx) });
@@ -444,9 +443,9 @@ fn concat_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> 
     }
 }
 
-fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn regexp_instr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
 
@@ -477,13 +476,13 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<A
     let mut builder = Vec::with_capacity(size);
 
     let cached_reg = match (&pat_arg, &mt_arg) {
-        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+        (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
             match regexp::build_regexp_from_pattern("regexp_instr", pat, Some(mt)) {
                 Ok(re) => Some(re),
                 _ => None,
             }
         }
-        (ValueRef::Scalar(pat), None) => {
+        (Value::Scalar(pat), None) => {
             match regexp::build_regexp_from_pattern("regexp_instr", pat, None) {
                 Ok(re) => Some(re),
                 _ => None,
@@ -553,9 +552,9 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<A
     }
 }
 
-fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn regexp_like_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
     let source_arg = args[0].try_downcast::<StringType>().unwrap();
@@ -567,13 +566,13 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<An
     };
 
     let cached_reg = match (&pat_arg, &mt_arg) {
-        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+        (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
             match regexp::build_regexp_from_pattern("regexp_like", pat, Some(mt)) {
                 Ok(re) => Some(re),
                 _ => None,
             }
         }
-        (ValueRef::Scalar(pat), None) => {
+        (Value::Scalar(pat), None) => {
             match regexp::build_regexp_from_pattern("regexp_like", pat, None) {
                 Ok(re) => Some(re),
                 _ => None,
@@ -615,9 +614,9 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<An
     }
 }
 
-fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn regexp_replace_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
 
@@ -641,16 +640,16 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
     };
 
     let size = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+    let mut builder = StringColumnBuilder::with_capacity(size);
 
     let cached_reg = match (&pat_arg, &mt_arg) {
-        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+        (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
             match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
                 Ok(re) => Some(re),
                 _ => None,
             }
         }
-        (ValueRef::Scalar(pat), None) => {
+        (Value::Scalar(pat), None) => {
             match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
                 Ok(re) => Some(re),
                 _ => None,
@@ -691,8 +690,7 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
         }
 
         if source.is_empty() || pat.is_empty() {
-            builder.put_str(source);
-            builder.commit_row();
+            builder.put_and_commit(source);
             continue;
         }
 
@@ -725,9 +723,9 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
     }
 }
 
-fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn regexp_substr_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
+        Value::Column(col) => Some(col.len()),
         _ => None,
     });
 
@@ -750,13 +748,13 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
     };
 
     let cached_reg = match (&pat_arg, &mt_arg) {
-        (ValueRef::Scalar(pat), Some(ValueRef::Scalar(mt))) => {
+        (Value::Scalar(pat), Some(Value::Scalar(mt))) => {
             match regexp::build_regexp_from_pattern("regexp_replace", pat, Some(mt)) {
                 Ok(re) => Some(re),
                 _ => None,
             }
         }
-        (ValueRef::Scalar(pat), None) => {
+        (Value::Scalar(pat), None) => {
             match regexp::build_regexp_from_pattern("regexp_replace", pat, None) {
                 Ok(re) => Some(re),
                 _ => None,
@@ -766,7 +764,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
     };
 
     let size = len.unwrap_or(1);
-    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+    let mut builder = StringColumnBuilder::with_capacity(size);
     let mut validity = MutableBitmap::with_capacity(size);
     for idx in 0..size {
         let source = unsafe { source_arg.index_unchecked(idx) };
@@ -829,10 +827,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
     }
     match len {
         Some(_) => {
-            let col = Column::Nullable(Box::new(NullableColumn {
-                validity: validity.into(),
-                column: Column::String(builder.build()),
-            }));
+            let col = NullableColumn::new_column(Column::String(builder.build()), validity.into());
             Value::Column(col)
         }
         _ => match validity.pop() {
@@ -974,7 +969,8 @@ pub mod regexp {
         occur: i64,
         builder: &mut StringColumnBuilder,
     ) {
-        let pos = (pos - 1) as usize; // set the index start from 0
+        let pos = (pos - 1) as usize;
+        // set the index start from 0
         // the 'pos' position is the character index,
         // so we should iterate the character to find the byte index.
         let char_pos = match s.char_indices().nth(pos) {

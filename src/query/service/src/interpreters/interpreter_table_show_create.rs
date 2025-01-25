@@ -33,8 +33,10 @@ use databend_common_storages_view::view_table::QUERY;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
 use databend_storages_common_table_meta::table::StreamMode;
+use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -65,7 +67,7 @@ impl Interpreter for ShowCreateTableInterpreter {
     }
 
     fn is_ddl(&self) -> bool {
-        true
+        false
     }
 
     #[async_backtrace::framed]
@@ -154,17 +156,19 @@ impl ShowCreateTableInterpreter {
             )
         }
 
+        if table.options().contains_key(OPT_KEY_TEMP_PREFIX) {
+            table_create_sql = format!(
+                "CREATE TEMP TABLE {} (\n",
+                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+            )
+        }
+
         let table_info = table.get_table_info();
 
         // Append columns and indexes.
         {
             let mut create_defs = vec![];
             for (idx, field) in schema.fields().iter().enumerate() {
-                let nullable = if field.is_nullable() {
-                    " NULL".to_string()
-                } else {
-                    " NOT NULL".to_string()
-                };
                 let default_expr = match field.default_expr() {
                     Some(expr) => {
                         format!(" DEFAULT {expr}")
@@ -192,15 +196,10 @@ impl ShowCreateTableInterpreter {
                 } else {
                     "".to_string()
                 };
-                let column_str = format!(
-                    "  {} {}{}{}{}{}",
-                    display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect),
-                    field.data_type().remove_recursive_nullable().sql_name(),
-                    nullable,
-                    default_expr,
-                    computed_expr,
-                    comment
-                );
+                let ident = display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect);
+                let data_type = field.data_type().sql_name_explicit_null();
+                let column_str =
+                    format!("  {ident} {data_type}{default_expr}{computed_expr}{comment}");
 
                 create_defs.push(column_str);
             }
@@ -247,8 +246,14 @@ impl ShowCreateTableInterpreter {
         let table_engine = format!(") ENGINE={}", engine);
         table_create_sql.push_str(table_engine.as_str());
 
-        if let Some((_, cluster_keys_str)) = table_info.meta.cluster_key() {
-            table_create_sql.push_str(format!(" CLUSTER BY {}", cluster_keys_str).as_str());
+        if let Some(cluster_keys_str) = &table_info.meta.cluster_key {
+            let cluster_type = table_info
+                .options()
+                .get(OPT_KEY_CLUSTER_TYPE)
+                .cloned()
+                .unwrap_or("".to_string());
+            table_create_sql
+                .push_str(format!(" CLUSTER BY {}{}", cluster_type, cluster_keys_str).as_str());
         }
 
         if !hide_options_in_show_create_table || engine == "ICEBERG" || engine == "DELTA" {
@@ -266,7 +271,7 @@ impl ShowCreateTableInterpreter {
 
         if engine != "ICEBERG" && engine != "DELTA" {
             if let Some(sp) = &table_info.meta.storage_params {
-                table_create_sql.push_str(format!(" LOCATION = '{}'", sp).as_str());
+                table_create_sql.push_str(format!(" '{}' ", sp).as_str());
             }
         }
 

@@ -15,15 +15,14 @@
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use arrow_schema::Schema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
 use databend_common_expression::converts::arrow::EXTENSION_KEY;
-use databend_common_expression::converts::arrow2::ARROW_EXT_TYPE_VARIANT;
+use databend_common_expression::types::DataType;
 use databend_common_expression::variant_transform::contains_variant;
 use databend_common_expression::variant_transform::transform_variant;
 use databend_common_expression::BlockEntry;
@@ -33,163 +32,96 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::FunctionContext;
 use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_sql::executor::physical_plans::UdfFunctionDesc;
+use databend_common_sql::plans::UDFLanguage;
+use databend_common_sql::plans::UDFScriptCode;
 use databend_common_sql::plans::UDFType;
-use parking_lot::RwLock;
 
-/// python runtime should be only initialized once by gil lock, see: https://github.com/python/cpython/blob/main/Python/pystate.c
-#[cfg(feature = "python-udf")]
-static GLOBAL_PYTHON_RUNTIME: std::sync::LazyLock<Arc<RwLock<arrow_udf_python::Runtime>>> =
-    std::sync::LazyLock::new(|| Arc::new(RwLock::new(arrow_udf_python::Runtime::new().unwrap())));
+use super::runtime_pool::Pool;
+use super::runtime_pool::RuntimeBuilder;
 
 pub enum ScriptRuntime {
-    JavaScript(Vec<Arc<RwLock<arrow_udf_js::Runtime>>>),
-    WebAssembly(Arc<RwLock<arrow_udf_wasm::Runtime>>),
-    Python,
+    JavaScript(JsRuntimePool),
+    WebAssembly(arrow_udf_wasm::Runtime),
+    #[cfg(feature = "python-udf")]
+    Python(python_pool::PyRuntimePool),
 }
 
 impl ScriptRuntime {
-    pub fn try_create(
-        lang: &str,
-        code: Option<&[u8]>,
-        runtime_num: usize,
-    ) -> Result<Self, ErrorCode> {
-        match lang {
-            "javascript" => {
-                // Create multiple runtimes to execute in parallel to avoid blocking caused by js udf runtime locks.
-                let runtimes = (0..runtime_num)
-                    .map(|_| {
-                        arrow_udf_js::Runtime::new()
-                            .map(|mut runtime| {
-                                runtime
-                                    .converter_mut()
-                                    .set_arrow_extension_key(EXTENSION_KEY);
-                                runtime
-                                    .converter_mut()
-                                    .set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
-                                Arc::new(RwLock::new(runtime))
-                            })
-                            .map_err(|err| {
-                                ErrorCode::UDFDataError(format!(
-                                    "Cannot create js runtime: {}",
-                                    err
-                                ))
-                            })
-                    })
-                    .collect::<Result<Vec<Arc<RwLock<arrow_udf_js::Runtime>>>>>()?;
-                Ok(Self::JavaScript(runtimes))
+    pub fn try_create(func: &UdfFunctionDesc) -> Result<Self> {
+        let UDFType::Script(UDFScriptCode { language, code, .. }) = &func.udf_type else {
+            unreachable!()
+        };
+        match language {
+            UDFLanguage::JavaScript => {
+                let builder = JsRuntimeBuilder {
+                    name: func.name.clone(),
+                    handler: func.func_name.clone(),
+                    code: String::from_utf8(code.to_vec())?,
+                    output_type: func.data_type.as_ref().clone(),
+                    counter: Default::default(),
+                };
+                Ok(Self::JavaScript(JsRuntimePool::new(builder)))
             }
-            "wasm" => Self::create_wasm_runtime(code),
-            "python" => Ok(Self::Python),
-            _ => Err(ErrorCode::from_string(format!(
-                "Invalid {} lang Runtime not supported",
-                lang
-            ))),
-        }
-    }
-
-    fn create_wasm_runtime(code_blob: Option<&[u8]>) -> Result<Self, ErrorCode> {
-        let decoded_code_blob = code_blob
-            .ok_or_else(|| ErrorCode::UDFDataError("WASM module not provided".to_string()))?;
-
-        let runtime = arrow_udf_wasm::Runtime::new(decoded_code_blob).map_err(|err| {
-            ErrorCode::UDFDataError(format!("Failed to create WASM runtime for module: {}", err))
-        })?;
-
-        Ok(ScriptRuntime::WebAssembly(Arc::new(RwLock::new(runtime))))
-    }
-
-    pub fn add_function_with_handler(
-        &self,
-        func: &UdfFunctionDesc,
-        code: &[u8],
-    ) -> Result<(), ErrorCode> {
-        let tmp_schema =
-            DataSchema::new(vec![DataField::new("tmp", func.data_type.as_ref().clone())]);
-        let arrow_schema = Schema::from(&tmp_schema);
-
-        match self {
-            ScriptRuntime::JavaScript(runtimes) => {
-                let code = std::str::from_utf8(code)?;
-                for runtime in runtimes {
-                    let mut runtime = runtime.write();
-                    runtime.add_function_with_handler(
-                        &func.name,
-                        // we pass the field instead of the data type because arrow-udf-js
-                        // now takes the field as an argument here so that it can get any
-                        // metadata associated with the field
-                        arrow_schema.field(0).clone(),
-                        arrow_udf_js::CallMode::ReturnNullOnNullInput,
-                        code,
-                        &func.func_name,
-                    )?;
-                }
+            UDFLanguage::WebAssembly => {
+                let start = std::time::Instant::now();
+                let runtime = arrow_udf_wasm::Runtime::new(code).map_err(|err| {
+                    ErrorCode::UDFRuntimeError(format!(
+                        "Failed to create WASM runtime for module: {err}"
+                    ))
+                })?;
+                log::info!(
+                    "Init WebAssembly UDF runtime for {:?} took: {:?}",
+                    func.name,
+                    start.elapsed()
+                );
+                Ok(ScriptRuntime::WebAssembly(runtime))
             }
             #[cfg(feature = "python-udf")]
-            ScriptRuntime::Python => {
-                let code: &str = std::str::from_utf8(code)?;
-                let mut runtime = GLOBAL_PYTHON_RUNTIME.write();
-                runtime.add_function_with_handler(
-                    &func.name,
-                    arrow_schema.field(0).data_type().clone(),
-                    arrow_udf_python::CallMode::ReturnNullOnNullInput,
-                    code,
-                    &func.func_name,
-                )?;
+            UDFLanguage::Python => {
+                let builder = PyRuntimeBuilder {
+                    name: func.name.clone(),
+                    handler: func.func_name.clone(),
+                    code: String::from_utf8(code.to_vec())?,
+                    output_type: func.data_type.as_ref().clone(),
+                    counter: Default::default(),
+                };
+                Ok(Self::Python(python_pool::PyRuntimePool::new(builder)))
             }
             #[cfg(not(feature = "python-udf"))]
-            ScriptRuntime::Python => {
-                return Err(ErrorCode::EnterpriseFeatureNotEnable(
-                    "Failed to create python script udf",
-                ));
-            }
-            // Ignore the execution for WASM context
-            ScriptRuntime::WebAssembly(_) => {}
+            UDFLanguage::Python => Err(ErrorCode::EnterpriseFeatureNotEnable(
+                "Failed to create python script udf",
+            )),
         }
-
-        Ok(())
     }
 
     pub fn handle_execution(
         &self,
         func: &UdfFunctionDesc,
         input_batch: &RecordBatch,
-        index: usize,
     ) -> Result<RecordBatch> {
         let result_batch = match self {
-            ScriptRuntime::JavaScript(runtimes) => {
-                // Choose a js runtime in order to avoid blocking
-                let idx = index % runtimes.len();
-                let runtime = &runtimes[idx];
-                let runtime = runtime.read();
-                runtime.call(&func.name, input_batch).map_err(|err| {
-                    ErrorCode::UDFDataError(format!(
-                        "JavaScript UDF '{}' execution failed: {}",
-                        func.name, err
+            ScriptRuntime::JavaScript(pool) => pool
+                .call(|runtime| runtime.call(&func.name, input_batch))
+                .map_err(|err| {
+                    ErrorCode::UDFRuntimeError(format!(
+                        "JavaScript UDF {:?} execution failed: {err}",
+                        func.name
                     ))
-                })?
-            }
+                })?,
             #[cfg(feature = "python-udf")]
-            ScriptRuntime::Python => {
-                let runtime = GLOBAL_PYTHON_RUNTIME.read();
-                runtime.call(&func.name, input_batch).map_err(|err| {
-                    ErrorCode::UDFDataError(format!(
-                        "Python UDF '{}' execution failed: {}",
-                        func.name, err
+            ScriptRuntime::Python(pool) => pool
+                .call(|runtime| runtime.call(&func.name, input_batch))
+                .map_err(|err| {
+                    ErrorCode::UDFRuntimeError(format!(
+                        "Python UDF {:?} execution failed: {err}",
+                        func.name
                     ))
-                })?
-            }
-            #[cfg(not(feature = "python-udf"))]
-            ScriptRuntime::Python => {
-                return Err(ErrorCode::EnterpriseFeatureNotEnable(
-                    "Failed to execute python script udf",
-                ));
-            }
+                })?,
             ScriptRuntime::WebAssembly(runtime) => {
-                let runtime = runtime.read();
                 runtime.call(&func.func_name, input_batch).map_err(|err| {
-                    ErrorCode::UDFDataError(format!(
-                        "WASM UDF '{}' execution failed: {}",
-                        func.func_name, err
+                    ErrorCode::UDFRuntimeError(format!(
+                        "WASM UDF {:?} execution failed: {err}",
+                        func.func_name
                     ))
                 })?
             }
@@ -198,25 +130,116 @@ impl ScriptRuntime {
     }
 }
 
+pub struct JsRuntimeBuilder {
+    name: String,
+    handler: String,
+    code: String,
+    output_type: DataType,
+
+    counter: AtomicUsize,
+}
+
+impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
+    type Error = ErrorCode;
+
+    fn build(&self) -> Result<arrow_udf_js::Runtime> {
+        let start = std::time::Instant::now();
+        let mut runtime = arrow_udf_js::Runtime::new()
+            .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))?;
+
+        let converter = runtime.converter_mut();
+        converter.set_arrow_extension_key(EXTENSION_KEY);
+        converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
+
+        runtime.add_function_with_handler(
+            &self.name,
+            // we pass the field instead of the data type because arrow-udf-js
+            // now takes the field as an argument here so that it can get any
+            // metadata associated with the field
+            arrow_field_from_data_type(&self.name, self.output_type.clone()),
+            arrow_udf_js::CallMode::ReturnNullOnNullInput,
+            &self.code,
+            &self.handler,
+        )?;
+
+        log::info!(
+            "Init JavaScript UDF runtime for {:?} #{} took: {:?}",
+            self.name,
+            self.counter
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+            start.elapsed()
+        );
+
+        Ok(runtime)
+    }
+}
+
+fn arrow_field_from_data_type(name: &str, dt: DataType) -> arrow_schema::Field {
+    let field = DataField::new(name, dt);
+    (&field).into()
+}
+
+type JsRuntimePool = Pool<arrow_udf_js::Runtime, JsRuntimeBuilder>;
+
+#[cfg(feature = "python-udf")]
+pub struct PyRuntimeBuilder {
+    name: String,
+    handler: String,
+    code: String,
+    output_type: DataType,
+
+    counter: AtomicUsize,
+}
+
+#[cfg(feature = "python-udf")]
+mod python_pool {
+    use super::*;
+
+    impl RuntimeBuilder<arrow_udf_python::Runtime> for PyRuntimeBuilder {
+        type Error = ErrorCode;
+
+        fn build(&self) -> Result<arrow_udf_python::Runtime> {
+            let start = std::time::Instant::now();
+            let mut runtime = arrow_udf_python::Builder::default()
+                .sandboxed(true)
+                .build()?;
+            runtime.add_function_with_handler(
+                &self.name,
+                arrow_field_from_data_type(&self.name, self.output_type.clone()),
+                arrow_udf_python::CallMode::CalledOnNullInput,
+                &self.code,
+                &self.handler,
+            )?;
+
+            log::info!(
+                "Init Python UDF runtime for {:?} #{} took: {:?}",
+                self.name,
+                self.counter
+                    .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                start.elapsed()
+            );
+
+            Ok(runtime)
+        }
+    }
+
+    pub type PyRuntimePool = Pool<arrow_udf_python::Runtime, PyRuntimeBuilder>;
+}
+
 pub struct TransformUdfScript {
     funcs: Vec<UdfFunctionDesc>,
     script_runtimes: BTreeMap<String, Arc<ScriptRuntime>>,
-    index_seq: Arc<AtomicUsize>,
 }
-
-unsafe impl Send for TransformUdfScript {}
 
 impl TransformUdfScript {
     pub fn new(
         _func_ctx: FunctionContext,
         funcs: Vec<UdfFunctionDesc>,
         script_runtimes: BTreeMap<String, Arc<ScriptRuntime>>,
-        index_seq: Arc<AtomicUsize>,
     ) -> Self {
         Self {
             funcs,
             script_runtimes,
-            index_seq,
         }
     }
 }
@@ -231,78 +254,39 @@ impl Transform for TransformUdfScript {
             return Ok(data_block);
         }
 
-        let index = self.index_seq.fetch_add(1, Ordering::SeqCst);
         for func in &self.funcs {
             let num_rows = data_block.num_rows();
             let block_entries = self.prepare_block_entries(func, &data_block)?;
             let input_batch = self.create_input_batch(block_entries, num_rows)?;
-            let runtime_key = Self::get_runtime_key(func)?;
-
-            if let Some(runtime) = self.script_runtimes.get(&runtime_key) {
-                let result_batch = runtime.handle_execution(func, &input_batch, index)?;
-                self.update_datablock(func, result_batch, &mut data_block)?;
-            } else {
-                return Err(ErrorCode::UDFDataError(format!(
-                    "Failed to find runtime for function '{}' with key: {}",
-                    func.name, runtime_key
-                )));
-            }
+            let runtime = self.script_runtimes.get(&func.name).unwrap();
+            let result_batch = runtime.handle_execution(func, &input_batch)?;
+            self.update_datablock(func, result_batch, &mut data_block)?;
         }
         Ok(data_block)
     }
 }
 
 impl TransformUdfScript {
-    fn get_runtime_key(func: &UdfFunctionDesc) -> Result<String, ErrorCode> {
-        let (lang, func_name) = match &func.udf_type {
-            UDFType::Script((lang, _, _)) => (lang, &func.func_name),
-            _ => {
-                return Err(ErrorCode::UDFDataError(format!(
-                    "Unsupported UDFType variant for function '{}'",
-                    func.name
-                )));
-            }
-        };
-
-        let runtime_key = format!("{}-{}", lang.trim(), func_name.trim());
-        Ok(runtime_key)
-    }
-
-    pub fn init_runtime(
-        funcs: &[UdfFunctionDesc],
-        runtime_num: usize,
-    ) -> Result<BTreeMap<String, Arc<ScriptRuntime>>, ErrorCode> {
+    pub fn init_runtime(funcs: &[UdfFunctionDesc]) -> Result<BTreeMap<String, Arc<ScriptRuntime>>> {
         let mut script_runtimes: BTreeMap<String, Arc<ScriptRuntime>> = BTreeMap::new();
 
-        let start = std::time::Instant::now();
         for func in funcs {
-            let (lang, code_opt) = match &func.udf_type {
-                UDFType::Script((lang, _, code)) => (lang, Some(code.as_ref())),
+            let code = match &func.udf_type {
+                UDFType::Script(code) => code,
                 _ => continue,
             };
 
-            let runtime_key = Self::get_runtime_key(func)?;
-            let runtime = match script_runtimes.entry(runtime_key.clone()) {
-                Entry::Occupied(entry) => entry.into_mut().clone(),
-                Entry::Vacant(entry) => {
-                    let new_runtime = ScriptRuntime::try_create(lang.trim(), code_opt, runtime_num)
-                        .map(Arc::new)
-                        .map_err(|err| {
-                            ErrorCode::UDFDataError(format!(
-                                "Failed to create UDF runtime for language '{}' with error: {}",
-                                lang, err
-                            ))
-                        })?;
-                    entry.insert(new_runtime).clone()
-                }
+            if let Entry::Vacant(entry) = script_runtimes.entry(func.name.clone()) {
+                let runtime = ScriptRuntime::try_create(func).map_err(|err| {
+                    ErrorCode::UDFDataError(format!(
+                        "Failed to create UDF runtime for language {:?} with error: {err}",
+                        code.language
+                    ))
+                })?;
+                entry.insert(Arc::new(runtime));
             };
-
-            if let UDFType::Script((_, _, code)) = &func.udf_type {
-                runtime.add_function_with_handler(func, code)?;
-            }
         }
 
-        log::info!("Init UDF runtimes took: {:?}", start.elapsed());
         Ok(script_runtimes)
     }
 
@@ -396,7 +380,7 @@ impl TransformUdfScript {
 
         if col.data_type != func.data_type.as_ref().clone() {
             return Err(ErrorCode::UDFDataError(format!(
-                "Function '{}' returned column with data type {:?} but expected {:?}",
+                "Function {:?} returned column with data type {:?} but expected {:?}",
                 func.name, col.data_type, func.data_type
             )));
         }

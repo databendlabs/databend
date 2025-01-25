@@ -18,9 +18,13 @@ use std::str::FromStr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use geo::Geometry;
+use geozero::geo_types::GeoWriter;
+use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
 use geozero::CoordDimensions;
+use geozero::GeomProcessor;
 use geozero::GeozeroGeometry;
+use geozero::ToGeo;
 use geozero::ToJson;
 use geozero::ToWkb;
 use geozero::ToWkt;
@@ -80,30 +84,14 @@ impl Display for GeometryDataType {
     }
 }
 
-pub fn parse_to_ewkb(buf: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
-    let wkt = std::str::from_utf8(buf).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-    let input_wkt = wkt.trim().to_ascii_uppercase();
-
-    let parts: Vec<&str> = input_wkt.split(';').collect();
-
-    let parsed_srid: Option<i32> = srid.or_else(|| {
-        if input_wkt.starts_with("SRID=") && parts.len() == 2 {
-            parts[0].replace("SRID=", "").parse().ok()
-        } else {
-            None
-        }
-    });
-
-    let geo_part = if parts.len() == 2 { parts[1] } else { parts[0] };
-
-    let geom: Geometry<f64> = Geometry::try_from_wkt_str(geo_part)
-        .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
-
-    geom.to_ewkb(CoordDimensions::xy(), parsed_srid)
-        .map_err(ErrorCode::from)
+pub fn parse_bytes_to_ewkb(buf: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
+    let s = std::str::from_utf8(buf).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+    geometry_from_str(s, srid)
 }
 
-/// An enum representing any possible geometry subtype.
+/// Parses an input and returns a value of ewkb geometry.
+///
+/// Support any possible geometry format.
 ///
 /// WKB/EWKB: start with 01/00(1bit)
 ///
@@ -131,49 +119,69 @@ pub fn parse_to_ewkb(buf: &[u8], srid: Option<i32>) -> Result<Vec<u8>> {
 /// let wkb: &[u8] = "0101000020797f000066666666a9cb17411f85ebc19e325641".as_bytes();
 /// println!(
 ///     "wkt:{ } wkb:{ } json: { }",
-///     parse_to_subtype(wkt).unwrap(),
-///     parse_to_subtype(wkb).unwrap(),
-///     parse_to_subtype(geo_json.as_bytes()).unwrap()
+///     geometry_from_str(wkt).unwrap(),
+///     geometry_from_str(wkb).unwrap(),
+///     geometry_from_str(geo_json.as_bytes()).unwrap()
 /// );
 /// ```
-pub fn parse_to_subtype(buf: &[u8]) -> Result<GeometryDataType> {
-    let bit_0_1: u8 = buf[0] & 1 | (buf[0] >> 1) & 1;
-    match std::str::from_utf8(buf) {
-        Ok(str) => {
-            let text: &String = &str.replace([' ', '\n'], "");
-            let prefixes = [
-                "SRID",
-                "POINT",
-                "LINESTRING",
-                "POLYGON",
-                "MULTIPOINT",
-                "MULTILINESTRING",
-                "MULTIPOLYGON",
-                "GEOMETRYCOLLECTION",
-            ];
-            if prefixes.iter().any(|&prefix| text.starts_with(prefix)) {
-                Ok(GeometryDataType::EWKT)
-            } else if (text.starts_with('{')) && (text.ends_with('}')) {
-                Ok(GeometryDataType::GEOJSON)
-            } else if bit_0_1 == 0b00 || bit_0_1 == 0b01 {
-                Ok(GeometryDataType::EWKB)
-            } else {
-                Err(ErrorCode::GeometryError(
-                    "Invalid geometry type format".to_string(),
-                ))
-            }
-        }
-        Err(_) => {
-            if bit_0_1 == 0b00 || bit_0_1 == 0b01 {
-                Ok(GeometryDataType::EWKB)
-            } else {
-                Err(ErrorCode::GeometryError(
-                    "Invalid geometry type format".to_string(),
-                ))
-            }
-        }
+pub fn geometry_from_str(input: &str, srid: Option<i32>) -> Result<Vec<u8>> {
+    let input = input.trim();
+    let (geo, parsed_srid) = str_to_geo(input)?;
+    let srid = srid.or(parsed_srid);
+
+    geo.to_ewkb(CoordDimensions::xy(), srid)
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+/// Parses an EWKT input and returns a value of EWKB geometry.
+pub fn geometry_from_ewkt(input: &str, srid: Option<i32>) -> Result<Vec<u8>> {
+    let input = input.trim();
+    let (geo, parsed_srid) = ewkt_str_to_geo(input)?;
+    let srid = srid.or(parsed_srid);
+    geo.to_ewkb(CoordDimensions::xy(), srid)
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+/// Parses a GEOJSON/EWKB/WKB/EWKT/WKT input and returns a Geometry object.
+pub(crate) fn str_to_geo(input: &str) -> Result<(Geometry, Option<i32>)> {
+    if input.starts_with(['{']) {
+        let geo = GeoJson(input)
+            .to_geo()
+            .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+        Ok((geo, None))
+    } else if input.starts_with(['0', '0']) || input.starts_with(['0', '1']) {
+        let binary = match hex::decode(input) {
+            Ok(binary) => binary,
+            Err(e) => return Err(ErrorCode::GeometryError(e.to_string())),
+        };
+        ewkb_to_geo(&mut Ewkb(&binary))
+    } else {
+        ewkt_str_to_geo(input)
     }
 }
+
+/// Parses an EWKT input and returns Geometry object and SRID.
+pub(crate) fn ewkt_str_to_geo(input: &str) -> Result<(Geometry, Option<i32>)> {
+    if input.starts_with(['s']) || input.starts_with(['S']) {
+        if let Some((srid_input, wkt_input)) = input.split_once(';') {
+            let srid_input = srid_input.to_uppercase();
+            if let Some(srid_str) = srid_input.strip_prefix("SRID") {
+                if let Some(srid_str) = srid_str.trim().strip_prefix("=") {
+                    let parsed_srid = srid_str.trim().parse::<i32>()?;
+                    let geo = Geometry::try_from_wkt_str(wkt_input)
+                        .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+                    return Ok((geo, Some(parsed_srid)));
+                }
+            }
+        }
+        Err(ErrorCode::GeometryError("invalid srid"))
+    } else {
+        let geo = Geometry::try_from_wkt_str(input)
+            .map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
+        Ok((geo, None))
+    }
+}
+
 pub trait GeometryFormatOutput {
     fn format(self, data_type: GeometryDataType) -> Result<String>;
 }
@@ -215,4 +223,179 @@ pub fn geometry_format<T: GeometryFormatOutput>(
     format_type: GeometryDataType,
 ) -> Result<String> {
     geometry.format(format_type)
+}
+
+/// Convert Geometry object to GEOJSON format.
+pub fn geo_to_json(geo: Geometry) -> Result<String> {
+    geo.to_json()
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+/// Convert Geometry object to WKB format.
+pub fn geo_to_wkb(geo: Geometry) -> Result<Vec<u8>> {
+    geo.to_wkb(geo.dims())
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+/// Convert Geometry object to EWKB format.
+pub fn geo_to_ewkb(geo: Geometry, srid: Option<i32>) -> Result<Vec<u8>> {
+    geo.to_ewkb(geo.dims(), srid)
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+/// Convert Geometry object to WKT format.
+pub fn geo_to_wkt(geo: Geometry) -> Result<String> {
+    geo.to_wkt()
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+/// Convert Geometry object to EWKT format.
+pub fn geo_to_ewkt(geo: Geometry, srid: Option<i32>) -> Result<String> {
+    geo.to_ewkt(srid)
+        .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+/// Process EWKB input and return SRID.
+pub fn read_srid<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Option<i32> {
+    let mut srid_processor = SridProcessor::new();
+    ewkb.process_geom(&mut srid_processor).ok()?;
+
+    srid_processor.srid
+}
+
+/// Process EWKB input and return Geometry object and SRID.
+pub fn ewkb_to_geo<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Result<(Geometry<f64>, Option<i32>)> {
+    let mut ewkb_processor = EwkbProcessor::new();
+    ewkb.process_geom(&mut ewkb_processor)?;
+
+    let geo = ewkb_processor
+        .geo_writer
+        .take_geometry()
+        .ok_or_else(|| ErrorCode::GeometryError("Invalid ewkb format"))?;
+    let srid = ewkb_processor.srid;
+    Ok((geo, srid))
+}
+
+struct SridProcessor {
+    srid: Option<i32>,
+}
+
+impl SridProcessor {
+    fn new() -> Self {
+        Self { srid: None }
+    }
+}
+
+impl GeomProcessor for SridProcessor {
+    fn srid(&mut self, srid: Option<i32>) -> geozero::error::Result<()> {
+        self.srid = srid;
+        Ok(())
+    }
+}
+
+struct EwkbProcessor {
+    geo_writer: GeoWriter,
+    srid: Option<i32>,
+}
+
+impl EwkbProcessor {
+    fn new() -> Self {
+        Self {
+            geo_writer: GeoWriter::new(),
+            srid: None,
+        }
+    }
+}
+
+impl GeomProcessor for EwkbProcessor {
+    fn srid(&mut self, srid: Option<i32>) -> geozero::error::Result<()> {
+        self.srid = srid;
+        Ok(())
+    }
+
+    fn xy(&mut self, x: f64, y: f64, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.xy(x, y, idx)
+    }
+
+    fn point_begin(&mut self, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.point_begin(idx)
+    }
+
+    fn point_end(&mut self, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.point_end(idx)
+    }
+
+    fn multipoint_begin(&mut self, size: usize, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.multipoint_begin(size, idx)
+    }
+
+    fn multipoint_end(&mut self, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.multipoint_end(idx)
+    }
+
+    fn linestring_begin(
+        &mut self,
+        tagged: bool,
+        size: usize,
+        idx: usize,
+    ) -> geozero::error::Result<()> {
+        self.geo_writer.linestring_begin(tagged, size, idx)
+    }
+
+    fn linestring_end(&mut self, tagged: bool, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.linestring_end(tagged, idx)
+    }
+
+    fn multilinestring_begin(&mut self, size: usize, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.multilinestring_begin(size, idx)
+    }
+
+    fn multilinestring_end(&mut self, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.multilinestring_end(idx)
+    }
+
+    fn polygon_begin(
+        &mut self,
+        tagged: bool,
+        size: usize,
+        idx: usize,
+    ) -> geozero::error::Result<()> {
+        self.geo_writer.polygon_begin(tagged, size, idx)
+    }
+
+    fn polygon_end(&mut self, tagged: bool, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.polygon_end(tagged, idx)
+    }
+
+    fn multipolygon_begin(&mut self, size: usize, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.multipolygon_begin(size, idx)
+    }
+
+    fn multipolygon_end(&mut self, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.multipolygon_end(idx)
+    }
+
+    fn geometrycollection_begin(&mut self, size: usize, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.geometrycollection_begin(size, idx)
+    }
+
+    fn geometrycollection_end(&mut self, idx: usize) -> geozero::error::Result<()> {
+        self.geo_writer.geometrycollection_end(idx)
+    }
+}
+
+/// Return Geometry type name.
+pub fn geometry_type_name(geo: &Geometry) -> &'static str {
+    match geo {
+        Geometry::Point(_) => "Point",
+        Geometry::Line(_) => "Line",
+        Geometry::LineString(_) => "LineString",
+        Geometry::Polygon(_) => "Polygon",
+        Geometry::MultiPoint(_) => "MultiPoint",
+        Geometry::MultiLineString(_) => "MultiLineString",
+        Geometry::MultiPolygon(_) => "MultiPolygon",
+        Geometry::GeometryCollection(_) => "GeometryCollection",
+        Geometry::Rect(_) => "Rect",
+        Geometry::Triangle(_) => "Triangle",
+    }
 }

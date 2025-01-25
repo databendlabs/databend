@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::cmp::Ordering;
 use std::collections::HashSet;
 
@@ -27,8 +28,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_storage::Datum;
+use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_storage::F64;
 
+use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Statistics;
 use crate::plans::BoundColumnRef;
@@ -52,13 +55,19 @@ const ANY_CHAR_SEL: f64 = 0.9; // not 1, since it won't match end-of-string
 const FULL_WILDCARD_SEL: f64 = 2.0;
 
 pub struct SelectivityEstimator<'a> {
+    pub cardinality: f64,
     pub input_stat: &'a mut Statistics,
     pub updated_column_indexes: HashSet<IndexType>,
 }
 
 impl<'a> SelectivityEstimator<'a> {
-    pub fn new(input_stat: &'a mut Statistics, updated_column_indexes: HashSet<IndexType>) -> Self {
+    pub fn new(
+        input_stat: &'a mut Statistics,
+        cardinality: f64,
+        updated_column_indexes: HashSet<IndexType>,
+    ) -> Self {
         Self {
+            cardinality,
             input_stat,
             updated_column_indexes,
         }
@@ -101,6 +110,9 @@ impl<'a> SelectivityEstimator<'a> {
             ScalarExpr::FunctionCall(func) => {
                 if func.func_name.eq("like") {
                     return self.compute_like_selectivity(func);
+                }
+                if func.func_name.eq("is_not_null") {
+                    return self.compute_is_not_null_selectivity(&func.arguments[0]);
                 }
                 if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
                     return self.compute_selectivity_comparison_expr(
@@ -156,6 +168,29 @@ impl<'a> SelectivityEstimator<'a> {
             Ok(sel)
         } else {
             Ok(DEFAULT_SELECTIVITY)
+        }
+    }
+
+    fn compute_is_not_null_selectivity(&mut self, expr: &ScalarExpr) -> Result<f64> {
+        match expr {
+            ScalarExpr::BoundColumnRef(column_ref) => {
+                let column_stat = if let Some(stat) = self
+                    .input_stat
+                    .column_stats
+                    .get_mut(&column_ref.column.index)
+                {
+                    stat
+                } else {
+                    return Ok(DEFAULT_SELECTIVITY);
+                };
+                if self.cardinality == 0.0 {
+                    return Ok(0.0);
+                }
+                let selectivity =
+                    (self.cardinality - column_stat.null_count as f64) / self.cardinality;
+                Ok(selectivity)
+            }
+            _ => Ok(DEFAULT_SELECTIVITY),
         }
     }
 
@@ -291,8 +326,10 @@ impl<'a> SelectivityEstimator<'a> {
                 column_stat.ndv = new_ndv;
                 if let Some(histogram) = &mut column_stat.histogram {
                     if histogram.accuracy {
+                        // If selectivity < 0.2, most buckets are invalid and
+                        // the accuracy histogram can be discarded.
                         // Todo: find a better way to update histogram.
-                        if selectivity < 0.8 {
+                        if selectivity < 0.2 {
                             column_stat.histogram = None;
                         }
                         continue;
@@ -317,9 +354,14 @@ impl<'a> SelectivityEstimator<'a> {
         column_stat: &mut ColumnStat,
         updated_column_indexes: &mut HashSet<IndexType>,
     ) -> Result<f64> {
-        let col_hist = column_stat.histogram.as_ref();
+        let histogram = column_stat.histogram.as_ref();
 
-        if col_hist.is_none() && const_datum.is_numeric() {
+        if histogram.is_none() && const_datum.is_numeric() {
+            // If there is no histogram and the column isn't numeric, return default selectivity.
+            if !column_stat.min.is_numeric() || !column_stat.max.is_numeric() {
+                return Ok(DEFAULT_SELECTIVITY);
+            }
+
             let min = column_stat.min.to_double()?;
             let max = column_stat.max.to_double()?;
             let ndv = column_stat.ndv;
@@ -391,69 +433,93 @@ impl<'a> SelectivityEstimator<'a> {
             return Ok(percent);
         }
 
-        if col_hist.is_none() {
+        let Some(histogram) = histogram else {
             return Ok(DEFAULT_SELECTIVITY);
-        }
-        let col_hist = col_hist.unwrap();
-        let (mut num_greater, new_min, new_max) = match comparison_op {
-            ComparisonOp::GT | ComparisonOp::GTE => {
-                let new_min = const_datum.clone();
-                let new_max = column_stat.max.clone();
-                (0.0, new_min, new_max)
-            }
-            ComparisonOp::LT | ComparisonOp::LTE => {
-                let new_max = const_datum.clone();
-                let new_min = column_stat.min.clone();
-                (0.0, new_min, new_max)
-            }
-            _ => unreachable!(),
         };
 
-        for bucket in col_hist.buckets_iter() {
-            if let Ok(ord) = bucket.upper_bound().compare(const_datum) {
-                match comparison_op {
-                    ComparisonOp::GT => {
-                        if ord == Ordering::Less || ord == Ordering::Equal {
-                            num_greater += bucket.num_values();
-                        } else {
-                            break;
-                        }
-                    }
-                    ComparisonOp::GTE => {
-                        if ord == Ordering::Less {
-                            num_greater += bucket.num_values();
-                        } else {
-                            break;
-                        }
-                    }
-                    ComparisonOp::LT => {
-                        if ord == Ordering::Less {
-                            num_greater += bucket.num_values();
-                        } else {
-                            break;
-                        }
-                    }
+        let mut num_selected = 0.0;
+        for bucket in histogram.buckets_iter() {
+            let lower_bound = bucket.lower_bound();
+            let upper_bound = bucket.upper_bound();
+
+            let const_gte_upper_bound = matches!(
+                const_datum.compare(upper_bound)?,
+                Ordering::Greater | Ordering::Equal
+            );
+            let (no_overlap, complete_overlap) = match comparison_op {
+                ComparisonOp::LT => (
+                    matches!(
+                        const_datum.compare(lower_bound)?,
+                        Ordering::Less | Ordering::Equal
+                    ),
+                    const_gte_upper_bound,
+                ),
+                ComparisonOp::LTE => (
+                    matches!(const_datum.compare(lower_bound)?, Ordering::Less),
+                    const_gte_upper_bound,
+                ),
+                ComparisonOp::GT => (
+                    const_gte_upper_bound,
+                    matches!(const_datum.compare(lower_bound)?, Ordering::Less),
+                ),
+                ComparisonOp::GTE => (
+                    const_gte_upper_bound,
+                    matches!(
+                        const_datum.compare(lower_bound)?,
+                        Ordering::Less | Ordering::Equal
+                    ),
+                ),
+                _ => unreachable!(),
+            };
+
+            if complete_overlap {
+                num_selected += bucket.num_values();
+            } else if !no_overlap && const_datum.is_numeric() {
+                let ndv = bucket.num_distinct();
+                let lower_bound = lower_bound.to_double()?;
+                let upper_bound = upper_bound.to_double()?;
+                let const_value = const_datum.to_double()?;
+
+                let bucket_range = upper_bound - lower_bound;
+                let bucket_selectivity = match comparison_op {
+                    ComparisonOp::LT => (const_value - lower_bound) / bucket_range,
                     ComparisonOp::LTE => {
-                        if ord == Ordering::Less || ord == Ordering::Equal {
-                            num_greater += bucket.num_values();
+                        if const_value == lower_bound {
+                            1.0 / ndv
                         } else {
-                            break;
+                            (const_value - lower_bound + 1.0) / bucket_range
                         }
                     }
+                    ComparisonOp::GT => {
+                        if const_value == lower_bound {
+                            1.0 - 1.0 / ndv
+                        } else {
+                            (upper_bound - const_value - 1.0).max(0.0) / bucket_range
+                        }
+                    }
+                    ComparisonOp::GTE => (upper_bound - const_value) / bucket_range,
                     _ => unreachable!(),
-                }
-            } else {
-                return Ok(DEFAULT_SELECTIVITY);
+                };
+                num_selected += bucket.num_values() * bucket_selectivity;
             }
         }
 
-        let selectivity = match comparison_op {
-            ComparisonOp::GT | ComparisonOp::GTE => 1.0 - num_greater / col_hist.num_values(),
-            ComparisonOp::LT | ComparisonOp::LTE => num_greater / col_hist.num_values(),
-            _ => unreachable!(),
-        };
+        let selectivity = num_selected / histogram.num_values();
 
         if update {
+            let (new_min, new_max) = match comparison_op {
+                ComparisonOp::GT | ComparisonOp::GTE => {
+                    let new_min = const_datum.clone();
+                    let new_max = column_stat.max.clone();
+                    (new_min, new_max)
+                }
+                ComparisonOp::LT | ComparisonOp::LTE => {
+                    let new_max = const_datum.clone();
+                    let new_min = column_stat.min.clone();
+                    (new_min, new_max)
+                }
+                _ => unreachable!(),
+            };
             update_statistic(column_stat, new_min, new_max, selectivity)?;
             updated_column_indexes.insert(column_ref.column.index);
         }
@@ -539,11 +605,31 @@ fn update_statistic(
         new_min = Datum::Float(F64::from(new_min.to_double()?));
         new_max = Datum::Float(F64::from(new_max.to_double()?));
     }
-    if selectivity < 0.8 {
-        // Todo: support unfixed buckets number for histogram and prune the histogram.
-        column_stat.histogram = None;
-    }
     column_stat.min = new_min.clone();
     column_stat.max = new_max.clone();
+
+    if let Some(histogram) = &column_stat.histogram {
+        // If selectivity < 0.2, most buckets are invalid and
+        // the accuracy histogram can be discarded.
+        // Todo: support unfixed buckets number for histogram and prune the histogram.
+        column_stat.histogram = if histogram.accuracy && selectivity >= 0.2 {
+            Some(histogram.clone())
+        } else {
+            let num_values = histogram.num_values();
+            let new_num_values = (num_values * selectivity).ceil() as u64;
+            let new_ndv = new_ndv as u64;
+            if new_ndv <= 2 {
+                column_stat.histogram = None;
+                return Ok(());
+            }
+            Some(histogram_from_ndv(
+                new_ndv,
+                max(new_num_values, new_ndv),
+                Some((new_min, new_max)),
+                DEFAULT_HISTOGRAM_BUCKETS,
+            )?)
+        }
+    }
+
     Ok(())
 }

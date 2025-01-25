@@ -30,14 +30,8 @@ use super::sort::algorithm::HeapSort;
 use super::sort::algorithm::LoserTreeSort;
 use super::sort::algorithm::SortAlgorithm;
 use super::sort::CommonRows;
-use super::sort::DateConverter;
-use super::sort::DateRows;
 use super::sort::Rows;
 use super::sort::SortedStream;
-use super::sort::StringConverter;
-use super::sort::StringRows;
-use super::sort::TimestampConverter;
-use super::sort::TimestampRows;
 use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 use super::AccumulatingTransform;
@@ -48,9 +42,8 @@ use crate::processors::sort::Merger;
 /// For merge sort with limit, see [`super::transform_sort_merge_limit`]
 pub struct TransformSortMerge<R: Rows> {
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
     enable_loser_tree: bool,
-
+    limit: Option<usize>,
     block_size: usize,
     buffer: Vec<Option<(DataBlock, Column)>>,
 
@@ -66,14 +59,15 @@ pub struct TransformSortMerge<R: Rows> {
 impl<R: Rows> TransformSortMerge<R> {
     pub fn create(
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        _sort_desc: Arc<Vec<SortColumnDescription>>,
         block_size: usize,
         enable_loser_tree: bool,
+        limit: Option<usize>,
     ) -> Self {
         TransformSortMerge {
             schema,
-            sort_desc,
             enable_loser_tree,
+            limit,
             block_size,
             buffer: vec![],
             aborting: Arc::new(AtomicBool::new(false)),
@@ -176,16 +170,11 @@ impl<R: Rows> TransformSortMerge<R> {
         batch_size: usize,
         size_hint: usize,
     ) -> Result<Vec<DataBlock>> {
-        let streams = self.buffer.drain(..).collect::<Vec<_>>();
+        let streams = self.buffer.drain(..).collect::<Vec<BlockStream>>();
         let mut result = Vec::with_capacity(size_hint);
 
-        let mut merger = Merger::<A, BlockStream>::create(
-            self.schema.clone(),
-            streams,
-            self.sort_desc.clone(),
-            batch_size,
-            None,
-        );
+        let mut merger =
+            Merger::<A, _>::create(self.schema.clone(), streams, batch_size, self.limit);
 
         while let Some(block) = merger.next_block()? {
             if unlikely(self.aborting.load(Ordering::Relaxed)) {
@@ -210,17 +199,6 @@ impl SortedStream for BlockStream {
     }
 }
 
-pub(super) type MergeSortDateImpl = TransformSortMerge<DateRows>;
-pub(super) type MergeSortDate = TransformSortMergeBase<MergeSortDateImpl, DateRows, DateConverter>;
-
-pub(super) type MergeSortTimestampImpl = TransformSortMerge<TimestampRows>;
-pub(super) type MergeSortTimestamp =
-    TransformSortMergeBase<MergeSortTimestampImpl, TimestampRows, TimestampConverter>;
-
-pub(super) type MergeSortStringImpl = TransformSortMerge<StringRows>;
-pub(super) type MergeSortString =
-    TransformSortMergeBase<MergeSortStringImpl, StringRows, StringConverter>;
-
 pub(super) type MergeSortCommonImpl = TransformSortMerge<CommonRows>;
 pub(super) type MergeSortCommon =
     TransformSortMergeBase<MergeSortCommonImpl, CommonRows, CommonConverter>;
@@ -243,10 +221,11 @@ pub fn sort_merge(
         0,
         0,
         sort_spilling_batch_bytes,
-        MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree),
+        MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree, None),
     )?;
     for block in data_blocks {
         processor.transform(block)?;
     }
+
     processor.on_finish(true)
 }

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic;
+use std::sync::atomic::AtomicUsize;
+
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -20,29 +23,28 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::query_spill_prefix;
-use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::Window;
 use databend_common_sql::executor::physical_plans::WindowPartition;
-use databend_common_storage::DataOperator;
+use databend_storages_common_cache::TempDirManager;
+use opendal::services::Fs;
+use opendal::Operator;
 
 use crate::pipelines::processors::transforms::FrameBound;
-use crate::pipelines::processors::transforms::TransformWindowPartitionBucket;
-use crate::pipelines::processors::transforms::TransformWindowPartitionScatter;
-use crate::pipelines::processors::transforms::TransformWindowPartitionSort;
-use crate::pipelines::processors::transforms::TransformWindowPartitionSpillReader;
-use crate::pipelines::processors::transforms::TransformWindowPartitionSpillWriter;
+use crate::pipelines::processors::transforms::TransformWindow;
+use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
-use crate::pipelines::processors::TransformWindow;
+use crate::pipelines::processors::transforms::WindowPartitionExchange;
+use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
+use crate::pipelines::processors::transforms::WindowSortDesc;
+use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::PipelineBuilder;
+use crate::spillers::SpillerDiskConfig;
 
 impl PipelineBuilder {
     pub(crate) fn build_window(&mut self, window: &Window) -> Result<()> {
         self.build_pipeline(&window.input)?;
 
         let input_schema = window.input.output_schema()?;
-
         let partition_by = window
             .partition_by
             .iter()
@@ -51,17 +53,16 @@ impl PipelineBuilder {
                 Ok(offset)
             })
             .collect::<Result<Vec<_>>>()?;
-
         let order_by = window
             .order_by
             .iter()
             .map(|o| {
                 let offset = input_schema.index_of(&o.order_by.to_string())?;
-                Ok(SortColumnDescription {
+                Ok(WindowSortDesc {
                     offset,
                     asc: o.asc,
                     nulls_first: o.nulls_first,
-                    is_nullable: input_schema.field(offset).is_nullable(), // Used for check null frame.
+                    is_nullable: input_schema.field(offset).is_nullable(),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -136,11 +137,17 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    pub(crate) fn build_window_partition_pipeline(
+    pub(crate) fn build_window_partition(
         &mut self,
         window_partition: &WindowPartition,
     ) -> Result<()> {
         self.build_pipeline(&window_partition.input)?;
+
+        let num_processors = self.main_pipeline.output_len();
+
+        // Settings.
+        let settings = self.ctx.get_settings();
+        let num_partitions = settings.get_window_num_partitions()?;
 
         let plan_schema = window_partition.output_schema()?;
 
@@ -159,76 +166,71 @@ impl PipelineBuilder {
                     offset,
                     asc: desc.asc,
                     nulls_first: desc.nulls_first,
-                    is_nullable: plan_schema.field(offset).is_nullable(),
                 })
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                TransformWindowPartitionScatter::try_create(
-                    self.ctx.clone(),
-                    input,
-                    output,
+        if let Some(top_n) = &window_partition.top_n
+            && top_n.top < 10000
+        {
+            self.main_pipeline.exchange(
+                num_processors,
+                WindowPartitionTopNExchange::create(
                     partition_by.clone(),
-                )?,
-            ))
-        })?;
-
-        let operator = DataOperator::instance().operator();
-        let location_prefix =
-            query_spill_prefix(self.ctx.get_tenant().tenant_name(), &self.ctx.get_id());
-        self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                TransformWindowPartitionSpillWriter::create(
-                    self.ctx.clone(),
-                    input,
-                    output,
-                    operator.clone(),
-                    location_prefix.clone(),
+                    sort_desc.clone(),
+                    top_n.top,
+                    top_n.func,
+                    num_partitions as u64,
                 ),
-            ))
-        })?;
+            )
+        } else {
+            self.main_pipeline.exchange(
+                num_processors,
+                WindowPartitionExchange::create(partition_by.clone(), num_partitions),
+            );
+        }
 
-        let input_nums = self.main_pipeline.output_len();
-        let transform = TransformWindowPartitionBucket::create(input_nums)?;
+        let disk_bytes_limit = settings.get_window_partition_spilling_to_disk_bytes_limit()?;
+        let temp_dir_manager = TempDirManager::instance();
 
-        let inputs = transform.get_inputs();
-        let output = transform.get_output();
+        let enable_dio = settings.get_enable_dio()?;
+        let disk_spill =
+            match temp_dir_manager.get_disk_spill_dir(disk_bytes_limit, &self.ctx.get_id()) {
+                Some(temp_dir) if !enable_dio => {
+                    let builder = Fs::default().root(temp_dir.path().to_str().unwrap());
+                    Some(SpillerDiskConfig {
+                        temp_dir,
+                        local_operator: Some(Operator::new(builder)?.finish()),
+                    })
+                }
+                Some(temp_dir) => Some(SpillerDiskConfig {
+                    temp_dir,
+                    local_operator: None,
+                }),
+                None => None,
+            };
 
-        self.main_pipeline
-            .add_pipe(Pipe::create(inputs.len(), 1, vec![PipeItem::create(
-                ProcessorPtr::create(Box::new(transform)),
-                inputs,
-                vec![output],
-            )]));
-
-        self.main_pipeline.try_resize(input_nums)?;
-
-        self.main_pipeline.add_transform(|input, output| {
-            TransformWindowPartitionSpillReader::create(input, output, operator.clone())
-        })?;
-
-        let block_size = self.settings.get_max_block_size()? as usize;
-        let sort_spilling_batch_bytes = self.ctx.get_settings().get_sort_spilling_batch_bytes()?;
-        let enable_loser_tree = self.ctx.get_settings().get_enable_loser_tree_merge_sort()?;
+        let window_spill_settings = WindowSpillSettings::new(&settings, num_processors)?;
         let have_order_col = window_partition.after_exchange.unwrap_or(false);
 
+        let processor_id = AtomicUsize::new(0);
         self.main_pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(
-                TransformWindowPartitionSort::try_create(
+            Ok(ProcessorPtr::create(Box::new(
+                TransformWindowPartitionCollect::new(
+                    self.ctx.clone(),
                     input,
                     output,
+                    &settings,
+                    processor_id.fetch_add(1, atomic::Ordering::AcqRel),
+                    num_processors,
+                    num_partitions,
+                    window_spill_settings.clone(),
+                    disk_spill.clone(),
                     sort_desc.clone(),
                     plan_schema.clone(),
-                    block_size,
-                    sort_spilling_batch_bytes,
-                    enable_loser_tree,
                     have_order_col,
                 )?,
-            ))
-        })?;
-
-        Ok(())
+            )))
+        })
     }
 }

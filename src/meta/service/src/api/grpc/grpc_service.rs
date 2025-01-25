@@ -16,7 +16,7 @@ use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow_format::flight::data::BasicAuth;
+use arrow_flight::BasicAuth;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::future::TimedFutureExt;
 use databend_common_base::runtime::ThreadTracker;
@@ -41,23 +41,23 @@ use databend_common_meta_types::protobuf::RaftRequest;
 use databend_common_meta_types::protobuf::StreamItem;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
-use fastrace::full_name;
 use fastrace::func_name;
+use fastrace::func_path;
 use fastrace::prelude::*;
 use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
-use log::info;
+use log::error;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
@@ -109,7 +109,7 @@ impl MetaServiceImpl {
     #[fastrace::trace]
     async fn handle_kv_api(&self, request: Request<RaftRequest>) -> Result<RaftReply, Status> {
         let req: MetaGrpcReq = request.try_into()?;
-        info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
+        debug!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
 
         let m = &self.meta_node;
         let reply = match &req {
@@ -117,27 +117,6 @@ impl MetaServiceImpl {
                 let res = m
                     .upsert_kv(a.clone())
                     .log_elapsed_info(format!("UpsertKV: {:?}", a))
-                    .await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::GetKV(a) => {
-                let res = m
-                    .get_kv(&a.key)
-                    .log_elapsed_info(format!("GetKV: {:?}", a))
-                    .await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::MGetKV(a) => {
-                let res = m
-                    .mget_kv(&a.keys)
-                    .log_elapsed_info(format!("MGetKV: {:?}", a))
-                    .await;
-                RaftReply::from(res)
-            }
-            MetaGrpcReq::ListKV(a) => {
-                let res = m
-                    .prefix_list_kv(&a.prefix)
-                    .log_elapsed_info(format!("ListKV: {:?}", a))
                     .await;
                 RaftReply::from(res)
             }
@@ -155,7 +134,7 @@ impl MetaServiceImpl {
     ) -> Result<(Option<Endpoint>, BoxStream<StreamItem>), Status> {
         let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
 
-        info!("{}: Received ReadRequest: {:?}", func_name!(), req);
+        debug!("{}: Received ReadRequest: {:?}", func_name!(), req);
 
         let req = ForwardRequest::new(1, req);
 
@@ -177,7 +156,7 @@ impl MetaServiceImpl {
     ) -> Result<(Option<Endpoint>, TxnReply), Status> {
         let txn = request.into_inner();
 
-        info!("{}: Received TxnRequest: {}", func_name!(), txn);
+        debug!("{}: Received TxnRequest: {}", func_name!(), txn);
 
         let ent = LogEntry::new(Cmd::Transaction(txn.clone()));
 
@@ -199,12 +178,8 @@ impl MetaServiceImpl {
                 (endpoint, txn_reply)
             }
             Err(err) => {
-                let txn_reply = TxnReply {
-                    success: false,
-                    error: serde_json::to_string(&err).expect("fail to serialize"),
-                    responses: vec![],
-                };
-                (None, txn_reply)
+                error!("txn request failed: {:?}", err);
+                return Err(Status::internal(err.to_string()));
             }
         };
 
@@ -289,7 +264,7 @@ impl MetaService for MetaServiceImpl {
             let _guard = RequestInFlight::guard();
 
             let root =
-                databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
             let reply = self.handle_kv_api(request).in_span(root).await?;
 
             network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -311,7 +286,7 @@ impl MetaService for MetaServiceImpl {
         ThreadTracker::tracking_future(async move {
             network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
             let root =
-                databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
 
             let (endpoint, strm) = self.handle_kv_read_v1(request).in_span(root).await?;
 
@@ -336,7 +311,7 @@ impl MetaService for MetaServiceImpl {
             let _guard = RequestInFlight::guard();
 
             let root =
-                databend_common_tracing::start_trace_for_remote_request(full_name!(), &request);
+                databend_common_tracing::start_trace_for_remote_request(func_path!(), &request);
             let (endpoint, reply) = self.handle_txn(request).in_span(root).await?;
 
             network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -362,7 +337,7 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let strm = meta_node.sto.inner().export();
+        let strm = meta_node.raft_store.inner().export();
 
         let chunk_size = 32;
         // - Chunk up upto 32 Ok items inside a Vec<String>;
@@ -390,7 +365,7 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let strm = meta_node.sto.inner().export();
+        let strm = meta_node.raft_store.inner().export();
 
         let chunk_size = request.get_ref().chunk_size.unwrap_or(32) as usize;
         // - Chunk up upto `chunk_size` Ok items inside a Vec<String>;
@@ -411,22 +386,27 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<WatchRequest>,
     ) -> Result<Response<Self::WatchStream>, Status> {
+        let watch = request.into_inner();
+
+        let key_range = watch.key_range().map_err(Status::invalid_argument)?;
+        let flush = watch.initial_flush;
+
         let (tx, rx) = mpsc::channel(4);
 
         let mn = &self.meta_node;
 
-        let add_res = mn.add_watcher(request.into_inner(), tx).await;
+        let sender = mn.add_watcher(watch, tx.clone()).await?;
+        let stream = WatchStream::new(rx, sender, mn.subscriber_handle.clone());
 
-        match add_res {
-            Ok(watcher) => {
-                let stream = WatchStream::new(rx, watcher, mn.dispatcher_handle.clone());
-                Ok(Response::new(Box::pin(stream) as Self::WatchStream))
-            }
-            Err(e) => {
-                // TODO: test error return.
-                Err(Status::invalid_argument(e))
+        if flush {
+            let sm = mn.raft_store.state_machine.clone();
+            {
+                let mut sm = sm.write().await;
+                sm.send_range(tx, key_range).await?;
             }
         }
+
+        Ok(Response::new(Box::pin(stream) as Self::WatchStream))
     }
 
     async fn member_list(
@@ -462,8 +442,21 @@ impl MetaService for MetaServiceImpl {
             binary_version: status.binary_version,
             data_version: status.data_version.to_string(),
             endpoint: status.endpoint,
-            db_size: status.db_size,
-            key_num: status.key_num as u64,
+
+            raft_log_size: status.raft_log.wal_total_size,
+
+            raft_log_status: Some(pb::RaftLogStatus {
+                cache_items: status.raft_log.cache_items,
+                cache_used_size: status.raft_log.cache_used_size,
+                wal_total_size: status.raft_log.wal_total_size,
+                wal_open_chunk_size: status.raft_log.wal_open_chunk_size,
+                wal_offset: status.raft_log.wal_offset,
+                wal_closed_chunk_count: status.raft_log.wal_closed_chunk_count,
+                wal_closed_chunk_total_size: status.raft_log.wal_closed_chunk_total_size,
+                wal_closed_chunk_sizes: status.raft_log.wal_closed_chunk_sizes,
+            }),
+
+            snapshot_key_count: status.snapshot_key_count as u64,
             state: status.state,
             is_leader: status.is_leader,
             current_term: status.current_term,

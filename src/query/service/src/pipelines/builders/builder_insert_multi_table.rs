@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
+use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::DynTransformBuilder;
@@ -166,7 +167,9 @@ impl PipelineBuilder {
 
     pub(crate) fn build_chunk_append_data(&mut self, plan: &ChunkAppendData) -> Result<()> {
         self.build_pipeline(&plan.input)?;
-        let mut compact_builders: Vec<DynTransformBuilder> =
+        let mut compact_task_builders: Vec<DynTransformBuilder> =
+            Vec::with_capacity(plan.target_tables.len());
+        let mut compact_transform_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(plan.target_tables.len());
         let mut serialize_block_builders: Vec<DynTransformBuilder> =
             Vec::with_capacity(plan.target_tables.len());
@@ -182,9 +185,9 @@ impl PipelineBuilder {
                 .ctx
                 .build_table_by_table_info(&append_data.target_table_info, None)?;
             let block_thresholds = table.get_block_thresholds();
-            compact_builders.push(Box::new(
-                self.block_compact_transform_builder(block_thresholds)?,
-            ));
+            compact_task_builders
+                .push(Box::new(self.block_compact_task_builder(block_thresholds)?));
+            compact_transform_builders.push(Box::new(self.block_compact_transform_builder()?));
             let schema: Arc<DataSchema> = DataSchema::from(table.schema()).into();
             let num_input_columns = schema.num_fields();
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -219,7 +222,6 @@ impl PipelineBuilder {
                         offset: *index,
                         asc: true,
                         nulls_first: false,
-                        is_nullable: false, // This information is not needed here.
                     })
                     .collect();
                 let sort_desc = Arc::new(sort_desc);
@@ -228,7 +230,7 @@ impl PipelineBuilder {
                         Ok(ProcessorPtr::create(TransformSortPartial::try_create(
                             transform_input_port,
                             transform_output_port,
-                            None,
+                            LimitType::None,
                             sort_desc.clone(),
                         )?))
                     },
@@ -242,7 +244,9 @@ impl PipelineBuilder {
             ));
         }
         self.main_pipeline
-            .add_transforms_by_chunk(compact_builders)?;
+            .add_transforms_by_chunk(compact_task_builders)?;
+        self.main_pipeline
+            .add_transforms_by_chunk(compact_transform_builders)?;
         if eval_cluster_key_num > 0 {
             self.main_pipeline
                 .add_transforms_by_chunk(eval_cluster_key_builders)?;
@@ -288,8 +292,10 @@ impl PipelineBuilder {
         self.main_pipeline
             .add_transforms_by_chunk(mutation_aggregator_builders)?;
         self.main_pipeline.try_resize(1)?;
-        let catalog = CatalogManager::instance()
-            .build_catalog(targets[0].target_catalog_info.clone(), self.ctx.txn_mgr())?;
+        let catalog = CatalogManager::instance().build_catalog(
+            targets[0].target_catalog_info.clone(),
+            self.ctx.session_state(),
+        )?;
         self.main_pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(AsyncSinker::create(
                 input,

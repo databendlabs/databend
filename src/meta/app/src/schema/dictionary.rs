@@ -20,11 +20,15 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 
-use super::tenant_dictionary_ident::TenantDictionaryIdent;
+use super::dictionary_name_ident::DictionaryNameIdent;
+use crate::schema::DictionaryIdentity;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
+use crate::KeyWithTenant;
 
 /// Represents the metadata of a dictionary within the system.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -77,9 +81,38 @@ impl Default for DictionaryMeta {
     }
 }
 
+impl DictionaryMeta {
+    pub fn build_sql_connection_url(&self) -> Result<String> {
+        let username = self
+            .options
+            .get("username")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `username`"))?;
+        let password = self
+            .options
+            .get("password")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `password`"))?;
+        let host = self
+            .options
+            .get("host")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `host`"))?;
+        let port = self
+            .options
+            .get("port")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
+        let db = self
+            .options
+            .get("db")
+            .ok_or_else(|| ErrorCode::BadArguments("Miss option `db`"))?;
+        Ok(format!(
+            "mysql://{}:{}@{}:{}/{}",
+            username, password, host, port, db
+        ))
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateDictionaryReq {
-    pub dictionary_ident: TenantDictionaryIdent,
+    pub dictionary_ident: DictionaryNameIdent,
     pub dictionary_meta: DictionaryMeta,
 }
 
@@ -94,23 +127,6 @@ pub struct GetDictionaryReply {
     pub dictionary_meta: DictionaryMeta,
     /// Any change to a dictionary causes the seq to increment
     pub dictionary_meta_seq: u64,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
-pub struct DictionaryId {
-    pub dictionary_id: u64,
-}
-
-impl DictionaryId {
-    pub fn new(dictionary_id: u64) -> DictionaryId {
-        DictionaryId { dictionary_id }
-    }
-}
-
-impl Display for DictionaryId {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "DictionaryId{{{}}}", self.dictionary_id)
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -139,7 +155,7 @@ impl ListDictionaryReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UpdateDictionaryReq {
     pub dictionary_meta: DictionaryMeta,
-    pub dictionary_ident: TenantDictionaryIdent,
+    pub dictionary_ident: DictionaryNameIdent,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -147,41 +163,44 @@ pub struct UpdateDictionaryReply {
     pub dictionary_id: u64,
 }
 
-mod kvapi_key_impl {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenameDictionaryReq {
+    pub name_ident: DictionaryNameIdent,
+    pub new_dict_ident: DictionaryIdentity,
+}
 
-    use databend_common_meta_kvapi::kvapi;
-
-    use super::DictionaryId;
-    use super::DictionaryMeta;
-
-    impl kvapi::KeyCodec for DictionaryId {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.dictionary_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-        where Self: Sized {
-            let dict_id = parser.next_u64()?;
-            Ok(Self {
-                dictionary_id: dict_id,
-            })
-        }
+impl RenameDictionaryReq {
+    pub fn tenant(&self) -> &Tenant {
+        self.name_ident.tenant()
     }
 
-    /// "<prefix>/<dictionary_id>"
-    impl kvapi::Key for DictionaryId {
-        const PREFIX: &'static str = "__fd_dictionary_by_id";
-
-        type ValueType = DictionaryMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
+    pub fn db_id(&self) -> u64 {
+        self.name_ident.db_id()
     }
 
-    impl kvapi::Value for DictionaryMeta {
-        fn dependency_keys(&self) -> impl IntoIterator<Item = String> {
-            []
-        }
+    pub fn dictionary_name(&self) -> String {
+        self.name_ident.dict_name().clone()
+    }
+
+    pub fn new_db_id(&self) -> u64 {
+        self.new_dict_ident.db_id
+    }
+
+    pub fn new_dictionary_name(&self) -> String {
+        self.new_dict_ident.dict_name.clone()
+    }
+}
+
+impl Display for RenameDictionaryReq {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(
+            f,
+            "rename_dictionary:{}/{}-{}=>{}-{}",
+            self.tenant().tenant_name(),
+            self.db_id(),
+            self.dictionary_name(),
+            self.new_db_id(),
+            self.new_dictionary_name(),
+        )
     }
 }

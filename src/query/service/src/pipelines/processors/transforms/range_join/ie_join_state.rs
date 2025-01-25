@@ -18,6 +18,8 @@ use std::sync::atomic::Ordering;
 use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -35,7 +37,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_sql::executor::physical_plans::RangeJoin;
@@ -86,19 +87,16 @@ impl IEJoinState {
                 offset: 0,
                 asc: l1_order,
                 nulls_first: false,
-                is_nullable: l1_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 1,
                 asc: l2_order,
                 nulls_first: false,
-                is_nullable: l2_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 2,
                 asc: false,
                 nulls_first: false,
-                is_nullable: false,
             },
         ];
 
@@ -107,20 +105,17 @@ impl IEJoinState {
                 offset: 1,
                 asc: l2_order,
                 nulls_first: false,
-                is_nullable: l2_data_type.is_nullable(),
             },
             SortColumnDescription {
                 offset: 0,
                 asc: l1_order,
                 nulls_first: false,
-                is_nullable: l1_data_type.is_nullable(),
             },
             // `_tuple_id` column
             SortColumnDescription {
                 offset: 2,
                 asc: false,
                 nulls_first: false,
-                is_nullable: false,
             },
         ];
 
@@ -136,6 +131,10 @@ impl IEJoinState {
     fn intersection(&self, left_block: &DataBlock, right_block: &DataBlock) -> bool {
         let left_len = left_block.num_rows();
         let right_len = right_block.num_rows();
+        if left_len == 0 || right_len == 0 {
+            return false;
+        }
+
         let left_l1_column = left_block.columns()[0]
             .value
             .convert_to_full_column(&self.l1_data_type, left_len);
@@ -286,8 +285,8 @@ impl RangeJoinState {
             .value
             .try_downcast::<UInt64Type>()
             .unwrap();
-        if let ValueRef::Column(col) = column.as_ref() {
-            for val in UInt64Type::iter_column(&col) {
+        if let Value::Column(col) = &column {
+            for val in UInt64Type::iter_column(col) {
                 p_array.push(val)
             }
         }
@@ -409,6 +408,7 @@ impl RangeJoinState {
             &indices,
             indices.len(),
         );
+        // Merge left_result_block and right_result_block
         for col in right_result_block.columns() {
             left_result_block.add_column(col.clone());
         }

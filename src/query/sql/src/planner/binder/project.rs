@@ -71,7 +71,10 @@ struct RemoveIdentifierQuote;
 
 impl RemoveIdentifierQuote {
     fn enter_identifier(&mut self, ident: &mut Identifier) {
-        ident.quote = None
+        if !ident.is_hole() && !ident.is_variable() {
+            ident.quote = None;
+            ident.name = ident.name.to_lowercase();
+        }
     }
 }
 
@@ -99,16 +102,17 @@ impl Binder {
                 ScalarExpr::AggregateFunction(agg) => {
                     // Replace to bound column to reduce duplicate derived column bindings.
                     debug_assert!(!is_grouping_sets_item);
-                    find_replaced_aggregate_function(agg_info, agg, &item.alias).unwrap()
+                    find_replaced_aggregate_function(
+                        agg_info,
+                        &agg.display_name,
+                        &agg.return_type,
+                        &item.alias,
+                    )
+                    .unwrap()
                 }
                 ScalarExpr::WindowFunction(win) => {
                     find_replaced_window_function(window_info, win, &item.alias).unwrap()
                 }
-                ScalarExpr::AsyncFunctionCall(async_func) => self.create_derived_column_binding(
-                    async_func.display_name.clone(),
-                    async_func.return_type.as_ref().clone(),
-                    Some(item.scalar.clone()),
-                ),
                 _ => self.create_derived_column_binding(
                     item.alias.clone(),
                     item.scalar.data_type()?,
@@ -260,8 +264,6 @@ impl Binder {
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
                         &prev_aliases,
-                        self.m_cte_bound_ctx.clone(),
-                        self.ctes_map.clone(),
                     );
                     let (bound_expr, _) = scalar_binder.bind(expr)?;
 
@@ -285,7 +287,7 @@ impl Binder {
                             let mut expr = expr.clone();
                             let mut remove_quote_visitor = RemoveIdentifierQuote;
                             expr.drive_mut(&mut remove_quote_visitor);
-                            format!("{:#}", expr).to_lowercase()
+                            format!("{:#}", expr)
                         }
                     };
 
@@ -318,8 +320,6 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
-                    self.m_cte_bound_ctx.clone(),
-                    self.ctes_map.clone(),
                 );
                 let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
                 let expr = parse_expr(&sql_tokens, self.dialect)?;

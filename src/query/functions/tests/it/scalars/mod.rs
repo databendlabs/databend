@@ -43,6 +43,7 @@ mod geo;
 // TODO: fix this in running on linux
 #[cfg(not(target_os = "macos"))]
 mod geo_h3;
+mod geography;
 mod geometry;
 mod hash;
 mod map;
@@ -104,9 +105,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
         let optimized_result = evaluator.run(&optimized_expr);
         match &result {
             Ok(result) => assert!(
-                result
-                    .as_ref()
-                    .semantically_eq(&optimized_result.clone().unwrap().as_ref()),
+                result.semantically_eq(&optimized_result.clone().unwrap()),
                 "{} should eq {}, expr: {}, optimized_expr: {}",
                 result,
                 optimized_result.unwrap(),
@@ -221,8 +220,8 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
 }
 
 fn test_arrow_conversion(col: &Column) {
-    let arrow_col = col.as_arrow();
-    let new_col = Column::from_arrow(&*arrow_col, &col.data_type()).unwrap();
+    let arrow_col = col.clone().into_arrow_rs();
+    let new_col = Column::from_arrow_rs(arrow_col, &col.data_type()).unwrap();
     assert_eq!(col, &new_col, "arrow conversion went wrong");
 }
 
@@ -271,4 +270,44 @@ fn list_all_builtin_functions() {
 #[test]
 fn check_ambiguity() {
     BUILTIN_FUNCTIONS.check_ambiguity()
+}
+
+#[test]
+fn test_if_function() -> Result<()> {
+    use databend_common_expression::types::*;
+    use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
+    let raw_expr = parser::parse_raw_expr("if(eq(n,1), sum_sid + 1,100)", &[
+        ("n", UInt8Type::data_type()),
+        ("sum_sid", Int32Type::data_type().wrap_nullable()),
+    ]);
+    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+    let block = DataBlock::new(
+        vec![
+            BlockEntry {
+                data_type: UInt8Type::data_type(),
+                value: Value::Column(UInt8Type::from_data(vec![2_u8, 1])),
+            },
+            BlockEntry {
+                data_type: Int32Type::data_type().wrap_nullable(),
+                value: Value::Scalar(Scalar::Number(NumberScalar::Int32(2400_i32))),
+            },
+        ],
+        2,
+    );
+    let func_ctx = FunctionContext::default();
+    let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+    let result = evaluator.run(&expr).unwrap();
+    let result = result
+        .as_column()
+        .unwrap()
+        .clone()
+        .as_nullable()
+        .unwrap()
+        .clone();
+
+    let bm = Bitmap::from_iter([true, true]);
+    assert_eq!(result.validity, bm);
+    assert_eq!(result.column, Int64Type::from_data(vec![100, 2401]));
+    Ok(())
 }

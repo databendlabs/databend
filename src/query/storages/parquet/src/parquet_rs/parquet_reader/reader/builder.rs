@@ -51,6 +51,7 @@ pub struct ParquetRSReaderBuilder<'a> {
     op: Operator,
     table_schema: TableSchemaRef,
     schema_desc: SchemaDescPtr,
+    schema_desc_from: Option<String>,
     arrow_schema: Option<arrow_schema::Schema>,
 
     push_downs: Option<&'a PushDownInfo>,
@@ -85,6 +86,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
             table_schema,
             schema_desc,
             Some(arrow_schema),
+            None,
         ))
     }
 
@@ -94,6 +96,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         table_schema: TableSchemaRef,
         schema_desc: SchemaDescPtr,
         arrow_schema: Option<arrow_schema::Schema>,
+        schema_desc_from: Option<String>,
     ) -> ParquetRSReaderBuilder<'a> {
         ParquetRSReaderBuilder {
             ctx,
@@ -101,6 +104,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
             table_schema,
             schema_desc,
             arrow_schema,
+            schema_desc_from,
             push_downs: None,
             options: Default::default(),
             pruner: None,
@@ -221,6 +225,10 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         let (_, _, output_schema, _) = self.built_output.as_ref().unwrap();
         Ok(ParquetRSFullReader {
             op: self.op.clone(),
+            expect_file_schema: self
+                .schema_desc_from
+                .as_ref()
+                .map(|p| (self.schema_desc.clone(), p.clone())),
             output_schema: output_schema.clone(),
             predicate,
             projection,

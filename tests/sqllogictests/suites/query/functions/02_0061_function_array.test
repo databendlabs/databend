@@ -19,23 +19,33 @@ statement ok
 DROP TABLE IF EXISTS t
 
 statement ok
-create table t(col1 Array(Int Null) not null, col2 Array(String) not null, col3 Array(Date) not null, col4 Array(Timestamp) not null, col5 Array(Array(Int null)) not null)
+create table t(index int default 10, col1 Array(Int Null) not null, col2 Array(String) not null, col3 Array(Date) not null, col4 Array(Timestamp) not null, col5 Array(Array(Int null)) not null)
 
 statement ok
-insert into t values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
+insert into t(col1, col2, col3, col4, col5) values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
 
 query IIII
 select length(col1), length(col2), length(col3), length(col4) from t
 ----
 4 4 1 1
 
+query II
+select array_length(col1), array_length(col2) from t
+----
+4 4
+
+query II
+select array_size(col3), array_size(col4) from t
+----
+1 1
+
 query ITT
-select get(col1, 3), get(col2, 2), get(col3, 1) from t
+select get(col1, index - 7), get(col2, index - 8), get(col3, index - 9) from t
 ----
 3 x 2022-02-02
 
 query TTTT
-select slice(col1, 1), slice(col1, 2, 3), slice(col2, 2), slice(col2, 3, 3) from t
+select slice(col1, index - 9), slice(col1, 2, 3), slice(col2, 2), slice(col2, 3, 3) from t
 ----
 [1,2,3,3] [2,3] ['x','y','z'] ['y']
 
@@ -250,7 +260,7 @@ statement error 1065
 select array_filter([1, 2], x -> x + 1)
 
 query TT
-select array_flatten( [ [1,2], [3,4] ] ), array_to_string(['open', 'ai'], ' love ');
+select array_flatten( [ [1,2], [3,4] ] ), array_to_string(['open', 'ai', null], ' love ');
 ----
 [1,2,3,4]	open love ai
 
@@ -309,6 +319,11 @@ select length(col1), length(col2), length(col3), length(col4) from t
 ----
 4 4 1 1
 
+query IIII
+select array_size(col1), array_size(col2), array_length(col3), array_length(col4) from t1
+----
+3 3 3 3
+
 statement ok
 DROP TABLE IF EXISTS t2
 
@@ -363,8 +378,50 @@ select array_transform(col1, a -> a + col2), array_filter(col1, a -> a = col2), 
 NULL NULL NULL
 [12,13] [] 20
 
+## json array functions
+
+query T
+select json_array_transform(['data', 'a', 'b']::Variant, data -> CONCAT(data::String, 'bend') );
+----
+["databend","abend","bbend"]
+
+query TT
+select json_array_transform(try_cast(col1 as Variant), a -> a::Int + col2), json_array_filter(try_cast(col1 as Variant), a -> a::Int = col2) from t3;
+----
+[3,4,5] [2]
+[null,null] []
+NULL NULL
+[12,13] []
+
+query TT
+select json_array_reduce([1,2,3,4]::Variant, (x, y) -> 3 + x + y), json_array_transform(parse_json('"aa"'), data -> CONCAT(data::String, 'bend'));
+----
+19 []
+
+query T
+SELECT arrays_zip(1, 'a', null);
+----
+[(1,'a',NULL)]
+
+query T
+SELECT arrays_zip([1,2,3], ['a','b','c'], 10);
+----
+[(1,'a',10),(2,'b',10),(3,'c',10)]
+
+statement error 1006
+SELECT arrays_zip([1,2,3], ['a','b'], 10);
+
+query T
+SELECT arrays_zip(col1, col2) FROM t3;
+----
+[(1,2),(2,2),(3,2)]
+[(4,NULL),(5,NULL)]
+[(NULL,4)]
+[(7,5),(8,5)]
+
 statement ok
 USE default
 
 statement ok
 DROP DATABASE array_func_test
+

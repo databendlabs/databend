@@ -13,11 +13,10 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::result::Result;
 
-use chrono::Datelike;
-use chrono::NaiveDate;
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
+use jiff::civil::Date;
+use jiff::Unit;
 
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalSize;
@@ -25,20 +24,23 @@ use crate::types::decimal::DecimalSize;
 pub const EPOCH_DAYS_FROM_CE: i32 = 719_163;
 
 #[inline]
-pub fn uniform_date(date: NaiveDate) -> i32 {
-    date.num_days_from_ce() - EPOCH_DAYS_FROM_CE
+pub fn uniform_date(date: Date) -> i32 {
+    date.since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+        .unwrap()
+        .get_days()
 }
 
+// Used in function, so we don't want to return ErrorCode with backtrace
 pub fn read_decimal_with_size<T: Decimal>(
     buf: &[u8],
     size: DecimalSize,
     exact: bool,
     rounding_mode: bool,
-) -> Result<(T, usize)> {
+) -> Result<(T, usize), String> {
     // Read one more digit for round
     let (n, d, e, n_read) =
         read_decimal::<T>(buf, (size.precision + 1) as u32, size.scale as _, exact)?;
-    if d as i32 + e > (size.precision - size.scale).into() {
+    if d as i32 + e > (size.precision - size.scale) as i32 {
         return Err(decimal_overflow_error());
     }
     let scale_diff = e + size.scale as i32;
@@ -91,7 +93,7 @@ pub fn read_decimal<T: Decimal>(
     max_digits: u32,
     mut max_scales: u32,
     exact: bool,
-) -> Result<(T, u8, i32, usize)> {
+) -> Result<(T, u8, i32, usize), String> {
     if buf.is_empty() {
         return Err(decimal_parse_error("empty"));
     }
@@ -302,7 +304,7 @@ pub fn read_decimal<T: Decimal>(
 pub fn read_decimal_from_json<T: Decimal>(
     value: &serde_json::Value,
     size: DecimalSize,
-) -> Result<T> {
+) -> Result<T, String> {
     match value {
         serde_json::Value::Number(n) => {
             if n.is_i64() {
@@ -323,14 +325,14 @@ pub fn read_decimal_from_json<T: Decimal>(
             let (n, _) = read_decimal_with_size::<T>(s.as_bytes(), size, true, true)?;
             Ok(n)
         }
-        _ => Err(ErrorCode::from("Incorrect json value for decimal")),
+        _ => Err("Incorrect json value for decimal".to_string()),
     }
 }
 
-fn decimal_parse_error(msg: &str) -> ErrorCode {
-    ErrorCode::BadArguments(format!("bad decimal literal: {msg}"))
+fn decimal_parse_error(msg: &str) -> String {
+    format!("bad decimal literal: {msg}")
 }
 
-fn decimal_overflow_error() -> ErrorCode {
-    ErrorCode::Overflow("Decimal overflow")
+fn decimal_overflow_error() -> String {
+    "Decimal overflow".to_string()
 }

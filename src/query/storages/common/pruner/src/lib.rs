@@ -18,10 +18,12 @@ mod block_meta;
 mod internal_column_pruner;
 mod limiter_pruner;
 mod page_pruner;
+pub mod partition_prunner;
 mod range_pruner;
 mod topn_pruner;
 
 pub use block_meta::BlockMetaIndex;
+pub use block_meta::VirtualBlockMetaIndex;
 pub use internal_column_pruner::InternalColumnPruner;
 pub use limiter_pruner::Limiter;
 pub use limiter_pruner::LimiterPruner;

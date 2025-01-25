@@ -15,12 +15,9 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::VecDisplay;
-
-pub type UpsertKVReq = UpsertKV;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetKVReq {

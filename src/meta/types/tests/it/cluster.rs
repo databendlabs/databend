@@ -21,8 +21,15 @@ fn test_node_info_ip_port() -> anyhow::Result<()> {
         secret: "".to_string(),
         cpu_nums: 1,
         version: 1,
+        http_address: "7.8.9.10:987".to_string(),
         flight_address: "1.2.3.4:123".to_string(),
+        discovery_address: "4.5.6.7:456".to_string(),
         binary_version: "v0.8-binary-version".to_string(),
+        node_type: Default::default(),
+        node_group: None,
+        cluster_id: "".to_string(),
+        warehouse_id: "".to_string(),
+        runtime_node_group: None,
     };
 
     let (ip, port) = n.ip_port()?;
@@ -31,4 +38,36 @@ fn test_node_info_ip_port() -> anyhow::Result<()> {
     assert_eq!("v0.8-binary-version".to_string(), n.binary_version);
 
     Ok(())
+}
+
+#[test]
+fn test_serde_node_info() {
+    let mut info = NodeInfo {
+        id: "test_id".to_string(),
+        secret: "test_secret".to_string(),
+        version: 1,
+        cpu_nums: 1,
+        http_address: "7.8.9.10:987".to_string(),
+        flight_address: "1.2.3.4:123".to_string(),
+        discovery_address: "4.5.6.7:456".to_string(),
+        binary_version: "v0.8-binary-version".to_string(),
+        node_type: Default::default(),
+        node_group: None,
+        cluster_id: String::new(),
+        warehouse_id: String::new(),
+        runtime_node_group: None,
+    };
+
+    let json_str = serde_json::to_string(&info).unwrap();
+    assert_eq!(info, serde_json::from_str::<NodeInfo>(&json_str).unwrap());
+    assert!(!json_str.contains("cluster"));
+    assert!(!json_str.contains("warehouse"));
+
+    info.cluster_id = String::from("test-cluster-id");
+    info.warehouse_id = String::from("test-warehouse-id");
+
+    assert_eq!(
+        info,
+        serde_json::from_slice::<NodeInfo>(&serde_json::to_vec(&info).unwrap()).unwrap()
+    );
 }

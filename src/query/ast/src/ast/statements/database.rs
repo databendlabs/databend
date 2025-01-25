@@ -49,6 +49,26 @@ impl Display for ShowDatabasesStmt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct ShowDropDatabasesStmt {
+    pub catalog: Option<Identifier>,
+    pub limit: Option<ShowLimit>,
+}
+
+impl Display for ShowDropDatabasesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW DROP DATABASES")?;
+        if let Some(catalog) = &self.catalog {
+            write!(f, " FROM {catalog}")?;
+        }
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
 pub struct ShowCreateDatabaseStmt {
     pub catalog: Option<Identifier>,

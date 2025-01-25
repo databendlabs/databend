@@ -1,0 +1,250 @@
+statement ok
+CREATE OR REPLACE TABLE table1 (
+    value INT
+);
+
+statement ok
+INSERT INTO table1 (value) SELECT number from numbers(2000);
+
+statement ok
+INSERT INTO table1 (value) SELECT NULL FROM numbers(2000);
+
+statement ok
+CREATE OR REPLACE TABLE table2 (
+    value INT
+);
+
+statement ok
+INSERT INTO table2 (value) SELECT number from numbers(1000);
+
+statement ok
+INSERT INTO table2 (value) SELECT NULL FROM numbers(3000);
+
+statement ok
+CREATE OR REPLACE TABLE table3 (
+    value INT
+);
+
+statement ok
+INSERT INTO table3 (value) SELECT number from numbers(2000);
+
+statement ok
+INSERT INTO table3 (value) SELECT NULL FROM numbers(2000);
+
+
+query T
+explain SELECT * FROM table1 INNER JOIN table2 ON table1.value = table2.value;
+----
+Exchange
+├── output columns: [table1.value (#0), table2.value (#1)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [table1.value (#0), table2.value (#1)]
+    ├── join type: INNER
+    ├── build keys: [table2.value (#1)]
+    ├── probe keys: [table1.value (#0)]
+    ├── filters: []
+    ├── estimated rows: 250.00
+    ├── Exchange(Build)
+    │   ├── output columns: [table2.value (#1)]
+    │   ├── exchange type: Broadcast
+    │   └── Filter
+    │       ├── output columns: [table2.value (#1)]
+    │       ├── filters: [is_not_null(table2.value (#1))]
+    │       ├── estimated rows: 1000.00
+    │       └── TableScan
+    │           ├── table: default.default.table2
+    │           ├── output columns: [value (#1)]
+    │           ├── read rows: 1000
+    │           ├── read size: 2.30 KiB
+    │           ├── partitions total: 6
+    │           ├── partitions scanned: 3
+    │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+    │           └── estimated rows: 4000.00
+    └── Filter(Probe)
+        ├── output columns: [table1.value (#0)]
+        ├── filters: [is_not_null(table1.value (#0))]
+        ├── estimated rows: 2000.00
+        └── TableScan
+            ├── table: default.default.table1
+            ├── output columns: [value (#0)]
+            ├── read rows: 2000
+            ├── read size: 3.94 KiB
+            ├── partitions total: 6
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+            ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+            └── estimated rows: 4000.00
+
+query T
+explain SELECT * FROM table1 INNER JOIN table2 INNER JOIN table3 ON table1.value = table2.value and table2.value = table3.value;
+----
+Exchange
+├── output columns: [table1.value (#0), table2.value (#1), table3.value (#2)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [table1.value (#0), table2.value (#1), table3.value (#2)]
+    ├── join type: INNER
+    ├── build keys: [table3.value (#2)]
+    ├── probe keys: [table1.value (#0)]
+    ├── filters: []
+    ├── estimated rows: 200.00
+    ├── Exchange(Build)
+    │   ├── output columns: [table3.value (#2), table2.value (#1)]
+    │   ├── exchange type: Broadcast
+    │   └── HashJoin
+    │       ├── output columns: [table3.value (#2), table2.value (#1)]
+    │       ├── join type: INNER
+    │       ├── build keys: [table2.value (#1)]
+    │       ├── probe keys: [table3.value (#2)]
+    │       ├── filters: []
+    │       ├── estimated rows: 250.00
+    │       ├── Exchange(Build)
+    │       │   ├── output columns: [table2.value (#1)]
+    │       │   ├── exchange type: Broadcast
+    │       │   └── Filter
+    │       │       ├── output columns: [table2.value (#1)]
+    │       │       ├── filters: [is_not_null(table2.value (#1))]
+    │       │       ├── estimated rows: 1000.00
+    │       │       └── TableScan
+    │       │           ├── table: default.default.table2
+    │       │           ├── output columns: [value (#1)]
+    │       │           ├── read rows: 1000
+    │       │           ├── read size: 2.30 KiB
+    │       │           ├── partitions total: 6
+    │       │           ├── partitions scanned: 3
+    │       │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │       │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+    │       │           └── estimated rows: 4000.00
+    │       └── Filter(Probe)
+    │           ├── output columns: [table3.value (#2)]
+    │           ├── filters: [is_not_null(table3.value (#2))]
+    │           ├── estimated rows: 2000.00
+    │           └── TableScan
+    │               ├── table: default.default.table3
+    │               ├── output columns: [value (#2)]
+    │               ├── read rows: 2000
+    │               ├── read size: 3.94 KiB
+    │               ├── partitions total: 6
+    │               ├── partitions scanned: 3
+    │               ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │               ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
+    │               └── estimated rows: 4000.00
+    └── Filter(Probe)
+        ├── output columns: [table1.value (#0)]
+        ├── filters: [is_not_null(table1.value (#0))]
+        ├── estimated rows: 2000.00
+        └── TableScan
+            ├── table: default.default.table1
+            ├── output columns: [value (#0)]
+            ├── read rows: 2000
+            ├── read size: 3.94 KiB
+            ├── partitions total: 6
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+            ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+            └── estimated rows: 4000.00
+
+
+query T
+explain SELECT * FROM table1 LEFT SEMI JOIN table2 ON table1.value = table2.value;
+----
+Exchange
+├── output columns: [table1.value (#0)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [table1.value (#0)]
+    ├── join type: LEFT SEMI
+    ├── build keys: [table2.value (#1)]
+    ├── probe keys: [table1.value (#0)]
+    ├── filters: []
+    ├── estimated rows: 250.00
+    ├── Exchange(Build)
+    │   ├── output columns: [table2.value (#1)]
+    │   ├── exchange type: Broadcast
+    │   └── Filter
+    │       ├── output columns: [table2.value (#1)]
+    │       ├── filters: [is_not_null(table2.value (#1))]
+    │       ├── estimated rows: 1000.00
+    │       └── TableScan
+    │           ├── table: default.default.table2
+    │           ├── output columns: [value (#1)]
+    │           ├── read rows: 1000
+    │           ├── read size: 2.30 KiB
+    │           ├── partitions total: 6
+    │           ├── partitions scanned: 3
+    │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+    │           └── estimated rows: 4000.00
+    └── Filter(Probe)
+        ├── output columns: [table1.value (#0)]
+        ├── filters: [is_not_null(table1.value (#0))]
+        ├── estimated rows: 2000.00
+        └── TableScan
+            ├── table: default.default.table1
+            ├── output columns: [value (#0)]
+            ├── read rows: 2000
+            ├── read size: 3.94 KiB
+            ├── partitions total: 6
+            ├── partitions scanned: 3
+            ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+            ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+            └── estimated rows: 4000.00
+
+query T
+explain  SELECT * FROM table1 RIGHT SEMI JOIN table2 ON table1.value = table2.value;
+----
+Exchange
+├── output columns: [table2.value (#1)]
+├── exchange type: Merge
+└── HashJoin
+    ├── output columns: [table2.value (#1)]
+    ├── join type: RIGHT SEMI
+    ├── build keys: [table2.value (#1)]
+    ├── probe keys: [table1.value (#0)]
+    ├── filters: []
+    ├── estimated rows: 250.00
+    ├── Exchange(Build)
+    │   ├── output columns: [table2.value (#1)]
+    │   ├── exchange type: Hash(table2.value (#1))
+    │   └── Filter
+    │       ├── output columns: [table2.value (#1)]
+    │       ├── filters: [is_not_null(table2.value (#1))]
+    │       ├── estimated rows: 1000.00
+    │       └── TableScan
+    │           ├── table: default.default.table2
+    │           ├── output columns: [value (#1)]
+    │           ├── read rows: 1000
+    │           ├── read size: 2.30 KiB
+    │           ├── partitions total: 6
+    │           ├── partitions scanned: 3
+    │           ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+    │           ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
+    │           └── estimated rows: 4000.00
+    └── Exchange(Probe)
+        ├── output columns: [table1.value (#0)]
+        ├── exchange type: Hash(table1.value (#0))
+        └── Filter
+            ├── output columns: [table1.value (#0)]
+            ├── filters: [is_not_null(table1.value (#0))]
+            ├── estimated rows: 2000.00
+            └── TableScan
+                ├── table: default.default.table1
+                ├── output columns: [value (#0)]
+                ├── read rows: 2000
+                ├── read size: 3.94 KiB
+                ├── partitions total: 6
+                ├── partitions scanned: 3
+                ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 3 to 3>]
+                ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+                └── estimated rows: 4000.00
+
+statement ok
+drop table table1;
+
+statement ok
+drop table table2;
+
+statement ok
+drop table table3;

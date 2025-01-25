@@ -24,7 +24,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
-use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::AggregateFunctionRef;
@@ -32,6 +31,7 @@ use databend_common_expression::Scalar;
 use ethnum::i256;
 use serde::Deserialize;
 use serde::Serialize;
+use string::StringColumnBuilder;
 
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
@@ -157,8 +157,7 @@ where
                 })
                 .collect::<Vec<Bucket<String>>>(),
         )?;
-        builder.put_str(&json_str);
-        builder.commit_row();
+        builder.put_and_commit(json_str);
 
         Ok(())
     }

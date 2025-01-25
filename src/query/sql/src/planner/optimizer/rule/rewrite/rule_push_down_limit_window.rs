@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -71,26 +70,32 @@ impl Rule for RulePushDownLimitWindow {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
-        if let Some(mut count) = limit.limit {
-            count += limit.offset;
-            let window = s_expr.child(0)?;
-            let mut window_limit: LogicalWindow = window.plan().clone().try_into()?;
-            if should_apply(window.child(0)?, &window_limit)? {
-                let limit = window_limit.limit.map_or(count, |c| cmp::max(c, count));
-
-                if limit <= self.max_limit {
-                    window_limit.limit = Some(limit);
-                    let sort = SExpr::create_unary(
-                        Arc::new(RelOperator::Window(window_limit)),
-                        Arc::new(window.child(0)?.clone()),
-                    );
-
-                    let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
-                    result.set_applied_rule(&self.id);
-                    state.add_result(result);
-                }
-            }
+        let Some(mut count) = limit.limit else {
+            return Ok(());
+        };
+        count += limit.offset;
+        if count > self.max_limit {
+            return Ok(());
         }
+        let window = s_expr.child(0)?;
+        let mut window_limit: LogicalWindow = window.plan().clone().try_into()?;
+        let limit = window_limit.limit.map_or(count, |c| c.max(count));
+        if limit > self.max_limit {
+            return Ok(());
+        }
+        if !should_apply(window.child(0)?, &window_limit)? {
+            return Ok(());
+        }
+
+        window_limit.limit = Some(limit);
+        let sort = SExpr::create_unary(
+            Arc::new(RelOperator::Window(window_limit)),
+            Arc::new(window.child(0)?.clone()),
+        );
+        let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
+        result.set_applied_rule(&self.id);
+        state.add_result(result);
+
         Ok(())
     }
 
@@ -100,7 +105,7 @@ impl Rule for RulePushDownLimitWindow {
 }
 
 fn should_apply(child: &SExpr, window: &LogicalWindow) -> Result<bool> {
-    let child_window_exists = child_has_window(child)?;
+    let child_window_exists = child_has_window(child);
     // ranking functions are frame insensitive
     if is_ranking_function(&window.function) {
         Ok(!child_window_exists)
@@ -122,10 +127,10 @@ fn is_valid_frame(frame: &WindowFuncFrame) -> bool {
         && matches!(frame.end_bound, WindowFuncFrameBound::CurrentRow)
 }
 
-fn child_has_window(child: &SExpr) -> Result<bool> {
+fn child_has_window(child: &SExpr) -> bool {
     match child.plan() {
-        RelOperator::Window(_) => Ok(true),
-        RelOperator::Scan(_) => Ok(false), // finish recursion
-        _ => child_has_window(child.child(0)?),
+        RelOperator::Window(_) => true,
+        RelOperator::Scan(_) => false, // finish recursion
+        _ => child.children().any(child_has_window),
     }
 }

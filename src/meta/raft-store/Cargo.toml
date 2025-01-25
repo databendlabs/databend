@@ -23,24 +23,26 @@ chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
-databend-common-meta-api = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-common-tracing = { workspace = true }
+deepsize = { workspace = true }
 derive_more = { workspace = true }
 fastrace = { workspace = true }
+fs_extra = { workspace = true }
 futures = { workspace = true }
 futures-async-stream = { workspace = true }
 futures-util = { workspace = true }
-hostname = "0.3.1"
+hostname = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
-maplit = "1.0.2"
-num = "0.4.0"
+maplit = { workspace = true }
+num = { workspace = true }
 openraft = { workspace = true }
 ordq = { workspace = true }
+raft-log = { workspace = true }
+rmp-serde = { workspace = true }
 rotbl = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
@@ -48,12 +50,12 @@ serde_json = { workspace = true }
 stream-more = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tonic = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }
-pretty_assertions = "1.3.0"
-tempfile = "3.4.0"
-test-harness = "0.1.1"
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true }
 
 [lints]

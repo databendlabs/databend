@@ -15,6 +15,7 @@
 use std::default::Default;
 use std::sync::Arc;
 
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -53,7 +54,7 @@ pub struct MallocStatsTotalsTable {
 
 impl SyncSystemTable for MallocStatsTotalsTable {
     const NAME: &'static str = "system.malloc_stats_totals";
-    const IS_LOCAL: bool = false;
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
@@ -92,7 +93,7 @@ impl MallocStatsTotalsTable {
     }
 
     fn build_columns(node_name: &str) -> BuildResult {
-        let mut names = StringColumnBuilder::with_capacity(6, 6 * 4);
+        let mut names = StringColumnBuilder::with_capacity(6);
         let mut values: Vec<u64> = vec![];
 
         let e = epoch::mib()?;

@@ -14,121 +14,21 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::ops::Range;
-use std::time::Instant;
 
-use databend_common_base::rangemap::RangeMerger;
-use databend_common_base::runtime::UnlimitedFuture;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_metrics::storage::*;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TableDataCacheKey;
+use databend_storages_common_io::MergeIOReader;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::ColumnMeta;
-use futures::future::try_join_all;
-use opendal::Operator;
 
-use crate::io::read::block::block_reader_merge_io::OwnerMemory;
-use crate::io::read::ReadSettings;
 use crate::io::BlockReader;
-use crate::MergeIOReadResult;
+use crate::BlockReadResult;
 
 impl BlockReader {
-    /// If the distance between two IO request ranges to be read is less than storage_io_min_bytes_for_seek(Default is 48Bytes),
-    /// will read the range that contains both ranges, thus avoiding extra seek.
-    ///
-    /// It will *NOT* merge two requests:
-    /// if the last io request size is larger than storage_io_page_bytes_for_read(Default is 512KB).
-    #[async_backtrace::framed]
-    pub async fn merge_io_read(
-        read_settings: &ReadSettings,
-        op: Operator,
-        location: &str,
-        raw_ranges: &[(ColumnId, Range<u64>)],
-        put_cache: bool,
-    ) -> Result<MergeIOReadResult> {
-        let table_data_cache = if put_cache {
-            CacheManager::instance().get_table_data_cache()
-        } else {
-            None
-        };
-
-        if raw_ranges.is_empty() {
-            // shortcut
-            let read_res = MergeIOReadResult::create(
-                OwnerMemory::create(vec![]),
-                raw_ranges.len(),
-                location.to_string(),
-                table_data_cache,
-            );
-            return Ok(read_res);
-        }
-
-        // Build merged read ranges.
-        let ranges = raw_ranges
-            .iter()
-            .map(|(_, r)| r.clone())
-            .collect::<Vec<_>>();
-        let range_merger = RangeMerger::from_iter(
-            ranges,
-            read_settings.storage_io_min_bytes_for_seek,
-            read_settings.storage_io_max_page_bytes_for_read,
-        );
-        let merged_ranges = range_merger.ranges();
-
-        // Read merged range data.
-        let mut read_handlers = Vec::with_capacity(merged_ranges.len());
-        for (idx, range) in merged_ranges.iter().enumerate() {
-            // Perf.
-            {
-                metrics_inc_remote_io_seeks_after_merged(1);
-                metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
-            }
-
-            read_handlers.push(UnlimitedFuture::create(Self::read_range(
-                op.clone(),
-                location,
-                idx,
-                range.start,
-                range.end,
-            )));
-        }
-
-        let start = Instant::now();
-        let owner_memory = OwnerMemory::create(try_join_all(read_handlers).await?);
-        let mut read_res = MergeIOReadResult::create(
-            owner_memory,
-            raw_ranges.len(),
-            location.to_string(),
-            table_data_cache,
-        );
-
-        // Perf.
-        {
-            metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
-        }
-
-        for (raw_idx, raw_range) in raw_ranges {
-            let column_range = raw_range.start..raw_range.end;
-
-            // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or_else(|| ErrorCode::Internal(format!(
-                "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
-                column_range, location, merged_ranges
-            )))?;
-
-            // Fetch the raw data for the raw range.
-            let start = (column_range.start - merged_range.start) as usize;
-            let end = (column_range.end - merged_range.start) as usize;
-            let column_id = *raw_idx as ColumnId;
-            read_res.add_column_chunk(merged_range_idx, column_id, column_range, start..end);
-        }
-
-        Ok(read_res)
-    }
-
     #[async_backtrace::framed]
     pub async fn read_columns_data_by_merge_io(
         &self,
@@ -136,7 +36,7 @@ impl BlockReader {
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
-    ) -> Result<MergeIOReadResult> {
+    ) -> Result<BlockReadResult> {
         // Perf
         {
             metrics_inc_remote_io_read_parts(1);
@@ -148,6 +48,9 @@ impl BlockReader {
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
         let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
+
+        let column_cache_key_builder = ColumnCacheKeyBuilder::new(location);
+
         for (_index, (column_id, ..)) in self.project_indices.iter() {
             if let Some(ignore_column_ids) = ignore_column_ids {
                 if ignore_column_ids.contains(column_id) {
@@ -158,7 +61,7 @@ impl BlockReader {
             if let Some(column_meta) = columns_meta.get(column_id) {
                 let (offset, len) = column_meta.offset_length();
 
-                let column_cache_key = TableDataCacheKey::new(location, *column_id, offset, len);
+                let column_cache_key = column_cache_key_builder.cache_key(column_id, column_meta);
 
                 // first, check in memory table data cache
                 // column_array_cache
@@ -186,33 +89,52 @@ impl BlockReader {
             }
         }
 
-        let mut merge_io_read_res = Self::merge_io_read(
-            settings,
-            self.operator.clone(),
-            location,
-            &ranges,
-            self.put_cache,
-        )
-        .await?;
+        let merge_io_result =
+            MergeIOReader::merge_io_read(settings, self.operator.clone(), location, &ranges)
+                .await?;
 
-        merge_io_read_res.cached_column_data = cached_column_data;
-        merge_io_read_res.cached_column_array = cached_column_array;
+        if self.put_cache {
+            // add raw data (compressed raw bytes) to column cache
+            for (column_id, (chunk_idx, range)) in &merge_io_result.columns_chunk_offsets {
+                // Should NOT use `range.start` as part of the cache key,
+                // as they are not stable and can vary for the same column depending on the query's projection.
+                // For instance:
+                //  - `SELECT col1, col2 FROM t;`
+                //  - `SELECT col2 FROM t;`
+                // may result in different ranges for `col2`
+                // This can lead to cache missing or INCONSISTENCIES
 
-        self.report_cache_metrics(&merge_io_read_res, ranges.iter().map(|(_, r)| r));
+                // Safe to unwrap here, since this column has been fetched, its meta must be present.
+                let column_meta = columns_meta.get(column_id).unwrap();
+                let column_cache_key = column_cache_key_builder.cache_key(column_id, column_meta);
 
-        Ok(merge_io_read_res)
+                let chunk_data = merge_io_result
+                    .owner_memory
+                    .get_chunk(*chunk_idx, &merge_io_result.block_path)?;
+                let data = chunk_data.slice(range.clone());
+                column_data_cache.insert(column_cache_key.as_ref().to_owned(), data);
+            }
+        }
+
+        let block_read_res =
+            BlockReadResult::create(merge_io_result, cached_column_data, cached_column_array);
+
+        self.report_cache_metrics(&block_read_res, ranges.iter().map(|(_, r)| r));
+
+        Ok(block_read_res)
     }
+}
 
-    #[inline]
-    #[async_backtrace::framed]
-    async fn read_range(
-        op: Operator,
-        path: &str,
-        index: usize,
-        start: u64,
-        end: u64,
-    ) -> Result<(usize, Vec<u8>)> {
-        let chunk = op.read_with(path).range(start..end).await?;
-        Ok((index, chunk.to_vec()))
+struct ColumnCacheKeyBuilder<'a> {
+    block_path: &'a str,
+}
+
+impl<'a> ColumnCacheKeyBuilder<'a> {
+    fn new(block_path: &'a str) -> Self {
+        Self { block_path }
+    }
+    fn cache_key(&self, column_id: &ColumnId, column_meta: &ColumnMeta) -> TableDataCacheKey {
+        let (offset, len) = column_meta.offset_length();
+        TableDataCacheKey::new(self.block_path, *column_id, offset, len)
     }
 }

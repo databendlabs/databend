@@ -83,3 +83,8 @@ impl ShowCreateCatalogPlan {
         self.schema.clone()
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UseCatalogPlan {
+    pub catalog: String,
+}

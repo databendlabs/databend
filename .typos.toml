@@ -12,9 +12,11 @@
 "ser" = "ser"
 "Ser" = "Ser"
 "flate" = "flate"
+"Tke" = "Tke"
 
 [files]
 extend-exclude = [
+    "**/Cargo.toml",
     "scripts/benchmark/",
     "benchmark/",
     "tests/",

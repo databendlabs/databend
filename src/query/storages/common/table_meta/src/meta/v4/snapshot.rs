@@ -43,7 +43,7 @@ use crate::meta::Versioned;
 /// The structure of the TableSnapshot is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
-    /// format version of TableSnapshot meta data
+    /// format version of TableSnapshot metadata
     ///
     /// Note that:
     ///
@@ -78,15 +78,18 @@ pub struct TableSnapshot {
     /// Summary Statistics
     pub summary: Statistics,
 
-    /// Pointers to SegmentInfos (may be of different format)
+    /// Pointers to SegmentInfos (maybe of different format)
     ///
     /// We rely on background merge tasks to keep merging segments, so that
     /// this the size of this vector could be kept reasonable
     pub segments: Vec<Location>,
 
     /// The metadata of the cluster keys.
+    /// **This field is deprecated and will be removed in the next version.**
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
+
+    pub least_visible_timestamp: Option<DateTime<Utc>>,
 }
 
 impl TableSnapshot {
@@ -98,7 +101,6 @@ impl TableSnapshot {
         schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
-        cluster_key_meta: Option<ClusterKey>,
         table_statistics_location: Option<String>,
     ) -> Self {
         let now = Utc::now();
@@ -118,8 +120,9 @@ impl TableSnapshot {
             schema,
             summary,
             segments,
-            cluster_key_meta,
+            cluster_key_meta: None,
             table_statistics_location,
+            least_visible_timestamp: None,
         }
     }
 
@@ -132,7 +135,6 @@ impl TableSnapshot {
             schema,
             Statistics::default(),
             vec![],
-            None,
             None,
         )
     }
@@ -149,7 +151,6 @@ impl TableSnapshot {
             clone.schema,
             clone.summary,
             clone.segments,
-            clone.cluster_key_meta,
             clone.table_statistics_location,
         )
     }
@@ -234,6 +235,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
+            least_visible_timestamp: None,
         }
     }
 }
@@ -256,6 +258,7 @@ where T: Into<v3::TableSnapshot>
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
+            least_visible_timestamp: None,
         }
     }
 }

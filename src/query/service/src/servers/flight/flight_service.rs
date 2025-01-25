@@ -16,7 +16,7 @@ use std::future::Future;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
+use arrow_flight::flight_service_server::FlightServiceServer;
 use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::Notify;
 use databend_common_config::InnerConfig;
@@ -80,7 +80,7 @@ impl FlightService {
         };
 
         let incoming = TcpIncoming::new(addr, true, None)
-            .map_err(|e| ErrorCode::CannotListenerPort(format!("{e}")))?;
+            .map_err(|e| ErrorCode::CannotListenerPort(format!("{},{}", e, addr)))?;
         let server = builder
             .add_service(
                 FlightServiceServer::new(flight_api_service)

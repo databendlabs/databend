@@ -12,17 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use bstr::ByteSlice;
 use chrono_tz::Tz;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_base::base::OrderedFloat;
+use databend_common_column::types::months_days_micros;
 use databend_common_expression::types::array::ArrayColumn;
-use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::decimal::DecimalColumn;
+use databend_common_expression::types::geography::GeographyColumn;
+use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_expression::types::BinaryColumn;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
@@ -33,18 +36,18 @@ use databend_common_io::constants::NAN_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
+use databend_common_io::ewkb_to_geo;
+use databend_common_io::geo_to_ewkb;
+use databend_common_io::geo_to_ewkt;
+use databend_common_io::geo_to_json;
+use databend_common_io::geo_to_wkb;
+use databend_common_io::geo_to_wkt;
 use databend_common_io::GeometryDataType;
 use geozero::wkb::Ewkb;
-use geozero::CoordDimensions;
-use geozero::GeozeroGeometry;
-use geozero::ToGeos;
-use geozero::ToJson;
-use geozero::ToWkb;
-use geozero::ToWkt;
+use jiff::tz::TimeZone;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
-use ordered_float::OrderedFloat;
 
 use crate::field_encoder::helpers::write_quoted_string;
 use crate::field_encoder::helpers::PrimitiveWithFormat;
@@ -66,6 +69,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
+                jiff_timezone: options.jiff_timezone.clone(),
                 binary_format: Default::default(),
                 geometry_format: Default::default(),
             },
@@ -73,7 +77,11 @@ impl FieldEncoderValues {
         }
     }
 
-    pub fn create_for_http_handler(timezone: Tz, geometry_format: GeometryDataType) -> Self {
+    pub fn create_for_http_handler(
+        jiff_timezone: TimeZone,
+        timezone: Tz,
+        geometry_format: GeometryDataType,
+    ) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -82,6 +90,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
+                jiff_timezone,
                 binary_format: Default::default(),
                 geometry_format,
             },
@@ -93,7 +102,11 @@ impl FieldEncoderValues {
     // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
     // so we still use 'nan' and 'inf' in logic test.
     // https://github.com/datafuselabs/databend/discussions/8941
-    pub fn create_for_mysql_handler(timezone: Tz, geometry_format: GeometryDataType) -> Self {
+    pub fn create_for_mysql_handler(
+        jiff_timezone: TimeZone,
+        timezone: Tz,
+        geometry_format: GeometryDataType,
+    ) -> Self {
         FieldEncoderValues {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
@@ -102,6 +115,7 @@ impl FieldEncoderValues {
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
+                jiff_timezone,
                 binary_format: Default::default(),
                 geometry_format,
             },
@@ -140,10 +154,12 @@ impl FieldEncoderValues {
             Column::Binary(c) => self.write_binary(c, row_index, out_buf),
             Column::String(c) => self.write_string(c, row_index, out_buf, in_nested),
             Column::Date(c) => self.write_date(c, row_index, out_buf, in_nested),
+            Column::Interval(c) => self.write_interval(c, row_index, out_buf, in_nested),
             Column::Timestamp(c) => self.write_timestamp(c, row_index, out_buf, in_nested),
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, in_nested),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, in_nested),
             Column::Geometry(c) => self.write_geometry(c, row_index, out_buf, in_nested),
+            Column::Geography(c) => self.write_geography(c, row_index, out_buf, in_nested),
 
             Column::Array(box c) => self.write_array(c, row_index, out_buf),
             Column::Map(box c) => self.write_map(c, row_index, out_buf),
@@ -259,7 +275,19 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = date_to_string(*v as i64, self.common_settings().timezone).to_string();
+        let s = date_to_string(*v as i64, &self.common_settings().jiff_timezone).to_string();
+        self.write_string_inner(s.as_bytes(), out_buf, in_nested);
+    }
+
+    fn write_interval(
+        &self,
+        column: &Buffer<months_days_micros>,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        in_nested: bool,
+    ) {
+        let v = unsafe { column.get_unchecked(row_index) };
+        let s = interval_to_string(v).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
@@ -271,7 +299,7 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
-        let s = timestamp_to_string(*v, self.common_settings().timezone).to_string();
+        let s = timestamp_to_string(*v, &self.common_settings().jiff_timezone).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, in_nested);
     }
 
@@ -306,24 +334,40 @@ impl FieldEncoderValues {
         in_nested: bool,
     ) {
         let v = unsafe { column.index_unchecked(row_index) };
-        let s = match self.common_settings().geometry_format {
-            GeometryDataType::WKB => hex::encode_upper(
-                Ewkb(v.to_vec())
-                    .to_wkb(CoordDimensions::xy())
-                    .unwrap()
-                    .as_bytes(),
-            )
-            .as_bytes()
-            .to_vec(),
-            GeometryDataType::WKT => Ewkb(v.to_vec()).to_wkt().unwrap().as_bytes().to_vec(),
-            GeometryDataType::EWKB => hex::encode_upper(v).as_bytes().to_vec(),
-            GeometryDataType::EWKT => {
-                let ewkb = Ewkb(v.to_vec());
-                let geos = ewkb.to_geos().unwrap();
-                geos.to_ewkt(geos.srid()).unwrap().as_bytes().to_vec()
-            }
-            GeometryDataType::GEOJSON => Ewkb(v.to_vec()).to_json().unwrap().as_bytes().to_vec(),
-        };
+        let s = ewkb_to_geo(&mut Ewkb(v))
+            .and_then(|(geo, srid)| match self.common_settings().geometry_format {
+                GeometryDataType::WKB => geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes()),
+                GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::EWKB => {
+                    geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
+                }
+                GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
+            })
+            .unwrap_or_else(|_| v.to_vec());
+
+        self.write_string_inner(&s, out_buf, in_nested);
+    }
+
+    fn write_geography(
+        &self,
+        column: &GeographyColumn,
+        row_index: usize,
+        out_buf: &mut Vec<u8>,
+        in_nested: bool,
+    ) {
+        let v = unsafe { column.index_unchecked(row_index) };
+        let s = ewkb_to_geo(&mut Ewkb(v.0))
+            .and_then(|(geo, srid)| match self.common_settings().geometry_format {
+                GeometryDataType::WKB => geo_to_wkb(geo).map(|v| hex::encode_upper(v).into_bytes()),
+                GeometryDataType::WKT => geo_to_wkt(geo).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::EWKB => {
+                    geo_to_ewkb(geo, srid).map(|v| hex::encode_upper(v).into_bytes())
+                }
+                GeometryDataType::EWKT => geo_to_ewkt(geo, srid).map(|v| v.as_bytes().to_vec()),
+                GeometryDataType::GEOJSON => geo_to_json(geo).map(|v| v.as_bytes().to_vec()),
+            })
+            .unwrap_or_else(|_| v.0.to_vec());
 
         self.write_string_inner(&s, out_buf, in_nested);
     }

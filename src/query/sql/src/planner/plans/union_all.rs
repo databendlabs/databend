@@ -41,6 +41,7 @@ pub struct UnionAll {
     // For example: `with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f where m.x < 3) select * from t`
     // The `cte_scan_names` are `m` and `f`
     pub cte_scan_names: Vec<String>,
+    pub output_indexes: Vec<IndexType>,
 }
 
 impl UnionAll {
@@ -53,6 +54,33 @@ impl UnionAll {
             used_columns.insert(*idx);
         }
         Ok(used_columns)
+    }
+
+    pub fn derive_union_stats(
+        &self,
+        left_stat_info: Arc<StatInfo>,
+        right_stat_info: Arc<StatInfo>,
+    ) -> Result<Arc<StatInfo>> {
+        let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
+
+        let precise_cardinality =
+            left_stat_info
+                .statistics
+                .precise_cardinality
+                .and_then(|left_cardinality| {
+                    right_stat_info
+                        .statistics
+                        .precise_cardinality
+                        .map(|right_cardinality| left_cardinality + right_cardinality)
+                });
+
+        Ok(Arc::new(StatInfo {
+            cardinality,
+            statistics: Statistics {
+                precise_cardinality,
+                column_stats: Default::default(),
+            },
+        }))
     }
 }
 
@@ -70,12 +98,7 @@ impl Operator for UnionAll {
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
 
         // Derive output columns
-        let mut output_columns = left_prop.output_columns.clone();
-        output_columns = output_columns
-            .union(&right_prop.output_columns)
-            .cloned()
-            .collect();
-
+        let output_columns = self.output_indexes.iter().cloned().collect();
         // Derive outer columns
         let mut outer_columns = left_prop.outer_columns.clone();
         outer_columns = outer_columns
@@ -117,26 +140,7 @@ impl Operator for UnionAll {
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-        let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
-
-        let precise_cardinality =
-            left_stat_info
-                .statistics
-                .precise_cardinality
-                .and_then(|left_cardinality| {
-                    right_stat_info
-                        .statistics
-                        .precise_cardinality
-                        .map(|right_cardinality| left_cardinality + right_cardinality)
-                });
-
-        Ok(Arc::new(StatInfo {
-            cardinality,
-            statistics: Statistics {
-                precise_cardinality,
-                column_stats: Default::default(),
-            },
-        }))
+        self.derive_union_stats(left_stat_info, right_stat_info)
     }
 
     fn compute_required_prop_child(

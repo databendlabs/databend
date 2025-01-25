@@ -22,14 +22,14 @@ use databend_common_expression::FieldIndex;
 use databend_common_pipeline_core::PipeItem;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 use rand::prelude::SliceRandom;
 
 use crate::io::BlockBuilder;
-use crate::io::ReadSettings;
 use crate::operations::mutation::SegmentIndex;
-use crate::operations::replace_into::MergeIntoOperationAggregator;
+use crate::operations::replace_into::ReplaceIntoOperationAggregator;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -102,7 +102,7 @@ impl FuseTable {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let mut items = Vec::with_capacity(num_partition);
         for chunk_of_segment_locations in chunks {
-            let item = MergeIntoOperationAggregator::try_create(
+            let item = ReplaceIntoOperationAggregator::try_create(
                 ctx.clone(),
                 on_conflicts.clone(),
                 bloom_filter_column_indexes.clone(),

@@ -17,22 +17,23 @@ use std::io::BufRead;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::check_date;
+use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::timestamp::check_timestamp;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
@@ -43,16 +44,18 @@ use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::BufferReadStringExt;
-use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
 use databend_common_io::cursor_ext::ReadNumberExt;
+use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
-use databend_common_io::parse_to_ewkb;
+use databend_common_io::parse_bytes_to_ewkb;
+use databend_common_io::Interval;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 
 use crate::binary::decode_binary;
+use crate::field_decoder::common::read_timestamp;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
 
@@ -63,9 +66,9 @@ pub struct NestedValues {
 
 impl NestedValues {
     /// Consider map/tuple/array as a private object format like JSON.
-    /// Currently we assume it as a fixed format, embed it in "strings" of other formats.
-    /// So we can used the same code to encode/decode in clients.
-    /// It maybe need to be configurable in future,
+    /// Currently, we assume it as a fixed format, embed it in "strings" of other formats.
+    /// So we can use the same code to encode/decode in clients.
+    /// It maybe needs to be configurable in the future,
     /// to read data from other DB which also support map/tuple/array.
     pub fn create(options_ext: &FileFormatOptionsExt) -> Self {
         NestedValues {
@@ -77,6 +80,7 @@ impl NestedValues {
                     NULL_BYTES_LOWER.as_bytes().to_vec(),
                 ],
                 timezone: options_ext.timezone,
+                jiff_timezone: options_ext.jiff_timezone.clone(),
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
                 is_rounding_mode: options_ext.is_rounding_mode,
@@ -126,6 +130,7 @@ impl NestedValues {
                 DecimalColumnBuilder::DECIMAL_TYPE(c, size) => self.read_decimal(c, *size, reader),
             }),
             ColumnBuilder::Date(c) => self.read_date(c, reader),
+            ColumnBuilder::Interval(c) => self.read_interval(c, reader),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader),
             ColumnBuilder::Binary(c) => self.read_binary(c, reader),
             ColumnBuilder::String(c) => self.read_string(c, reader),
@@ -135,6 +140,7 @@ impl NestedValues {
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader),
             ColumnBuilder::Geometry(c) => self.read_geometry(c, reader),
+            ColumnBuilder::Geography(c) => self.read_geography(c, reader),
             ColumnBuilder::EmptyArray { .. } => {
                 unreachable!("EmptyArray")
             }
@@ -194,7 +200,7 @@ impl NestedValues {
         column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        reader.read_quoted_text(&mut column.data, b'\'')?;
+        reader.read_quoted_text(&mut column.row_buffer, b'\'')?;
         column.commit_row();
         Ok(())
     }
@@ -227,7 +233,7 @@ impl NestedValues {
         size: DecimalSize,
         reader: &mut Cursor<R>,
     ) -> Result<()> {
-        let buf = reader.remaining_slice();
+        let buf = Cursor::split(reader).1;
         let (n, n_read) = read_decimal_with_size(buf, size, false, true)?;
         column.push(n);
         reader.consume(n_read);
@@ -242,13 +248,28 @@ impl NestedValues {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
         let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(
-            &self.common_settings().timezone,
-            self.common_settings().enable_dst_hour_fix,
-        )?;
+        let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
         let days = uniform_date(date);
-        check_date(days as i64)?;
-        column.push(days);
+        column.push(clamp_date(days as i64));
+        Ok(())
+    }
+
+    fn read_interval<R: AsRef<[u8]>>(
+        &self,
+        column: &mut Vec<months_days_micros>,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf)?;
+        let res =
+            std::str::from_utf8(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || {
+                format!(
+                    "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
+                    buf
+                )
+            })?;
+        let i = Interval::from_string(res)?;
+        column.push(months_days_micros::new(i.months, i.days, i.micros));
         Ok(())
     }
 
@@ -259,34 +280,7 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        let mut buffer_readr = Cursor::new(&buf);
-        let ts = if !buf.contains(&b'-') {
-            buffer_readr.read_num_text_exact()?
-        } else {
-            let t = buffer_readr.read_timestamp_text(
-                &self.common_settings().timezone,
-                false,
-                self.common_settings.enable_dst_hour_fix,
-            )?;
-            match t {
-                DateTimeResType::Datetime(t) => {
-                    if !buffer_readr.eof() {
-                        let data = buf.to_str().unwrap_or("not utf8");
-                        let msg = format!(
-                            "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                            buffer_readr.position(),
-                            data
-                        );
-                        return Err(ErrorCode::BadBytes(msg));
-                    }
-                    t.timestamp_micros()
-                }
-                _ => unreachable!(),
-            }
-        };
-        check_timestamp(ts)?;
-        column.push(ts);
-        Ok(())
+        read_timestamp(column, &buf, self.common_settings())
     }
 
     fn read_bitmap<R: AsRef<[u8]>>(
@@ -332,8 +326,21 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        let geom = parse_to_ewkb(&buf, None)?;
+        let geom = parse_bytes_to_ewkb(&buf, None)?;
         column.put_slice(geom.as_bytes());
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_geography<R: AsRef<[u8]>>(
+        &self,
+        column: &mut BinaryColumnBuilder,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf)?;
+        let geog = geography_from_ewkt_bytes(&buf)?;
+        column.put_slice(geog.as_bytes());
         column.commit_row();
         Ok(())
     }

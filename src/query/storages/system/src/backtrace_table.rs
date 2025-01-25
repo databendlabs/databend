@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_base::get_all_tasks;
 use databend_common_base::runtime::Runtime;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -44,7 +45,7 @@ impl SyncSystemTable for BacktraceTable {
     const NAME: &'static str = "system.backtrace";
 
     // Allow distributed query.
-    const IS_LOCAL: bool = false;
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
@@ -59,6 +60,7 @@ impl SyncSystemTable for BacktraceTable {
         let mut queries_id: Vec<String> = Vec::with_capacity(tasks_size);
         let mut queries_status: Vec<String> = Vec::with_capacity(tasks_size);
         let mut stacks: Vec<String> = Vec::with_capacity(tasks_size);
+        let regex = regex::Regex::new("<(.+) as .+>").unwrap();
 
         for (status, mut tasks) in [
             ("PENDING".to_string(), tasks),
@@ -95,12 +97,9 @@ impl SyncSystemTable for BacktraceTable {
 
                 for mut frame in frames_iter {
                     frame = frame.replace("::{{closure}}", "");
-
-                    let regex = regex::Regex::new("<(.+) as .+>").unwrap();
                     let frame = regex
                         .replace(&frame, |caps: &Captures| caps[1].to_string())
                         .to_string();
-
                     writeln!(stack_frames, "{}", frame).unwrap();
                 }
 

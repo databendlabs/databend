@@ -17,6 +17,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use databend_common_ast::ast::CopyIntoLocationOptions;
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::TableSchema;
@@ -40,6 +42,8 @@ pub struct StageTableInfo {
     // - may need to be purged as well (depends on the copy options)
     pub duplicated_files_detected: Vec<String>,
     pub is_select: bool,
+    pub copy_into_location_options: CopyIntoLocationOptions,
+    pub copy_into_table_options: CopyIntoTableOptions,
 }
 
 impl StageTableInfo {
@@ -93,6 +97,6 @@ impl Display for StageTableInfo {
         write!(f, "StageParam {}", self.stage_info.stage_params.storage)?;
         write!(f, "IsTemporary {}", self.stage_info.is_temporary)?;
         write!(f, "FileFormatParams {}", self.stage_info.file_format_params)?;
-        write!(f, "CopyOption {}", self.stage_info.copy_options)
+        Ok(())
     }
 }

@@ -17,7 +17,8 @@ explain pipeline select a from t1 ignore_result
 ----
 EmptySink × 1
   DeserializeDataTransform × 1
-    SyncReadParquetDataSource × 1
+    SyncReadParquetDataTransform × 1
+      BlockPartitionSource × 1
 
 
 statement ok

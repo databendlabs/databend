@@ -21,6 +21,7 @@ use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::SpillProgress;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -33,14 +34,18 @@ pub enum ProgressInfo {
     ScanProgress(ProgressValues),
     WriteProgress(ProgressValues),
     ResultProgress(ProgressValues),
+    SpillTotalStats(SpillProgress),
 }
 
 impl ProgressInfo {
-    pub fn inc(&self, ctx: &Arc<QueryContext>) {
+    pub fn inc(&self, source_target: &str, ctx: &Arc<QueryContext>) {
         match self {
             ProgressInfo::ScanProgress(values) => ctx.get_scan_progress().incr(values),
             ProgressInfo::WriteProgress(values) => ctx.get_write_progress().incr(values),
             ProgressInfo::ResultProgress(values) => ctx.get_result_progress().incr(values),
+            ProgressInfo::SpillTotalStats(values) => {
+                ctx.set_cluster_spill_progress(source_target, values.clone())
+            }
         };
     }
 
@@ -49,6 +54,12 @@ impl ProgressInfo {
             ProgressInfo::ScanProgress(values) => (1_u8, values),
             ProgressInfo::WriteProgress(values) => (2_u8, values),
             ProgressInfo::ResultProgress(values) => (3_u8, values),
+            ProgressInfo::SpillTotalStats(values) => {
+                bytes.write_u8(4)?;
+                bytes.write_u64::<BigEndian>(values.file_nums as u64)?;
+                bytes.write_u64::<BigEndian>(values.bytes as u64)?;
+                return Ok(());
+            }
         };
 
         bytes.write_u8(info_type)?;
@@ -59,6 +70,15 @@ impl ProgressInfo {
 
     pub fn read<T: Read>(bytes: &mut T) -> Result<ProgressInfo> {
         let info_type = bytes.read_u8()?;
+
+        if info_type == 4 {
+            let nums = bytes.read_u64::<BigEndian>()? as usize;
+            let bytes = bytes.read_u64::<BigEndian>()? as usize;
+            return Ok(ProgressInfo::SpillTotalStats(SpillProgress::new(
+                nums, bytes,
+            )));
+        }
+
         let rows = bytes.read_u64::<BigEndian>()? as usize;
         let bytes = bytes.read_u64::<BigEndian>()? as usize;
 

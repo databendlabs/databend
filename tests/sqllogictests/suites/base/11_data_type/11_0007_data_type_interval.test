@@ -1,0 +1,10 @@
+statement ok
+create table test_r (weeks int16 not null,hours int16 not null) engine=random;
+
+query I
+with t as ( select to_weeks(weeks) + to_hours(hours) as i, weeks*168+hours as h from test_r limit 10000), t1 as ( select ROW_NUMBER() OVER (ORDER BY h) AS num_h,ROW_NUMBER() OVER (ORDER BY i) AS num_i from t) select count_if(num_h=num_i) from t1;
+----
+10000
+
+statement ok
+drop table test_r;

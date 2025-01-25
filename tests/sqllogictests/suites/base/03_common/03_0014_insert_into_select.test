@@ -107,6 +107,15 @@ select count(1) from test_insert
 56
 
 statement ok
+create table a (t tuple(int, int));
+
+statement ok
+create table b (t int);
+
+statement error (?s)1006.* unable to cast type
+insert into a select * from b;
+
+statement ok
 DROP TABLE base_table
 
 statement ok

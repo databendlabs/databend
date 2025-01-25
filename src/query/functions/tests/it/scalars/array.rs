@@ -52,6 +52,7 @@ fn test_array() {
     test_array_kurtosis(file);
     test_array_skewness(file);
     test_array_sort(file);
+    test_arrays_zip(file);
 }
 
 fn test_create(file: &mut impl Write) {
@@ -73,6 +74,8 @@ fn test_length(file: &mut impl Write) {
     run_ast(file, "length([1, 2, 3])", &[]);
     run_ast(file, "length([true, false])", &[]);
     run_ast(file, "length(['a', 'b', 'c', 'd'])", &[]);
+    run_ast(file, "array_size(['a', 'b', 'c', 'd'])", &[]);
+    run_ast(file, "array_length(['a', 'b', 'c', 'd'])", &[]);
 }
 
 fn test_range(file: &mut impl Write) {
@@ -728,4 +731,11 @@ fn test_array_sort(file: &mut impl Write) {
         "array_sort_desc_null_last([1.2, NULL, 3.4, 5.6, '2.2', NULL])",
         &[],
     );
+}
+
+fn test_arrays_zip(file: &mut impl Write) {
+    run_ast(file, "arrays_zip(NULL, NULL)", &[]);
+    run_ast(file, "arrays_zip(1, 2, 'a')", &[]);
+    run_ast(file, "arrays_zip([1,2,3], ['a','b','c'], 10)", &[]);
+    run_ast(file, "arrays_zip([1,2,3], ['a','b'], 10)", &[]);
 }

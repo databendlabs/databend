@@ -39,7 +39,7 @@ use rand::Rng;
 use crate::sql_gen::Column;
 use crate::sql_gen::SqlGenerator;
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_scalar_func(&mut self, ty: &DataType) -> Expr {
         let mut indices = Vec::new();
         for (i, func_sig) in self.scalar_func_sigs.iter().enumerate() {
@@ -63,8 +63,9 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     pub(crate) fn gen_factory_scalar_func(&mut self, ty: &DataType) -> Expr {
+        let by_ty = self.rng.gen_bool(0.6);
         let (name, params, args_type) = match ty.remove_nullable() {
-            DataType::String => {
+            DataType::String if by_ty => {
                 let idx = self.rng.gen_range(0..=5);
                 let name = match idx {
                     0 => "char".to_string(),
@@ -151,7 +152,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 (name, vec![], args_type)
             }
-            DataType::Boolean => {
+            DataType::Boolean if by_ty => {
                 let idx = self.rng.gen_range(0..=3);
                 let name = match idx {
                     0 => "and_filters".to_string(),
@@ -185,7 +186,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 (name, vec![], args_type)
             }
-            DataType::Number(_) => {
+            DataType::Number(_) if by_ty => {
                 let idx = self.rng.gen_range(0..=4);
                 let name = match idx {
                     0 => "point_in_ellipses".to_string(),
@@ -282,13 +283,28 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
                 (name, vec![], args_type)
             }
-            DataType::Array(box inner_ty) => {
+            DataType::Array(box inner_ty) if by_ty => {
                 let name = "array".to_string();
                 let len = self.rng.gen_range(0..=4);
                 let args_type = vec![inner_ty; len];
                 (name, vec![], args_type)
             }
-            DataType::Decimal(_) => {
+            DataType::Map(box DataType::Tuple(inner_tys)) if by_ty => {
+                let key_ty = inner_tys[0].clone();
+                let name = if self.rng.gen_bool(0.5) {
+                    "map_delete".to_string()
+                } else {
+                    "map_pick".to_string()
+                };
+                if self.rng.gen_bool(0.5) {
+                    let len = self.rng.gen_range(1..=5);
+                    let args_type = vec![key_ty; len];
+                    (name, vec![], args_type)
+                } else {
+                    (name, vec![], vec![DataType::Array(Box::new(key_ty))])
+                }
+            }
+            DataType::Decimal(_) if by_ty => {
                 let decimal = ["to_float64", "to_float32", "to_decimal", "try_to_decimal"];
                 let name = decimal[self.rng.gen_range(0..=3)].to_string();
                 if name == "to_decimal" || name == "try_to_decimal" {
@@ -312,11 +328,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     (name, params, args_type)
                 }
             }
-            DataType::Tuple(inner_tys) => {
+            DataType::Tuple(inner_tys) if by_ty => {
                 let name = "tuple".to_string();
                 (name, vec![], inner_tys)
             }
-            DataType::Variant => {
+            DataType::Variant if by_ty => {
                 if self.rng.gen_bool(0.5) {
                     let json_func = ["json_array", "json_object", "json_object_keep_null"];
                     let name = json_func[self.rng.gen_range(0..=2)].to_string();
@@ -366,8 +382,9 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     pub(crate) fn gen_agg_func(&mut self, ty: &DataType) -> Expr {
+        let by_ty = self.rng.gen_bool(0.6);
         let (name, params, mut args_type) = match ty.remove_nullable() {
-            DataType::Number(NumberDataType::UInt8) => {
+            DataType::Number(NumberDataType::UInt8) if by_ty => {
                 let name = "window_funnel".to_string();
                 let other_type = vec![DataType::Boolean; 6];
                 let mut args_type = Vec::with_capacity(7);
@@ -382,7 +399,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let params = vec![Literal::UInt64(self.rng.gen_range(1..=10))];
                 (name, params, args_type)
             }
-            DataType::Number(NumberDataType::UInt64) => {
+            DataType::Number(NumberDataType::UInt64) if by_ty => {
                 let idx = self.rng.gen_range(0..=7);
                 let name = match idx {
                     0 => "approx_count_distinct".to_string(),
@@ -422,7 +439,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 (name, params, args_type)
             }
-            DataType::Array(_) => {
+            DataType::Array(_) if by_ty => {
                 let idx = self.rng.gen_range(0..=2);
                 let name = match idx {
                     0 => {
@@ -465,14 +482,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 (name, params, args_type)
             }
-            DataType::Decimal(_) => {
+            DataType::Decimal(_) if by_ty => {
                 let name = "sum".to_string();
                 let params = vec![];
                 let args_type = vec![self.gen_decimal_data_type()];
                 (name, params, args_type)
             }
-            DataType::Number(NumberDataType::Float64) => {
-                let idx = self.rng.gen_range(0..=14);
+            DataType::Number(NumberDataType::Float64) if by_ty => {
+                let idx = self.rng.gen_range(0..=15);
                 let name = match idx {
                     0 => "avg".to_string(),
                     1 => "covar_pop".to_string(),
@@ -489,10 +506,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     12 => "quantile_cont".to_string(),
                     13 => "quantile_tdigest".to_string(),
                     14 => "quantile_disc".to_string(),
+                    15 => "quantile_tdigest_weighted".to_string(),
                     _ => unreachable!(),
                 };
 
-                let args_type = if idx == 1 || idx == 2 {
+                let args_type = if idx == 1 || idx == 2 || idx == 15 {
                     vec![
                         self.gen_all_number_data_type(),
                         self.gen_all_number_data_type(),
@@ -512,7 +530,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 (name, params, args_type)
             }
-            DataType::Bitmap => {
+            DataType::Bitmap if by_ty => {
                 let idx = self.rng.gen_range(0..=1);
                 let name = match idx {
                     0 => "bitmap_intersect".to_string(),
@@ -523,29 +541,52 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let args_type = vec![DataType::Bitmap];
                 (name, params, args_type)
             }
-            DataType::String => {
-                let name = "string_agg".to_string();
-                let args_type = if self.rng.gen_bool(0.6) {
-                    vec![DataType::String]
+            DataType::String if by_ty => {
+                if self.rng.gen_bool(0.5) {
+                    let name = "histogram".to_string();
+                    let arg_type = self.gen_simple_common_data_type();
+                    (name, vec![], vec![arg_type])
                 } else {
-                    vec![DataType::String; 2]
-                };
-                let params = vec![];
-                (name, params, args_type)
+                    let name = "string_agg".to_string();
+                    let args_type = if self.rng.gen_bool(0.6) {
+                        vec![DataType::String]
+                    } else {
+                        vec![DataType::String; 2]
+                    };
+                    let params = vec![];
+                    (name, params, args_type)
+                }
+            }
+            DataType::Variant if by_ty => {
+                if self.rng.gen_bool(0.5) {
+                    let name = "json_array_agg".to_string();
+                    let arg_type = self.gen_simple_data_type();
+                    (name, vec![], vec![arg_type])
+                } else {
+                    let name = "json_object_agg".to_string();
+                    let key_type = DataType::String;
+                    let val_type = self.gen_simple_data_type();
+                    (name, vec![], vec![key_type, val_type])
+                }
+            }
+            DataType::Geometry if by_ty => {
+                let name = "st_collect".to_string();
+                let arg_type = DataType::Geometry;
+                (name, vec![], vec![arg_type])
             }
             _ => {
-                // TODO: other aggreate functions
-                let idx = self.rng.gen_range(0..=4);
+                let idx = self.rng.gen_range(0..=5);
                 let name = match idx {
                     0 => "any".to_string(),
                     1 => "min".to_string(),
                     2 => "max".to_string(),
-                    3 => "arg_min".to_string(),
-                    4 => "arg_max".to_string(),
+                    3 => "mode".to_string(),
+                    4 => "arg_min".to_string(),
+                    5 => "arg_max".to_string(),
                     _ => unreachable!(),
                 };
                 let params = vec![];
-                let args_type = if idx == 3 || idx == 4 {
+                let args_type = if idx == 4 || idx == 5 {
                     vec![ty.clone(), self.gen_simple_data_type()]
                 } else {
                     vec![ty.clone()]
@@ -579,10 +620,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     pub(crate) fn gen_window_func(&mut self, ty: &DataType) -> Expr {
+        let by_ty = self.rng.gen_bool(0.6);
         let window = self.gen_window();
         let ty = ty.clone();
         match ty {
-            DataType::Number(NumberDataType::UInt64) => {
+            DataType::Number(NumberDataType::UInt64) if by_ty => {
                 let number = ["row_number", "rank", "dense_rank", "ntile"];
                 let name = number[self.rng.gen_range(0..=2)];
                 let args_type = if name == "ntile" {
@@ -592,7 +634,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 self.gen_func(name.to_string(), vec![], args_type, window, None)
             }
-            DataType::Number(NumberDataType::Float64) => {
+            DataType::Number(NumberDataType::Float64) if by_ty => {
                 let float = ["percent_rank", "cume_dist"];
                 let name = float[self.rng.gen_range(0..=1)].to_string();
                 self.gen_func(name, vec![], vec![], window, None)
@@ -707,12 +749,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
         let args_type = vec![ty.clone()];
         let lambda_name = format!("l{}", self.gen_random_name());
-        let lambda_column = Column {
-            table_name: "".to_string(),
-            name: lambda_name.clone(),
-            index: 0,
-            data_type: ty.clone(),
-        };
+        let lambda_column = Column::new(None, lambda_name.clone(), 0, ty.clone());
         self.bound_columns.push(lambda_column);
 
         let lambda_expr = self.gen_expr(inner_ty);

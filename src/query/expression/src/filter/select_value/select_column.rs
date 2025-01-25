@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
 use crate::filter::SelectStrategy;
 use crate::filter::Selector;
 use crate::types::ValueType;
 
-impl<'a> Selector<'a> {
+impl Selector<'_> {
     // Select indices by comparing two columns.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn select_columns<

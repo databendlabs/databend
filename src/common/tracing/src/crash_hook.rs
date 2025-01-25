@@ -12,65 +12,137 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::File;
+use std::io::Read;
 use std::io::Write;
+use std::os::fd::FromRawFd;
+use std::os::fd::IntoRawFd;
+use std::os::fd::OwnedFd;
 #[cfg(test)]
 use std::ptr::addr_of_mut;
 use std::sync::Mutex;
 use std::sync::PoisonError;
+use std::time::Duration;
 
+use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
+use databend_common_exception::StackTrace;
 
-use crate::panic_hook::backtrace;
+const BUFFER_SIZE: usize = {
+    size_of::<i32>() // sig
+        + size_of::<i32>() // si_code
+        + size_of::<u64>()  // si_addr
+        + size_of::<u64>()  // current query id length
+        + 36 // max query id length, example: a9ef0b3f-b3a1-4759-b129-e1bcf3a551c0
+        + size_of::<u64>()  // frame length
+        + size_of::<u64>() * 50 // max frames ip size
+};
 
 struct CrashHandler {
-    version: String,
+    write_file: File,
 }
 
 impl CrashHandler {
-    pub fn create(version: String) -> CrashHandler {
-        CrashHandler { version }
+    pub fn create(write_file: File) -> CrashHandler {
+        CrashHandler { write_file }
     }
 
-    pub fn recv_signal(&self, sig: i32, info: *mut libc::siginfo_t, uc: *mut libc::c_void) {
+    pub fn recv_signal(&mut self, sig: i32, info: *mut libc::siginfo_t, _uc: *mut libc::c_void) {
+        let mut buffer = [0_u8; BUFFER_SIZE];
+
+        let mut pos = 0;
+
+        fn write_i32(buf: &mut [u8], v: i32, mut pos: usize) -> usize {
+            for x in v.to_le_bytes() {
+                buf[pos] = x;
+                pos += 1;
+            }
+
+            pos
+        }
+
+        fn write_u64(buf: &mut [u8], v: u64, mut pos: usize) -> usize {
+            for x in v.to_le_bytes() {
+                buf[pos] = x;
+                pos += 1;
+            }
+
+            pos
+        }
+
+        fn write_string(buf: &mut [u8], v: &str, mut pos: usize, max_length: usize) -> usize {
+            let bytes = v.as_bytes();
+            let length = std::cmp::min(bytes.len(), max_length);
+            pos = write_u64(buf, length as u64, pos);
+
+            #[allow(clippy::needless_range_loop)]
+            for index in 0..length {
+                buf[pos] = bytes[index];
+                pos += 1;
+            }
+
+            pos
+        }
+
         let current_query_id = match ThreadTracker::query_id() {
             None => "Unknown",
             Some(query_id) => query_id,
         };
 
-        write_error(format_args!("{:#^80}", " Crash fault info "));
-        write_error(format_args!("PID: {}", std::process::id()));
-        write_error(format_args!(
-            "TID: {}",
-            std::thread::current().id().as_u64()
-        ));
-        write_error(format_args!("Version: {}", self.version));
-        write_error(format_args!("Timestamp(UTC): {}", chrono::Utc::now()));
-        write_error(format_args!("Timestamp(Local): {}", chrono::Local::now()));
-        write_error(format_args!("QueryId: {:?}", current_query_id));
-        write_error(format_args!("{}", signal_message(sig, info, uc)));
-        write_error(format_args!("Backtrace:\n{}", backtrace(50)));
+        pos = write_i32(&mut buffer, sig, pos);
+        pos = write_i32(&mut buffer, unsafe { (*info).si_code }, pos);
+        pos = write_u64(&mut buffer, unsafe { (*info).si_addr() as u64 }, pos);
+        pos = write_string(&mut buffer, current_query_id, pos, 36);
+
+        let mut frames_len = 0;
+        let mut frames = [0_u64; 50];
+
+        unsafe {
+            backtrace::trace_unsynchronized(|frame| {
+                frames[frames_len] = frame.ip() as u64;
+                frames_len += 1;
+                frames_len < 50
+            });
+        }
+
+        pos = write_u64(&mut buffer, frames_len as u64, pos);
+        for frame in frames {
+            pos = write_u64(&mut buffer, frame, pos);
+        }
+
+        if let Err(e) = self.write_file.write(&buffer) {
+            eprintln!("write signal pipe failure");
+            let _ = std::io::stderr().flush();
+            eprintln!("cause: {:?}", e);
+        }
+
+        if let Err(e) = self.write_file.flush() {
+            eprintln!("flush signal pipe failure");
+            let _ = std::io::stderr().flush();
+            eprintln!("cause: {:?}", e);
+        }
+
+        std::thread::sleep(Duration::from_secs(4));
     }
 }
 
 static CRASH_HANDLER_LOCK: Mutex<Option<CrashHandler>> = Mutex::new(None);
 
-fn sigsegv_message(info: *mut libc::siginfo_t, _: *mut libc::c_void) -> String {
-    unsafe {
-        let mut address = String::from("null points");
+fn sigsegv_message(si_code: i32, si_addr: usize) -> String {
+    let mut address = String::from("null points");
 
-        if !(*info).si_addr().is_null() {
-            address = format!("{:#02x?}", (*info).si_addr() as usize);
-        }
-
-        format!(
-            "Signal {} ({}), si_code {} ({}), Address {}\n",
-            libc::SIGSEGV,
-            "SIGSEGV",
-            (*info).si_code,
-            "Unknown", // TODO: SEGV_MAPERR or SEGV_ACCERR
-            address,
-        )
+    if si_addr != 0 {
+        address = format!("{:#02x?}", si_addr);
     }
+
+    format!(
+        "Signal {} ({}), si_code {} ({}), Address {}\n",
+        libc::SIGSEGV,
+        "SIGSEGV",
+        si_code,
+        "Unknown", // TODO: SEGV_MAPERR or SEGV_ACCERR
+        address,
+    )
 }
 
 #[cfg(all(test, target_arch = "x86_64"))]
@@ -138,84 +210,65 @@ extern "C" {
 #[cfg(test)]
 static mut TEST_JMP_BUFFER: JmpBuffer = JmpBuffer::create();
 
-fn sigbus_message(info: *mut libc::siginfo_t, _: *mut libc::c_void) -> String {
-    unsafe {
-        format!(
-            "Signal {} ({}), si_code {} ({})\n",
-            libc::SIGBUS,
-            "SIGBUS",
-            (*info).si_code,
-            match (*info).si_code {
-                libc::BUS_ADRALN => "BUS_ADRALN, invalid address alignment",
-                libc::BUS_ADRERR => "BUS_ADRERR, non-existent physical address",
-                libc::BUS_OBJERR => "BUS_OBJERR, object specific hardware error",
-                _ => "Unknown",
-            },
-        )
-    }
+fn sigbus_message(si_code: i32) -> String {
+    format!(
+        "Signal {} ({}), si_code {} ({})\n",
+        libc::SIGBUS,
+        "SIGBUS",
+        si_code,
+        match si_code {
+            libc::BUS_ADRALN => "BUS_ADRALN, invalid address alignment",
+            libc::BUS_ADRERR => "BUS_ADRERR, non-existent physical address",
+            libc::BUS_OBJERR => "BUS_OBJERR, object specific hardware error",
+            _ => "Unknown",
+        },
+    )
 }
 
-fn sigill_message(info: *mut libc::siginfo_t, _: *mut libc::c_void) -> String {
-    unsafe {
-        format!(
-            "Signal {} ({}), si_code {} ({})， instruction address:{} \n",
-            libc::SIGILL,
-            "SIGILL",
-            (*info).si_code,
-            "Unknown", /* ILL_ILLOPC ILL_ILLOPN ILL_ILLADR ILL_ILLTRP ILL_PRVOPC ILL_PRVREG ILL_COPROC ILL_BADSTK, */
-            match (*info).si_addr().is_null() {
-                true => "null points".to_string(),
-                false => format!("{:#02x?}", (*info).si_addr() as usize),
-            },
-        )
-    }
+fn sigill_message(si_code: i32, si_addr: usize) -> String {
+    format!(
+        "Signal {} ({}), si_code {} ({})， instruction address:{} \n",
+        libc::SIGILL,
+        "SIGILL",
+        si_code,
+        "Unknown", /* ILL_ILLOPC ILL_ILLOPN ILL_ILLADR ILL_ILLTRP ILL_PRVOPC ILL_PRVREG ILL_COPROC ILL_BADSTK, */
+        match si_addr == 0 {
+            true => "null points".to_string(),
+            false => format!("{:#02x?}", si_addr),
+        },
+    )
 }
 
-fn sigfpe_message(info: *mut libc::siginfo_t, _: *mut libc::c_void) -> String {
-    unsafe {
-        format!(
-            "Signal {} ({}), si_code {} ({})， instruction address:{} \n",
-            libc::SIGFPE,
-            "SIGFPE",
-            (*info).si_code,
-            "Unknown", /* FPE_INTDIV FPE_INTOVF FPE_FLTDIV FPE_FLTOVF FPE_FLTUND FPE_FLTRES FPE_FLTINV FPE_FLTSUB */
-            match (*info).si_addr().is_null() {
-                true => "null points".to_string(),
-                false => format!("{:#02x?}", (*info).si_addr() as usize),
-            },
-        )
-    }
+fn sigfpe_message(si_code: i32, si_addr: usize) -> String {
+    format!(
+        "Signal {} ({}), si_code {} ({})， instruction address:{} \n",
+        libc::SIGFPE,
+        "SIGFPE",
+        si_code,
+        "Unknown", /* FPE_INTDIV FPE_INTOVF FPE_FLTDIV FPE_FLTOVF FPE_FLTUND FPE_FLTRES FPE_FLTINV FPE_FLTSUB */
+        match si_addr == 0 {
+            true => "null points".to_string(),
+            false => format!("{:#02x?}", si_addr),
+        },
+    )
 }
 
-fn signal_message(sig: i32, info: *mut libc::siginfo_t, uc: *mut libc::c_void) -> String {
+fn signal_message(sig: i32, si_code: i32, si_addr: usize) -> String {
     // https://pubs.opengroup.org/onlinepubs/007908799/xsh/signal.h.html
     match sig {
-        libc::SIGBUS => sigbus_message(info, uc),
-        libc::SIGILL => sigill_message(info, uc),
-        libc::SIGSEGV => sigsegv_message(info, uc),
-        libc::SIGFPE => sigfpe_message(info, uc),
-        _ => format!("Signal {}, si_code {}", sig, unsafe { (*info).si_code }),
+        libc::SIGBUS => sigbus_message(si_code),
+        libc::SIGILL => sigill_message(si_code, si_addr),
+        libc::SIGSEGV => sigsegv_message(si_code, si_addr),
+        libc::SIGFPE => sigfpe_message(si_code, si_addr),
+        _ => format!("Signal {}, si_code {}", sig, si_code),
     }
-}
-
-#[cfg(test)]
-static mut ERROR_MESSAGE: String = String::new();
-
-fn write_error(message: std::fmt::Arguments) {
-    #[cfg(test)]
-    unsafe {
-        ERROR_MESSAGE.push_str(&format!("{}\n", message))
-    };
-
-    #[cfg(not(test))]
-    eprintln!("{}", message);
 }
 
 unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *mut libc::c_void) {
     let lock = CRASH_HANDLER_LOCK.lock();
-    let guard = lock.unwrap_or_else(PoisonError::into_inner);
+    let mut guard = lock.unwrap_or_else(PoisonError::into_inner);
 
-    if let Some(crash_handler) = guard.as_ref() {
+    if let Some(crash_handler) = guard.as_mut() {
         crash_handler.recv_signal(sig, info, uc);
     }
 
@@ -227,9 +280,13 @@ unsafe extern "C" fn signal_handler(sig: i32, info: *mut libc::siginfo_t, uc: *m
 
     #[allow(unreachable_code)]
     if sig != libc::SIGTRAP {
-        drop(guard);
-        let _ = std::io::stderr().flush();
-        std::process::exit(1);
+        match libc::SIG_ERR == libc::signal(sig, libc::SIG_DFL) {
+            true => std::process::exit(1),
+            false => match libc::raise(sig) {
+                0 => {}
+                _ => std::process::exit(1),
+            },
+        }
     }
 }
 
@@ -283,11 +340,11 @@ pub unsafe fn add_signal_stack(stack_bytes: usize) {
     }
 }
 
-pub fn set_crash_hook(version: String) {
+pub fn set_crash_hook(output: File) {
     let lock = CRASH_HANDLER_LOCK.lock();
     let mut guard = lock.unwrap_or_else(PoisonError::into_inner);
 
-    *guard = Some(CrashHandler::create(version));
+    *guard = Some(CrashHandler::create(output));
     unsafe {
         #[cfg(debug_assertions)]
         add_signal_stack(20 * 1024 * 1024);
@@ -302,25 +359,164 @@ pub fn set_crash_hook(version: String) {
             libc::SIGFPE,
             libc::SIGSYS,
             libc::SIGTRAP,
+            libc::SIGABRT,
         ]);
+    };
+}
+
+#[cfg(not(target_os = "macos"))]
+fn open_pipe() -> std::io::Result<(OwnedFd, OwnedFd)> {
+    unsafe {
+        let mut fds: [libc::c_int; 2] = [0; 2];
+        if libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok((OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn open_pipe() -> std::io::Result<(OwnedFd, OwnedFd)> {
+    unsafe {
+        let mut fds: [libc::c_int; 2] = [0; 2];
+
+        if libc::pipe(fds.as_mut_ptr()) != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        if libc::fcntl(fds[0], libc::F_SETFD, libc::FD_CLOEXEC) != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        if libc::fcntl(fds[1], libc::F_SETFD, libc::FD_CLOEXEC) != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+
+        Ok((OwnedFd::from_raw_fd(fds[0]), OwnedFd::from_raw_fd(fds[1])))
+    }
+}
+
+pub fn pipe_file() -> std::io::Result<(File, File)> {
+    let (ifd, ofd) = open_pipe()?;
+
+    unsafe {
+        Ok((
+            File::from_raw_fd(ifd.into_raw_fd()),
+            File::from_raw_fd(ofd.into_raw_fd()),
+        ))
+    }
+}
+
+fn read_i32(buf: &[u8], pos: usize) -> (i32, usize) {
+    let bytes: [u8; 4] = buf[pos..pos + 4].try_into().expect("expect");
+    (i32::from_le_bytes(bytes), pos + 4)
+}
+
+fn read_u64(buf: &[u8], pos: usize) -> (u64, usize) {
+    let bytes: [u8; 8] = buf[pos..pos + 8].try_into().expect("expect");
+    (u64::from_le_bytes(bytes), pos + 8)
+}
+
+fn read_string(buf: &[u8], pos: usize) -> (&str, usize) {
+    unsafe {
+        let (len, pos) = read_u64(buf, pos);
+        (
+            std::str::from_utf8_unchecked(&buf[pos..pos + len as usize]),
+            pos + len as usize,
+        )
+    }
+}
+
+pub struct SignalListener;
+
+impl SignalListener {
+    pub fn spawn(mut file: File, crash_version: String) {
+        Thread::named_spawn(Some(String::from("SignalListener")), move || loop {
+            let mut buffer = [0_u8; BUFFER_SIZE];
+
+            if file.read_exact(&mut buffer).is_ok() {
+                let pos = 0;
+                let (sig, pos) = read_i32(&buffer, pos);
+                let (si_code, pos) = read_i32(&buffer, pos);
+                let (si_addr, pos) = read_u64(&buffer, pos);
+                let (crash_query_id, pos) = read_string(&buffer, pos);
+
+                let (frames_len, mut pos) = read_u64(&buffer, pos);
+                let mut frames = Vec::with_capacity(50);
+
+                for _ in 0..frames_len {
+                    let (ip, new_pos) = read_u64(&buffer, pos);
+                    frames.push(ip);
+                    pos = new_pos;
+                }
+
+                let id = std::process::id();
+                let signal_mess = signal_message(sig, si_code, si_addr as usize);
+                let stack_trace = StackTrace::from_ips(&frames);
+
+                eprintln!(
+                    "{:#^80}\n\
+                    PID: {}\n\
+                    Version: {}\n\
+                    Timestamp(UTC): {}\n\
+                    Timestamp(Local): {}\n\
+                    QueryId: {:?}\n\
+                    Signal Message: {}\n\
+                    Backtrace:\n{:?}",
+                    " Crash fault info ",
+                    id,
+                    crash_version,
+                    chrono::Utc::now(),
+                    chrono::Local::now(),
+                    crash_query_id,
+                    signal_mess,
+                    stack_trace
+                );
+                log::error!(
+                    "{:#^80}\n\
+                    PID: {}\n\
+                    Version: {}\n\
+                    Timestamp(UTC): {}\n\
+                    Timestamp(Local): {}\n\
+                    QueryId: {:?}\n\
+                    Signal Message: {}\n\
+                    Backtrace:\n{:?}",
+                    " Crash fault info ",
+                    id,
+                    crash_version,
+                    chrono::Utc::now(),
+                    chrono::Local::now(),
+                    crash_query_id,
+                    signal_mess,
+                    stack_trace
+                );
+            }
+        });
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io::Read;
     use std::ptr::addr_of_mut;
 
     use databend_common_base::runtime::ThreadTracker;
 
+    use crate::crash_hook::pipe_file;
+    use crate::crash_hook::read_i32;
+    use crate::crash_hook::read_string;
+    use crate::crash_hook::read_u64;
     use crate::crash_hook::sigsetjmp;
-    use crate::crash_hook::ERROR_MESSAGE;
+    use crate::crash_hook::BUFFER_SIZE;
     use crate::crash_hook::TEST_JMP_BUFFER;
     use crate::set_crash_hook;
 
     #[test]
     fn test_crash() {
         unsafe {
-            set_crash_hook(String::from("1.2.111"));
+            let (input, output) = pipe_file().unwrap();
+            set_crash_hook(output);
+            let mut reader = std::io::BufReader::new(input);
 
             for signal in [
                 libc::SIGSEGV,
@@ -330,7 +526,6 @@ mod tests {
                 libc::SIGSYS,
                 libc::SIGTRAP,
             ] {
-                ERROR_MESSAGE = String::new();
                 let query_id = format!("Trakcing query id: {}", signal);
                 let mut tracking_payload = ThreadTracker::new_tracking_payload();
                 tracking_payload.query_id = Some(query_id.clone());
@@ -341,86 +536,29 @@ mod tests {
                     libc::raise(signal);
                 }
 
-                // Example:
-                // ############################### Crash fault info ###############################
-                // PID: 0
-                // Version: 1.2.111
-                // Timestamp(UTC): 2024-07-15 07:24:50.624669 UTC
-                // Timestamp(Local): 2024-07-15 15:24:50.624788 +08:00
-                // QueryId: "Trakcing query id: 11"
-                // Signal 11 (SIGSEGV), si_code 2 (Unknown), Address 0x10479d130
-                //
-                // Backtrace:
-                // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ BACKTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                //                               ⋮ 5 frames hidden ⋮
-                //  6: databend_common_tracing::panic_hook::backtrace::h205501a90720b8ac
-                //     at /Users/WinterZhang/Source/databend/src/common/tracing/src/panic_hook.rs:67
-                //       65 │ pub fn backtrace() -> String {
-                //       66 │     if should_backtrace() {
-                //       67 >         let backtrace = Backtrace::new();
-                //       68 │         let printer = BacktracePrinter::new()
-                //       69 │             .message("")
-                //  7: databend_common_tracing::crash_hook::CrashHandler::recv_signal::hfbc5155e9fe371e2
-                //     at /Users/WinterZhang/Source/databend/src/common/tracing/src/crash_hook.rs:31
-                //       29 │             write_error(format_args!("QueryId: {:?}", current_query_id));
-                //       30 │             write_error(format_args!("{}", signal_message(sig, info, uc)));
-                //       31 >             write_error(format_args!("Backtrace:\n{}", backtrace()));
-                //       32 │         }
-                //       33 │     }
-                //  8: databend_common_tracing::crash_hook::signal_handler::h8f436acfc653eadf
-                //     at /Users/WinterZhang/Source/databend/src/common/tracing/src/crash_hook.rs:202
-                //      200 │
-                //      201 │     if let Some(crash_handler) = guard.as_ref() {
-                //      202 >         crash_handler.recv_signal(sig, info, uc);
-                //      203 │     }
-                //      204 │
-                //  9: _OSAtomicTestAndClearBarrier
-                //     at <unknown source file>
-                // 10: __pthread_atfork_prepare_handlers
-                //     at <unknown source file>
-                // 11: databend_common_tracing::crash_hook::tests::test_crash::hb571a3876f0deaa5
-                //     at /Users/WinterZhang/Source/databend/src/common/tracing/src/crash_hook.rs:274
-                //      272 │
-                //      273 │                 if sigsetjmp(addr_of_mut!(TEST_JMP_BUFFER), 1) == 0 {
-                //      274 >                     libc::raise(signal);
-                //      275 │                 }
-                //      276 │
-                // 12: databend_common_tracing::crash_hook::tests::test_crash::{{closure}}::h85bf763847dcff53
-                //     at /Users/WinterZhang/Source/databend/src/common/tracing/src/crash_hook.rs:261
-                //      259 │
-                //      260 │     #[test]
-                //      261 >     fn test_crash() {
-                //      262 │         unsafe {
-                //      263 │             set_crash_hook(String::from("1.2.111"));
-                // 14: core::ops::function::FnOnce::call_once::h31eb0fafb294dd12
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/core/src/ops/function.rs:250
-                // 15: test::__rust_begin_short_backtrace::h6fac42d75080a771
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/test/src/lib.rs:620
-                // 16: test::run_test_in_process::{{closure}}::h55d5037f9addec80
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/test/src/lib.rs:643
-                // 17: <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once::hdb2a8a04750edb82
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/core/src/panic/unwind_safe.rs:272
-                // 18: std::panicking::try::do_call::h6d5a55026eb7cc8c
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/std/src/panicking.rs:554
-                // 19: std::panicking::try::h64d2a41424d099bc
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/std/src/panicking.rs:518
-                // 20: std::panic::catch_unwind::hc4df77f0513e1be7
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/std/src/panic.rs:142
-                // 21: test::run_test_in_process::ha75b98814770ae24
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/test/src/lib.rs:643
-                // 22: test::run_test::{{closure}}::h7f301602b56ea75e
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/test/src/lib.rs:566
-                // 23: test::run_test::{{closure}}::hfbc0ddafa8073094
-                //     at /rustc/8ace7ea1f7cbba7b4f031e66c54ca237a0d65de6/library/test/src/lib.rs:594
-                //                               ⋮ 12 frames hidden ⋮
+                let mut buffer = [0_u8; BUFFER_SIZE];
 
-                assert!(!ERROR_MESSAGE.is_empty());
-                assert!(ERROR_MESSAGE.contains("1.2.111"));
-                assert!(ERROR_MESSAGE.contains(&query_id));
-                assert!(ERROR_MESSAGE.contains(&format!("Signal {}", signal)));
-                assert!(ERROR_MESSAGE.contains(&format!("{:━^80}", " BACKTRACE ")));
-                assert!(ERROR_MESSAGE.contains("test_crash"));
-                eprintln!("{}", ERROR_MESSAGE)
+                let pos = 0;
+                if reader.read_exact(&mut buffer).is_ok() {
+                    let (sig, pos) = read_i32(&buffer, pos);
+                    let (_si_code, pos) = read_i32(&buffer, pos);
+                    let (_si_addr, pos) = read_u64(&buffer, pos);
+                    let (crash_query_id, pos) = read_string(&buffer, pos);
+
+                    let (frames_len, mut pos) = read_u64(&buffer, pos);
+                    let mut frames = Vec::with_capacity(50);
+
+                    for _index in 0..frames_len {
+                        let (ip, new_pos) = read_u64(&buffer, pos);
+                        frames.push(ip);
+                        pos = new_pos;
+                    }
+
+                    // eprintln!("{:?}", StackTrace::from_ips(&frames));
+                    assert_eq!(sig, signal);
+                    assert_eq!(crash_query_id, query_id);
+                    assert!(!frames.is_empty());
+                }
             }
         }
     }

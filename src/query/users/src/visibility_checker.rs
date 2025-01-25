@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::string::ToString;
 
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -22,12 +24,14 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use enumflags2::BitFlags;
+use itertools::Itertools;
 
 /// GrantObjectVisibilityChecker is used to check whether a user has the privilege to access a
 /// database or table.
 /// It is used in `SHOW DATABASES` and `SHOW TABLES` statements.
 pub struct GrantObjectVisibilityChecker {
     granted_global_udf: bool,
+    granted_global_ws: bool,
     granted_global_db_table: bool,
     granted_global_stage: bool,
     granted_global_read_stage: bool,
@@ -36,10 +40,12 @@ pub struct GrantObjectVisibilityChecker {
     granted_tables: HashSet<(String, String, String)>,
     granted_tables_id: HashSet<(String, u64, u64)>,
     extra_databases: HashSet<(String, String)>,
+    sys_databases: HashSet<(String, String)>,
     extra_databases_id: HashSet<(String, u64)>,
     granted_udfs: HashSet<String>,
     granted_write_stages: HashSet<String>,
     granted_read_stages: HashSet<String>,
+    granted_ws: HashSet<String>,
 }
 
 impl GrantObjectVisibilityChecker {
@@ -49,12 +55,14 @@ impl GrantObjectVisibilityChecker {
         ownership_objects: &[OwnershipObject],
     ) -> Self {
         let mut granted_global_udf = false;
+        let mut granted_global_ws = false;
         let mut granted_global_db_table = false;
         let mut granted_global_stage = false;
         let mut granted_global_read_stage = false;
         let mut granted_databases = HashSet::new();
         let mut granted_tables = HashSet::new();
         let mut granted_udfs = HashSet::new();
+        let mut granted_ws = HashSet::new();
         let mut granted_write_stages = HashSet::new();
         let mut granted_read_stages = HashSet::new();
         let mut extra_databases = HashSet::new();
@@ -87,6 +95,15 @@ impl GrantObjectVisibilityChecker {
                             ent.privileges().iter(),
                             |privilege| {
                                 UserPrivilegeSet::available_privileges_on_udf(false)
+                                    .has_privilege(privilege)
+                            },
+                        );
+
+                        check_privilege(
+                            &mut granted_global_ws,
+                            ent.privileges().iter(),
+                            |privilege| {
+                                UserPrivilegeSet::available_privileges_on_warehouse()
                                     .has_privilege(privilege)
                             },
                         );
@@ -152,6 +169,9 @@ impl GrantObjectVisibilityChecker {
                             granted_read_stages.insert(stage.to_string());
                         }
                     }
+                    GrantObject::Warehouse(w) => {
+                        granted_ws.insert(w.to_string());
+                    }
                 }
             }
         }
@@ -185,6 +205,7 @@ impl GrantObjectVisibilityChecker {
 
         Self {
             granted_global_udf,
+            granted_global_ws,
             granted_global_db_table,
             granted_global_stage,
             granted_global_read_stage,
@@ -197,6 +218,11 @@ impl GrantObjectVisibilityChecker {
             granted_udfs,
             granted_write_stages,
             granted_read_stages,
+            sys_databases: HashSet::from([
+                ("default".to_string(), "information_schema".to_string()),
+                ("default".to_string(), "system".to_string()),
+            ]),
+            granted_ws,
         }
     }
 
@@ -228,6 +254,17 @@ impl GrantObjectVisibilityChecker {
         }
 
         if self.granted_udfs.contains(udf) {
+            return true;
+        }
+        false
+    }
+
+    pub fn check_warehouse_visibility(&self, udf: &str) -> bool {
+        if self.granted_global_ws {
+            return true;
+        }
+
+        if self.granted_ws.contains(udf) {
             return true;
         }
         false
@@ -323,5 +360,54 @@ impl GrantObjectVisibilityChecker {
         }
 
         false
+    }
+
+    #[allow(clippy::type_complexity)]
+    pub fn get_visibility_database(
+        &self,
+    ) -> Option<HashMap<&String, HashSet<(Option<&String>, Option<&u64>)>>> {
+        if self.granted_global_db_table {
+            return None;
+        }
+
+        let capacity = self.granted_databases.len()
+            + self.granted_databases_id.len()
+            + self.extra_databases.len()
+            + self.extra_databases_id.len()
+            + self.sys_databases.len();
+
+        let dbs = self
+            .granted_databases
+            .iter()
+            .map(|(catalog, db)| (catalog, (Some(db), None)))
+            .chain(
+                self.granted_databases_id
+                    .iter()
+                    .map(|(catalog, db_id)| (catalog, (None, Some(db_id)))),
+            )
+            .chain(
+                self.extra_databases
+                    .iter()
+                    .map(|(catalog, db)| (catalog, (Some(db), None))),
+            )
+            .chain(
+                self.sys_databases
+                    .iter()
+                    .map(|(catalog, db)| (catalog, (Some(db), None))),
+            )
+            .chain(
+                self.extra_databases_id
+                    .iter()
+                    .map(|(catalog, db_id)| (catalog, (None, Some(db_id)))),
+            )
+            .into_grouping_map()
+            .fold(
+                HashSet::with_capacity(capacity / 4),
+                |mut set, _key, value| {
+                    set.insert(value);
+                    set
+                },
+            );
+        Some(dbs)
     }
 }

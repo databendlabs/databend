@@ -17,20 +17,18 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::table::NavigationPoint;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::AbortChecker;
+use databend_common_exception::ResultExt;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
-use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
-use log::warn;
 use opendal::EntryMode;
-use opendal::Metakey;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
@@ -53,7 +51,7 @@ impl FuseTable {
                     .await
             }
             NavigationPoint::TimePoint(time_point) => {
-                let Some(location) = self.snapshot_loc().await? else {
+                let Some(location) = self.snapshot_loc() else {
                     return Err(ErrorCode::TableHistoricalDataNotFound(
                         "Empty Table has no historical data",
                     ));
@@ -114,7 +112,7 @@ impl FuseTable {
         snapshot_id: &str,
         abort_checker: AbortChecker,
     ) -> Result<Arc<FuseTable>> {
-        let Some(location) = self.snapshot_loc().await? else {
+        let Some(location) = self.snapshot_loc() else {
             return Err(ErrorCode::TableHistoricalDataNotFound(
                 "Empty Table has no historical data",
             ));
@@ -154,7 +152,9 @@ impl FuseTable {
         // Find the instant which matches the given `time_point`.
         let mut instant = None;
         while let Some(snapshot_with_version) = snapshot_stream.try_next().await? {
-            abort_checker.try_check_aborting()?;
+            abort_checker
+                .try_check_aborting()
+                .with_context(|| "failed to find snapshot")?;
             if pred(snapshot_with_version.0.as_ref()) {
                 instant = Some(snapshot_with_version);
                 break;
@@ -171,7 +171,7 @@ impl FuseTable {
     }
 
     /// Load the table instance by the snapshot
-    fn load_table_by_snapshot(
+    pub fn load_table_by_snapshot(
         &self,
         snapshot: &TableSnapshot,
         format_version: u64,
@@ -271,29 +271,11 @@ impl FuseTable {
             ));
         }
 
-        let location = files[0].clone();
-        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        let ver = TableMetaLocationGenerator::snapshot_version(location.as_str());
-        let load_params = LoadParams {
-            location,
-            len_hint: None,
-            ver,
-            put_cache: false,
+        let Some(location) = self.snapshot_loc() else {
+            return Err(ErrorCode::TableHistoricalDataNotFound("No historical data"));
         };
-        let snapshot = reader.read(&load_params).await?;
-        // Take the prev snapshot as base snapshot to avoid get orphan snapshot.
-        let prev = snapshot.prev_snapshot_id;
-        match prev {
-            Some((id, v)) => {
-                let new_loc = self
-                    .meta_location_generator()
-                    .snapshot_location_from_uuid(&id, v)?;
-                Ok((new_loc, files))
-            }
-            None => Err(ErrorCode::TableHistoricalDataNotFound(
-                "No historical data found at given point",
-            )),
-        }
+
+        Ok((location, files))
     }
 
     #[async_backtrace::framed]
@@ -378,15 +360,18 @@ impl FuseTable {
     where F: FnMut(String, DateTime<Utc>) -> bool {
         let mut file_list = vec![];
         let op = self.operator.clone();
-        let mut ds = op
-            .lister_with(&prefix)
-            .metakey(Metakey::Mode | Metakey::LastModified)
-            .await?;
+        let mut ds = op.lister_with(&prefix).await?;
         while let Some(de) = ds.try_next().await? {
             let meta = de.metadata();
             match meta.mode() {
                 EntryMode::FILE => {
-                    let modified = meta.last_modified();
+                    let modified = if let Some(v) = meta.last_modified() {
+                        Some(v)
+                    } else {
+                        let meta = op.stat(de.path()).await?;
+                        meta.last_modified()
+                    };
+
                     let location = de.path().to_string();
                     if let Some(modified) = modified {
                         if f(location.clone(), modified) {
@@ -395,7 +380,6 @@ impl FuseTable {
                     }
                 }
                 _ => {
-                    warn!("found not snapshot file in {:}, found: {:?}", prefix, de);
                     continue;
                 }
             }

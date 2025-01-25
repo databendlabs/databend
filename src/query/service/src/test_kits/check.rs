@@ -162,7 +162,7 @@ pub async fn check_data_dir(
     if check_last_snapshot.is_some() {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot_loc = fuse_table.snapshot_loc().await?;
+        let snapshot_loc = fuse_table.snapshot_loc();
         let snapshot_loc = snapshot_loc.unwrap();
         assert!(last_snapshot_loc.contains(&snapshot_loc));
         assert_eq!(
@@ -184,11 +184,9 @@ pub async fn check_data_dir(
             "ts_location_opt: {:?}, table_statistic_files: {:?}",
             ts_location, table_statistic_files
         );
-        assert!(
-            table_statistic_files
-                .iter()
-                .any(|e| e.contains(&ts_location))
-        );
+        assert!(table_statistic_files
+            .iter()
+            .any(|e| e.contains(&ts_location)));
     }
 
     Ok(())

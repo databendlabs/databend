@@ -105,7 +105,6 @@ build_exceptions! {
     BadBytes(1046),
     InitPrometheusFailure(1047),
     Overflow(1049),
-    AuthenticateFailure(1051),
     TLSConfigurationFailure(1052),
     UnknownSession(1053),
     SHA1CheckFailed(1057),
@@ -123,7 +122,6 @@ build_exceptions! {
     UnknownFormat(1074),
     UnknownCompressionType(1075),
     InvalidCompressionData(1076),
-    InvalidAuthInfo(1077),
     InvalidTimezone(1078),
     InvalidDate(1079),
     InvalidTimestamp(1080),
@@ -195,6 +193,7 @@ build_exceptions! {
     /// For example: license key is expired
     LicenseKeyInvalid(1402),
     EnterpriseFeatureNotEnable(1403),
+    LicenseKeyExpired(1404),
 
     BackgroundJobAlreadyExists(1501),
     UnknownBackgroundJob(1502),
@@ -213,6 +212,10 @@ build_exceptions! {
     // Geometry errors.
     GeometryError(1801),
     InvalidGeometryFormat(1802),
+
+    // UDF errors.
+    UDFRuntimeError(1810),
+
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),
@@ -294,6 +297,14 @@ build_exceptions! {
     // Cluster error codes.
     ClusterUnknownNode(2401),
     ClusterNodeAlreadyExists(2402),
+    InvalidWarehouse(2403),
+    NoResourcesAvailable(2404),
+    WarehouseAlreadyExists(2405),
+    UnknownWarehouse(2406),
+    WarehouseOperateConflict(2407),
+    EmptyNodesForWarehouse(2408),
+    WarehouseClusterAlreadyExists(2409),
+    WarehouseClusterNotExists(2410),
 
     // Stage error codes.
     UnknownStage(2501),
@@ -359,6 +370,7 @@ build_exceptions! {
     StreamAlreadyExists(2732),
     IllegalStream(2733),
     StreamVersionMismatched(2734),
+    WithOptionInvalid(2735),
 
     // dynamic error codes.
     IllegalDynamicTable(2740),
@@ -387,6 +399,11 @@ build_exceptions! {
     // dictionary
     DictionaryAlreadyExists(3113),
     UnknownDictionary(3114),
+    DictionarySourceError(3115),
+    // Procedure
+    UnknownProcedure(3130),
+    ProcedureAlreadyExists(3131),
+    IllegalProcedureFormat(3132),
 }
 
 // Storage errors [3001, 4000].
@@ -409,17 +426,21 @@ build_exceptions! {
     // recluster error codes
     NoNeedToRecluster(4011),
     NoNeedToCompact(4012),
+    UnsupportedClusterType(4013),
 
-    RefreshTableInfoFailure(4012),
+    RefreshTableInfoFailure(4021),
 }
 
 // Service errors [5001,6000].
 build_exceptions! {
-    // A task that already stopped and can not stopped twice.
+    // A task that already stopped and can not stop twice.
     AlreadyStopped(5002),
 
-    SessionTokenExpired(5100),
-    RefreshTokenExpired(5101),
-    SessionTokenNotFound(5102),
-    RefreshTokenNotFound(5103)
+    // auth related
+    AuthenticateFailure(5100),
+    // the flowing 4 code is used by clients
+    SessionTokenExpired(5101),
+    RefreshTokenExpired(5102),
+    SessionTokenNotFound(5103),
+    RefreshTokenNotFound(5104)
 }

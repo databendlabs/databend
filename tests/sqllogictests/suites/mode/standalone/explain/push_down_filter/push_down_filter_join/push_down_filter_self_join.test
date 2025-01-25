@@ -1,0 +1,38 @@
+statement ok
+create or replace table t1 as select number as a, number as b from numbers(10);
+
+statement ok
+create or replace table t2 as select number as a, number as b from numbers(10);
+
+query T
+explain with A as  materialized (select * from t1 union all select * from t2),
+B as (select * from A),
+C as (select * from B as b1 left outer join B as b2 on b1.a = b2.a where b1.b < b2.b),
+D as (select * from C)
+select * from D;
+----
+HashJoin
+├── output columns: [a.a (#0), a.b (#1), a.b (#3), a.a (#2)]
+├── join type: INNER
+├── build keys: [b2.a (#2)]
+├── probe keys: [b1.a (#0)]
+├── filters: [d.b (#1) < d.b (#3)]
+├── estimated rows: 400.00
+├── TableScan(Build)
+│   ├── table: default.default.a
+│   ├── output columns: [a (#2), b (#3)]
+│   ├── read rows: 20
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 0
+│   ├── partitions scanned: 0
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 20.00
+└── TableScan(Probe)
+    ├── table: default.default.a
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 20
+    ├── read size: < 1 KiB
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 20.00

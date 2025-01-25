@@ -1,0 +1,535 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpch_test;
+
+# To make the test stable, we set the dynamic_sample_time_budget_ms to a large vale
+statement ok
+set dynamic_sample_time_budget_ms = 10000;
+
+# cbo will remove the `stat_info` computed by sample, so we need to disable cbo to see the estimate row info in explain
+statement ok
+set enable_cbo = 0;
+
+statement ok
+set random_function_seed = 1;
+
+# estimated rows and output rows are similar for filter
+# the test is flaky, so only put it there as a reference.
+onlyif todo
+query ok
+EXPLAIN ANALYZE PARTIAL
+SELECT
+  *
+FROM
+  orders,
+  lineitem
+WHERE
+  o_orderkey = l_orderkey
+  AND l_shipmode LIKE '%MAIL%';
+----
+HashJoin
+├── estimated rows: 66953.00
+├── output rows: 85.95 thousand
+├── Filter
+│   ├── filters: [like(lineitem.l_shipmode (#23), '%MAIL%')]
+│   ├── estimated rows: 66953.00
+│   ├── output rows: 85.95 thousand
+│   └── TableScan
+│       ├── table: default.tpch_test.lineitem
+│       ├── estimated rows: 600572.00
+│       └── output rows: 600.57 thousand
+└── TableScan
+    ├── table: default.tpch_test.orders
+    ├── estimated rows: 150000.00
+    └── output rows: 150 thousand
+
+statement ok
+set enable_cbo = 1;
+
+# use `join.test` to test dynamic sample framework without error
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        full outer join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+    limit 20;
+----
+1 0
+2 0
+3 0
+4 0
+5 0
+6 0
+7 0
+8 0
+9 0
+10 0
+11 0
+12 0
+13 0
+14 0
+15 0
+16 0
+17 0
+18 0
+19 0
+20 0
+
+
+query I
+select
+    c_custkey
+from
+    customer
+        inner join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120 order by c_custkey limit 20;
+----
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+103
+103
+103
+103
+103
+103
+103
+103
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        left join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+    limit 20;
+----
+1 0
+2 0
+3 0
+4 0
+5 0
+6 0
+7 0
+8 0
+9 0
+10 0
+11 0
+12 0
+13 0
+14 0
+15 0
+16 0
+17 0
+18 0
+19 0
+20 0
+
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        right join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+limit 20;
+----
+101 12
+103 18
+104 7
+106 18
+107 12
+109 25
+110 9
+112 19
+113 17
+115 28
+116 4
+118 18
+119 10
+NULL 149803
+
+query I
+select
+    c_custkey
+from
+    customer
+        left semi join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by c_custkey
+    limit 20;
+----
+101
+103
+104
+106
+107
+109
+110
+112
+113
+115
+116
+118
+119
+
+query I
+select
+    o_custkey
+from
+    customer
+    right semi join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_custkey
+    limit 20;
+----
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+103
+103
+103
+103
+103
+103
+103
+103
+
+query I
+select
+    c_custkey
+from
+    customer
+    left anti join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by c_custkey
+    limit 20;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+
+query I
+select
+    o_custkey
+from
+    customer
+    right anti join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_custkey
+    limit 20;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+2
+2
+2
+2
+2
+2
+2
+2
+2
+2
+2
+
+query I
+select
+    o_comment
+from
+    customer
+    cross join
+    orders
+where o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_comment
+    limit 20;
+----
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias above the carefully ironic packages nag about the pend
+
+statement ok
+set max_block_size = 1024;
+
+
+# Test iejoin with large dataset
+query I
+select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) as l, (select * from orders order by o_orderkey limit 5000) as o where l.l_orderkey > o.o_orderkey and l.l_partkey < o.o_custkey order by l_orderkey limit 10;
+----
+3
+3
+3
+3
+3
+3
+3
+4
+5
+5
+
+statement ok
+set max_block_size = 65536;
+
+query I
+select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) as l, (select * from orders order by o_orderkey limit 5000) as o where l.l_orderkey > o.o_orderkey order by l_orderkey limit 10;
+----
+2
+3
+3
+3
+3
+3
+3
+3
+3
+3
+
+# LEFT OUTER / LEFT SINGEL / FULL
+query I
+select l_orderkey, o_orderdate, o_shippriority from lineitem left join orders on l_orderkey = o_orderkey  and o_orderdate < to_date('1995-03-15') order by o_orderdate, l_orderkey limit 5;
+----
+3271 1992-01-01 0
+3271 1992-01-01 0
+3271 1992-01-01 0
+3271 1992-01-01 0
+5607 1992-01-01 0
+
+# LEFT ANTI
+query I
+select o_custkey from orders where not exists (select * from customer where substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') and o_custkey = c_custkey) order by o_custkey limit 10;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+4
+
+query I
+select
+    supp_nation,
+    cust_nation,
+    l_year,
+    truncate(sum(volume),3) as revenue
+from
+    (
+        select
+            n1.n_name as supp_nation,
+            n2.n_name as cust_nation,
+            extract(year from l_shipdate) as l_year,
+            l_extendedprice * (1 - l_discount) as volume
+        from
+            supplier,
+            lineitem,
+            orders,
+            customer,
+            nation n1,
+            nation n2
+        where
+                s_suppkey = l_suppkey
+          and o_orderkey = l_orderkey
+          and c_custkey = o_custkey
+          and s_nationkey = n1.n_nationkey
+          and c_nationkey = n2.n_nationkey
+          and (
+                (n1.n_name = 'FRANCE' and n2.n_name = 'GERMANY')
+                or (n1.n_name = 'GERMANY' and n2.n_name = 'FRANCE')
+            )
+          and l_shipdate between to_date('1995-01-01') and to_date('1996-12-31')
+    ) as shipping
+group by
+    supp_nation,
+    cust_nation,
+    l_year
+order by
+    supp_nation,
+    cust_nation,
+    l_year;
+----
+FRANCE GERMANY 1995 4637235.150
+FRANCE GERMANY 1996 5224779.573
+GERMANY FRANCE 1995 6232818.703
+GERMANY FRANCE 1996 5557312.112
+
+query I
+select
+    o_year,
+    truncate(sum(case
+            when nation = 'BRAZIL' then volume
+            else 0
+        end) / sum(volume),8) as mkt_share
+from
+    (
+        select
+            extract(year from o_orderdate) as o_year,
+            l_extendedprice * (1 - l_discount) as volume,
+            n2.n_name as nation
+        from
+            part,
+            supplier,
+            lineitem,
+            orders,
+            customer,
+            nation n1,
+            nation n2,
+            region
+        where
+                p_partkey = l_partkey
+          and s_suppkey = l_suppkey
+          and l_orderkey = o_orderkey
+          and o_custkey = c_custkey
+          and c_nationkey = n1.n_nationkey
+          and n1.n_regionkey = r_regionkey
+          and r_name = 'AMERICA'
+          and s_nationkey = n2.n_nationkey
+          and o_orderdate between to_date('1995-01-01') and to_date('1996-12-31')
+          and p_type = 'ECONOMY ANODIZED STEEL'
+    ) as all_nations
+group by
+    o_year
+order by
+    o_year;
+----
+1995 0.02864874
+1996 0.01825027
+
+query I
+select
+    nation,
+    o_year,
+    truncate(truncate(sum(amount),0)/10, 0) as sum_profit
+from
+    (
+        select
+            n_name as nation,
+            extract(year from o_orderdate) as o_year,
+            truncate(l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity, 100) as amount
+        from
+            part,
+            supplier,
+            lineitem,
+            partsupp,
+            orders,
+            nation
+        where
+                s_suppkey = l_suppkey
+          and ps_suppkey = l_suppkey
+          and ps_partkey = l_partkey
+          and p_partkey = l_partkey
+          and o_orderkey = l_orderkey
+          and s_nationkey = n_nationkey
+          and p_name like '%green%'
+    ) as profit
+group by
+    nation,
+    o_year
+order by
+    sum_profit
+limit 5;
+----
+MOZAMBIQUE 1998 162042
+JORDAN 1998 181148
+MOROCCO 1998 181533
+JAPAN 1998 184953
+VIETNAM 1998 192431
+
+
+statement ok
+set random_function_seed = 0;
+
+statement ok
+set dynamic_sample_time_budget_ms = 0;

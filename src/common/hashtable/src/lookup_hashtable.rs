@@ -17,13 +17,17 @@ use std::iter::TrustedLen;
 use std::mem;
 use std::mem::MaybeUninit;
 
-use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
 
 use crate::table0::Entry;
 use crate::HashtableLike;
 
-pub struct LookupHashtable<K: Sized, const CAPACITY: usize, V, A: Allocator + Clone = MmapAllocator>
-{
+pub struct LookupHashtable<
+    K: Sized,
+    const CAPACITY: usize,
+    V,
+    A: Allocator + Clone = DefaultAllocator,
+> {
     flags: Box<[bool; CAPACITY], A>,
     data: Box<[Entry<K, V>; CAPACITY], A>,
     len: usize,
@@ -73,19 +77,39 @@ macro_rules! lookup_impl {
         impl<V, A: Allocator + Clone> HashtableLike for LookupHashtable<$ty, $capacity, V, A> {
             type Key = $ty;
             type Value = V;
-            type EntryRef<'a> = &'a Entry<$ty, V> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
-            type EntryMutRef<'a> = &'a mut Entry<$ty, V> where Self: 'a, Self::Key:'a, Self::Value: 'a;
-            type Iterator<'a> = LookupTableIter<'a, $capacity, $ty, V> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
-            type IteratorMut<'a> = LookupTableIterMut<'a, $capacity, $ty, V> where Self: 'a, Self::Key: 'a, Self::Value: 'a;
+            type EntryRef<'a>
+                = &'a Entry<$ty, V>
+            where
+                Self: 'a,
+                Self::Key: 'a,
+                Self::Value: 'a;
+            type EntryMutRef<'a>
+                = &'a mut Entry<$ty, V>
+            where
+                Self: 'a,
+                Self::Key: 'a,
+                Self::Value: 'a;
+            type Iterator<'a>
+                = LookupTableIter<'a, $capacity, $ty, V>
+            where
+                Self: 'a,
+                Self::Key: 'a,
+                Self::Value: 'a;
+            type IteratorMut<'a>
+                = LookupTableIterMut<'a, $capacity, $ty, V>
+            where
+                Self: 'a,
+                Self::Key: 'a,
+                Self::Value: 'a;
 
             fn len(&self) -> usize {
                 self.len
             }
 
             fn bytes_len(&self, _without_arena: bool) -> usize {
-                mem::size_of::<MaybeUninit<[bool; $capacity]>>() +
-                mem::size_of::<MaybeUninit<[Entry<$ty, V>; $capacity]>>() +
-                mem::size_of::<Self>()
+                mem::size_of::<MaybeUninit<[bool; $capacity]>>()
+                    + mem::size_of::<MaybeUninit<[Entry<$ty, V>; $capacity]>>()
+                    + mem::size_of::<Self>()
             }
 
             fn entry(&self, key: &$ty) -> Option<Self::EntryRef<'_>> {
@@ -110,14 +134,20 @@ macro_rules! lookup_impl {
                 unsafe { self.entry_mut(key).map(|e| e.val.assume_init_mut()) }
             }
 
-            unsafe fn insert(&mut self, key: &$ty) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
+            unsafe fn insert(
+                &mut self,
+                key: &$ty,
+            ) -> Result<&mut MaybeUninit<Self::Value>, &mut Self::Value> {
                 match self.insert_and_entry(key) {
                     Ok(e) => Ok(&mut e.val),
                     Err(e) => Err(e.val.assume_init_mut()),
                 }
             }
 
-            unsafe fn insert_and_entry(&mut self, key: &$ty) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+            unsafe fn insert_and_entry(
+                &mut self,
+                key: &$ty,
+            ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
                 match self.flags[*key as usize] {
                     true => Err(&mut self.data[*key as usize]),
                     false => {
@@ -130,7 +160,11 @@ macro_rules! lookup_impl {
                 }
             }
 
-            unsafe fn insert_and_entry_with_hash(&mut self, key: &$ty, _hash: u64) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
+            unsafe fn insert_and_entry_with_hash(
+                &mut self,
+                key: &$ty,
+                _hash: u64,
+            ) -> Result<Self::EntryMutRef<'_>, Self::EntryMutRef<'_>> {
                 self.insert_and_entry(key)
             }
 
@@ -141,8 +175,11 @@ macro_rules! lookup_impl {
             fn clear(&mut self) {
                 unsafe {
                     self.len = 0;
-                    self.flags = Box::<[bool; $capacity], A>::new_zeroed_in(self.allocator.clone()).assume_init();
-                    self.data = Box::<[Entry<$ty, V>; $capacity], A>::new_zeroed_in(self.allocator.clone()).assume_init();
+                    self.flags = Box::<[bool; $capacity], A>::new_zeroed_in(self.allocator.clone())
+                        .assume_init();
+                    self.data =
+                        Box::<[Entry<$ty, V>; $capacity], A>::new_zeroed_in(self.allocator.clone())
+                            .assume_init();
                 }
             }
         }

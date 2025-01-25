@@ -23,12 +23,11 @@ use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_sql::plans::DropTablePlan;
 use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_share::remove_share_table_info;
-use databend_common_storages_share::save_share_spec;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -88,6 +87,7 @@ impl Interpreter for DropTableInterpreter {
                 }
             }
         };
+        let is_temp = tbl.is_temp();
         let table_id = tbl.get_table_info().ident.table_id;
 
         let engine = tbl.get_table_info().engine();
@@ -117,28 +117,36 @@ impl Interpreter for DropTableInterpreter {
         let tenant = self.ctx.get_tenant();
         let db = catalog.get_database(&tenant, &self.plan.database).await?;
         // actually drop table
-        let resp = catalog
+        let _resp = catalog
             .drop_table_by_id(DropTableByIdReq {
                 if_exists: self.plan.if_exists,
                 tenant: tenant.clone(),
                 table_name: tbl_name.to_string(),
                 tb_id: tbl.get_table_info().ident.table_id,
-                db_id: db.get_db_info().ident.db_id,
+                db_id: db.get_db_info().database_id.db_id,
+                engine: tbl.engine().to_string(),
+                session_id: tbl
+                    .options()
+                    .get(OPT_KEY_TEMP_PREFIX)
+                    .cloned()
+                    .unwrap_or_default(),
             })
             .await?;
 
-        // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
-        // but the table still exists, in the interval maybe some unexpected things will happen.
-        // drop the ownership
-        let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
-        let owner_object = OwnershipObject::Table {
-            catalog_name: self.plan.catalog.clone(),
-            db_id: db.get_db_info().ident.db_id,
-            table_id,
-        };
+        if !is_temp {
+            // we should do `drop ownership` after actually drop table, otherwise when we drop the ownership,
+            // but the table still exists, in the interval maybe some unexpected things will happen.
+            // drop the ownership
+            let role_api = UserApiProvider::instance().role_api(&self.plan.tenant);
+            let owner_object = OwnershipObject::Table {
+                catalog_name: self.plan.catalog.clone(),
+                db_id: db.get_db_info().database_id.db_id,
+                table_id,
+            };
 
-        role_api.revoke_ownership(&owner_object).await?;
-        RoleCacheManager::instance().invalidate_cache(&tenant);
+            role_api.revoke_ownership(&owner_object).await?;
+            RoleCacheManager::instance().invalidate_cache(&tenant);
+        }
 
         let mut build_res = PipelineBuildResult::create();
         // if `plan.all`, truncate, then purge the historical data
@@ -161,28 +169,6 @@ impl Interpreter for DropTableInterpreter {
                 latest
                     .truncate(self.ctx.clone(), &mut build_res.main_pipeline)
                     .await?
-            }
-        }
-
-        // update share spec if needed
-        if let Some((db_id, spec_vec)) = resp.spec_vec {
-            save_share_spec(
-                self.ctx.get_tenant().tenant_name(),
-                self.ctx.get_application_level_data_operator()?.operator(),
-                &spec_vec,
-            )
-            .await?;
-
-            // remove table spec
-            for share_spec in spec_vec {
-                remove_share_table_info(
-                    self.ctx.get_tenant().tenant_name(),
-                    self.ctx.get_application_level_data_operator()?.operator(),
-                    &share_spec.name,
-                    db_id,
-                    table_id,
-                )
-                .await?;
             }
         }
 

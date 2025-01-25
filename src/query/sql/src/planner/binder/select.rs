@@ -83,17 +83,12 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             aliases,
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
-
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::AggregateFunction(_)
-                    | ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
+                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
             )
         };
 
@@ -132,7 +127,7 @@ impl Binder {
                 ));
             }
             // Add recursive cte's columns to cte info
-            let mut_cte_info = self.ctes_map.get_mut(cte_name).unwrap();
+            let mut_cte_info = bind_context.cte_context.cte_map.get_mut(cte_name).unwrap();
             // The recursive cte may be used by multiple times in main query, so clear cte_info's columns
             mut_cte_info.columns.clear();
             for column in left_bind_context.columns.iter() {
@@ -147,6 +142,10 @@ impl Binder {
                 mut_cte_info.columns.push(col);
             }
         }
+        // Merge cte info from left context to `bind_context`
+        bind_context
+            .cte_context
+            .merge(left_bind_context.cte_context.clone());
         let (right_expr, right_bind_context) =
             self.bind_set_expr(bind_context, right, &[], None)?;
 
@@ -258,26 +257,34 @@ impl Binder {
             left_span,
             right_span,
             left_context,
-            right_context,
+            right_context.clone(),
             coercion_types,
         )?;
 
         if let Some(cte_name) = &cte_name {
-            for (col, cte_col) in new_bind_context
-                .columns
-                .iter_mut()
-                .zip(self.ctes_map.get(cte_name).unwrap().columns.iter())
-            {
+            for (col, cte_col) in new_bind_context.columns.iter_mut().zip(
+                new_bind_context
+                    .cte_context
+                    .cte_map
+                    .get(cte_name)
+                    .unwrap()
+                    .columns
+                    .iter(),
+            ) {
                 col.table_name = cte_col.table_name.clone();
                 col.column_name = cte_col.column_name.clone();
             }
         }
 
+        let output_indexes = new_bind_context.columns.iter().map(|x| x.index).collect();
+
         let union_plan = UnionAll {
             left_outputs,
             right_outputs,
             cte_scan_names,
+            output_indexes,
         };
+
         let mut new_expr = SExpr::create_binary(
             Arc::new(union_plan.into()),
             Arc::new(left_expr),
@@ -285,10 +292,11 @@ impl Binder {
         );
 
         if distinct {
+            let columns = new_bind_context.all_column_bindings().to_vec();
             new_expr = self.bind_distinct(
                 left_span,
-                &new_bind_context,
-                new_bind_context.all_column_bindings(),
+                &mut new_bind_context,
+                &columns,
                 &mut HashMap::new(),
                 new_expr,
             )?;
@@ -342,16 +350,17 @@ impl Binder {
         &mut self,
         left_span: Span,
         right_span: Span,
-        left_context: BindContext,
+        mut left_context: BindContext,
         right_context: BindContext,
         left_expr: SExpr,
         right_expr: SExpr,
         join_type: JoinType,
     ) -> Result<(SExpr, BindContext)> {
+        let columns = left_context.all_column_bindings().to_vec();
         let left_expr = self.bind_distinct(
             left_span,
-            &left_context,
-            left_context.all_column_bindings(),
+            &mut left_context,
+            &columns,
             &mut HashMap::new(),
             left_expr,
         )?;
@@ -378,21 +387,31 @@ impl Binder {
                 .into(),
             );
         }
+        let is_null_equal = (0..left_conditions.len()).collect();
         let join_conditions = JoinConditions {
             left_conditions,
             right_conditions,
             non_equi_conditions: vec![],
             other_conditions: vec![],
         };
-        let s_expr =
-            self.bind_join_with_type(join_type, join_conditions, left_expr, right_expr, None)?;
+        let s_expr = self.bind_join_with_type(
+            join_type,
+            join_conditions,
+            left_expr,
+            right_expr,
+            is_null_equal,
+            None,
+        )?;
+        left_context
+            .cte_context
+            .set_cte_context(right_context.cte_context);
         Ok((s_expr, left_context))
     }
 
     #[allow(clippy::type_complexity)]
     #[allow(clippy::too_many_arguments)]
     fn coercion_union_type(
-        &self,
+        &mut self,
         left_span: Span,
         right_span: Span,
         left_bind_context: BindContext,
@@ -406,6 +425,11 @@ impl Binder {
         let mut left_outputs = Vec::with_capacity(left_bind_context.columns.len());
         let mut right_outputs = Vec::with_capacity(right_bind_context.columns.len());
         let mut new_bind_context = BindContext::new();
+
+        new_bind_context
+            .cte_context
+            .set_cte_context(right_bind_context.cte_context);
+
         for (idx, (left_col, right_col)) in left_bind_context
             .columns
             .iter()
@@ -429,18 +453,10 @@ impl Binder {
                     left_col.index,
                     Some(ScalarExpr::CastExpr(left_coercion_expr)),
                 ));
-                let column_binding = ColumnBindingBuilder::new(
-                    left_col.column_name.clone(),
-                    left_col.index,
-                    Box::new(coercion_types[idx].clone()),
-                    Visibility::Visible,
-                )
-                .build();
-                new_bind_context.add_column_binding(column_binding);
             } else {
                 left_outputs.push((left_col.index, None));
-                new_bind_context.add_column_binding(left_col.clone());
             }
+
             if *right_col.data_type != coercion_types[idx] {
                 let right_coercion_expr = CastExpr {
                     span: right_span,
@@ -461,7 +477,15 @@ impl Binder {
             } else {
                 right_outputs.push((right_col.index, None));
             }
+
+            let column_binding = self.create_derived_column_binding(
+                left_col.column_name.clone(),
+                coercion_types[idx].clone(),
+                None,
+            );
+            new_bind_context.add_column_binding(column_binding);
         }
+
         Ok((new_bind_context, left_outputs, right_outputs))
     }
 
@@ -483,6 +507,7 @@ impl Binder {
         if stmt.group_by.is_some()
             || stmt.having.is_some()
             || stmt.distinct
+            || stmt.qualify.is_some()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
         {

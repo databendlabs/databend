@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 use pretty_assertions::assert_eq;
@@ -23,6 +23,8 @@ use crate::leveled_store::map_api::MapApiRO;
 use crate::marked::Marked;
 use crate::sm_v003::SMV003;
 use crate::state_machine::ExpireKey;
+use crate::state_machine_api::StateMachineApi;
+use crate::state_machine_api_ext::StateMachineApiExt;
 
 #[tokio::test]
 async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
@@ -83,7 +85,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     a.upsert_kv(&UpsertKV::update("a/b", b"b0")).await?;
     a.upsert_kv(&UpsertKV::update("c", b"c0")).await?;
 
-    sm.levels.freeze_writable();
+    sm.map_mut().freeze_writable();
     let mut a = sm.new_applier();
 
     // internal_seq = 3
@@ -140,14 +142,14 @@ async fn test_update_expire_index() -> anyhow::Result<()> {
     let mut sm = SMV003::default();
 
     sm.update_expire_cursor(1);
-    assert_eq!(sm.expire_cursor, ExpireKey::new(1, 0));
+    assert_eq!(sm.get_expire_cursor(), ExpireKey::new(1, 0));
 
     sm.update_expire_cursor(2);
-    assert_eq!(sm.expire_cursor, ExpireKey::new(2, 0));
+    assert_eq!(sm.get_expire_cursor(), ExpireKey::new(2, 0));
 
     sm.update_expire_cursor(1);
     assert_eq!(
-        sm.expire_cursor,
+        sm.get_expire_cursor(),
         ExpireKey::new(2, 0),
         "expire cursor can not go back"
     );
@@ -171,7 +173,7 @@ async fn build_sm_with_expire() -> anyhow::Result<SMV003> {
     a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await?;
 
-    sm.levels.freeze_writable();
+    sm.map_mut().freeze_writable();
     let mut a = sm.new_applier();
 
     a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
@@ -192,7 +194,7 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 
     // Check internal expire index
     let got = sm
-        .levels
+        .map_ref()
         .expire_map()
         .range(..)
         .await?
@@ -298,7 +300,7 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
 
     // Check expire store
     let got = sm
-        .levels
+        .map_ref()
         .expire_map()
         .range(..)
         .await?

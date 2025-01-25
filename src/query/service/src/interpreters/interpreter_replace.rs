@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -46,6 +47,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::ClusterType;
 use parking_lot::RwLock;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -98,11 +100,11 @@ impl Interpreter for ReplaceInterpreter {
             .add_lock_guard(self.plan.lock_guard.clone());
 
         // purge
-        if let Some((files, stage_info)) = purge_info {
+        if let Some((files, stage_info, options)) = purge_info {
             PipelineBuilder::set_purge_files_on_finished(
                 self.ctx.clone(),
                 files.into_iter().map(|v| v.path).collect(),
-                stage_info.copy_options.purge,
+                &options,
                 stage_info,
                 &mut pipeline.main_pipeline,
             )?;
@@ -128,7 +130,10 @@ impl Interpreter for ReplaceInterpreter {
 impl ReplaceInterpreter {
     async fn build_physical_plan(
         &self,
-    ) -> Result<(Box<PhysicalPlan>, Option<(Vec<StageFileInfo>, StageInfo)>)> {
+    ) -> Result<(
+        Box<PhysicalPlan>,
+        Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
+    )> {
         let plan = &self.plan;
         let table = self
             .ctx
@@ -214,8 +219,6 @@ impl ReplaceInterpreter {
                 &name_resolution_ctx,
                 metadata,
                 &[],
-                Default::default(),
-                Default::default(),
             );
             let (scalar, _) = scalar_binder.bind(expr)?;
             let columns = scalar.used_columns();
@@ -288,7 +291,10 @@ impl ReplaceInterpreter {
             .ctx
             .get_settings()
             .get_replace_into_bloom_pruning_max_column_number()?;
-        let bloom_filter_column_indexes = if !table.cluster_keys(self.ctx.clone()).is_empty() {
+        let bloom_filter_column_indexes = if table
+            .cluster_type()
+            .is_some_and(|v| v == ClusterType::Linear)
+        {
             fuse_table
                 .choose_bloom_filter_columns(
                     self.ctx.clone(),
@@ -375,7 +381,7 @@ impl ReplaceInterpreter {
         ctx: Arc<QueryContext>,
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
-        purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
+        purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
     ) -> Result<ReplaceSourceCtx> {
         match source {
             InsertInputSource::Values(source) => self
@@ -401,6 +407,7 @@ impl ReplaceInterpreter {
                     *purge_info = Some((
                         copy_plan.stage_table_info.files_to_copy.unwrap_or_default(),
                         copy_plan.stage_table_info.stage_info.clone(),
+                        copy_plan.stage_table_info.copy_into_table_options.clone(),
                     ));
                     Ok(ReplaceSourceCtx {
                         root: Box::new(physical_plan),
@@ -445,7 +452,7 @@ impl ReplaceInterpreter {
             v => unreachable!("Input plan must be Query, but it's {}", v),
         };
 
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
 
         let select_interpreter = SelectInterpreter::try_create(
             ctx.clone(),

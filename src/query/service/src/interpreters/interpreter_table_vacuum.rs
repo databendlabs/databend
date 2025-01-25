@@ -21,7 +21,7 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
-use databend_common_license::license_manager::get_license_manager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::VacuumTablePlan;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
@@ -29,7 +29,6 @@ use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
-use opendal::Metakey;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -75,12 +74,16 @@ impl VacuumTableInterpreter {
         for (dir_prefix, stat) in prefix_with_stats {
             for entry in operator
                 .list_with(&format!("{}/{}/", table_data_prefix, dir_prefix))
-                .metakey(Metakey::ContentLength)
                 .await?
             {
                 if entry.metadata().is_file() {
+                    let mut content_length = entry.metadata().content_length();
+                    if content_length == 0 {
+                        content_length = operator.stat(entry.path()).await?.content_length();
+                    }
+
                     stat.0 += 1;
-                    stat.1 += entry.metadata().content_length();
+                    stat.1 += content_length;
                 }
             }
         }
@@ -106,9 +109,7 @@ impl Interpreter for VacuumTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let license_manager = get_license_manager();
-        license_manager
-            .manager
+        LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let catalog_name = self.plan.catalog.clone();

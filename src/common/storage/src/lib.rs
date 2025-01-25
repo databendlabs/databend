@@ -35,7 +35,12 @@ mod config;
 pub use config::ShareTableConfig;
 pub use config::StorageConfig;
 
+mod http_client;
+pub use http_client::StorageHttpClient;
+
 mod operator;
+pub use operator::build_operator;
+pub use operator::check_operator;
 pub use operator::init_operator;
 pub use operator::DataOperator;
 
@@ -48,10 +53,6 @@ mod runtime_layer;
 mod column_node;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;
-
-mod parquet2;
-pub use parquet2::infer_schema_with_extension;
-pub use parquet2::read_parquet_metas_in_parallel;
 
 pub mod parquet_rs;
 pub use parquet_rs::read_metadata_async;

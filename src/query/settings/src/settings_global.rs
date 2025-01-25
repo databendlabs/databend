@@ -15,12 +15,10 @@
 use std::sync::Arc;
 
 use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserSetting;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::MatchSeq;
 use databend_common_users::UserApiProvider;
 use log::warn;
 
@@ -28,6 +26,7 @@ use crate::settings::ChangeValue;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
 use crate::ScopeLevel;
+use crate::SettingScope;
 
 impl Settings {
     #[async_backtrace::framed]
@@ -44,12 +43,13 @@ impl Settings {
 
         UserApiProvider::instance()
             .setting_api(&self.tenant)
-            .try_drop_setting(key, MatchSeq::GE(1))
+            .try_drop_setting(key)
             .await
     }
 
     #[async_backtrace::framed]
     pub async fn set_global_setting(&self, k: String, v: String) -> Result<()> {
+        DefaultSettings::check_setting_scope(&k, SettingScope::Global)?;
         let (key, value) = DefaultSettings::convert_value(k.clone(), v)?;
         self.changes.insert(key.clone(), ChangeValue {
             value: value.clone(),
@@ -57,7 +57,8 @@ impl Settings {
         });
 
         UserApiProvider::instance()
-            .set_setting(&self.tenant, UserSetting { name: key, value })
+            .setting_api(&self.tenant)
+            .set_setting(UserSetting { name: key, value })
             .await?;
         Ok(())
     }
@@ -68,25 +69,32 @@ impl Settings {
         self.load_global_changes().await
     }
 
+    fn apply_local_config(&self, k: &str, v: String) -> Result<()> {
+        let (key, value) = DefaultSettings::convert_value(k.to_string(), v)?;
+        self.changes.insert(key.clone(), ChangeValue {
+            value: value.clone(),
+            level: ScopeLevel::Local,
+        });
+        Ok(())
+    }
+
     fn load_config_changes(&self) -> Result<()> {
         let query_config = &GlobalConfig::instance().query;
-        if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
-            self.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
+        if let Some(val) = query_config.parquet_fast_read_bytes {
+            self.apply_local_config("parquet_fast_read_bytes", val.to_string())?;
         }
 
-        if let Some(max_storage_io_requests) = query_config.max_storage_io_requests {
-            self.set_max_storage_io_requests(max_storage_io_requests)?;
+        if let Some(val) = query_config.max_storage_io_requests {
+            self.apply_local_config("max_storage_io_requests", val.to_string())?;
         }
 
-        if let Some(enterprise_license_key) = query_config.databend_enterprise_license.clone() {
-            unsafe {
-                self.set_enterprise_license(enterprise_license_key)?;
-            }
+        if let Some(val) = query_config.databend_enterprise_license.clone() {
+            self.apply_local_config("enterprise_license", val)?;
         }
         Ok(())
     }
 
-    async fn load_global_changes(&self) -> Result<(), ErrorCode> {
+    async fn load_global_changes(&self) -> Result<()> {
         let default_settings = DefaultSettings::instance()?;
 
         let api = UserApiProvider::instance();
@@ -103,16 +111,25 @@ impl Settings {
                         warn!("Ignore deprecated global setting {} = {}", name, val);
                         continue;
                     }
-                    Some(default_setting_value) => match &default_setting_value.value {
-                        UserSettingValue::UInt64(_) => ChangeValue {
-                            level: ScopeLevel::Global,
-                            value: UserSettingValue::UInt64(val.parse::<u64>()?),
-                        },
-                        UserSettingValue::String(_) => ChangeValue {
-                            level: ScopeLevel::Global,
-                            value: UserSettingValue::String(val.clone()),
-                        },
-                    },
+                    Some(default_setting_value) => {
+                        if DefaultSettings::check_setting_scope(&name, SettingScope::Global)
+                            .is_err()
+                        {
+                            // the settings is session only, ignore the global setting
+                            warn!("Ignore session only global setting {} = {}", name, val);
+                            continue;
+                        }
+                        match &default_setting_value.value {
+                            UserSettingValue::UInt64(_) => ChangeValue {
+                                level: ScopeLevel::Global,
+                                value: UserSettingValue::UInt64(val.parse::<u64>()?),
+                            },
+                            UserSettingValue::String(_) => ChangeValue {
+                                level: ScopeLevel::Global,
+                                value: UserSettingValue::String(val.clone()),
+                            },
+                        }
+                    }
                 });
         }
 

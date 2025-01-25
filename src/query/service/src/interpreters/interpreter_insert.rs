@@ -15,11 +15,14 @@
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table::AppendMode;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::UInt64Type;
+use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::FromData;
+use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::executor::physical_plans::DistributedInsertSelect;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -44,6 +47,7 @@ use crate::pipelines::ValueSource;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::stream::DataBlockStream;
 
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
@@ -140,7 +144,7 @@ impl Interpreter for InsertInterpreter {
             }
             InsertInputSource::SelectPlan(plan) => {
                 let table1 = table.clone();
-                let (mut select_plan, select_column_bindings, metadata) = match plan.as_ref() {
+                let (select_plan, select_column_bindings, metadata) = match plan.as_ref() {
                     Plan::Query {
                         s_expr,
                         metadata,
@@ -163,14 +167,14 @@ impl Interpreter for InsertInterpreter {
                     .format_pretty()?;
                 info!("Insert select plan: \n{}", explain_plan);
 
-                let update_stream_meta =
-                    dml_build_update_stream_req(self.ctx.clone(), metadata).await?;
+                let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
 
                 // here we remove the last exchange merge plan to trigger distribute insert
-                let insert_select_plan = match select_plan {
-                    PhysicalPlan::Exchange(ref mut exchange) => {
-                        // insert can be dispatched to different nodes
+                let insert_select_plan = match (select_plan, table.support_distributed_insert()) {
+                    (PhysicalPlan::Exchange(ref mut exchange), true) => {
+                        // insert can be dispatched to different nodes if table support_distributed_insert
                         let input = exchange.input.clone();
+
                         exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(Box::new(
                             DistributedInsertSelect {
                                 // TODO(leiysky): we reuse the id of exchange here,
@@ -184,9 +188,9 @@ impl Interpreter for InsertInterpreter {
                                 cast_needed: self.check_schema_cast(plan)?,
                             },
                         )));
-                        select_plan
+                        PhysicalPlan::Exchange(exchange.clone())
                     }
-                    other_plan => {
+                    (other_plan, _) => {
                         // insert should wait until all nodes finished
                         PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
                             // TODO: we reuse the id of other plan here,
@@ -241,7 +245,6 @@ impl Interpreter for InsertInterpreter {
             None,
             vec![],
             self.plan.overwrite,
-            AppendMode::Normal,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
         )?;
 
@@ -259,5 +262,14 @@ impl Interpreter for InsertInterpreter {
         }
 
         Ok(build_res)
+    }
+
+    fn inject_result(&self) -> Result<SendableDataBlockStream> {
+        let binding = self.ctx.get_mutation_status();
+        let status = binding.read();
+        let blocks = vec![DataBlock::new_from_columns(vec![UInt64Type::from_data(
+            vec![status.insert_rows],
+        )])];
+        Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }

@@ -57,6 +57,8 @@ impl Binder {
                 span: None,
                 lateral: false,
                 alias: None,
+                pivot: None,
+                unpivot: None,
             };
 
             let (s_expr, bind_context) = self.bind_table_reference(bind_context, &table_ref)?;
@@ -92,8 +94,6 @@ impl Binder {
                 &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
-                self.m_cte_bound_ctx.clone(),
-                self.ctes_map.clone(),
             );
             let (condition, _) = scalar_binder.bind(&when_clause.condition)?;
             if !matches!(condition.data_type()?.remove_nullable(), DataType::Boolean) {
@@ -242,8 +242,6 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
-                    self.m_cte_bound_ctx.clone(),
-                    self.ctes_map.clone(),
                 );
                 let mut source_scalar_exprs = vec![];
                 for source_column in source_columns {

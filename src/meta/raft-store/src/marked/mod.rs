@@ -19,9 +19,9 @@ mod internal_seq;
 
 mod marked_impl;
 
-use databend_common_meta_types::KVMeta;
-use databend_common_meta_types::SeqV;
-use databend_common_meta_types::SeqValue;
+use databend_common_meta_types::seq_value::KVMeta;
+use databend_common_meta_types::seq_value::SeqV;
+use databend_common_meta_types::seq_value::SeqValue;
 pub(crate) use internal_seq::InternalSeq;
 
 use crate::state_machine::ExpireValue;
@@ -83,6 +83,17 @@ impl<T> SeqValue<T> for Marked<T> {
         }
     }
 
+    fn into_value(self) -> Option<T> {
+        match self {
+            Marked::TombStone { internal_seq: _ } => None,
+            Marked::Normal {
+                internal_seq: _,
+                value,
+                meta: _,
+            } => Some(value),
+        }
+    }
+
     fn meta(&self) -> Option<&KVMeta> {
         match self {
             Marked::TombStone { .. } => None,
@@ -130,14 +141,22 @@ impl<T> Marked<T> {
 
     /// Return the one with the larger sequence number.
     pub fn max(a: Self, b: Self) -> Self {
-        if a.order_key() > b.order_key() { a } else { b }
+        if a.order_key() > b.order_key() {
+            a
+        } else {
+            b
+        }
     }
 
     /// Return the one with the larger sequence number.
     // Not used, may be useful.
     #[allow(dead_code)]
     pub fn max_ref<'l>(a: &'l Self, b: &'l Self) -> &'l Self {
-        if a.order_key() > b.order_key() { a } else { b }
+        if a.order_key() > b.order_key() {
+            a
+        } else {
+            b
+        }
     }
 
     pub fn new_tombstone(internal_seq: u64) -> Self {
@@ -232,7 +251,7 @@ impl From<Marked<String>> for Option<ExpireValue> {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_meta_types::KVMeta;
+    use databend_common_meta_types::seq_value::KVMeta;
 
     use super::Marked;
 

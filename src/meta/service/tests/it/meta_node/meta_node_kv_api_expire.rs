@@ -16,12 +16,12 @@ use std::time::Duration;
 
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_types::seq_value::KVMeta;
+use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaSpec;
-use databend_common_meta_types::SeqV;
 use databend_common_meta_types::UpsertKV;
 use databend_common_meta_types::With;
 use log::info;
@@ -115,7 +115,7 @@ async fn test_meta_node_replicate_kv_with_expire() -> anyhow::Result<()> {
     // This way on every node applying a log always get the same result.
     info!("--- get updated kv with new expire, assert the updated value");
     {
-        let sm = learner.sto.state_machine.read().await;
+        let sm = learner.raft_store.state_machine.read().await;
         let resp = sm.kv_api().get_kv(key).await.unwrap();
         let seq_v = resp.unwrap();
         assert_eq!(Some(KVMeta::new_expire(now_sec + 1000)), seq_v.meta);

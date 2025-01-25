@@ -48,6 +48,13 @@ impl SnapshotConfig {
         &self.raft_config
     }
 
+    pub fn version_dir(&self) -> String {
+        format!(
+            "{}/df_meta/{}",
+            self.raft_config.raft_dir, self.data_version
+        )
+    }
+
     pub fn snapshot_dir(&self) -> String {
         format!(
             "{}/df_meta/{}/snapshot",

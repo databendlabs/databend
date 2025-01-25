@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use chrono_tz::Tz;
 use comfy_table::Cell;
 use comfy_table::Table;
 use databend_common_ast::ast::quote::display_ident;
@@ -24,11 +23,11 @@ use databend_common_ast::parser::Dialect;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
+use databend_common_io::ewkb_to_geo;
+use databend_common_io::geo_to_ewkt;
 use geozero::wkb::Ewkb;
-use geozero::GeozeroGeometry;
-use geozero::ToGeos;
-use geozero::ToWkt;
 use itertools::Itertools;
+use jiff::tz::TimeZone;
 use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
@@ -40,13 +39,13 @@ use crate::function::Function;
 use crate::function::FunctionSignature;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
-use crate::types::binary::BinaryColumn;
 use crate::types::boolean::BooleanDomain;
 use crate::types::date::date_to_string;
 use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalDomain;
 use crate::types::decimal::DecimalScalar;
+use crate::types::interval::interval_to_string;
 use crate::types::map::KvPair;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
@@ -54,7 +53,6 @@ use crate::types::number::NumberDataType;
 use crate::types::number::NumberDomain;
 use crate::types::number::NumberScalar;
 use crate::types::number::SimpleDomain;
-use crate::types::string::StringColumn;
 use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
 use crate::types::AnyType;
@@ -64,7 +62,6 @@ use crate::types::ValueType;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
 use crate::values::Value;
-use crate::values::ValueRef;
 use crate::with_integer_mapped_type;
 use crate::Column;
 use crate::ColumnIndex;
@@ -103,7 +100,7 @@ impl Display for DataBlock {
             let row: Vec<_> = self
                 .columns()
                 .iter()
-                .map(|entry| entry.value.as_ref().index(index).unwrap().to_string())
+                .map(|entry| entry.value.index(index).unwrap().to_string())
                 .map(Cell::new)
                 .collect();
             table.add_row(row);
@@ -112,7 +109,7 @@ impl Display for DataBlock {
     }
 }
 
-impl<'a> Debug for ScalarRef<'a> {
+impl Debug for ScalarRef<'_> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
@@ -130,6 +127,10 @@ impl<'a> Debug for ScalarRef<'a> {
             ScalarRef::String(s) => write!(f, "{s:?}"),
             ScalarRef::Timestamp(t) => write!(f, "{t:?}"),
             ScalarRef::Date(d) => write!(f, "{d:?}"),
+            ScalarRef::Interval(i) => {
+                let interval = interval_to_string(i);
+                write!(f, "{interval}")
+            }
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
@@ -169,12 +170,16 @@ impl<'a> Debug for ScalarRef<'a> {
                 Ok(())
             }
             ScalarRef::Geometry(s) => {
-                let ewkb = Ewkb(s.to_vec());
-                let geos = ewkb.to_geos().unwrap();
-                let geom = geos
-                    .to_ewkt(geos.srid())
-                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
+                let geom = ewkb_to_geo(&mut Ewkb(s))
+                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                    .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "{geom:?}")
+            }
+            ScalarRef::Geography(v) => {
+                let geog = ewkb_to_geo(&mut Ewkb(v.0))
+                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                    .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
+                write!(f, "{geog:?}")
             }
         }
     }
@@ -193,6 +198,7 @@ impl Debug for Column {
             Column::String(col) => write!(f, "{col:?}"),
             Column::Timestamp(col) => write!(f, "{col:?}"),
             Column::Date(col) => write!(f, "{col:?}"),
+            Column::Interval(col) => write!(f, "{col:?}"),
             Column::Array(col) => write!(f, "{col:?}"),
             Column::Map(col) => write!(f, "{col:?}"),
             Column::Bitmap(col) => write!(f, "{col:?}"),
@@ -200,11 +206,12 @@ impl Debug for Column {
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
             Column::Geometry(col) => write!(f, "{col:?}"),
+            Column::Geography(col) => write!(f, "{col:?}"),
         }
     }
 }
 
-impl<'a> Display for ScalarRef<'a> {
+impl Display for ScalarRef<'_> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             ScalarRef::Null => write!(f, "NULL"),
@@ -220,8 +227,9 @@ impl<'a> Display for ScalarRef<'a> {
                 Ok(())
             }
             ScalarRef::String(s) => write!(f, "'{s}'"),
-            ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, Tz::UTC)),
-            ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, Tz::UTC)),
+            ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
+            ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
+            ScalarRef::Interval(interval) => write!(f, "{}", interval_to_string(interval)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
@@ -258,12 +266,16 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "'{value}'")
             }
             ScalarRef::Geometry(s) => {
-                let ewkb = Ewkb(s.to_vec());
-                let geos = ewkb.to_geos().unwrap();
-                let geom = geos
-                    .to_ewkt(geos.srid())
-                    .unwrap_or_else(|x| format!("GeozeroError: {:?}", x));
+                let geom = ewkb_to_geo(&mut Ewkb(s))
+                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                    .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "'{geom}'")
+            }
+            ScalarRef::Geography(v) => {
+                let geog = ewkb_to_geo(&mut Ewkb(v.0))
+                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                    .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
+                write!(f, "'{geog}'")
             }
         }
     }
@@ -401,30 +413,6 @@ impl Debug for DecimalColumn {
     }
 }
 
-impl Debug for BinaryColumn {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        f.debug_struct("BinaryColumn")
-            .field(
-                "data",
-                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
-            )
-            .field("offsets", &self.offsets())
-            .finish()
-    }
-}
-
-impl Debug for StringColumn {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        f.debug_struct("StringColumn")
-            .field(
-                "data",
-                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
-            )
-            .field("offsets", &self.offsets())
-            .finish()
-    }
-}
-
 impl<Index: ColumnIndex> Display for RawExpr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -503,6 +491,7 @@ impl Display for DataType {
             DataType::Decimal(decimal) => write!(f, "{decimal}"),
             DataType::Timestamp => write!(f, "Timestamp"),
             DataType::Date => write!(f, "Date"),
+            DataType::Interval => write!(f, "Interval"),
             DataType::Null => write!(f, "NULL"),
             DataType::Nullable(inner) => write!(f, "{inner} NULL"),
             DataType::EmptyArray => write!(f, "Array(Nothing)"),
@@ -530,6 +519,7 @@ impl Display for DataType {
             }
             DataType::Variant => write!(f, "Variant"),
             DataType::Geometry => write!(f, "Geometry"),
+            DataType::Geography => write!(f, "Geography"),
             DataType::Generic(index) => write!(f, "T{index}"),
         }
     }
@@ -577,7 +567,9 @@ impl Display for TableDataType {
                 write!(f, ")")
             }
             TableDataType::Variant => write!(f, "Variant"),
+            TableDataType::Interval => write!(f, "Interval"),
             TableDataType::Geometry => write!(f, "Geometry"),
+            TableDataType::Geography => write!(f, "Geography"),
         }
     }
 }
@@ -740,7 +732,7 @@ impl<Index: ColumnIndex> Expr<Index> {
             precedence: usize,
             min_precedence: usize,
         ) -> String {
-            if precedence < min_precedence {
+            if precedence < min_precedence || matches!(op, "AND" | "OR") {
                 format!(
                     "({} {op} {})",
                     write_expr(lhs, precedence),
@@ -758,7 +750,30 @@ impl<Index: ColumnIndex> Expr<Index> {
         #[recursive::recursive]
         fn write_expr<Index: ColumnIndex>(expr: &Expr<Index>, min_precedence: usize) -> String {
             match expr {
-                Expr::Constant { scalar, .. } => scalar.as_ref().to_string(),
+                Expr::Constant { scalar, .. } => match scalar {
+                    s @ Scalar::Binary(_) => format!("from_hex('{s}')::string"),
+                    Scalar::Number(NumberScalar::Float32(f)) if f.is_nan() => {
+                        "'nan'::Float32".to_string()
+                    }
+                    Scalar::Number(NumberScalar::Float64(f)) if f.is_nan() => {
+                        "'nan'::Float64".to_string()
+                    }
+                    Scalar::Number(NumberScalar::Float32(f)) if f.is_infinite() => {
+                        if *f != f32::NEG_INFINITY {
+                            "'inf'::Float32".to_string()
+                        } else {
+                            "'-inf'::Float32".to_string()
+                        }
+                    }
+                    Scalar::Number(NumberScalar::Float64(f)) if f.is_infinite() => {
+                        if *f != f64::NEG_INFINITY {
+                            "'inf'::Float64".to_string()
+                        } else {
+                            "'-inf'::Float64".to_string()
+                        }
+                    }
+                    other => other.as_ref().to_string(),
+                },
                 Expr::ColumnRef { display_name, .. } => display_name.clone(),
                 Expr::Cast {
                     is_try,
@@ -879,15 +894,6 @@ impl<T: ValueType> Display for Value<T> {
         match self {
             Value::Scalar(scalar) => write!(f, "{:?}", scalar),
             Value::Column(col) => write!(f, "{:?}", col),
-        }
-    }
-}
-
-impl<'a, T: ValueType> Display for ValueRef<'a, T> {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            ValueRef::Scalar(scalar) => write!(f, "{:?}", scalar),
-            ValueRef::Column(col) => write!(f, "{:?}", col),
         }
     }
 }
@@ -1019,6 +1025,7 @@ impl Display for Domain {
             Domain::String(domain) => write!(f, "{domain}"),
             Domain::Timestamp(domain) => write!(f, "{domain}"),
             Domain::Date(domain) => write!(f, "{domain}"),
+            Domain::Interval(domain) => write!(f, "{:?}", domain),
             Domain::Nullable(domain) => write!(f, "{domain}"),
             Domain::Array(None) => write!(f, "[]"),
             Domain::Array(Some(domain)) => write!(f, "[{domain}]"),

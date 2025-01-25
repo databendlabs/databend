@@ -26,10 +26,13 @@ pub enum SetType {
     SettingsSession,
     SettingsGlobal,
     Variable,
+    SettingsQuery,
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum SetValues {
     Expr(Vec<Box<Expr>>),
     Query(Box<Query>),
+    // None means Unset Stmt
+    None,
 }

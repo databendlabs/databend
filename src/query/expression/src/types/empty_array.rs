@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::ops::Range;
 
 use crate::property::Domain;
@@ -106,7 +107,11 @@ impl ValueType for EmptyArrayType {
     }
 
     fn index_column(len: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        if index < *len { Some(()) } else { None }
+        if index < *len {
+            Some(())
+        } else {
+            None
+        }
     }
 
     #[inline(always)]
@@ -159,6 +164,11 @@ impl ValueType for EmptyArrayType {
 
     fn column_memory_size(_: &Self::Column) -> usize {
         std::mem::size_of::<usize>()
+    }
+
+    #[inline(always)]
+    fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
+        lhs.cmp(&rhs)
     }
 
     #[inline(always)]

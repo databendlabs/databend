@@ -24,9 +24,12 @@ use itertools::Itertools;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::common::SortDesc;
 use crate::executor::physical_plans::WindowPartition;
+use crate::executor::physical_plans::WindowPartitionTopN;
+use crate::executor::physical_plans::WindowPartitionTopNFunc;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
+use crate::plans::WindowFuncType;
 use crate::ColumnSet;
 use crate::IndexType;
 
@@ -122,12 +125,6 @@ impl PhysicalPlanBuilder {
 
         let input_plan = self.build(s_expr.child(0)?, required).await?;
 
-        let window_partition = sort
-            .window_partition
-            .iter()
-            .map(|v| v.index)
-            .collect::<Vec<_>>();
-
         let order_by = sort
             .items
             .iter()
@@ -140,16 +137,31 @@ impl PhysicalPlanBuilder {
             .collect::<Vec<_>>();
 
         // Add WindowPartition for parallel sort in window.
-        if !window_partition.is_empty() {
+        if let Some(window) = &sort.window_partition {
+            let window_partition = window
+                .partition_by
+                .iter()
+                .map(|v| v.index)
+                .collect::<Vec<_>>();
+
             return Ok(PhysicalPlan::WindowPartition(WindowPartition {
                 plan_id: 0,
                 input: Box::new(input_plan.clone()),
                 partition_by: window_partition.clone(),
                 order_by: order_by.clone(),
                 after_exchange: sort.after_exchange,
+                top_n: window.top.map(|top| WindowPartitionTopN {
+                    func: match window.func {
+                        WindowFuncType::RowNumber => WindowPartitionTopNFunc::RowNumber,
+                        WindowFuncType::Rank => WindowPartitionTopNFunc::Rank,
+                        WindowFuncType::DenseRank => WindowPartitionTopNFunc::DenseRank,
+                        _ => unreachable!(),
+                    },
+                    top,
+                }),
                 stat_info: Some(stat_info.clone()),
             }));
-        }
+        };
 
         // 2. Build physical plan.
         Ok(PhysicalPlan::Sort(Sort {

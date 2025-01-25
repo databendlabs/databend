@@ -1,0 +1,12 @@
+---------- TABLE INFO ------------
+DB.Table: 'system'.'databases_with_history', Table: databases_with_history-table_id:1, ver:0, Engine: SystemDatabases
+-------- TABLE CONTENTS ----------
++-----------+----------------------+---------------------+----------+----------+
+| Column 0  | Column 1             | Column 2            | Column 3 | Column 4 |
++-----------+----------------------+---------------------+----------+----------+
+| 'default' | 'default'            | 1                   | NULL     | NULL     |
+| 'default' | 'information_schema' | 4611686018427387906 | NULL     | NULL     |
+| 'default' | 'system'             | 4611686018427387905 | NULL     | NULL     |
++-----------+----------------------+---------------------+----------+----------+
+
+

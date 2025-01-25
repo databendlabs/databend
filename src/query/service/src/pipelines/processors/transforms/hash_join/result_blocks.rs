@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -42,10 +42,9 @@ impl HashJoinProbeState {
     ///    equi-condition is subquery's outer columns with subquery's derived columns. (see the above example in correlated ANY subquery)
     pub(crate) fn result_blocks<'a, H: HashJoinHashtableLike>(
         &self,
-        input: &DataBlock,
+        probe_state: &mut ProbeState,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
         hash_table: &H,
-        probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>>
     where
         H::Key: 'a,
@@ -58,63 +57,63 @@ impl HashJoinProbeState {
         match self.hash_join_state.hash_join_desc.join_type {
             JoinType::Inner => match self.hash_join_state.hash_join_desc.single_to_inner {
                 Some(JoinType::LeftSingle) => {
-                    self.inner_join::<_, true, false>(input, keys, hash_table, probe_state)
+                    self.inner_join::<_, true, false>(probe_state, keys, hash_table)
                 }
                 Some(JoinType::RightSingle) => {
-                    self.inner_join::<_, false, true>(input, keys, hash_table, probe_state)
+                    self.inner_join::<_, false, true>(probe_state, keys, hash_table)
                 }
-                _ => self.inner_join::<_, false, false>(input, keys, hash_table, probe_state),
+                _ => self.inner_join::<_, false, false>(probe_state, keys, hash_table),
             },
             JoinType::Left | JoinType::Full => {
                 if no_other_predicate {
-                    self.left_join::<_, false>(input, keys, hash_table, probe_state)
+                    self.left_join::<_, false>(probe_state, keys, hash_table)
                 } else {
-                    self.left_join_with_conjunct::<_, false>(input, keys, hash_table, probe_state)
+                    self.left_join_with_conjunct::<_, false>(probe_state, keys, hash_table)
                 }
             }
             JoinType::LeftSingle => {
                 if no_other_predicate {
-                    self.left_join::<_, true>(input, keys, hash_table, probe_state)
+                    self.left_join::<_, true>(probe_state, keys, hash_table)
                 } else {
-                    self.left_join_with_conjunct::<_, true>(input, keys, hash_table, probe_state)
+                    self.left_join_with_conjunct::<_, true>(probe_state, keys, hash_table)
                 }
             }
             JoinType::LeftSemi => {
                 if no_other_predicate {
-                    self.left_semi_join(input, keys, hash_table, probe_state)
+                    self.left_semi_join(probe_state, keys, hash_table)
                 } else {
-                    self.left_semi_join_with_conjunct(input, keys, hash_table, probe_state)
+                    self.left_semi_join_with_conjunct(probe_state, keys, hash_table)
                 }
             }
             JoinType::LeftAnti => {
                 if no_other_predicate {
-                    self.left_anti_join(input, keys, hash_table, probe_state)
+                    self.left_anti_join(probe_state, keys, hash_table)
                 } else {
-                    self.left_anti_join_with_conjunct(input, keys, hash_table, probe_state)
+                    self.left_anti_join_with_conjunct(probe_state, keys, hash_table)
                 }
             }
             JoinType::LeftMark => {
                 if no_other_predicate {
-                    self.left_mark_join(input, keys, hash_table, probe_state)
+                    self.left_mark_join(probe_state, keys, hash_table)
                 } else {
-                    self.left_mark_join_with_conjunct(input, keys, hash_table, probe_state)
+                    self.left_mark_join_with_conjunct(probe_state, keys, hash_table)
                 }
             }
             JoinType::Right | JoinType::RightSingle => {
-                self.probe_right_join(input, keys, hash_table, probe_state)
+                self.probe_right_join(probe_state, keys, hash_table)
             }
             JoinType::RightSemi | JoinType::RightAnti => {
                 if no_other_predicate {
-                    self.right_semi_anti_join(input, keys, hash_table, probe_state)
+                    self.right_semi_anti_join(probe_state, keys, hash_table)
                 } else {
-                    self.right_semi_anti_join_with_conjunct(input, keys, hash_table, probe_state)
+                    self.right_semi_anti_join_with_conjunct(probe_state, keys, hash_table)
                 }
             }
             JoinType::RightMark => {
                 if no_other_predicate {
-                    self.right_mark_join(input, keys, hash_table, probe_state)
+                    self.right_mark_join(probe_state, keys, hash_table)
                 } else {
-                    self.right_mark_join_with_conjunct(input, keys, hash_table, probe_state)
+                    self.right_mark_join_with_conjunct(probe_state, keys, hash_table)
                 }
             }
             _ => Err(ErrorCode::Unimplemented(format!(

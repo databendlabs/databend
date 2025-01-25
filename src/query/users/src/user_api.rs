@@ -16,22 +16,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_management::udf::UdfMgr;
+use databend_common_management::ClientSessionMgr;
 use databend_common_management::ConnectionMgr;
 use databend_common_management::FileFormatMgr;
 use databend_common_management::NetworkPolicyMgr;
 use databend_common_management::PasswordPolicyMgr;
+use databend_common_management::ProcedureMgr;
 use databend_common_management::QuotaApi;
 use databend_common_management::QuotaMgr;
 use databend_common_management::RoleApi;
 use databend_common_management::RoleMgr;
-use databend_common_management::SettingApi;
 use databend_common_management::SettingMgr;
 use databend_common_management::StageApi;
 use databend_common_management::StageMgr;
-use databend_common_management::TokenMgr;
 use databend_common_management::UserApi;
 use databend_common_management::UserMgr;
 use databend_common_meta_app::principal::AuthInfo;
@@ -125,7 +126,11 @@ impl UserApiProvider {
     }
 
     pub fn role_api(&self, tenant: &Tenant) -> Arc<impl RoleApi> {
-        let role_mgr = RoleMgr::create(self.client.clone(), tenant);
+        let role_mgr = RoleMgr::create(
+            self.client.clone(),
+            tenant,
+            GlobalConfig::instance().query.upgrade_to_pb,
+        );
         Arc::new(role_mgr)
     }
 
@@ -146,8 +151,11 @@ impl UserApiProvider {
         Arc::new(QuotaMgr::<WRITE_PB>::create(self.client.clone(), tenant))
     }
 
-    pub fn setting_api(&self, tenant: &Tenant) -> Arc<dyn SettingApi> {
-        Arc::new(SettingMgr::create(self.client.clone(), tenant))
+    pub fn setting_api(&self, tenant: &Tenant) -> SettingMgr {
+        SettingMgr::create(self.client.clone(), tenant)
+    }
+    pub fn procedure_api(&self, _tenant: &Tenant) -> ProcedureMgr {
+        ProcedureMgr::create(self.client.clone())
     }
 
     pub fn network_policy_api(&self, tenant: &Tenant) -> NetworkPolicyMgr {
@@ -158,8 +166,8 @@ impl UserApiProvider {
         PasswordPolicyMgr::create(self.client.clone(), tenant)
     }
 
-    pub fn token_api(&self, tenant: &Tenant) -> TokenMgr {
-        TokenMgr::create(self.client.clone(), tenant)
+    pub fn client_session_api(&self, tenant: &Tenant) -> ClientSessionMgr {
+        ClientSessionMgr::create(self.client.clone(), tenant)
     }
 
     pub fn get_meta_store_client(&self) -> Arc<MetaStore> {

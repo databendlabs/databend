@@ -32,22 +32,29 @@ use databend_common_meta_client::reply_to_api_result;
 use databend_common_meta_client::RequestFor;
 use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_meta_raft_store::ondisk::DATA_VERSION;
+use databend_common_meta_raft_store::raft_log_v004::RaftLogStat;
 use databend_common_meta_sled_store::openraft;
+use databend_common_meta_sled_store::openraft::error::RaftError;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::protobuf::raft_service_server::RaftServiceServer;
 use databend_common_meta_types::protobuf::WatchRequest;
+use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::raft_types::CommittedLeaderId;
+use databend_common_meta_types::raft_types::ForwardToLeader;
+use databend_common_meta_types::raft_types::InitializeError;
+use databend_common_meta_types::raft_types::LogId;
+use databend_common_meta_types::raft_types::MembershipNode;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::RaftMetrics;
+use databend_common_meta_types::raft_types::TypeConfig;
 use databend_common_meta_types::AppliedState;
 use databend_common_meta_types::Cmd;
-use databend_common_meta_types::CommittedLeaderId;
 use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::ForwardRPCError;
-use databend_common_meta_types::ForwardToLeader;
 use databend_common_meta_types::GrpcConfig;
 use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::LogId;
-use databend_common_meta_types::MembershipNode;
 use databend_common_meta_types::MetaAPIError;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::MetaManagementError;
@@ -55,12 +62,8 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::MetaStartupError;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
-use databend_common_meta_types::RaftMetrics;
-use databend_common_meta_types::TypeConfig;
 use fastrace::func_name;
 use fastrace::prelude::*;
-use futures::channel::oneshot;
 use itertools::Itertools;
 use log::debug;
 use log::error;
@@ -71,6 +74,8 @@ use openraft::Config;
 use openraft::Raft;
 use openraft::ServerState;
 use openraft::SnapshotPolicy;
+use tokio::sync::mpsc;
+use tonic::Status;
 
 use crate::configs::Config as MetaConfig;
 use crate::message::ForwardRequest;
@@ -89,23 +94,20 @@ use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
 use crate::store::RaftStore;
 use crate::version::METASRV_COMMIT_VERSION;
-use crate::watcher::DispatcherSender;
-use crate::watcher::EventDispatcher;
-use crate::watcher::EventDispatcherHandle;
-use crate::watcher::Watcher;
-use crate::watcher::WatcherSender;
-use crate::Opened;
+use crate::watcher::EventSubscriber;
+use crate::watcher::StreamSender;
+use crate::watcher::SubscriberHandle;
 
 pub type LogStore = RaftStore;
 pub type SMStore = RaftStore;
 
-/// MetaRaft is a implementation of the generic Raft handling meta data R/W.
+/// MetaRaft is an implementation of the generic Raft handling metadata R/W.
 pub type MetaRaft = Raft<TypeConfig>;
 
-/// MetaNode is the container of meta data related components and threads, such as storage, the raft node and a raft-state monitor.
+/// MetaNode is the container of metadata related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
-    pub sto: RaftStore,
-    pub dispatcher_handle: EventDispatcherHandle,
+    pub raft_store: RaftStore,
+    pub subscriber_handle: SubscriberHandle,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -113,9 +115,13 @@ pub struct MetaNode {
     pub joined_tasks: AtomicI32,
 }
 
-impl Opened for MetaNode {
-    fn is_opened(&self) -> bool {
-        self.sto.is_opened()
+impl Drop for MetaNode {
+    fn drop(&mut self) {
+        info!(
+            "MetaNode(id={}, raft={}) is dropping",
+            self.raft_store.id,
+            self.raft_store.config.raft_api_advertise_host_string()
+        );
     }
 }
 
@@ -153,15 +159,15 @@ impl MetaNodeBuilder {
 
         let (tx, rx) = watch::channel::<()>(());
 
-        let dispatcher_tx = EventDispatcher::spawn();
+        let handle = EventSubscriber::spawn();
 
         sto.get_state_machine()
             .await
-            .set_subscriber(Box::new(DispatcherSender(dispatcher_tx.clone())));
+            .set_event_sender(Box::new(handle.clone()));
 
         let meta_node = Arc::new(MetaNode {
-            sto: sto.clone(),
-            dispatcher_handle: EventDispatcherHandle::new(dispatcher_tx),
+            raft_store: sto.clone(),
+            subscriber_handle: handle,
             raft: raft.clone(),
             running_tx: tx,
             running_rx: rx,
@@ -279,7 +285,7 @@ impl MetaNode {
         info!("about to start raft grpc on: {}", ip_port);
 
         let socket_addr = ip_port.parse::<std::net::SocketAddr>()?;
-        let node_id = meta_node.sto.id;
+        let node_id = meta_node.raft_store.id;
 
         let srv = tonic::transport::Server::builder().add_service(raft_server);
 
@@ -287,7 +293,7 @@ impl MetaNode {
             srv.serve_with_shutdown(socket_addr, async move {
                 let _ = running_rx.changed().await;
                 info!(
-                    "signal received, shutting down: id={} {} ",
+                    "running_rx for Raft server received, shutting down: id={} {} ",
                     node_id, ip_port
                 );
             })
@@ -305,18 +311,9 @@ impl MetaNode {
     }
 
     /// Open or create a meta node.
-    /// 1. If `open` is `Some`, try to open an existent one.
-    /// 2. If `create` is `Some`, try to create an one in non-voter mode.
     #[fastrace::trace]
-    pub async fn open_create(
-        config: &RaftConfig,
-        open: Option<()>,
-        create: Option<()>,
-    ) -> Result<Arc<MetaNode>, MetaStartupError> {
-        info!(
-            "open_create_boot, config: {:?}, open: {:?}, create: {:?}",
-            config, open, create
-        );
+    pub async fn open(config: &RaftConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
+        info!("MetaNode::open, config: {:?}", config);
 
         let mut config = config.clone();
 
@@ -329,13 +326,17 @@ impl MetaNode {
             config.no_sync = true;
         }
 
-        let sto = RaftStore::open_create(&config, open, create).await?;
+        let log_store = RaftStore::open(&config).await?;
 
         // config.id only used for the first time
-        let self_node_id = if sto.is_opened() { sto.id } else { config.id };
+        let self_node_id = if log_store.is_opened {
+            log_store.id
+        } else {
+            config.id
+        };
 
         let builder = MetaNode::builder(&config)
-            .sto(sto.clone())
+            .sto(log_store.clone())
             .node_id(self_node_id)
             .raft_service_endpoint(config.raft_api_listen_host_endpoint());
         let mn = builder.build().await?;
@@ -346,17 +347,15 @@ impl MetaNode {
     }
 
     /// Open or create a metasrv node.
+    ///
     /// Optionally boot a single node cluster.
-    /// 1. If `open` is `Some`, try to open an existent one.
-    /// 2. If `create` is `Some`, try to create an one in non-voter mode.
+    /// If `initialize_cluster` is `Some`, initialize the cluster as a single-node cluster.
     #[fastrace::trace]
-    pub async fn open_create_boot(
+    pub async fn open_boot(
         config: &RaftConfig,
-        open: Option<()>,
-        create: Option<()>,
         initialize_cluster: Option<Node>,
     ) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn = Self::open_create(config, open, create).await?;
+        let mn = Self::open(config).await?;
 
         if let Some(node) = initialize_cluster {
             mn.init_cluster(node).await?;
@@ -404,7 +403,7 @@ impl MetaNode {
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
 
-        info!("shutdown: id={}", self.sto.id);
+        info!("shutdown: id={}", self.raft_store.id);
         let joined = self.joined_tasks.load(std::sync::atomic::Ordering::Relaxed);
         Ok(joined)
     }
@@ -422,7 +421,10 @@ impl MetaNode {
 
                 if let Err(changed_err) = changed {
                     // Shutting down.
-                    error!("{} when watching metrics_rx", changed_err);
+                    info!(
+                        "{}; when:(watching metrics_rx); quit subscribe_metrics() loop",
+                        changed_err
+                    );
                     break;
                 }
 
@@ -436,7 +438,7 @@ impl MetaNode {
                     server_metrics::incr_leader_change();
                 }
                 server_metrics::set_current_leader(mm.current_leader.unwrap_or_default());
-                server_metrics::set_is_leader(mm.current_leader == Some(meta_node.sto.id));
+                server_metrics::set_is_leader(mm.current_leader == Some(meta_node.raft_store.id));
 
                 // metrics about raft log and state machine.
                 server_metrics::set_current_term(mm.current_term);
@@ -444,9 +446,14 @@ impl MetaNode {
                 server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
                 server_metrics::set_last_seq(meta_node.get_last_seq().await);
 
+                {
+                    let st = meta_node.get_raft_log_stat().await;
+                    server_metrics::set_raft_log_stat(st);
+                }
+
                 // metrics about server storage
-                server_metrics::set_db_size(meta_node.get_db_size().unwrap_or_default());
-                server_metrics::set_snapshot_key_num(meta_node.get_key_num().await);
+                server_metrics::set_raft_log_size(meta_node.get_raft_log_size().await);
+                server_metrics::set_snapshot_key_count(meta_node.get_snapshot_key_count().await);
 
                 last_leader = mm.current_leader;
             }
@@ -622,7 +629,7 @@ impl MetaNode {
 
         Err(MetaManagementError::Join(AnyError::error(format!(
             "fail to join node-{} to cluster via {:?}, errors: {}",
-            self.sto.id,
+            self.raft_store.id,
             addrs,
             errors.into_iter().map(|e| e.to_string()).join(", ")
         ))))
@@ -716,20 +723,23 @@ impl MetaNode {
     ///   Only when the membership is committed, this node can be sure it is in a cluster.
     async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
         let membership = {
-            let sm = self.sto.get_state_machine().await;
+            let sm = self.raft_store.get_state_machine().await;
             sm.sys_data_ref().last_membership_ref().membership().clone()
         };
         info!("is_in_cluster: membership: {:?}", membership);
 
         let voter_ids = membership.voter_ids().collect::<BTreeSet<_>>();
 
-        if voter_ids.contains(&self.sto.id) {
-            return Ok(Ok(format!("node {} already in cluster", self.sto.id)));
+        if voter_ids.contains(&self.raft_store.id) {
+            return Ok(Ok(format!(
+                "node {} already in cluster",
+                self.raft_store.id
+            )));
         }
 
         Ok(Err(format!(
             "node {} has membership but not in it",
-            self.sto.id
+            self.raft_store.id
         )))
     }
 
@@ -737,20 +747,12 @@ impl MetaNode {
         let raft_conf = &conf.raft_config;
 
         if raft_conf.single {
-            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
+            let mn = MetaNode::open(raft_conf).await?;
             mn.init_cluster(conf.get_node()).await?;
             return Ok(mn);
         }
 
-        if !raft_conf.join.is_empty() {
-            // Bring up a new node, join it into a cluster
-
-            let mn = MetaNode::open_create(raft_conf, Some(()), Some(())).await?;
-            return Ok(mn);
-        }
-        // open mode
-
-        let mn = MetaNode::open_create(raft_conf, Some(()), None).await?;
+        let mn = MetaNode::open(raft_conf).await?;
         Ok(mn)
     }
 
@@ -758,7 +760,7 @@ impl MetaNode {
     /// For every cluster this func should be called exactly once.
     #[fastrace::trace]
     pub async fn boot(config: &MetaConfig) -> Result<Arc<MetaNode>, MetaStartupError> {
-        let mn = Self::open_create(&config.raft_config, None, Some(())).await?;
+        let mn = Self::open(&config.raft_config).await?;
         mn.init_cluster(config.get_node()).await?;
         Ok(mn)
     }
@@ -768,14 +770,9 @@ impl MetaNode {
     /// - Adding current node into the meta data.
     #[fastrace::trace]
     pub async fn init_cluster(&self, node: Node) -> Result<(), MetaStartupError> {
-        info!("init_cluster: node: {:?}", node);
+        info!("Initialize node as single node cluster: {:?}", node);
 
-        if self.is_opened() {
-            info!("It is opened, skip initializing cluster");
-            return Ok(());
-        }
-
-        let node_id = self.sto.id;
+        let node_id = self.raft_store.id;
 
         let mut cluster_node_ids = BTreeSet::new();
         cluster_node_ids.insert(node_id);
@@ -783,19 +780,45 @@ impl MetaNode {
         // initialize() and add_node() are not done atomically.
         // There is an issue that just after initializing the cluster,
         // the node will be used but no node info is found.
-        // Thus meta-server can only be initialized with a single node.
+        // Thus, meta-server can only be initialized with a single node.
         //
         // We do not store node info in membership config,
         // because every start a meta-server node updates its latest configured address.
-        self.raft.initialize(cluster_node_ids).await?;
+        let res = self.raft.initialize(cluster_node_ids.clone()).await;
+        match res {
+            Ok(_) => {
+                info!("Initialized with: {:?}", cluster_node_ids);
+            }
+            Err(e) => match e {
+                RaftError::APIError(e) => match e {
+                    InitializeError::NotAllowed(e) => {
+                        info!("Already initialized: {}", e);
+                    }
+                    InitializeError::NotInMembers(e) => {
+                        return Err(MetaStartupError::InvalidConfig(e.to_string()));
+                    }
+                },
+                RaftError::Fatal(fatal) => {
+                    return Err(MetaStartupError::MetaServiceError(fatal.to_string()));
+                }
+            },
+        }
 
-        info!("initialized cluster");
-
-        self.add_node(node_id, node)
-            .await
-            .map_err(|e| MetaStartupError::AddNodeError {
-                source: AnyError::new(&e),
+        if self.get_node(&node_id).await.is_none() {
+            info!(
+                "This node not found in state-machine; add node: {}:{:?}",
+                node_id, node
+            );
+            self.add_node(node_id, node.clone()).await.map_err(|e| {
+                MetaStartupError::AddNodeError {
+                    source: AnyError::new(&e),
+                }
             })?;
+        } else {
+            info!("This node already in state-machine; No need to add");
+        }
+
+        info!("Done initializing node as single node cluster: {:?}", node);
 
         Ok(())
     }
@@ -804,7 +827,7 @@ impl MetaNode {
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.sto.state_machine.read().await;
+        let sm = self.raft_store.state_machine.read().await;
         let n = sm.sys_data_ref().nodes_ref().get(node_id).cloned();
         n
     }
@@ -813,7 +836,7 @@ impl MetaNode {
     pub async fn get_nodes(&self) -> Vec<Node> {
         // inconsistent get: from local state machine
 
-        let sm = self.sto.state_machine.read().await;
+        let sm = self.raft_store.state_machine.read().await;
         let nodes = sm
             .sys_data_ref()
             .nodes_ref()
@@ -823,35 +846,40 @@ impl MetaNode {
         nodes
     }
 
-    fn get_db_size(&self) -> Result<u64, MetaError> {
-        self.sto.db.size_on_disk().map_err(|e| {
-            let se = MetaStorageError::SledError(AnyError::new(&e).add_context(|| "get db_size"));
-            MetaError::StorageError(se)
-        })
+    /// Get the size in bytes of the on disk files of the raft log storage.
+    async fn get_raft_log_size(&self) -> u64 {
+        self.raft_store.log.read().await.on_disk_size()
     }
 
-    async fn get_key_num(&self) -> u64 {
-        self.sto
-            .try_get_snapshot_key_num()
+    async fn get_raft_log_stat(&self) -> RaftLogStat {
+        self.raft_store.log.read().await.stat()
+    }
+
+    async fn get_snapshot_key_count(&self) -> u64 {
+        self.raft_store
+            .try_get_snapshot_key_count()
             .await
             .unwrap_or_default()
     }
 
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
         let voters = self
-            .sto
+            .raft_store
             .get_nodes(|ms| ms.voter_ids().collect::<Vec<_>>())
             .await;
 
         let learners = self
-            .sto
+            .raft_store
             .get_nodes(|ms| ms.learner_ids().collect::<Vec<_>>())
             .await;
 
-        let endpoint = self.sto.get_node_raft_endpoint(&self.sto.id).await?;
+        let endpoint = self
+            .raft_store
+            .get_node_raft_endpoint(&self.raft_store.id)
+            .await?;
 
-        let db_size = self.get_db_size()?;
-        let key_num = self.get_key_num().await;
+        let raft_log_status = self.get_raft_log_stat().await.into();
+        let snapshot_key_count = self.get_snapshot_key_count().await;
 
         let metrics = self.raft.metrics().borrow().clone();
 
@@ -864,12 +892,12 @@ impl MetaNode {
         let last_seq = self.get_last_seq().await;
 
         Ok(MetaNodeStatus {
-            id: self.sto.id,
+            id: self.raft_store.id,
             binary_version: METASRV_COMMIT_VERSION.as_str().to_string(),
             data_version: DATA_VERSION,
             endpoint: endpoint.to_string(),
-            db_size,
-            key_num,
+            raft_log: raft_log_status,
+            snapshot_key_count,
             state: format!("{:?}", metrics.state),
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,
@@ -888,7 +916,7 @@ impl MetaNode {
     }
 
     pub(crate) async fn get_last_seq(&self) -> u64 {
-        let sm = self.sto.state_machine.read().await;
+        let sm = self.raft_store.state_machine.read().await;
         sm.sys_data_ref().curr_seq()
     }
 
@@ -897,7 +925,7 @@ impl MetaNode {
         // Maybe stale get: from local state machine
 
         let nodes = {
-            let sm = self.sto.state_machine.read().await;
+            let sm = self.raft_store.state_machine.read().await;
             sm.sys_data_ref()
                 .nodes_ref()
                 .values()
@@ -1034,7 +1062,7 @@ impl MetaNode {
 
         debug!("curr_leader_id: {:?}", leader_id);
 
-        if leader_id == Some(self.sto.id) {
+        if leader_id == Some(self.raft_store.id) {
             return Ok(MetaLeader::new(self));
         }
 
@@ -1119,19 +1147,15 @@ impl MetaNode {
     pub(crate) async fn add_watcher(
         &self,
         request: WatchRequest,
-        tx: WatcherSender,
-    ) -> Result<Watcher, &'static str> {
-        let (resp_tx, resp_rx) = oneshot::channel();
+        tx: mpsc::Sender<Result<WatchResponse, Status>>,
+    ) -> Result<Arc<StreamSender>, Status> {
+        let stream_sender = self
+            .subscriber_handle
+            .request_blocking(|d: &mut EventSubscriber| d.add_watcher(request, tx))
+            .await
+            .map_err(|_e| Status::internal("EventSubscriber closed"))?
+            .map_err(Status::invalid_argument)?;
 
-        self.dispatcher_handle.request(|d: &mut EventDispatcher| {
-            let add_res = d.add_watcher(request, tx);
-            let _ = resp_tx.send(add_res);
-        });
-
-        let recv_res = resp_rx.await;
-        match recv_res {
-            Ok(add_res) => add_res,
-            Err(_e) => Err("dispatcher closed"),
-        }
+        Ok(stream_sender)
     }
 }

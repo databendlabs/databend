@@ -1,12 +1,18 @@
+2
+1
+1
 checking that there should are 3 snapshots before purge
 true
 checking that after purge (by snapshot id) there should be 2 snapshots left
 true
 checking that after purge (by snapshot id) there should be 4 rows left
 true
+2
+1
+1
 checking that there should are 3 snapshots before purge
 true
-checking that after purge (by timestamp) there should be at least 2 snapshots left
+checking that after purge (by timestamp) there should be 1 snapshot left
 true
 checking that after purge (by timestamp) there should be 4 rows left
 true

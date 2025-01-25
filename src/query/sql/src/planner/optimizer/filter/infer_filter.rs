@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
@@ -22,7 +23,6 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use ordered_float::OrderedFloat;
 
 use crate::optimizer::rule::constant::check_float_range;
 use crate::optimizer::rule::constant::check_int_range;
@@ -151,13 +151,11 @@ impl<'a> InferFilterOptimizer<'a> {
         }
 
         if self.is_falsy {
-            new_predicates = vec![
-                ConstantExpr {
-                    span: None,
-                    value: Scalar::Boolean(false),
-                }
-                .into(),
-            ];
+            new_predicates = vec![ConstantExpr {
+                span: None,
+                value: Scalar::Boolean(false),
+            }
+            .into()];
         } else {
             // Derive new predicates from remaining predicates.
             new_predicates.extend(self.derive_remaining_predicates(remaining_predicates));
@@ -496,14 +494,14 @@ impl<'a> InferFilterOptimizer<'a> {
             can_replace: bool,
         }
 
-        impl<'a> ReplaceScalarExpr<'a> {
+        impl ReplaceScalarExpr<'_> {
             fn reset(&mut self) {
                 self.column_set.clear();
                 self.can_replace = true;
             }
         }
 
-        impl<'a> VisitorMut<'_> for ReplaceScalarExpr<'a> {
+        impl VisitorMut<'_> for ReplaceScalarExpr<'_> {
             fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
                 if let Some(index) = self.expr_index.get(expr) {
                     let equal_to = &self.expr_equal_to[*index];
@@ -527,6 +525,7 @@ impl<'a> InferFilterOptimizer<'a> {
                     | ScalarExpr::SubqueryExpr(_)
                     | ScalarExpr::UDFCall(_)
                     | ScalarExpr::UDFLambdaCall(_)
+                    | ScalarExpr::UDAFCall(_)
                     | ScalarExpr::AsyncFunctionCall(_) => {
                         // Can not replace `BoundColumnRef` or can not replace unsupported ScalarExpr.
                         self.can_replace = false;

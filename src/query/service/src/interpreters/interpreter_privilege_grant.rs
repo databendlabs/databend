@@ -60,7 +60,7 @@ impl GrantPrivilegeInterpreter {
                     .get_database(tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 Ok(OwnershipObject::Database {
                     catalog_name,
@@ -74,7 +74,7 @@ impl GrantPrivilegeInterpreter {
                     .get_database(tenant, db_name)
                     .await?
                     .get_db_info()
-                    .ident
+                    .database_id
                     .db_id;
                 let table_id = catalog
                     .get_table(tenant, db_name.as_str(), table_name)
@@ -101,7 +101,7 @@ impl GrantPrivilegeInterpreter {
             GrantObject::UDF(name) => Ok(OwnershipObject::UDF {
                 name: name.to_string(),
             }),
-            GrantObject::Global => Err(ErrorCode::IllegalGrant(
+            GrantObject::Global | GrantObject::Warehouse(_) => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
             )),
         }

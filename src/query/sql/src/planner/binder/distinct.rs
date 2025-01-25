@@ -37,7 +37,7 @@ impl Binder {
     pub fn bind_distinct(
         &self,
         span: Span,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         projections: &[ColumnBinding],
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
         child: SExpr,
@@ -83,10 +83,8 @@ impl Binder {
         let distinct_plan = Aggregate {
             mode: AggregateMode::Initial,
             group_items,
-            aggregate_functions: vec![],
             from_distinct: true,
-            limit: None,
-            grouping_sets: None,
+            ..Default::default()
         };
 
         Ok(SExpr::create_unary(

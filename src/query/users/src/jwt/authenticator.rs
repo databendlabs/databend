@@ -27,7 +27,7 @@ use super::jwk;
 
 #[derive(Debug, Clone)]
 pub enum PubKey {
-    RSA256(RS256PublicKey),
+    RSA256(Box<RS256PublicKey>),
     ES256(ES256PublicKey),
 }
 
@@ -78,14 +78,30 @@ impl CustomClaims {
 }
 
 impl JwtAuthenticator {
-    pub fn create(jwt_key_file: String, jwt_key_files: Vec<String>) -> Option<Self> {
+    pub fn create(
+        jwt_key_file: String,
+        jwt_key_files: Vec<String>,
+        jwks_refresh_interval: u64,
+        jwks_refresh_timeout: u64,
+    ) -> Option<Self> {
         if jwt_key_file.is_empty() && jwt_key_files.is_empty() {
             return None;
         }
         // init a vec of key store
-        let mut key_stores = vec![jwk::JwkKeyStore::new(jwt_key_file)];
+        let mut key_stores = vec![];
+        if !jwt_key_file.is_empty() {
+            key_stores.push(
+                jwk::JwkKeyStore::new(jwt_key_file)
+                    .with_refresh_interval(jwks_refresh_interval)
+                    .with_refresh_timeout(jwks_refresh_timeout),
+            );
+        }
         for u in jwt_key_files {
-            key_stores.push(jwk::JwkKeyStore::new(u))
+            key_stores.push(
+                jwk::JwkKeyStore::new(u)
+                    .with_refresh_interval(jwks_refresh_interval)
+                    .with_refresh_timeout(jwks_refresh_timeout),
+            );
         }
         Some(JwtAuthenticator { key_stores })
     }

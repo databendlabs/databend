@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int32Type;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::NumberDataType;
@@ -74,10 +74,7 @@ pub fn get_simple_block(is_nullable: bool) -> (TableSchemaRef, DataBlock) {
             .map(|(idx, (data_type, c))| {
                 let validity = Bitmap::new_constant(true, c.len());
                 (
-                    Column::Nullable(Box::new(NullableColumn {
-                        column: c,
-                        validity,
-                    })),
+                    NullableColumn::new_column(c, validity),
                     TableField::new(&format!("c{}", idx + 1), data_type.wrap_nullable()),
                 )
             })

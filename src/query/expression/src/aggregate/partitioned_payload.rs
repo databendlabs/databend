@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -20,11 +19,13 @@ use itertools::Itertools;
 
 use super::payload::Payload;
 use super::probe_state::ProbeState;
+use crate::get_states_layout;
 use crate::read;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::InputColumns;
 use crate::PayloadFlushState;
+use crate::StatesLayout;
 use crate::BATCH_SIZE;
 
 pub struct PartitionedPayload {
@@ -37,8 +38,7 @@ pub struct PartitionedPayload {
     pub validity_offsets: Vec<usize>,
     pub hash_offset: usize,
     pub state_offset: usize,
-    pub state_addr_offsets: Vec<usize>,
-    pub state_layout: Option<Layout>,
+    pub states_layout: Option<StatesLayout>,
 
     pub arenas: Vec<Arc<Bump>>,
 
@@ -60,8 +60,21 @@ impl PartitionedPayload {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
 
+        let states_layout = if !aggrs.is_empty() {
+            Some(get_states_layout(&aggrs).unwrap())
+        } else {
+            None
+        };
+
         let payloads = (0..partition_count)
-            .map(|_| Payload::new(arenas[0].clone(), group_types.clone(), aggrs.clone()))
+            .map(|_| {
+                Payload::new(
+                    arenas[0].clone(),
+                    group_types.clone(),
+                    aggrs.clone(),
+                    states_layout.clone(),
+                )
+            })
             .collect_vec();
 
         let group_sizes = payloads[0].group_sizes.clone();
@@ -69,8 +82,6 @@ impl PartitionedPayload {
         let validity_offsets = payloads[0].validity_offsets.clone();
         let hash_offset = payloads[0].hash_offset;
         let state_offset = payloads[0].state_offset;
-        let state_addr_offsets = payloads[0].state_addr_offsets.clone();
-        let state_layout = payloads[0].state_layout;
 
         PartitionedPayload {
             payloads,
@@ -81,8 +92,7 @@ impl PartitionedPayload {
             validity_offsets,
             hash_offset,
             state_offset,
-            state_addr_offsets,
-            state_layout,
+            states_layout,
             partition_count,
 
             arenas,
@@ -108,6 +118,7 @@ impl PartitionedPayload {
                 &state.empty_vector,
                 &state.group_hashes,
                 &mut state.addresses,
+                &mut state.page_index,
                 new_group_rows,
                 group_columns,
             );
@@ -134,6 +145,7 @@ impl PartitionedPayload {
                         sel,
                         &state.group_hashes,
                         &mut state.addresses,
+                        &mut state.page_index,
                         count,
                         group_columns,
                     );

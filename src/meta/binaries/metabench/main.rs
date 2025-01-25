@@ -41,10 +41,10 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::FileConfig;
 use databend_common_tracing::StderrConfig;
@@ -171,7 +171,7 @@ async fn benchmark_upsert(client: &Arc<ClientHandle>, prefix: u64, client_num: u
     let value = Operation::Update(node_key().as_bytes().to_vec());
 
     let res = client
-        .upsert_kv(UpsertKVReq::new(node_key(), seq, value, None))
+        .upsert_kv(UpsertKV::new(node_key(), seq, value, None))
         .await;
 
     print_res(i, "upsert_kv", &res);
@@ -198,7 +198,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
 
     print_res(i, "create_db", &res);
     let db_id = match res {
-        Ok(res) => res.db_id,
+        Ok(res) => *res.db_id,
         Err(_) => 0,
     };
 
@@ -238,6 +238,8 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             db_id,
             table_name: table_name(),
             tb_id: t.ident.table_id,
+            engine: "FUSE".to_string(),
+            session_id: "".to_string(),
         })
         .await;
 
@@ -296,11 +298,7 @@ async fn benchmark_table_copy_file(
         serde_json::from_str(param).unwrap()
     };
 
-    let mut txn = TxnRequest {
-        condition: vec![],
-        if_then: vec![],
-        else_then: vec![],
-    };
+    let mut txn = TxnRequest::default();
 
     for file_index in 0..param.file_cnt {
         let copied_file_ident = TableCopiedFileNameIdent {

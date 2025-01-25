@@ -14,7 +14,7 @@
 
 use std::fmt::Debug;
 
-use ordered_float::OrderedFloat;
+use databend_common_base::base::OrderedFloat;
 
 pub trait StatBuffer {
     type Buffer: AsMut<[u8]> + AsRef<[u8]> + Copy + Sync + Debug;

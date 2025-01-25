@@ -43,7 +43,6 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Sort;
-use crate::plans::SrfItem;
 use crate::plans::UnionAll;
 use crate::plans::Window;
 use crate::BaseTableColumn;
@@ -109,6 +108,7 @@ impl SubqueryRewriter {
                 Scan {
                     table_index,
                     columns: scan_columns,
+                    scan_id: metadata.next_scan_id(),
                     ..Default::default()
                 }
                 .into(),
@@ -125,40 +125,35 @@ impl SubqueryRewriter {
                     Arc::new(scan),
                 );
             }
-            if self.ctx.get_cluster().is_empty() {
-                // Wrap logical get with distinct to eliminate duplicates rows.
-                let mut group_items = Vec::with_capacity(self.derived_columns.len());
-                for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
-                    group_items.push(ScalarItem {
-                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: ColumnBindingBuilder::new(
-                                "".to_string(),
-                                column_index,
-                                Box::new(data_types[index].clone()),
-                                Visibility::Visible,
-                            )
-                            .table_index(Some(table_index))
-                            .build(),
-                        }),
-                        index: column_index,
-                    });
-                }
-                scan = SExpr::create_unary(
-                    Arc::new(
-                        Aggregate {
-                            mode: AggregateMode::Initial,
-                            group_items,
-                            aggregate_functions: vec![],
-                            from_distinct: false,
-                            limit: None,
-                            grouping_sets: None,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(scan),
-                );
+            // Wrap logical get with distinct to eliminate duplicates rows.
+            let mut group_items = Vec::with_capacity(self.derived_columns.len());
+            for (index, column_index) in self.derived_columns.values().cloned().enumerate() {
+                group_items.push(ScalarItem {
+                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: ColumnBindingBuilder::new(
+                            "".to_string(),
+                            column_index,
+                            Box::new(data_types[index].clone()),
+                            Visibility::Visible,
+                        )
+                        .table_index(Some(table_index))
+                        .build(),
+                    }),
+                    index: column_index,
+                });
             }
+            scan = SExpr::create_unary(
+                Arc::new(
+                    Aggregate {
+                        mode: AggregateMode::Initial,
+                        group_items,
+                        ..Default::default()
+                    }
+                    .into(),
+                ),
+                Arc::new(scan),
+            );
 
             let cross_join = Join {
                 equi_conditions: JoinEquiCondition::new_conditions(vec![], vec![], vec![]),
@@ -324,7 +319,7 @@ impl SubqueryRewriter {
         )?;
         let mut srfs = Vec::with_capacity(project_set.srfs.len());
         for item in project_set.srfs.iter() {
-            let new_item = SrfItem {
+            let new_item = ScalarItem {
                 scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
                 index: item.index,
             };
@@ -624,7 +619,7 @@ impl SubqueryRewriter {
                     group_items,
                     aggregate_functions: agg_items,
                     from_distinct: aggregate.from_distinct,
-                    limit: aggregate.limit,
+                    rank_limit: aggregate.rank_limit.clone(),
                     grouping_sets: aggregate.grouping_sets.clone(),
                 }
                 .into(),

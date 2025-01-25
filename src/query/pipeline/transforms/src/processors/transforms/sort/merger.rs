@@ -14,13 +14,11 @@
 
 use std::cmp::Reverse;
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 
 use super::algorithm::*;
 use super::Rows;
@@ -48,7 +46,6 @@ where
     S: SortedStream,
 {
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<S>,
     sorted_cursors: A,
     buffer: Vec<DataBlock>,
@@ -69,7 +66,6 @@ where
     pub fn create(
         schema: DataSchemaRef,
         streams: Vec<S>,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
         batch_rows: usize,
         limit: Option<usize>,
     ) -> Self {
@@ -78,7 +74,7 @@ where
 
         let sorted_cursors = A::with_capacity(streams.len());
         let buffer = vec![DataBlock::empty_with_schema(schema.clone()); streams.len()];
-        let pending_stream = (0..streams.len()).collect();
+        let pending_streams = (0..streams.len()).collect();
 
         Self {
             schema,
@@ -87,8 +83,7 @@ where
             buffer,
             batch_rows,
             limit,
-            sort_desc,
-            pending_streams: pending_stream,
+            pending_streams,
             temp_sorted_num_rows: 0,
             temp_output_indices: vec![],
             temp_sorted_blocks: vec![],
@@ -119,7 +114,7 @@ where
                 continue;
             }
             if let Some((block, col)) = input {
-                let rows = A::Rows::from_column(&col, &self.sort_desc)?;
+                let rows = A::Rows::from_column(&col)?;
                 let cursor = Cursor::new(i, rows);
                 self.sorted_cursors.push(i, Reverse(cursor));
                 self.buffer[i] = block;
@@ -141,7 +136,7 @@ where
                 continue;
             }
             if let Some((block, col)) = input {
-                let rows = A::Rows::from_column(&col, &self.sort_desc)?;
+                let rows = A::Rows::from_column(&col)?;
                 let cursor = Cursor::new(i, rows);
                 self.sorted_cursors.push(i, Reverse(cursor));
                 self.buffer[i] = block;
@@ -338,6 +333,10 @@ where
         }
 
         Ok(Some(self.build_output()?))
+    }
+
+    pub fn streams(self) -> Vec<S> {
+        self.unsorted_streams
     }
 }
 
