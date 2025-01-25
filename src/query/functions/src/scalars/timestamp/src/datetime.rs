@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::io::Write;
 
 use databend_common_exception::ErrorCode;
@@ -129,6 +130,20 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
         min: int64_to_timestamp(domain.min.as_()),
         max: int64_to_timestamp(domain.max.as_()),
     })
+}
+
+// jiff don't support local formats:
+// https://github.com/BurntSushi/jiff/issues/219
+fn replace_time_format(format: &str) -> Cow<str> {
+    if ["%c", "x", "X"].iter().any(|f| format.contains(f)) {
+        let format = format
+            .replace("%c", "%x %X")
+            .replace("%x", "%F")
+            .replace("%X", "%T");
+        Cow::Owned(format)
+    } else {
+        Cow::Borrowed(format)
+    }
 }
 
 fn register_convert_timezone(registry: &mut FunctionRegistry) {
@@ -592,7 +607,12 @@ fn register_to_string(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<TimestampType, StringType, NullableType<StringType>>(
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
-                match write!(output.builder.row_buffer, "{}", ts.strftime(format)) {
+                let format = replace_time_format(format);
+                match write!(
+                    output.builder.row_buffer,
+                    "{}",
+                    ts.strftime(format.as_ref())
+                ) {
                     Ok(_) => {
                         output.builder.commit_row();
                         output.validity.push(true);

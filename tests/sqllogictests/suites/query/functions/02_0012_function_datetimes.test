@@ -1367,8 +1367,10 @@ select to_date('精彩的2022年，美丽的02month,激动の02d', '精彩的%Y�
 ----
 2022-02-02
 
-statement error 1104
-select date_format('2022-02-04T03:58:59', '%x');
+query TTT
+select date_format('2022-02-04T03:58:59', '%x'), strftime('2022-02-04T03:58:59', '%X'), strftime('2022-02-04T03:58:59', '%c')
+----
+2022-02-04 03:58:59 2022-02-04 03:58:59
 
 statement error 1006
 select date_format('2022-2-04T03:58:59', '%i');
