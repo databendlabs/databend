@@ -60,7 +60,6 @@ use jiff::civil::Date;
 use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz::TimeZone;
 use jiff::Unit;
-use jiff::Zoned;
 use num_traits::AsPrimitive;
 
 pub fn register(registry: &mut FunctionRegistry) {
