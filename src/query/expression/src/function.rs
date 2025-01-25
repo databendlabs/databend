@@ -95,7 +95,7 @@ pub enum FunctionEval {
 
 #[derive(Clone)]
 pub struct FunctionContext {
-    pub jiff_tz: TimeZone,
+    pub tz: TimeZone,
     pub now: Zoned,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
@@ -116,7 +116,7 @@ pub struct FunctionContext {
 impl Default for FunctionContext {
     fn default() -> Self {
         FunctionContext {
-            jiff_tz: TimeZone::UTC,
+            tz: TimeZone::UTC,
             now: Default::default(),
             rounding_mode: false,
             disable_variant_check: false,

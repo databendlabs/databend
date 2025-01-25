@@ -895,7 +895,7 @@ impl TableContext for QueryContext {
         let settings = self.get_settings();
 
         let tz_string = settings.get_timezone()?;
-        let jiff_tz = TimeZone::get(&tz_string).map_err(|e| {
+        let tz = TimeZone::get(&tz_string).map_err(|e| {
             ErrorCode::InvalidTimezone(format!(
                 "Timezone has been checked and should be valid but got error: {}",
                 e
@@ -913,7 +913,7 @@ impl TableContext for QueryContext {
 
         Ok(FunctionContext {
             now,
-            jiff_tz,
+            tz,
             rounding_mode,
             disable_variant_check,
 

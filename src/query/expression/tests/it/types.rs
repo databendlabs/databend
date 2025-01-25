@@ -56,15 +56,9 @@ fn test_parse_jiff() {
         offset
     );
 
-    // static PARSER: DateTimeParser = DateTimeParser::new();
-
-    // let zdt = PARSER
-    //     .parse_datetime("January 4, 2024; 18:30:04 +02:00")
-    //     .unwrap();
-    // println!("{:?}", zdt);
-
-    // let zdt = PARSER.parse_datetime("2024.6.8").unwrap();
-    // println!("{:?}", zdt);
+    let (mut tm, _) = BrokenDownTime::parse_prefix("%s,%Y", "200,2000").unwrap();
+    tm.set_offset(Some(tz::offset(0 as _)));
+    assert_eq!("2000-01-01T00:03:20", tm.to_datetime().unwrap().to_string());
 }
 
 #[test]
