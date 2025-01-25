@@ -65,7 +65,6 @@ pub const CHANGE_ACTION_COL_NAME: &str = "change$action";
 pub const CHANGE_IS_UPDATE_COL_NAME: &str = "change$is_update";
 pub const CHANGE_ROW_ID_COL_NAME: &str = "change$row_id";
 
-pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
 pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 
 // stream column id.
@@ -94,7 +93,6 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         CHANGE_ACTION_COL_NAME,
         CHANGE_IS_UPDATE_COL_NAME,
         CHANGE_ROW_ID_COL_NAME,
-        ROW_NUMBER_COL_NAME,
         PREDICATE_COLUMN_NAME,
         ORIGIN_VERSION_COL_NAME,
         ORIGIN_BLOCK_ID_COL_NAME,
