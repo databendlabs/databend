@@ -58,7 +58,6 @@ use dtparse::parse;
 use jiff::civil::date;
 use jiff::civil::Date;
 use jiff::fmt::strtime::BrokenDownTime;
-use jiff::tz;
 use jiff::tz::TimeZone;
 use jiff::Unit;
 use num_traits::AsPrimitive;
@@ -216,32 +215,25 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
-            if ctx.func_ctx.enable_strict_datetime_parser {
-                match string_to_timestamp(val, &ctx.func_ctx.jiff_tz) {
-                    Ok(ts) => output.push(ts.timestamp().as_microsecond()),
-                    Err(e) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("cannot parse to type `TIMESTAMP`. {}", e),
-                        );
-                        output.push(0);
-                    }
-                }
-            } else {
-                match parse(val) {
-                    Ok((naive_dt, parse_tz)) => {
-                        if let Some(offset) = parse_tz {
-                            naive_dt.checked_add_offset(offset).unwrap();
-                        }
-                        output.push(naive_dt.and_utc().timestamp_micros());
-                    }
-                    Err(err) => {
-                        ctx.set_error(
-                            output.len(),
-                            format!("cannot parse to type `TIMESTAMP`. {}", err),
-                        );
-                        output.push(0);
-                    }
+            let mut d = string_to_timestamp(val, &ctx.func_ctx.jiff_tz);
+            if !ctx.func_ctx.enable_strict_datetime_parser {
+                d = d.or_else(|_| {
+                    parse(val)
+                        .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                        .and_then(|(naive_dt, _)| {
+                            string_to_timestamp(naive_dt.to_string(), &ctx.func_ctx.jiff_tz)
+                        })
+                });
+            }
+
+            match d {
+                Ok(ts) => output.push(ts.timestamp().as_microsecond()),
+                Err(e) => {
+                    ctx.set_error(
+                        output.len(),
+                        format!("cannot parse to type `TIMESTAMP`. {}", e),
+                    );
+                    output.push(0);
                 }
             }
         })(val, ctx)
@@ -341,6 +333,7 @@ fn string_to_format_timestamp(
     if format.is_empty() {
         return Ok((0, true));
     }
+
     let (mut tm, offset) = BrokenDownTime::parse_prefix(format, timestamp)
         .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))?;
 
@@ -349,12 +342,36 @@ fn string_to_format_timestamp(
             "Can not fully parse timestamp {timestamp} by format {format}",
         ))));
     }
-    if tm.offset().is_none() {
-        tm.set_offset(Some(tz::offset(0)));
+
+    if tm.year().is_none() {
+        let _ = tm.set_year(Some(1970));
     }
-    tm.to_timestamp()
-        .map(|ts| (ts.as_microsecond(), false))
-        .map_err(|err| Box::new(ErrorCode::BadArguments(format!("{err}"))))
+
+    if tm.month().is_none() {
+        let _ = tm.set_month(Some(1));
+    }
+
+    if tm.day().is_none() {
+        let _ = tm.set_day(Some(1));
+    }
+
+    if tm.hour().is_none() {
+        let _ = tm.set_hour(Some(0));
+    }
+    if tm.minute().is_none() {
+        let _ = tm.set_minute(Some(0));
+    }
+    if tm.second().is_none() {
+        let _ = tm.set_second(Some(0));
+    }
+
+    let z = if tm.offset().is_none() {
+        ctx.func_ctx.jiff_tz.to_zoned(tm.to_datetime().unwrap())
+    } else {
+        tm.to_zoned()
+    }
+    .map_err(|err| ErrorCode::BadArguments(format!("{err}")))?;
+    Ok((z.timestamp().as_microsecond(), false))
 }
 
 fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
@@ -473,15 +490,16 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
 
     fn eval_string_to_date(val: Value<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
-            let d = if ctx.func_ctx.enable_strict_datetime_parser {
-                string_to_date(val, &ctx.func_ctx.jiff_tz)
-            } else {
-                parse(val)
-                    .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-                    .and_then(|(naive_dt, _)| {
-                        string_to_date(naive_dt.to_string(), &ctx.func_ctx.jiff_tz)
-                    })
-            };
+            let mut d = string_to_date(val, &ctx.func_ctx.jiff_tz);
+            if !ctx.func_ctx.enable_strict_datetime_parser {
+                d = d.or_else(|_| {
+                    parse(val)
+                        .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                        .and_then(|(naive_dt, _)| {
+                            string_to_date(naive_dt.to_string(), &ctx.func_ctx.jiff_tz)
+                        })
+                });
+            }
 
             match d {
                 Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
