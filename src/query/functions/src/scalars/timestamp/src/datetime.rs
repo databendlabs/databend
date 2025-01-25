@@ -585,7 +585,7 @@ fn register_number_to_date(registry: &mut FunctionRegistry) {
 }
 
 fn register_to_string(registry: &mut FunctionRegistry) {
-    registry.register_aliases("to_string", &["date_format"]);
+    registry.register_aliases("to_string", &["date_format", "strftime"]);
     registry.register_combine_nullable_2_arg::<TimestampType, StringType, StringType, _, _>(
         "to_string",
         |_, _, _| FunctionDomain::MayThrow,
