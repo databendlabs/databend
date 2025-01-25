@@ -255,7 +255,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                 }
                 Err(e) => {
                     ctx.set_error(output.len(), e.to_string());
-                    output.push_null();
+                    output.push(0);
                 }
             },
         ),
@@ -294,8 +294,12 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
                         Ok((res, false)) => {
                             output.push((res / MICROS_PER_SEC / 24 / 3600) as _);
                         }
-                        _ => {
+                        Ok((_, true)) => {
                             output.push_null();
+                        }
+                        Err(e) => {
+                            ctx.set_error(output.len(), e.to_string());
+                            output.push(0);
                         }
                     }
                 }
@@ -593,9 +597,13 @@ fn register_to_string(registry: &mut FunctionRegistry) {
                         output.builder.commit_row();
                         output.validity.push(true);
                     }
-                    Err(_) => {
-                        output.builder.row_buffer.clear();
-                        output.push_null();
+                    Err(e) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("{format} is invalid time format, error {e}"),
+                        );
+                        output.builder.commit_row();
+                        output.validity.push(true);
                     }
                 }
             },
