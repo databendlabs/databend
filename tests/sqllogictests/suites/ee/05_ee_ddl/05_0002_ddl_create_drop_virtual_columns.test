@@ -45,17 +45,28 @@ CREATE VIRTUAL COLUMN (v) FOR t1;
 statement error 1065
 CREATE VIRTUAL COLUMN (a['k1']) FOR t1;
 
-statement ok
-CREATE VIRTUAL COLUMN (v['k1'], v:k2, v[0]) FOR t1;
+statement error 1065
+CREATE VIRTUAL COLUMN (v['k1'] as a) FOR t1;
+
+statement error 1065
+CREATE VIRTUAL COLUMN (v['k1'] as v1, v['k2'] as v1) FOR t1;
 
 statement ok
-CREATE VIRTUAL COLUMN IF NOT EXISTS (v['k1'], v:k2, v[0]) FOR t1;
+CREATE VIRTUAL COLUMN (v['k1'] as v1, v:k2 as v2, v[0] as v3) FOR t1;
+
+statement ok
+CREATE VIRTUAL COLUMN IF NOT EXISTS (v['k1'] as v1, v:k2 as v2, v[0] as v3) FOR t1;
 
 statement error 1116
 CREATE VIRTUAL COLUMN (v['k1'], v:k2, v[0]) FOR t1;
 
 statement ok
-ALTER VIRTUAL COLUMN (v['k1']['k2'], v[1][2], v[3]) FOR t1;
+ALTER VIRTUAL COLUMN (v['k1']['k2'] as v1, v[1][2] as v2, v[3] as v3) FOR t1;
+
+query TTT
+SHOW VIRTUAL COLUMN WHERE database='default' AND table='t1';
+----
+test_virtual_db t1 v['k1']['k2'] AS v1, v[1][2] AS v2, v[3] AS v3
 
 statement ok
 REFRESH VIRTUAL COLUMN FOR t1;
