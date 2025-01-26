@@ -255,7 +255,6 @@ pub async fn run_ttc_container(
     let mut images = image.split(":");
     let image = images.next().unwrap();
     let tag = images.next().unwrap_or("latest");
-    let x = "";
 
     use rand::distributions::Alphanumeric;
     use rand::Rng;
