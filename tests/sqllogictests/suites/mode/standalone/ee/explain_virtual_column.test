@@ -91,7 +91,7 @@ query T
 explain select a, v1, v2 from t1
 ----
 TableScan
-├── table: default.default.t1
+├── table: default.test_virtual_db.t1
 ├── output columns: [a (#0), v['a'][0] (#2), v['b'] (#3)]
 ├── read rows: 1
 ├── read size: < 1 KiB

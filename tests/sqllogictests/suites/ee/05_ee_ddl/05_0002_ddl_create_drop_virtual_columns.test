@@ -64,7 +64,7 @@ statement ok
 ALTER VIRTUAL COLUMN (v['k1']['k2'] as v1, v[1][2] as v2, v[3] as v3) FOR t1;
 
 query TTT
-SHOW VIRTUAL COLUMN WHERE database='default' AND table='t1';
+SHOW VIRTUAL COLUMNS WHERE database='test_virtual_db' AND table='t1';
 ----
 test_virtual_db t1 v['k1']['k2'] AS v1, v[1][2] AS v2, v[3] AS v3
 
