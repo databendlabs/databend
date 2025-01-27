@@ -58,6 +58,7 @@ st_polygon -> st_makepolygon
 str_to_date -> to_date
 str_to_timestamp -> to_timestamp
 str_to_year -> to_year
+strftime -> to_string
 substr_utf8 -> substr
 substring -> substr
 substring_utf8 -> substr

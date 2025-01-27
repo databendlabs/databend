@@ -112,11 +112,7 @@ fn register_interval_add_sub(registry: &mut FunctionRegistry) {
                     let ts = a
                         .wrapping_add(b.microseconds())
                         .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
-                    match EvalMonthsImpl::eval_timestamp(
-                        ts,
-                        ctx.func_ctx.jiff_tz.clone(),
-                        b.months(),
-                    ) {
+                    match EvalMonthsImpl::eval_timestamp(ts, ctx.func_ctx.tz.clone(), b.months()) {
                         Ok(t) => output.push(t),
                         Err(e) => {
                             ctx.set_error(output.len(), e);
@@ -137,11 +133,7 @@ fn register_interval_add_sub(registry: &mut FunctionRegistry) {
                     let ts = a
                         .wrapping_add(b.microseconds())
                         .wrapping_add((b.days() as i64).wrapping_mul(86_400_000_000));
-                    match EvalMonthsImpl::eval_timestamp(
-                        ts,
-                        ctx.func_ctx.jiff_tz.clone(),
-                        b.months(),
-                    ) {
+                    match EvalMonthsImpl::eval_timestamp(ts, ctx.func_ctx.tz.clone(), b.months()) {
                         Ok(t) => output.push(t),
                         Err(e) => {
                             ctx.set_error(output.len(), e);
@@ -176,11 +168,7 @@ fn register_interval_add_sub(registry: &mut FunctionRegistry) {
                     let ts = a
                         .wrapping_sub(b.microseconds())
                         .wrapping_sub((b.days() as i64).wrapping_mul(86_400_000_000));
-                    match EvalMonthsImpl::eval_timestamp(
-                        ts,
-                        ctx.func_ctx.jiff_tz.clone(),
-                        -b.months(),
-                    ) {
+                    match EvalMonthsImpl::eval_timestamp(ts, ctx.func_ctx.tz.clone(), -b.months()) {
                         Ok(t) => output.push(t),
                         Err(e) => {
                             ctx.set_error(output.len(), e);

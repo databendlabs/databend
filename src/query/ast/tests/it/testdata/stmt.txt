@@ -5767,6 +5767,162 @@ Query(
 
 
 ---------- Input ----------
+from aa.bb select *;
+---------- Output ---------
+SELECT * FROM aa.bb
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..19,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..19,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    18..19,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            5..10,
+                        ),
+                        catalog: None,
+                        database: Some(
+                            Identifier {
+                                span: Some(
+                                    5..7,
+                                ),
+                                name: "aa",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                        table: Identifier {
+                            span: Some(
+                                8..10,
+                            ),
+                            name: "bb",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+from aa.bb
+---------- Output ---------
+SELECT * FROM aa.bb
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..10,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..10,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    0..0,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            5..10,
+                        ),
+                        catalog: None,
+                        database: Some(
+                            Identifier {
+                                span: Some(
+                                    5..7,
+                                ),
+                                name: "aa",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                        table: Identifier {
+                            span: Some(
+                                8..10,
+                            ),
+                            name: "bb",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 select * from a, b, c;
 ---------- Output ---------
 SELECT * FROM a, b, c
