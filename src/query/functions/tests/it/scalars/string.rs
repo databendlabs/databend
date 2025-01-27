@@ -183,6 +183,9 @@ fn test_ltrim(file: &mut impl Write) {
         "a",
         StringType::from_data(vec!["abc", "   abc", "   abc   ", "abc   "]),
     )]);
+    run_ast(file, "ltrim(' aa','')", &[]);
+    run_ast(file, "ltrim('\\taa')", &[]);
+    run_ast(file, "ltrim('#000000123','0#')", &[]);
 }
 
 fn test_rtrim(file: &mut impl Write) {
@@ -197,6 +200,9 @@ fn test_rtrim(file: &mut impl Write) {
         "a",
         StringType::from_data(vec!["abc", "   abc", "   abc   ", "abc   "]),
     )]);
+    run_ast(file, "rtrim('aa ','')", &[]);
+    run_ast(file, "rtrim('aa\\t')", &[]);
+    run_ast(file, "rtrim('$125.00','0.')", &[]);
 }
 
 fn test_trim_leading(file: &mut impl Write) {
@@ -357,6 +363,8 @@ fn test_trim(file: &mut impl Write) {
         "a",
         StringType::from_data(vec!["abc", "   abc", "   abc   ", "abc   "]),
     )]);
+    run_ast(file, "trim('\\ta\\t')", &[]);
+    run_ast(file, "trim('*-*ABC-*-','*-')", &[]);    
 
     // TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
     test_trim_with_from(file, "both");
