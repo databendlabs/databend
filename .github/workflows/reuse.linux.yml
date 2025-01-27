@@ -329,3 +329,12 @@ jobs:
       build_profile: ${{ inputs.build_profile }}
       runner_provider: ${{ inputs.runner_provider }}
       license_type: ${{ inputs.license_type }}
+
+  benchmark:
+    needs: [build, check]
+    if: github.event_name == 'pull_request'
+    runs-on: [self-hosted, X64, Linux, 16c64g, "${{ inputs.runner_provider }}"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_benchmark
+        timeout-minutes: 20
