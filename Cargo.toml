@@ -334,7 +334,7 @@ jaq-core = "1.5.1"
 jaq-interpret = "1.5.0"
 jaq-parse = "1.0.3"
 jaq-std = "1.6.0"
-jiff = { version = "0.1.14", features = ["serde", "tzdb-bundle-always"] }
+jiff = { version = "0.1.26", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.4.4"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"

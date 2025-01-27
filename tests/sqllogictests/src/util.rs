@@ -255,8 +255,16 @@ pub async fn run_ttc_container(
     let mut images = image.split(":");
     let image = images.next().unwrap();
     let tag = images.next().unwrap_or("latest");
-    let container_name = format!("databend-ttc-{}", port);
 
+    use rand::distributions::Alphanumeric;
+    use rand::Rng;
+    let rng = rand::thread_rng();
+    let x: String = rng
+        .sample_iter(&Alphanumeric)
+        .take(5)
+        .map(char::from)
+        .collect();
+    let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
     println!("Start container {container_name}");
 
@@ -295,8 +303,7 @@ pub async fn run_ttc_container(
                     "Start container {} using {} secs failed: {}",
                     container_name, duration, err
                 );
-                if let TestcontainersError::WaitContainer(WaitContainerError::StartupTimeout) = err
-                {
+                if err.to_string().contains("timeout") {
                     stop_container(docker, &container_name).await;
                 }
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {

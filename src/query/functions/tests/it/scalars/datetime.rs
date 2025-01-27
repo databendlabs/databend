@@ -47,6 +47,8 @@ fn test_to_timestamp(file: &mut impl Write) {
     run_ast(file, "to_timestamp(0)", &[]);
     run_ast(file, "to_timestamp(100)", &[]);
     run_ast(file, "to_timestamp(315360000000)", &[]);
+    run_ast(file, "to_timestamp('2023-01-11')", &[]);
+    run_ast(file, "to_timestamp('2023-01-11')::int64::timestamp", &[]);
     run_ast(file, "to_timestamp(315360000000000)", &[]);
     run_ast(file, "to_timestamp(253402300800000000)", &[]);
     run_ast(file, "to_timestamp(a)", &[(
@@ -69,6 +71,8 @@ fn test_to_date(file: &mut impl Write) {
     run_ast(file, "to_date(-100)", &[]);
     run_ast(file, "to_date(-0)", &[]);
     run_ast(file, "to_date(0)", &[]);
+    run_ast(file, "to_date('2023-01-11')", &[]);
+    run_ast(file, "to_int32(to_date('2023-01-11'))::date", &[]);
     run_ast(file, "to_date(100)", &[]);
     run_ast(file, "to_date(2932896)", &[]);
     run_ast(file, "to_date(2932897)", &[]);
