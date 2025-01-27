@@ -373,7 +373,7 @@ impl Binder {
                     data_type,
                     table_index,
                     column_position,
-                    virtual_computed_expr,
+                    virtual_expr,
                     ..
                 }) => {
                     let column_binding = ColumnBindingBuilder::new(
@@ -390,7 +390,7 @@ impl Binder {
                     .database_name(Some(database_name.to_string()))
                     .table_index(Some(*table_index))
                     .column_position(*column_position)
-                    .virtual_computed_expr(virtual_computed_expr.clone())
+                    .virtual_expr(virtual_expr.clone())
                     .build();
                     bind_context.add_column_binding(column_binding);
                     base_column_scan_id.insert(*column_index, scan_id);

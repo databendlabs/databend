@@ -145,7 +145,7 @@ impl RuleNormalizeAggregateOptimizer {
                                 database_name: None,
                                 column_position: None,
                                 index: work_index,
-                                virtual_computed_expr: None,
+                                virtual_expr: None,
                                 data_type: work_c.return_type.clone(),
                                 visibility: Visibility::Visible,
                                 column_name: work_c.display_name.clone(),

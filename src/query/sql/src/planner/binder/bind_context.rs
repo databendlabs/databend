@@ -123,6 +123,21 @@ pub struct VirtualColumnContext {
     /// The is used to generate virtual column id for virtual columns.
     /// Not a real column id, only used to identify a virtual column.
     pub next_column_ids: HashMap<IndexType, u32>,
+    /// virtual column alias names
+    pub virtual_columns: Vec<ColumnBinding>,
+}
+
+impl VirtualColumnContext {
+    fn with_parent(parent: &VirtualColumnContext) -> VirtualColumnContext {
+        VirtualColumnContext {
+            allow_pushdown: parent.allow_pushdown,
+            table_indices: HashSet::new(),
+            virtual_column_indices: HashMap::new(),
+            virtual_column_names: HashMap::new(),
+            next_column_ids: HashMap::new(),
+            virtual_columns: Vec::new(),
+        }
+    }
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
@@ -252,7 +267,9 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
-            virtual_column_context: Default::default(),
+            virtual_column_context: VirtualColumnContext::with_parent(
+                &parent.virtual_column_context,
+            ),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
@@ -422,6 +439,17 @@ impl BindContext {
                     internal_column,
                 };
                 result.push(NameResolutionResult::InternalColumn(column_binding));
+            }
+
+            if !result.is_empty() {
+                return;
+            }
+
+            // look up virtual column alias names
+            for column_binding in bind_context.virtual_column_context.virtual_columns.iter() {
+                if Self::match_column_binding(database, table, column, column_binding) {
+                    result.push(NameResolutionResult::Column(column_binding.clone()));
+                }
             }
 
             if !result.is_empty() {

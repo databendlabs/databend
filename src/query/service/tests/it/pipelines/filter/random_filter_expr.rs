@@ -151,7 +151,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 index: 0,
                 data_type: Box::new(data_type.clone()),
                 visibility: Visibility::Visible,
-                virtual_computed_expr: None,
+                virtual_expr: None,
             };
             let scalar_expr = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
             ScalarExpr::FunctionCall(FunctionCall {
