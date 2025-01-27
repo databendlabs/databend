@@ -27,8 +27,8 @@ jobs:
         uses: tj-actions/changed-files@v45
         id: src
         with:
+          # .github/**
           files_ignore: |
-            .github/**
             **.md
             benchmark/**
             docker/**
