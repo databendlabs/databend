@@ -364,7 +364,7 @@ fn test_trim(file: &mut impl Write) {
         StringType::from_data(vec!["abc", "   abc", "   abc   ", "abc   "]),
     )]);
     run_ast(file, "trim('\\ta\\t')", &[]);
-    run_ast(file, "trim('*-*ABC-*-','*-')", &[]);    
+    run_ast(file, "trim('*-*ABC-*-','*-')", &[]);
 
     // TRIM([[BOTH | LEADING | TRAILING] <expr> FROM] <expr>)
     test_trim_with_from(file, "both");
