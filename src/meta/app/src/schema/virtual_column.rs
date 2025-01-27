@@ -26,10 +26,18 @@ use crate::schema::virtual_column_ident::VirtualColumnIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+// The virtual field column definition of Variant type.
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VirtualField {
+    // Expression to extracts the internal virtual field of the variant value.
+    // for example:
+    // `data['key']`, `data[0]`, `data['key1']['key2']`, ..
     pub expr: String,
+    // The data type of internal virtual field.
+    // If all the rows of a virtual field has same type,
+    // the virtual field can cast to the type.
     pub data_type: TableDataType,
+    // Optional alias name.
     pub alias_name: Option<String>,
 }
 
@@ -49,13 +57,22 @@ impl Display for VirtualField {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct VirtualColumnMeta {
     pub table_id: MetaId,
 
+    // The internal virtual field columns of Variant type.
+    // For example, the data column has the following values:
+    // `{"id":1,"name":"tom","metas":{"key1":"val1","key2":"val2"}}`
+    // `{"id":2,"name":"alice","metas":{"key1":"val3","key2":"val4"}}`
+    // ...
+    // We can generate virtual columns as follows:
+    // `data['id']`, `data['name']`, `data['metas']['key1']`, `data['metas']['key2']`
     pub virtual_columns: Vec<VirtualField>,
     pub created_on: DateTime<Utc>,
     pub updated_on: Option<DateTime<Utc>>,
+    // Whether the virtual columns are auto-generated,
+    // true for auto-generated, false for user-defined.
     pub auto_generated: bool,
 }
 
