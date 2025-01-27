@@ -19,7 +19,7 @@ runs:
       working-directory: benchmark/clickbench
       env:
         BENCHMARK_ID: ${{ inputs.run_id }}
-        BENCHMARK_DATASET: local
+        BENCHMARK_DATASET: internal
       shell: bash
       run: |
         ./benchmark_local.sh
