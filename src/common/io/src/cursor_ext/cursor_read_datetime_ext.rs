@@ -58,7 +58,8 @@ const DATE_LEN: usize = 10;
 
 fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
     if size > 0 && size < 3 {
-        Ok(lexical_core::FromLexical::from_lexical(buf).unwrap())
+        Ok(lexical_core::FromLexical::from_lexical(buf)
+            .map_err_to_code(ErrorCode::BadBytes, || "time part parse error".to_string())?)
     } else {
         let msg = format!(
             "err with parse time part. Format like this:[03:00:00], got {} digits",
@@ -132,7 +133,7 @@ where T: AsRef<[u8]>
         match n {
             2 => {
                 let hour_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+                    lexical_core::FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || "hour offset parse error".to_string())?;
                 if (0..15).contains(&hour_offset) {
                     buf.clear();
                     if self.ignore_byte(b':') {
@@ -143,7 +144,7 @@ where T: AsRef<[u8]>
                             ));
                         }
                         let minute_offset: i32 =
-                            lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+                            lexical_core::FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || "minute offset parse error".to_string())?;
                         // max utc: 14:00, min utc: 00:00
                         get_hour_minute_offset(
                             tz,
@@ -166,10 +167,10 @@ where T: AsRef<[u8]>
             4 => {
                 let hour_offset = &buf.as_slice()[..2];
                 let hour_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(hour_offset).unwrap();
+                    lexical_core::FromLexical::from_lexical(hour_offset).map_err_to_code(ErrorCode::BadBytes, || "hour offset parse error".to_string())?;
                 let minute_offset = &buf.as_slice()[2..];
                 let minute_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(minute_offset).unwrap();
+                    lexical_core::FromLexical::from_lexical(minute_offset).map_err_to_code(ErrorCode::BadBytes, || "minute offset parse error".to_string())?;
                 buf.clear();
                 // max utc: 14:00, min utc: 00:00
                 if (0..15).contains(&hour_offset) {
@@ -257,8 +258,10 @@ where T: AsRef<[u8]>
                         "Microsecond Parsing Error: Expecting a format like [.123456] for microseconds part",
                     ));
                 }
-                let mut scales: u64 =
-                    lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+                let mut scales: u64 = lexical_core::FromLexical::from_lexical(buf.as_slice())
+                    .map_err_to_code(ErrorCode::BadBytes, || {
+                        "datetime scales parse error".to_string()
+                    })?;
                 if size <= 9 {
                     scales *= 10_u64.pow(9 - size as u32)
                 } else {
