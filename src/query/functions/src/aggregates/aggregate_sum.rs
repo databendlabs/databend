@@ -15,6 +15,7 @@
 use boolean::TrueIdxIter;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
@@ -271,6 +272,65 @@ where
     }
 }
 
+#[derive(BorshSerialize, BorshDeserialize, Default)]
+pub struct IntervalSumState {
+    pub value: months_days_micros,
+}
+
+impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
+    fn add(
+        &mut self,
+        other: months_days_micros,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let sum = self.value.total_micros() + other.total_micros();
+        self.value = months_days_micros(sum as i128);
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        other: Buffer<months_days_micros>,
+        validity: Option<&Bitmap>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let mut sum = self.value.total_micros();
+        let col = IntervalType::upcast_column(other);
+        let buffer = IntervalType::try_downcast_column(&col).unwrap();
+        match validity {
+            Some(validity) if validity.null_count() > 0 => {
+                buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
+                    if b {
+                        sum += t.total_micros();
+                    }
+                });
+            }
+            _ => {
+                buffer.iter().for_each(|t| {
+                    sum += t.total_micros();
+                });
+            }
+        }
+        self.value = months_days_micros(sum as i128);
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        let res = self.value.total_micros() + rhs.value.total_micros();
+        self.value = months_days_micros(res as i128);
+        Ok(())
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: &mut Vec<months_days_micros>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        IntervalType::push_item(builder, IntervalType::to_scalar_ref(&self.value));
+        Ok(())
+    }
+}
+
 pub fn try_create_aggregate_sum_function(
     display_name: &str,
     params: Vec<Scalar>,
@@ -322,6 +382,15 @@ pub fn try_create_aggregate_sum_function(
                     display_name, return_type, params, arguments[0].clone()
                 )
             }
+        }
+        DataType::Interval => {
+            let return_type = DataType::Interval;
+            AggregateUnaryFunction::<IntervalSumState, IntervalType, IntervalType>::try_create_unary(
+                display_name,
+                return_type,
+                params,
+                arguments[0].clone(),
+            )
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
             let p = MAX_DECIMAL256_PRECISION;
