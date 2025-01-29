@@ -1516,6 +1516,19 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_passthrough_nullable_1_arg::<TimestampType, Float64Type, _, _>(
+        "epoch_microsecond",
+        |_, _| FunctionDomain::Full,
+        vectorize_1_arg::<TimestampType, Float64Type>(|val, ctx| {
+            (val.to_timestamp(ctx.func_ctx.tz.clone())
+                .with_time_zone(TimeZone::UTC)
+                .timestamp()
+                .as_microsecond() as f64
+                / 1_000_000f64)
+                .into()
+        }),
+    );
+
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
         "to_hour",
         |_, _| FunctionDomain::Full,

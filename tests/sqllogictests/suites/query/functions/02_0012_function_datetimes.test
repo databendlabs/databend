@@ -1124,7 +1124,20 @@ select EXTRACT(YEAR FROM to_datetime('2022-03-04 22:32:09')) = 2022
 ----
 1
 
+query B
+select EXTRACT(EPOCH FROM to_datetime('2022-03-04 22:32:09')) = to_unix_timestamp('2022-03-04 22:32:09');
+----
+1
 
+query B
+select EXTRACT(EPOCH FROM now()) = epoch_microsecond(now())
+----
+1
+
+query B
+SELECT (to_timestamp('2023-11-12 09:38:18.965575') - to_timestamp(0)) / 1000000.0 = epoch_microsecond('2023-11-12 09:38:18.965575')
+----
+1
 
 query B
 select EXTRACT(MONTH FROM to_datetime('2022-03-04 22:32:09')) = 3
