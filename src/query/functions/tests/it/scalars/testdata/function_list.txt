@@ -3492,6 +3492,8 @@ Functions overloads:
 1 tan(Float64 NULL) :: Float64 NULL
 0 time_slot(Timestamp) :: Timestamp
 1 time_slot(Timestamp NULL) :: Timestamp NULL
+0 timestamp_diff(Timestamp, Timestamp) :: Interval
+1 timestamp_diff(Timestamp NULL, Timestamp NULL) :: Interval NULL
 0 to_base64(Binary) :: String
 1 to_base64(Binary NULL) :: String NULL
 0 to_binary(Variant) :: Binary

@@ -154,3 +154,33 @@ query T
 select to_interval('120000000000 months');
 ----
 00:00:00
+
+onlyif http
+query T
+select '2022-01-01'::timestamp - '2021-01-01'::timestamp
+----
+31536000000000
+
+onlyif http
+query T
+select timestamp_diff('2022-01-01'::timestamp,'2021-01-01'::timestamp);
+----
+8760:00:00
+
+onlyif http
+query T
+select timestamp_diff('2021-01-01'::timestamp, '2022-01-01'::timestamp);
+----
+-8760:00:00
+
+onlyif http
+query T
+select timestamp_diff('2022-01-01'::timestamp,'2021-12-01'::timestamp);
+----
+744:00:00
+
+onlyif http
+query T
+select '2022-01-01'::timestamp-'2021-12-01'::timestamp;
+----
+2678400000000
