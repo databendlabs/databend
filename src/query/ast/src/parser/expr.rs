@@ -1821,56 +1821,87 @@ pub fn weekday(i: Input) -> IResult<Weekday> {
 }
 
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
+    let year = value(IntervalKind::Year, rule! { YEAR });
+    let quarter = value(IntervalKind::Quarter, rule! { QUARTER });
+    let month = value(IntervalKind::Month, rule! { MONTH });
+    let day = value(IntervalKind::Day, rule! { DAY });
+    let hour = value(IntervalKind::Hour, rule! { HOUR });
+    let minute = value(IntervalKind::Minute, rule! { MINUTE });
+    let second = value(IntervalKind::Second, rule! { SECOND });
+    let doy = value(IntervalKind::Doy, rule! { DOY });
+    let dow = value(IntervalKind::Dow, rule! { DOW });
+    let week = value(IntervalKind::Week, rule! { WEEK });
+    let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
+    let year_str = value(
+        IntervalKind::Year,
+        rule! { #literal_string_eq_ignore_case("YEAR")  },
+    );
+    let quarter_str = value(
+        IntervalKind::Quarter,
+        rule! { #literal_string_eq_ignore_case("QUARTER") },
+    );
+    let month_str = value(
+        IntervalKind::Month,
+        rule! { #literal_string_eq_ignore_case("MONTH")  },
+    );
+    let day_str = value(
+        IntervalKind::Day,
+        rule! { #literal_string_eq_ignore_case("DAY")  },
+    );
+    let hour_str = value(
+        IntervalKind::Hour,
+        rule! { #literal_string_eq_ignore_case("HOUR")  },
+    );
+    let minute_str = value(
+        IntervalKind::Minute,
+        rule! { #literal_string_eq_ignore_case("MINUTE")  },
+    );
+    let second_str = value(
+        IntervalKind::Second,
+        rule! { #literal_string_eq_ignore_case("SECOND")  },
+    );
+    let doy_str = value(
+        IntervalKind::Doy,
+        rule! { #literal_string_eq_ignore_case("DOY")  },
+    );
+    let dow_str = value(
+        IntervalKind::Dow,
+        rule! { #literal_string_eq_ignore_case("DOW")  },
+    );
+    let week_str = value(
+        IntervalKind::Week,
+        rule! { #literal_string_eq_ignore_case("WEEK")  },
+    );
+    let epoch_str = value(
+        IntervalKind::Epoch,
+        rule! { #literal_string_eq_ignore_case("EPOCH")  },
+    );
     alt((
-        value(IntervalKind::Year, rule! { YEAR }),
-        value(IntervalKind::Quarter, rule! { QUARTER }),
-        value(IntervalKind::Month, rule! { MONTH }),
-        value(IntervalKind::Day, rule! { DAY }),
-        value(IntervalKind::Hour, rule! { HOUR }),
-        value(IntervalKind::Minute, rule! { MINUTE }),
-        value(IntervalKind::Second, rule! { SECOND }),
-        value(IntervalKind::Doy, rule! { DOY }),
-        value(IntervalKind::Dow, rule! { DOW }),
-        value(IntervalKind::Week, rule! { WEEK }),
-        value(
-            IntervalKind::Year,
-            rule! { #literal_string_eq_ignore_case("YEAR")  },
+        rule!(
+            #year
+            | #quarter
+            | #month
+            | #day
+            | #hour
+            | #minute
+            | #second
+            | #doy
+            | #dow
+            | #week
+            | #epoch
         ),
-        value(
-            IntervalKind::Quarter,
-            rule! { #literal_string_eq_ignore_case("QUARTER") },
-        ),
-        value(
-            IntervalKind::Month,
-            rule! { #literal_string_eq_ignore_case("MONTH")  },
-        ),
-        value(
-            IntervalKind::Day,
-            rule! { #literal_string_eq_ignore_case("DAY")  },
-        ),
-        value(
-            IntervalKind::Hour,
-            rule! { #literal_string_eq_ignore_case("HOUR")  },
-        ),
-        value(
-            IntervalKind::Minute,
-            rule! { #literal_string_eq_ignore_case("MINUTE")  },
-        ),
-        value(
-            IntervalKind::Second,
-            rule! { #literal_string_eq_ignore_case("SECOND")  },
-        ),
-        value(
-            IntervalKind::Doy,
-            rule! { #literal_string_eq_ignore_case("DOY")  },
-        ),
-        value(
-            IntervalKind::Dow,
-            rule! { #literal_string_eq_ignore_case("DOW")  },
-        ),
-        value(
-            IntervalKind::Week,
-            rule! { #literal_string_eq_ignore_case("WEEK")  },
+        rule!(
+            #year_str
+            | #quarter_str
+            | #month_str
+            | #day_str
+            | #hour_str
+            | #minute_str
+            | #second_str
+            | #doy_str
+            | #dow_str
+            | #week_str
+            | #epoch_str
         ),
     ))(i)
 }

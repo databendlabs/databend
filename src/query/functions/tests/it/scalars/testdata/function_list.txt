@@ -1673,6 +1673,8 @@ Functions overloads:
 0 divnull(Float64 NULL, Float64 NULL) :: Float64 NULL
 0 epoch(Int64) :: Interval
 1 epoch(Int64 NULL) :: Interval NULL
+0 epoch_microsecond(Timestamp) :: Float64
+1 epoch_microsecond(Timestamp NULL) :: Float64 NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean
