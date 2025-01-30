@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::io::Write;
 
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::date::clamp_date;
@@ -40,6 +41,7 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -1181,6 +1183,12 @@ fn register_diff_functions(registry: &mut FunctionRegistry) {
             .unwrap_or(FunctionDomain::Full)
         },
         |a, b, _| a - b,
+    );
+
+    registry.register_2_arg::<TimestampType, TimestampType, IntervalType, _, _>(
+        "timestamp_diff",
+        |_, _, _| FunctionDomain::MayThrow,
+        |a, b, _| months_days_micros::new(0, 0, a - b),
     );
 
     registry.register_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
