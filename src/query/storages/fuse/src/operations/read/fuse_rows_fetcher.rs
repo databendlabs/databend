@@ -195,7 +195,7 @@ where F: RowsFetcher + Send + Sync + 'static
             .extend_from_slice(&row_id_column.as_slice()[0..consumed_len]);
         self.blocks.push(data.slice(0..consumed_len));
 
-        let block = if consumed_len < num_rows {
+        if consumed_len < num_rows {
             let block = self.flush().await;
             for row_id in row_id_column.as_slice()[consumed_len..num_rows].iter() {
                 let (prefix, _) = split_row_id(*row_id);
@@ -206,9 +206,7 @@ where F: RowsFetcher + Send + Sync + 'static
             block
         } else {
             Ok(None)
-        };
-
-        block
+        }
     }
 
     #[async_backtrace::framed]
