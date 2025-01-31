@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
+
 use databend_common_column::types::months_days_micros;
 use databend_common_expression::date_helper::EvalMonthsImpl;
 use databend_common_expression::error_to_null;
@@ -19,7 +21,6 @@ use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
-use databend_common_expression::types::NullableType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -75,15 +76,13 @@ fn register_string_to_interval(registry: &mut FunctionRegistry) {
 }
 
 fn register_interval_to_string(registry: &mut FunctionRegistry) {
-    registry.register_combine_nullable_1_arg::<IntervalType, StringType, _, _>(
+    registry.register_passthrough_nullable_1_arg::<IntervalType, StringType, _, _>(
         "to_string",
         |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_1_arg::<IntervalType, NullableType<StringType>>(
-            |interval, output, _| {
-                let res = interval_to_string(&interval).to_string();
-                output.push(&res);
-            },
-        ),
+        vectorize_with_builder_1_arg::<IntervalType, StringType>(|interval, output, _| {
+            write!(output.row_buffer, "{}", interval_to_string(&interval)).unwrap();
+            output.commit_row();
+        }),
     );
 }
 
