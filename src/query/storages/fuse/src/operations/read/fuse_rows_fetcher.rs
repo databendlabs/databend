@@ -239,7 +239,7 @@ where F: RowsFetcher + Send + Sync + 'static
 
     async fn flush(&mut self) -> Result<Option<DataBlock>> {
         let blocks = std::mem::take(&mut self.blocks);
-        if self.blocks.is_empty() {
+        if blocks.is_empty() {
             return Ok(None);
         }
 
