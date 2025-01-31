@@ -1526,7 +1526,12 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<TimestampType, Float64Type, _, _>(
         "epoch_microsecond",
-        |_, _| FunctionDomain::Full,
+        |_, domain| {
+            FunctionDomain::Domain(SimpleDomain::<F64> {
+                min: (domain.min as f64 / 1_000_000f64).into(),
+                max: (domain.max as f64 / 1_000_000f64).into(),
+            })
+        },
         vectorize_1_arg::<TimestampType, Float64Type>(|val, _| (val as f64 / 1_000_000f64).into()),
     );
 
