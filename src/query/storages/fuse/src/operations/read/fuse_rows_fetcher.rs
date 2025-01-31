@@ -182,7 +182,7 @@ where F: RowsFetcher + Send + Sync + 'static
             let (prefix, _) = split_row_id(*row_id);
 
             // Which means we are full now, new prefix will be processed in next batch
-            if self.distinct_block_ids.len() >= self.max_threads
+            if self.distinct_block_ids.len() >= self.max_threads * 2
                 && !self.distinct_block_ids.contains(&prefix)
             {
                 consumed_len = idx;
