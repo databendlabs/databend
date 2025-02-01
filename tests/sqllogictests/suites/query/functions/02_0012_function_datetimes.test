@@ -1124,7 +1124,40 @@ select EXTRACT(YEAR FROM to_datetime('2022-03-04 22:32:09')) = 2022
 ----
 1
 
+query T
+select EXTRACT(EPOCH FROM to_datetime('1969-12-31 23:59:59'))
+----
+-1.0
 
+statement ok
+create or replace table t_epoch(c timestamp);
+
+statement ok
+insert into t_epoch values('1969-12-31 23:59:59'), ('1970-01-01 00:00:01.123456789');
+
+query T
+select EXTRACT(EPOCH FROM c) from t_epoch order by c;
+----
+-1.0
+1.123456
+
+statement ok
+drop table if exists t_epoch;
+
+query T
+select EXTRACT(EPOCH FROM to_datetime('1969-12-31 23:59:59.999999'))
+----
+-1.0e-6
+
+query B
+select EXTRACT(EPOCH FROM now()) = epoch(now())
+----
+1
+
+query B
+SELECT (to_timestamp('2023-11-12 09:38:18.965575') - to_timestamp(0)) / 1000000.0 = epoch('2023-11-12 09:38:18.965575')
+----
+1
 
 query B
 select EXTRACT(MONTH FROM to_datetime('2022-03-04 22:32:09')) = 3
