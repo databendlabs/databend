@@ -78,7 +78,7 @@ fn register_string_to_interval(registry: &mut FunctionRegistry) {
 fn register_interval_to_string(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<IntervalType, StringType, _, _>(
         "to_string",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<IntervalType, StringType>(|interval, output, _| {
             write!(output.row_buffer, "{}", interval_to_string(&interval)).unwrap();
             output.commit_row();
