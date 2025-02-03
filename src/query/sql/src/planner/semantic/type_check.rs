@@ -14,7 +14,9 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
@@ -166,6 +168,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
+use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
 
@@ -1932,16 +1935,17 @@ impl<'a> TypeChecker<'a> {
             vec![inner_ty.clone()]
         };
 
-        let columns = params
+        let lambda_columns = params
             .iter()
             .zip(inner_tys.iter())
             .map(|(col, ty)| (col.clone(), ty.clone()))
             .collect::<Vec<_>>();
 
+        let mut lambda_context = self.bind_context.clone();
         let box (lambda_expr, lambda_type) = parse_lambda_expr(
             self.ctx.clone(),
-            self.bind_context.clone(),
-            &columns,
+            &mut lambda_context,
+            &lambda_columns,
             &lambda.expr,
         )?;
 
@@ -2035,20 +2039,24 @@ impl<'a> TypeChecker<'a> {
             _ => {
                 struct LambdaVisitor<'a> {
                     bind_context: &'a BindContext,
+                    arg_index: HashSet<IndexType>,
                     args: Vec<ScalarExpr>,
                     fields: Vec<DataField>,
                 }
 
                 impl<'a> ScalarVisitor<'a> for LambdaVisitor<'a> {
                     fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
-                        let contains = self
+                        if self.arg_index.contains(&col.column.index) {
+                            return Ok(());
+                        }
+                        self.arg_index.insert(col.column.index);
+                        let is_outer_column = self
                             .bind_context
                             .all_column_bindings()
                             .iter()
                             .map(|c| c.index)
                             .contains(&col.column.index);
-                        // add outer scope columns first
-                        if contains {
+                        if is_outer_column {
                             let arg = ScalarExpr::BoundColumnRef(col.clone());
                             self.args.push(arg);
                             let field = DataField::new(
@@ -2061,24 +2069,30 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
 
+                // Collect outer scope columns as arguments first.
                 let mut lambda_visitor = LambdaVisitor {
                     bind_context: self.bind_context,
+                    arg_index: HashSet::new(),
                     args: Vec::new(),
                     fields: Vec::new(),
                 };
                 lambda_visitor.visit(&lambda_expr)?;
 
-                // add lambda columns at end
-                let mut fields = lambda_visitor.fields.clone();
-                let column_len = self.bind_context.all_column_bindings().len();
-                for (i, inner_ty) in inner_tys.into_iter().enumerate() {
-                    let lambda_field = DataField::new(&format!("{}", column_len + i), inner_ty);
-                    fields.push(lambda_field);
+                let mut lambda_args = mem::take(&mut lambda_visitor.args);
+                lambda_args.push(arg);
+                let mut lambda_fields = mem::take(&mut lambda_visitor.fields);
+                // Add lambda columns as arguments at end.
+                for (lambda_column_name, lambda_column_type) in lambda_columns.into_iter() {
+                    for column in lambda_context.all_column_bindings().iter().rev() {
+                        if column.column_name == lambda_column_name {
+                            let lambda_field =
+                                DataField::new(&format!("{}", column.index), lambda_column_type);
+                            lambda_fields.push(lambda_field);
+                            break;
+                        }
+                    }
                 }
-                let lambda_schema = DataSchema::new(fields);
-                let mut args = lambda_visitor.args.clone();
-                args.push(arg);
-
+                let lambda_schema = DataSchema::new(lambda_fields);
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
                     .project_column_ref(|index| {
@@ -2092,7 +2106,7 @@ impl<'a> TypeChecker<'a> {
                     LambdaFunc {
                         span,
                         func_name: func_name.to_string(),
-                        args,
+                        args: lambda_args,
                         lambda_expr: Box::new(remote_lambda_expr),
                         lambda_display,
                         return_type: Box::new(return_type.clone()),
