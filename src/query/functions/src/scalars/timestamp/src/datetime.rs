@@ -374,6 +374,15 @@ fn string_to_format_timestamp(
         let _ = tm.set_second(Some(0));
     }
 
+    if !ctx.func_ctx.enable_strict_datetime_parser {
+        if tm.day().is_none() {
+            let _ = tm.set_day(Some(1));
+        }
+        if tm.month().is_none() {
+            let _ = tm.set_month(Some(1));
+        }
+    }
+
     let z = if tm.offset().is_none() {
         ctx.func_ctx.tz.to_zoned(tm.to_datetime().map_err(|err| {
             ErrorCode::BadArguments(format!("{timestamp} to datetime error {err}"))
