@@ -366,13 +366,14 @@ pub fn parse_lambda_expr(
     // The column index may not be consecutive, and the length of columns
     // cannot be used to calculate the column index of the lambda argument.
     // We need to start from the current largest column index.
-    let mut column_index = 0;
-    for column in lambda_context.all_column_bindings().iter().rev() {
-        if column.index >= column_index {
-            column_index = column.index + 1;
-        }
-    }
+    let mut column_index = lambda_context
+        .all_column_bindings()
+        .iter()
+        .map(|c| c.index)
+        .max()
+        .unwrap_or_default();
     for (lambda_column, lambda_column_type) in lambda_columns.iter() {
+        column_index += 1;
         lambda_context.add_column_binding(
             ColumnBindingBuilder::new(
                 lambda_column.clone(),
@@ -382,7 +383,6 @@ pub fn parse_lambda_expr(
             )
             .build(),
         );
-        column_index += 1;
     }
 
     let settings = ctx.get_settings();
