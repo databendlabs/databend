@@ -3933,7 +3933,7 @@ Functions overloads:
 34 to_string(Bitmap NULL) :: String NULL
 35 to_string(Geometry) :: String
 36 to_string(Geometry NULL) :: String NULL
-37 to_string(Interval) :: String NULL
+37 to_string(Interval) :: String
 38 to_string(Interval NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
