@@ -1227,9 +1227,11 @@ fn register_diff_functions(registry: &mut FunctionRegistry) {
             let rm = rhs.max;
             let rn = rhs.min;
 
+            let min = EvalMonthsImpl::months_between(ln, rm);
+            let max = EvalMonthsImpl::months_between(lm, rn);
             FunctionDomain::Domain(SimpleDomain::<F64> {
-                min: EvalMonthsImpl::months_between(ln, rm).into(),
-                max: EvalMonthsImpl::months_between(lm, rn).into(),
+                min: min.into(),
+                max: max.into(),
             })
         },
         vectorize_2_arg::<DateType, DateType, Float64Type>(|a, b, _ctx| {
