@@ -230,25 +230,17 @@ impl EvalMonthsImpl {
             .checked_add(SignedDuration::from_hours(date_b as i64 * 24))
             .unwrap();
 
-        let year_diff = date_a.year() - date_b.year();
-        let month_diff = date_a.month() as i16 - date_b.month() as i16;
+        let year_diff = (date_a.year() - date_b.year()) as i64;
+        let month_diff = date_a.month() as i64 - date_b.month() as i64;
 
         // Calculate total months difference
         let total_months_diff = year_diff * 12 + month_diff;
 
         // Determine if special case for fractional part applies
         let is_same_day_of_month = date_a.day() == date_b.day();
-        let are_both_end_of_month = date_a
-            .checked_add(SignedDuration::from_hours(24))
-            .unwrap()
-            .month()
-            != date_a.month()
-            && date_b
-                .checked_add(SignedDuration::from_hours(24))
-                .unwrap()
-                .month()
-                != date_b.month();
 
+        let are_both_end_of_month =
+            date_a.last_of_month() == date_a && date_b.last_of_month() == date_b;
         let day_fraction = if is_same_day_of_month || are_both_end_of_month {
             0.0
         } else {
