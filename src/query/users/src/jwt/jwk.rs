@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -97,7 +98,7 @@ pub struct JwkKeys {
 
 pub struct JwkKeyStore {
     url: String,
-    cached_keys: Arc<RwLock<HashMap<String, PubKey>>>,
+    recent_cached_keys: Arc<RwLock<VecDeque<HashMap<String, PubKey>>>>,
     last_refreshed_time: RwLock<Option<Instant>>,
     last_peeked_time: RwLock<Option<Instant>>,
     refresh_interval: Duration,
@@ -109,7 +110,7 @@ impl JwkKeyStore {
     pub fn new(url: String) -> Self {
         Self {
             url,
-            cached_keys: Arc::new(RwLock::new(HashMap::new())),
+            recent_cached_keys: Arc::new(RwLock::new(VecDeque::new())),
             refresh_interval: Duration::from_secs(JWKS_REFRESH_INTERVAL),
             refresh_timeout: Duration::from_secs(JWKS_REFRESH_TIMEOUT),
             last_refreshed_time: RwLock::new(None),
@@ -170,16 +171,22 @@ impl JwkKeyStore {
     }
 
     #[async_backtrace::framed]
-    async fn maybe_refresh_cached_keys(&self, force: bool) -> Result<HashMap<String, PubKey>> {
+    async fn maybe_refresh_cached_keys(&self, force: bool) -> Result<()> {
         let need_reload = force
             || match *self.last_refreshed_time.read() {
                 None => true,
                 Some(last_refreshed_at) => last_refreshed_at.elapsed() > self.refresh_interval,
             };
 
-        let old_keys = self.cached_keys.read().clone();
+        let old_keys = self
+            .recent_cached_keys
+            .read()
+            .iter()
+            .last()
+            .cloned()
+            .unwrap_or(HashMap::new());
         if !need_reload {
-            return Ok(old_keys);
+            return Ok(());
         }
 
         // if got network issues on loading JWKS, fallback to the cached keys if available
@@ -188,19 +195,32 @@ impl JwkKeyStore {
             Err(err) => {
                 warn!("Failed to load JWKS: {}", err);
                 if !old_keys.is_empty() {
-                    return Ok(old_keys);
+                    return Ok(());
                 }
                 return Err(err.add_message("failed to load JWKS keys, and no available fallback"));
             }
         };
 
-        // the JWKS keys are not always changes, but when it changed, we can have a log about this.
-        if !new_keys.keys().eq(old_keys.keys()) {
-            info!("JWKS keys changed.");
+        // if the new keys are empty, skip save it to the cache
+        if new_keys.is_empty() {
+            warn!("got empty JWKS keys, skip");
+            return Ok(());
         }
-        *self.cached_keys.write() = new_keys.clone();
+
+        // only update the cache when the keys are changed
+        if new_keys.keys().eq(old_keys.keys()) {
+            return Ok(());
+        }
+        info!("JWKS keys changed.");
+
+        // append the new keys to the end of recent_cached_keys
+        let mut recent_cached_keys = self.recent_cached_keys.write();
+        recent_cached_keys.push_back(new_keys);
+        if recent_cached_keys.len() > 5 {
+            recent_cached_keys.pop_front();
+        }
         self.last_refreshed_time.write().replace(Instant::now());
-        Ok(new_keys)
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -211,8 +231,11 @@ impl JwkKeyStore {
         let key_id = match &key_id {
             Some(key_id) => key_id.clone(),
             None => {
-                let cached_keys = self.cached_keys.read();
-                let first_key = cached_keys.iter().next();
+                let cached_keys = self.recent_cached_keys.read();
+                let first_key = cached_keys
+                    .iter()
+                    .last()
+                    .and_then(|keys| keys.iter().next());
                 if let Some((_, pub_key)) = first_key {
                     return Ok(pub_key.clone());
                 } else {
@@ -226,8 +249,10 @@ impl JwkKeyStore {
         // if the key is not found, try to refresh the keys and try again. this refresh only
         // happens once within 5 seconds.
         for _ in 0..2 {
-            if let Some(key) = self.cached_keys.read().get(&key_id) {
-                return Ok(key.clone());
+            for keys in self.recent_cached_keys.read().iter().rev() {
+                if let Some(key) = keys.get(&key_id) {
+                    return Ok(key.clone());
+                }
             }
 
             let need_peek = match *self.last_peeked_time.read() {
