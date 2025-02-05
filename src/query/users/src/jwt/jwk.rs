@@ -96,12 +96,12 @@ pub struct JwkKeys {
 }
 
 pub struct JwkKeyStore {
-    pub(crate) url: String,
+    url: String,
     cached_keys: Arc<RwLock<HashMap<String, PubKey>>>,
-    pub(crate) last_refreshed_at: RwLock<Option<Instant>>,
-    pub(crate) refresh_interval: Duration,
-    pub(crate) refresh_timeout: Duration,
-    pub(crate) load_keys_func: Option<Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>>,
+    last_refreshed_at: RwLock<Option<Instant>>,
+    refresh_interval: Duration,
+    refresh_timeout: Duration,
+    load_keys_func: Option<Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>>,
 }
 
 impl JwkKeyStore {
