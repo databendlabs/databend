@@ -1104,7 +1104,12 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs)?,
 
-            Expr::Hole { .. } => unreachable!("hole is impossible in trivial query"),
+            Expr::Hole { span, .. } => {
+                return Err(ErrorCode::SemanticError(
+                    "Hole expression is impossible in trivial query".to_string(),
+                )
+                .set_span(*span))
+            }
         };
         Ok(Box::new((scalar, data_type)))
     }

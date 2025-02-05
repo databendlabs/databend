@@ -1977,7 +1977,9 @@ pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
         },
         None => 0,
     };
-    if i_part.len() as i32 + exp > 76 {
+
+    let p = i_part.len() as i32 + exp - f_part.len() as i32;
+    if !(-76..=76).contains(&p) {
         Ok(Literal::Float64(fast_float2::parse(text)?))
     } else {
         let mut digits = String::with_capacity(76);
