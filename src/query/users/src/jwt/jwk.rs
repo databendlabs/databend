@@ -99,14 +99,14 @@ pub struct JwkKeys {
 /// [`JwkKeyStore`] is a store for JWKS keys, it will cache the keys for a while and refresh the
 /// keys periodically. When the keys are refreshed, the older keys will still be kept for a while.
 ///
-/// When the keys rorated in the client side first, the server will respond a 401 Authorization Failure
+/// When the keys rotated in the client side first, the server will respond a 401 Authorization Failure
 /// error, as the key is not found in the cache. We'll try to refresh the keys and try again.
 pub struct JwkKeyStore {
     url: String,
     recent_cached_maps: Arc<RwLock<VecDeque<HashMap<String, PubKey>>>>,
-    max_recent_cached_maps: usize,
     last_refreshed_time: RwLock<Option<Instant>>,
     last_retry_time: RwLock<Option<Instant>>,
+    max_recent_cached_maps: usize,
     refresh_interval: Duration,
     refresh_timeout: Duration,
     retry_interval: Duration,
