@@ -175,9 +175,11 @@ impl JwkKeyStore {
             .map_err(|e| {
                 ErrorCode::InvalidConfig(format!("Failed to create jwks client: {}", e))
             })?;
-        let response = client.get(&self.url).send().await.map_err(|e| {
-            ErrorCode::AuthenticateFailure(format!("Could not download JWKS: {}", e))
-        })?;
+        let response = client
+            .get(&self.url)
+            .send()
+            .await
+            .map_err(|e| ErrorCode::Internal(format!("Could not download JWKS: {}", e)))?;
         let jwk_keys: JwkKeys = response
             .json()
             .await
