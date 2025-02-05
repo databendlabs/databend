@@ -235,10 +235,12 @@ impl JwkKeyStore {
         info!("JWKS keys changed.");
 
         // append the new keys to the end of recent_cached_maps
-        let mut recent_cached_maps = self.recent_cached_maps.write();
-        recent_cached_maps.push_back(new_keys);
-        if recent_cached_maps.len() > self.max_recent_cached_maps {
-            recent_cached_maps.pop_front();
+        {
+            let mut recent_cached_maps = self.recent_cached_maps.write();
+            recent_cached_maps.push_back(new_keys);
+            if recent_cached_maps.len() > self.max_recent_cached_maps {
+                recent_cached_maps.pop_front();
+            }
         }
         self.last_refreshed_time.write().replace(Instant::now());
         Ok(())
