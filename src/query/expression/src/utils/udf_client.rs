@@ -251,7 +251,11 @@ impl UDFFlightClient {
         let record_batch_stream = FlightRecordBatchStream::new_from_flight_data(
             flight_data_stream.map_err(|err| err.into()),
         )
-        .map_err(|err| ErrorCode::UDFDataError(format!("Decode record batch error: {err}")));
+        .map_err(|err| {
+            ErrorCode::UDFDataError(format!(
+                "Decode record batch failed on UDF Function {func_name} from UDF server: {err}"
+            ))
+        });
 
         let batches: Vec<RecordBatch> = record_batch_stream.try_collect().await?;
         if batches.is_empty() {
