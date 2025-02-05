@@ -118,7 +118,7 @@ impl JwkKeyStore {
         Self {
             url,
             recent_cached_maps: Arc::new(RwLock::new(VecDeque::new())),
-            max_recent_cached_maps: 3,
+            max_recent_cached_maps: 2,
             refresh_interval: Duration::from_secs(JWKS_REFRESH_INTERVAL),
             refresh_timeout: Duration::from_secs(JWKS_REFRESH_TIMEOUT),
             retry_interval: Duration::from_secs(2),
@@ -144,6 +144,16 @@ impl JwkKeyStore {
 
     pub fn with_refresh_timeout(mut self, timeout: u64) -> Self {
         self.refresh_timeout = Duration::from_secs(timeout);
+        self
+    }
+
+    pub fn with_max_recent_cached_maps(mut self, max: usize) -> Self {
+        self.max_recent_cached_maps = max;
+        self
+    }
+
+    pub fn with_retry_interval(mut self, interval: u64) -> Self {
+        self.retry_interval = Duration::from_secs(interval);
         self
     }
 
@@ -233,7 +243,7 @@ impl JwkKeyStore {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_key(&self, key_id: Option<String>) -> Result<PubKey> {
+    pub async fn get_key(&self, key_id: &Option<String>) -> Result<Option<PubKey>> {
         self.maybe_refresh_cached_keys(false).await?;
 
         // if the key_id is not set, and there is only one key in the store, return it
@@ -246,7 +256,7 @@ impl JwkKeyStore {
                     .last()
                     .and_then(|keys| keys.iter().next());
                 if let Some((_, pub_key)) = first_key {
-                    return Ok(pub_key.clone());
+                    return Ok(Some(pub_key.clone()));
                 } else {
                     return Err(ErrorCode::AuthenticateFailure(
                         "must specify key_id for jwt when multi keys exists ",
@@ -260,7 +270,7 @@ impl JwkKeyStore {
         for _ in 0..2 {
             for keys_map in self.recent_cached_maps.read().iter().rev() {
                 if let Some(key) = keys_map.get(&key_id) {
-                    return Ok(key.clone());
+                    return Ok(Some(key.clone()));
                 }
             }
             let need_retry = match *self.last_retry_time.read() {
@@ -277,10 +287,6 @@ impl JwkKeyStore {
             }
         }
 
-        // found the key in the store, happy path
-        Err(ErrorCode::AuthenticateFailure(format!(
-            "key id {} not found in jwk store",
-            key_id
-        )))
+        Ok(None)
     }
 }
