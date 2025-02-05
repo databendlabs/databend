@@ -596,8 +596,19 @@ impl<'a> TypeChecker<'a> {
                 if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
                     return Ok(constant);
                 }
+
+                let is_variant_cast = data_type.remove_nullable() == DataType::Variant
+                    && matches!(
+                        checked_expr.data_type().remove_nullable(),
+                        DataType::Boolean
+                            | DataType::Number(_)
+                            | DataType::String
+                            | DataType::Date
+                            | DataType::Timestamp
+                    );
                 // if the source type is nullable, cast target type should also be nullable.
-                let target_type = if data_type.is_nullable_or_null() {
+                // cast variant to other type should be nullable, as we cast JSON null to SQL NULL.
+                let target_type = if data_type.is_nullable_or_null() || is_variant_cast {
                     checked_expr.data_type().wrap_nullable()
                 } else {
                     checked_expr.data_type().clone()

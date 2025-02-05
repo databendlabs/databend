@@ -740,6 +740,21 @@ pub fn get_simple_cast_function(
     {
         // parse JSON string to variant instead of cast
         "parse_json".to_owned()
+    } else if src_type.remove_nullable() == DataType::Variant
+        && matches!(
+            dest_type.remove_nullable(),
+            DataType::Boolean
+                | DataType::Number(_)
+                | DataType::String
+                | DataType::Date
+                | DataType::Timestamp
+        )
+    {
+        // allow cast variant to other types as nullable
+        format!(
+            "to_{}",
+            dest_type.remove_nullable().to_string().to_lowercase()
+        )
     } else {
         format!("to_{}", dest_type.to_string().to_lowercase())
     };
