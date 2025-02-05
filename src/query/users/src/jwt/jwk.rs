@@ -98,7 +98,8 @@ pub struct JwkKeys {
 pub struct JwkKeyStore {
     url: String,
     cached_keys: Arc<RwLock<HashMap<String, PubKey>>>,
-    last_refreshed_at: RwLock<Option<Instant>>,
+    last_refreshed_time: RwLock<Option<Instant>>,
+    last_peeked_time: RwLock<Option<Instant>>,
     refresh_interval: Duration,
     refresh_timeout: Duration,
     load_keys_func: Option<Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>>,
@@ -111,7 +112,8 @@ impl JwkKeyStore {
             cached_keys: Arc::new(RwLock::new(HashMap::new())),
             refresh_interval: Duration::from_secs(JWKS_REFRESH_INTERVAL),
             refresh_timeout: Duration::from_secs(JWKS_REFRESH_TIMEOUT),
-            last_refreshed_at: RwLock::new(None),
+            last_refreshed_time: RwLock::new(None),
+            last_peeked_time: RwLock::new(None),
             load_keys_func: None,
         }
     }
@@ -168,9 +170,9 @@ impl JwkKeyStore {
     }
 
     #[async_backtrace::framed]
-    async fn load_keys_with_cache(&self, force: bool) -> Result<HashMap<String, PubKey>> {
+    async fn maybe_refresh_cached_keys(&self, force: bool) -> Result<HashMap<String, PubKey>> {
         let need_reload = force
-            || match *self.last_refreshed_at.read() {
+            || match *self.last_refreshed_time.read() {
                 None => true,
                 Some(last_refreshed_at) => last_refreshed_at.elapsed() > self.refresh_interval,
             };
@@ -197,34 +199,59 @@ impl JwkKeyStore {
             info!("JWKS keys changed.");
         }
         *self.cached_keys.write() = new_keys.clone();
-        self.last_refreshed_at.write().replace(Instant::now());
+        self.last_refreshed_time.write().replace(Instant::now());
         Ok(new_keys)
     }
 
     #[async_backtrace::framed]
     pub async fn get_key(&self, key_id: Option<String>) -> Result<PubKey> {
-        let keys = self.load_keys_with_cache(false).await?;
+        self.maybe_refresh_cached_keys(false).await?;
 
         // if the key_id is not set, and there is only one key in the store, return it
-        let key_id = match key_id {
-            Some(key_id) => key_id,
+        let key_id = match &key_id {
+            Some(key_id) => key_id.clone(),
             None => {
-                if keys.len() != 1 {
+                let cached_keys = self.cached_keys.read();
+                let first_key = cached_keys.iter().next();
+                if let Some((_, pub_key)) = first_key {
+                    return Ok(pub_key.clone());
+                } else {
                     return Err(ErrorCode::AuthenticateFailure(
                         "must specify key_id for jwt when multi keys exists ",
                     ));
-                } else {
-                    return Ok((keys.iter().next().unwrap().1).clone());
                 }
             }
         };
 
-        match keys.get(&key_id) {
-            None => Err(ErrorCode::AuthenticateFailure(format!(
-                "key id {} not found in jwk store",
-                key_id
-            ))),
-            Some(key) => Ok(key.clone()),
+        // found the key in the store, happy path
+        if let Some(key) = self.cached_keys.read().get(&key_id) {
+            return Ok(key.clone());
         }
+
+        // if the key is not found, try to refresh the keys and try again. this refresh only
+        // happens once within 5 seconds.
+        let need_peek = match *self.last_peeked_time.read() {
+            None => true,
+            Some(last_peeked_at) => last_peeked_at.elapsed() > Duration::from_secs(5),
+        };
+        if need_peek {
+            warn!(
+                "key id {} not found in jwk store, try to peek the latest keys",
+                key_id
+            );
+            self.maybe_refresh_cached_keys(true).await?;
+            *self.last_peeked_time.write() = Some(Instant::now());
+        }
+
+        // have another try
+        if let Some(key) = self.cached_keys.read().get(&key_id) {
+            return Ok(key.clone());
+        }
+
+        // found the key in the store, happy path
+        Err(ErrorCode::AuthenticateFailure(format!(
+            "key id {} not found in jwk store",
+            key_id
+        )))
     }
 }
