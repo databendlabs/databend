@@ -410,7 +410,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "ltrim",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            output.put_and_commit(val.trim_start());
+            output.put_and_commit(val.trim_start_matches(' '));
         }),
     );
 
@@ -418,7 +418,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "rtrim",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            output.put_and_commit(val.trim_end());
+            output.put_and_commit(val.trim_end_matches(' '));
         }),
     );
 
@@ -426,7 +426,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         "trim",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<StringType, StringType>(|val, output, _| {
-            output.put_and_commit(val.trim());
+            output.put_and_commit(val.trim_matches(' '));
         }),
     );
 
@@ -440,7 +440,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
 
-                output.put_and_commit(val.trim_start_matches(trim_str));
+                let p: Vec<_> = trim_str.chars().collect();
+                output.put_and_commit(val.trim_start_matches(p.as_slice()));
             },
         ),
     );
@@ -470,7 +471,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
 
-                output.put_and_commit(val.trim_end_matches(trim_str));
+                let p: Vec<_> = trim_str.chars().collect();
+                output.put_and_commit(val.trim_end_matches(p.as_slice()));
             },
         ),
     );
@@ -510,6 +512,22 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
 
                 output.put_and_commit(res);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, StringType, _, _>(
+        "trim",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<StringType, StringType, StringType>(
+            |val, trim_str, output, _| {
+                if trim_str.is_empty() {
+                    output.put_and_commit(val);
+                    return;
+                }
+
+                let p: Vec<_> = trim_str.chars().collect();
+                output.put_and_commit(val.trim_matches(p.as_slice()));
             },
         ),
     );
