@@ -3009,6 +3009,16 @@ impl<'a> TypeChecker<'a> {
                     &[date],
                 )
             }
+            ASTIntervalKind::Week => {
+                self.resolve_function(
+                    span,
+                    "to_start_of_week", vec![],
+                    &[date, &Expr::Literal {
+                        span: None,
+                        value: Literal::UInt64(1)
+                    }],
+                )
+            }
             ASTIntervalKind::Day => {
                 self.resolve_function(
                     span,

@@ -272,6 +272,16 @@ SELECT max(MONTHS_BETWEEN(mine_date, birth_date))/12 as demo_age FROM t GROUP BY
 statement ok
 drop table if exists t;
 
+query T
+select date_trunc('month', '2025-02-05 00:01:00');
+----
+2025-02-01
+
+query T
+select date_trunc('week', '2025-02-05 00:01:00');
+----
+2025-02-03
+
 query FF
 SELECT
     MONTHS_BETWEEN('2019-03-15'::DATE,

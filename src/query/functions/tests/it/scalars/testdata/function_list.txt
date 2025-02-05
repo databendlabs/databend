@@ -4090,6 +4090,8 @@ Functions overloads:
 1 translate(String NULL, String NULL, String NULL) :: String NULL
 0 trim(String) :: String
 1 trim(String NULL) :: String NULL
+2 trim(String, String) :: String
+3 trim(String NULL, String NULL) :: String NULL
 0 trim_both(String, String) :: String
 1 trim_both(String NULL, String NULL) :: String NULL
 0 trim_leading(String, String) :: String
