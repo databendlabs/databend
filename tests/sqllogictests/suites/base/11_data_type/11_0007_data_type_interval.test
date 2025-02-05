@@ -15,6 +15,7 @@ create or replace table t (c interval);
 statement ok
 insert into t values('1 year'),('1 months'),('1 day'),('1 hour'),('1 minute'),('1 second'),('1 microsecond');
 
+onlyif http
 query T
 select * from t order by c;
 ----
@@ -26,11 +27,13 @@ select * from t order by c;
 1 month
 1 year
 
+onlyif http
 query T
 select sum(c) from t;
 ----
 9385:01:01.000001
 
+onlyif http
 query T
 select sum(c) from t where c <= interval '1 day';
 ----

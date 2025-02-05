@@ -283,8 +283,7 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
         other: months_days_micros,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let sum = self.value.total_micros() + other.total_micros();
-        self.value = months_days_micros(sum as i128);
+        self.value += other;
         Ok(())
     }
 
@@ -294,24 +293,23 @@ impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
         validity: Option<&Bitmap>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        let mut sum = self.value.total_micros();
         let col = IntervalType::upcast_column(other);
         let buffer = IntervalType::try_downcast_column(&col).unwrap();
         match validity {
             Some(validity) if validity.null_count() > 0 => {
                 buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
                     if b {
-                        sum += t.total_micros();
+                        self.value += *t;
                     }
                 });
             }
             _ => {
                 buffer.iter().for_each(|t| {
-                    sum += t.total_micros();
+                    self.value += *t;
                 });
             }
         }
-        self.value = months_days_micros(sum as i128);
+
         Ok(())
     }
 

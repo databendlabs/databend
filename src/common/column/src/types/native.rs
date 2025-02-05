@@ -17,6 +17,8 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::ops::Add;
+use std::ops::AddAssign;
 use std::ops::Neg;
 use std::panic::RefUnwindSafe;
 
@@ -267,6 +269,26 @@ impl NativeType for days_ms {
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct months_days_micros(pub i128);
+
+impl Add for months_days_micros {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let add_months = self.months() + rhs.months();
+        let add_days = self.days() + rhs.days();
+        let add_micros = self.microseconds() + rhs.microseconds();
+        Self::new(add_months, add_days, add_micros)
+    }
+}
+
+impl AddAssign for months_days_micros {
+    fn add_assign(&mut self, rhs: Self) {
+        let add_months = self.months() + rhs.months();
+        let add_days = self.days() + rhs.days();
+        let add_micros = self.microseconds() + rhs.microseconds();
+        self.0 = months_days_micros::new(add_months, add_days, add_micros).0
+    }
+}
 
 impl Hash for months_days_micros {
     fn hash<H: Hasher>(&self, state: &mut H) {
