@@ -223,29 +223,25 @@ impl JwkKeyStore {
             }
         };
 
-        // found the key in the store, happy path
-        if let Some(key) = self.cached_keys.read().get(&key_id) {
-            return Ok(key.clone());
-        }
-
         // if the key is not found, try to refresh the keys and try again. this refresh only
         // happens once within 5 seconds.
-        let need_peek = match *self.last_peeked_time.read() {
-            None => true,
-            Some(last_peeked_at) => last_peeked_at.elapsed() > Duration::from_secs(5),
-        };
-        if need_peek {
-            warn!(
-                "key id {} not found in jwk store, try to peek the latest keys",
-                key_id
-            );
-            self.maybe_refresh_cached_keys(true).await?;
-            *self.last_peeked_time.write() = Some(Instant::now());
-        }
+        for _ in 0..2 {
+            if let Some(key) = self.cached_keys.read().get(&key_id) {
+                return Ok(key.clone());
+            }
 
-        // have another try
-        if let Some(key) = self.cached_keys.read().get(&key_id) {
-            return Ok(key.clone());
+            let need_peek = match *self.last_peeked_time.read() {
+                None => true,
+                Some(last_peeked_at) => last_peeked_at.elapsed() > Duration::from_secs(5),
+            };
+            if need_peek {
+                warn!(
+                    "key id {} not found in jwk store, try to peek the latest keys",
+                    key_id
+                );
+                self.maybe_refresh_cached_keys(true).await?;
+                *self.last_peeked_time.write() = Some(Instant::now());
+            }
         }
 
         // found the key in the store, happy path
