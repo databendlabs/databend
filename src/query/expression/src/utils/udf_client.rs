@@ -253,7 +253,7 @@ impl UDFFlightClient {
         )
         .map_err(|err| {
             ErrorCode::UDFDataError(format!(
-                "Decode record batch failed on UDF Function {func_name} from UDF server: {err}"
+                "Decode record batch failed on UDF function {func_name}: {err}"
             ))
         });
 
