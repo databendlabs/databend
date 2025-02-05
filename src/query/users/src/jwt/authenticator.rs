@@ -128,6 +128,7 @@ impl JwtAuthenticator {
             Some(_) => Ok(c),
         }
     }
+
     #[async_backtrace::framed]
     pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
         let mut combined_code = ErrorCode::AuthenticateFailure(
