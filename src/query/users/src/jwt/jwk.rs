@@ -96,13 +96,20 @@ pub struct JwkKeys {
     pub keys: Vec<JwkKey>,
 }
 
+/// [`JwkKeyStore`] is a store for JWKS keys, it will cache the keys for a while and refresh the
+/// keys periodically. When the keys are refreshed, the older keys will still be kept for a while.
+///
+/// When the keys rorated in the client side first, the server will respond a 401 Authorization Failure
+/// error, as the key is not found in the cache. We'll try to refresh the keys and try again.
 pub struct JwkKeyStore {
     url: String,
-    recent_cached_keys: Arc<RwLock<VecDeque<HashMap<String, PubKey>>>>,
+    recent_cached_maps: Arc<RwLock<VecDeque<HashMap<String, PubKey>>>>,
+    max_recent_cached_maps: usize,
     last_refreshed_time: RwLock<Option<Instant>>,
-    last_peeked_time: RwLock<Option<Instant>>,
+    last_retry_time: RwLock<Option<Instant>>,
     refresh_interval: Duration,
     refresh_timeout: Duration,
+    retry_interval: Duration,
     load_keys_func: Option<Arc<dyn Fn() -> HashMap<String, PubKey> + Send + Sync>>,
 }
 
@@ -110,11 +117,13 @@ impl JwkKeyStore {
     pub fn new(url: String) -> Self {
         Self {
             url,
-            recent_cached_keys: Arc::new(RwLock::new(VecDeque::new())),
+            recent_cached_maps: Arc::new(RwLock::new(VecDeque::new())),
+            max_recent_cached_maps: 3,
             refresh_interval: Duration::from_secs(JWKS_REFRESH_INTERVAL),
             refresh_timeout: Duration::from_secs(JWKS_REFRESH_TIMEOUT),
+            retry_interval: Duration::from_secs(2),
             last_refreshed_time: RwLock::new(None),
-            last_peeked_time: RwLock::new(None),
+            last_retry_time: RwLock::new(None),
             load_keys_func: None,
         }
     }
@@ -179,7 +188,7 @@ impl JwkKeyStore {
             };
 
         let old_keys = self
-            .recent_cached_keys
+            .recent_cached_maps
             .read()
             .iter()
             .last()
@@ -213,11 +222,11 @@ impl JwkKeyStore {
         }
         info!("JWKS keys changed.");
 
-        // append the new keys to the end of recent_cached_keys
-        let mut recent_cached_keys = self.recent_cached_keys.write();
-        recent_cached_keys.push_back(new_keys);
-        if recent_cached_keys.len() > 5 {
-            recent_cached_keys.pop_front();
+        // append the new keys to the end of recent_cached_maps
+        let mut recent_cached_maps = self.recent_cached_maps.write();
+        recent_cached_maps.push_back(new_keys);
+        if recent_cached_maps.len() > self.max_recent_cached_maps {
+            recent_cached_maps.pop_front();
         }
         self.last_refreshed_time.write().replace(Instant::now());
         Ok(())
@@ -231,8 +240,8 @@ impl JwkKeyStore {
         let key_id = match &key_id {
             Some(key_id) => key_id.clone(),
             None => {
-                let cached_keys = self.recent_cached_keys.read();
-                let first_key = cached_keys
+                let cached_maps = self.recent_cached_maps.read();
+                let first_key = cached_maps
                     .iter()
                     .last()
                     .and_then(|keys| keys.iter().next());
@@ -247,25 +256,24 @@ impl JwkKeyStore {
         };
 
         // if the key is not found, try to refresh the keys and try again. this refresh only
-        // happens once within 5 seconds.
+        // happens once within retry interval (default 2s).
         for _ in 0..2 {
-            for keys in self.recent_cached_keys.read().iter().rev() {
-                if let Some(key) = keys.get(&key_id) {
+            for keys_map in self.recent_cached_maps.read().iter().rev() {
+                if let Some(key) = keys_map.get(&key_id) {
                     return Ok(key.clone());
                 }
             }
-
-            let need_peek = match *self.last_peeked_time.read() {
+            let need_retry = match *self.last_retry_time.read() {
                 None => true,
-                Some(last_peeked_at) => last_peeked_at.elapsed() > Duration::from_secs(5),
+                Some(last_retry_time) => last_retry_time.elapsed() > self.retry_interval,
             };
-            if need_peek {
+            if need_retry {
                 warn!(
                     "key id {} not found in jwk store, try to peek the latest keys",
                     key_id
                 );
                 self.maybe_refresh_cached_keys(true).await?;
-                *self.last_peeked_time.write() = Some(Instant::now());
+                *self.last_retry_time.write() = Some(Instant::now());
             }
         }
 
