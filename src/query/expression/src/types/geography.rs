@@ -29,8 +29,7 @@ use geozero::ToWkt;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::binary::BinaryLike;
-use super::binary::BinaryLikeIterator;
+use super::binary::BinaryColumnIter;
 use crate::property::Domain;
 use crate::types::binary::BinaryColumn;
 use crate::types::binary::BinaryColumnBuilder;
@@ -67,7 +66,7 @@ impl Geography {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GeographyRef<'a>(pub &'a [u8]);
 
-impl<'a> GeographyRef<'a> {
+impl GeographyRef<'_> {
     pub fn to_owned(&self) -> Geography {
         Geography(self.0.to_owned())
     }
@@ -83,9 +82,9 @@ impl<'a> GeographyRef<'a> {
     }
 }
 
-impl<'a> BinaryLike<'a> for GeographyRef<'a> {
-    fn from(value: &'a [u8]) -> Self {
-        GeographyRef(value)
+impl AsRef<[u8]> for GeographyRef<'_> {
+    fn as_ref(&self) -> &[u8] {
+        self.0
     }
 }
 
@@ -281,16 +280,26 @@ impl GeographyColumn {
     }
 
     pub fn iter(&self) -> GeographyIterator<'_> {
-        BinaryLikeIterator {
-            data: &self.0.data,
-            offsets: self.0.offsets.windows(2),
-            _t: std::marker::PhantomData,
+        GeographyIterator {
+            inner: self.0.iter(),
         }
     }
 
     pub fn check_valid(&self) -> Result<()> {
-        self.0.check_valid()
+        Ok(self.0.check_valid()?)
     }
 }
 
-pub type GeographyIterator<'a> = BinaryLikeIterator<'a, GeographyRef<'a>>;
+pub struct GeographyIterator<'a> {
+    inner: BinaryColumnIter<'a>,
+}
+
+impl<'a> Iterator for GeographyIterator<'a> {
+    type Item = GeographyRef<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(GeographyRef)
+    }
+}
+
+unsafe impl std::iter::TrustedLen for GeographyIterator<'_> {}

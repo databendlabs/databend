@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -22,13 +23,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use databend_common_arrow::arrow_format::flight::data::BasicAuth;
+use arrow_flight::BasicAuth;
 use databend_common_base::base::tokio::select;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::sync::mpsc::UnboundedReceiver;
 use databend_common_base::base::tokio::sync::mpsc::UnboundedSender;
 use databend_common_base::base::tokio::sync::oneshot;
-use databend_common_base::base::tokio::sync::oneshot::Receiver as OneRecv;
 use databend_common_base::base::tokio::sync::oneshot::Sender as OneSend;
 use databend_common_base::base::tokio::time::sleep;
 use databend_common_base::containers::ItemManager;
@@ -65,6 +65,7 @@ use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
 use databend_common_metrics::count::Count;
+use fastrace::func_name;
 use fastrace::func_path;
 use fastrace::future::FutureExt as MTFutureExt;
 use fastrace::Span;
@@ -139,6 +140,7 @@ impl MetaChannelManager {
         }
     }
 
+    #[async_backtrace::framed]
     async fn new_established_client(
         &self,
         addr: &String,
@@ -198,6 +200,7 @@ impl MetaChannelManager {
         (client, once)
     }
 
+    #[async_backtrace::framed]
     async fn build_channel(&self, addr: &String) -> Result<Channel, MetaNetworkError> {
         info!("MetaChannelManager::build_channel to {}", addr);
 
@@ -226,12 +229,14 @@ impl ItemManager for MetaChannelManager {
 
     #[logcall::logcall(err = "debug")]
     #[fastrace::trace]
+    #[async_backtrace::framed]
     async fn build(&self, addr: &Self::Key) -> Result<Self::Item, Self::Error> {
         self.new_established_client(addr).await
     }
 
     #[logcall::logcall(err = "debug")]
     #[fastrace::trace]
+    #[async_backtrace::framed]
     async fn check(&self, ch: Self::Item) -> Result<Self::Item, Self::Error> {
         // The underlying `tonic::transport::channel::Channel` reconnects when server is down.
         // But we still need to assert the readiness, e.g., when handshake token expires
@@ -246,17 +251,52 @@ impl ItemManager for MetaChannelManager {
 /// A handle to access meta-client worker.
 /// The worker will be actually running in a dedicated runtime: `MetaGrpcClient.rt`.
 pub struct ClientHandle {
+    /// For debug purpose only.
+    pub endpoints: Vec<String>,
     /// For sending request to meta-client worker.
     pub(crate) req_tx: UnboundedSender<ClientWorkerRequest>,
     /// Notify auto sync to stop.
     /// `oneshot::Receiver` impl `Drop` by sending a closed notification to the `Sender` half.
     #[allow(dead_code)]
-    cancel_auto_sync_rx: OneRecv<()>,
+    cancel_auto_sync_tx: oneshot::Sender<()>,
+
+    /// The reference to the dedicated runtime.
+    ///
+    /// If all ClientHandle are dropped, the runtime will be destroyed.
+    ///
+    /// In order not to let a blocking operation(such as calling the new PipelinePullingExecutor)
+    /// in a tokio runtime block meta-client background tasks.
+    /// If a background task is blocked, no meta-client will be able to proceed if meta-client is reused.
+    ///
+    /// Note that a thread_pool tokio runtime does not help:
+    /// a scheduled tokio-task resides in `filo_slot` won't be stolen by other tokio-workers.
+    ///
+    /// This `rt` previously is stored in `MetaGrpcClient`, which leads to a deadlock:
+    /// - When all `ClientHandle` are dropped, the two workers `worker_loop()` and `auto_sync_interval()`
+    ///   will quit.
+    /// - These two futures both held a reference to `MetaGrpcClient`.
+    /// - The last of these(say, `F`) two will drop `MetaGrpcClient.rt` and `Runtime::_dropper`
+    ///   will block waiting for the runtime to shut down.
+    /// - But `F` is still held, deadlock occurs.
+    _rt: Arc<Runtime>,
+}
+
+impl Display for ClientHandle {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ClientHandle({})", self.endpoints.join(","))
+    }
+}
+
+impl Drop for ClientHandle {
+    fn drop(&mut self) {
+        info!("{} handle dropped", self);
+    }
 }
 
 impl ClientHandle {
     /// Send a request to the internal worker task, which will be running in another runtime.
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub async fn request<Req, E>(&self, req: Req) -> Result<Req::Reply, E>
     where
         Req: RequestFor,
@@ -311,8 +351,8 @@ impl ClientHandle {
         };
 
         debug!(
-            worker_request :? =(&worker_request);
-            "Meta ClientHandle send request to meta client worker"
+            "{} send request to meta client worker: request: {:?}",
+            self, worker_request
         );
 
         self.req_tx.send(worker_request).map_err(|e| {
@@ -358,19 +398,23 @@ impl ClientHandle {
         res
     }
 
+    #[async_backtrace::framed]
     pub async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
         self.request(message::GetClusterStatus {}).await
     }
 
+    #[async_backtrace::framed]
     pub async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
         self.request(message::GetClientInfo {}).await
     }
 
+    #[async_backtrace::framed]
     pub async fn make_established_client(&self) -> Result<EstablishedClient, MetaClientError> {
         self.request(message::MakeEstablishedClient {}).await
     }
 
     /// Return the endpoints list cached on this client.
+    #[async_backtrace::framed]
     pub async fn get_cached_endpoints(&self) -> Result<Vec<String>, MetaError> {
         self.request(message::GetEndpoints {}).await
     }
@@ -388,16 +432,8 @@ impl ClientHandle {
 pub struct MetaGrpcClient {
     conn_pool: Pool<MetaChannelManager>,
     endpoints: Arc<Mutex<Endpoints>>,
+    endpoints_str: Vec<String>,
     auto_sync_interval: Option<Duration>,
-
-    /// Dedicated runtime to support meta client background tasks.
-    ///
-    /// In order not to let a blocking operation(such as calling the new PipelinePullingExecutor) in a tokio runtime block meta-client background tasks.
-    /// If a background task is blocked, no meta-client will be able to proceed if meta-client is reused.
-    ///
-    /// Note that a thread_pool tokio runtime does not help: a scheduled tokio-task resides in `filo_slot` won't be stolen by other tokio-workers.
-    #[allow(dead_code)]
-    rt: Arc<Runtime>,
 }
 
 impl Debug for MetaGrpcClient {
@@ -406,6 +442,12 @@ impl Debug for MetaGrpcClient {
         de.field("endpoints", &*self.endpoints.lock());
         de.field("auto_sync_interval", &self.auto_sync_interval);
         de.finish()
+    }
+}
+
+impl fmt::Display for MetaGrpcClient {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "MetaGrpcClient({})", self.endpoints_str.join(","))
     }
 }
 
@@ -433,26 +475,29 @@ impl MetaGrpcClient {
 
     #[fastrace::trace]
     pub fn try_create(
-        endpoints: Vec<String>,
+        endpoints_str: Vec<String>,
         username: &str,
         password: &str,
         timeout: Option<Duration>,
         auto_sync_interval: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
     ) -> Result<Arc<ClientHandle>, MetaClientError> {
-        Self::endpoints_non_empty(&endpoints)?;
+        Self::endpoints_non_empty(&endpoints_str)?;
 
-        let endpoints = Arc::new(Mutex::new(Endpoints::new(endpoints)));
+        let endpoints = Arc::new(Mutex::new(Endpoints::new(endpoints_str.clone())));
 
         let mgr =
             MetaChannelManager::new(username, password, timeout, tls_config, endpoints.clone());
 
-        let rt =
-            Runtime::with_worker_threads(1, Some("meta-client-rt".to_string())).map_err(|e| {
-                MetaClientError::ClientRuntimeError(
-                    AnyError::new(&e).add_context(|| "when creating meta-client"),
-                )
-            })?;
+        let rt = Runtime::with_worker_threads(
+            1,
+            Some(format!("meta-client-rt-{}", endpoints_str.join(","))),
+        )
+        .map_err(|e| {
+            MetaClientError::ClientRuntimeError(
+                AnyError::new(&e).add_context(|| "when creating meta-client"),
+            )
+        })?;
         let rt = Arc::new(rt);
 
         // Build the handle-worker pair
@@ -461,41 +506,50 @@ impl MetaGrpcClient {
         let (one_tx, one_rx) = oneshot::channel::<()>();
 
         let handle = Arc::new(ClientHandle {
+            endpoints: endpoints_str.clone(),
             req_tx: tx,
-            cancel_auto_sync_rx: one_rx,
+            cancel_auto_sync_tx: one_tx,
+            _rt: rt.clone(),
         });
 
         let worker = Arc::new(Self {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
             endpoints,
+            endpoints_str,
             auto_sync_interval,
-            rt: rt.clone(),
         });
 
-        rt.spawn(UnlimitedFuture::create(Self::worker_loop(
-            worker.clone(),
-            rx,
-        )));
-        rt.spawn(UnlimitedFuture::create(Self::auto_sync_endpoints(
-            worker, one_tx,
-        )));
+        let worker_name = worker.to_string();
+
+        rt.try_spawn(
+            UnlimitedFuture::create(Self::worker_loop(worker.clone(), rx)),
+            Some(format!("{}::worker_loop()", worker_name)),
+        )
+        .unwrap();
+
+        rt.try_spawn(
+            UnlimitedFuture::create(Self::auto_sync_endpoints(worker, one_rx)),
+            Some(format!("{}::auto_sync_endpoints()", worker_name)),
+        )
+        .unwrap();
 
         Ok(handle)
     }
 
     /// A worker runs a receiving-loop to accept user-request to metasrv and deals with request in the dedicated runtime.
     #[fastrace::trace]
+    #[async_backtrace::framed]
     async fn worker_loop(self: Arc<Self>, mut req_rx: UnboundedReceiver<ClientWorkerRequest>) {
-        info!("MetaGrpcClient::worker spawned");
+        info!("{}::worker spawned", self);
 
         loop {
             let recv_res = req_rx.recv().await;
             let Some(mut worker_request) = recv_res else {
-                warn!("MetaGrpcClient handle closed. worker quit");
+                warn!("{} handle closed. worker quit", self);
                 return;
             };
 
-            debug!(worker_request :? =(&worker_request); "MetaGrpcClient worker handle request");
+            debug!(worker_request :? =(&worker_request); "{} worker handle request", self);
 
             let _guard = ThreadTracker::tracking(worker_request.tracking_payload.take().unwrap());
             let span = Span::enter_with_parent(func_path!(), &worker_request.span);
@@ -503,7 +557,7 @@ impl MetaGrpcClient {
             if worker_request.resp_tx.is_closed() {
                 info!(
                     req :? =(&worker_request.req);
-                    "MetaGrpcClient request.resp_tx is closed, cancel handling this request"
+                    "{} request.resp_tx is closed, cancel handling this request", self
                 );
                 continue;
             }
@@ -514,22 +568,29 @@ impl MetaGrpcClient {
                 message::Request::GetEndpoints(_) => {
                     let endpoints = self.get_all_endpoints();
                     let resp = Response::GetEndpoints(Ok(endpoints));
-                    Self::send_response(worker_request.resp_tx, worker_request.request_id, resp);
+                    Self::send_response(
+                        self.clone(),
+                        worker_request.resp_tx,
+                        worker_request.request_id,
+                        resp,
+                    );
                     continue;
                 }
                 _ => {}
             }
 
-            databend_common_base::runtime::spawn(
+            databend_common_base::runtime::spawn_named(
                 self.clone()
                     .handle_rpc_request(worker_request)
                     .in_span(span),
+                format!("{}::handle_rpc_request()", self),
             );
         }
     }
 
     /// Handle a RPC request in a separate task.
     #[fastrace::trace]
+    #[async_backtrace::framed]
     async fn handle_rpc_request(self: Arc<Self>, worker_request: ClientWorkerRequest) {
         let request_id = worker_request.request_id;
         let resp_tx = worker_request.resp_tx;
@@ -600,22 +661,20 @@ impl MetaGrpcClient {
 
         self.update_rpc_metrics(req_name, &req_str, request_id, start, resp.err());
 
-        Self::send_response(resp_tx, request_id, resp);
+        Self::send_response(self.clone(), resp_tx, request_id, resp);
     }
 
-    fn send_response(tx: OneSend<Response>, request_id: u64, resp: Response) {
+    fn send_response(self: Arc<Self>, tx: OneSend<Response>, request_id: u64, resp: Response) {
         debug!(
-            request_id :? =(&request_id),
-            resp :? =(&resp);
-            "MetaGrpcClient send response to the handle"
+            "{} send response to the handle; request_id={}, resp={:?}",
+            self, request_id, resp
         );
 
         let send_res = tx.send(resp);
         if let Err(err) = send_res {
             error!(
-                request_id :% =(request_id),
-                err :? =(&err);
-                "MetaGrpcClient failed to send response to the handle. recv-end closed"
+                "{} failed to send response to the handle. recv-end closed; request_id={}, error={:?}",
+                self, request_id, err
             );
         }
     }
@@ -641,12 +700,8 @@ impl MetaGrpcClient {
 
             if elapsed > 1000_f64 {
                 warn!(
-                    request_id :% =(request_id);
-                    "MetaGrpcClient slow request {} to {} takes {} ms: {}",
-                    req_name,
-                    endpoint,
-                    elapsed,
-                    req_str,
+                    "{} slow request {} to {} takes {} ms; request_id={}; request: {}",
+                    self, req_name, endpoint, elapsed, request_id, req_str,
                 );
             }
         }
@@ -654,10 +709,7 @@ impl MetaGrpcClient {
         // Error metrics
         if let Some(err) = resp_err {
             grpc_metrics::incr_meta_grpc_client_request_failed(&endpoint, req_name, err);
-            error!(
-                request_id :% =(request_id);
-                "MetaGrpcClient error: {:?}", err
-            );
+            error!("{} request_id={} error: {:?}", self, request_id, err);
         } else {
             grpc_metrics::incr_meta_grpc_client_request_success(&endpoint, req_name);
         }
@@ -665,6 +717,7 @@ impl MetaGrpcClient {
 
     /// Return a client for communication, and a server version in form of `{major:03}.{minor:03}.{patch:03}`.
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub async fn get_established_client(&self) -> Result<EstablishedClient, MetaClientError> {
         let (endpoints_str, n) = {
             let eps = self.endpoints.lock();
@@ -672,7 +725,7 @@ impl MetaGrpcClient {
         };
         debug_assert!(n > 0);
 
-        debug!("meta-service endpoints: {}", endpoints_str);
+        debug!("{}::{}; endpoints: {}", self, func_name!(), endpoints_str);
 
         let mut last_err = None::<MetaClientError>;
 
@@ -682,7 +735,7 @@ impl MetaGrpcClient {
                 es.current_or_next().to_string()
             };
 
-            debug!("get or build ReadClient to {}", addr);
+            debug!("{} get or build ReadClient to {}", self, addr);
 
             let res = self.conn_pool.get(&addr).await;
 
@@ -730,6 +783,7 @@ impl MetaGrpcClient {
     }
 
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub async fn set_endpoints(&self, endpoints: Vec<String>) -> Result<(), MetaError> {
         Self::endpoints_non_empty(&endpoints)?;
 
@@ -753,6 +807,7 @@ impl MetaGrpcClient {
     }
 
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub async fn sync_endpoints(&self) -> Result<(), MetaError> {
         let mut client = self.get_established_client().await?;
         let result = client
@@ -782,21 +837,27 @@ impl MetaGrpcClient {
         Ok(())
     }
 
-    async fn auto_sync_endpoints(self: Arc<Self>, mut cancel_tx: OneSend<()>) {
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    async fn auto_sync_endpoints(self: Arc<Self>, mut cancel_rx: oneshot::Receiver<()>) {
         info!(
-            "start auto sync endpoints: interval: {:?}",
-            self.auto_sync_interval
+            "{} start auto_sync_endpoints: interval: {:?}",
+            self, self.auto_sync_interval
         );
+
         if let Some(interval) = self.auto_sync_interval {
             loop {
+                debug!("{} auto_sync_endpoints loop start", self);
+
                 select! {
-                    _ = cancel_tx.closed() => {
+                    _ = &mut cancel_rx => {
+                        info!("{} auto_sync_endpoints received quit signal, quit", self);
                         return;
                     }
                     _ = sleep(interval) => {
                         let r = self.sync_endpoints().await;
                         if let Err(e) = r {
-                            warn!("auto sync endpoints failed: {:?}", e);
+                            warn!("{} auto_sync_endpoints failed: {:?}", self, e);
                         }
                     }
                 }
@@ -841,6 +902,7 @@ impl MetaGrpcClient {
     /// S.ver:           2      3      4
     /// ```
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub async fn handshake(
         client: &mut RealClient,
         client_ver: &Version,
@@ -916,14 +978,12 @@ impl MetaGrpcClient {
 
     /// Create a watching stream that receives KV change events.
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub(crate) async fn watch(
         &self,
         watch_request: WatchRequest,
     ) -> Result<tonic::codec::Streaming<WatchResponse>, MetaError> {
-        debug!(
-            watch_request :? =(&watch_request);
-            "MetaGrpcClient worker: handle watch request"
-        );
+        debug!("{}: handle watch request: {:?}", self, watch_request);
 
         let mut client = self.get_established_client().await?;
         let res = client.watch(watch_request).await?;
@@ -932,13 +992,14 @@ impl MetaGrpcClient {
 
     /// Export all data in json from metasrv.
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub(crate) async fn export(
         &self,
         export_request: message::ExportReq,
     ) -> Result<tonic::codec::Streaming<ExportedChunk>, MetaError> {
         debug!(
-            export_request :? =(&export_request);
-            "MetaGrpcClient worker: handle export request"
+            "{} worker: handle export request: {:?}",
+            self, export_request
         );
 
         let mut client = self.get_established_client().await?;
@@ -957,8 +1018,9 @@ impl MetaGrpcClient {
 
     /// Get cluster status
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub(crate) async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
-        debug!("MetaGrpcClient::get_cluster_status");
+        debug!("{}::get_cluster_status", self);
 
         let mut client = self.get_established_client().await?;
         let res = client.get_cluster_status(Empty {}).await?;
@@ -967,8 +1029,9 @@ impl MetaGrpcClient {
 
     /// Export all data in json from metasrv.
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub(crate) async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
-        debug!("MetaGrpcClient::get_client_info");
+        debug!("{}::get_client_info", self);
 
         let mut client = self.get_established_client().await?;
         let res = client.get_client_info(Empty {}).await?;
@@ -976,6 +1039,7 @@ impl MetaGrpcClient {
     }
 
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub(crate) async fn kv_api<T>(&self, v: T) -> Result<T::Reply, MetaError>
     where
         T: RequestFor,
@@ -984,10 +1048,7 @@ impl MetaGrpcClient {
     {
         let grpc_req: MetaGrpcReq = v.into();
 
-        debug!(
-            req :? =(&grpc_req);
-            "MetaGrpcClient::kv_api request"
-        );
+        debug!("{}::kv_api request: {:?}", self, grpc_req);
 
         let raft_req: RaftRequest = grpc_req.into();
 
@@ -1047,14 +1108,12 @@ impl MetaGrpcClient {
     }
 
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub(crate) async fn kv_read_v1(
         &self,
         grpc_req: MetaGrpcReadReq,
     ) -> Result<BoxStream<pb::StreamItem>, MetaError> {
-        debug!(
-            req :? =(&grpc_req);
-            "MetaGrpcClient::kv_read_v1 request"
-        );
+        debug!("{}::kv_read_v1 request: {:?}", self, grpc_req);
 
         let mut failures = vec![];
 
@@ -1076,17 +1135,18 @@ impl MetaGrpcClient {
                 .await;
 
             debug!(
-                result :? =(&result);
-                "MetaGrpcClient::kv_read_v1 result, {}-th try", i
+                "{}::kv_read_v1 result, {}-th try; result: {:?}",
+                self, i, result
             );
 
             if let Err(ref e) = result {
                 warn!(
-                    req :? =(&grpc_req),
-                    error :? =(&e);
-                    "MetaGrpcClient::kv_read_v1 error, retryable: {}, target={}",
+                    "{}::kv_read_v1 error, retryable: {}, target={}; error: {:?}; request: {:?}",
+                    self,
                     is_status_retryable(e),
-                    established_client.target_endpoint()
+                    established_client.target_endpoint(),
+                    e,
+                    grpc_req
                 );
 
                 if is_status_retryable(e) {
@@ -1113,13 +1173,11 @@ impl MetaGrpcClient {
     }
 
     #[fastrace::trace]
+    #[async_backtrace::framed]
     pub(crate) async fn transaction(&self, req: TxnRequest) -> Result<TxnReply, MetaError> {
         let txn: TxnRequest = req;
 
-        debug!(
-            req :% =(&txn);
-            "MetaGrpcClient::transaction request"
-        );
+        debug!("{}::transaction request: {}", self, txn);
 
         let req = traced_req(txn.clone());
 
@@ -1143,10 +1201,7 @@ impl MetaGrpcClient {
 
         let reply = result?;
 
-        debug!(
-            reply :% =(&reply);
-            "MetaGrpcClient::transaction reply"
-        );
+        debug!("{}::transaction reply: {}", self, reply);
 
         Ok(reply)
     }
@@ -1162,7 +1217,7 @@ impl MetaGrpcClient {
             es.choose_next().to_string()
         };
 
-        info!("MetaGrpcClient choose_next_endpoint: {}", next);
+        info!("{} choose_next_endpoint: {}", self, next);
     }
 }
 

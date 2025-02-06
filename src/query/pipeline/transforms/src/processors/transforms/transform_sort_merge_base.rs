@@ -197,14 +197,14 @@ where
 impl<M, R, Converter> AccumulatingTransform for TransformSortMergeBase<M, R, Converter>
 where
     M: MergeSort<R> + Send + Sync,
-    R: Rows + Send + Sync,
+    R: Rows + Sync,
     Converter: RowConverter<R> + Send + Sync,
 {
     const NAME: &'static str = M::NAME;
 
     fn transform(&mut self, mut block: DataBlock) -> Result<Vec<DataBlock>> {
         let rows = if self.order_col_generated {
-            let rows = R::from_column(block.get_last_column(), &self.sort_desc)?;
+            let rows = R::from_column(block.get_last_column())?;
             if !self.output_order_col {
                 // The next processor could be a sort spill processor which need order column.
                 // And the order column will be removed in that processor.
@@ -337,7 +337,7 @@ impl TransformSortMergeBuilder {
             !self.schema.has_field(ORDER_COL_NAME)
         });
 
-        if self.limit.is_some() {
+        if self.limit.map(|limit| limit < 10000).unwrap_or_default() {
             self.build_sort_limit()
         } else {
             self.build_sort()
@@ -370,7 +370,7 @@ impl TransformSortMergeBuilder {
     where
         T: ArgType + Send + Sync,
         T::Column: Send + Sync,
-        for<'a> T::ScalarRef<'a>: Ord,
+        for<'a> T::ScalarRef<'a>: Ord + Send,
     {
         if asc {
             self.build_sort_rows::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
@@ -381,7 +381,7 @@ impl TransformSortMergeBuilder {
 
     fn build_sort_rows<R, C>(self) -> Result<Box<dyn Processor>>
     where
-        R: Rows + Send + Sync + 'static,
+        R: Rows + Sync + 'static,
         C: RowConverter<R> + Send + Sync + 'static,
     {
         Ok(AccumulatingTransformer::create(
@@ -400,6 +400,7 @@ impl TransformSortMergeBuilder {
                     self.sort_desc,
                     self.block_size,
                     self.enable_loser_tree,
+                    self.limit,
                 ),
             )?,
         ))
@@ -431,7 +432,7 @@ impl TransformSortMergeBuilder {
     where
         T: ArgType + Send + Sync,
         T::Column: Send + Sync,
-        for<'a> T::ScalarRef<'a>: Ord,
+        for<'a> T::ScalarRef<'a>: Ord + Send,
     {
         if asc {
             self.build_sort_limit_rows::<SimpleRowsAsc<T>, SimpleRowConverter<T>>()
@@ -442,7 +443,7 @@ impl TransformSortMergeBuilder {
 
     fn build_sort_limit_rows<R, C>(self) -> Result<Box<dyn Processor>>
     where
-        R: Rows + Send + Sync + 'static,
+        R: Rows + Sync + 'static,
         C: RowConverter<R> + Send + Sync + 'static,
     {
         Ok(AccumulatingTransformer::create(

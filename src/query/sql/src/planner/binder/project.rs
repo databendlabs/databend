@@ -102,7 +102,13 @@ impl Binder {
                 ScalarExpr::AggregateFunction(agg) => {
                     // Replace to bound column to reduce duplicate derived column bindings.
                     debug_assert!(!is_grouping_sets_item);
-                    find_replaced_aggregate_function(agg_info, agg, &item.alias).unwrap()
+                    find_replaced_aggregate_function(
+                        agg_info,
+                        &agg.display_name,
+                        &agg.return_type,
+                        &item.alias,
+                    )
+                    .unwrap()
                 }
                 ScalarExpr::WindowFunction(win) => {
                     find_replaced_window_function(window_info, win, &item.alias).unwrap()
@@ -258,8 +264,6 @@ impl Binder {
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
                         &prev_aliases,
-                        self.m_cte_bound_ctx.clone(),
-                        self.ctes_map.clone(),
                     );
                     let (bound_expr, _) = scalar_binder.bind(expr)?;
 
@@ -307,8 +311,8 @@ impl Binder {
         select_target: &'a SelectTarget,
         column_binding: ColumnBinding,
     ) -> Result<SelectItem<'a>> {
-        let scalar = match column_binding.virtual_computed_expr {
-            Some(virtual_computed_expr) => {
+        let scalar = match column_binding.virtual_expr {
+            Some(virtual_expr) => {
                 let mut input_context = input_context.clone();
                 let mut scalar_binder = ScalarBinder::new(
                     &mut input_context,
@@ -316,10 +320,8 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
-                    self.m_cte_bound_ctx.clone(),
-                    self.ctes_map.clone(),
                 );
-                let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
+                let sql_tokens = tokenize_sql(virtual_expr.as_str())?;
                 let expr = parse_expr(&sql_tokens, self.dialect)?;
 
                 let (scalar, _) = scalar_binder.bind(&expr)?;

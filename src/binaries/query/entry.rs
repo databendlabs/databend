@@ -21,9 +21,9 @@ use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::Commands;
 use databend_common_config::InnerConfig;
 use databend_common_config::DATABEND_COMMIT_VERSION;
-use databend_common_config::QUERY_GIT_SEMVER;
-use databend_common_config::QUERY_GIT_SHA;
-use databend_common_config::QUERY_SEMVER;
+use databend_common_config::DATABEND_GIT_SEMVER;
+use databend_common_config::DATABEND_GIT_SHA;
+use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -55,7 +55,7 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
     match &conf.subcommand {
         None => return Ok(false),
         Some(Commands::Ver) => {
-            println!("version: {}", *QUERY_SEMVER);
+            println!("version: {}", *DATABEND_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
         }
         Some(Commands::Local {
@@ -69,10 +69,11 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool, MainError> {
     Ok(true)
 }
 
-pub async fn init_services(conf: &InnerConfig) -> Result<(), MainError> {
+pub async fn init_services(conf: &InnerConfig, ee_mode: bool) -> Result<(), MainError> {
     let make_error = || "failed to init services";
 
-    set_panic_hook();
+    let binary_version = DATABEND_COMMIT_VERSION.clone();
+    set_panic_hook(binary_version);
     set_alloc_error_hook();
 
     #[cfg(target_arch = "x86_64")]
@@ -92,7 +93,9 @@ pub async fn init_services(conf: &InnerConfig) -> Result<(), MainError> {
         .with_context(make_error);
     }
     // Make sure global services have been inited.
-    GlobalServices::init(conf).await.with_context(make_error)
+    GlobalServices::init(conf, ee_mode)
+        .await
+        .with_context(make_error)
 }
 
 async fn precheck_services(conf: &InnerConfig) -> Result<(), MainError> {
@@ -215,7 +218,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
 
     // Metric API service.
     {
-        set_system_version("query", QUERY_GIT_SEMVER.as_str(), QUERY_GIT_SHA.as_str());
+        set_system_version(
+            "query",
+            DATABEND_GIT_SEMVER.as_str(),
+            DATABEND_GIT_SHA.as_str(),
+        );
         let address = conf.query.metric_api_address.clone();
         let mut srv = MetricService::create();
         let listening = srv

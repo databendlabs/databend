@@ -27,10 +27,7 @@ use databend_common_base::base::ProgressValues;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_expression::AbortChecker;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::CheckAbort;
-use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -62,7 +59,6 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -76,10 +72,9 @@ use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
 use crate::runtime_filter_info::RuntimeFilterInfo;
+use crate::runtime_filter_info::RuntimeFilterReady;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
-
-pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
 
 pub struct ContextError;
 
@@ -182,10 +177,6 @@ pub trait TableContext: Send + Sync {
     fn get_compaction_num_block_hint(&self, _table_name: &str) -> u64 {
         unimplemented!()
     }
-    fn set_table_snapshot(&self, snapshot: Arc<TableSnapshot>);
-    fn get_table_snapshot(&self) -> Option<Arc<TableSnapshot>>;
-    fn set_lazy_mutation_delete(&self, lazy: bool);
-    fn get_lazy_mutation_delete(&self) -> bool;
 
     fn attach_query_str(&self, kind: QueryKind, query: String);
     fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
@@ -206,10 +197,6 @@ pub trait TableContext: Send + Sync {
             this: S,
         }
         impl<S: TableContext + ?Sized> CheckAbort for Checker<Arc<S>> {
-            fn is_aborting(&self) -> bool {
-                self.this.as_ref().check_aborting().is_err()
-            }
-
             fn try_check_aborting(&self) -> Result<()> {
                 self.this.check_aborting().with_context(|| "query aborted")
             }
@@ -233,7 +220,10 @@ pub trait TableContext: Send + Sync {
         check_current_role_only: bool,
     ) -> Result<()>;
     async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
-    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
+    async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> Tenant;
@@ -242,8 +232,10 @@ pub trait TableContext: Send + Sync {
     fn get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;
-    fn get_shared_settings(&self) -> Arc<Settings>;
+    fn get_session_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
+    fn set_cluster(&self, cluster: Arc<Cluster>);
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
     fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>>;
@@ -268,7 +260,9 @@ pub trait TableContext: Send + Sync {
     async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection>;
 
     async fn get_table(&self, catalog: &str, database: &str, table: &str)
-    -> Result<Arc<dyn Table>>;
+        -> Result<Arc<dyn Table>>;
+
+    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
 
     async fn get_table_with_batch(
         &self,
@@ -287,24 +281,23 @@ pub trait TableContext: Send + Sync {
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles>;
 
-    fn set_materialized_cte(
-        &self,
-        idx: (usize, usize),
-        mem_table: Arc<RwLock<Vec<DataBlock>>>,
-    ) -> Result<()>;
+    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()>;
 
-    fn get_materialized_cte(
-        &self,
-        idx: (usize, usize),
-    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>>;
+    fn clear_written_segment_locations(&self) -> Result<()>;
 
-    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks;
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>>;
 
-    fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
+    fn add_selected_segment_location(&self, _segment_loc: Location) {
+        unimplemented!()
+    }
 
-    fn clear_segment_locations(&self) -> Result<()>;
+    fn get_selected_segment_locations(&self) -> Vec<Location> {
+        unimplemented!()
+    }
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>>;
+    fn clear_selected_segment_locations(&self) {
+        unimplemented!()
+    }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 
@@ -326,6 +319,14 @@ pub trait TableContext: Send + Sync {
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
     fn set_runtime_filter(&self, filters: (usize, RuntimeFilterInfo));
+
+    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>);
+
+    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>>;
+
+    fn set_wait_runtime_filter(&self, table_index: usize, need_to_wait: bool);
+
+    fn get_wait_runtime_filter(&self, table_index: usize) -> bool;
 
     fn clear_runtime_filter(&self);
 
@@ -366,6 +367,7 @@ pub trait TableContext: Send + Sync {
         _files_info: StageFilesInfo,
         _files_to_copy: Option<Vec<StageFileInfo>>,
         _max_column_position: usize,
+        _case_sensitive: bool,
     ) -> Result<Arc<dyn Table>> {
         unimplemented!()
     }
@@ -383,4 +385,23 @@ pub trait TableContext: Send + Sync {
     fn session_state(&self) -> SessionState;
 
     fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
+    fn get_shared_settings(&self) -> Arc<Settings>;
+
+    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()>;
+
+    fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {
+        unimplemented!()
+    }
+
+    fn get_consume_streams(&self, _query: bool) -> Result<Vec<Arc<dyn Table>>> {
+        unimplemented!()
+    }
+}
+
+pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;
+
+pub trait CheckAbort {
+    fn try_check_aborting(&self) -> Result<()>;
 }

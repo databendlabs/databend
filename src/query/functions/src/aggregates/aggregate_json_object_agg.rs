@@ -16,30 +16,34 @@ use std::alloc::Layout;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::marker::PhantomData;
+use std::mem;
 use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::date_helper::TzLUT;
 use databend_common_expression::types::string::StringColumn;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::types::*;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
+use jiff::tz::TimeZone;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 
 pub trait BinaryScalarStateFunc<V: ValueType>:
@@ -166,20 +170,21 @@ where
     }
 
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        let tz = TzLUT::default();
-        let mut kvs = Vec::with_capacity(self.kvs.len());
-        for (key, value) in &self.kvs {
-            let v = V::upcast_scalar(value.clone());
+        let tz = TimeZone::UTC;
+        let mut values = Vec::with_capacity(self.kvs.len());
+        let kvs = mem::take(&mut self.kvs);
+        for (key, value) in kvs.into_iter() {
+            let v = V::upcast_scalar(value);
             // NULL values are omitted from the output.
             if v == Scalar::Null {
                 continue;
             }
             let mut val = vec![];
-            cast_scalar_to_variant(v.as_ref(), tz, &mut val);
-            kvs.push((key, val));
+            cast_scalar_to_variant(v.as_ref(), &tz, &mut val);
+            values.push((key, val));
         }
         let mut data = vec![];
-        jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut data).unwrap();
+        jsonb::build_object(values.iter().map(|(k, v)| (k, &v[..])), &mut data).unwrap();
 
         let object_value = Scalar::Variant(data);
         builder.push(object_value.as_ref());
@@ -208,17 +213,17 @@ where
         Ok(self.return_type.clone())
     }
 
-    fn init_state(&self, place: StateAddr) {
-        place.write(|| State::new());
+    fn init_state(&self, place: AggrState) {
+        place.write(State::new);
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<State>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<State>()));
     }
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -233,7 +238,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -245,8 +250,7 @@ where
             for (k, (v, (valid, place))) in
                 key_column_iter.zip(val_column_iter.zip(validity.iter().zip(places.iter())))
             {
-                let addr = place.next(offset);
-                let state = addr.get::<State>();
+                let state = AggrState::new(*place, loc).get::<State>();
                 if valid {
                     state.add(Some((k, v.clone())))?;
                 } else {
@@ -255,8 +259,7 @@ where
             }
         } else {
             for (k, (v, place)) in key_column_iter.zip(val_column_iter.zip(places.iter())) {
-                let addr = place.next(offset);
-                let state = addr.get::<State>();
+                let state = AggrState::new(*place, loc).get::<State>();
                 state.add(Some((k, v.clone())))?;
             }
         }
@@ -264,7 +267,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<State>();
         let (key_column, val_column, validity) = self.downcast_columns(columns)?;
 
@@ -284,25 +287,25 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
         let rhs: State = borsh_deserialize_state(reader)?;
 
         state.merge(&rhs)
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<State>();
         let other = rhs.get::<State>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
         state.merge_result(builder)
     }
@@ -311,7 +314,7 @@ where
         true
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<State>();
         std::ptr::drop_in_place(state);
     }
@@ -364,7 +367,7 @@ where
         };
         let validity = match (key_validity, val_validity) {
             (Some(key_validity), Some(val_validity)) => {
-                let and_validity = bitmap::and(&key_validity, &val_validity);
+                let and_validity = boolean::and(&key_validity, &val_validity);
                 Some(and_validity)
             }
             (Some(key_validity), None) => Some(key_validity.clone()),

@@ -55,7 +55,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "ipfs".to_string(),
                 "".to_string(),
                 "too-naive".to_string(),
-                "".to_string(),
                 vec![("endpoint_url", "ipfs.filebase.io")]
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -75,7 +74,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "oss".to_string(),
                 "zhen".to_string(),
                 "/highest/".to_string(),
-                "".to_string(),
                 vec![
                     ("endpoint_url", "https://oss-cn-litang.example.com"),
                     ("access_key_id", "dzin"),
@@ -126,7 +124,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "ipfs".to_string(),
                 "".to_string(),
                 "too-simple".to_string(),
-                "".to_string(),
                 BTreeMap::new(),
             ),
             (
@@ -143,7 +140,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "ipfs".to_string(),
                 "".to_string(),
                 "too-naive".to_string(),
-                "".to_string(),
                 vec![("endpoint_url", "https://ipfs.filebase.io")]
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -163,7 +159,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "s3".to_string(),
                 "test".to_string(),
                 "/tmp/".to_string(),
-                "".to_string(),
                 [
                     ("access_key_id", "access_key_id"),
                     ("secret_access_key", "secret_access_key"),
@@ -198,7 +193,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "s3".to_string(),
                 "test".to_string(),
                 "/tmp/".to_string(),
-                "".to_string(),
                 [
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
@@ -233,7 +227,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "s3".to_string(),
                 "test".to_string(),
                 "/tmp/".to_string(),
-                "".to_string(),
                 [
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
@@ -268,7 +261,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "s3".to_string(),
                 "test".to_string(),
                 "/tmp/".to_string(),
-                "".to_string(),
                 [("role_arn", "aws::iam::xxxx"), ("region", "us-east-2")]
                     .iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -298,7 +290,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "fs".to_string(),
                 "".to_string(),
                 "/tmp/".to_string(),
-                "".to_string(),
                 BTreeMap::default(),
             ),
             (
@@ -314,7 +305,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "gcs".to_string(),
                 "example".to_string(),
                 "/tmp/".to_string(),
-                "".to_string(),
                 vec![("credential", "gcs.credential")]
                     .into_iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -336,7 +326,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "https".to_string(),
                 "example.com".to_string(),
                 "/tmp.csv".to_string(),
-                "".to_string(),
                 BTreeMap::default(),
             ),
             (
@@ -353,7 +342,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "https".to_string(),
                 "example.com".to_string(),
                 "/tmp-{a,b,c}.csv".to_string(),
-                "".to_string(),
                 BTreeMap::default(),
             ),
             (
@@ -373,7 +361,6 @@ async fn test_parse_uri_location() -> Result<()> {
                 "https".to_string(),
                 "example.com".to_string(),
                 "/tmp-[11-15].csv".to_string(),
-                "".to_string(),
                 BTreeMap::default(),
             ),
             (
@@ -399,17 +386,23 @@ async fn test_parse_uri_location() -> Result<()> {
                 "webhdfs".to_string(),
                 "example.com".to_string(),
                 "/path/to/dir/".to_string(),
-                "".to_string(),
-                vec![("https", "TrUE"), ("delegation", "databendthebest")]
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v.to_string()))
-                    .collect::<BTreeMap<_, _>>(),
+                vec![
+                    ("https", "TrUE"),
+                    ("delegation", "databendthebest"),
+                    ("disable_list_batch", "true"),
+                    ("user_name", "test"),
+                ]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect::<BTreeMap<_, _>>(),
             ),
             (
                 StorageParams::Webhdfs(StorageWebhdfsConfig {
                     root: "/path/to/dir/".to_string(),
                     endpoint_url: "https://example.com".to_string(),
                     delegation: "databendthebest".to_string(),
+                    disable_list_batch: true,
+                    user_name: "test".to_string(),
                 }),
                 "/".to_string(),
             ),

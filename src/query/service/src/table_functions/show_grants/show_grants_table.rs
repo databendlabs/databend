@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
@@ -430,6 +431,13 @@ async fn show_account_grants(
                     privileges.push(get_priv_str(&grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
+                GrantObject::Warehouse(w_name) => {
+                    // grant all on *.* to a
+                    object_name.push(w_name.to_string());
+                    object_id.push(None);
+                    privileges.push(get_priv_str(&grant_entry));
+                    grant_list.push(format!("{} TO {}", grant_entry, identity));
+                }
                 GrantObject::Global => {
                     // grant all on *.* to a
                     object_name.push("*.*".to_string());
@@ -496,49 +504,78 @@ async fn show_account_grants(
         }
     }
 
-    for (catalog_name, dbs_priv_id) in catalog_db_ids {
+    for (catalog_name, dbs_priv_id) in catalog_db_ids.into_iter() {
         let catalog = ctx.get_catalog(&catalog_name).await?;
-        let db_ids = dbs_priv_id.iter().map(|res| res.0).collect::<Vec<u64>>();
-        let privileges_strs = dbs_priv_id
+        let db_id_set = dbs_priv_id
             .iter()
-            .map(|res| res.1.clone())
-            .collect::<Vec<String>>();
-        let dbs_name = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
-
-        for (i, db_name) in dbs_name.iter().enumerate() {
-            if let Some(db_name) = db_name {
-                object_name.push(db_name.to_string());
-                object_id.push(Some(db_ids[i]));
-                privileges.push(privileges_strs[i].to_string());
-                grant_list.push(format!(
+            .map(|res| res.0)
+            .collect::<HashSet<u64>>();
+        let mut db_ids = db_id_set.into_iter().collect::<Vec<u64>>();
+        db_ids.sort();
+        let db_names = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
+        let db_map = db_ids
+            .into_iter()
+            .zip(db_names.into_iter())
+            .filter(|(_, db_name)| db_name.is_some())
+            .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
+            .collect::<HashMap<_, _>>();
+        for (db_id, privilege_str) in dbs_priv_id.into_iter() {
+            if let Some(db_name) = db_map.get(&db_id) {
+                let grant_str = format!(
                     "GRANT {} ON '{}'.'{}'.* TO {}",
-                    &privileges_strs[i], catalog_name, db_name, identity
-                ));
+                    privilege_str, catalog_name, db_name, identity
+                );
+                object_name.push(db_name.to_string());
+                object_id.push(Some(db_id));
+                privileges.push(privilege_str);
+                grant_list.push(grant_str);
             }
         }
     }
 
-    for (catalog_name, tables_priv_id) in catalog_table_ids {
+    for (catalog_name, tables_priv_id) in catalog_table_ids.into_iter() {
         let catalog = ctx.get_catalog(&catalog_name).await?;
-        let db_ids = tables_priv_id.iter().map(|res| res.0).collect::<Vec<u64>>();
-        let table_ids = tables_priv_id.iter().map(|res| res.1).collect::<Vec<u64>>();
-        let privileges_strs = tables_priv_id
+        let db_id_set = tables_priv_id
             .iter()
-            .map(|res| res.2.clone())
-            .collect::<Vec<String>>();
-        let dbs_name = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
-        let tables_name = catalog.mget_table_names_by_ids(&tenant, &table_ids).await?;
+            .map(|res| res.0)
+            .collect::<HashSet<u64>>();
+        let mut db_ids = db_id_set.into_iter().collect::<Vec<u64>>();
+        db_ids.sort();
+        let db_names = catalog.mget_database_names_by_ids(&tenant, &db_ids).await?;
+        let db_map = db_ids
+            .into_iter()
+            .zip(db_names.into_iter())
+            .filter(|(_, db_name)| db_name.is_some())
+            .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
+            .collect::<HashMap<_, _>>();
 
-        for (i, table_name) in tables_name.iter().enumerate() {
-            if let Some(table_name) = table_name {
-                if let Some(db_name) = &dbs_name[i] {
-                    object_name.push(format!("{}.{}.{}", catalog_name, db_name, table_name));
-                    object_id.push(Some(table_ids[i]));
-                    privileges.push(privileges_strs[i].to_string());
-                    grant_list.push(format!(
+        let table_id_set = tables_priv_id
+            .iter()
+            .map(|res| res.1)
+            .collect::<HashSet<u64>>();
+        let mut table_ids = table_id_set.into_iter().collect::<Vec<u64>>();
+        table_ids.sort();
+        let table_names = catalog
+            .mget_table_names_by_ids(&tenant, &table_ids, false)
+            .await?;
+        let table_map = table_ids
+            .into_iter()
+            .zip(table_names.into_iter())
+            .filter(|(_, table_name)| table_name.is_some())
+            .map(|(table_id, table_name)| (table_id, table_name.unwrap()))
+            .collect::<HashMap<_, _>>();
+
+        for (db_id, table_id, privilege_str) in tables_priv_id.into_iter() {
+            if let Some(db_name) = db_map.get(&db_id) {
+                if let Some(table_name) = table_map.get(&table_id) {
+                    let grant_str = format!(
                         "GRANT {} ON '{}'.'{}'.'{}' TO {}",
-                        &privileges_strs[i], catalog_name, db_name, table_name, identity
-                    ));
+                        &privilege_str, catalog_name, db_name, table_name, identity
+                    );
+                    object_name.push(format!("{}.{}.{}", catalog_name, db_name, table_name));
+                    object_id.push(Some(table_id));
+                    privileges.push(privilege_str);
+                    grant_list.push(grant_str);
                 }
             }
         }
@@ -566,7 +603,7 @@ async fn show_object_grant(
     let tenant = ctx.get_tenant();
     let user_api = UserApiProvider::instance();
     let roles = user_api.get_roles(&tenant).await?;
-    let visibility_checker = ctx.get_visibility_checker().await?;
+    let visibility_checker = ctx.get_visibility_checker(false).await?;
     let current_user = ctx.get_current_user()?.identity().username;
     let (object, owner_object, object_id, object_name) = match grant_type {
         "table" => {

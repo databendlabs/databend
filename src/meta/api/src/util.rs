@@ -25,7 +25,6 @@ use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_kvapi::kvapi;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::txn_condition::Target;
 use databend_common_meta_types::ConditionResult;
@@ -40,6 +39,7 @@ use databend_common_meta_types::TxnGetResponse;
 use databend_common_meta_types::TxnOp;
 use databend_common_meta_types::TxnOpResponse;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use databend_common_proto_conv::FromToProto;
 use log::debug;
 
@@ -200,7 +200,7 @@ pub async fn fetch_id<T: kvapi::Key>(
     generator: T,
 ) -> Result<u64, MetaError> {
     let res = kv_api
-        .upsert_kv(UpsertKVReq {
+        .upsert_kv(UpsertKV {
             key: generator.to_string_key(),
             seq: MatchSeq::GE(0),
             value: Operation::Update(b"".to_vec()),

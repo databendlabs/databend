@@ -1,0 +1,43 @@
+statement ok
+create table test_r (weeks int16 not null,hours int16 not null) engine=random;
+
+query I
+with t as ( select to_weeks(weeks) + to_hours(hours) as i, weeks*168+hours as h from test_r limit 10000), t1 as ( select ROW_NUMBER() OVER (ORDER BY h) AS num_h,ROW_NUMBER() OVER (ORDER BY i) AS num_i from t) select count_if(num_h=num_i) from t1;
+----
+10000
+
+statement ok
+drop table test_r;
+
+statement ok
+create or replace table t (c interval);
+
+statement ok
+insert into t values('1 year'),('1 months'),('1 day'),('1 hour'),('1 minute'),('1 second'),('1 microsecond');
+
+onlyif http
+query T
+select * from t order by c;
+----
+0:00:00.000001
+0:00:01
+0:01:00
+1:00:00
+1 day
+1 month
+1 year
+
+onlyif http
+query T
+select sum(c) from t;
+----
+9385:01:01.000001
+
+onlyif http
+query T
+select sum(c) from t where c <= interval '1 day';
+----
+25:01:01.000001
+
+statement ok
+drop table t;

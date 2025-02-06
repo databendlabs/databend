@@ -107,7 +107,11 @@ impl ValueType for EmptyArrayType {
     }
 
     fn index_column(len: &Self::Column, index: usize) -> Option<Self::ScalarRef<'_>> {
-        if index < *len { Some(()) } else { None }
+        if index < *len {
+            Some(())
+        } else {
+            None
+        }
     }
 
     #[inline(always)]

@@ -158,3 +158,133 @@ with recursive t as (select 1 as x union all select m.x+f.x from t as m, t as f 
 1
 2
 4
+
+# recursive cte with normal cte
+statement ok
+create or replace table t1(a int);
+
+statement ok
+insert into t1 values (0), (1), (2), (3), (4), (5), (6), (7), (8), (9);
+
+query II
+WITH RECURSIVE t(n) as (
+  select 1
+  union all
+  select n+1 from t where n<10
+),
+cte1 as (
+  select a from t1
+)
+select n, cte1.a  from t join cte1 where t.n=cte1.a;
+----
+1 1
+2 2
+3 3
+4 4
+5 5
+6 6
+7 7
+8 8
+9 9
+
+
+query II
+WITH RECURSIVE cte1 as (
+  select  a  from t1
+),
+t(n) as (
+  select 1
+  union all
+  select n+1 from t where n<10
+)
+select n, cte1.a  from t join cte1 where t.n=cte1.a;
+----
+1 1
+2 2
+3 3
+4 4
+5 5
+6 6
+7 7
+8 8
+9 9
+
+
+query I
+WITH RECURSIVE cte1 as (
+  select  a  from t1
+)
+select cte1.a  from cte1;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+
+statement ok
+create table train(
+train_id varchar(8) not null ,
+departure_station varchar(32) not null,
+arrival_station varchar(32) not null,
+seat_count int not null
+);
+
+statement ok
+create table passenger(
+passenger_id varchar(16) not null,
+departure_station varchar(32) not null,
+arrival_station varchar(32) not null
+);
+
+statement ok
+create table city(city varchar(32));
+
+statement ok
+insert into city
+with t as (select 1 n union select 2 union select 3 union select 4 union select 5)
+,t1 as(select row_number()over() rn from t ,t t2,t t3)
+select concat('城市',rn::varchar) city from t1 where rn<=5;
+
+statement ok
+insert into train
+select concat('G',row_number()over()::varchar),c1.city,c2.city, n from city c1, city c2, (select 600 n union select 800 union select 1200 union select 1600) a ;
+
+statement ok
+insert into passenger
+select concat('P',substr((100000000+row_number()over())::varchar,2)),c1.city,c2.city from city c1, city c2 ,city c3, city c4, city c5,
+city c6, (select 1 n union select 2 union select 3 union select 4) c7,(select 1 n union select 2) c8;
+
+
+query III
+with
+t0 as (
+select
+        train_id,
+        seat_count,
+        sum(seat_count) over (
+        partition by departure_station, arrival_station order by train_id
+      ) ::int sum_sid
+from
+        train
+)
+select
+    sum(case when n=1 then sum_sid+1 else 0  end::int),
+    sum(sum_sid),
+    sum(seat_count)
+from
+        t0,(select 1 n union all select 2);
+----
+261700 523200 210000
+
+statement ok
+use default;
+
+statement ok
+drop database db;

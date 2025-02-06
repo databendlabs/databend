@@ -220,15 +220,14 @@ where A: SortAlgorithm
         schema: DataSchemaRef,
         block_size: usize,
         limit: Option<usize>,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        _sort_desc: Arc<Vec<SortColumnDescription>>,
         remove_order_col: bool,
     ) -> Result<Self> {
         let streams = inputs
             .iter()
             .map(|i| InputBlockStream::new(i.clone(), remove_order_col))
             .collect::<Vec<_>>();
-        let merger =
-            Merger::<A, InputBlockStream>::create(schema, streams, sort_desc, block_size, limit);
+        let merger = Merger::<A, _>::create(schema, streams, block_size, limit);
         Ok(Self {
             merger,
             inputs,

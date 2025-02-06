@@ -19,7 +19,7 @@ use databend_common_meta_sled_store::SledBytesError;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
 use databend_common_meta_types::anyerror::AnyError;
-use databend_common_meta_types::LogId;
+use databend_common_meta_types::raft_types::LogId;
 use serde::Deserialize;
 use serde::Serialize;
 use sled::IVec;
@@ -36,6 +36,14 @@ pub enum LogMetaKey {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, derive_more::TryInto)]
 pub enum LogMetaValue {
     LogId(LogId),
+}
+
+impl LogMetaValue {
+    pub fn log_id(&self) -> LogId {
+        match self {
+            LogMetaValue::LogId(log_id) => *log_id,
+        }
+    }
 }
 
 impl fmt::Display for LogMetaKey {

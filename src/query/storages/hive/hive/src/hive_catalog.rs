@@ -80,6 +80,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -292,6 +293,11 @@ impl Catalog for HiveCatalog {
         Ok(res)
     }
 
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        // TODO: Implement list_databases_history
+        unimplemented!()
+    }
+
     // Get all the databases.
     #[fastrace::trace]
     #[async_backtrace::framed]
@@ -366,6 +372,7 @@ impl Catalog for HiveCatalog {
         &self,
         _tenant: &Tenant,
         _table_ids: &[MetaId],
+        _get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",
@@ -677,8 +684,6 @@ impl Catalog for HiveCatalog {
         unimplemented!()
     }
 
-    /// Table function
-
     // Get function by name.
     fn get_table_function(
         &self,
@@ -748,6 +753,10 @@ impl Catalog for HiveCatalog {
         &self,
         _req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
+        unimplemented!()
+    }
+
+    async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
         unimplemented!()
     }
 }

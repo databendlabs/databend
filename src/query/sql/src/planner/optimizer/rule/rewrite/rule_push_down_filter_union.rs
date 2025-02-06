@@ -72,31 +72,43 @@ impl Rule for RulePushDownFilterUnion {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let union_s_expr = s_expr.child(0)?;
         let union: UnionAll = union_s_expr.plan().clone().try_into()?;
-
-        // Create a filter which matches union's right child.
-        let index_pairs: HashMap<IndexType, IndexType> = union
-            .left_outputs
-            .iter()
-            .zip(union.right_outputs.iter())
-            .map(|(left, right)| (left.0, right.0))
-            .collect();
-        let new_predicates = filter
-            .predicates
-            .iter()
-            .map(|predicate| replace_column_binding(&index_pairs, predicate.clone()))
-            .collect::<Result<Vec<_>>>()?;
-        let right_filer = Filter {
-            predicates: new_predicates,
-        };
+        if !union.cte_scan_names.is_empty() {
+            // If the union has cte scan names, it's not allowed to push down filter.
+            state.add_result(s_expr.clone());
+            return Ok(());
+        }
 
         let mut union_left_child = union_s_expr.child(0)?.clone();
         let mut union_right_child = union_s_expr.child(1)?.clone();
 
         // Add filter to union children
-        union_left_child = SExpr::create_unary(Arc::new(filter.into()), Arc::new(union_left_child));
-        union_right_child =
-            SExpr::create_unary(Arc::new(right_filer.into()), Arc::new(union_right_child));
+        for (union_side, union_sexpr) in [&union.left_outputs, &union.right_outputs]
+            .iter()
+            .zip([&mut union_left_child, &mut union_right_child].iter_mut())
+        {
+            // Create a filter which matches union's right child.
+            let index_pairs: HashMap<IndexType, IndexType> = union
+                .output_indexes
+                .iter()
+                .zip(union_side.iter())
+                .map(|(index, side)| (*index, side.0))
+                .collect();
 
+            let new_predicates = filter
+                .predicates
+                .iter()
+                .map(|predicate| replace_column_binding(&index_pairs, predicate.clone()))
+                .collect::<Result<Vec<_>>>()?;
+
+            let filter = Filter {
+                predicates: new_predicates,
+            };
+
+            let s = (*union_sexpr).clone();
+            **union_sexpr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(s));
+        }
+
+        // Create a filter which matches union's right child.
         let result = SExpr::create_binary(
             Arc::new(union.into()),
             Arc::new(union_left_child),
@@ -130,7 +142,7 @@ fn replace_column_binding(
                     column.column.data_type.clone(),
                     Visibility::Visible,
                 )
-                .virtual_computed_expr(column.column.virtual_computed_expr.clone())
+                .virtual_expr(column.column.virtual_expr.clone())
                 .build();
                 column.column = new_column;
             }

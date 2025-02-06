@@ -69,6 +69,8 @@ use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -88,6 +90,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -243,6 +246,33 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        let dbs = self
+            .ctx
+            .meta
+            .get_tenant_history_databases(
+                ListDatabaseReq {
+                    tenant: tenant.clone(),
+                },
+                false,
+            )
+            .await?;
+
+        dbs.iter()
+            .try_fold(vec![], |mut acc, item: &Arc<DatabaseInfo>| {
+                let db_result = self.build_db_instance(item);
+                match db_result {
+                    Ok(db) => acc.push(db),
+                    Err(err) => {
+                        // Ignore the error and continue, allow partial failure.
+                        warn!("Failed to build database '{:?}': {:?}", item, err);
+                    }
+                }
+                Ok(acc)
+            })
+    }
+
+    #[async_backtrace::framed]
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let dbs = self
             .ctx
@@ -318,6 +348,61 @@ impl Catalog for MutableCatalog {
         let got = self.ctx.meta.get_index(&req.name_ident).await?;
         let got = got.ok_or_else(|| AppError::from(req.name_ident.unknown_error("get_index")))?;
         Ok(got)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_marked_deleted_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        let res = self
+            .ctx
+            .meta
+            .list_marked_deleted_indexes(tenant, table_id)
+            .await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        Ok(self
+            .ctx
+            .meta
+            .list_marked_deleted_table_indexes(tenant, table_id)
+            .await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        index_ids: &[u64],
+    ) -> Result<()> {
+        Ok(self
+            .ctx
+            .meta
+            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
+            .await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<()> {
+        Ok(self
+            .ctx
+            .meta
+            .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
+            .await?)
     }
 
     #[async_backtrace::framed]
@@ -406,7 +491,7 @@ impl Catalog for MutableCatalog {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = self.ctx.storage_factory.clone();
-        storage.get_table(table_info)
+        storage.get_table(table_info, self.disable_table_info_refresh)
     }
 
     #[async_backtrace::framed]
@@ -419,8 +504,13 @@ impl Catalog for MutableCatalog {
         &self,
         _tenant: &Tenant,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
-        let res = self.ctx.meta.mget_table_names_by_ids(table_ids).await?;
+        let res = self
+            .ctx
+            .meta
+            .mget_table_names_by_ids(table_ids, get_dropped_table)
+            .await?;
         Ok(res)
     }
 
@@ -508,7 +598,7 @@ impl Catalog for MutableCatalog {
         db_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.list_tables_history().await
+        db.list_tables_history(false).await
     }
 
     async fn get_drop_table_infos(
@@ -538,7 +628,7 @@ impl Catalog for MutableCatalog {
                 self.info(),
                 DatabaseType::NormalDB,
             );
-            tables.push(storage.get_table(&table_info)?);
+            tables.push(storage.get_table(&table_info, ctx.disable_table_info_refresh)?);
         }
         Ok((tables, drop_ids))
     }
@@ -763,5 +853,11 @@ impl Catalog for MutableCatalog {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         Ok(self.ctx.meta.list_dictionaries(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
+        let res = self.ctx.meta.rename_dictionary(req).await?;
+        Ok(res)
     }
 }

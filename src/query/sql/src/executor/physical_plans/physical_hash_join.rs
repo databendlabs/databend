@@ -27,7 +27,6 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::ROW_NUMBER_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::table::get_change_type;
 
@@ -215,6 +214,7 @@ impl PhysicalPlanBuilder {
         let mut left_join_conditions_rt = Vec::new();
         let mut probe_to_build_index = Vec::new();
         let mut table_index = None;
+        let mut scan_id = None;
         for condition in join.equi_conditions.iter() {
             let left_condition = &condition.left;
             let right_condition = &condition.right;
@@ -243,13 +243,19 @@ impl PhysicalPlanBuilder {
                                 .table_index()
                                 .unwrap(),
                         );
+                        scan_id = Some(
+                            self.metadata
+                                .read()
+                                .base_column_scan_id(*column_idx)
+                                .unwrap(),
+                        );
                     }
                     Some((
                         left_condition
                             .as_raw_expr()
                             .type_check(&*self.metadata.read())?
                             .project_column_ref(|col| col.column_name.clone()),
-                        table_index.unwrap(),
+                        scan_id.unwrap(),
                     ))
                 } else {
                     None
@@ -367,12 +373,6 @@ impl PhysicalPlanBuilder {
         } else {
             None
         };
-
-        // for distributed merge into, there is a field called "_row_number", but
-        // it's not an internal row_number, we need to add it here
-        if let Some((index, _)) = build_schema.column_with_name(ROW_NUMBER_COL_NAME) {
-            build_projections.insert(index);
-        }
 
         let mut merged_fields =
             Vec::with_capacity(probe_projections.len() + build_projections.len());
@@ -494,12 +494,6 @@ impl PhysicalPlanBuilder {
             if let Some((index, _)) = projected_schema.column_with_name(&column.to_string()) {
                 projections.insert(index);
             }
-        }
-
-        // for distributed merge into, there is a field called "_row_number", but
-        // it's not an internal row_number, we need to add it here
-        if let Some((index, _)) = projected_schema.column_with_name(ROW_NUMBER_COL_NAME) {
-            projections.insert(index);
         }
 
         let mut output_fields = Vec::with_capacity(column_projections.len());

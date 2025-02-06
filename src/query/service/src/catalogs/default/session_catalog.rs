@@ -59,6 +59,8 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -77,6 +79,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -134,8 +137,6 @@ impl SessionCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for SessionCatalog {
-    /// Catalog itself
-
     // Get the name of the catalog.
     fn name(&self) -> String {
         self.inner.name()
@@ -145,11 +146,14 @@ impl Catalog for SessionCatalog {
         self.inner.info()
     }
 
-    /// Database.
-
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         self.inner.get_database(tenant, db_name).await
+    }
+
+    // List all the databases history.
+    async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        self.inner.list_databases_history(tenant).await
     }
 
     // Get all the databases.
@@ -186,6 +190,50 @@ impl Catalog for SessionCatalog {
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
         self.inner.get_index(req).await
+    }
+
+    async fn list_marked_deleted_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        self.inner
+            .list_marked_deleted_indexes(tenant, table_id)
+            .await
+    }
+
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        self.inner
+            .list_marked_deleted_table_indexes(tenant, table_id)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        index_ids: &[u64],
+    ) -> Result<()> {
+        self.inner
+            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<()> {
+        self.inner
+            .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
+            .await
     }
 
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
@@ -260,8 +308,6 @@ impl Catalog for SessionCatalog {
         self.inner.rename_database(req).await
     }
 
-    /// Table.
-
     // Build a `Arc<dyn Table>` from `TableInfo`.
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         self.inner.get_table_by_info(table_info)
@@ -289,8 +335,11 @@ impl Catalog for SessionCatalog {
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> databend_common_exception::Result<Vec<Option<String>>> {
-        self.inner.mget_table_names_by_ids(tenant, table_ids).await
+        self.inner
+            .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
+            .await
     }
 
     async fn get_table_name_by_id(&self, table_id: MetaId) -> Result<Option<String>> {
@@ -586,8 +635,6 @@ impl Catalog for SessionCatalog {
         self.inner.list_locks(req).await
     }
 
-    /// Table function
-
     // Get function by name.
     fn get_table_function(
         &self,
@@ -699,6 +746,10 @@ impl Catalog for SessionCatalog {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         self.inner.list_dictionaries(req).await
+    }
+
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
+        self.inner.rename_dictionary(req).await
     }
 }
 

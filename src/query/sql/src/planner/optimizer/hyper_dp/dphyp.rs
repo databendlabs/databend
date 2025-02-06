@@ -28,6 +28,7 @@ use crate::optimizer::hyper_dp::query_graph::QueryGraph;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::OptimizerContext;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -45,9 +46,7 @@ const RELATION_THRESHOLD: usize = 10;
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
 // See the paper for more details.
 pub struct DPhpy {
-    ctx: Arc<dyn TableContext>,
-    sample_executor: Option<Arc<dyn QueryExecutor>>,
-    metadata: MetadataRef,
+    opt_ctx: OptimizerContext,
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
     table_index_map: HashMap<IndexType, IndexType>,
@@ -61,15 +60,9 @@ pub struct DPhpy {
 }
 
 impl DPhpy {
-    pub fn new(
-        ctx: Arc<dyn TableContext>,
-        metadata: MetadataRef,
-        sample_executor: Option<Arc<dyn QueryExecutor>>,
-    ) -> Self {
+    pub fn new(opt_ctx: OptimizerContext) -> Self {
         Self {
-            ctx,
-            sample_executor,
-            metadata,
+            opt_ctx,
             join_relations: vec![],
             table_index_map: Default::default(),
             dp_table: Default::default(),
@@ -80,22 +73,30 @@ impl DPhpy {
         }
     }
 
+    fn table_ctx(&self) -> Arc<dyn TableContext> {
+        self.opt_ctx.table_ctx.clone()
+    }
+
+    fn metadata(&self) -> MetadataRef {
+        self.opt_ctx.metadata.clone()
+    }
+
+    fn sample_executor(&self) -> Option<Arc<dyn QueryExecutor>> {
+        self.opt_ctx.sample_executor.clone()
+    }
+
     async fn new_children(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         // Parallel process children: start a new dphyp for each child.
-        let ctx = self.ctx.clone();
-        let metadata = self.metadata.clone();
-        let sample_executor = self.sample_executor.clone();
         let left_expr = s_expr.children[0].clone();
+        let opt_ctx = self.opt_ctx.clone();
         let left_res = spawn(async move {
-            let mut dphyp = DPhpy::new(ctx, metadata, sample_executor);
+            let mut dphyp = DPhpy::new(opt_ctx.clone());
             (dphyp.optimize(&left_expr).await, dphyp.table_index_map)
         });
-        let ctx = self.ctx.clone();
-        let metadata = self.metadata.clone();
-        let sample_executor = self.sample_executor.clone();
         let right_expr = s_expr.children[1].clone();
+        let opt_ctx = self.opt_ctx.clone();
         let right_res = spawn(async move {
-            let mut dphyp = DPhpy::new(ctx, metadata, sample_executor);
+            let mut dphyp = DPhpy::new(opt_ctx.clone());
             (dphyp.optimize(&right_expr).await, dphyp.table_index_map)
         });
         let left_res = left_res
@@ -130,19 +131,17 @@ impl DPhpy {
     ) -> Result<(Arc<SExpr>, bool)> {
         if is_subquery {
             // If it's a subquery, start a new dphyp
-            let mut dphyp = DPhpy::new(
-                self.ctx.clone(),
-                self.metadata.clone(),
-                self.sample_executor.clone(),
-            );
+            let mut dphyp = DPhpy::new(self.opt_ctx.clone());
             let (new_s_expr, _) = dphyp.optimize(s_expr).await?;
             // Merge `table_index_map` of subquery into current `table_index_map`.
             let relation_idx = self.join_relations.len() as IndexType;
             for table_index in dphyp.table_index_map.keys() {
                 self.table_index_map.insert(*table_index, relation_idx);
             }
-            self.join_relations
-                .push(JoinRelation::new(&new_s_expr, self.sample_executor.clone()));
+            self.join_relations.push(JoinRelation::new(
+                &new_s_expr,
+                self.sample_executor().clone(),
+            ));
             return Ok((new_s_expr, true));
         }
 
@@ -152,9 +151,9 @@ impl DPhpy {
                     // Check if relation contains filter, if exists, check if the filter in `filters`
                     // If exists, remove it from `filters`
                     self.check_filter(relation);
-                    JoinRelation::new(relation, self.sample_executor.clone())
+                    JoinRelation::new(relation, self.sample_executor().clone())
                 } else {
-                    JoinRelation::new(s_expr, self.sample_executor.clone())
+                    JoinRelation::new(s_expr, self.sample_executor().clone())
                 };
                 self.table_index_map
                     .insert(op.table_index, self.join_relations.len() as IndexType);
@@ -217,8 +216,10 @@ impl DPhpy {
                 }
                 if !is_inner_join {
                     let new_s_expr = self.new_children(s_expr).await?;
-                    self.join_relations
-                        .push(JoinRelation::new(&new_s_expr, self.sample_executor.clone()));
+                    self.join_relations.push(JoinRelation::new(
+                        &new_s_expr,
+                        self.sample_executor().clone(),
+                    ));
                     Ok((Arc::new(new_s_expr), true))
                 } else {
                     let left_res = self
@@ -278,8 +279,10 @@ impl DPhpy {
             }
             RelOperator::UnionAll(_) => {
                 let new_s_expr = self.new_children(s_expr).await?;
-                self.join_relations
-                    .push(JoinRelation::new(&new_s_expr, self.sample_executor.clone()));
+                self.join_relations.push(JoinRelation::new(
+                    &new_s_expr,
+                    self.sample_executor().clone(),
+                ));
                 Ok((Arc::new(new_s_expr), true))
             }
             RelOperator::Exchange(_) => {
@@ -289,9 +292,7 @@ impl DPhpy {
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
             | RelOperator::CacheScan(_)
-            | RelOperator::CteScan(_)
             | RelOperator::AsyncFunction(_)
-            | RelOperator::MaterializedCte(_)
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
@@ -383,7 +384,7 @@ impl DPhpy {
             // Get nodes  in `relation_set_tree`
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
             let ce = relation
-                .cardinality(self.ctx.clone(), self.metadata.clone())
+                .cardinality(self.table_ctx().clone(), self.metadata().clone())
                 .await?;
             let join = JoinNode {
                 join_type: JoinType::Inner,
@@ -822,7 +823,7 @@ impl DPhpy {
 
     fn apply_rule(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
-        let rule = RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.metadata.clone())?;
+        let rule = RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.opt_ctx.clone())?;
         let mut state = TransformResult::new();
         if rule
             .matchers()

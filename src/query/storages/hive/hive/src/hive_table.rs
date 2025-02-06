@@ -25,6 +25,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
@@ -59,7 +60,6 @@ use futures::TryStreamExt;
 use log::info;
 use log::trace;
 use opendal::EntryMode;
-use opendal::Metakey;
 use opendal::Operator;
 
 use super::hive_catalog::HiveCatalog;
@@ -243,7 +243,8 @@ impl HiveTable {
         if partition_num < 100000 {
             trace!(
                 "get {} partitions from hive metastore:{:?}",
-                partition_num, partition_names
+                partition_num,
+                partition_names
             );
         } else {
             trace!("get {} partitions from hive metastore", partition_num);
@@ -396,8 +397,8 @@ impl HiveTable {
 
 #[async_trait::async_trait]
 impl Table for HiveTable {
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn as_any(&self) -> &(dyn std::any::Any + 'static) {
@@ -599,10 +600,7 @@ async fn do_list_files_from_dir(
     sem: Arc<Semaphore>,
 ) -> Result<(Vec<HivePartInfo>, Vec<String>)> {
     let _a = sem.acquire().await.unwrap();
-    let mut m = operator
-        .lister_with(&location)
-        .metakey(Metakey::Mode | Metakey::ContentLength)
-        .await?;
+    let mut m = operator.lister_with(&location).await?;
 
     let mut all_files = vec![];
     let mut all_dirs = vec![];
@@ -621,8 +619,11 @@ async fn do_list_files_from_dir(
 
         match meta.mode() {
             EntryMode::FILE => {
+                let mut length = meta.content_length();
+                if length == 0 {
+                    length = operator.stat(path).await?.content_length();
+                }
                 let location = path.to_string();
-                let length = meta.content_length();
                 all_files.push(HivePartInfo::create(location, vec![], length));
             }
             EntryMode::DIR => {

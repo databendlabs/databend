@@ -13,22 +13,21 @@
 // limitations under the License.
 
 use std::fmt;
-use std::time::Duration;
 
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::with::With;
-use crate::MatchSeq;
+use crate::raft_types::NodeId;
 use crate::Node;
-use crate::NodeId;
-use crate::Operation;
 use crate::TxnRequest;
 
 mod cmd_context;
 mod meta_spec;
+mod upsert_kv;
+
 pub use cmd_context::CmdContext;
 pub use meta_spec::MetaSpec;
+pub use upsert_kv::UpsertKV;
 
 /// A Cmd describes what a user want to do to raft state machine
 /// and is the essential part of a raft log.
@@ -51,24 +50,6 @@ pub enum Cmd {
 
     /// Update one or more kv with a transaction.
     Transaction(TxnRequest),
-}
-
-/// Update or insert a general purpose kv store
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, deepsize::DeepSizeOf)]
-pub struct UpsertKV {
-    pub key: String,
-
-    /// Since a sequence number is always positive, using Exact(0) to perform an add-if-absent operation.
-    /// - GE(1) to perform an update-any operation.
-    /// - Exact(n) to perform an update on some specified version.
-    /// - Any to perform an update or insert that always takes effect.
-    pub seq: MatchSeq,
-
-    /// The value to set. A `None` indicates to delete it.
-    pub value: Operation<Vec<u8>>,
-
-    /// Meta data of a value.
-    pub value_meta: Option<MetaSpec>,
 }
 
 impl fmt::Display for Cmd {
@@ -98,79 +79,80 @@ impl fmt::Display for Cmd {
     }
 }
 
-impl fmt::Display for UpsertKV {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}({:?}) = {:?} ({:?})",
-            self.key, self.seq, self.value, self.value_meta
-        )
-    }
-}
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
 
-impl UpsertKV {
-    pub fn new(
-        key: impl ToString,
-        seq: MatchSeq,
-        value: Operation<Vec<u8>>,
-        value_meta: Option<MetaSpec>,
-    ) -> Self {
-        Self {
-            key: key.to_string(),
-            seq,
-            value,
-            value_meta,
-        }
+    use crate::Endpoint;
+    use crate::TxnCondition;
+    use crate::TxnOp;
+    use crate::TxnRequest;
+    use crate::UpsertKV;
+
+    #[test]
+    fn test_serde() -> anyhow::Result<()> {
+        // AddNode, override = true
+        let cmd = super::Cmd::AddNode {
+            node_id: 1,
+            node: super::Node::new("n1", Endpoint::new("e1", 12)),
+            overriding: true,
+        };
+
+        let want = r#"{"AddNode":{"node_id":1,"node":{"name":"n1","endpoint":{"addr":"e1","port":12},"grpc_api_advertise_address":null},"overriding":true}}"#;
+
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // AddNode, override = false
+        let cmd = super::Cmd::AddNode {
+            node_id: 1,
+            node: super::Node::new("n1", Endpoint::new("e1", 12)),
+            overriding: false,
+        };
+
+        let want = r#"{"AddNode":{"node_id":1,"node":{"name":"n1","endpoint":{"addr":"e1","port":12},"grpc_api_advertise_address":null},"overriding":false}}"#;
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // Decode from absent override field
+        let want = r#"{"AddNode":{"node_id":1,"node":{"name":"n1","endpoint":{"addr":"e1","port":12},"grpc_api_advertise_address":null}}}"#;
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // RemoveNode
+        let cmd = super::Cmd::RemoveNode { node_id: 1 };
+        let want = r#"{"RemoveNode":{"node_id":1}}"#;
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // UpsertKV
+        let cmd = super::Cmd::UpsertKV(UpsertKV::insert("k", b"v"));
+        let want = r#"{"UpsertKV":{"key":"k","seq":{"Exact":0},"value":{"Update":[118]},"value_meta":null}}"#;
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        // Transaction
+        let cmd = super::Cmd::Transaction(TxnRequest::new(
+            vec![TxnCondition::eq_value("k", b("v"))],
+            vec![TxnOp::put_with_ttl(
+                "k",
+                b("v"),
+                Some(Duration::from_millis(100)),
+            )],
+        ));
+        let want = concat!(
+            r#"{"Transaction":{"#,
+            r#""condition":[{"key":"k","expected":0,"target":{"Value":[118]}}],"#,
+            r#""if_then":[{"request":{"Put":{"key":"k","value":[118],"prev_value":true,"expire_at":null,"ttl_ms":100}}}],"#,
+            r#""else_then":[]"#,
+            r#"}}"#
+        );
+        assert_eq!(want, serde_json::to_string(&cmd)?);
+        assert_eq!(cmd, serde_json::from_str(want)?);
+
+        Ok(())
     }
 
-    pub fn insert(key: impl ToString, value: &[u8]) -> Self {
-        Self {
-            key: key.to_string(),
-            seq: MatchSeq::Exact(0),
-            value: Operation::Update(value.to_vec()),
-            value_meta: None,
-        }
-    }
-
-    pub fn update(key: impl ToString, value: &[u8]) -> Self {
-        Self {
-            key: key.to_string(),
-            seq: MatchSeq::GE(0),
-            value: Operation::Update(value.to_vec()),
-            value_meta: None,
-        }
-    }
-
-    pub fn delete(key: impl ToString) -> Self {
-        Self {
-            key: key.to_string(),
-            seq: MatchSeq::GE(1),
-            value: Operation::Delete,
-            value_meta: None,
-        }
-    }
-
-    pub fn with_expire_sec(self, expire_at_sec: u64) -> Self {
-        self.with(MetaSpec::new_expire(expire_at_sec))
-    }
-
-    /// Set the time to last for the value.
-    /// When the ttl is passed, the value is deleted.
-    pub fn with_ttl(self, ttl: Duration) -> Self {
-        self.with(MetaSpec::new_ttl(ttl))
-    }
-}
-
-impl With<MatchSeq> for UpsertKV {
-    fn with(mut self, seq: MatchSeq) -> Self {
-        self.seq = seq;
-        self
-    }
-}
-
-impl With<MetaSpec> for UpsertKV {
-    fn with(mut self, meta: MetaSpec) -> Self {
-        self.value_meta = Some(meta);
-        self
+    fn b(x: impl ToString) -> Vec<u8> {
+        x.to_string().into_bytes()
     }
 }

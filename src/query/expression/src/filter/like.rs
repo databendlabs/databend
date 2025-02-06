@@ -36,7 +36,7 @@ pub enum LikePattern<'a> {
     Constant(bool),
 }
 
-impl<'a> PartialEq for LikePattern<'a> {
+impl PartialEq for LikePattern<'_> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (LikePattern::OrdinalStr(a), LikePattern::OrdinalStr(b)) => a == b,
@@ -53,7 +53,7 @@ impl<'a> PartialEq for LikePattern<'a> {
     }
 }
 
-impl<'a> LikePattern<'a> {
+impl LikePattern<'_> {
     #[inline]
     pub fn compare(&self, haystack: &[u8]) -> bool {
         match self {
@@ -304,13 +304,13 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
         return None;
     }
     // Inspired by fast_strstr (https://github.com/RaphaelJ/fast_strstr).
-    let mut checksum = 0;
+    let mut checksum: i64 = 0;
     for i in 0..needle_len {
         // # Safety
         // `needle_len` <= haystack_len
         unsafe {
-            checksum += haystack.get_unchecked(i);
-            checksum -= needle.get_unchecked(i);
+            checksum += *haystack.get_unchecked(i) as i64;
+            checksum -= *needle.get_unchecked(i) as i64;
         }
     }
     let mut idx = 0;
@@ -331,8 +331,8 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
         // # Safety
         // `idx` < `haystack_len` and `idx` + `needle_len` < `haystack_len`.
         unsafe {
-            checksum -= haystack.get_unchecked(idx);
-            checksum += haystack.get_unchecked(idx + needle_len);
+            checksum -= *haystack.get_unchecked(idx) as i64;
+            checksum += *haystack.get_unchecked(idx + needle_len) as i64;
         }
         idx += 1;
     }

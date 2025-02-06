@@ -17,10 +17,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Not;
 
-use databend_common_arrow::arrow::bitmap;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_ast::Span;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
@@ -34,6 +33,7 @@ use crate::type_check::check_function;
 use crate::type_check::get_simple_cast_function;
 use crate::types::any::AnyType;
 use crate::types::array::ArrayColumn;
+use crate::types::boolean;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
@@ -203,15 +203,13 @@ impl<'a> Evaluator<'a> {
                     .map(|expr| self.partial_run(expr, validity.clone(), &mut child_option))
                     .collect::<Result<Vec<_>>>()?;
 
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match val {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
+                assert!(args
+                    .iter()
+                    .filter_map(|val| match val {
+                        Value::Column(col) => Some(col.len()),
+                        Value::Scalar(_) => None,
+                    })
+                    .all_equal());
 
                 let errors = if !child_suppress_error {
                     None
@@ -228,7 +226,7 @@ impl<'a> Evaluator<'a> {
                 };
 
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
+                let result = (eval)(&args, &mut ctx);
 
                 ctx.render_error(
                     *span,
@@ -258,14 +256,13 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|expr| self.partial_run(expr, validity.clone(), options))
                     .collect::<Result<Vec<_>>>()?;
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match val {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
+                assert!(args
+                    .iter()
+                    .filter_map(|val| match val {
+                        Value::Column(col) => Some(col.len()),
+                        Value::Scalar(_) => None,
+                    })
+                    .all_equal());
 
                 self.run_lambda(name, args, data_types, lambda_expr, return_type)
             }
@@ -379,7 +376,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Nullable(inner_src_ty), _) => match value {
                 Value::Scalar(Scalar::Null) => {
                     let has_valid = validity
-                        .map(|validity| validity.unset_bits() < validity.len())
+                        .map(|validity| validity.null_count() < validity.len())
                         .unwrap_or(true);
                     if has_valid {
                         Err(ErrorCode::BadArguments(format!(
@@ -397,9 +394,9 @@ impl<'a> Evaluator<'a> {
                     let has_valid_nulls = validity
                         .as_ref()
                         .map(|validity| {
-                            (validity & (&col.validity)).unset_bits() > validity.unset_bits()
+                            (validity & (&col.validity)).null_count() > validity.null_count()
                         })
-                        .unwrap_or_else(|| col.validity.unset_bits() > 0);
+                        .unwrap_or_else(|| col.validity.null_count() > 0);
                     if has_valid_nulls {
                         return Err(ErrorCode::Internal(format!(
                             "unable to cast `NULL` to type `{dest_type}`"
@@ -465,7 +462,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
                     });
                     let new_array = self
                         .run_cast(
@@ -613,10 +610,9 @@ impl<'a> Evaluator<'a> {
                         };
                         let validity = None;
 
-                        let mut key_builder = StringColumnBuilder::with_capacity(obj.len(), 0);
+                        let mut key_builder = StringColumnBuilder::with_capacity(obj.len());
                         for k in obj.keys() {
-                            key_builder.put_str(k.as_str());
-                            key_builder.commit_row();
+                            key_builder.put_and_commit(k.as_str());
                         }
                         let key_column = Column::String(key_builder.build());
 
@@ -659,8 +655,7 @@ impl<'a> Evaluator<'a> {
                             };
 
                             for (k, v) in obj.iter() {
-                                key_builder.put_str(k.as_str());
-                                key_builder.commit_row();
+                                key_builder.put_and_commit(k.as_str());
                                 v.write_to_vec(&mut value_builder.builder.data);
                                 value_builder.builder.commit_row();
                             }
@@ -712,7 +707,7 @@ impl<'a> Evaluator<'a> {
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
                     let validity = validity.map(|validity| {
-                        Bitmap::new_constant(validity.unset_bits() != validity.len(), array.len())
+                        Bitmap::new_constant(validity.null_count() != validity.len(), array.len())
                     });
                     let new_array = self
                         .run_cast(
@@ -860,7 +855,7 @@ impl<'a> Evaluator<'a> {
                         .unwrap()
                         .into_nullable()
                         .unwrap();
-                    let validity = bitmap::and(&col.validity, &new_col.validity);
+                    let validity = boolean::and(&col.validity, &new_col.validity);
                     Ok(Value::Column(NullableColumn::new_column(
                         new_col.column,
                         validity,
@@ -1106,17 +1101,15 @@ impl<'a> Evaluator<'a> {
         let else_result = self.partial_run(&args[args.len() - 1], Some(validity), options)?;
 
         // Assert that all the arguments have the same length.
-        assert!(
-            conds
-                .iter()
-                .chain(results.iter())
-                .chain([&else_result])
-                .filter_map(|val| match val {
-                    Value::Column(col) => Some(col.len()),
-                    Value::Scalar(_) => None,
-                })
-                .all_equal()
-        );
+        assert!(conds
+            .iter()
+            .chain(results.iter())
+            .chain([&else_result])
+            .filter_map(|val| match val {
+                Value::Column(col) => Some(col.len()),
+                Value::Scalar(_) => None,
+            })
+            .all_equal());
 
         // Pick the results from the result branches depending on the condition.
         let mut output_builder = ColumnBuilder::with_capacity(&generics[0], len.unwrap_or(1));
@@ -1205,7 +1198,6 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|expr| self.run(expr))
                     .collect::<Result<Vec<_>>>()?;
-                let cols_ref = args.iter().map(Value::as_ref).collect::<Vec<_>>();
                 let mut ctx = EvalContext {
                     generics,
                     num_rows: self.data_block.num_rows(),
@@ -1214,7 +1206,7 @@ impl<'a> Evaluator<'a> {
                     func_ctx: self.func_ctx,
                     suppress_error: false,
                 };
-                let result = (eval)(&cols_ref, &mut ctx, max_nums_per_row);
+                let result = (eval)(&args, &mut ctx, max_nums_per_row);
                 ctx.render_error(
                     *span,
                     id.params(),
@@ -1597,15 +1589,13 @@ impl<'a> Evaluator<'a> {
             .iter()
             .map(|expr| self.get_select_child(expr, options))
             .collect::<Result<Vec<_>>>()?;
-        assert!(
-            children
-                .iter()
-                .filter_map(|val| match &val.0 {
-                    Value::Column(col) => Some(col.len()),
-                    Value::Scalar(_) => None,
-                })
-                .all_equal()
-        );
+        assert!(children
+            .iter()
+            .filter_map(|val| match &val.0 {
+                Value::Column(col) => Some(col.len()),
+                Value::Scalar(_) => None,
+            })
+            .all_equal());
         Ok(children)
     }
 
@@ -1694,19 +1684,15 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|expr| self.get_select_child(expr, &mut child_option))
                     .collect::<Result<Vec<_>>>()?;
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match &val.0 {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
-
-                let cols_ref = args
+                assert!(args
                     .iter()
-                    .map(|(val, _)| Value::as_ref(val))
-                    .collect::<Vec<_>>();
+                    .filter_map(|val| match &val.0 {
+                        Value::Column(col) => Some(col.len()),
+                        Value::Scalar(_) => None,
+                    })
+                    .all_equal());
+
+                let args = args.into_iter().map(|(val, _)| val).collect::<Vec<_>>();
 
                 let errors = if !child_suppress_error {
                     None
@@ -1722,8 +1708,7 @@ impl<'a> Evaluator<'a> {
                     suppress_error: options.suppress_error,
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
-                let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                let args = args.into_iter().map(|(val, _)| val).collect::<Vec<_>>();
+                let result = (eval)(&args, &mut ctx);
 
                 ctx.render_error(
                     *span,
@@ -1755,14 +1740,13 @@ impl<'a> Evaluator<'a> {
                     .iter()
                     .map(|expr| self.partial_run(expr, None, &mut EvaluateOptions::default()))
                     .collect::<Result<Vec<_>>>()?;
-                assert!(
-                    args.iter()
-                        .filter_map(|val| match val {
-                            Value::Column(col) => Some(col.len()),
-                            Value::Scalar(_) => None,
-                        })
-                        .all_equal()
-                );
+                assert!(args
+                    .iter()
+                    .filter_map(|val| match val {
+                        Value::Column(col) => Some(col.len()),
+                        Value::Scalar(_) => None,
+                    })
+                    .all_equal());
 
                 Ok((
                     self.run_lambda(name, args, data_types, lambda_expr, return_type)?,
@@ -1926,7 +1910,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 if inner_expr.as_constant().is_some() {
-                    let block = DataBlock::empty();
+                    let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let cast_expr = cast_expr.project_column_ref(|_| unreachable!());
@@ -2057,7 +2041,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty();
+                    let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
@@ -2136,7 +2120,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 }
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty();
+                    let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());
@@ -2183,7 +2167,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 if all_args_is_scalar {
-                    let block = DataBlock::empty();
+                    let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
                     // Since we know the expression is constant, it'll be safe to change its column index type.
                     let func_expr = func_expr.project_column_ref(|_| unreachable!());

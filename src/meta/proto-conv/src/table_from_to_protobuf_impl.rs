@@ -183,14 +183,22 @@ impl FromToProto for mt::TableMeta {
     fn from_pb(p: pb::TableMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        let schema = p.schema.ok_or_else(|| Incompatible {
-            reason: "TableMeta.schema can not be None".to_string(),
-        })?;
+        let schema = p
+            .schema
+            .ok_or_else(|| Incompatible::new("TableMeta.schema can not be None".to_string()))?;
 
         let mut indexes = BTreeMap::new();
         for (name, index) in p.indexes {
             indexes.insert(name, mt::TableIndex::from_pb(index)?);
         }
+
+        let cluster_key_seq = if let Some(seq) = p.cluster_key_seq {
+            seq
+        } else if p.cluster_keys.is_empty() {
+            0
+        } else {
+            p.cluster_keys.len() as u32 - 1
+        };
 
         let v = Self {
             schema: Arc::new(ex::TableSchema::from_pb(schema)?),
@@ -202,9 +210,8 @@ impl FromToProto for mt::TableMeta {
             },
             part_prefix: p.part_prefix.unwrap_or("".to_string()),
             options: p.options,
-            default_cluster_key: p.default_cluster_key,
-            cluster_keys: p.cluster_keys,
-            default_cluster_key_id: p.default_cluster_key_id,
+            cluster_key: p.cluster_key,
+            cluster_key_seq,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             updated_on: DateTime::<Utc>::from_pb(p.updated_on)?,
             drop_on: match p.drop_on {
@@ -250,9 +257,10 @@ impl FromToProto for mt::TableMeta {
                 Some(self.part_prefix.clone())
             },
             options: self.options.clone(),
-            default_cluster_key: self.default_cluster_key.clone(),
-            cluster_keys: self.cluster_keys.clone(),
-            default_cluster_key_id: self.default_cluster_key_id,
+            cluster_key: self.cluster_key.clone(),
+            // cluster_keys is deprecated.
+            cluster_keys: vec![],
+            cluster_key_seq: Some(self.cluster_key_seq),
             created_on: self.created_on.to_pb()?,
             updated_on: self.updated_on.to_pb()?,
             drop_on: match self.drop_on {

@@ -40,9 +40,8 @@ impl FromToProto for mt::IndexMeta {
 
         let v = Self {
             table_id: p.table_id,
-            index_type: FromPrimitive::from_i32(p.index_type).ok_or_else(|| Incompatible {
-                reason: format!("invalid IndexType: {}", p.index_type),
-            })?,
+            index_type: FromPrimitive::from_i32(p.index_type)
+                .ok_or_else(|| Incompatible::new(format!("invalid IndexType: {}", p.index_type)))?,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             dropped_on: match p.dropped_on {
                 Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
@@ -79,5 +78,30 @@ impl FromToProto for mt::IndexMeta {
             sync_creation: self.sync_creation,
         };
         Ok(p)
+    }
+}
+
+impl FromToProto for mt::MarkedDeletedIndexMeta {
+    type PB = pb::MarkedDeletedIndexMeta;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> {
+        Ok(Self {
+            dropped_on: DateTime::<Utc>::from_pb(p.dropped_on)?,
+            index_type: FromPrimitive::from_i32(p.index_type)
+                .ok_or_else(|| Incompatible::new(format!("invalid IndexType: {}", p.index_type)))?,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            dropped_on: self.dropped_on.to_pb()?,
+            index_type: self.index_type.clone() as i32,
+        })
     }
 }

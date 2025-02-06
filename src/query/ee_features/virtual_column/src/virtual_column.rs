@@ -23,6 +23,7 @@ use databend_common_meta_app::schema::DropVirtualColumnReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::schema::VirtualField;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::Location;
@@ -57,7 +58,7 @@ pub trait VirtualColumnHandler: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
-        virtual_columns: Vec<String>,
+        virtual_columns: Vec<VirtualField>,
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()>;
@@ -113,7 +114,7 @@ impl VirtualColumnHandlerWrapper {
         &self,
         ctx: Arc<dyn TableContext>,
         fuse_table: &FuseTable,
-        virtual_columns: Vec<String>,
+        virtual_columns: Vec<VirtualField>,
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {

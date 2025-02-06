@@ -84,6 +84,12 @@ SELECT * FROM t1
 ----
 1
 
+statement ok
+CREATE TEMP TABLE t2(c int)
+
+statement error 2302
+RENAME TABLE t1 to t2
+
 statement error 1006
 RENAME TABLE t1 to system.t1
 

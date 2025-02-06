@@ -34,7 +34,6 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -60,7 +59,7 @@ enum State {
     RefreshTable,
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
-        cluster_key_meta: Option<ClusterKey>,
+        cluster_key_id: Option<u32>,
         table_info: TableInfo,
     },
     TryCommit {
@@ -138,12 +137,21 @@ where F: SnapshotGenerator + Send + 'static
     }
 
     fn is_error_recoverable(&self, e: &ErrorCode) -> bool {
+        let code = e.code();
         // When prev_snapshot_id is some, means it is an alter table column modification or truncate.
         // In this case if commit to meta fail and error is TABLE_VERSION_MISMATCHED operation will be aborted.
-        if self.prev_snapshot_id.is_some() && e.code() == ErrorCode::TABLE_VERSION_MISMATCHED {
+        if self.prev_snapshot_id.is_some() && code == ErrorCode::TABLE_VERSION_MISMATCHED {
             return false;
         }
-        FuseTable::is_error_recoverable(e, self.purge)
+
+        code == ErrorCode::TABLE_VERSION_MISMATCHED
+            || (self.purge && code == ErrorCode::STORAGE_NOT_FOUND)
+    }
+
+    fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
+        // currently, the only error that we know,  which indicates there are no side effects
+        // is TABLE_VERSION_MISMATCHED
+        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
     }
 
     fn read_meta(&mut self) -> Result<Event> {
@@ -249,7 +257,7 @@ where F: SnapshotGenerator + Send + 'static
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSnapshot {
                 previous,
-                cluster_key_meta,
+                cluster_key_id,
                 table_info,
             } => {
                 let change_tracking_enabled_during_commit = {
@@ -283,7 +291,7 @@ where F: SnapshotGenerator + Send + 'static
                 let schema = self.table.schema().as_ref().clone();
                 match self.snapshot_gen.generate_new_snapshot(
                     schema,
-                    cluster_key_meta,
+                    cluster_key_id,
                     previous,
                     Some(table_info.ident.seq),
                     self.ctx.txn_mgr(),
@@ -348,7 +356,7 @@ where F: SnapshotGenerator + Send + 'static
 
                     self.state = State::GenerateSnapshot {
                         previous,
-                        cluster_key_meta: fuse_table.cluster_key_meta.clone(),
+                        cluster_key_id: fuse_table.cluster_key_id(),
                         table_info,
                     };
                 }
@@ -434,7 +442,7 @@ where F: SnapshotGenerator + Send + 'static
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
                         }
                         for segment_loc in std::mem::take(&mut self.new_segment_locs).into_iter() {
-                            self.ctx.add_segment_location(segment_loc)?;
+                            self.ctx.add_written_segment_location(segment_loc)?;
                         }
 
                         let target_descriptions = {
@@ -469,7 +477,7 @@ where F: SnapshotGenerator + Send + 'static
                             None => {
                                 // Commit not fulfilled. try to abort the operations.
                                 // if it is safe to do so.
-                                if FuseTable::no_side_effects_in_meta_store(&e) {
+                                if Self::no_side_effects_in_meta_store(&e) {
                                     // if we are sure that table state inside metastore has not been
                                     // modified by this operation, abort this operation.
                                     self.state = State::Abort(e);
@@ -498,10 +506,9 @@ where F: SnapshotGenerator + Send + 'static
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
-                let cluster_key_meta = fuse_table.cluster_key_meta.clone();
                 self.state = State::GenerateSnapshot {
                     previous,
-                    cluster_key_meta,
+                    cluster_key_id: fuse_table.cluster_key_id(),
                     table_info: fuse_table.table_info.clone(),
                 };
             }

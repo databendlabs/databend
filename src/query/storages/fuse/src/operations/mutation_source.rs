@@ -88,7 +88,7 @@ impl FuseTable {
 
         Ok(match &predicates {
             Value::Scalar(v) => *v,
-            Value::Column(bitmap) => bitmap.unset_bits() == 0,
+            Value::Column(bitmap) => bitmap.null_count() == 0,
         })
     }
 
@@ -236,6 +236,7 @@ impl FuseTable {
             &push_down,
             self.bloom_index_cols(),
             None,
+            self.get_storage_format(),
         )?;
 
         if let Some(inverse) = filters.map(|f| f.inverted_filter) {

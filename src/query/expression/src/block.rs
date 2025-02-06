@@ -17,9 +17,7 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::array::Array;
-use databend_common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use databend_common_arrow::ArrayRef;
+use arrow_array::ArrayRef;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -32,6 +30,7 @@ use crate::DataField;
 use crate::DataSchemaRef;
 use crate::Domain;
 use crate::Scalar;
+use crate::ScalarRef;
 use crate::TableSchemaRef;
 use crate::Value;
 
@@ -57,7 +56,7 @@ impl BlockEntry {
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
-            if let crate::ValueRef::Column(c) = value.as_ref() {
+            if let crate::Value::Column(c) = &value {
                 c.check_valid().unwrap();
             }
             check_type(&data_type, &value);
@@ -83,28 +82,36 @@ impl BlockEntry {
 #[typetag::serde(tag = "type")]
 pub trait BlockMetaInfo: Debug + Send + Sync + Any + 'static {
     #[allow(clippy::borrowed_box)]
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool;
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
+        panic!(
+            "The reason for not implementing equals is usually because the higher-level logic doesn't allow/need the meta to be compared."
+        )
+    }
 
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo>;
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        panic!(
+            "The reason for not implementing clone_self is usually because the higher-level logic doesn't allow/need the associated block to be cloned."
+        )
+    }
 }
 
-pub trait BlockMetaInfoDowncast: Sized {
-    fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self>;
+pub trait BlockMetaInfoDowncast: Sized + BlockMetaInfo {
+    fn boxed(self) -> BlockMetaInfoPtr {
+        Box::new(self)
+    }
 
-    fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self>;
-}
-
-impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {
     fn downcast_from(boxed: BlockMetaInfoPtr) -> Option<Self> {
         let boxed: Box<dyn Any> = boxed;
         boxed.downcast().ok().map(|x| *x)
     }
 
     fn downcast_ref_from(boxed: &BlockMetaInfoPtr) -> Option<&Self> {
-        let boxed: &dyn Any = boxed.as_ref();
+        let boxed = boxed.as_ref() as &dyn Any;
         boxed.downcast_ref()
     }
 }
+
+impl<T: BlockMetaInfo> BlockMetaInfoDowncast for T {}
 
 impl DataBlock {
     #[inline]
@@ -166,6 +173,11 @@ impl DataBlock {
     #[inline]
     pub fn empty() -> Self {
         DataBlock::new(vec![], 0)
+    }
+
+    #[inline]
+    pub fn empty_with_rows(rows: usize) -> Self {
+        DataBlock::new(vec![], rows)
     }
 
     #[inline]
@@ -232,7 +244,7 @@ impl DataBlock {
     pub fn domains(&self) -> Vec<Domain> {
         self.columns
             .iter()
-            .map(|entry| entry.value.as_ref().domain(&entry.data_type))
+            .map(|entry| entry.value.domain(&entry.data_type))
             .collect()
     }
 
@@ -326,8 +338,7 @@ impl DataBlock {
     }
 
     pub fn split_by_rows_no_tail(&self, max_rows_per_block: usize) -> Vec<Self> {
-        let mut res =
-            Vec::with_capacity((self.num_rows + max_rows_per_block - 1) / max_rows_per_block);
+        let mut res = Vec::with_capacity(self.num_rows.div_ceil(max_rows_per_block));
         let mut offset = 0;
         let mut remain_rows = self.num_rows;
         while remain_rows >= max_rows_per_block {
@@ -446,38 +457,18 @@ impl DataBlock {
         self.meta
     }
 
-    pub fn from_arrow_chunk<A: AsRef<dyn Array>>(
-        arrow_chunk: &ArrowChunk<A>,
-        schema: &DataSchema,
-    ) -> Result<Self> {
-        let cols = schema
-            .fields
-            .iter()
-            .zip(arrow_chunk.arrays())
-            .map(|(field, col)| {
-                Ok(BlockEntry::new(
-                    field.data_type().clone(),
-                    Value::Column(Column::from_arrow(col.as_ref(), field.data_type())?),
-                ))
-            })
-            .collect::<Result<_>>()?;
-
-        Ok(DataBlock::new(cols, arrow_chunk.len()))
-    }
-
     // If default_vals[i].is_some(), then DataBlock.column[i] = num_rows * default_vals[i].
-    // Else, DataBlock.column[i] = chuck.column.
+    // Else, DataBlock.column[i] = self.column.
     // For example, Schema.field is [a,b,c] and default_vals is [Some("a"), None, Some("c")],
     // then the return block column will be ["a"*num_rows, chunk.column[0], "c"*num_rows].
-    pub fn create_with_default_value_and_chunk<A: AsRef<dyn Array>>(
+    pub fn create_with_opt_default_value(
+        arrays: Vec<ArrayRef>,
         schema: &DataSchema,
-        chunk: &ArrowChunk<A>,
         default_vals: &[Option<Scalar>],
         num_rows: usize,
     ) -> Result<DataBlock> {
         let mut chunk_idx: usize = 0;
         let schema_fields = schema.fields();
-        let chunk_columns = chunk.arrays();
 
         let mut columns = Vec::with_capacity(default_vals.len());
         for (i, default_val) in default_vals.iter().enumerate() {
@@ -489,12 +480,9 @@ impl DataBlock {
                     BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()))
                 }
                 None => {
-                    let chunk_column = &chunk_columns[chunk_idx];
+                    let col = Column::from_arrow_rs(arrays[chunk_idx].clone(), data_type)?;
                     chunk_idx += 1;
-                    BlockEntry::new(
-                        data_type.clone(),
-                        Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)?),
-                    )
+                    BlockEntry::new(data_type.clone(), Value::Column(col))
                 }
             };
 
@@ -509,17 +497,18 @@ impl DataBlock {
         default_vals: &[Scalar],
         num_rows: usize,
     ) -> Result<DataBlock> {
-        let default_opt_vals: Vec<Option<Scalar>> = default_vals
-            .iter()
-            .map(|default_val| Some(default_val.to_owned()))
-            .collect();
+        let schema_fields = schema.fields();
 
-        Self::create_with_default_value_and_chunk(
-            schema,
-            &ArrowChunk::<ArrayRef>::new(vec![]),
-            &default_opt_vals[0..],
-            num_rows,
-        )
+        let mut columns = Vec::with_capacity(default_vals.len());
+        for (i, default_val) in default_vals.iter().enumerate() {
+            let field = &schema_fields[i];
+            let data_type = field.data_type();
+
+            let column = BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()));
+            columns.push(column);
+        }
+
+        Ok(DataBlock::new(columns, num_rows))
     }
 
     // If block_column_ids not contain schema.field[i].column_id,
@@ -600,23 +589,13 @@ impl DataBlock {
             .collect();
         DataSchema::new(fields)
     }
-}
 
-impl TryFrom<DataBlock> for ArrowChunk<ArrayRef> {
-    type Error = ErrorCode;
-
-    fn try_from(v: DataBlock) -> Result<ArrowChunk<ArrayRef>> {
-        let arrays = v
-            .convert_to_full()
-            .columns()
-            .iter()
-            .map(|val| {
-                let column = val.value.clone().into_column().unwrap();
-                column.as_arrow()
-            })
-            .collect();
-
-        Ok(ArrowChunk::try_new(arrays)?)
+    // This is inefficient, don't use it in hot path
+    pub fn value_at(&self, col: usize, row: usize) -> Option<ScalarRef<'_>> {
+        if col >= self.columns.len() {
+            return None;
+        }
+        self.columns[col].value.index(row)
     }
 }
 
@@ -633,8 +612,8 @@ impl Eq for Box<dyn BlockMetaInfo> {}
 
 impl PartialEq for Box<dyn BlockMetaInfo> {
     fn eq(&self, other: &Self) -> bool {
-        let this_any: &dyn Any = self.as_ref();
-        let other_any: &dyn Any = other.as_ref();
+        let this_any = self.as_ref() as &dyn Any;
+        let other_any = other.as_ref() as &dyn Any;
 
         match this_any.type_id() == other_any.type_id() {
             true => self.equals(other),
@@ -667,4 +646,29 @@ fn check_type(data_type: &DataType, value: &Value<AnyType>) {
         Value::Scalar(s) => assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable()),
         Value::Column(c) => assert_eq!(&c.data_type(), data_type),
     }
+}
+
+#[macro_export]
+macro_rules! local_block_meta_serde {
+    ($T:ty) => {
+        impl serde::Serialize for $T {
+            fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
+            where S: serde::Serializer {
+                unreachable!(
+                    "{} must not be exchanged between multiple nodes.",
+                    stringify!($T)
+                )
+            }
+        }
+
+        impl<'de> serde::Deserialize<'de> for $T {
+            fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
+            where D: serde::Deserializer<'de> {
+                unreachable!(
+                    "{} must not be exchanged between multiple nodes.",
+                    stringify!($T)
+                )
+            }
+        }
+    };
 }

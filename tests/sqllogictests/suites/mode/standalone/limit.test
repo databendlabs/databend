@@ -2,10 +2,10 @@
 # Both results are reasonable
 
 statement ok
-create table t1 as select number as a from numbers(10);
+create or replace table t1 as select number as a from numbers(10);
 
 statement ok
-create table t2 as select number as b from numbers(100);
+create or replace table t2 as select number as b from numbers(100);
 
 query I rowsort
 select * from t1 left join t2 on t1.a = t2.b limit 10 offset 5;
@@ -17,10 +17,7 @@ select * from t1 left join t2 on t1.a = t2.b limit 10 offset 5;
 9 9
 
 statement ok
-drop table if exists t;
-
-statement ok
-create table t(id int, top int);
+create or replace table t(id int, top int);
 
 statement ok
 insert into t values(1,10),(2,20),(3,30);

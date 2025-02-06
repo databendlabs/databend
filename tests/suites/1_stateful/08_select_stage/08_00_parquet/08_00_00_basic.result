@@ -1,15 +1,17 @@
+2
 --- named internal stage
-2	45	699
+2	53	791
 1	2	3
 4	5	6
-2	45	699
+2	53	791
 --- external stage
 1	2	3
 4	5	6
 --- file_format
 1	2	3
 4	5	6
+2
 --- variant named internal stage
-2	70	677
+2	70	767
 1	[1,2,3]
 2	{"k":"v"}

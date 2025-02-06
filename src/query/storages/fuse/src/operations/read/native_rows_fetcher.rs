@@ -26,7 +26,6 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::LoadParams;
@@ -63,6 +62,10 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
     async fn on_start(&mut self) -> Result<()> {
         self.snapshot = self.table.read_table_snapshot().await?;
         Ok(())
+    }
+
+    fn clear_cache(&mut self) {
+        self.part_map.clear();
     }
 
     #[async_backtrace::framed]
@@ -147,10 +150,6 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
             .collect::<Vec<_>>();
 
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
-    }
-
-    fn schema(&self) -> DataSchema {
-        self.reader.data_schema()
     }
 }
 
@@ -238,7 +237,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
         for (index, column_node) in reader.project_column_nodes.iter().enumerate() {
             let readers = chunks.remove(&index).unwrap();
             if !readers.is_empty() {
-                let array_iter = reader.build_array_iter(column_node, readers)?;
+                let array_iter = reader.build_column_iter(column_node, readers)?;
                 array_iters.insert(index, array_iter);
             }
         }
@@ -253,13 +252,13 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             // discarded, and also that calling `nth(0)` multiple times on the same iterator
             // will return different elements.
             let pos = *page - offset;
-            let mut arrays = Vec::with_capacity(array_iters.len());
+            let mut columns = Vec::with_capacity(array_iters.len());
             for (index, array_iter) in array_iters.iter_mut() {
                 let array = array_iter.nth(pos as usize).unwrap()?;
-                arrays.push((*index, array));
+                columns.push((*index, array));
             }
             offset = *page + 1;
-            let block = reader.build_block(&arrays, None)?;
+            let block = reader.build_block(&columns, None)?;
             blocks.push(block);
         }
 

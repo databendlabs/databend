@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use ahash::HashMap;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -74,6 +74,11 @@ pub struct Metadata {
     table_row_id_index: HashMap<IndexType, IndexType>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
     max_column_position: usize, // for CSV
+
+    /// Scan id of each scan operator.
+    next_scan_id: usize,
+    /// Mappings from base column index to scan id.
+    base_column_scan_id: HashMap<IndexType, usize>,
 }
 
 impl Metadata {
@@ -165,6 +170,10 @@ impl Metadata {
         self.lazy_columns.extend(indices);
     }
 
+    pub fn clear_lazy_columns(&mut self) {
+        self.lazy_columns.clear();
+    }
+
     pub fn add_non_lazy_columns(&mut self, indices: HashSet<usize>) {
         debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
         self.non_lazy_columns.extend(indices);
@@ -231,7 +240,7 @@ impl Metadata {
         path_indices: Option<Vec<IndexType>>,
         column_id: Option<u32>,
         column_position: Option<usize>,
-        virtual_computed_expr: Option<String>,
+        virtual_expr: Option<String>,
     ) -> IndexType {
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -242,7 +251,7 @@ impl Metadata {
             table_index,
             path_indices,
             column_id,
-            virtual_computed_expr,
+            virtual_expr,
         });
         self.columns.push(column_entry);
         column_index
@@ -282,14 +291,20 @@ impl Metadata {
 
     pub fn add_virtual_column(
         &mut self,
-        table_index: IndexType,
-        source_column_name: String,
-        source_column_index: IndexType,
+        base_column: &BaseTableColumn,
+        column_id: u32,
         column_name: String,
         data_type: TableDataType,
         key_paths: Scalar,
         old_index: Option<IndexType>,
+        is_created: bool,
     ) -> IndexType {
+        let table_index = base_column.table_index;
+        let source_column_name = base_column.column_name.clone();
+        let source_column_index = base_column.column_index;
+        // The type of source column is variant, not a nested type, must have `column_id`.
+        let source_column_id = base_column.column_id.unwrap();
+
         // If the function that generates the virtual column already has an index,
         // we can use that index and avoid generate a new one.
         let column_index = if let Some(old_index) = old_index {
@@ -301,10 +316,13 @@ impl Metadata {
             table_index,
             source_column_name,
             source_column_index,
+            source_column_id,
+            column_id,
             column_index,
             column_name,
             data_type,
             key_paths,
+            is_created,
         });
         if old_index.is_some() {
             self.columns[column_index] = column;
@@ -339,9 +357,10 @@ impl Metadata {
         source_of_view: bool,
         source_of_index: bool,
         source_of_stage: bool,
-        consume: bool,
+        cte_suffix_name: Option<String>,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
+        let table_name = Self::remove_cte_suffix(table_name, cte_suffix_name);
 
         let table_index = self.tables.len();
         // If exists table alias name, use it instead of origin name
@@ -355,7 +374,6 @@ impl Metadata {
             source_of_view,
             source_of_index,
             source_of_stage,
-            consume,
         };
         self.tables.push(table_entry);
         let table_schema = table_meta.schema_with_stream();
@@ -389,7 +407,6 @@ impl Metadata {
                 None
             };
 
-            // TODO handle Tuple inside Array.
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
@@ -454,8 +471,32 @@ impl Metadata {
     pub fn set_max_column_position(&mut self, max_pos: usize) {
         self.max_column_position = max_pos
     }
+
     pub fn get_max_column_position(&self) -> usize {
         self.max_column_position
+    }
+
+    pub fn next_scan_id(&mut self) -> usize {
+        let next_scan_id = self.next_scan_id;
+        self.next_scan_id += 1;
+        next_scan_id
+    }
+
+    pub fn add_base_column_scan_id(&mut self, base_column_scan_id: HashMap<usize, usize>) {
+        self.base_column_scan_id.extend(base_column_scan_id);
+    }
+
+    pub fn base_column_scan_id(&self, column_index: usize) -> Option<usize> {
+        self.base_column_scan_id.get(&column_index).cloned()
+    }
+
+    fn remove_cte_suffix(mut table_name: String, cte_suffix_name: Option<String>) -> String {
+        if let Some(suffix) = cte_suffix_name {
+            if table_name.ends_with(&suffix) {
+                table_name.truncate(table_name.len() - suffix.len() - 1);
+            }
+        }
+        table_name
     }
 }
 
@@ -473,9 +514,6 @@ pub struct TableEntry {
 
     source_of_stage: bool,
     table: Arc<dyn Table>,
-
-    /// If this table need to be consumed.
-    consume: bool,
 }
 
 impl Debug for TableEntry {
@@ -508,7 +546,6 @@ impl TableEntry {
             source_of_view: false,
             source_of_index: false,
             source_of_stage: false,
-            consume: false,
         }
     }
 
@@ -557,9 +594,8 @@ impl TableEntry {
         self.source_of_index
     }
 
-    /// Return true if this table need to be consumed.
-    pub fn is_consume(&self) -> bool {
-        self.consume
+    pub fn update_table_index(&mut self, table_index: IndexType) {
+        self.index = table_index;
     }
 }
 
@@ -577,7 +613,7 @@ pub struct BaseTableColumn {
     /// The column id in table schema.
     pub column_id: Option<u32>,
     /// Virtual computed expression, generated in query.
-    pub virtual_computed_expr: Option<String>,
+    pub virtual_expr: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -602,12 +638,15 @@ pub struct VirtualColumn {
     pub table_index: IndexType,
     pub source_column_name: String,
     pub source_column_index: IndexType,
+    pub source_column_id: u32,
+    pub column_id: u32,
     pub column_index: IndexType,
     pub column_name: String,
     pub data_type: TableDataType,
 
     /// Paths to generate virtual column from source column
     pub key_paths: Scalar,
+    pub is_created: bool,
 }
 
 #[derive(Clone, Debug)]

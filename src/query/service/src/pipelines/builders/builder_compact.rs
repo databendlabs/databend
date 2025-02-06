@@ -73,18 +73,20 @@ impl PipelineBuilder {
             let column_ids = compact_block.column_ids.clone();
             self.main_pipeline.set_on_init(move || {
                 let ctx = query_ctx.clone();
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let partitions = BlockCompactMutator::build_compact_tasks(
-                        ctx.clone(),
-                        column_ids.clone(),
-                        cluster_key_id,
-                        thresholds,
-                        lazy_parts,
-                    )
-                    .await?;
+                let partitions =
+                    Runtime::with_worker_threads(2, Some("build_compact_tasks".to_string()))?
+                        .block_on(async move {
+                            let partitions = BlockCompactMutator::build_compact_tasks(
+                                ctx.clone(),
+                                column_ids.clone(),
+                                cluster_key_id,
+                                thresholds,
+                                lazy_parts,
+                            )
+                            .await?;
 
-                    Result::<_>::Ok(partitions)
-                })?;
+                            Result::<_>::Ok(partitions)
+                        })?;
 
                 let partitions = Partitions::create(PartitionsShuffleKind::Mod, partitions);
                 query_ctx.set_partitions(partitions)?;

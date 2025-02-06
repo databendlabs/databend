@@ -13,6 +13,36 @@ ShowDatabases(
 
 
 ---------- Input ----------
+show drop databases
+---------- Output ---------
+SHOW DROP DATABASES
+---------- AST ------------
+ShowDropDatabases(
+    ShowDropDatabasesStmt {
+        catalog: None,
+        limit: None,
+    },
+)
+
+
+---------- Input ----------
+show drop databases like 'db%'
+---------- Output ---------
+SHOW DROP DATABASES LIKE 'db%'
+---------- AST ------------
+ShowDropDatabases(
+    ShowDropDatabasesStmt {
+        catalog: None,
+        limit: Some(
+            Like {
+                pattern: "db%",
+            },
+        ),
+    },
+)
+
+
+---------- Input ----------
 show databases format TabSeparatedWithNamesAndTypes;
 ---------- Output ---------
 SHOW DATABASES
@@ -49,7 +79,7 @@ ShowTables(
 ---------- Input ----------
 show drop tables
 ---------- Output ---------
-SHOW DROP TABLE
+SHOW DROP TABLES
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -62,7 +92,7 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables like 't%'
 ---------- Output ---------
-SHOW DROP TABLE LIKE 't%'
+SHOW DROP TABLES LIKE 't%'
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -79,7 +109,7 @@ ShowDropTables(
 ---------- Input ----------
 show drop tables where name='t'
 ---------- Output ---------
-SHOW DROP TABLE WHERE name = 't'
+SHOW DROP TABLES WHERE name = 't'
 ---------- AST ------------
 ShowDropTables(
     ShowDropTablesStmt {
@@ -2759,81 +2789,6 @@ CreateTable(
                 protocol: "s3",
                 name: "testbucket",
                 path: "/admin/data/",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {
-                        "aws_key_id": "minioadmin",
-                        "aws_secret_key": "minioadmin",
-                        "endpoint_url": "http://127.0.0.1:9900",
-                    },
-                },
-            },
-        ),
-        cluster_by: None,
-        table_options: {},
-        as_query: None,
-        table_type: Normal,
-    },
-)
-
-
----------- Input ----------
-create table if not exists a.b (a int) 's3://testbucket/admin/data/'
-    connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
-    location_prefix = 'db';
----------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = 'minioadmin', aws_secret_key = 'minioadmin', endpoint_url = 'http://127.0.0.1:9900' ) LOCATION_PREFIX = 'db'
----------- AST ------------
-CreateTable(
-    CreateTableStmt {
-        create_option: CreateIfNotExists,
-        catalog: None,
-        database: Some(
-            Identifier {
-                span: Some(
-                    27..28,
-                ),
-                name: "a",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        table: Identifier {
-            span: Some(
-                29..30,
-            ),
-            name: "b",
-            quote: None,
-            ident_type: None,
-        },
-        source: Some(
-            Columns(
-                [
-                    ColumnDefinition {
-                        name: Identifier {
-                            span: Some(
-                                32..33,
-                            ),
-                            name: "a",
-                            quote: None,
-                            ident_type: None,
-                        },
-                        data_type: Int32,
-                        expr: None,
-                        comment: None,
-                    },
-                ],
-                None,
-            ),
-        ),
-        engine: None,
-        uri_location: Some(
-            UriLocation {
-                protocol: "s3",
-                name: "testbucket",
-                path: "/admin/data/",
-                part_prefix: "db",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -2997,6 +2952,83 @@ CreateCatalog(
         },
     },
 )
+
+
+---------- Input ----------
+select current_catalog();
+---------- Output ---------
+SELECT current_catalog()
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..24,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..24,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                7..24,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        7..22,
+                                    ),
+                                    name: "current_catalog",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [],
+                                params: [],
+                                window: None,
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+use catalog ctl;
+---------- Output ---------
+USE CATALOG ctl
+---------- AST ------------
+UseCatalog {
+    catalog: Identifier {
+        span: Some(
+            12..15,
+        ),
+        name: "ctl",
+        quote: None,
+        ident_type: None,
+    },
+}
 
 
 ---------- Input ----------
@@ -5735,6 +5767,162 @@ Query(
 
 
 ---------- Input ----------
+from aa.bb select *;
+---------- Output ---------
+SELECT * FROM aa.bb
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..19,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..19,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    18..19,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            5..10,
+                        ),
+                        catalog: None,
+                        database: Some(
+                            Identifier {
+                                span: Some(
+                                    5..7,
+                                ),
+                                name: "aa",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                        table: Identifier {
+                            span: Some(
+                                8..10,
+                            ),
+                            name: "bb",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+from aa.bb
+---------- Output ---------
+SELECT * FROM aa.bb
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..10,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..10,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    0..0,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            5..10,
+                        ),
+                        catalog: None,
+                        database: Some(
+                            Identifier {
+                                span: Some(
+                                    5..7,
+                                ),
+                                name: "aa",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                        table: Identifier {
+                            span: Some(
+                                8..10,
+                            ),
+                            name: "bb",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 select * from a, b, c;
 ---------- Output ---------
 SELECT * FROM a, b, c
@@ -7139,6 +7327,290 @@ Query(
 
 
 ---------- Input ----------
+SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;
+---------- Output ---------
+SETTINGS (max_thread = 1, timezone = 'Asia/Shanghai') SELECT 1
+---------- AST ------------
+StatementWithSettings {
+    settings: Some(
+        Settings {
+            set_type: SettingsQuery,
+            identifiers: [
+                Identifier {
+                    span: Some(
+                        10..20,
+                    ),
+                    name: "max_thread",
+                    quote: None,
+                    ident_type: None,
+                },
+                Identifier {
+                    span: Some(
+                        24..32,
+                    ),
+                    name: "timezone",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+            values: Expr(
+                [
+                    Literal {
+                        span: Some(
+                            21..22,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            33..48,
+                        ),
+                        value: String(
+                            "Asia/Shanghai",
+                        ),
+                    },
+                ],
+            ),
+        },
+    ),
+    stmt: Query(
+        Query {
+            span: Some(
+                50..58,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        50..58,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        AliasedExpr {
+                            expr: Literal {
+                                span: Some(
+                                    57..58,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                            alias: None,
+                        },
+                    ],
+                    from: [],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
+SETTINGS (max_thread=1) select * from a anti join b on a.a = b.a;
+---------- Output ---------
+SETTINGS (max_thread = 1) SELECT * FROM a LEFT ANTI JOIN b ON a.a = b.a
+---------- AST ------------
+StatementWithSettings {
+    settings: Some(
+        Settings {
+            set_type: SettingsQuery,
+            identifiers: [
+                Identifier {
+                    span: Some(
+                        10..20,
+                    ),
+                    name: "max_thread",
+                    quote: None,
+                    ident_type: None,
+                },
+            ],
+            values: Expr(
+                [
+                    Literal {
+                        span: Some(
+                            21..22,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                ],
+            ),
+        },
+    ),
+    stmt: Query(
+        Query {
+            span: Some(
+                24..64,
+            ),
+            with: None,
+            body: Select(
+                SelectStmt {
+                    span: Some(
+                        24..64,
+                    ),
+                    hints: None,
+                    distinct: false,
+                    top_n: None,
+                    select_list: [
+                        StarColumns {
+                            qualified: [
+                                Star(
+                                    Some(
+                                        31..32,
+                                    ),
+                                ),
+                            ],
+                            column_filter: None,
+                        },
+                    ],
+                    from: [
+                        Join {
+                            span: Some(
+                                40..49,
+                            ),
+                            join: Join {
+                                op: LeftAnti,
+                                condition: On(
+                                    BinaryOp {
+                                        span: Some(
+                                            59..60,
+                                        ),
+                                        op: Eq,
+                                        left: ColumnRef {
+                                            span: Some(
+                                                55..56,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            55..56,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            57..58,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        right: ColumnRef {
+                                            span: Some(
+                                                61..62,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: Some(
+                                                    Identifier {
+                                                        span: Some(
+                                                            61..62,
+                                                        ),
+                                                        name: "b",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            63..64,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    },
+                                ),
+                                left: Table {
+                                    span: Some(
+                                        38..39,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            38..39,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                                right: Table {
+                                    span: Some(
+                                        50..51,
+                                    ),
+                                    catalog: None,
+                                    database: None,
+                                    table: Identifier {
+                                        span: Some(
+                                            50..51,
+                                        ),
+                                        name: "b",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
+                                    temporal: None,
+                                    with_options: None,
+                                    pivot: None,
+                                    unpivot: None,
+                                    sample: None,
+                                },
+                            },
+                        },
+                    ],
+                    selection: None,
+                    group_by: None,
+                    having: None,
+                    window_list: None,
+                    qualify: None,
+                },
+            ),
+            order_by: [],
+            limit: [],
+            offset: None,
+            ignore_result: false,
+        },
+    ),
+}
+
+
+---------- Input ----------
 select * from a right semi join b on a.a = b.a;
 ---------- Output ---------
 SELECT * FROM a RIGHT SEMI JOIN b ON a.a = b.a
@@ -7620,6 +8092,75 @@ Query(
         limit: [],
         offset: None,
         ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select * FROM fuse_compat_table ignore_result;
+---------- Output ---------
+SELECT * FROM fuse_compat_table IGNORE_RESULT
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..31,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..31,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..31,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..31,
+                            ),
+                            name: "fuse_compat_table",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: true,
     },
 )
 
@@ -9287,6 +9828,7 @@ Query(
                                 "tsv",
                             ),
                             connection: {},
+                            case_sensitive: None,
                         },
                         alias: None,
                     },
@@ -10993,9 +11535,6 @@ CreateStage(
         file_format_options: FileFormatOptions {
             options: {},
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -11015,7 +11554,6 @@ CreateStage(
                 protocol: "s3",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11038,9 +11576,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -11060,7 +11595,6 @@ CreateStage(
                 protocol: "s3",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11083,9 +11617,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -11105,7 +11636,6 @@ CreateStage(
                 protocol: "azblob",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11128,9 +11658,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -11150,7 +11677,6 @@ CreateStage(
                 protocol: "azblob",
                 name: "load",
                 path: "/files/",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {
@@ -11173,9 +11699,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -11510,7 +12033,7 @@ OptimizeTable(
 ---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
-ALTER TABLE t  CLUSTER BY LINEAR(c1)
+ALTER TABLE t CLUSTER BY LINEAR(c1)
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -12868,6 +13391,56 @@ CreateTable(
 
 
 ---------- Input ----------
+CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')
+---------- Output ---------
+CREATE TEMPORARY  TABLE t (a Int32 COMMENT 'col comment')
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                23..24,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                26..27,
+                            ),
+                            name: "a",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: Some(
+                            "col comment",
+                        ),
+                    },
+                ],
+                None,
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        as_query: None,
+        table_type: Temporary,
+    },
+)
+
+
+---------- Input ----------
 GRANT CREATE, CREATE USER ON * TO 'test-grant';
 ---------- Output ---------
 GRANT CREATE, CREATE USER ON  * TO USER 'test-grant'@'%'
@@ -13633,7 +14206,7 @@ COPY INTO mytable
     FROM '@~/mybucket/my data.csv'
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/my data.csv' SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@~/mybucket/my data.csv'  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13663,15 +14236,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -13687,7 +14265,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@~/mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13730,15 +14308,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -13755,7 +14338,7 @@ COPY INTO mytable
     size_limit=10
     max_files=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13766,7 +14349,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -13807,15 +14389,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 10,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 10,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -13832,7 +14419,7 @@ COPY INTO mytable
     size_limit=10
     max_files=3000;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 MAX_FILES = 3000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13843,7 +14430,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -13884,15 +14470,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 3000,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 3000,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -13911,7 +14502,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -13922,7 +14513,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -13965,15 +14555,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -13992,7 +14587,7 @@ COPY INTO mytable
         skip_header = 1
     );
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = 'http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14003,7 +14598,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -14046,15 +14640,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -14063,7 +14662,7 @@ CopyIntoTable(
 COPY INTO mytable
     FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 'https://127.0.0.1:9900/'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14074,7 +14673,6 @@ CopyIntoTable(
                     protocol: "https",
                     name: "127.0.0.1:9900",
                     path: "/",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14102,15 +14700,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 0,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -14119,7 +14722,7 @@ CopyIntoTable(
 COPY INTO mytable
     FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 'https://127.0.0.1/'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14130,7 +14733,6 @@ CopyIntoTable(
                     protocol: "https",
                     name: "127.0.0.1",
                     path: "/",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14158,15 +14760,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 0,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -14183,7 +14790,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (error_on_column_count_mismatch = false, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14229,15 +14836,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -14278,7 +14890,6 @@ CopyIntoLocation(
                 protocol: "s3",
                 name: "mybucket",
                 path: "/data.csv",
-                part_prefix: "",
                 connection: Connection {
                     visited_keys: {},
                     conns: {},
@@ -14433,7 +15044,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = 'access_key', aws_secret_key = 'secret_key' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14444,7 +15055,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "mybucket",
                     path: "/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -14488,15 +15098,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -14512,7 +15127,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14555,15 +15170,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -14579,7 +15199,7 @@ COPY INTO mytable
     )
     size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@external_stage/path/to/dir/' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14622,15 +15242,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -14646,7 +15271,7 @@ COPY INTO mytable
     )
     force=true;
 ---------- Output ---------
-COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM '@external_stage/path/to/file.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14689,15 +15314,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: true,
-        validation_mode: "",
-        size_limit: 0,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            force: true,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -14714,7 +15344,7 @@ COPY INTO mytable
     size_limit=10
     disable_variant_check=true;
 ---------- Output ---------
-COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV) SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '\n', skip_header = 1, type = CSV)  SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14725,7 +15355,6 @@ CopyIntoTable(
                     protocol: "fs",
                     name: "",
                     path: "/path/to/data.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {},
@@ -14766,15 +15395,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: true,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 10,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: true,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -14789,7 +15423,7 @@ COPY INTO books FROM 's3://databend/books.csv'
     )
     FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV) PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = 'ROOTUSER', endpoint_url = 'http://localhost:9000/', region = 'us-west-2', secret_access_key = 'CHANGEME123' ) FILE_FORMAT = (type = CSV)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -14800,7 +15434,6 @@ CopyIntoTable(
                     protocol: "s3",
                     name: "databend",
                     path: "/books.csv",
-                    part_prefix: "",
                     connection: Connection {
                         visited_keys: {},
                         conns: {
@@ -14837,15 +15470,20 @@ CopyIntoTable(
         },
         files: None,
         pattern: None,
-        force: false,
-        validation_mode: "",
-        size_limit: 0,
-        max_files: 0,
-        split_size: 0,
-        purge: false,
-        disable_variant_check: false,
-        return_failed_only: false,
-        on_error: "abort",
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            size_limit: 0,
+            max_files: 0,
+            split_size: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            validation_mode: "",
+            column_match_mode: None,
+        },
     },
 )
 
@@ -15707,6 +16345,94 @@ Revoke(
                 username: "test-grant",
                 hostname: "%",
             },
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT all ON warehouse a TO role 'test-grant';
+---------- Output ---------
+GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT usage ON warehouse a TO role 'test-grant';
+---------- Output ---------
+GRANT USAGE ON  WAREHOUSE a TO ROLE 'test-grant'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE usage ON warehouse a FROM role 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
+        ),
+    },
+)
+
+
+---------- Input ----------
+REVOKE all ON warehouse a FROM role 'test-grant';
+---------- Output ---------
+REVOKE USAGE ON  WAREHOUSE a FROM ROLE 'test-grant'
+---------- AST ------------
+Revoke(
+    RevokeStmt {
+        source: Privs {
+            privileges: [
+                Usage,
+            ],
+            level: Warehouse(
+                "a",
+            ),
+        },
+        principal: Role(
+            "test-grant",
         ),
     },
 )
@@ -16623,6 +17349,7 @@ Query(
                             pattern: None,
                             file_format: None,
                             connection: {},
+                            case_sensitive: None,
                         },
                         alias: None,
                     },
@@ -16715,6 +17442,7 @@ Query(
                                 "PARQUET",
                             ),
                             connection: {},
+                            case_sensitive: None,
                         },
                         alias: Some(
                             TableAlias {
@@ -16858,6 +17586,7 @@ Query(
                                         "parquet",
                                     ),
                                     connection: {},
+                                    case_sensitive: None,
                                 },
                                 alias: Some(
                                     TableAlias {
@@ -16965,7 +17694,6 @@ Query(
                                 protocol: "s3",
                                 name: "test",
                                 path: "/bucket",
-                                part_prefix: "",
                                 connection: Connection {
                                     visited_keys: {},
                                     conns: {},
@@ -16983,6 +17711,7 @@ Query(
                             connection: {
                                 "endpoint_url": "xxx",
                             },
+                            case_sensitive: None,
                         },
                         alias: Some(
                             TableAlias {
@@ -17087,6 +17816,227 @@ DropFileFormat {
     if_exists: false,
     name: "my_csv",
 }
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY all
+---------- Output ---------
+SELECT * FROM t GROUP BY ALL
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..28,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..28,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    All,
+                ),
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY a, b, c, d
+---------- Output ---------
+SELECT * FROM t GROUP BY a, b, c, d
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..35,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..35,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Normal(
+                        [
+                            ColumnRef {
+                                span: Some(
+                                    25..26,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                25..26,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    28..29,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                28..29,
+                                            ),
+                                            name: "b",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    31..32,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                31..32,
+                                            ),
+                                            name: "c",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            ColumnRef {
+                                span: Some(
+                                    34..35,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                34..35,
+                                            ),
+                                            name: "d",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                    ),
+                ),
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
 
 
 ---------- Input ----------
@@ -17996,6 +18946,328 @@ Query(
 
 
 ---------- Input ----------
+SELECT * FROM t GROUP BY a, ROLLUP (b, c)
+---------- Output ---------
+SELECT * FROM t GROUP BY a, ROLLUP (b, c)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..41,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..41,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Combined(
+                        [
+                            Normal(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            25..26,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        25..26,
+                                                    ),
+                                                    name: "a",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                            Rollup(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            36..37,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        36..37,
+                                                    ),
+                                                    name: "b",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                    ColumnRef {
+                                        span: Some(
+                                            39..40,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        39..40,
+                                                    ),
+                                                    name: "c",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                        ],
+                    ),
+                ),
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)
+---------- Output ---------
+SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..65,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..65,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            14..15,
+                        ),
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: Some(
+                    Combined(
+                        [
+                            GroupingSets(
+                                [
+                                    [
+                                        ColumnRef {
+                                            span: Some(
+                                                41..42,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            41..42,
+                                                        ),
+                                                        name: "a",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                        ColumnRef {
+                                            span: Some(
+                                                44..45,
+                                            ),
+                                            column: ColumnRef {
+                                                database: None,
+                                                table: None,
+                                                column: Name(
+                                                    Identifier {
+                                                        span: Some(
+                                                            44..45,
+                                                        ),
+                                                        name: "b",
+                                                        quote: None,
+                                                        ident_type: None,
+                                                    },
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                ],
+                            ),
+                            Normal(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            49..50,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        49..50,
+                                                    ),
+                                                    name: "a",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                            Rollup(
+                                [
+                                    ColumnRef {
+                                        span: Some(
+                                            60..61,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        60..61,
+                                                    ),
+                                                    name: "b",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                    ColumnRef {
+                                        span: Some(
+                                            63..64,
+                                        ),
+                                        column: ColumnRef {
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    span: Some(
+                                                        63..64,
+                                                    ),
+                                                    name: "c",
+                                                    quote: None,
+                                                    ident_type: None,
+                                                },
+                                            ),
+                                        },
+                                    },
+                                ],
+                            ),
+                        ],
+                    ),
+                ),
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
 ---------- Output ---------
 CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
@@ -18239,103 +19511,109 @@ CreateVirtualColumn(
             ident_type: None,
         },
         virtual_columns: [
-            MapAccess {
-                span: Some(
-                    30..36,
-                ),
+            VirtualColumn {
                 expr: MapAccess {
                     span: Some(
-                        24..30,
+                        30..36,
                     ),
-                    expr: ColumnRef {
+                    expr: MapAccess {
                         span: Some(
-                            23..24,
+                            24..30,
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        23..24,
-                                    ),
-                                    name: "a",
-                                    quote: None,
-                                    ident_type: None,
-                                },
+                        expr: ColumnRef {
+                            span: Some(
+                                23..24,
                             ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            23..24,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    25..29,
+                                ),
+                                value: String(
+                                    "k1",
+                                ),
+                            },
                         },
                     },
                     accessor: Bracket {
                         key: Literal {
                             span: Some(
-                                25..29,
+                                31..35,
                             ),
                             value: String(
-                                "k1",
+                                "k2",
                             ),
                         },
                     },
                 },
-                accessor: Bracket {
-                    key: Literal {
-                        span: Some(
-                            31..35,
-                        ),
-                        value: String(
-                            "k2",
-                        ),
-                    },
-                },
+                alias: None,
             },
-            MapAccess {
-                span: Some(
-                    42..45,
-                ),
+            VirtualColumn {
                 expr: MapAccess {
                     span: Some(
-                        39..42,
+                        42..45,
                     ),
-                    expr: ColumnRef {
+                    expr: MapAccess {
                         span: Some(
-                            38..39,
+                            39..42,
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        38..39,
-                                    ),
-                                    name: "b",
-                                    quote: None,
-                                    ident_type: None,
-                                },
+                        expr: ColumnRef {
+                            span: Some(
+                                38..39,
                             ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            38..39,
+                                        ),
+                                        name: "b",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    40..41,
+                                ),
+                                value: UInt64(
+                                    0,
+                                ),
+                            },
                         },
                     },
                     accessor: Bracket {
                         key: Literal {
                             span: Some(
-                                40..41,
+                                43..44,
                             ),
                             value: UInt64(
-                                0,
+                                1,
                             ),
                         },
                     },
                 },
-                accessor: Bracket {
-                    key: Literal {
-                        span: Some(
-                            43..44,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
-                },
+                alias: None,
             },
         ],
     },
@@ -18343,13 +19621,173 @@ CreateVirtualColumn(
 
 
 ---------- Input ----------
-CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
+CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2']::string as v1, b[0][1]::int as v2) FOR t
 ---------- Output ---------
-CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
+CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2']::STRING AS v1, b[0][1]::Int32 AS v2) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
         create_option: CreateOrReplace,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                87..88,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        virtual_columns: [
+            VirtualColumn {
+                expr: Cast {
+                    span: Some(
+                        47..55,
+                    ),
+                    expr: MapAccess {
+                        span: Some(
+                            41..47,
+                        ),
+                        expr: MapAccess {
+                            span: Some(
+                                35..41,
+                            ),
+                            expr: ColumnRef {
+                                span: Some(
+                                    34..35,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                34..35,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            accessor: Bracket {
+                                key: Literal {
+                                    span: Some(
+                                        36..40,
+                                    ),
+                                    value: String(
+                                        "k1",
+                                    ),
+                                },
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    42..46,
+                                ),
+                                value: String(
+                                    "k2",
+                                ),
+                            },
+                        },
+                    },
+                    target_type: String,
+                    pg_style: true,
+                },
+                alias: Some(
+                    Identifier {
+                        span: Some(
+                            59..61,
+                        ),
+                        name: "v1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+            },
+            VirtualColumn {
+                expr: Cast {
+                    span: Some(
+                        70..75,
+                    ),
+                    expr: MapAccess {
+                        span: Some(
+                            67..70,
+                        ),
+                        expr: MapAccess {
+                            span: Some(
+                                64..67,
+                            ),
+                            expr: ColumnRef {
+                                span: Some(
+                                    63..64,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                63..64,
+                                            ),
+                                            name: "b",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            accessor: Bracket {
+                                key: Literal {
+                                    span: Some(
+                                        65..66,
+                                    ),
+                                    value: UInt64(
+                                        0,
+                                    ),
+                                },
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    68..69,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                        },
+                    },
+                    target_type: Int32,
+                    pg_style: true,
+                },
+                alias: Some(
+                    Identifier {
+                        span: Some(
+                            79..81,
+                        ),
+                        name: "v2",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER VIRTUAL COLUMN (a['k1']['k2'] as v1, b[0][1] as v2) FOR t
+---------- Output ---------
+ALTER VIRTUAL COLUMN (a['k1']['k2'] AS v1, b[0][1] AS v2) FOR t
+---------- AST ------------
+AlterVirtualColumn(
+    AlterVirtualColumnStmt {
+        if_exists: false,
         catalog: None,
         database: None,
         table: Identifier {
@@ -18361,225 +19799,127 @@ CreateVirtualColumn(
             ident_type: None,
         },
         virtual_columns: [
-            MapAccess {
-                span: Some(
-                    41..47,
-                ),
+            VirtualColumn {
                 expr: MapAccess {
                     span: Some(
-                        35..41,
+                        29..35,
                     ),
-                    expr: ColumnRef {
+                    expr: MapAccess {
                         span: Some(
-                            34..35,
+                            23..29,
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        34..35,
-                                    ),
-                                    name: "a",
-                                    quote: None,
-                                    ident_type: None,
-                                },
+                        expr: ColumnRef {
+                            span: Some(
+                                22..23,
                             ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            22..23,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    24..28,
+                                ),
+                                value: String(
+                                    "k1",
+                                ),
+                            },
                         },
                     },
                     accessor: Bracket {
                         key: Literal {
                             span: Some(
-                                36..40,
+                                30..34,
                             ),
                             value: String(
-                                "k1",
+                                "k2",
                             ),
                         },
                     },
                 },
-                accessor: Bracket {
-                    key: Literal {
+                alias: Some(
+                    Identifier {
                         span: Some(
-                            42..46,
+                            39..41,
                         ),
-                        value: String(
-                            "k2",
-                        ),
+                        name: "v1",
+                        quote: None,
+                        ident_type: None,
                     },
-                },
-            },
-            MapAccess {
-                span: Some(
-                    53..56,
                 ),
+            },
+            VirtualColumn {
                 expr: MapAccess {
                     span: Some(
-                        50..53,
+                        47..50,
                     ),
-                    expr: ColumnRef {
+                    expr: MapAccess {
                         span: Some(
-                            49..50,
+                            44..47,
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        49..50,
-                                    ),
-                                    name: "b",
-                                    quote: None,
-                                    ident_type: None,
-                                },
+                        expr: ColumnRef {
+                            span: Some(
+                                43..44,
                             ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            43..44,
+                                        ),
+                                        name: "b",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    45..46,
+                                ),
+                                value: UInt64(
+                                    0,
+                                ),
+                            },
                         },
                     },
                     accessor: Bracket {
                         key: Literal {
                             span: Some(
-                                51..52,
+                                48..49,
                             ),
                             value: UInt64(
-                                0,
+                                1,
                             ),
                         },
                     },
                 },
-                accessor: Bracket {
-                    key: Literal {
+                alias: Some(
+                    Identifier {
                         span: Some(
-                            54..55,
+                            54..56,
                         ),
-                        value: UInt64(
-                            1,
-                        ),
+                        name: "v2",
+                        quote: None,
+                        ident_type: None,
                     },
-                },
-            },
-        ],
-    },
-)
-
-
----------- Input ----------
-ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
----------- Output ---------
-ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
----------- AST ------------
-AlterVirtualColumn(
-    AlterVirtualColumnStmt {
-        if_exists: false,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                50..51,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        virtual_columns: [
-            MapAccess {
-                span: Some(
-                    29..35,
                 ),
-                expr: MapAccess {
-                    span: Some(
-                        23..29,
-                    ),
-                    expr: ColumnRef {
-                        span: Some(
-                            22..23,
-                        ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        22..23,
-                                    ),
-                                    name: "a",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ),
-                        },
-                    },
-                    accessor: Bracket {
-                        key: Literal {
-                            span: Some(
-                                24..28,
-                            ),
-                            value: String(
-                                "k1",
-                            ),
-                        },
-                    },
-                },
-                accessor: Bracket {
-                    key: Literal {
-                        span: Some(
-                            30..34,
-                        ),
-                        value: String(
-                            "k2",
-                        ),
-                    },
-                },
-            },
-            MapAccess {
-                span: Some(
-                    41..44,
-                ),
-                expr: MapAccess {
-                    span: Some(
-                        38..41,
-                    ),
-                    expr: ColumnRef {
-                        span: Some(
-                            37..38,
-                        ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        37..38,
-                                    ),
-                                    name: "b",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ),
-                        },
-                    },
-                    accessor: Bracket {
-                        key: Literal {
-                            span: Some(
-                                39..40,
-                            ),
-                            value: UInt64(
-                                0,
-                            ),
-                        },
-                    },
-                },
-                accessor: Bracket {
-                    key: Literal {
-                        span: Some(
-                            42..43,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
-                },
             },
         ],
     },
@@ -19811,7 +21151,7 @@ CreateTask(
 ---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true
 ---------- Output ---------
-CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET)  PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreateTask(
     CreateTaskStmt {
@@ -19833,7 +21173,7 @@ CreateTask(
         after: [],
         when_condition: None,
         sql: SingleStatement(
-            "COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET) PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false",
+            "COPY INTO streams_test.paper_table FROM '@stream_stage' FILE_FORMAT = (type = PARQUET)  PURGE = true FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false",
         ),
     },
 )
@@ -20624,7 +21964,7 @@ ShowLocks(
 ---------- Input ----------
 CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENT = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (TYPE = 'CSV')
 ---------- Output ---------
-CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+CREATE PIPE IF NOT EXISTS MyPipe1 AUTO_INGEST = TRUE COMMENTS = 'This is test pipe 1' AS COPY INTO MyTable1 FROM '@~/MyStage1' FILE_FORMAT = (type = 'CSV')  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -20663,15 +22003,20 @@ CreatePipe(
             },
             files: None,
             pattern: None,
-            force: false,
-            validation_mode: "",
-            size_limit: 0,
-            max_files: 0,
-            split_size: 0,
-            purge: false,
-            disable_variant_check: false,
-            return_failed_only: false,
-            on_error: "abort",
+            options: CopyIntoTableOptions {
+                on_error: AbortNum(
+                    1,
+                ),
+                size_limit: 0,
+                max_files: 0,
+                split_size: 0,
+                force: false,
+                purge: false,
+                disable_variant_check: false,
+                return_failed_only: false,
+                validation_mode: "",
+                column_match_mode: None,
+            },
         },
     },
 )
@@ -20680,7 +22025,7 @@ CreatePipe(
 ---------- Input ----------
 CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM @~/mybucket/data.csv
 ---------- Output ---------
-CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
+CREATE PIPE pipe1 AS COPY INTO db1.MyTable1 FROM '@~/mybucket/data.csv'  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false
 ---------- AST ------------
 CreatePipe(
     CreatePipeStmt {
@@ -20724,15 +22069,20 @@ CreatePipe(
             },
             files: None,
             pattern: None,
-            force: false,
-            validation_mode: "",
-            size_limit: 0,
-            max_files: 0,
-            split_size: 0,
-            purge: false,
-            disable_variant_check: false,
-            return_failed_only: false,
-            on_error: "abort",
+            options: CopyIntoTableOptions {
+                on_error: AbortNum(
+                    1,
+                ),
+                size_limit: 0,
+                max_files: 0,
+                split_size: 0,
+                force: false,
+                purge: false,
+                disable_variant_check: false,
+                return_failed_only: false,
+                validation_mode: "",
+                column_match_mode: None,
+            },
         },
     },
 )
@@ -21153,7 +22503,7 @@ RemoveStage {
 ---------- Input ----------
 SELECT sum(d) OVER (w) FROM e;
 ---------- Output ---------
-SELECT sum(d) OVER ( w ) FROM e
+SELECT sum(d) OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -21276,7 +22626,7 @@ Query(
 ---------- Input ----------
 SELECT first_value(d) OVER (w) FROM e;
 ---------- Output ---------
-SELECT first_value(d) OVER ( w ) FROM e
+SELECT first_value(d) OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -21399,7 +22749,7 @@ Query(
 ---------- Input ----------
 SELECT first_value(d) ignore nulls OVER (w) FROM e;
 ---------- Output ---------
-SELECT first_value(d) IGNORE NULLS OVER ( w ) FROM e
+SELECT first_value(d) IGNORE NULLS OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -21524,7 +22874,7 @@ Query(
 ---------- Input ----------
 SELECT first_value(d) respect nulls OVER (w) FROM e;
 ---------- Output ---------
-SELECT first_value(d) RESPECT NULLS OVER ( w ) FROM e
+SELECT first_value(d) RESPECT NULLS OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -21649,7 +22999,7 @@ Query(
 ---------- Input ----------
 SELECT sum(d) IGNORE NULLS OVER (w) FROM e;
 ---------- Output ---------
-SELECT sum(d) IGNORE NULLS OVER ( w ) FROM e
+SELECT sum(d) IGNORE NULLS OVER (w) FROM e
 ---------- AST ------------
 Query(
     Query {
@@ -21774,7 +23124,7 @@ Query(
 ---------- Input ----------
 SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);
 ---------- Output ---------
-SELECT sum(d) OVER w FROM e WINDOW w AS ( PARTITION BY f ORDER BY g )
+SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g)
 ---------- AST ------------
 Query(
     Query {
@@ -21953,6 +23303,299 @@ Query(
 
 
 ---------- Input ----------
+SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number)
+FROM numbers(10) where number > 10 and number > 9 and number > 8;
+---------- Output ---------
+SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number) FROM numbers(10) WHERE number > 10 AND number > 9 AND number > 8
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..133,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..133,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..13,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            7..13,
+                                        ),
+                                        name: "number",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                    AliasedExpr {
+                        expr: FunctionCall {
+                            span: Some(
+                                15..68,
+                            ),
+                            func: FunctionCall {
+                                distinct: false,
+                                name: Identifier {
+                                    span: Some(
+                                        15..19,
+                                    ),
+                                    name: "rank",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                                args: [],
+                                params: [],
+                                window: Some(
+                                    WindowDesc {
+                                        ignore_nulls: None,
+                                        window: WindowSpec(
+                                            WindowSpec {
+                                                existing_window_name: None,
+                                                partition_by: [
+                                                    BinaryOp {
+                                                        span: Some(
+                                                            48..49,
+                                                        ),
+                                                        op: Modulo,
+                                                        left: ColumnRef {
+                                                            span: Some(
+                                                                41..47,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            41..47,
+                                                                        ),
+                                                                        name: "number",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        right: Literal {
+                                                            span: Some(
+                                                                50..51,
+                                                            ),
+                                                            value: UInt64(
+                                                                3,
+                                                            ),
+                                                        },
+                                                    },
+                                                ],
+                                                order_by: [
+                                                    OrderByExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                61..67,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            61..67,
+                                                                        ),
+                                                                        name: "number",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        asc: None,
+                                                        nulls_first: None,
+                                                    },
+                                                ],
+                                                window_frame: None,
+                                            },
+                                        ),
+                                    },
+                                ),
+                                lambda: None,
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    TableFunction {
+                        span: Some(
+                            74..85,
+                        ),
+                        lateral: false,
+                        name: Identifier {
+                            span: Some(
+                                74..81,
+                            ),
+                            name: "numbers",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        params: [
+                            Literal {
+                                span: Some(
+                                    82..84,
+                                ),
+                                value: UInt64(
+                                    10,
+                                ),
+                            },
+                        ],
+                        named_params: [],
+                        alias: None,
+                        sample: None,
+                    },
+                ],
+                selection: Some(
+                    BinaryOp {
+                        span: Some(
+                            119..122,
+                        ),
+                        op: And,
+                        left: BinaryOp {
+                            span: Some(
+                                104..107,
+                            ),
+                            op: And,
+                            left: BinaryOp {
+                                span: Some(
+                                    99..100,
+                                ),
+                                op: Gt,
+                                left: ColumnRef {
+                                    span: Some(
+                                        92..98,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    92..98,
+                                                ),
+                                                name: "number",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        101..103,
+                                    ),
+                                    value: UInt64(
+                                        10,
+                                    ),
+                                },
+                            },
+                            right: BinaryOp {
+                                span: Some(
+                                    115..116,
+                                ),
+                                op: Gt,
+                                left: ColumnRef {
+                                    span: Some(
+                                        108..114,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    108..114,
+                                                ),
+                                                name: "number",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                right: Literal {
+                                    span: Some(
+                                        117..118,
+                                    ),
+                                    value: UInt64(
+                                        9,
+                                    ),
+                                },
+                            },
+                        },
+                        right: BinaryOp {
+                            span: Some(
+                                130..131,
+                            ),
+                            op: Gt,
+                            left: ColumnRef {
+                                span: Some(
+                                    123..129,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                123..129,
+                                            ),
+                                            name: "number",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            right: Literal {
+                                span: Some(
+                                    132..133,
+                                ),
+                                value: UInt64(
+                                    8,
+                                ),
+                            },
+                        },
+                    },
+                ),
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';
 ---------- Output ---------
 GRANT OWNERSHIP ON  d20_0014.* TO ROLE 'd20_0015_owner'
@@ -22066,7 +23709,6 @@ AttachTable(
             protocol: "s3",
             name: "a",
             path: "/",
-            part_prefix: "",
             connection: Connection {
                 visited_keys: {},
                 conns: {
@@ -22243,7 +23885,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+CREATE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -22259,13 +23901,38 @@ CreateUDF(
         description: None,
         definition: UDFServer {
             arg_types: [
-                Nullable(
-                    Binary,
-                ),
-            ],
-            return_type: Nullable(
                 Binary,
+            ],
+            return_type: Binary,
+            address: "http://0.0.0.0:8815",
+            handler: "binary_reverse",
+            language: "python",
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+ALTER FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+---------- AST ------------
+AlterUDF(
+    AlterUDFStmt {
+        udf_name: Identifier {
+            span: Some(
+                15..29,
             ),
+            name: "binary_reverse",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDFServer {
+            arg_types: [
+                Binary,
+            ],
+            return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
             language: "python",
@@ -22277,7 +23944,7 @@ CreateUDF(
 ---------- Input ----------
 CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION binary_reverse (BINARY NULL) RETURNS BINARY NULL LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
+CREATE OR REPLACE FUNCTION binary_reverse ( BINARY ) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815'
 ---------- AST ------------
 CreateUDF(
     CreateUDFStmt {
@@ -22293,13 +23960,9 @@ CreateUDF(
         description: None,
         definition: UDFServer {
             arg_types: [
-                Nullable(
-                    Binary,
-                ),
-            ],
-            return_type: Nullable(
                 Binary,
-            ),
+            ],
+            return_type: Binary,
             address: "http://0.0.0.0:8815",
             handler: "binary_reverse",
             language: "python",
@@ -22388,9 +24051,6 @@ CreateStage(
                 ),
             },
         },
-        on_error: "",
-        size_limit: 0,
-        validation_mode: "",
         comments: "",
     },
 )
@@ -22407,7 +24067,7 @@ def addone_py(i):
 return i+1
 $$;
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
+CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
 def addone_py(i):
 return i+1
 $$
@@ -22426,13 +24086,9 @@ CreateUDF(
         description: None,
         definition: UDFScript {
             arg_types: [
-                Nullable(
-                    Int32,
-                ),
-            ],
-            return_type: Nullable(
                 Int32,
-            ),
+            ],
+            return_type: Int32,
             code: "def addone_py(i):\nreturn i+1",
             handler: "addone_py",
             language: "python",
@@ -22449,7 +24105,7 @@ language python
 handler = 'addone_py'
 as '@data/abc/a.py';
 ---------- Output ---------
-CREATE OR REPLACE FUNCTION addone (Int32 NULL) RETURNS Int32 NULL LANGUAGE python HANDLER = 'addone_py' AS $$
+CREATE OR REPLACE FUNCTION addone ( Int32 ) RETURNS Int32 LANGUAGE python HANDLER = 'addone_py' AS $$
 @data/abc/a.py
 $$
 ---------- AST ------------
@@ -22467,13 +24123,9 @@ CreateUDF(
         description: None,
         definition: UDFScript {
             arg_types: [
-                Nullable(
-                    Int32,
-                ),
-            ],
-            return_type: Nullable(
                 Int32,
-            ),
+            ],
+            return_type: Int32,
             code: "@data/abc/a.py",
             handler: "addone_py",
             language: "python",
@@ -22520,6 +24172,150 @@ DropUDF {
 
 
 ---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';
+---------- Output ---------
+CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815'
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists,
+        udf_name: Identifier {
+            span: Some(
+                30..36,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFServer {
+            arg_types: [
+                Int32,
+            ],
+            state_fields: [
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            51..52,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
+            ],
+            return_type: Boolean,
+            address: "http://0.0.0.0:8815",
+            language: "javascript",
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+---------- Output ---------
+CREATE FUNCTION IF NOT EXISTS my_agg ( Int32 ) STATE { s STRING, i Int32 NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS $$
+some code
+$$
+---------- AST ------------
+CreateUDF(
+    CreateUDFStmt {
+        create_option: CreateIfNotExists,
+        udf_name: Identifier {
+            span: Some(
+                30..36,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFScript {
+            arg_types: [
+                Int32,
+            ],
+            state_fields: [
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            51..52,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            61..62,
+                        ),
+                        name: "i",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: NotNull(
+                        Int32,
+                    ),
+                },
+            ],
+            return_type: Boolean,
+            code: "some code",
+            language: "javascript",
+            runtime_version: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';
+---------- Output ---------
+ALTER FUNCTION my_agg ( Int32 ) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS $$
+some code
+$$
+---------- AST ------------
+AlterUDF(
+    AlterUDFStmt {
+        udf_name: Identifier {
+            span: Some(
+                15..21,
+            ),
+            name: "my_agg",
+            quote: None,
+            ident_type: None,
+        },
+        description: None,
+        definition: UDAFScript {
+            arg_types: [
+                Int32,
+            ],
+            state_fields: [
+                UDAFStateField {
+                    name: Identifier {
+                        span: Some(
+                            36..37,
+                        ),
+                        name: "s",
+                        quote: None,
+                        ident_type: None,
+                    },
+                    type_name: String,
+                },
+            ],
+            return_type: Boolean,
+            code: "some code",
+            language: "javascript",
+            runtime_version: "",
+        },
+    },
+)
+
+
+---------- Input ----------
 EXECUTE IMMEDIATE
 $$
 BEGIN
@@ -22556,7 +24352,7 @@ abc as (
 )
 select * from abc;
 ---------- Output ---------
-WITH abc AS (SELECT id, uid, eid, match_id, created_at, updated_at FROM (SELECT * FROM ddd.ccc WHERE score > 0 LIMIT 10) QUALIFY row_number() OVER ( PARTITION BY uid, eid ORDER BY updated_at DESC ) = 1) SELECT * FROM abc
+WITH abc AS (SELECT id, uid, eid, match_id, created_at, updated_at FROM (SELECT * FROM ddd.ccc WHERE score > 0 LIMIT 10) QUALIFY row_number() OVER (PARTITION BY uid, eid ORDER BY updated_at DESC) = 1) SELECT * FROM abc
 ---------- AST ------------
 Query(
     Query {
@@ -23146,12 +24942,14 @@ CreateDictionary(
 ---------- Input ----------
 describe PROCEDURE p1()
 ---------- Output ---------
-DESCRIBE PROCEDURE p1() 
+DESCRIBE PROCEDURE p1()
 ---------- AST ------------
 DescProcedure(
     DescProcedureStmt {
-        name: "p1",
-        args: [],
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
     },
 )
 
@@ -23159,15 +24957,14 @@ DescProcedure(
 ---------- Input ----------
 describe PROCEDURE p1(string, timestamp)
 ---------- Output ---------
-DESCRIBE PROCEDURE p1(STRING, TIMESTAMP) 
+DESCRIBE PROCEDURE p1(STRING,TIMESTAMP)
 ---------- AST ------------
 DescProcedure(
     DescProcedureStmt {
-        name: "p1",
-        args: [
-            String,
-            Timestamp,
-        ],
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "STRING,TIMESTAMP",
+        },
     },
 )
 
@@ -23308,7 +25105,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE OR REPLACE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+CREATE OR REPLACE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO
@@ -23354,7 +25151,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE IF NOT EXISTS p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+CREATE PROCEDURE IF NOT EXISTS p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO
@@ -23400,7 +25197,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+CREATE PROCEDURE p1() RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO
@@ -23446,7 +25243,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE p1(a Int32, b STRING) RETURNS STRING NOT NULL LANGUAGE SQL COMMENT='test' AS $$
+CREATE PROCEDURE p1(a Int32, b STRING) RETURNS STRING NOT NULL LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO
@@ -23507,7 +25304,7 @@ BEGIN
 END;
 $$;
 ---------- Output ---------
-CREATE PROCEDURE p1() RETURNS TABLE(a STRING NOT NULL, b Int32 NULL) LANGUAGE SQL COMMENT='test' AS $$
+CREATE PROCEDURE p1() RETURNS TABLE(a STRING NOT NULL, b Int32 NULL) LANGUAGE SQL  COMMENT='test' AS $$
 BEGIN
     LET sum := 0;
     FOR x IN SELECT * FROM numbers(100) DO

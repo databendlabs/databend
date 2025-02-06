@@ -22,25 +22,27 @@ use databend_common_meta_raft_store::sm_v003::SMV003;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
 use databend_common_meta_types::protobuf::StreamItem;
+use databend_common_meta_types::raft_types::ClientWriteError;
+use databend_common_meta_types::raft_types::MembershipNode;
+use databend_common_meta_types::raft_types::NodeId;
+use databend_common_meta_types::raft_types::RaftError;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::AppliedState;
-use databend_common_meta_types::ClientWriteError;
 use databend_common_meta_types::Cmd;
 use databend_common_meta_types::LogEntry;
-use databend_common_meta_types::MembershipNode;
 use databend_common_meta_types::MetaDataError;
 use databend_common_meta_types::MetaDataReadError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::Node;
-use databend_common_meta_types::NodeId;
-use databend_common_meta_types::RaftError;
 use databend_common_metrics::count::Count;
 use futures::StreamExt;
+use futures::TryStreamExt;
 use log::debug;
 use log::info;
 use maplit::btreemap;
 use maplit::btreeset;
 use tonic::codegen::BoxStream;
+use tonic::Status;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
@@ -64,7 +66,7 @@ pub struct MetaLeader<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> Handler<ForwardRequestBody> for MetaLeader<'a> {
+impl Handler<ForwardRequestBody> for MetaLeader<'_> {
     #[fastrace::trace]
     async fn handle(
         &self,
@@ -108,7 +110,7 @@ impl<'a> Handler<ForwardRequestBody> for MetaLeader<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> Handler<MetaGrpcReadReq> for MetaLeader<'a> {
+impl Handler<MetaGrpcReadReq> for MetaLeader<'_> {
     #[fastrace::trace]
     async fn handle(
         &self,
@@ -147,12 +149,14 @@ impl<'a> Handler<MetaGrpcReadReq> for MetaLeader<'a> {
             }
 
             MetaGrpcReadReq::ListKV(req) => {
-                // safe unwrap(): Infallible
-                let kvs = kv_api.prefix_list_kv(&req.prefix).await.unwrap();
+                let strm =
+                    kv_api.list_kv(&req.prefix).await.map_err(|e| {
+                        MetaOperationError::DataError(MetaDataError::ReadError(
+                            MetaDataReadError::new("list_kv", &req.prefix, &e),
+                        ))
+                    })?;
 
-                let kv_iter = kvs.into_iter().map(|kv| Ok(StreamItem::from(kv)));
-
-                let strm = futures::stream::iter(kv_iter);
+                let strm = strm.map_err(|e| Status::internal(e.to_string()));
 
                 Ok(strm.boxed())
             }
@@ -161,9 +165,9 @@ impl<'a> Handler<MetaGrpcReadReq> for MetaLeader<'a> {
 }
 
 impl<'a> MetaLeader<'a> {
-    pub fn new(meta_node: &'a MetaNode) -> MetaLeader {
+    pub fn new(meta_node: &'a MetaNode) -> MetaLeader<'a> {
         MetaLeader {
-            sto: &meta_node.sto,
+            sto: &meta_node.raft_store,
             raft: &meta_node.raft,
         }
     }

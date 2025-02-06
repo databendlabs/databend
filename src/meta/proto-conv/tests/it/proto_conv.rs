@@ -140,9 +140,8 @@ fn new_table_meta() -> mt::TableMeta {
         part_prefix: "".to_string(),
         engine_options: btreemap! {s("abc") => s("def")},
         options: btreemap! {s("xyz") => s("foo")},
-        default_cluster_key: Some("(a + 2, b)".to_string()),
-        cluster_keys: vec!["(a + 2, b)".to_string()],
-        default_cluster_key_id: Some(0),
+        cluster_key: Some("(a + 2, b)".to_string()),
+        cluster_key_seq: 0,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
@@ -300,13 +299,13 @@ fn test_incompatible() -> anyhow::Result<()> {
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
-        Incompatible {
-            reason: format!(
+        Incompatible::new(
+            format!(
                 "executable ver={} is smaller than the min reader version({}) that can read this message",
                 VER,
                 VER + 1
             )
-        },
+        ),
         res.unwrap_err()
     );
 
@@ -317,11 +316,9 @@ fn test_incompatible() -> anyhow::Result<()> {
 
     let res = mt::DatabaseMeta::from_pb(p);
     assert_eq!(
-        Incompatible {
-            reason: s(
-                "message ver=0 is smaller than executable MIN_MSG_VER(1) that this program can read"
-            )
-        },
+        Incompatible::new(s(
+            "message ver=0 is smaller than executable MIN_MSG_VER(1) that this program can read"
+        )),
         res.unwrap_err()
     );
 

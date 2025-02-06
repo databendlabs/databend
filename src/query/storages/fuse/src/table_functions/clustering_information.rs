@@ -189,7 +189,7 @@ impl<'a> ClusteringInformation<'a> {
                 (cluster_key, exprs)
             }
             (Some(a), None) => {
-                let exprs = self.table.cluster_keys(self.ctx.clone());
+                let exprs = self.table.linear_cluster_keys(self.ctx.clone());
                 let exprs = exprs
                     .iter()
                     .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
@@ -205,13 +205,17 @@ impl<'a> ClusteringInformation<'a> {
             }
         };
 
-        let cluster_type = if default_cluster_key_id.is_some() {
-            self.table
-                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear)
-                .to_string()
-        } else {
-            "linear".to_string()
-        };
+        if default_cluster_key_id.is_some() {
+            let typ = self
+                .table
+                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+            if matches!(typ, ClusterType::Hilbert) {
+                return Err(ErrorCode::UnsupportedClusterType(
+                    "Unsupported 'hilbert' type, please use `hilbert_clustering_information` instead",
+                ));
+            }
+        }
+        let cluster_type = "linear".to_string();
 
         let snapshot = self.table.read_table_snapshot().await?;
         let now = Utc::now();
@@ -296,7 +300,14 @@ impl<'a> ClusteringInformation<'a> {
         let (keys, values): (Vec<_>, Vec<_>) = points_map.into_iter().unzip();
         let cluster_key_types = exprs
             .into_iter()
-            .map(|v| v.data_type().clone())
+            .map(|v| {
+                let data_type = v.data_type();
+                if matches!(*data_type, DataType::String) {
+                    data_type.wrap_nullable()
+                } else {
+                    data_type.clone()
+                }
+            })
             .collect::<Vec<_>>();
         let indices = compare_scalars(keys, &cluster_key_types)?;
         for idx in indices.into_iter() {
@@ -550,6 +561,9 @@ fn domain_to_minmax(domain: &Domain) -> (Scalar, Scalar) {
             (Scalar::Timestamp(*min), Scalar::Timestamp(*max))
         }
         Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
+        Domain::Interval(SimpleDomain { min, max }) => {
+            (Scalar::Interval(*min), Scalar::Interval(*max))
+        }
         Domain::Nullable(NullableDomain { has_null, value }) => {
             if let Some(v) = value {
                 let (min, mut max) = domain_to_minmax(v);

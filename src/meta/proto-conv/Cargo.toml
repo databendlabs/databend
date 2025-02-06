@@ -20,7 +20,7 @@ databend-common-meta-types = { workspace = true }
 databend-common-protos = { workspace = true }
 enumflags2 = { workspace = true }
 fastrace = { workspace = true }
-num = "0.4.0"
+num = { workspace = true }
 prost = { workspace = true }
 thiserror = { workspace = true }
 
@@ -28,9 +28,9 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-convert_case = { version = "0.6.0" }
-maplit = "1.0.2"
-pretty_assertions = "1.3.0"
+convert_case = { workspace = true }
+maplit = { workspace = true }
+pretty_assertions = { workspace = true }
 
 [lints]
 workspace = true

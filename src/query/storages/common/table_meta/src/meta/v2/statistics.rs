@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::hash::Hash;
 use std::marker::PhantomData;
 
 use databend_common_expression::converts::datavalues::from_scalar;
@@ -24,8 +23,10 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use log::info;
 use serde::de::Error;
 
+use crate::meta::supported_stat_type;
 use crate::meta::v0;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -367,12 +368,11 @@ pub fn deserialize_col_stats<'de, D>(
 where D: serde::Deserializer<'de> {
     deserializer.deserialize_map(ColStatsVisitor::new())
 }
-
-struct ColStatsVisitor<K, V> {
-    marker: PhantomData<fn() -> HashMap<K, V>>,
+struct ColStatsVisitor {
+    marker: PhantomData<fn() -> HashMap<ColumnId, ColumnStatistics>>,
 }
 
-impl<K, V> ColStatsVisitor<K, V> {
+impl ColStatsVisitor {
     fn new() -> Self {
         ColStatsVisitor {
             marker: PhantomData,
@@ -380,12 +380,8 @@ impl<K, V> ColStatsVisitor<K, V> {
     }
 }
 
-impl<'de, K, V> serde::de::Visitor<'de> for ColStatsVisitor<K, V>
-where
-    K: serde::Deserialize<'de> + Hash + Eq,
-    V: serde::Deserialize<'de>,
-{
-    type Value = HashMap<K, V>;
+impl<'de> serde::de::Visitor<'de> for ColStatsVisitor {
+    type Value = HashMap<ColumnId, ColumnStatistics>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a map")
@@ -395,9 +391,27 @@ where
     where M: serde::de::MapAccess<'de> {
         let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
 
-        while let Some(key) = access.next_key()? {
-            if let Ok(value) = access.next_value() {
-                map.insert(key, value);
+        while let Some(key) = access.next_key::<ColumnId>()? {
+            if let Ok(value) = access.next_value::<ColumnStatistics>() {
+                if value.max.is_null() && value.min.is_null() {
+                    // If scalar values of min and max are all NULL, they should be retained.
+                    //
+                    // This ensures that columns with only NULL values have their column statistics
+                    // recorded, which is essential for pruning on these columns, and without this,
+                    // column statistics like NDV (Number of Distinct Values) and null_count
+                    // would be missing as well.
+                    map.insert(key, value);
+                } else {
+                    let data_type = value.max.as_ref().infer_data_type();
+                    if supported_stat_type(&data_type) {
+                        map.insert(key, value);
+                    } else {
+                        info!(
+                            "column of id {} is excluded from column statistics, unsupported data type {}",
+                            key, data_type
+                        );
+                    }
+                }
             }
         }
 

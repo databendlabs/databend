@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::ffi::OsString;
 use std::fmt;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use databend_common_grpc::RpcClientConf;
 use databend_common_grpc::RpcClientTlsConfig;
 use databend_common_meta_app::principal::UserSettingValue;
+use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::TenantQuota;
 use databend_common_storage::StorageConfig;
@@ -36,6 +37,7 @@ use databend_common_tracing::Config as LogConfig;
 
 use super::config::Commands;
 use super::config::Config;
+use super::config::ResourcesManagementConfig;
 use crate::background_config::InnerBackgroundConfig;
 use crate::BuiltInConfig;
 
@@ -215,6 +217,8 @@ pub struct QueryConfig {
 
     pub jwt_key_file: String,
     pub jwt_key_files: Vec<String>,
+    pub jwks_refresh_interval: u64,
+    pub jwks_refresh_timeout: u64,
     pub default_storage_format: String,
     pub default_compression: String,
     pub builtin: BuiltInConfig,
@@ -246,7 +250,11 @@ pub struct QueryConfig {
     pub cloud_control_grpc_server_address: Option<String>,
     pub cloud_control_grpc_timeout: u64,
     pub max_cached_queries_profiles: usize,
+
+    pub network_policy_whitelist: Vec<String>,
+
     pub settings: HashMap<String, UserSettingValue>,
+    pub resources_management: Option<ResourcesManagementConfig>,
 }
 
 impl Default for QueryConfig {
@@ -298,6 +306,8 @@ impl Default for QueryConfig {
             max_storage_io_requests: None,
             jwt_key_file: "".to_string(),
             jwt_key_files: Vec::new(),
+            jwks_refresh_interval: 600,
+            jwks_refresh_timeout: 10,
             default_storage_format: "auto".to_string(),
             default_compression: "auto".to_string(),
             builtin: BuiltInConfig::default(),
@@ -322,7 +332,9 @@ impl Default for QueryConfig {
             cloud_control_grpc_timeout: 0,
             data_retention_time_in_days_max: 90,
             max_cached_queries_profiles: 50,
+            network_policy_whitelist: Vec::new(),
             settings: HashMap::new(),
+            resources_management: None,
         }
     }
 }
@@ -542,6 +554,10 @@ pub struct CacheConfig {
     /// Max number of cached table block meta
     pub block_meta_count: u64,
 
+    /// Max number of **segment** which all of its block meta will be cached.
+    /// Note that a segment may contain multiple block metadata entries.
+    pub segment_block_metas_count: u64,
+
     /// Max number of cached table segment
     pub table_meta_statistic_count: u64,
 
@@ -689,6 +705,7 @@ impl Default for CacheConfig {
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
             block_meta_count: 0,
+            segment_block_metas_count: 0,
             table_meta_statistic_count: 256,
             enable_table_index_bloom: true,
             table_bloom_index_meta_count: 3000,
@@ -710,22 +727,55 @@ impl Default for CacheConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpillConfig {
-    /// Path of spill to local disk. disable if it's empty.
-    pub path: OsString,
+    pub(crate) local_writeable_root: Option<String>,
+    pub(crate) path: String,
 
     /// Ratio of the reserve of the disk space.
     pub reserved_disk_ratio: OrderedFloat<f64>,
 
     /// Allow bytes use of disk space.
     pub global_bytes_limit: u64,
+
+    pub storage_params: Option<StorageParams>,
+}
+
+impl SpillConfig {
+    /// Path of spill to local disk.
+    pub fn local_path(&self) -> Option<PathBuf> {
+        if self.global_bytes_limit == 0 {
+            return None;
+        }
+
+        if !self.path.is_empty() {
+            return Some(self.path.clone().into());
+        }
+
+        if let Some(root) = &self.local_writeable_root {
+            return Some(PathBuf::from(root).join("temp/_query_spill"));
+        }
+
+        None
+    }
+
+    pub fn new_for_test(path: String, reserved_disk_ratio: f64, global_bytes_limit: u64) -> Self {
+        Self {
+            local_writeable_root: None,
+            path,
+            reserved_disk_ratio: OrderedFloat(reserved_disk_ratio),
+            global_bytes_limit,
+            storage_params: None,
+        }
+    }
 }
 
 impl Default for SpillConfig {
     fn default() -> Self {
         Self {
-            path: OsString::from(""),
+            local_writeable_root: None,
+            path: "".to_string(),
             reserved_disk_ratio: OrderedFloat(0.3),
             global_bytes_limit: u64::MAX,
+            storage_params: None,
         }
     }
 }

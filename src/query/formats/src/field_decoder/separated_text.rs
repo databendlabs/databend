@@ -16,9 +16,10 @@ use std::any::Any;
 use std::io::Cursor;
 
 use bstr::ByteSlice;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ToErrorCode;
 use databend_common_expression::serialize::read_decimal_with_size;
 use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::array::ArrayColumnBuilder;
@@ -28,8 +29,8 @@ use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
-use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::with_decimal_type;
@@ -43,11 +44,10 @@ use databend_common_io::constants::TRUE_BYTES_NUM;
 use databend_common_io::cursor_ext::collect_number;
 use databend_common_io::cursor_ext::read_num_text_exact;
 use databend_common_io::cursor_ext::BufferReadDateTimeExt;
-use databend_common_io::cursor_ext::DateTimeResType;
-use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::geography::geography_from_ewkt_bytes;
 use databend_common_io::parse_bitmap;
 use databend_common_io::parse_bytes_to_ewkb;
+use databend_common_io::Interval;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::TsvFileFormatParams;
 use jsonb::parse_value;
@@ -55,6 +55,7 @@ use lexical_core::FromLexical;
 use num_traits::NumCast;
 
 use crate::binary::decode_binary;
+use crate::field_decoder::common::read_timestamp;
 use crate::field_decoder::FieldDecoder;
 use crate::FileFormatOptionsExt;
 use crate::InputCommonSettings;
@@ -82,6 +83,7 @@ impl SeparatedTextDecoder {
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_if: vec![params.null_display.as_bytes().to_vec()],
                 timezone: options_ext.timezone,
+                jiff_timezone: options_ext.jiff_timezone.clone(),
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: params.binary_format,
                 is_rounding_mode: options_ext.is_rounding_mode,
@@ -98,6 +100,7 @@ impl SeparatedTextDecoder {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
+                jiff_timezone: options_ext.jiff_timezone.clone(),
                 disable_variant_check: options_ext.disable_variant_check,
                 binary_format: Default::default(),
                 is_rounding_mode: options_ext.is_rounding_mode,
@@ -124,8 +127,7 @@ impl SeparatedTextDecoder {
                 Ok(())
             }
             ColumnBuilder::String(c) => {
-                c.put_str(std::str::from_utf8(data)?);
-                c.commit_row();
+                c.put_and_commit(std::str::from_utf8(data)?);
                 Ok(())
             }
             ColumnBuilder::Boolean(c) => self.read_bool(c, data),
@@ -143,6 +145,7 @@ impl SeparatedTextDecoder {
                 DecimalColumnBuilder::DECIMAL_TYPE(c, size) => self.read_decimal(c, *size, data),
             }),
             ColumnBuilder::Date(c) => self.read_date(c, data),
+            ColumnBuilder::Interval(c) => self.read_interval(c, data),
             ColumnBuilder::Timestamp(c) => self.read_timestamp(c, data),
             ColumnBuilder::Array(c) => self.read_array(c, data),
             ColumnBuilder::Map(c) => self.read_map(c, data),
@@ -252,44 +255,26 @@ impl SeparatedTextDecoder {
 
     fn read_date(&self, column: &mut Vec<i32>, data: &[u8]) -> Result<()> {
         let mut buffer_readr = Cursor::new(&data);
-        let date = buffer_readr.read_date_text(
-            &self.common_settings().timezone,
-            self.common_settings().enable_dst_hour_fix,
-        )?;
+        let date = buffer_readr.read_date_text(&self.common_settings().jiff_timezone)?;
         let days = uniform_date(date);
         column.push(clamp_date(days as i64));
         Ok(())
     }
 
-    fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
-        let mut ts = if !data.contains(&b'-') {
-            read_num_text_exact(data)?
-        } else {
-            let mut buffer_readr = Cursor::new(&data);
-            let t = buffer_readr.read_timestamp_text(
-                &self.common_settings().timezone,
-                false,
-                self.common_settings.enable_dst_hour_fix,
-            )?;
-            match t {
-                DateTimeResType::Datetime(t) => {
-                    if !buffer_readr.eof() {
-                        let data = data.to_str().unwrap_or("not utf8");
-                        let msg = format!(
-                            "fail to deserialize timestamp, unexpected end at pos {} of {}",
-                            buffer_readr.position(),
-                            data
-                        );
-                        return Err(ErrorCode::BadBytes(msg));
-                    }
-                    t.timestamp_micros()
-                }
-                _ => unreachable!(),
-            }
-        };
-        clamp_timestamp(&mut ts);
-        column.push(ts);
+    fn read_interval(&self, column: &mut Vec<months_days_micros>, data: &[u8]) -> Result<()> {
+        let res = std::str::from_utf8(data).map_err_to_code(ErrorCode::BadBytes, || {
+            format!(
+                "UTF-8 Conversion Failed: Unable to convert value {:?} to UTF-8",
+                data
+            )
+        })?;
+        let i = Interval::from_string(res)?;
+        column.push(months_days_micros::new(i.months, i.days, i.micros));
         Ok(())
+    }
+
+    fn read_timestamp(&self, column: &mut Vec<i64>, data: &[u8]) -> Result<()> {
+        read_timestamp(column, data, self.common_settings())
     }
 
     fn read_bitmap(&self, column: &mut BinaryColumnBuilder, data: &[u8]) -> Result<()> {

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
@@ -39,19 +38,17 @@ use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::BUCKET_TYPE;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::servers::flight::v1::exchange::serde::deserialize_block;
 use crate::servers::flight::v1::exchange::serde::ExchangeDeserializeMeta;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
-pub struct TransformDeserializer<Method: HashMethodBounds, V: Send + Sync + 'static> {
+pub struct TransformDeserializer {
     schema: DataSchemaRef,
     arrow_schema: Arc<ArrowSchema>,
-    _phantom: PhantomData<(Method, V)>,
 }
 
-impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<Method, V> {
+impl TransformDeserializer {
     pub fn try_create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
@@ -62,10 +59,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
         Ok(ProcessorPtr::create(BlockMetaTransformer::create(
             input,
             output,
-            TransformDeserializer::<Method, V> {
+            TransformDeserializer {
                 arrow_schema: Arc::new(arrow_schema),
                 schema: schema.clone(),
-                _phantom: Default::default(),
             },
         )))
     }
@@ -93,18 +89,26 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
                 }
                 Some(meta) => {
                     return match meta.typ == BUCKET_TYPE {
-                        true => Ok(DataBlock::empty_with_meta(
-                            AggregateMeta::<Method, V>::create_serialized(
-                                meta.bucket,
-                                deserialize_block(
-                                    dict,
-                                    fragment_data,
-                                    &self.schema,
-                                    self.arrow_schema.clone(),
-                                )?,
-                                meta.max_partition_count,
-                            ),
-                        )),
+                        true => {
+                            let mut block = deserialize_block(
+                                dict,
+                                fragment_data,
+                                &self.schema,
+                                self.arrow_schema.clone(),
+                            )?;
+
+                            if meta.is_empty {
+                                block = block.slice(0..0);
+                            }
+
+                            Ok(DataBlock::empty_with_meta(
+                                AggregateMeta::create_serialized(
+                                    meta.bucket,
+                                    block,
+                                    meta.max_partition_count,
+                                ),
+                            ))
+                        }
                         false => {
                             let data_schema = Arc::new(exchange_defines::spilled_schema());
                             let arrow_schema = Arc::new(exchange_defines::spilled_arrow_schema());
@@ -151,9 +155,9 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
                                 }
                             }
 
-                            Ok(DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_spilled(buckets_payload),
-                            ))
+                            Ok(DataBlock::empty_with_meta(AggregateMeta::create_spilled(
+                                buckets_payload,
+                            )))
                         }
                     };
                 }
@@ -167,11 +171,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> TransformDeserializer<M
     }
 }
 
-impl<M, V> BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer<M, V>
-where
-    M: HashMethodBounds,
-    V: Send + Sync + 'static,
-{
+impl BlockMetaTransform<ExchangeDeserializeMeta> for TransformDeserializer {
     const UNKNOWN_MODE: UnknownMode = UnknownMode::Pass;
     const NAME: &'static str = "TransformDeserializer";
 
@@ -189,5 +189,4 @@ where
     }
 }
 
-pub type TransformGroupByDeserializer<Method> = TransformDeserializer<Method, ()>;
-pub type TransformAggregateDeserializer<Method> = TransformDeserializer<Method, usize>;
+pub type TransformAggregateDeserializer = TransformDeserializer;

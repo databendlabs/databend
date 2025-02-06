@@ -109,7 +109,10 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables_history(
+        &self,
+        _include_non_retainable: bool,
+    ) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement list_tables_history in {} Database",
             self.name()

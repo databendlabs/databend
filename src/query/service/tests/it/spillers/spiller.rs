@@ -24,7 +24,6 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::ScalarRef;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_storage::DataOperator;
 use databend_query::spillers::Location;
 use databend_query::spillers::Spiller;
@@ -37,14 +36,14 @@ async fn test_spill_with_partition() -> Result<()> {
     let fixture = TestFixture::setup().await?;
 
     let ctx = fixture.new_query_ctx().await?;
-    let tenant = ctx.get_tenant();
+    let location_prefix = ctx.query_id_spill_prefix();
     let spiller_config = SpillerConfig {
         spiller_type: SpillerType::HashJoinBuild,
-        location_prefix: query_spill_prefix(tenant.tenant_name(), &ctx.get_id()),
+        location_prefix,
         disk_spill: None,
         use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
     };
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
 
     let mut spiller = Spiller::create(ctx, operator, spiller_config)?;
 

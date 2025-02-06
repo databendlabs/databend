@@ -19,20 +19,19 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
-use chrono::DateTime;
-use chrono::Utc;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_ast::Span;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
+use jiff::tz::TimeZone;
+use jiff::Zoned;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::date_helper::TzLUT;
 use crate::property::Domain;
 use crate::property::FunctionProperty;
 use crate::type_check::try_unify_signature;
@@ -40,7 +39,6 @@ use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
-use crate::values::ValueRef;
 use crate::Column;
 use crate::ColumnIndex;
 use crate::Expr;
@@ -77,7 +75,7 @@ pub enum FunctionEval {
             Box<dyn Fn(&FunctionContext, &[Domain]) -> FunctionDomain<AnyType> + Send + Sync>,
         /// Given a set of arguments, return a single value.
         /// The result must be in the same length as the input arguments if its a column.
-        eval: Box<dyn Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
+        eval: Box<dyn Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> + Send + Sync>,
     },
     /// Set-returning-function that input a scalar and then return a set.
     SRF {
@@ -85,7 +83,7 @@ pub enum FunctionEval {
         /// for each input row, along with the number of rows in each set.
         eval: Box<
             dyn Fn(
-                    &[ValueRef<AnyType>],
+                    &[Value<AnyType>],
                     &mut EvalContext,
                     &mut [usize],
                 ) -> Vec<(Value<AnyType>, usize)>
@@ -97,8 +95,8 @@ pub enum FunctionEval {
 
 #[derive(Clone)]
 pub struct FunctionContext {
-    pub tz: TzLUT,
-    pub now: DateTime<Utc>,
+    pub tz: TimeZone,
+    pub now: Zoned,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
 
@@ -111,7 +109,6 @@ pub struct FunctionContext {
 
     pub geometry_output_format: GeometryDataType,
     pub parse_datetime_ignore_remainder: bool,
-    pub enable_dst_hour_fix: bool,
     pub enable_strict_datetime_parser: bool,
     pub random_function_seed: bool,
 }
@@ -119,7 +116,7 @@ pub struct FunctionContext {
 impl Default for FunctionContext {
     fn default() -> Self {
         FunctionContext {
-            tz: Default::default(),
+            tz: TimeZone::UTC,
             now: Default::default(),
             rounding_mode: false,
             disable_variant_check: false,
@@ -132,7 +129,6 @@ impl Default for FunctionContext {
 
             geometry_output_format: Default::default(),
             parse_datetime_ignore_remainder: false,
-            enable_dst_hour_fix: false,
             enable_strict_datetime_parser: true,
             random_function_seed: false,
         }
@@ -190,13 +186,11 @@ pub struct FunctionRegistry {
 
 impl Function {
     pub fn passthrough_nullable(self) -> Self {
-        debug_assert!(
-            !self
-                .signature
-                .args_type
-                .iter()
-                .any(|ty| ty.is_nullable_or_null())
-        );
+        debug_assert!(!self
+            .signature
+            .args_type
+            .iter()
+            .any(|ty| ty.is_nullable_or_null()));
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
 
@@ -275,7 +269,7 @@ impl Function {
                 FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
             }
         });
-        let new_eval = Box::new(move |val: &[ValueRef<AnyType>], ctx: &mut EvalContext| {
+        let new_eval = Box::new(move |val: &[Value<AnyType>], ctx: &mut EvalContext| {
             let num_rows = ctx.num_rows;
             let output = eval(val, ctx);
             if let Some((validity, _)) = ctx.errors.take() {
@@ -559,7 +553,7 @@ impl FunctionID {
     }
 }
 
-impl<'a> EvalContext<'a> {
+impl EvalContext<'_> {
     #[inline]
     pub fn set_error(&mut self, row: usize, error_msg: impl Into<String>) {
         // If the row is NULL, we don't need to set error.
@@ -620,10 +614,7 @@ impl<'a> EvalContext<'a> {
 
                 let args = args
                     .iter()
-                    .map(|arg| {
-                        let arg_ref = arg.as_ref();
-                        arg_ref.index(first_error_row).unwrap().to_string()
-                    })
+                    .map(|arg| arg.index(first_error_row).unwrap().to_string())
                     .join(", ");
 
                 let err_msg = if params.is_empty() {
@@ -646,26 +637,26 @@ impl<'a> EvalContext<'a> {
 
 pub fn passthrough_nullable<F>(
     f: F,
-) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType>
-where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
+) -> impl Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType>
+where F: Fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
         type T = NullableType<AnyType>;
         type Result = AnyType;
 
         let mut bitmap: Option<MutableBitmap> = None;
-        let mut nonull_args: Vec<ValueRef<Result>> = Vec::with_capacity(args.len());
+        let mut nonull_args: Vec<Value<Result>> = Vec::with_capacity(args.len());
 
         let mut len = 1;
         for arg in args {
             let arg = arg.try_downcast::<T>().unwrap();
             match arg {
-                ValueRef::Scalar(None) => return Value::Scalar(Scalar::Null),
-                ValueRef::Scalar(Some(s)) => {
-                    nonull_args.push(ValueRef::Scalar(s.clone()));
+                Value::Scalar(None) => return Value::Scalar(Scalar::Null),
+                Value::Scalar(Some(s)) => {
+                    nonull_args.push(Value::Scalar(s.clone()));
                 }
-                ValueRef::Column(v) => {
+                Value::Column(v) => {
                     len = v.len();
-                    nonull_args.push(ValueRef::Column(v.column.clone()));
+                    nonull_args.push(Value::Column(v.column.clone()));
                     bitmap = match bitmap {
                         Some(m) => Some(m.bitand(&v.validity)),
                         None => Some(v.validity.clone().make_mut()),
@@ -679,7 +670,7 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             // If the original value is NULL, we can ignore the error.
             let rhs: Bitmap = bitmap.clone().not().into();
             let res = error_bitmap.clone().bitor(&rhs);
-            if res.unset_bits() == 0 {
+            if res.null_count() == 0 {
                 ctx.errors = None;
             } else {
                 *error_bitmap = res;
@@ -697,8 +688,8 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             Value::Column(column) => {
                 let result = match column {
                     Column::Nullable(box nullable_column) => {
-                        let validity = bitmap.into();
-                        let validity = databend_common_arrow::arrow::bitmap::and(
+                        let validity: Bitmap = bitmap.into();
+                        let validity = databend_common_column::bitmap::and(
                             &nullable_column.validity,
                             &validity,
                         );
@@ -714,9 +705,8 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
 }
 
 pub fn error_to_null<I1: ArgType, O: ArgType>(
-    func: impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
-) -> impl for<'a> Fn(ValueRef<'a, I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync
-{
+    func: impl Fn(Value<I1>, &mut EvalContext) -> Value<O> + Copy + Send + Sync,
+) -> impl Fn(Value<I1>, &mut EvalContext) -> Value<NullableType<O>> + Copy + Send + Sync {
     debug_assert!(!O::data_type().is_nullable_or_null());
     move |val, ctx| {
         let output = func(val, ctx);

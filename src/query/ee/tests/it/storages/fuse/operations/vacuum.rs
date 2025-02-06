@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::tokio;
+use databend_common_catalog::table_context::CheckAbort;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -27,7 +29,9 @@ use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::d
 use databend_enterprise_query::storages::fuse::operations::vacuum_drop_tables::vacuum_drop_tables_by_table_info;
 use databend_enterprise_query::storages::fuse::operations::vacuum_temporary_files::do_vacuum_temporary_files;
 use databend_enterprise_query::storages::fuse::vacuum_drop_tables;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_query::test_kits::*;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use opendal::raw::Access;
 use opendal::raw::AccessorInfo;
@@ -117,7 +121,7 @@ async fn test_fuse_do_vacuum_drop_tables() -> Result<()> {
 async fn test_do_vacuum_temporary_files() -> Result<()> {
     let _fixture = TestFixture::setup().await?;
 
-    let operator = DataOperator::instance().operator();
+    let operator = DataOperator::instance().spill_operator();
     operator.write("test_dir/test1", vec![1, 2]).await?;
     operator.write("test_dir/test2", vec![1, 2]).await?;
     operator.write("test_dir/test3", vec![1, 2]).await?;
@@ -125,8 +129,41 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
     let size = operator.list_with("test_dir/").recursive(true).await?.len();
     assert!((3..=4).contains(&size));
 
+    struct NoAbort;
+    struct AbortRightNow;
+    impl CheckAbort for NoAbort {
+        fn try_check_aborting(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    impl CheckAbort for AbortRightNow {
+        fn try_check_aborting(&self) -> Result<()> {
+            Err(ErrorCode::AbortedQuery(""))
+        }
+    }
+
+    // check abort
+
+    let r = do_vacuum_temporary_files(
+        Arc::new(AbortRightNow),
+        "test_dir/".to_string(),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
+        1,
+    )
+    .await;
+
+    assert!(r.is_err_and(|e| e.code() == ErrorCode::ABORTED_QUERY));
+
+    let no_abort = Arc::new(NoAbort);
     tokio::time::sleep(Duration::from_secs(2)).await;
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), 1).await?;
+    do_vacuum_temporary_files(
+        no_abort.clone(),
+        "test_dir/".to_string(),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
+        1,
+    )
+    .await?;
 
     let size = operator.list("test_dir/").await?.len();
     assert!((2..=3).contains(&size));
@@ -137,12 +174,24 @@ async fn test_do_vacuum_temporary_files() -> Result<()> {
         .write("test_dir/test5/finished", vec![1, 2])
         .await?;
 
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(2)), 2).await?;
+    do_vacuum_temporary_files(
+        no_abort.clone(),
+        "test_dir/".to_string(),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(2))),
+        2,
+    )
+    .await?;
     let size = operator.list("test_dir/").await?.len();
     assert!((2..=3).contains(&size));
 
     tokio::time::sleep(Duration::from_secs(3)).await;
-    do_vacuum_temporary_files("test_dir/".to_string(), Some(Duration::from_secs(3)), 1000).await?;
+    do_vacuum_temporary_files(
+        no_abort.clone(),
+        "test_dir/".to_string(),
+        &VacuumTempOptions::VacuumCommand(Some(Duration::from_secs(3))),
+        1000,
+    )
+    .await?;
 
     dbg!(operator.list_with("test_dir/").await?);
 
@@ -160,10 +209,8 @@ mod test_accessor {
     use opendal::raw::oio;
     use opendal::raw::oio::Entry;
     use opendal::raw::MaybeSend;
-    use opendal::raw::OpBatch;
     use opendal::raw::OpDelete;
     use opendal::raw::OpList;
-    use opendal::raw::RpBatch;
     use opendal::raw::RpDelete;
     use opendal::raw::RpList;
 
@@ -173,6 +220,7 @@ mod test_accessor {
     #[derive(Debug)]
     pub(crate) struct AccessorFaultyDeletion {
         hit_delete: AtomicBool,
+        hit_batch: Arc<AtomicBool>,
         hit_stat: AtomicBool,
         inject_delete_faulty: bool,
         inject_stat_faulty: bool,
@@ -182,6 +230,7 @@ mod test_accessor {
         pub(crate) fn with_delete_fault() -> Self {
             AccessorFaultyDeletion {
                 hit_delete: AtomicBool::new(false),
+                hit_batch: Arc::new(AtomicBool::new(false)),
                 hit_stat: AtomicBool::new(false),
                 inject_delete_faulty: true,
                 inject_stat_faulty: false,
@@ -191,6 +240,7 @@ mod test_accessor {
         pub(crate) fn with_stat_fault() -> Self {
             AccessorFaultyDeletion {
                 hit_delete: AtomicBool::new(false),
+                hit_batch: Arc::new(AtomicBool::new(false)),
                 hit_stat: AtomicBool::new(false),
                 inject_delete_faulty: false,
                 inject_stat_faulty: true,
@@ -199,10 +249,6 @@ mod test_accessor {
 
         pub(crate) fn hit_delete_operation(&self) -> bool {
             self.hit_delete.load(Ordering::Acquire)
-        }
-
-        pub(crate) fn hit_stat_operation(&self) -> bool {
-            self.hit_stat.load(Ordering::Acquire)
         }
     }
 
@@ -225,6 +271,26 @@ mod test_accessor {
         }
     }
 
+    pub struct MockDeleter {
+        size: usize,
+        hit_batch: Arc<AtomicBool>,
+    }
+
+    impl oio::Delete for MockDeleter {
+        fn delete(&mut self, _path: &str, _args: OpDelete) -> opendal::Result<()> {
+            self.size += 1;
+            Ok(())
+        }
+
+        async fn flush(&mut self) -> opendal::Result<usize> {
+            self.hit_batch.store(true, Ordering::Release);
+
+            let n = self.size;
+            self.size = 0;
+            Ok(n)
+        }
+    }
+
     impl Access for AccessorFaultyDeletion {
         type Reader = ();
         type BlockingReader = ();
@@ -232,14 +298,16 @@ mod test_accessor {
         type BlockingWriter = ();
         type Lister = VecLister;
         type BlockingLister = ();
+        type Deleter = MockDeleter;
+        type BlockingDeleter = ();
 
         fn info(&self) -> Arc<AccessorInfo> {
             let mut info = AccessorInfo::default();
             let cap = info.full_capability_mut();
             cap.stat = true;
             cap.create_dir = true;
-            cap.batch = true;
             cap.delete = true;
+            cap.delete_max_size = Some(1000);
             cap.list = true;
             info.into()
         }
@@ -261,27 +329,19 @@ mod test_accessor {
             }
         }
 
-        async fn delete(&self, _path: &str, _args: OpDelete) -> opendal::Result<RpDelete> {
+        async fn delete(&self) -> opendal::Result<(RpDelete, Self::Deleter)> {
             self.hit_delete.store(true, Ordering::Release);
-            if self.inject_delete_faulty {
-                Err(opendal::Error::new(
-                    opendal::ErrorKind::Unexpected,
-                    "does not matter (delete)",
-                ))
-            } else {
-                Ok(RpDelete::default())
-            }
-        }
 
-        async fn batch(&self, _args: OpBatch) -> opendal::Result<RpBatch> {
-            self.hit_delete.store(true, Ordering::Release);
             if self.inject_delete_faulty {
                 Err(opendal::Error::new(
                     opendal::ErrorKind::Unexpected,
                     "does not matter (delete)",
                 ))
             } else {
-                Ok(RpBatch::new(vec![]))
+                Ok((RpDelete::default(), MockDeleter {
+                    size: 0,
+                    hit_batch: self.hit_batch.clone(),
+                }))
             }
         }
 
@@ -401,8 +461,6 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
         let tables = vec![table];
         let num_threads = 1;
         let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
-        // verify that accessor.stat() was called
-        assert!(faulty_accessor.hit_stat_operation());
         // verify that errors of NotFound are swallowed
         assert!(result.is_ok());
     }
@@ -417,8 +475,6 @@ async fn test_fuse_vacuum_drop_tables_dry_run_with_obj_not_found_error() -> Resu
         let tables = vec![table.clone(), table];
         let num_threads = 2;
         let result = vacuum_drop_tables_by_table_info(num_threads, tables, Some(usize::MAX)).await;
-        // verify that accessor.stat() was called
-        assert!(faulty_accessor.hit_stat_operation());
         // verify that errors of NotFound are swallowed
         assert!(result.is_ok());
     }
@@ -452,6 +508,25 @@ async fn test_fuse_do_vacuum_drop_table_external_storage() -> Result<()> {
 
     // verify that accessor.delete() was called
     assert!(!accessor.hit_delete_operation());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_remove_files_in_batch_do_not_swallow_errors() -> Result<()> {
+    // errors should not be swallowed in remove_file_in_batch
+    let faulty_accessor = Arc::new(test_accessor::AccessorFaultyDeletion::with_delete_fault());
+    let operator = OperatorBuilder::new(faulty_accessor.clone()).finish();
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let file_util = Files::create(ctx, operator);
+
+    // files to be deleted does not matter, faulty_accessor will always fail to delete
+    let r = file_util.remove_file_in_batch(vec!["1", "2"]).await;
+    assert!(r.is_err());
+
+    // verify that accessor.delete() was called
+    assert!(faulty_accessor.hit_delete_operation());
 
     Ok(())
 }

@@ -23,9 +23,9 @@ use databend_common_catalog::plan::split_row_id;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::LoadParams;
@@ -64,6 +64,10 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
     async fn on_start(&mut self) -> Result<()> {
         self.snapshot = self.table.read_table_snapshot().await?;
         Ok(())
+    }
+
+    fn clear_cache(&mut self) {
+        self.part_map.clear();
     }
 
     #[async_backtrace::framed]
@@ -142,11 +146,20 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
             })
             .collect::<Vec<_>>();
 
-        Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
-    }
+        // check if row index is in valid bounds cause we don't ensure rowid is valid
+        for (block_idx, row_idx, _) in indices.iter() {
+            if *block_idx as usize >= blocks.len()
+                || *row_idx as usize >= blocks[*block_idx as usize].num_rows()
+            {
+                return Err(ErrorCode::Internal(format!(
+                    "RowID is invalid, block idx {block_idx}, row idx {row_idx}, blocks len {}, block idx len {:?}",
+                    blocks.len(),
+                    blocks.get(*block_idx as usize).map(|b| b.num_rows()),
+                )));
+            }
+        }
 
-    fn schema(&self) -> DataSchema {
-        self.reader.data_schema()
+        Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
     }
 }
 

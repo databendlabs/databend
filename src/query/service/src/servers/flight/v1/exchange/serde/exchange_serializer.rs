@@ -31,6 +31,7 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
@@ -45,8 +46,6 @@ use databend_common_pipeline_transforms::processors::Transform;
 use databend_common_pipeline_transforms::processors::Transformer;
 use databend_common_pipeline_transforms::processors::UnknownMode;
 use databend_common_settings::FlightCompression;
-use serde::Deserializer;
-use serde::Serializer;
 
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::MergeExchangeParams;
@@ -74,30 +73,10 @@ impl Debug for ExchangeSerializeMeta {
     }
 }
 
-impl serde::Serialize for ExchangeSerializeMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: Serializer {
-        unimplemented!("Unimplemented serialize ExchangeSerializeMeta")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for ExchangeSerializeMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        unimplemented!("Unimplemented deserialize ExchangeSerializeMeta")
-    }
-}
+local_block_meta_serde!(ExchangeSerializeMeta);
 
 #[typetag::serde(name = "exchange_serialize")]
-impl BlockMetaInfo for ExchangeSerializeMeta {
-    fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
-        unimplemented!("Unimplemented equals ExchangeSerializeMeta")
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        unimplemented!("Unimplemented clone ExchangeSerializeMeta")
-    }
-}
+impl BlockMetaInfo for ExchangeSerializeMeta {}
 
 pub struct TransformExchangeSerializer {
     options: IpcWriteOptions,
@@ -217,14 +196,12 @@ pub fn serialize_block(
     let (_, dict, values) = match data_block.is_empty() {
         true => batches_to_flight_data_with_options(
             &ArrowSchema::empty(),
-            vec![
-                RecordBatch::try_new_with_options(
-                    Arc::new(ArrowSchema::empty()),
-                    vec![],
-                    &RecordBatchOptions::new().with_row_count(Some(0)),
-                )
-                .unwrap(),
-            ],
+            vec![RecordBatch::try_new_with_options(
+                Arc::new(ArrowSchema::empty()),
+                vec![],
+                &RecordBatchOptions::new().with_row_count(Some(0)),
+            )
+            .unwrap()],
             options,
         )?,
         false => {

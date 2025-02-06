@@ -20,6 +20,7 @@ pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
+pub const OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG: &str = "snapshot_location_fixed";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
@@ -49,6 +50,9 @@ pub const OPT_KEY_ENGINE_META: &str = "engine_meta";
 pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
 // the following are used in for random engine
 pub const OPT_KEY_RANDOM_SEED: &str = "seed";
+pub const OPT_KEY_RANDOM_MIN_STRING_LEN: &str = "min_string_len";
+pub const OPT_KEY_RANDOM_MAX_STRING_LEN: &str = "max_string_len";
+pub const OPT_KEY_RANDOM_MAX_ARRAY_LEN: &str = "max_array_len";
 
 pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
@@ -83,7 +87,7 @@ pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy)]
 pub enum ClusterType {
     Linear,
     Hilbert,

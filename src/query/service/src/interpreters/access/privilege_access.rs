@@ -29,6 +29,7 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserGrantSet;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::principal::UserPrivilegeType;
+use databend_common_meta_app::principal::SYSTEM_TABLES_ALLOW_LIST;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_sql::binder::MutationType;
@@ -58,34 +59,8 @@ enum ObjectId {
     Table(u64, u64),
 }
 
-// some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
-// rewritten to the queries on the system tables, we need to skip the privilege check on
-// these tables.
-const SYSTEM_TABLES_ALLOW_LIST: [&str; 20] = [
-    "catalogs",
-    "columns",
-    "databases",
-    "dictionaries",
-    "tables",
-    "views",
-    "tables_with_history",
-    "views_with_history",
-    "password_policies",
-    "streams",
-    "streams_terse",
-    "virtual_columns",
-    "users",
-    "roles",
-    "stages",
-    "one",
-    "processes",
-    "user_functions",
-    "functions",
-    "indexes",
-];
-
 // table functions that need `Super` privilege
-const SYSTEM_TABLE_FUNCTIONS: [&str; 1] = ["fuse_amend"];
+const SYSTEM_TABLE_FUNCTIONS: [&str; 2] = ["fuse_amend", "set_cache_capacity"];
 
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
@@ -176,7 +151,7 @@ impl PrivilegeAccess {
             GrantObject::UDF(name) => OwnershipObject::UDF {
                 name: name.to_string(),
             },
-            GrantObject::Global => return Ok(None),
+            GrantObject::Global | GrantObject::Warehouse(_) => return Ok(None),
         };
 
         Ok(Some(object))
@@ -250,7 +225,7 @@ impl PrivilegeAccess {
 
                             return Err(ErrorCode::PermissionDenied(format!(
                                 "Permission denied: privilege [{:?}] is required on '{}'.'{}'.* for user {} with roles [{}]. \
-                                Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.",
+                                Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
                                 privileges,
                                 catalog_name,
                                 db_name,
@@ -466,7 +441,7 @@ impl PrivilegeAccess {
             | GrantObject::UDF(_)
             | GrantObject::Stage(_)
             | GrantObject::TableById(_, _, _) => true,
-            GrantObject::Global => false,
+            GrantObject::Global | GrantObject::Warehouse(_) => false,
         };
 
         if verify_ownership
@@ -515,11 +490,12 @@ impl PrivilegeAccess {
                     GrantObject::DatabaseById(_, _) => Err(ErrorCode::PermissionDenied("")),
                     GrantObject::Global
                     | GrantObject::UDF(_)
+                    | GrantObject::Warehouse(_)
                     | GrantObject::Stage(_)
                     | GrantObject::Database(_, _)
                     | GrantObject::Table(_, _, _) => Err(ErrorCode::PermissionDenied(format!(
                         "Permission denied: privilege [{:?}] is required on {} for user {} with roles [{}]. \
-                        Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.",
+                        Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.",
                         privilege,
                         grant_object,
                         &current_user.identity().display(),
@@ -708,6 +684,7 @@ impl AccessChecker for PrivilegeAccess {
             } => {
                 match rewrite_kind {
                     Some(RewriteKind::ShowDatabases)
+                    | Some(RewriteKind::ShowDropDatabases)
                     | Some(RewriteKind::ShowEngines)
                     | Some(RewriteKind::ShowFunctions)
                     | Some(RewriteKind::ShowUserFunctions)
@@ -1021,7 +998,8 @@ impl AccessChecker for PrivilegeAccess {
             // Dictionary
             Plan::ShowCreateDictionary(_)
             | Plan::CreateDictionary(_)
-            | Plan::DropDictionary(_) => {
+            | Plan::DropDictionary(_)
+            | Plan::RenameDictionary(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -1173,7 +1151,21 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant,false, false)
                     .await?;
             }
-            Plan::Set(_) | Plan::Unset(_) | Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
+            Plan::Set(plan) => {
+                use databend_common_ast::ast::SetType;
+                if let SetType::SettingsGlobal = plan.set_type {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
+            }
+            Plan::Unset(plan) => {
+                use databend_common_ast::ast::SetType;
+                if let SetType::SettingsGlobal = plan.unset_type {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
+            }
+            Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -1205,6 +1197,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
+            | Plan::UseCatalog(_)
             | Plan::CreateFileFormat(_)
             | Plan::DropFileFormat(_)
             | Plan::ShowFileFormats(_)
@@ -1269,6 +1262,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::CallProcedure(_)
             | Plan::CreateProcedure(_)
             | Plan::DropProcedure(_)
+            | Plan::DescProcedure(_)
             /*| Plan::ShowCreateProcedure(_)
             | Plan::RenameProcedure(_)*/ => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
@@ -1276,6 +1270,20 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Commit => {}
             Plan::Abort => {}
+            Plan::ShowWarehouses => {}
+            Plan::ShowOnlineNodes => {}
+            Plan::DropWarehouse(_) => {}
+            Plan::ResumeWarehouse(_) => {}
+            Plan::SuspendWarehouse(_) => {}
+            Plan::RenameWarehouse(_) => {}
+            Plan::InspectWarehouse(_) => {}
+            Plan::DropWarehouseCluster(_) => {}
+            Plan::RenameWarehouseCluster(_) => {}
+            Plan::UseWarehouse(_) => {}
+            Plan::CreateWarehouse(_) => {}
+            Plan::AddWarehouseCluster(_) => {}
+            Plan::AssignWarehouseNodes(_) => {}
+            Plan::UnassignWarehouseNodes(_) => {}
         }
 
         Ok(())

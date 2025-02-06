@@ -16,16 +16,20 @@ use std::alloc::Layout;
 use std::fmt;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::Result;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 
 use super::aggregate_function::AggregateFunction;
 use super::StateAddr;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 
 #[derive(Clone)]
 pub struct AggregateNullResultFunction {
@@ -47,15 +51,15 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(self.data_type.clone())
     }
 
-    fn init_state(&self, __place: StateAddr) {}
+    fn init_state(&self, _place: AggrState) {}
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<u8>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<u8>()));
     }
 
     fn accumulate(
         &self,
-        __place: StateAddr,
+        _place: AggrState,
         _columns: InputColumns,
         _validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -66,30 +70,30 @@ impl AggregateFunction for AggregateNullResultFunction {
     fn accumulate_keys(
         &self,
         _places: &[StateAddr],
-        _offset: usize,
+        _loc: &[AggrStateLoc],
         _columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
         Ok(())
     }
 
-    fn accumulate_row(&self, _place: StateAddr, _columns: InputColumns, _row: usize) -> Result<()> {
+    fn accumulate_row(&self, _place: AggrState, _columns: InputColumns, _row: usize) -> Result<()> {
         Ok(())
     }
 
-    fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, _place: AggrState, _writer: &mut Vec<u8>) -> Result<()> {
         Ok(())
     }
 
-    fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, _place: AggrState, _reader: &mut &[u8]) -> Result<()> {
         Ok(())
     }
 
-    fn merge_states(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, _place: AggrState, _rhs: AggrState) -> Result<()> {
         Ok(())
     }
 
-    fn merge_result(&self, _place: StateAddr, array: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, _place: AggrState, array: &mut ColumnBuilder) -> Result<()> {
         AnyType::push_default(array);
         Ok(())
     }

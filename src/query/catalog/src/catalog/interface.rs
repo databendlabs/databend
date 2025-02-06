@@ -56,6 +56,8 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -74,6 +76,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -108,6 +111,7 @@ use databend_common_meta_types::SeqV;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
+use log::info;
 
 use crate::database::Database;
 use crate::table::Table;
@@ -132,8 +136,6 @@ pub trait CatalogCreator: Send + Sync + Debug {
 
 #[async_trait::async_trait]
 pub trait Catalog: DynClone + Send + Sync + Debug {
-    /// Catalog itself
-
     // Get the name of the catalog.
     fn name(&self) -> String;
     // Get the info of the catalog.
@@ -146,10 +148,11 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         )))
     }
 
-    /// Database.
-
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>>;
+
+    // List all databases history
+    async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
 
     // Get all the databases.
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
@@ -166,6 +169,52 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn drop_index(&self, req: DropIndexReq) -> Result<()>;
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
+
+    async fn list_marked_deleted_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_marked_deleted_indexes' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_marked_deleted_table_indexes' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        _tenant: &Tenant,
+        _table_id: u64,
+        _index_ids: &[u64],
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'remove_marked_deleted_index_ids' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: u64,
+        _indexes: &[(String, String)],
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'remove_marked_deleted_table_indexes' not implemented for catalog {}",
+            self.name()
+        )))
+    }
 
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply>;
 
@@ -205,8 +254,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn rename_database(&self, req: RenameDatabaseReq) -> Result<RenameDatabaseReply>;
 
-    /// Table.
-
     // Build a `Arc<dyn Table>` from `TableInfo`.
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>>;
 
@@ -218,6 +265,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>>;
 
     // Get the db name by meta id.
@@ -365,16 +413,21 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        self.retryable_update_multi_table_meta(req)
-            .await?
-            .map_err(|e| {
-                ErrorCode::TableVersionMismatched(format!(
-                    "Fail to update table metas, conflict tables: {:?}",
-                    e.iter()
-                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
-                        .collect::<Vec<_>>()
-                ))
-            })
+        let result = self.retryable_update_multi_table_meta(req).await?;
+        match result {
+            Ok(reply) => Ok(reply),
+            Err(failed_tables) => {
+                let err_msg = format!(
+                    "Due to concurrent transactions, transaction commit failed. Conflicting table IDs: {:?}",
+                    failed_tables.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
+                );
+                info!(
+                    "Due to concurrent transactions, transaction commit failed. Conflicting tables: {:?}",
+                    failed_tables
+                );
+                Err(ErrorCode::TableVersionMismatched(err_msg))
+            }
+        }
     }
 
     // update stream metas, currently used by "copy into location form stream"
@@ -447,8 +500,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()>;
 
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>>;
-
-    /// Table function
 
     // Get function by name.
     fn get_table_function(
@@ -526,4 +577,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>>;
+
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()>;
 }

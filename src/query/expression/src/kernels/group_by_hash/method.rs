@@ -16,10 +16,11 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ptr::NonNull;
 
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::buffer::Buffer;
 use databend_common_exception::Result;
 use databend_common_hashtable::DictionaryKeys;
 use databend_common_hashtable::FastHash;
+use either::Either;
 use ethnum::i256;
 use ethnum::u256;
 
@@ -28,8 +29,8 @@ use crate::types::decimal::Decimal;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
+use crate::types::StringColumn;
 use crate::Column;
-use crate::HashMethodDictionarySerializer;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU16;
 use crate::HashMethodKeysU256;
@@ -46,7 +47,7 @@ pub enum KeysState {
     U128(Buffer<u128>),
     U256(Buffer<u256>),
     Dictionary {
-        columns: Vec<BinaryColumn>,
+        columns: Vec<Either<StringColumn, BinaryColumn>>,
         keys_point: Vec<NonNull<[u8]>>,
         dictionaries: Vec<DictionaryKeys>,
     },
@@ -89,7 +90,6 @@ pub trait HashMethod: Clone + Sync + Send + 'static {
 #[derive(Clone, Debug)]
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
-    DictionarySerializer(HashMethodDictionarySerializer),
     SingleBinary(HashMethodSingleBinary),
     KeysU8(HashMethodKeysU8),
     KeysU16(HashMethodKeysU16),
@@ -104,7 +104,7 @@ macro_rules! with_hash_method {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
             $t = [Serializer, SingleBinary, KeysU8, KeysU16,
-            KeysU32, KeysU64, KeysU128, KeysU256, DictionarySerializer],
+            KeysU32, KeysU64, KeysU128, KeysU256],
             $($tail)*
         }
     }
@@ -116,26 +116,6 @@ macro_rules! with_join_hash_method {
         match_template::match_template! {
             $t = [Serializer, SingleBinary, KeysU8, KeysU16,
             KeysU32, KeysU64, KeysU128, KeysU256],
-            $($tail)*
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! with_mappedhash_method {
-    ( | $t:tt | $($tail:tt)* ) => {
-        match_template::match_template! {
-            $t = [
-                Serializer => HashMethodSerializer,
-                SingleBinary => HashMethodSingleBinary,
-                KeysU8 => HashMethodKeysU8,
-                KeysU16 => HashMethodKeysU16,
-                KeysU32 => HashMethodKeysU32,
-                KeysU64 => HashMethodKeysU64,
-                KeysU128 => HashMethodKeysU128,
-                KeysU256 => HashMethodKeysU256,
-                DictionarySerializer => HashMethodDictionarySerializer
-            ],
             $($tail)*
         }
     }
@@ -162,7 +142,6 @@ impl HashMethodKind {
             HashMethodKind::KeysU256(_) => {
                 DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
             }
-            HashMethodKind::DictionarySerializer(_) => DataType::Binary,
         }
     }
 }

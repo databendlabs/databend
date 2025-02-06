@@ -29,7 +29,7 @@ fn test_input_columns() {
     let data_types = proxy.as_block().unwrap().data_types();
     assert!(data_types[0].is_boolean());
     assert!(data_types[1].is_string());
-    assert!(data_types[2].is_numeric());
+    assert!(data_types[2].is_number());
 
     assert_eq!(proxy.iter().count(), 3);
 

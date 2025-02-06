@@ -130,8 +130,8 @@ impl Interpreter for InsertMultiTableInterpreter {
 
 impl InsertMultiTableInterpreter {
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let (mut root, metadata) = self.build_source_physical_plan().await?;
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone(), &metadata).await?;
+        let (mut root, _) = self.build_source_physical_plan().await?;
+        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
         let source_schema = root.output_schema()?;
         let branches = self.build_insert_into_branches().await?;
         let serializable_tables = branches

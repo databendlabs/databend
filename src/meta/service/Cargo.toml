@@ -12,11 +12,9 @@ doctest = false
 test = true
 
 [features]
-default = ["simd", "memory-profiling"]
+default = []
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
-simd = ["databend-common-arrow/simd"]
 io-uring = [
-    "sled/io_uring",
     "databend-common-meta-sled-store/io-uring",
     "databend-common-meta-raft-store/io-uring",
 ]
@@ -24,10 +22,10 @@ io-uring = [
 [dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+arrow-flight = { workspace = true }
 async-trait = { workspace = true }
 backon = { workspace = true }
 clap = { workspace = true }
-databend-common-arrow = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-http = { workspace = true }
@@ -54,11 +52,13 @@ maplit = { workspace = true }
 poem = { workspace = true }
 prometheus-client = { workspace = true }
 prost = { workspace = true }
+raft-log = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serfig = { workspace = true }
-sled = { workspace = true }
+span-map = { workspace = true }
+tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
 tonic-reflection = { workspace = true }

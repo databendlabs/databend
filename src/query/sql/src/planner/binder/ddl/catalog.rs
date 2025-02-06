@@ -35,6 +35,7 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::CatalogType;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::schema::IcebergCatalogOption;
+use databend_common_meta_app::schema::IcebergGlueCatalogOption;
 use databend_common_meta_app::schema::IcebergHmsCatalogOption;
 use databend_common_meta_app::schema::IcebergRestCatalogOption;
 use databend_common_meta_app::storage::StorageParams;
@@ -192,7 +193,7 @@ async fn parse_hive_catalog_url(
         return Ok(None);
     };
 
-    let mut location = UriLocation::from_uri(uri, "".to_string(), options)?;
+    let mut location = UriLocation::from_uri(uri, options)?;
     let sp = parse_storage_params_from_uri(
         &mut location,
         Some(ctx.as_ref()),
@@ -231,6 +232,10 @@ fn parse_iceberg_rest_catalog(
         }),
         "hive" => IcebergCatalogOption::Hms(IcebergHmsCatalogOption {
             address,
+            warehouse,
+            props: HashMap::from_iter(options),
+        }),
+        "glue" => IcebergCatalogOption::Glue(IcebergGlueCatalogOption {
             warehouse,
             props: HashMap::from_iter(options),
         }),

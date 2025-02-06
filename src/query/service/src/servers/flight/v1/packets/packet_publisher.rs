@@ -34,6 +34,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
@@ -92,11 +93,10 @@ impl DataflowDiagramBuilder {
             let source = self
                 .nodes
                 .get(source)
-                .ok_or_else(|| ErrorCode::NotFoundClusterNode(""))?;
-            let destination = self
-                .nodes
-                .get(destination)
-                .ok_or_else(|| ErrorCode::NotFoundClusterNode(""))?;
+                .ok_or_else(|| ErrorCode::NotFoundClusterNode(format!("not found {}", source)))?;
+            let destination = self.nodes.get(destination).ok_or_else(|| {
+                ErrorCode::NotFoundClusterNode(format!("not found {}", destination))
+            })?;
 
             self.graph
                 .add_edge(*source, *destination, Edge::Fragment(v));
@@ -140,7 +140,7 @@ pub struct QueryEnv {
 }
 
 impl QueryEnv {
-    pub async fn init(&self, ctx: &Arc<QueryContext>, timeout: u64) -> Result<()> {
+    pub async fn init(&self, ctx: &Arc<QueryContext>, flight_params: FlightParams) -> Result<()> {
         debug!("Dataflow diagram {:?}", self.dataflow_diagram);
 
         let cluster = ctx.get_cluster();
@@ -151,7 +151,7 @@ impl QueryEnv {
         }
 
         let _ = cluster
-            .do_action::<_, ()>(INIT_QUERY_ENV, message, timeout)
+            .do_action::<_, ()>(INIT_QUERY_ENV, message, flight_params)
             .await?;
 
         Ok(())
@@ -165,11 +165,12 @@ impl QueryEnv {
         )?;
 
         let query_ctx = session.create_query_context_with_cluster(Arc::new(Cluster {
+            unassign: self.cluster.unassign,
             nodes: self.cluster.nodes.clone(),
             local_id: GlobalConfig::instance().query.node_id.clone(),
         }))?;
 
-        query_ctx.set_id(self.query_id.clone());
+        query_ctx.update_init_query_id(self.query_id.clone());
         query_ctx.attach_query_str(self.query_kind, "".to_string());
 
         Ok(query_ctx)

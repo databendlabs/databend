@@ -17,11 +17,14 @@ for i in `seq 0 9`;do
 		stmt "insert into t1 values($i)"
 done
 
-query "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=true" | $RM_UUID | sort
+echo "copy1"
+query "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=true" | $RM_UUID | tail -n +2 | sort
 
+echo "copy2"
 query "copy into @s1/a/bc from (select * from t1) file_format = (type=csv) max_file_size=1 detailed_output=false"
 
-query "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=true" | $RM_UUID | sort
+echo "copy3"
+query "copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=true" | $RM_UUID | tail -n +2 | sort
 
 query "copy into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=false" | $MYSQL
 

@@ -62,10 +62,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             Ok(Statement::Explain {
                 kind: match opt_kind.map(|token| token.kind) {
                     Some(TokenKind::SYNTAX) | Some(TokenKind::AST) => {
-                        let pretty_stmt =
-                            pretty_statement(statement.stmt.clone(), 10).map_err(|_| {
-                                nom::Err::Failure(ErrorKind::Other("invalid statement"))
-                            })?;
+                        let pretty_stmt = statement.stmt.to_string();
                         ExplainKind::Syntax(pretty_stmt)
                     }
                     Some(TokenKind::PIPELINE) => ExplainKind::Pipeline,
@@ -82,6 +79,18 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 },
                 options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
                 query: Box::new(statement.stmt),
+            })
+        },
+    );
+
+    let query_setting = map_res(
+        rule! {
+            SETTINGS ~ #query_statement_setting? ~ #statement_body
+        },
+        |(_, opt_settings, statement)| {
+            Ok(Statement::StatementWithSettings {
+                settings: opt_settings,
+                stmt: Box::new(statement),
             })
         },
     );
@@ -113,7 +122,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ #warehouse_option
+            ~ #task_warehouse_option
             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
             ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
             ~ ( WHEN ~ #expr )?
@@ -504,6 +513,146 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let use_catalog = map(
+        rule! {
+            USE ~ CATALOG ~ #ident
+        },
+        |(_, _, catalog)| Statement::UseCatalog { catalog },
+    );
+
+    let show_online_nodes = map(
+        rule! {
+            SHOW ~ ONLINE ~ NODES
+        },
+        |(_, _, _)| Statement::ShowOnlineNodes(ShowOnlineNodesStmt {}),
+    );
+
+    let show_warehouses = map(
+        rule! {
+            SHOW ~ WAREHOUSES
+        },
+        |(_, _)| Statement::ShowWarehouses(ShowWarehousesStmt {}),
+    );
+
+    let use_warehouse = map(
+        rule! {
+            USE ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::UseWarehouse(UseWarehouseStmt { warehouse }),
+    );
+
+    let create_warehouse = map(
+        rule! {
+            CREATE ~ WAREHOUSE ~ #ident ~ ("(" ~ #assign_nodes_list ~ ")")? ~ (WITH ~ #warehouse_cluster_option)?
+        },
+        |(_, _, warehouse, nodes, options)| {
+            Statement::CreateWarehouse(CreateWarehouseStmt {
+                warehouse,
+                node_list: nodes.map(|(_, nodes, _)| nodes).unwrap_or_else(Vec::new),
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
+    );
+
+    let drop_warehouse = map(
+        rule! {
+            DROP ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::DropWarehouse(DropWarehouseStmt { warehouse }),
+    );
+
+    let rename_warehouse = map(
+        rule! {
+            RENAME ~ WAREHOUSE ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, warehouse, _, new_warehouse)| {
+            Statement::RenameWarehouse(RenameWarehouseStmt {
+                warehouse,
+                new_warehouse,
+            })
+        },
+    );
+
+    let resume_warehouse = map(
+        rule! {
+            RESUME ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::ResumeWarehouse(ResumeWarehouseStmt { warehouse }),
+    );
+
+    let suspend_warehouse = map(
+        rule! {
+            SUSPEND ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::SuspendWarehouse(SuspendWarehouseStmt { warehouse }),
+    );
+
+    let inspect_warehouse = map(
+        rule! {
+            INSPECT ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, warehouse)| Statement::InspectWarehouse(InspectWarehouseStmt { warehouse }),
+    );
+
+    let add_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ ADD ~ CLUSTER ~ #ident ~ ("(" ~ #assign_nodes_list ~ ")")? ~ (WITH ~ #warehouse_cluster_option)?
+        },
+        |(_, _, warehouse, _, _, cluster, nodes, options)| {
+            Statement::AddWarehouseCluster(AddWarehouseClusterStmt {
+                warehouse,
+                cluster,
+                node_list: nodes.map(|(_, nodes, _)| nodes).unwrap_or_else(Vec::new),
+                options: options.map(|(_, x)| x).unwrap_or_else(BTreeMap::new),
+            })
+        },
+    );
+
+    let drop_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ DROP ~ CLUSTER ~ #ident
+        },
+        |(_, _, warehouse, _, _, cluster)| {
+            Statement::DropWarehouseCluster(DropWarehouseClusterStmt { warehouse, cluster })
+        },
+    );
+
+    let rename_warehouse_cluster = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ RENAME ~ CLUSTER ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, warehouse, _, _, cluster, _, new_cluster)| {
+            Statement::RenameWarehouseCluster(RenameWarehouseClusterStmt {
+                warehouse,
+                cluster,
+                new_cluster,
+            })
+        },
+    );
+
+    let assign_warehouse_nodes = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ ASSIGN ~ NODES ~ "(" ~ #assign_warehouse_nodes_list ~ ")"
+        },
+        |(_, _, warehouse, _, _, _, nodes, _)| {
+            Statement::AssignWarehouseNodes(AssignWarehouseNodesStmt {
+                warehouse,
+                node_list: nodes,
+            })
+        },
+    );
+
+    let unassign_warehouse_nodes = map(
+        rule! {
+            ALTER ~ WAREHOUSE ~ #ident ~ UNASSIGN ~ NODES ~ "(" ~ #unassign_warehouse_nodes_list ~ ")"
+        },
+        |(_, _, warehouse, _, _, _, nodes, _)| {
+            Statement::UnassignWarehouseNodes(UnassignWarehouseNodesStmt {
+                warehouse,
+                node_list: nodes,
+            })
+        },
+    );
 
     let show_databases = map(
         rule! {
@@ -517,6 +666,19 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+
+    let show_drop_databases = map(
+        rule! {
+            SHOW ~ DROP ~ ( DATABASES | DATABASES ) ~ ( FROM ~ ^#ident )? ~ #show_limit?
+        },
+        |(_, _, _, opt_catalog, limit)| {
+            Statement::ShowDropDatabases(ShowDropDatabasesStmt {
+                catalog: opt_catalog.map(|(_, catalog)| catalog),
+                limit,
+            })
+        },
+    );
+
     let show_create_database = map(
         rule! {
             SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #dot_separated_idents_1_to_2
@@ -1006,6 +1168,29 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             })
         },
     );
+    let rename_dictionary = map(
+        rule! {
+            RENAME ~ DICTIONARY ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ TO ~ #dot_separated_idents_1_to_3
+        },
+        |(
+            _,
+            _,
+            opt_if_exists,
+            (catalog, database, dictionary),
+            _,
+            (new_catalog, new_database, new_dictionary),
+        )| {
+            Statement::RenameDictionary(RenameDictionaryStmt {
+                if_exists: opt_if_exists.is_some(),
+                catalog,
+                database,
+                dictionary,
+                new_catalog,
+                new_database,
+                new_dictionary,
+            })
+        },
+    );
 
     let create_view = map_res(
         rule! {
@@ -1228,7 +1413,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( OR ~ ^REPLACE )?
             ~ VIRTUAL ~ COLUMN
             ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")"
             ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(
@@ -1257,7 +1442,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let alter_virtual_column = map(
         rule! {
-            ALTER ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            ALTER ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(_, _, _, opt_if_exists, _, virtual_columns, _, _, (catalog, database, table))| {
             Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
@@ -1509,9 +1694,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( #stage_name )
             ~ ( (URL ~ ^"=")? ~ #uri_location )?
             ~ ( #file_format_clause )?
-            ~ ( ON_ERROR ~ ^"=" ~ ^#ident )?
-            ~ ( SIZE_LIMIT ~ ^"=" ~ ^#literal_u64 )?
-            ~ ( VALIDATION_MODE ~ ^"=" ~ ^#ident )?
             ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
@@ -1522,9 +1704,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             stage,
             url_opt,
             file_format_opt,
-            on_error_opt,
-            size_limit_opt,
-            validation_mode_opt,
             comment_opt,
         )| {
             let create_option =
@@ -1534,11 +1713,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 stage_name: stage.to_string(),
                 location: url_opt.map(|(_, location)| location),
                 file_format_options: file_format_opt.unwrap_or_default(),
-                on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
-                size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
-                validation_mode: validation_mode_opt
-                    .map(|v| v.2.to_string())
-                    .unwrap_or_default(),
                 comments: comment_opt.map(|v| v.2).unwrap_or_default(),
             }))
         },
@@ -2218,8 +2392,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, name, args)| {
             // TODO: modify to ProcedureIdentify
             Statement::DescProcedure(DescProcedureStmt {
-                name: name.to_string(),
-                args,
+                name: ProcedureIdentity {
+                    name: name.to_string(),
+                    args_type: if args.is_empty() {
+                        "".to_string()
+                    } else {
+                        args.iter()
+                            .map(|arg| arg.to_string())
+                            .collect::<Vec<String>>()
+                            .join(",")
+                    },
+                },
             })
         },
     );
@@ -2244,15 +2427,37 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #set_priority: "`SET PRIORITY (HIGH | MEDIUM | LOW) <object_id>`"
             | #system_action: "`SYSTEM (ENABLE | DISABLE) EXCEPTION_BACKTRACE`"
         ),
+        // use
+        rule!(
+                #use_catalog: "`USE CATALOG <catalog>`"
+                | #use_warehouse: "`USE WAREHOUSE <warehouse>`"
+                | #use_database : "`USE <database>`"
+        ),
+        // warehouse
+        rule!(
+            #show_warehouses: "`SHOW WAREHOUSES`"
+            | #show_online_nodes: "`SHOW ONLINE NODES`"
+            | #create_warehouse: "`CREATE WAREHOUSE <warehouse> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [warehouse_size = <warehouse_size>]`"
+            | #drop_warehouse: "`DROP WAREHOUSE <warehouse>`"
+            | #rename_warehouse: "`RENAME WAREHOUSE <warehouse> TO <new_warehouse>`"
+            | #resume_warehouse: "`RESUME WAREHOUSE <warehouse>`"
+            | #suspend_warehouse: "`SUSPEND WAREHOUSE <warehouse>`"
+            | #inspect_warehouse: "`INSPECT WAREHOUSE <warehouse>`"
+            | #add_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> ADD CLUSTER <cluster> [(ASSIGN <node_size> NODES [FROM <node_group>] [, ...])] WITH [cluster_size = <cluster_size>]`"
+            | #drop_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> DROP CLUSTER <cluster>`"
+            | #rename_warehouse_cluster: "`ALTER WAREHOUSE <warehouse> RENAME CLUSTER <cluster> TO <new_cluster>`"
+            | #assign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> ASSIGN NODES ( ASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+            | #unassign_warehouse_nodes: "`ALTER WAREHOUSE <warehouse> UNASSIGN NODES ( UNASSIGN <node_size> NODES [FROM <node_group>] FOR <cluster> [, ...] )`"
+        ),
         // database
         rule!(
             #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"
             | #undrop_database : "`UNDROP DATABASE <database>`"
             | #show_create_database : "`SHOW CREATE DATABASE <database>`"
+            | #show_drop_databases : "`SHOW DROP DATABASES [FROM <database>] [<show_limit>]`"
             | #create_database : "`CREATE [OR REPLACE] DATABASE [IF NOT EXISTS] <database> [ENGINE = <engine>]`"
             | #drop_database : "`DROP DATABASE [IF EXISTS] <database>`"
             | #alter_database : "`ALTER DATABASE [IF EXISTS] <action>`"
-            | #use_database : "`USE <database>`"
         ),
         // network policy / password policy
         rule!(
@@ -2288,9 +2493,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
+            | #create_udf : "`CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
-            | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
+            | #alter_udf : "`ALTER FUNCTION <udf_name> <udf_definition> [DESC = <description>]`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #set_secondary_roles: "`SET SECONDARY ROLES (ALL | NONE)`"
             | #show_user_functions : "`SHOW USER FUNCTIONS [<show_limit>]`"
@@ -2324,6 +2529,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #drop_dictionary : "`DROP DICTIONARY [IF EXISTS] <dictionary_name>`"
             | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
             | #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
+            | #rename_dictionary: "`RENAME DICTIONARY [<database>.]<old_dict_name> TO <new_dict_name>`"
         ),
         // view,index
         rule!(
@@ -2375,6 +2581,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule!(
             #set_stmt : "`SET [variable] {<name> = <value> | (<name>, ...) = (<value>, ...)}`"
             | #unset_stmt : "`UNSET [variable] {<name> | (<name>, ...)}`"
+            | #query_setting : "SETTINGS ( {<name> = <value> | (<name>, ...) = (<value>, ...)} )  Statement"
         ),
         // catalog
         rule!(
@@ -2782,6 +2989,36 @@ pub fn hint(i: Input) -> IResult<Hint> {
     rule!(#hint|#invalid_hint)(i)
 }
 
+pub fn query_setting(i: Input) -> IResult<(Identifier, Expr)> {
+    map(
+        rule! {
+            #ident ~ "=" ~ #subexpr(0)
+        },
+        |(id, _, value)| (id, value),
+    )(i)
+}
+
+pub fn query_statement_setting(i: Input) -> IResult<Settings> {
+    let query_set = map(
+        rule! {
+            "(" ~ #comma_separated_list0(query_setting) ~ ")"
+        },
+        |(_, query_setting, _)| {
+            let mut ids = Vec::with_capacity(query_setting.len());
+            let mut values = Vec::with_capacity(query_setting.len());
+            for (id, value) in query_setting {
+                ids.push(id);
+                values.push(value);
+            }
+            Settings {
+                set_type: SetType::SettingsQuery,
+                identifiers: ids,
+                values: SetValues::Expr(values.into_iter().map(|x| x.into()).collect()),
+            }
+        },
+    );
+    rule!(#query_set: "(SETTING_NAME = VALUE, ...)")(i)
+}
 pub fn top_n(i: Input) -> IResult<u64> {
     map(
         rule! {
@@ -3004,9 +3241,31 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
 
+    let warehouse_privs = map(
+        rule! {
+            USAGE ~ ON ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Warehouse(w.to_string()),
+        },
+    );
+
+    let warehouse_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ WAREHOUSE ~ #ident
+        },
+        |(_, _, _, _, w)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::Usage],
+            level: AccountMgrLevel::Warehouse(w.to_string()),
+        },
+    );
+
     rule!(
         #role : "ROLE <role_name>"
+        | #warehouse_all_privs: "ALL [ PRIVILEGES ] ON WAREHOUSE <warehouse_name>"
         | #udf_privs: "USAGE ON UDF <udf_name>"
+        | #warehouse_privs: "USAGE ON WAREHOUSE <warehouse_name>"
         | #privs : "<privileges> ON <privileges_level>"
         | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #udf_all_privs: "ALL [ PRIVILEGES ] ON UDF <udf_name>"
@@ -3149,11 +3408,16 @@ pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
     let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
         AccountMgrLevel::Stage(stage_name.to_string())
     });
+
+    let warehouse = map(rule! { WAREHOUSE ~ #ident}, |(_, w)| {
+        AccountMgrLevel::Warehouse(w.to_string())
+    });
     rule!(
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
         | #stage : "STAGE <stage_name>"
+        | #warehouse : "WAREHOUSE <warehouse_name>"
     )(i)
 }
 
@@ -3831,7 +4095,7 @@ pub fn alter_pipe_option(i: Input) -> IResult<AlterPipeOptions> {
     )(i)
 }
 
-pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
+pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
             (WAREHOUSE  ~ "=" ~ #literal_string)?
@@ -3844,6 +4108,63 @@ pub fn warehouse_option(i: Input) -> IResult<WarehouseOptions> {
             WarehouseOptions { warehouse }
         },
     ),))(i)
+}
+
+pub fn assign_nodes_list(i: Input) -> IResult<Vec<(Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            ASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)?
+        },
+        |(_, node_size, _, node_group)| (node_group.map(|(_, x)| x), node_size),
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn assign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            ASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)? ~ FOR ~ #ident
+        },
+        |(_, node_size, _, node_group, _, cluster)| {
+            (cluster, node_group.map(|(_, x)| x), node_size)
+        },
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn unassign_warehouse_nodes_list(i: Input) -> IResult<Vec<(Identifier, Option<String>, u64)>> {
+    let nodes_list = map(
+        rule! {
+            UNASSIGN ~ #literal_u64 ~ NODES ~ (FROM ~ #option_to_string)? ~ FOR ~ #ident
+        },
+        |(_, node_size, _, node_group, _, cluster)| {
+            (cluster, node_group.map(|(_, x)| x), node_size)
+        },
+    );
+
+    map(comma_separated_list1(nodes_list), |opts| {
+        opts.into_iter().collect()
+    })(i)
+}
+
+pub fn warehouse_cluster_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    let option = map(
+        rule! {
+           #ident ~ "=" ~ #option_to_string
+        },
+        |(k, _, v)| (k, v),
+    );
+    map(comma_separated_list1(option), |opts| {
+        opts.into_iter()
+            .map(|(k, v)| (k.name.to_lowercase(), v.clone()))
+            .collect()
+    })(i)
 }
 
 pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
@@ -4201,15 +4522,35 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     })(i)
 }
 
-pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
+pub fn udaf_state_field(i: Input) -> IResult<UDAFStateField> {
     map(
         rule! {
-            #type_name
+            #ident
+            ~ #type_name
+            : "`<state name> <type>`"
         },
-        |type_name| match type_name {
-            TypeName::Nullable(_) | TypeName::NotNull(_) => type_name,
-            _ => type_name.wrap_nullable(),
+        |(name, type_name)| UDAFStateField { name, type_name },
+    )(i)
+}
+
+pub fn udf_script_or_address(i: Input) -> IResult<(String, bool)> {
+    let script = map(
+        rule! {
+            AS ~ ^(#code_string | #literal_string)
         },
+        |(_, code)| (code, true),
+    );
+
+    let address = map(
+        rule! {
+            ADDRESS ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, address)| (address, false),
+    );
+
+    rule!(
+        #script: "AS <language_codes>"
+        | #address: "ADDRESS=<udf_server_address>"
     )(i)
 }
 
@@ -4225,51 +4566,75 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
         },
     );
 
-    let udf_server = map(
+    let udf = map(
         rule! {
-            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ RETURNS ~ #udf_arg_type
+            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ ADDRESS ~ ^"=" ~ ^#literal_string
+            ~ #udf_script_or_address
         },
-        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, _, address)| {
-            UDFDefinition::UDFServer {
-                arg_types,
-                return_type,
-                address,
-                handler,
-                language: language.to_string(),
+        |(_, arg_types, _, _, return_type, _, language, _, _, handler, address_or_code)| {
+            if address_or_code.1 {
+                UDFDefinition::UDFScript {
+                    arg_types,
+                    return_type,
+                    code: address_or_code.0,
+                    handler,
+                    language: language.to_string(),
+                    // TODO inject runtime_version by user
+                    // Now we use fixed runtime version
+                    runtime_version: "".to_string(),
+                }
+            } else {
+                UDFDefinition::UDFServer {
+                    arg_types,
+                    return_type,
+                    address: address_or_code.0,
+                    handler,
+                    language: language.to_string(),
+                }
             }
         },
     );
 
-    let udf_script = map(
+    let udaf = map(
         rule! {
-            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
-            ~ RETURNS ~ #udf_arg_type
+            "(" ~ #comma_separated_list0(type_name) ~ ")"
+            ~ STATE ~ "{" ~ #comma_separated_list0(udaf_state_field) ~ "}"
+            ~ RETURNS ~ #type_name
             ~ LANGUAGE ~ #ident
-            ~ HANDLER ~ ^"=" ~ ^#literal_string
-            ~ AS ~ ^(#code_string | #literal_string)
+            ~ #udf_script_or_address
         },
-        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, code)| {
-            UDFDefinition::UDFScript {
-                arg_types,
-                return_type,
-                code,
-                handler,
-                language: language.to_string(),
-                // TODO inject runtime_version by user
-                // Now we use fixed runtime version
-                runtime_version: "".to_string(),
+        |(_, arg_types, _, _, _, state_types, _, _, return_type, _, language, address_or_code)| {
+            if address_or_code.1 {
+                UDFDefinition::UDAFScript {
+                    arg_types,
+                    state_fields: state_types,
+                    return_type,
+                    code: address_or_code.0,
+                    language: language.to_string(),
+                    // TODO inject runtime_version by user
+                    // Now we use fixed runtime version
+                    runtime_version: "".to_string(),
+                }
+            } else {
+                UDFDefinition::UDAFServer {
+                    arg_types,
+                    state_fields: state_types,
+                    return_type,
+                    address: address_or_code.0,
+                    language: language.to_string(),
+                }
             }
         },
     );
 
     rule!(
-        #udf_server: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
-        | #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
-        | #udf_script: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> AS <language_codes>"
+        #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
+        | #udaf: "(<arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+        | #udf: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> { ADDRESS=<udf_server_address> | AS <language_codes> } "
+
     )(i)
 }
 
@@ -4482,5 +4847,17 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             | #comment
         },
         |opts| opts,
+    )(i)
+}
+
+pub fn virtual_column(i: Input) -> IResult<VirtualColumn> {
+    map(
+        rule! {
+            #expr ~ #alias_name?
+        },
+        |(expr, alias)| VirtualColumn {
+            expr: Box::new(expr),
+            alias,
+        },
     )(i)
 }

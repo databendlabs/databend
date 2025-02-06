@@ -69,7 +69,7 @@ pub async fn main_entrypoint() -> Result<(), MainError> {
         return Ok(());
     }
 
-    init_services(&conf).await.with_context(make_error)?;
+    init_services(&conf, true).await.with_context(make_error)?;
     EnterpriseServices::init(conf.clone())
         .await
         .with_context(make_error)?;

@@ -15,6 +15,7 @@
 use std::io::Write;
 use std::sync::Arc;
 
+use arrow_schema::Schema;
 use buf_list::BufList;
 use buf_list::Cursor;
 use bytes::Buf;
@@ -23,7 +24,6 @@ use databend_common_base::base::DmaWriteBuf;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::read_column;
 use databend_common_expression::arrow::write_column;
-use databend_common_expression::converts::arrow::table_schema_to_arrow_schema;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
@@ -39,10 +39,11 @@ use parquet::file::reader::ChunkReader;
 use parquet::file::reader::Length;
 use parquet::format::FileMetaData;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Layout {
     ArrowIpc(Box<[usize]>),
     Parquet,
+    Aggregate,
 }
 
 pub(super) struct BlocksEncoder {
@@ -116,6 +117,7 @@ pub(super) fn deserialize_block(columns_layout: &Layout, mut data: Buffer) -> Da
             DataBlock::new_from_columns(columns)
         }
         Layout::Parquet => bare_blocks_from_parquet(Reader(data)).unwrap(),
+        Layout::Aggregate => unreachable!(),
     }
 }
 
@@ -166,7 +168,7 @@ fn bare_blocks_to_parquet<W: Write + Send>(
         .into_iter()
         .map(|block| block.to_record_batch(&table_schema))
         .collect::<Result<Vec<_>>>()?;
-    let arrow_schema = Arc::new(table_schema_to_arrow_schema(&table_schema));
+    let arrow_schema = Arc::new(Schema::from(table_schema.as_ref()));
     let mut writer = ArrowWriter::try_new(write_buffer, arrow_schema, Some(props))?;
     for batch in batches {
         writer.write(&batch)?;

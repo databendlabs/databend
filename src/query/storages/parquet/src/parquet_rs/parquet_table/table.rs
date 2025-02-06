@@ -29,12 +29,15 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::DummyColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
@@ -47,6 +50,7 @@ use databend_common_storage::parquet_rs::read_metadata_async;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::table::ChangeType;
+use log::info;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
@@ -121,6 +125,7 @@ impl ParquetRSTable {
         files_to_read: Option<Vec<StageFileInfo>>,
         settings: Arc<Settings>,
         query_kind: QueryKind,
+        case_sensitive: bool,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
         let first_file = match &files_to_read {
@@ -131,15 +136,23 @@ impl ParquetRSTable {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
 
-        let table_info = create_parquet_table_info(&arrow_schema, &stage_info)?;
+        let schema = arrow_to_table_schema(&arrow_schema, case_sensitive)?.into();
+        let table_info = create_parquet_table_info(schema, &stage_info)?;
         let leaf_fields = Arc::new(table_info.schema().leaf_fields());
 
         // If the query is `COPY`, we don't need to collect column statistics.
         // It's because the only transform could be contained in `COPY` command is projection.
-        let need_stats_provider = !matches!(
-            query_kind,
-            QueryKind::CopyIntoTable | QueryKind::CopyIntoLocation
-        );
+        let need_stats_provider = match query_kind {
+            QueryKind::CopyIntoTable | QueryKind::CopyIntoLocation => true,
+            QueryKind::Unknown => {
+                // add this branch to ensure query_kind is set
+                return Err(ErrorCode::Internal(
+                    "Unexpected QueryKind::Unknown: query_kind was not properly set before calling ParquetRSTable::create.",
+                ));
+            }
+            _ => false,
+        };
+
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
 
@@ -170,7 +183,9 @@ impl ParquetRSTable {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let size = operator.stat(path).await?.content_length();
+        let stat = operator.stat(path).await?;
+        let size = stat.content_length();
+        info!("infer schema from file {}, with stat {:?}", path, stat);
         let first_meta = read_metadata_async(path, &operator, Some(size)).await?;
         let arrow_schema = infer_schema_with_extension(first_meta.file_metadata())?;
         let compression_ratio = get_compression_ratio(&first_meta);
@@ -185,8 +200,8 @@ impl Table for ParquetRSTable {
         self
     }
 
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn get_table_info(&self) -> &TableInfo {
@@ -332,13 +347,16 @@ impl Table for ParquetRSTable {
     }
 }
 
-fn create_parquet_table_info(schema: &ArrowSchema, stage_info: &StageInfo) -> Result<TableInfo> {
+fn create_parquet_table_info(
+    schema: Arc<TableSchema>,
+    stage_info: &StageInfo,
+) -> Result<TableInfo> {
     Ok(TableInfo {
         ident: TableIdent::new(0, 0),
         desc: "''.'read_parquet'".to_string(),
         name: format!("read_parquet({})", stage_info.stage_name),
         meta: TableMeta {
-            schema: arrow_to_table_schema(schema)?.into(),
+            schema,
             engine: "SystemReadParquet".to_string(),
             created_on: DateTime::from_timestamp(0, 0).unwrap(),
             updated_on: DateTime::from_timestamp(0, 0).unwrap(),

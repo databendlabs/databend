@@ -24,6 +24,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::ColumnStatisticsProvider;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -42,7 +43,6 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
-use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -173,14 +173,13 @@ impl StreamTable {
         fuse_table.check_changes_valid(source_desc, self.offset()?)?;
 
         let (base_row_count, base_timsestamp) = if let Some(base_loc) = self.snapshot_loc() {
-            let (base, _) =
-                SnapshotsIO::read_snapshot(base_loc.to_string(), fuse_table.get_operator()).await?;
+            let base = fuse_table.changes_read_offset_snapshot(&base_loc).await?;
             (base.summary.row_count, base.timestamp)
         } else {
             (0, None)
         };
 
-        let Some(location) = fuse_table.snapshot_loc().await? else {
+        let Some(location) = fuse_table.snapshot_loc() else {
             return Ok(source);
         };
         let snapshot_version = TableMetaLocationGenerator::snapshot_version(location.as_str());
@@ -337,8 +336,8 @@ impl StreamTable {
 
 #[async_trait::async_trait]
 impl Table for StreamTable {
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -429,11 +428,14 @@ impl Table for StreamTable {
         table_name: &str,
         with_options: &str,
     ) -> Result<String> {
-        let table = self.source_table(ctx).await?;
+        let table = self.source_table(ctx.clone()).await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let table_desc = format!("{database_name}.{table_name}{with_options}");
+        let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
+        let table_desc =
+            format!("{quote}{database_name}{quote}.{quote}{table_name}{quote}{with_options}");
         fuse_table
             .get_changes_query(
+                ctx,
                 &self.mode(),
                 &self.snapshot_loc(),
                 table_desc,

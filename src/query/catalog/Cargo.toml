@@ -16,7 +16,7 @@ async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 dashmap = { workspace = true }
-databend-common-arrow = { workspace = true }
+
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }
@@ -33,7 +33,7 @@ databend-common-storage = { workspace = true }
 databend-common-users = { workspace = true }
 databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
-dyn-clone = "1.0.9"
+dyn-clone = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
@@ -41,13 +41,13 @@ rand = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-thrift = "0.17.0"
+thrift = { workspace = true }
 typetag = { workspace = true }
-xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
+xorf = { workspace = true, default-features = false, features = ["binary-fuse"] }
 
 [dev-dependencies]
-goldenfile = "1.4"
-maplit = "1.0.2"
+goldenfile = { workspace = true }
+maplit = { workspace = true }
 
 [lints]
 workspace = true

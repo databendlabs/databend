@@ -33,6 +33,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_types::MetaId;
 use databend_common_storages_fuse::TableContext;
+use itertools::Itertools;
 
 use crate::columns_table::dump_tables;
 use crate::table::AsyncOneBlockSystemTable;
@@ -79,7 +80,30 @@ impl AsyncSystemTable for VirtualColumnsTable {
                     if let Some(virtual_column_meta) = virtual_column_meta_map.remove(&table_id) {
                         database_names.push(database.clone());
                         table_names.push(table.name().to_string());
-                        virtual_columns.push(virtual_column_meta.virtual_columns.join(", "));
+                        virtual_columns.push(
+                            virtual_column_meta
+                                .virtual_columns
+                                .iter()
+                                .map(|virtual_field| {
+                                    let virtual_expr = if virtual_field.data_type.remove_nullable()
+                                        == TableDataType::Variant
+                                    {
+                                        virtual_field.expr.to_string()
+                                    } else {
+                                        format!(
+                                            "{}::{}",
+                                            virtual_field.expr,
+                                            virtual_field.data_type.remove_nullable()
+                                        )
+                                    };
+                                    if let Some(alias_name) = &virtual_field.alias_name {
+                                        format!("{} AS {}", virtual_expr, alias_name)
+                                    } else {
+                                        virtual_expr
+                                    }
+                                })
+                                .join(", "),
+                        );
                         created_on_columns.push(virtual_column_meta.created_on.timestamp_micros());
                         updated_on_columns
                             .push(virtual_column_meta.updated_on.map(|u| u.timestamp_micros()));

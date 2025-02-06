@@ -47,6 +47,16 @@ pub enum SettingMode {
     Write,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum SettingScope {
+    // they can be set for global and session
+    Both,
+    // they only can be set for global
+    Global,
+    // they only can be set for session
+    Session,
+}
+
 #[derive(Clone, Debug)]
 pub enum SettingRange {
     Numeric(RangeInclusive<u64>),
@@ -104,6 +114,7 @@ pub struct DefaultSettingValue {
     pub(crate) value: UserSettingValue,
     pub(crate) desc: &'static str,
     pub(crate) mode: SettingMode,
+    pub(crate) scope: SettingScope,
     pub(crate) range: Option<SettingRange>,
 }
 
@@ -129,30 +140,35 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables clickhouse handler.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("parquet_max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8192),
                     desc: "Max block size for parquet reader",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("max_threads", DefaultSettingValue {
                     value: UserSettingValue::UInt64(num_cpus),
                     desc: "Sets the maximum number of threads to execute a request.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("max_memory_usage", DefaultSettingValue {
                     value: UserSettingValue::UInt64(max_memory_usage),
                     desc: "Sets the maximum memory usage in bytes for processing a single query.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("data_retention_time_in_days", DefaultSettingValue {
@@ -160,18 +176,21 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets the data retention time in days.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=data_retention_time_in_days_max)),
                 }),
                 ("max_spill_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_spill_io_requests),
                     desc: "Sets the maximum number of concurrent spill I/O requests.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
                     desc: "Sets the maximum number of concurrent storage I/O requests.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
                 ("storage_io_min_bytes_for_seek", DefaultSettingValue {
@@ -179,18 +198,21 @@ impl DefaultSettings {
                     desc: "Sets the minimum byte size of data that must be read from storage in a single I/O operation \
                 when seeking a new location in the data file.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("storage_io_max_page_bytes_for_read", DefaultSettingValue {
                     value: UserSettingValue::UInt64(512 * 1024),
                     desc: "Sets the maximum byte size of data pages that can be read from storage in a single I/O operation.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("flight_client_timeout", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum time in seconds that a flight client request can be processed.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("http_handler_result_timeout_secs", DefaultSettingValue {
@@ -201,234 +223,287 @@ impl DefaultSettings {
                     },
                     desc: "Set the timeout in seconds that a http query session expires without any polls.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("storage_read_buffer_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024 * 1024),
                     desc: "Sets the byte size of the buffer used for reading data into memory.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("input_read_buffer_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4 * 1024 * 1024),
                     desc: "Sets the memory size in bytes allocated to the buffer used by the buffered reader to read data from storage.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_new_copy_for_text_formats", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Use new implementation for loading CSV files.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("purge_duplicated_files_in_copy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Purge duplicated files detected during execution of copy into table.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("timezone", DefaultSettingValue {
                     value: UserSettingValue::String("UTC".to_owned()),
                     desc: "Sets the timezone.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::String(all_timezones)),
                 }),
                 ("group_by_two_level_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(20000),
                     desc: "Sets the number of keys in a GROUP BY operation that will trigger a two-level aggregation.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("max_inlist_to_or", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
                     desc: "Sets the maximum number of values that can be included in an IN expression to be converted to an OR operator.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("unquoted_ident_case_sensitive", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Set to 1 to make unquoted names (like table or column names) case-sensitive, or 0 for case-insensitive.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("quoted_ident_case_sensitive", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Set to 1 for case-sensitive treatment of quoted names (like \"TableName\"), or 0 for case-insensitive.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("sql_dialect", DefaultSettingValue {
                     value: UserSettingValue::String("PostgreSQL".to_owned()),
                     desc: "Sets the SQL dialect. Available values include \"PostgreSQL\", \"MySQL\",  \"Experimental\", \"Prql\", and \"Hive\".",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
                 ("enable_dphyp", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables dphyp join order algorithm.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_cbo", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables cost-based optimization.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_dio", DefaultSettingValue{ 
+                ("enable_dio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables Direct IO.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("disable_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable join reorder optimization.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("max_push_down_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "Sets the maximum number of rows limit that can be pushed down to the leaf operator.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("join_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that one join processor can use before spilling data to storage during query execution, 0 is unlimited.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_partition_bits", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
                     desc: "Set the number of partitions for join spilling. Default value is 4, it means 2^4 partitions.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_buffer_threshold_per_proc_mb", DefaultSettingValue {
                     value: UserSettingValue::UInt64(512),
                     desc: "Set the spilling buffer threshold (MB) for each join processor.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("spilling_file_format", DefaultSettingValue {
                     value: UserSettingValue::String("parquet".to_string()),
                     desc: "Set the storage file format for spilling.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::String(SpillFileFormat::range())),
                 }),
                 ("spilling_to_disk_vacuum_unknown_temp_dirs_limit", DefaultSettingValue {
                     value: UserSettingValue::UInt64(u64::MAX),
                     desc: "Set the maximum number of directories to clean up. If there are some temporary dirs when another query is unexpectedly interrupted, which needs to be cleaned up after this query.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_merge_into_row_fetch", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable merge into row fetch optimization.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("max_cte_recursive_depth", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Max recursive depth for recursive cte",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("enable_materialized_cte", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable materialized common table expression.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("inlist_to_join_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1024),
                     desc: "Set the threshold for converting IN list to JOIN.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_bloom_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables runtime filter optimization for JOIN.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("collation", DefaultSettingValue {
                     value: UserSettingValue::String("utf8".to_owned()),
                     desc: "Sets the character collation. Available values include \"utf8\".",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["utf8".into()])),
                 }),
                 ("max_result_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum number of rows that can be returned in a query result when no specific row count is specified. Setting it to 0 means no limit.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("prefer_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables broadcast join.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enforce_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enforce broadcast join.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enforce_shuffle_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enforce shuffle join.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("storage_fetch_part_num", DefaultSettingValue {
                     value: UserSettingValue::UInt64(2),
                     desc: "Sets the number of partitions that are fetched in parallel from storage during query execution.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("load_file_metadata_expire_hours", DefaultSettingValue {
                     value: UserSettingValue::UInt64(24),
                     desc: "Sets the hours that the metadata of files you load data from with COPY INTO will expire in.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("hide_options_in_show_create_table", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Hides table-relevant information, such as SNAPSHOT_LOCATION and STORAGE_FORMAT, at the end of the result of SHOW TABLE CREATE.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("sandbox_tenant", DefaultSettingValue {
                     value: UserSettingValue::String("".to_string()),
                     desc: "Injects a custom 'sandbox_tenant' into this session. This is only for testing purposes and will take effect only when 'internal_enable_sandbox_tenant' is turned on.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: None,
                 }),
                 ("enable_planner_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables caching logic plan from same query.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_query_result_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables caching query results to improve performance for identical queries.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("query_result_cache_max_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1048576), // 1MB
                     desc: "Sets the maximum byte size of cache for a single query result.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("query_result_cache_min_execute_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "For a query to be cached, it must take at least this many seconds to fetch the first block. It helps to avoid caching queries that are too fast to execute or queries with streaming scan.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("query_result_cache_ttl_secs", DefaultSettingValue {
@@ -436,114 +511,140 @@ impl DefaultSettings {
                     desc: "Sets the time-to-live (TTL) in seconds for cached query results. \
                 Once the TTL for a cached result has expired, the result is considered stale and will not be used for new queries.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("query_result_cache_allow_inconsistent", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Determines whether Databend will return cached query results that are inconsistent with the underlying data.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_hive_parquet_predict_pushdown", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables hive parquet predict pushdown  by setting this variable to 1, default value: 1",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("hive_parquet_chunk_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(16384),
                     desc: "The max number of rows each read from parquet to databend processor",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("aggregate_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("aggregate_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("window_partition_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that a window partitioner can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_partition_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that a window partitioner can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("window_partition_spilling_to_disk_bytes_limit", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of local disk in bytes that each window partitioner can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_num_partitions", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256),
                     desc: "Sets the number of partitions for window operator.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_spill_unit_size_mb", DefaultSettingValue {
                     value: UserSettingValue::UInt64(256),
                     desc: "Sets the spill unit size (MB) for window operator.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_partition_sort_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the block size of data blocks to be sorted in window partition.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum amount of memory in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("sort_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
                 ("sort_spilling_batch_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8 * 1024 * 1024),
                     desc: "Sets the uncompressed size that merge sorter will spill to storage",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(4 * 1024..=u64::MAX)),
+                }),
+                ("enable_experimental_stream_sort_spilling", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable experimental stream sort spilling",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("group_by_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["before_partial".into(), "before_merge".into()])),
                 }),
                 ("efficiently_memory_group_by", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Memory is used efficiently, but this may cause performance degradation.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("parquet_fast_read_bytes", DefaultSettingValue {
                     value: UserSettingValue::UInt64(16 * 1024 * 1024),
                     desc: "Parquet file with smaller size will be read as a whole file, instead of column by column. Default value: 16MB",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
 
@@ -553,294 +654,346 @@ impl DefaultSettings {
                     desc: "License key for use enterprise features",
                     // license key should not be reported
                     mode: SettingMode::Write,
+                    scope: SettingScope::Global,
                     range: None,
                 }),
                 ("enable_table_lock", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables table lock if necessary (enabled by default).",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(30),
                     desc: "Sets the seconds that the table lock will expire in.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("acquire_lock_timeout", DefaultSettingValue {
                     value: UserSettingValue::UInt64(30),
                     desc: "Sets the maximum timeout in seconds for acquire a lock.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("deduplicate_label", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Sql duplicate label for deduplication.",
                     mode: SettingMode::Write,
+                    scope: SettingScope::Both,
                     range: None,
                 }),
                 ("enable_distributed_copy_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for the 'COPY INTO'.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables the experimental feature for 'MERGE INTO'.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_procedure", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables the experimental feature for 'PROCEDURE'. In default disable the experimental feature",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_distributed_merge_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables distributed execution for 'MERGE INTO'.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_distributed_replace_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables distributed execution of 'REPLACE INTO'.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_distributed_compact", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables distributed execution of table compaction.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_analyze_histogram", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables analyze histogram for query optimization during analyzing table.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables scanning aggregating index data while querying.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_compact_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables compact after write(copy/insert/replace-into/merge-into), need more memory.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                (
-                    "enable_compact_after_multi_table_insert",
-                    DefaultSettingValue {
-                        value: UserSettingValue::UInt64(0),
-                        desc: "Enables recluster and compact after multi-table insert.",
-                        mode: SettingMode::Both,
-                        range: Some(SettingRange::Numeric(0..=1)),
-                    }
-                ),
+                ("enable_compact_after_multi_table_insert", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables recluster and compact after multi-table insert.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(25),
                     desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("auto_compaction_segments_limit", DefaultSettingValue {
                     value: UserSettingValue::UInt64(3),
                     desc: "The maximum number of segments that can be compacted automatically triggered after write(replace-into/merge-into).",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(2..=u64::MAX)),
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "This setting is deprecated",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_replace_into_partitioning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
                     desc: "Max number of columns used by bloom pruning for replace-into statement.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("replace_into_shuffle_strategy", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Choose shuffle strategy: 0 for Block, 1 for Segment level.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("recluster_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(12 * 60 * 60),
                     desc: "Sets the seconds that recluster final will be timeout.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("default_order_by_null", DefaultSettingValue {
                     value: UserSettingValue::String("nulls_last".to_string()),
                     desc: "Set numeric default_order_by_null mode",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![
-                        "nulls_first".into(), "nulls_last".into(), 
-                        "nulls_first_on_asc_last_on_desc".into(), "nulls_last_on_asc_first_on_desc".into(), 
+                        "nulls_first".into(), "nulls_last".into(),
+                        "nulls_first_on_asc_last_on_desc".into(), "nulls_last_on_asc_first_on_desc".into(),
                     ])),
                 }),
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Sets new columns to be nullable (1) or not (0) by default in table operations.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("recluster_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(recluster_block_size),
                     desc: "Sets the maximum byte size of blocks for recluster",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("compact_max_block_selection", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10000),
                     desc: "Limits the maximum number of blocks that can be selected during a compact operation.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(2..=u64::MAX)),
                 }),
                 ("enable_distributed_recluster", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of table recluster.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_parquet_page_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables parquet page index",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_parquet_rowgroup_pruning", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables parquet rowgroup pruning",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("external_server_connect_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10),
                     desc: "Connection timeout to external server",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("external_server_request_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(180),
                     desc: "Request timeout to external server",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("external_server_request_batch_rows", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Request batch rows to external server",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("external_server_request_max_threads", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(256),
+                    desc: "Request maximum number of threads to external server",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("external_server_request_retry_times", DefaultSettingValue {
                     value: UserSettingValue::UInt64(8),
                     desc: "Request max retry times to external server",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=256)),
                 }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables parquet prewhere",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_experimental_aggregate_hashtable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables experimental aggregate hashtable",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("numeric_cast_option", DefaultSettingValue {
                     value: UserSettingValue::String("rounding".to_string()),
                     desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["rounding".into(), "truncating".into()])),
                 }),
                 ("enable_experimental_rbac_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "experiment setting disables stage and udf privilege check(enable by default).",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("create_query_flight_client_with_current_rt", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Turns on (1) or off (0) the use of the current runtime for query operations.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("query_flight_compression", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("LZ4")),
                     desc: "flight compression method",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["None".into(), "LZ4".into(), "ZSTD".into()])),
                 }),
                 ("enable_refresh_virtual_column_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Refresh virtual column after new data written",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Refresh aggregating index after new data written",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("parse_datetime_ignore_remainder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Ignore trailing chars when parse string to datetime",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_dst_hour_fix", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Time conversion handles invalid DST by adding an hour. Accuracy not guaranteed.(disable by default)",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_strict_datetime_parser", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Strict datetime parser. Only support ISO 8601 as Default format.The best practice is to turn this parameter on.(enable by default)",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("disable_variant_check", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable variant check to allow insert invalid JSON values",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("cost_factor_hash_table_per_row", DefaultSettingValue {
                     value: UserSettingValue::UInt64(COST_FACTOR_HASH_TABLE_PER_ROW),
                     desc: "Cost factor of building hash table for a data row",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("cost_factor_aggregate_per_row", DefaultSettingValue {
                     value: UserSettingValue::UInt64(COST_FACTOR_AGGREGATE_PER_ROW),
                     desc: "Cost factor of grouping operation for a data row",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("cost_factor_network_per_row", DefaultSettingValue {
                     value: UserSettingValue::UInt64(COST_FACTOR_NETWORK_PER_ROW),
                     desc: "Cost factor of transmit via network for a data row",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 // this setting will be removed when geometry type stable.
@@ -848,99 +1001,192 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(0),
                     desc: "Create and alter table with geometry/geography type",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("idle_transaction_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4 * 60 * 60),
                     desc: "Set the timeout in seconds for active session without any query",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("enable_experimental_queries_executor", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables experimental new executor",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("statement_queued_timeout_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The maximum waiting seconds in the queue. The default value is 0(no limit).",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("geometry_output_format", DefaultSettingValue {
                     value: UserSettingValue::String("GeoJSON".to_owned()),
                     desc: "Display format for GEOMETRY values.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["WKT".into(), "WKB".into(), "EWKT".into(), "EWKB".into(), "GeoJSON".into()])),
                 }),
                 ("script_max_steps", DefaultSettingValue {
                     value: UserSettingValue::UInt64(10000),
                     desc: "The maximum steps allowed in a single execution of script.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-
                 ("enable_auto_fix_missing_bloom_index", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables auto fix missing bloom index",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("max_vacuum_temp_files_after_query", DefaultSettingValue {
                     value: UserSettingValue::UInt64(u64::MAX),
                     desc: "The maximum temp files will be removed after query. please enable vacuum feature. disable if 0",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("max_set_operator_count", DefaultSettingValue {
                     value: UserSettingValue::UInt64(u64::MAX),
                     desc: "The maximum count of set operator in a query. If your query stack overflow, you can reduce this value.",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("enable_loser_tree_merge_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables loser tree merge sort",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_parallel_multi_merge_sort", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables parallel multi merge sort",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_last_snapshot_location_hint", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables writing last_snapshot_location_hint object",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("format_null_as_str", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Format NULL as str in query api response",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("random_function_seed", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Seed for random function",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("dynamic_sample_time_budget_ms", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Time budget for dynamic sample in milliseconds",
                     mode: SettingMode::Both,
+                    scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("short_sql_max_length", DefaultSettingValue {
                     value: UserSettingValue::UInt64(128),
                     desc: "Sets the maximum length for truncating SQL queries in short_sql function.",
                     mode: SettingMode::Both,
-                    range: Some(SettingRange::Numeric(1..=1024*1024)),
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=1024 * 1024)),
                 }),
+                ("enable_distributed_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable distributed index pruning, as it is very necessary and should remain enabled in the vast majority of cases.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_prune_pipeline", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable pruning pipeline",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("persist_materialized_cte", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0), // 0 for in-memory, 1 for disk
+                    desc: "Decides if materialized CTEs should be persisted to disk.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("flight_connection_max_retry_times", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The maximum retry count for cluster flight. Disable if 0.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=10)),
+                }),
+                ("flight_connection_retry_interval", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "The retry interval of cluster flight is in seconds.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=10)),
+                }),
+                ("network_policy", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_owned()),
+                    desc: "Network policy for all users in the tenant",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: None,
+                }),
+                ("stream_consume_batch_size_hint", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Hint for batch size during stream consumption. Set it to 0 to disable it. Larger values may improve throughput but could impose greater pressure on stream consumers.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("warehouse", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_string()),
+                    desc: "Please use the <use warehouse> statement to set the warehouse, this settings is only used to synchronize the warehouse status between the client and the server.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: None,
+                }),
+                ("hilbert_num_range_ids", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Specifies the domain of range IDs in Hilbert clustering. A larger value provides finer granularity, but may incur a performance cost.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=65535)),
+                }),
+                ("hilbert_sample_size_per_block", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Specifies the number of sample points per block used in Hilbert clustering.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("enable_prune_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable to cache the pruning result",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -1064,7 +1310,6 @@ impl DefaultSettings {
                     SettingRange::String(_) => {
                         // value is the standard value of the setting.
                         let value = range.is_within_string_range(&v)?;
-
                         Ok((k, UserSettingValue::String(value)))
                     }
                 }
@@ -1083,7 +1328,7 @@ impl DefaultSettings {
                 // If not a valid u64, try parsing as f64
                 match v.parse::<f64>() {
                     Ok(f) if f.fract() == 0.0 && f >= 0.0 && f <= u64::MAX as f64 => {
-                        Ok(f.trunc() as u64) /* Convert to u64 if no fractional part, non-negative, and within u64 range */
+                        Ok(f.trunc() as u64) // Convert to u64 if no fractional part, non-negative, and within u64 range
                     }
                     _ => Err(ErrorCode::WrongValueForVariable(format!(
                         "{} is not a valid integer value",
@@ -1131,8 +1376,35 @@ impl DefaultSettings {
         match matched_mode {
             true => Ok(()),
             false => Err(ErrorCode::Internal(format!(
-                "Variable mode don't matched, expect: {:?}, actual: {:?}",
+                "Variable mode mismatch, expect: {:?}, actual: {:?}",
                 expect, setting_mode
+            ))),
+        }
+    }
+
+    pub fn check_setting_scope(key: &str, expect: SettingScope) -> Result<()> {
+        let default_settings = DefaultSettings::instance()?;
+        let setting_scope = default_settings
+            .settings
+            .get(key)
+            .map(|x| x.scope)
+            .ok_or_else(|| ErrorCode::UnknownVariable(format!("Unknown variable: {:?}", key)))?;
+
+        let matched_scope = match expect {
+            SettingScope::Both => matches!(setting_scope, SettingScope::Both),
+            SettingScope::Global => {
+                matches!(setting_scope, SettingScope::Both | SettingScope::Global)
+            }
+            SettingScope::Session => {
+                matches!(setting_scope, SettingScope::Both | SettingScope::Session)
+            }
+        };
+
+        match matched_scope {
+            true => Ok(()),
+            false => Err(ErrorCode::Internal(format!(
+                "Variable scope mismatch, expect: {:?}, actual: {:?}",
+                expect, setting_scope
             ))),
         }
     }

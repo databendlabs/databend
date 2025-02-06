@@ -35,7 +35,6 @@ use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
 use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::ConditionResult::Eq;
 use databend_common_meta_types::MatchSeq;
@@ -43,6 +42,7 @@ use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_types::UpsertKV;
 use enumflags2::make_bitflags;
 use fastrace::func_name;
 use log::debug;
@@ -87,7 +87,7 @@ impl RoleMgr {
 
         let res = self
             .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
+            .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
             .await?;
         match res.result {
             Some(SeqV { seq: s, .. }) => Ok(s),
@@ -106,7 +106,7 @@ impl RoleMgr {
         seq: MatchSeq,
     ) -> Result<UpsertKVReply, MetaError> {
         self.kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Update(value), None))
+            .upsert_kv(UpsertKV::new(&key, seq, Operation::Update(value), None))
             .await
     }
 
@@ -145,7 +145,7 @@ impl RoleApi for RoleMgr {
         let key = self.role_ident(role_info.identity()).to_string_key();
         let value = serialize_struct(&role_info, ErrorCode::IllegalUserInfoFormat, || "")?;
 
-        let upsert_kv = self.kv_api.upsert_kv(UpsertKVReq::new(
+        let upsert_kv = self.kv_api.upsert_kv(UpsertKV::new(
             &key,
             match_seq,
             Operation::Update(value),
@@ -311,11 +311,7 @@ impl RoleApi for RoleMgr {
             }
 
             if need_transfer {
-                let txn_req = TxnRequest {
-                    condition: condition.clone(),
-                    if_then: if_then.clone(),
-                    else_then: vec![],
-                };
+                let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
                 let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
                 let (succ, _) = txn_reply_to_api_result(tx_reply)?;
                 debug!(
@@ -378,11 +374,7 @@ impl RoleApi for RoleMgr {
                 }
             }
 
-            let txn_req = TxnRequest {
-                condition: condition.clone(),
-                if_then: if_then.clone(),
-                else_then: vec![],
-            };
+            let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
 
             let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
@@ -467,11 +459,7 @@ impl RoleApi for RoleMgr {
                 }
             }
 
-            let txn_req = TxnRequest {
-                condition: condition.clone(),
-                if_then: if_then.clone(),
-                else_then: vec![],
-            };
+            let txn_req = TxnRequest::new(condition.clone(), if_then.clone());
 
             let tx_reply = self.kv_api.transaction(txn_req.clone()).await?;
             let (succ, _) = txn_reply_to_api_result(tx_reply)?;
@@ -493,7 +481,7 @@ impl RoleApi for RoleMgr {
 
         let res = self
             .kv_api
-            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
+            .upsert_kv(UpsertKV::new(&key, seq, Operation::Delete, None))
             .await?;
 
         res.removed_or_else(|_p| {

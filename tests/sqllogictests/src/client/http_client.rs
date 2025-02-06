@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use reqwest::cookie::CookieStore;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;
 use reqwest::Client;
@@ -23,7 +25,9 @@ use reqwest::ClientBuilder;
 use serde::Deserialize;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
+use url::Url;
 
+use crate::client::global_cookie_store::GlobalCookieStore;
 use crate::error::Result;
 use crate::util::parser_rows;
 use crate::util::HttpSessionConf;
@@ -33,6 +37,7 @@ pub struct HttpClient {
     pub session_token: String,
     pub debug: bool,
     pub session: Option<HttpSessionConf>,
+    pub port: u16,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -61,29 +66,39 @@ fn format_error(value: serde_json::Value) -> String {
 }
 
 #[derive(Deserialize)]
-struct AuthResponse {
+struct TokenInfo {
     session_token: String,
 }
 
+#[derive(Deserialize)]
+struct LoginResponse {
+    tokens: Option<TokenInfo>,
+}
+
 impl HttpClient {
-    pub async fn create() -> Result<Self> {
+    pub async fn create(port: u16) -> Result<Self> {
         let mut header = HeaderMap::new();
         header.insert(
             "Content-Type",
             HeaderValue::from_str("application/json").unwrap(),
         );
         header.insert("Accept", HeaderValue::from_str("application/json").unwrap());
+        let cookie_provider = GlobalCookieStore::new();
+        let cookie = HeaderValue::from_str("cookie_enabled=true").unwrap();
+        let mut initial_cookies = [&cookie].into_iter();
+        cookie_provider.set_cookies(&mut initial_cookies, &Url::parse("https://a.com").unwrap());
         let client = ClientBuilder::new()
+            .cookie_provider(Arc::new(cookie_provider))
             .default_headers(header)
             // https://github.com/hyperium/hyper/issues/2136#issuecomment-589488526
             .http2_keep_alive_timeout(Duration::from_secs(15))
             .pool_max_idle_per_host(0)
             .build()?;
 
-        let url = "http://127.0.0.1:8000/v1/session/login";
+        let url = format!("http://127.0.0.1:{}/v1/session/login", port);
 
         let session_token = client
-            .post(url)
+            .post(&url)
             .body("{}")
             .basic_auth("root", Some(""))
             .send()
@@ -91,11 +106,13 @@ impl HttpClient {
             .inspect_err(|e| {
                 println!("fail to send to {}: {:?}", url, e);
             })?
-            .json::<AuthResponse>()
+            .json::<LoginResponse>()
             .await
             .inspect_err(|e| {
                 println!("fail to decode json when call {}: {:?}", url, e);
             })?
+            .tokens
+            .unwrap()
             .session_token;
 
         Ok(Self {
@@ -103,18 +120,19 @@ impl HttpClient {
             session_token,
             session: None,
             debug: false,
+            port,
         })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
 
-        let url = "http://127.0.0.1:8000/v1/query".to_string();
+        let url = format!("http://127.0.0.1:{}/v1/query", self.port);
         let mut parsed_rows = vec![];
         let mut response = self.post_query(sql, &url).await?;
         self.handle_response(&response, &mut parsed_rows)?;
         while let Some(next_uri) = &response.next_uri {
-            let url = format!("http://127.0.0.1:8000{next_uri}");
+            let url = format!("http://127.0.0.1:{}{next_uri}", self.port);
             let new_response = self.poll_query_result(&url).await?;
             if new_response.next_uri.is_some() {
                 self.handle_response(&new_response, &mut parsed_rows)?;

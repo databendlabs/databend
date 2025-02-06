@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -29,12 +28,19 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
+use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_core::Pipe;
+use databend_common_pipeline_core::PipeItem;
+use databend_common_pipeline_core::Pipeline;
+use databend_common_storage::DataOperator;
+use tokio::sync::Semaphore;
 
 use super::AggregatePayload;
+use super::TransformAggregateSpillReader;
+use super::TransformFinalAggregate;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
 static MAX_PARTITION_COUNT: usize = 128;
@@ -44,7 +50,7 @@ struct InputPortState {
     bucket: isize,
     max_partition_count: usize,
 }
-pub struct NewTransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> {
+pub struct NewTransformPartitionBucket {
     output: Arc<OutputPort>,
     inputs: Vec<InputPortState>,
     params: Arc<AggregatorParams>,
@@ -56,12 +62,9 @@ pub struct NewTransformPartitionBucket<Method: HashMethodBounds, V: Copy + Send 
     flush_state: PayloadFlushState,
     unpartitioned_blocks: Vec<DataBlock>,
     max_partition_count: usize,
-    _phantom: PhantomData<(Method, V)>,
 }
 
-impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
-    NewTransformPartitionBucket<Method, V>
-{
+impl NewTransformPartitionBucket {
     pub fn create(input_nums: usize, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut inputs = Vec::with_capacity(input_nums);
 
@@ -85,7 +88,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             initialized_all_inputs: false,
             all_inputs_init: false,
             max_partition_count: 0,
-            _phantom: Default::default(),
         })
     }
 
@@ -210,18 +212,17 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
     #[allow(unused_assignments)]
     fn add_bucket(&mut self, mut data_block: DataBlock) -> Result<(isize, usize)> {
         let (mut bucket, mut partition_count) = (0, 0);
+        let mut is_empty_block = false;
         if let Some(block_meta) = data_block.get_meta() {
-            if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_ref_from(block_meta) {
+            if let Some(block_meta) = AggregateMeta::downcast_ref_from(block_meta) {
                 (bucket, partition_count) = match block_meta {
-                    AggregateMeta::Spilling(_) => unreachable!(),
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateSpilling(_) => unreachable!(),
-                    AggregateMeta::HashTable(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => {
                         let meta = data_block.take_meta().unwrap();
 
                         if let Some(AggregateMeta::BucketSpilled(payload)) =
-                            AggregateMeta::<Method, V>::downcast_from(meta)
+                            AggregateMeta::downcast_from(meta)
                         {
                             let bucket = payload.bucket;
                             let partition_count = payload.max_partition_count;
@@ -229,7 +230,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                                 self.max_partition_count.max(partition_count);
 
                             let data_block = DataBlock::empty_with_meta(
-                                AggregateMeta::<Method, V>::create_bucket_spilled(payload),
+                                AggregateMeta::create_bucket_spilled(payload),
                             );
                             match self.buckets_blocks.entry(bucket) {
                                 Entry::Vacant(v) => {
@@ -248,20 +249,21 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         let meta = data_block.take_meta().unwrap();
 
                         if let Some(AggregateMeta::Spilled(buckets_payload)) =
-                            AggregateMeta::<Method, V>::downcast_from(meta)
+                            AggregateMeta::downcast_from(meta)
                         {
-                            let partition_count = buckets_payload[0].max_partition_count;
+                            let partition_count = if !buckets_payload.is_empty() {
+                                buckets_payload[0].max_partition_count
+                            } else {
+                                MAX_PARTITION_COUNT
+                            };
                             self.max_partition_count =
                                 self.max_partition_count.max(partition_count);
 
                             for bucket_payload in buckets_payload {
                                 let bucket = bucket_payload.bucket;
-                                let data_block = DataBlock::empty_with_meta(AggregateMeta::<
-                                    Method,
-                                    V,
-                                >::create_bucket_spilled(
-                                    bucket_payload
-                                ));
+                                let data_block = DataBlock::empty_with_meta(
+                                    AggregateMeta::create_bucket_spilled(bucket_payload),
+                                );
                                 match self.buckets_blocks.entry(bucket) {
                                     Entry::Vacant(v) => {
                                         v.insert(vec![data_block]);
@@ -277,12 +279,14 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
                         unreachable!()
                     }
                     AggregateMeta::Serialized(payload) => {
+                        is_empty_block = payload.data_block.is_empty();
                         self.max_partition_count =
                             self.max_partition_count.max(payload.max_partition_count);
 
                         (payload.bucket, payload.max_partition_count)
                     }
                     AggregateMeta::AggregatePayload(payload) => {
+                        is_empty_block = payload.payload.len() == 0;
                         self.max_partition_count =
                             self.max_partition_count.max(payload.max_partition_count);
 
@@ -301,23 +305,25 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
             ));
         }
 
-        if self.all_inputs_init {
-            if partition_count != self.max_partition_count {
-                return Err(ErrorCode::Internal(
+        if !is_empty_block {
+            if self.all_inputs_init {
+                if partition_count != self.max_partition_count {
+                    return Err(ErrorCode::Internal(
                     "Internal, the partition count does not equal the max partition count on TransformPartitionBucket.
                     ",
                 ));
+                }
+                match self.buckets_blocks.entry(bucket) {
+                    Entry::Vacant(v) => {
+                        v.insert(vec![data_block]);
+                    }
+                    Entry::Occupied(mut v) => {
+                        v.get_mut().push(data_block);
+                    }
+                };
+            } else {
+                self.unpartitioned_blocks.push(data_block);
             }
-            match self.buckets_blocks.entry(bucket) {
-                Entry::Vacant(v) => {
-                    v.insert(vec![data_block]);
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().push(data_block);
-                }
-            };
-        } else {
-            self.unpartitioned_blocks.push(data_block);
         }
 
         Ok((bucket, partition_count))
@@ -342,9 +348,8 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         // already is max partition
         if payload.max_partition_count == self.max_partition_count {
             let bucket = payload.bucket;
-            let data_block = DataBlock::empty_with_meta(Box::new(
-                AggregateMeta::<Method, V>::Serialized(payload),
-            ));
+            let data_block =
+                DataBlock::empty_with_meta(Box::new(AggregateMeta::Serialized(payload)));
             match self.buckets_blocks.entry(bucket) {
                 Entry::Vacant(v) => {
                     v.insert(vec![data_block]);
@@ -361,6 +366,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         let p = payload.convert_to_partitioned_payload(
             self.params.group_data_types.clone(),
             self.params.aggregate_functions.clone(),
+            self.params.num_states(),
             0,
             Arc::new(Bump::new()),
         )?;
@@ -375,7 +381,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
         for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
             blocks.push(Some(DataBlock::empty_with_meta(
-                AggregateMeta::<Method, V>::create_agg_payload(
+                AggregateMeta::create_agg_payload(
                     bucket as isize,
                     payload,
                     self.max_partition_count,
@@ -390,9 +396,8 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         // already is max partition
         if payload.max_partition_count == self.max_partition_count {
             let bucket = payload.bucket;
-            let data_block = DataBlock::empty_with_meta(Box::new(
-                AggregateMeta::<Method, V>::AggregatePayload(payload),
-            ));
+            let data_block =
+                DataBlock::empty_with_meta(Box::new(AggregateMeta::AggregatePayload(payload)));
             match self.buckets_blocks.entry(bucket) {
                 Entry::Vacant(v) => {
                     v.insert(vec![data_block]);
@@ -417,7 +422,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
 
         for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
             blocks.push(Some(DataBlock::empty_with_meta(
-                AggregateMeta::<Method, V>::create_agg_payload(
+                AggregateMeta::create_agg_payload(
                     bucket as isize,
                     payload,
                     self.max_partition_count,
@@ -432,20 +437,18 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static>
         let mut data = Vec::with_capacity(data_blocks.len());
         for mut data_block in data_blocks.into_iter() {
             if let Some(block_meta) = data_block.take_meta() {
-                if let Some(block_meta) = AggregateMeta::<Method, V>::downcast_from(block_meta) {
+                if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {
                     data.push(block_meta);
                 }
             }
         }
 
-        DataBlock::empty_with_meta(AggregateMeta::<Method, V>::create_partitioned(bucket, data))
+        DataBlock::empty_with_meta(AggregateMeta::create_partitioned(bucket, data))
     }
 }
 
 #[async_trait::async_trait]
-impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
-    for NewTransformPartitionBucket<Method, V>
-{
+impl Processor for NewTransformPartitionBucket {
     fn name(&self) -> String {
         String::from("TransformPartitionBucket")
     }
@@ -543,14 +546,12 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
             .unpartitioned_blocks
             .pop()
             .and_then(|mut block| block.take_meta())
-            .and_then(AggregateMeta::<Method, V>::downcast_from);
+            .and_then(AggregateMeta::downcast_from);
 
         if let Some(agg_block_meta) = block_meta {
             let data_blocks = match agg_block_meta {
                 AggregateMeta::Spilled(_) => unreachable!(),
-                AggregateMeta::Spilling(_) => unreachable!(),
                 AggregateMeta::Partitioned { .. } => unreachable!(),
-                AggregateMeta::HashTable(_) => unreachable!(),
                 AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(_) => unreachable!(),
                 AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
@@ -573,4 +574,39 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
 
         Ok(())
     }
+}
+
+pub fn build_partition_bucket(
+    pipeline: &mut Pipeline,
+    params: Arc<AggregatorParams>,
+) -> Result<()> {
+    let input_nums = pipeline.output_len();
+    let transform = NewTransformPartitionBucket::create(input_nums, params.clone())?;
+
+    let output = transform.get_output();
+    let inputs_port = transform.get_inputs();
+
+    pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
+        inputs_port,
+        vec![output],
+    )]));
+
+    pipeline.try_resize(input_nums)?;
+
+    let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
+    let operator = DataOperator::instance().spill_operator();
+    pipeline.add_transform(|input, output| {
+        let operator = operator.clone();
+        TransformAggregateSpillReader::create(input, output, operator, semaphore.clone())
+    })?;
+
+    pipeline.add_transform(|input, output| {
+        Ok(ProcessorPtr::create(TransformFinalAggregate::try_create(
+            input,
+            output,
+            params.clone(),
+        )?))
+    })?;
+    Ok(())
 }

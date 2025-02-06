@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Raft state includes some essential information about raft, such as term, voted_for
-mod raft_state;
 pub(crate) mod raft_state_kv;
 
-pub use raft_state::RaftState;
-pub use raft_state::TREE_RAFT_STATE;
 pub use raft_state_kv::RaftStateKey;
 pub use raft_state_kv::RaftStateValue;
+
+pub const TREE_RAFT_STATE: &str = "raft_state";

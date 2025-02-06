@@ -98,7 +98,9 @@ use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListTableReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::LockKey;
+use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
@@ -124,12 +126,12 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
+use databend_common_meta_app::schema::VirtualField;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_kvapi::kvapi::Key;
-use databend_common_meta_kvapi::kvapi::UpsertKVReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
@@ -237,7 +239,7 @@ async fn upsert_test_data(
     value: Vec<u8>,
 ) -> Result<u64, KVAppError> {
     let res = kv_api
-        .upsert_kv(UpsertKVReq {
+        .upsert_kv(UpsertKV {
             key: key.to_string_key(),
             seq: MatchSeq::GE(0),
             value: Operation::Update(value),
@@ -254,7 +256,7 @@ async fn delete_test_data(
     key: &impl kvapi::Key,
 ) -> Result<(), KVAppError> {
     let _res = kv_api
-        .upsert_kv(UpsertKVReq {
+        .upsert_kv(UpsertKV {
             key: key.to_string_key(),
             seq: MatchSeq::GE(0),
             value: Operation::Delete,
@@ -349,7 +351,6 @@ impl SchemaApiTestSuite {
         suite.test_sequence(&b.build().await).await?;
 
         suite.dictionary_create_list_drop(&b.build().await).await?;
-
         Ok(())
     }
 
@@ -4003,7 +4004,7 @@ impl SchemaApiTestSuite {
             assert!(table_id >= 1, "table id >= 1");
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
 
             assert_eq!(res.len(), 1);
@@ -4021,10 +4022,15 @@ impl SchemaApiTestSuite {
             upsert_test_data(mt.as_kv_api(), &tbid, data).await?;
             // assert not return out of retention time data
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
 
             assert_eq!(res.len(), 0);
+
+            let res = mt
+                .list_history_tables(true, ListTableReq::new(&tenant, db_id))
+                .await?;
+            assert_eq!(res.len(), 1);
         }
 
         Ok(())
@@ -4659,7 +4665,7 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4691,7 +4697,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
@@ -4709,7 +4715,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
@@ -4736,7 +4742,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
@@ -4759,7 +4765,7 @@ impl SchemaApiTestSuite {
             assert!(res.table_id >= 1, "table id >= 1");
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4787,7 +4793,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
                 name: DBIdTableName::new(*db_id, tbl_name).to_string_key(),
@@ -4804,7 +4810,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
 
             calc_and_compare_drop_on_table_result(res, vec![DroponInfo {
@@ -4837,7 +4843,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             let _res = mt.create_table(req.clone()).await?;
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
             let cur_db = mt.get_database(Self::req_get_db(&tenant, db_name)).await?;
             assert!(old_db.meta.seq < cur_db.meta.seq);
@@ -4876,7 +4882,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
@@ -4905,7 +4911,7 @@ impl SchemaApiTestSuite {
             assert!(old_db.meta.seq < cur_db.meta.seq);
 
             let res = mt
-                .list_retainable_tables(ListTableReq::new(&tenant, db_id))
+                .list_history_tables(false, ListTableReq::new(&tenant, db_id))
                 .await?;
             calc_and_compare_drop_on_table_result(res, vec![
                 DroponInfo {
@@ -5984,8 +5990,14 @@ impl SchemaApiTestSuite {
         }
 
         let index_name_1 = "idx1".to_string();
+        let index_version_1;
         let index_column_ids_1 = vec![0, 1];
+        let index1_drop_start_time;
+        let index1_drop_end_time;
         let index_name_2 = "idx2".to_string();
+        let index_version_2;
+        let index2_drop_start_time;
+        let index2_drop_end_time;
         let index_column_ids_2 = vec![2];
         let index_name_3 = "idx2".to_string();
         let index_column_ids_3 = vec![3];
@@ -6003,6 +6015,12 @@ impl SchemaApiTestSuite {
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
+
+            index_version_1 = {
+                let seqv = mt.get_table_by_id(table_id).await?.unwrap();
+                let index = seqv.data.indexes.get(&index_name_1).unwrap();
+                index.version.clone()
+            };
 
             info!("--- create table index 2 with duplicate column id");
             let req = CreateTableIndexReq {
@@ -6029,6 +6047,12 @@ impl SchemaApiTestSuite {
             };
             let res = mt.create_table_index(req).await;
             assert!(res.is_ok());
+
+            index_version_2 = {
+                let seqv = mt.get_table_by_id(table_id).await?.unwrap();
+                let index = seqv.data.indexes.get(&index_name_2).unwrap();
+                index.version.clone()
+            };
         }
 
         {
@@ -6102,14 +6126,18 @@ impl SchemaApiTestSuite {
         {
             info!("--- drop table index");
             let req = DropTableIndexReq {
+                tenant: tenant.clone(),
                 if_exists: false,
                 table_id,
                 name: index_name_1.clone(),
             };
+            index1_drop_start_time = Utc::now();
             let res = mt.drop_table_index(req).await;
+            index1_drop_end_time = Utc::now();
             assert!(res.is_ok());
 
             let req = DropTableIndexReq {
+                tenant: tenant.clone(),
                 if_exists: false,
                 table_id,
                 name: index_name_1.clone(),
@@ -6118,12 +6146,37 @@ impl SchemaApiTestSuite {
             assert!(res.is_err());
 
             let req = DropTableIndexReq {
+                tenant: tenant.clone(),
                 if_exists: true,
                 table_id,
                 name: index_name_1.clone(),
             };
             let res = mt.drop_table_index(req).await;
             assert!(res.is_ok());
+        }
+
+        {
+            info!("--- get marked deleted table indexes after drop");
+            let results = vec![
+                mt.list_marked_deleted_table_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.list_marked_deleted_table_indexes(&tenant, None).await?,
+            ];
+            for res in results {
+                let table_indexes = res.table_indexes.get(&table_id);
+                assert!(table_indexes.is_some());
+                let table_indexes = table_indexes.unwrap();
+                assert_eq!(table_indexes.len(), 1);
+                let (index_name, index_version, index_meta) = table_indexes[0].clone();
+                assert_eq!(index_name, index_name_1);
+                assert_eq!(index_version, index_version_1);
+                assert!(matches!(
+                    index_meta.index_type,
+                    MarkedDeletedIndexType::INVERTED
+                ));
+                assert!(index_meta.dropped_on > index1_drop_start_time);
+                assert!(index_meta.dropped_on < index1_drop_end_time);
+            }
         }
 
         {
@@ -6141,6 +6194,76 @@ impl SchemaApiTestSuite {
             assert_eq!(index2.column_ids, index_column_ids_2);
         }
 
+        {
+            info!("--- replace index_2");
+            let req = CreateTableIndexReq {
+                create_option: CreateOption::CreateOrReplace,
+                table_id,
+                tenant: tenant.clone(),
+                name: index_name_2.clone(),
+                column_ids: index_column_ids_1.clone(),
+                sync_creation: true,
+                options: BTreeMap::new(),
+            };
+            index2_drop_start_time = Utc::now();
+            let res = mt.create_table_index(req).await;
+            index2_drop_end_time = Utc::now();
+            assert!(res.is_ok(), "{}", res.err().unwrap());
+        }
+
+        {
+            info!("--- get marked deleted table indexes after replace");
+            let results = vec![
+                mt.list_marked_deleted_table_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.list_marked_deleted_table_indexes(&tenant, None).await?,
+            ];
+
+            for res in results {
+                let table_indexes = res.table_indexes.get(&table_id);
+                assert!(table_indexes.is_some());
+                let mut table_indexes = table_indexes.unwrap().clone();
+                assert_eq!(table_indexes.len(), 2);
+                table_indexes.sort_by(|a, b| a.0.cmp(&b.0));
+                let (actual_index_name_1, actual_index_version_1, actual_index_meta_1) =
+                    table_indexes[0].clone();
+                let (actual_index_name_2, actual_index_version_2, actual_index_meta_2) =
+                    table_indexes[1].clone();
+                assert_eq!(actual_index_name_1, index_name_1);
+                assert_eq!(actual_index_name_2, index_name_2);
+                assert_eq!(actual_index_version_1, index_version_1);
+                assert_eq!(actual_index_version_2, index_version_2);
+                assert!(matches!(
+                    actual_index_meta_1.index_type,
+                    MarkedDeletedIndexType::INVERTED
+                ));
+                assert!(matches!(
+                    actual_index_meta_2.index_type,
+                    MarkedDeletedIndexType::INVERTED
+                ));
+                assert!(actual_index_meta_1.dropped_on > index1_drop_start_time);
+                assert!(actual_index_meta_1.dropped_on < index1_drop_end_time);
+                assert!(actual_index_meta_2.dropped_on > index2_drop_start_time);
+                assert!(actual_index_meta_2.dropped_on < index2_drop_end_time);
+            }
+
+            {
+                info!("--- remove marked deleted table indexes");
+                mt.remove_marked_deleted_table_indexes(&tenant, table_id, &[
+                    (index_name_1, index_version_1),
+                    (index_name_2, index_version_2),
+                ])
+                .await?;
+
+                let res = mt
+                    .list_marked_deleted_table_indexes(&tenant, Some(table_id))
+                    .await?;
+                assert_eq!(res.table_indexes.len(), 0);
+                let res = mt.list_marked_deleted_table_indexes(&tenant, None).await?;
+                assert_eq!(res.table_indexes.len(), 0);
+            }
+        }
+
         Ok(())
     }
 
@@ -6153,6 +6276,7 @@ impl SchemaApiTestSuite {
         let mut util = Util::new(mt, tenant_name, "db1", "tb1", "eng1");
         let table_id;
         let index_id;
+        let index_id_2;
 
         info!("--- prepare db and table");
         {
@@ -6224,7 +6348,8 @@ impl SchemaApiTestSuite {
                 meta: index_meta_2.clone(),
             };
 
-            mt.create_index(req).await?;
+            let res = mt.create_index(req).await?;
+            index_id_2 = res.index_id;
         }
 
         {
@@ -6276,10 +6401,43 @@ impl SchemaApiTestSuite {
         }
 
         {
+            info!("--- get marked deleted indexes");
+            let res = mt
+                .list_marked_deleted_indexes(&tenant, Some(table_id))
+                .await?;
+            assert_eq!(res.table_indexes.len(), 0);
+
+            let res = mt.list_marked_deleted_indexes(&tenant, None).await?;
+            assert_eq!(res.table_indexes.len(), 0);
+        }
+
+        {
             info!("--- drop index");
 
             let res = mt.drop_index(&name_ident_2).await?;
             assert!(res.is_some())
+        }
+
+        {
+            info!("--- get marked deleted indexes after drop one");
+            let results = vec![
+                mt.list_marked_deleted_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.list_marked_deleted_indexes(&tenant, None).await?,
+            ];
+            for res in results {
+                assert_eq!(res.table_indexes.len(), 1);
+                let index = res.table_indexes.get(&table_id);
+                assert!(index.is_some());
+                let index = index.unwrap();
+                assert_eq!(index.len(), 1);
+                let (res_index_id, res_index_meta) = index[0].clone();
+                assert_eq!(res_index_id, index_id_2);
+                assert_eq!(
+                    res_index_meta.index_type,
+                    MarkedDeletedIndexType::AGGREGATING
+                );
+            }
         }
 
         {
@@ -6315,6 +6473,62 @@ impl SchemaApiTestSuite {
 
             let res = mt.list_indexes(req).await?;
             assert!(res.is_empty())
+        }
+
+        {
+            info!("--- get marked deleted indexes after drop all");
+            let results = vec![
+                mt.list_marked_deleted_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.list_marked_deleted_indexes(&tenant, None).await?,
+            ];
+            for res in results {
+                assert_eq!(res.table_indexes.len(), 1);
+                let index = res.table_indexes.get(&table_id);
+                assert!(index.is_some());
+                let index = index.unwrap();
+                assert_eq!(index.len(), 2);
+                let res_index_ids = index.iter().map(|(id, _)| id).collect::<HashSet<_>>();
+                assert!(res_index_ids.contains(&index_id));
+                assert!(res_index_ids.contains(&index_id_2));
+
+                assert!(index.iter().all(|(_, meta)| {
+                    matches!(meta.index_type, MarkedDeletedIndexType::AGGREGATING)
+                }));
+            }
+        }
+
+        {
+            info!("--- remove marked deleted indexes");
+            mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id])
+                .await?;
+            let results = vec![
+                mt.list_marked_deleted_indexes(&tenant, Some(table_id))
+                    .await?,
+                mt.list_marked_deleted_indexes(&tenant, None).await?,
+            ];
+            for res in results {
+                assert_eq!(res.table_indexes.len(), 1);
+                let index = res.table_indexes.get(&table_id);
+                assert!(index.is_some());
+                let index = index.unwrap();
+                assert_eq!(index.len(), 1);
+                let (res_index_id, res_index_meta) = index[0].clone();
+                assert_eq!(res_index_id, index_id_2);
+                assert_eq!(
+                    res_index_meta.index_type,
+                    MarkedDeletedIndexType::AGGREGATING
+                );
+            }
+
+            mt.remove_marked_deleted_index_ids(&tenant, table_id, &[index_id_2])
+                .await?;
+            let res = mt
+                .list_marked_deleted_indexes(&tenant, Some(table_id))
+                .await?;
+            assert_eq!(res.table_indexes.len(), 0);
+            let res = mt.list_marked_deleted_indexes(&tenant, None).await?;
+            assert_eq!(res.table_indexes.len(), 0);
         }
 
         {
@@ -6417,7 +6631,31 @@ impl SchemaApiTestSuite {
             let req = CreateVirtualColumnReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+                virtual_columns: vec![
+                    VirtualField {
+                        expr: "variant:k1".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[1]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k2".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                        alias_name: None,
+                    },
+                ],
+                auto_generated: false,
             };
 
             mt.create_virtual_column(req.clone()).await?;
@@ -6426,7 +6664,31 @@ impl SchemaApiTestSuite {
             let req = CreateVirtualColumnReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+                virtual_columns: vec![
+                    VirtualField {
+                        expr: "variant:k1".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[1]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k2".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                        alias_name: None,
+                    },
+                ],
+                auto_generated: false,
             };
 
             let res = mt.create_virtual_column(req).await;
@@ -6440,8 +6702,28 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                "variant:k1".to_string(),
-                "variant[1]".to_string(),
+                VirtualField {
+                    expr: "variant:k1".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant[1]".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k1:k2".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k1:k3".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64
+                    ))),
+                    alias_name: None
+                },
             ]);
 
             let req = ListVirtualColumnsReq::new(&tenant, Some(u64::MAX));
@@ -6455,7 +6737,31 @@ impl SchemaApiTestSuite {
             let req = UpdateVirtualColumnReq {
                 if_exists: false,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k2".to_string(), "variant[2]".to_string()],
+                virtual_columns: vec![
+                    VirtualField {
+                        expr: "variant:k2".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[2]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k2:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k2:k4".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                        alias_name: None,
+                    },
+                ],
+                auto_generated: false,
             };
 
             mt.update_virtual_column(req).await?;
@@ -6468,8 +6774,28 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                "variant:k2".to_string(),
-                "variant[2]".to_string(),
+                VirtualField {
+                    expr: "variant:k2".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant[2]".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k2:k3".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k2:k4".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64
+                    ))),
+                    alias_name: None
+                },
             ]);
         }
 
@@ -6496,7 +6822,31 @@ impl SchemaApiTestSuite {
             let req = UpdateVirtualColumnReq {
                 if_exists: false,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k3".to_string(), "variant[3]".to_string()],
+                virtual_columns: vec![
+                    VirtualField {
+                        expr: "variant:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[3]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k3:k4".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k3:k5".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                        alias_name: None,
+                    },
+                ],
+                auto_generated: false,
             };
 
             let res = mt.update_virtual_column(req).await;
@@ -6508,7 +6858,31 @@ impl SchemaApiTestSuite {
             let req = CreateVirtualColumnReq {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+                virtual_columns: vec![
+                    VirtualField {
+                        expr: "variant:k1".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[1]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k4".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k5".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
+                            NumberDataType::UInt64,
+                        ))),
+                        alias_name: None,
+                    },
+                ],
+                auto_generated: false,
             };
 
             mt.create_virtual_column(req.clone()).await?;
@@ -6518,14 +6892,46 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                "variant:k1".to_string(),
-                "variant[1]".to_string(),
+                VirtualField {
+                    expr: "variant:k1".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant[1]".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k1:k4".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k1:k5".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
+                        NumberDataType::UInt64
+                    ))),
+                    alias_name: None
+                },
             ]);
 
             let req = CreateVirtualColumnReq {
                 create_option: CreateOption::CreateOrReplace,
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k2".to_string()],
+                virtual_columns: vec![
+                    VirtualField {
+                        expr: "variant:k2".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                ],
+                auto_generated: false,
             };
 
             mt.create_virtual_column(req.clone()).await?;
@@ -6534,7 +6940,18 @@ impl SchemaApiTestSuite {
 
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
-            assert_eq!(res[0].virtual_columns, vec!["variant:k2".to_string(),]);
+            assert_eq!(res[0].virtual_columns, vec![
+                VirtualField {
+                    expr: "variant:k2".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k3".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                    alias_name: None
+                },
+            ]);
         }
 
         Ok(())
@@ -7304,6 +7721,7 @@ impl SchemaApiTestSuite {
         let tbl_name = "tb2";
         let dict_name1 = "dict1";
         let dict_name2 = "dict2";
+        let dict_name3 = "dict3";
         let dict_tenant = Tenant::new_or_err(tenant_name.to_string(), func_name!())?;
 
         let mut util = Util::new(mt, tenant_name, db_name, tbl_name, "eng1");
@@ -7361,6 +7779,8 @@ impl SchemaApiTestSuite {
             dict_tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name2.to_string()),
         );
+        let dict3 = DictionaryIdentity::new(db_id, dict_name3.to_string());
+        let dict_ident3 = DictionaryNameIdent::new(dict_tenant.clone(), dict3.clone());
 
         {
             info!("--- create dictionary");
@@ -7459,8 +7879,36 @@ impl SchemaApiTestSuite {
         }
 
         {
-            info!("--- drop dictionary");
+            info!("--- rename dictionary");
+            let rename_req = RenameDictionaryReq {
+                name_ident: dict_ident1.clone(),
+                new_dict_ident: dict3.clone(),
+            };
+            mt.rename_dictionary(rename_req).await?;
             let req = dict_ident1.clone();
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_none());
+
+            let req = dict_ident3.clone();
+            let res = mt.get_dictionary(req).await?;
+            assert!(res.is_some());
+
+            let dict_reply = res.unwrap();
+            assert_eq!(*dict_reply.0.data, dict_id);
+            assert_eq!(dict_reply.1.source, "postgresql".to_string());
+
+            info!("--- rename unknown dictionary");
+            let rename_req = RenameDictionaryReq {
+                name_ident: dict_ident1.clone(),
+                new_dict_ident: dict3.clone(),
+            };
+            let res = mt.rename_dictionary(rename_req).await;
+            assert!(res.is_err());
+        }
+
+        {
+            info!("--- drop dictionary");
+            let req = dict_ident3.clone();
             let res = mt.drop_dictionary(req).await?;
             assert!(res.is_some());
         }

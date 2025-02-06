@@ -47,9 +47,5 @@ anyhow = { workspace = true }
 [package.metadata.cargo-machete]
 ignored = ["num-traits"]
 
-[build-dependencies]
-databend-common-building = { path = "../../common/building" }
-tonic-build = { workspace = true }
-
 [lints]
 workspace = true

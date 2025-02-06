@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+. "$CURDIR"/../../../shell_env.sh
+
+
+times=256
+
+echo "" > /tmp/fuzz_a.txt
+echo "" > /tmp/fuzz_b.txt
+
+for i in `seq 1 ${times}`;do
+	echo """with t0(sum_sid)  as (select sum(number) over(partition by number order by number)
+	  from numbers(3))  select  n, if(n =1,  sum_sid +1, 0) from t0,  (select 1 n union all select 2) order by 1,2;
+	  """ | $BENDSQL_CLIENT_CONNECT >> /tmp/fuzz_a.txt
+done
+
+
+for i in `seq 1 ${times}`;do
+	echo """with t0(sum_sid)  as (select sum(number) over(partition by number order by number)
+	  from numbers(3))  select  n, if(n =1,  sum_sid +1, 0) from t0,  (select 1 n union all select 2) order by 1,2;
+	  """ | $BENDSQL_CLIENT_CONNECT >> /tmp/fuzz_b.txt
+done
+
+diff /tmp/fuzz_a.txt /tmp/fuzz_b.txt && echo "OK"

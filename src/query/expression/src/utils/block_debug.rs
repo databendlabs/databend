@@ -186,7 +186,7 @@ fn create_box_table(
     let row_count: usize = results.iter().map(|block| block.num_rows()).sum();
     let mut rows_to_render = row_count.min(max_rows);
 
-    if row_count <= max_rows + 3 {
+    if row_count <= max_rows.saturating_add(3) {
         // hiding rows adds 3 extra rows
         // so hiding rows makes no sense if we are only slightly over the limit
         // if we are 1 row over the limit hiding rows will actually increase the number of lines we display!
@@ -228,7 +228,7 @@ fn create_box_table(
     // "..." take up three lengths
     if max_width > 0 {
         (widths, column_map) =
-            compute_render_widths(schema, max_width, max_col_width + 3, &res_vec);
+            compute_render_widths(schema, max_width, max_col_width.saturating_add(3), &res_vec);
     }
 
     let mut header = Vec::with_capacity(schema.fields().len());
@@ -355,7 +355,7 @@ fn compute_render_widths(
     for field in schema.fields() {
         // head_name = field_name + "\n" + field_data_type
         let col_length = field.name().len().max(field.data_type().to_string().len());
-        widths.push(col_length + 3);
+        widths.push(col_length.saturating_add(3));
     }
 
     for values in results {
@@ -443,7 +443,7 @@ fn render_head(
 
             header.push(cell);
 
-            if field.data_type().is_numeric() {
+            if field.data_type().is_number() {
                 aligns.push(CellAlignment::Right);
             } else {
                 aligns.push(CellAlignment::Left);
@@ -493,7 +493,7 @@ fn render_head(
 
                 header.push(cell);
 
-                if field.data_type().is_numeric() {
+                if field.data_type().is_number() {
                     aligns.push(CellAlignment::Right);
                 } else {
                     aligns.push(CellAlignment::Left);

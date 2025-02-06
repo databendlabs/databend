@@ -12,28 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_pipeline_core::query_spill_prefix;
-use databend_common_storage::DataOperator;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_storages_common_cache::TempDirManager;
 use log::warn;
-use opendal::Buffer;
 use rand::Rng;
 
+use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
 
 pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
-    let tenant = query_ctx.get_tenant();
     let settings = query_ctx.get_settings();
-    let spill_prefix = query_spill_prefix(tenant.tenant_name(), &query_ctx.get_id());
+    let spill_prefix = query_ctx.query_tenant_spill_prefix();
     let vacuum_limit = settings.get_max_vacuum_temp_files_after_query()?;
 
     // disable all s3 operator if vacuum limit = 0
@@ -44,26 +43,41 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
     {
         let handler = get_vacuum_handler();
 
-        let _ = GlobalIORuntime::instance().block_on(async move {
+        let cluster = query_ctx.get_cluster();
+        let query_id = query_ctx.get_id();
+
+        let mut node_files = HashMap::new();
+        for node in cluster.nodes.iter() {
+            let stats = query_ctx.get_spill_file_stats(Some(node.id.clone()));
+            if stats.file_nums != 0 {
+                if let Some(index) = cluster.index_of_nodeid(&node.id) {
+                    node_files.insert(index, stats.file_nums);
+                }
+            }
+        }
+        if node_files.is_empty() {
+            return Ok(());
+        }
+
+        log::info!(
+            "Vacuum temporary files by hook, node files: {:?}",
+            node_files
+        );
+
+        let nodes = node_files.keys().cloned().collect::<Vec<usize>>();
+        let abort_checker = query_ctx.clone().get_abort_checker();
+        let _ = GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
             let removed_files = handler
                 .do_vacuum_temporary_files(
+                    abort_checker,
                     spill_prefix.clone(),
-                    Some(Duration::from_secs(0)),
+                    &VacuumTempOptions::QueryHook(nodes, query_id),
                     vacuum_limit as usize,
                 )
                 .await;
 
             if let Err(cause) = &removed_files {
                 log::warn!("Vacuum temporary files has error: {:?}", cause);
-            }
-
-            if vacuum_limit != 0 && matches!(removed_files, Ok(res) if res == vacuum_limit as usize)
-            {
-                // Have not been removed files
-                let op = DataOperator::instance().operator();
-                op.create_dir(&format!("{}/", spill_prefix)).await?;
-                op.write(&format!("{}/finished", spill_prefix), Buffer::new())
-                    .await?;
             }
 
             Ok(())

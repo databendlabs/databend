@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -65,6 +66,18 @@ pub struct IndexMeta {
     // if true, index will create after data written to databend,
     // no need execute refresh index manually.
     pub sync_creation: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, num_derive::FromPrimitive)]
+pub enum MarkedDeletedIndexType {
+    AGGREGATING = 1,
+    INVERTED = 2,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarkedDeletedIndexMeta {
+    pub dropped_on: DateTime<Utc>,
+    pub index_type: MarkedDeletedIndexType,
 }
 
 impl Default for IndexMeta {
@@ -159,6 +172,12 @@ impl Display for GetIndexReq {
 pub struct GetIndexReply {
     pub index_id: u64,
     pub index_meta: IndexMeta,
+}
+
+/// Maps table_id to a vector of (index_id, marked_deleted_index_meta) pairs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GetMarkedDeletedIndexesReply {
+    pub table_indexes: HashMap<u64, Vec<(u64, MarkedDeletedIndexMeta)>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

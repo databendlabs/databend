@@ -140,7 +140,7 @@ pub fn gen_columns_statistics(
                 let (is_all_null, bitmap) = col.validity();
                 let unset_bits = match (is_all_null, bitmap) {
                     (true, _) => rows,
-                    (false, Some(bitmap)) => bitmap.unset_bits(),
+                    (false, Some(bitmap)) => bitmap.null_count(),
                     (false, None) => 0,
                 };
 

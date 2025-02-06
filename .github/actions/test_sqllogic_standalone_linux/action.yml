@@ -1,10 +1,6 @@
 name: "Test sqllogic Standalone"
 description: "Running sqllogic tests in standalone mode"
 inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
   dirs:
     description: "logic test suites dirs"
     required: true
@@ -13,6 +9,10 @@ inputs:
     description: "logic test handlers, mysql,http,clickhouse"
     required: true
     default: ""
+  parallel:
+    description: "logic test parallel"
+    required: false
+    default: ""
   storage-format:
     description: "storage format for databend query to test"
     required: true
@@ -20,17 +20,13 @@ inputs:
   enable_table_meta_cache:
     description: "Enable table meta cache"
     required: false
-    default: true
+    default: "true"
 
 runs:
   using: "composite"
   steps:
-    - uses: ./.github/actions/setup_bendsql
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
+    - uses: ./.github/actions/setup_test
       with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
         artifacts: sqllogictests,meta,query
 
     - name: Run sqllogic Tests with Standalone mode
@@ -38,6 +34,7 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        TEST_PARALLEL: ${{ inputs.parallel }}
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
 
@@ -46,5 +43,6 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        TEST_PARALLEL: ${{ inputs.parallel }}
         CACHE_ENABLE_TABLE_META_CACHE: ${{ inputs.enable_table_meta_cache}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-native.sh ${{ inputs.dirs }}

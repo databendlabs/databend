@@ -106,7 +106,7 @@ impl ClusterStatsGenerator {
 
         if !self.cluster_key_index.is_empty() {
             let indices = vec![0u32, block.num_rows() as u32 - 1];
-            block = block.take(&indices, &mut None)?;
+            block = block.take(&indices)?;
         }
 
         block = self
@@ -131,13 +131,12 @@ impl ClusterStatsGenerator {
 
         for key in self.cluster_key_index.iter() {
             let val = data_block.get_by_offset(*key);
-            let val_ref = val.value.as_ref();
-            let left = unsafe { val_ref.index_unchecked(0) }.to_owned();
+            let left = unsafe { val.value.index_unchecked(0) }.to_owned();
             min.push(left);
 
             // The maximum in cluster statistics neednot larger than the non-trimmed one.
             // So we use trim_min directly.
-            let right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) }.to_owned();
+            let right = unsafe { val.value.index_unchecked(val.value.len() - 1) }.to_owned();
             max.push(right);
         }
 
@@ -157,8 +156,7 @@ impl ClusterStatsGenerator {
                 let mut tuple_values = Vec::with_capacity(self.cluster_key_index.len());
                 for key in self.cluster_key_index.iter() {
                     let val = data_block.get_by_offset(*key);
-                    let val_ref = val.value.as_ref();
-                    let left = unsafe { val_ref.index_unchecked(start) };
+                    let left = unsafe { val.value.index_unchecked(start) };
                     tuple_values.push(left.to_owned());
                 }
                 values.push(Scalar::Tuple(tuple_values));

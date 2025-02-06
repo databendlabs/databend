@@ -214,7 +214,7 @@ impl ColumnsTable {
                                 && !field_comments[idx].is_empty()
                             {
                                 // can not use debug print, will add double quote
-                                format!("'{}'", &field_comments[idx].as_str().replace('\'', "\\'"))
+                                format!("{}", &field_comments[idx].as_str().replace('\'', "\\'"))
                             } else {
                                 "".to_string()
                             };
@@ -274,7 +274,7 @@ pub(crate) async fn dump_tables(
         }
     }
 
-    let visibility_checker = ctx.get_visibility_checker().await?;
+    let visibility_checker = ctx.get_visibility_checker(false).await?;
 
     let mut final_dbs: Vec<(String, u64)> = Vec::new();
 

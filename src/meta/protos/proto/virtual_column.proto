@@ -20,6 +20,8 @@ syntax = "proto3";
 
 package databend_proto;
 
+import "datatype.proto";
+
 // VirtualColumnMeta is a container of virtual columns information.
 message VirtualColumnMeta {
   uint64 ver = 100;
@@ -36,4 +38,15 @@ message VirtualColumnMeta {
 
   // The time virtual column updated.
   optional string updated_on = 4;
+
+  // virtual column data type
+  repeated DataType data_types = 5;
+
+  // virtual column alias names,
+  // key is the index of `virtual_columns` field.
+  map<uint64, string> alias_names = 6;
+
+  // whether the virtual columns are auto-generated,
+  // true for auto-generated, false for user-defined.
+  bool auto_generated = 7;
 }

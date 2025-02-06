@@ -159,7 +159,7 @@ impl<'a> ClusteringStatisticsImpl<'a> {
         let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
         let mut segment_name = Vec::with_capacity(len);
-        let mut block_name = StringColumnBuilder::with_capacity(len, len);
+        let mut block_name = StringColumnBuilder::with_capacity(len);
         let mut max = Vec::with_capacity(len);
         let mut min = Vec::with_capacity(len);
         let mut level = Vec::with_capacity(len);
@@ -172,7 +172,6 @@ impl<'a> ClusteringStatisticsImpl<'a> {
         );
 
         let mut row_num = 0;
-        let mut end_flag = false;
         let chunk_size =
             std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
 
@@ -196,14 +195,14 @@ impl<'a> ClusteringStatisticsImpl<'a> {
 
                 for block in segment.blocks.iter() {
                     let block = block.as_ref();
-                    block_name.put_str(&block.location.0);
-                    block_name.commit_row();
+                    block_name.put_and_commit(&block.location.0);
 
                     let cluster_stats = block.cluster_stats.as_ref();
                     let clustered = block
                         .cluster_stats
                         .as_ref()
-                        .map_or(false, |v| v.cluster_key_id == self.cluster_key_id);
+                        .is_some_and(|v| v.cluster_key_id == self.cluster_key_id);
+
                     if clustered {
                         // Safe to unwrap
                         let cluster_stats = cluster_stats.unwrap();
@@ -220,13 +219,8 @@ impl<'a> ClusteringStatisticsImpl<'a> {
 
                     row_num += 1;
                     if row_num >= limit {
-                        end_flag = true;
-                        break;
+                        break 'FOR;
                     }
-                }
-
-                if end_flag {
-                    break 'FOR;
                 }
             }
         }

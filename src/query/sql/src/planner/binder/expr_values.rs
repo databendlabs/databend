@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
@@ -28,7 +27,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_pipeline_transforms::processors::Transform;
-use indexmap::IndexMap;
 
 use crate::binder::wrap_cast;
 use crate::evaluator::BlockOperator;
@@ -110,15 +108,9 @@ impl BindContext {
                 exprs
             )));
         }
-        let mut scalar_binder = ScalarBinder::new(
-            self,
-            ctx.clone(),
-            name_resolution_ctx,
-            metadata.clone(),
-            &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
-        );
+        let mut scalar_binder =
+            ScalarBinder::new(self, ctx.clone(), name_resolution_ctx, metadata.clone(), &[
+            ]);
 
         let mut map_exprs = Vec::with_capacity(exprs.len());
 
@@ -178,7 +170,7 @@ impl BindContext {
             .columns()
             .iter()
             .skip(1)
-            .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
+            .map(|col| unsafe { col.value.index_unchecked(0).to_owned() })
             .collect();
         Ok(scalars)
     }

@@ -101,7 +101,7 @@ impl Dataframe {
                 false,
                 false,
                 false,
-                false,
+                None,
             );
 
             binder.bind_base_table(&bind_context, database, table_index, None, &None)
@@ -313,7 +313,7 @@ impl Dataframe {
         )?;
         self.s_expr = self.binder.bind_distinct(
             None,
-            &self.bind_context,
+            &mut self.bind_context,
             &projections,
             &mut scalar_items,
             self.s_expr.clone(),

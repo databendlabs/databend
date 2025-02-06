@@ -20,17 +20,17 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::FunctionContext;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::processors::PlanScope;
 use databend_common_pipeline_core::processors::PlanScopeGuard;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_settings::Settings;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_sql::IndexType;
 
 use super::PipelineBuilderData;
 use crate::interpreters::CreateTableInterpreter;
 use crate::pipelines::processors::transforms::HashJoinBuildState;
-use crate::pipelines::processors::transforms::MaterializedCteState;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::exchange::DefaultExchangeInjector;
@@ -49,17 +49,14 @@ pub struct PipelineBuilder {
     pub merge_into_probe_data_fields: Option<Vec<DataField>>,
     pub join_state: Option<Arc<HashJoinBuildState>>,
 
-    // The cte state of each materialized cte.
-    pub cte_state: HashMap<IndexType, Arc<MaterializedCteState>>,
-    // The column offsets used by cte scan
-    pub cte_scan_offsets: HashMap<IndexType, Vec<usize>>,
-
     pub(crate) exchange_injector: Arc<dyn ExchangeInjector>,
 
     pub hash_join_states: HashMap<usize, Arc<HashJoinState>>,
 
     pub r_cte_scan_interpreters: Vec<CreateTableInterpreter>,
     pub(crate) is_exchange_neighbor: bool,
+
+    pub contain_sink_processor: bool,
 }
 
 impl PipelineBuilder {
@@ -76,13 +73,12 @@ impl PipelineBuilder {
             pipelines: vec![],
             main_pipeline: Pipeline::with_scopes(scopes),
             exchange_injector: DefaultExchangeInjector::create(),
-            cte_state: HashMap::new(),
-            cte_scan_offsets: HashMap::new(),
             merge_into_probe_data_fields: None,
             join_state: None,
             hash_join_states: HashMap::new(),
             r_cte_scan_interpreters: vec![],
             is_exchange_neighbor: false,
+            contain_sink_processor: false,
         }
     }
 
@@ -95,6 +91,15 @@ impl PipelineBuilder {
                     "Source pipeline must be complete pipeline.",
                 ));
             }
+        }
+
+        // unload spill metas
+        if !self.ctx.mark_unload_callbacked() {
+            self.main_pipeline
+                .set_on_finished(always_callback(move |_info: &ExecutionInfo| {
+                    self.ctx.unload_spill_meta();
+                    Ok(())
+                }));
         }
 
         Ok(PipelineBuildResult {
@@ -159,7 +164,6 @@ impl PipelineBuilder {
 
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
-            PhysicalPlan::CteScan(scan) => self.build_cte_scan(scan),
             PhysicalPlan::ConstantTableScan(scan) => self.build_constant_table_scan(scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
@@ -186,9 +190,6 @@ impl PipelineBuilder {
                 "Invalid physical plan with PhysicalPlan::Exchange",
             )),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
-            PhysicalPlan::MaterializedCte(materialized_cte) => {
-                self.build_materialized_cte(materialized_cte)
-            }
             PhysicalPlan::CacheScan(cache_scan) => self.build_cache_scan(cache_scan),
             PhysicalPlan::ExpressionScan(expression_scan) => {
                 self.build_expression_scan(expression_scan)
@@ -228,6 +229,7 @@ impl PipelineBuilder {
 
             // Recluster.
             PhysicalPlan::Recluster(recluster) => self.build_recluster(recluster),
+            PhysicalPlan::HilbertSerialize(serialize) => self.build_hilbert_serialize(serialize),
 
             PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
             PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),

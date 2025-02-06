@@ -55,6 +55,7 @@ mod update;
 mod user;
 mod view;
 mod virtual_column;
+mod warehouse;
 
 pub use call::*;
 pub use catalog::*;
@@ -99,3 +100,4 @@ pub use update::*;
 pub use user::*;
 pub use view::*;
 pub use virtual_column::*;
+pub use warehouse::*;

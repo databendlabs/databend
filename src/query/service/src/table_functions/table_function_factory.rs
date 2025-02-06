@@ -26,7 +26,11 @@ use databend_common_storages_fuse::table_functions::FuseColumnFunc;
 use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
+use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
+use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
+use databend_common_storages_fuse::table_functions::HilbertClusteringInfoFunc;
+use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
@@ -139,6 +143,14 @@ impl TableFunctionFactory {
         );
 
         creators.insert(
+            "set_cache_capacity".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<SetCacheCapacity>::create),
+            ),
+        );
+
+        creators.insert(
             "fuse_segment".to_string(),
             (
                 next_id(),
@@ -183,6 +195,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<ClusteringStatisticsFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "hilbert_clustering_information".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<HilbertClusteringInfoFunc>::create),
             ),
         );
 
@@ -301,6 +321,22 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseTimeTravelSizeFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_vacuum_drop_aggregating_index".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuumDropAggregatingIndex>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_vacuum_drop_inverted_index".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuumDropInvertedIndex>::create),
             ),
         );
 

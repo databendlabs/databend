@@ -66,12 +66,19 @@ impl ProcedureMgr {
 
         let create_res = self
             .kv_api
-            .create_id_value(name_ident, meta, overriding, |id| {
-                vec![(
-                    ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
-                    name_ident_raw.clone(),
-                )]
-            })
+            .create_id_value(
+                name_ident,
+                meta,
+                overriding,
+                |id| {
+                    vec![(
+                        ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id)
+                            .to_string_key(),
+                        name_ident_raw.clone(),
+                    )]
+                },
+                |_, _| Ok(vec![]),
+            )
             .await?;
 
         match create_res {
@@ -96,7 +103,7 @@ impl ProcedureMgr {
         Ok(dropped)
     }
 
-    #[fastrace::trace]
+    //#[fastrace::trace]
     pub async fn get_procedure(
         &self,
         req: &GetProcedureReq,

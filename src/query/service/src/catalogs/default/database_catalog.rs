@@ -61,6 +61,8 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -79,6 +81,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -187,6 +190,17 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        let mut dbs = self
+            .immutable_catalog
+            .list_databases_history(tenant)
+            .await?;
+        let mut other = self.mutable_catalog.list_databases_history(tenant).await?;
+        dbs.append(&mut other);
+        Ok(dbs)
+    }
+
+    #[async_backtrace::framed]
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
         let mut dbs = self.immutable_catalog.list_databases(tenant).await?;
         let mut other = self.mutable_catalog.list_databases(tenant).await?;
@@ -276,45 +290,30 @@ impl Catalog for DatabaseCatalog {
         &self,
         tenant: &Tenant,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
-        // Fetching system database names
-        let sys_dbs = self.immutable_catalog.list_databases(tenant).await?;
+        let sys_table_names = self
+            .immutable_catalog
+            .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
+            .await?;
+        let mut_table_names = self
+            .mutable_catalog
+            .mget_table_names_by_ids(tenant, table_ids, get_dropped_table)
+            .await?;
 
-        // Collecting system table names from all system databases
-        let mut sys_table_ids = Vec::new();
-        for sys_db in sys_dbs {
-            let sys_tables = self
-                .immutable_catalog
-                .list_tables(tenant, sys_db.name())
-                .await?;
-            for sys_table in sys_tables {
-                sys_table_ids.push(sys_table.get_id());
+        let mut table_names = Vec::with_capacity(table_ids.len());
+        for (mut_table_name, sys_table_name) in
+            mut_table_names.into_iter().zip(sys_table_names.into_iter())
+        {
+            if mut_table_name.is_some() {
+                table_names.push(mut_table_name);
+            } else if sys_table_name.is_some() {
+                table_names.push(sys_table_name);
+            } else {
+                table_names.push(None);
             }
         }
-
-        // Filtering table IDs that are not in the system table IDs
-        let mut_table_ids: Vec<MetaId> = table_ids
-            .iter()
-            .copied()
-            .filter(|table_id| !sys_table_ids.contains(table_id))
-            .collect();
-
-        // Fetching table names for mutable table IDs
-        let mut tables = self
-            .immutable_catalog
-            .mget_table_names_by_ids(tenant, table_ids)
-            .await?;
-
-        // Fetching table names for remaining system table IDs
-        let other = self
-            .mutable_catalog
-            .mget_table_names_by_ids(tenant, &mut_table_ids)
-            .await?;
-
-        // Appending the results from the mutable catalog to tables
-        tables.extend(other);
-
-        Ok(tables)
+        Ok(table_names)
     }
 
     #[async_backtrace::framed]
@@ -376,33 +375,26 @@ impl Catalog for DatabaseCatalog {
         tenant: &Tenant,
         db_ids: &[MetaId],
     ) -> Result<Vec<Option<String>>> {
-        let sys_db_ids: Vec<_> = self
-            .immutable_catalog
-            .list_databases(tenant)
-            .await?
-            .iter()
-            .map(|sys_db| sys_db.get_db_info().database_id.db_id)
-            .collect();
-
-        let mut_db_ids: Vec<MetaId> = db_ids
-            .iter()
-            .filter(|db_id| !sys_db_ids.contains(db_id))
-            .copied()
-            .collect();
-
-        let mut dbs = self
+        let sys_db_names = self
             .immutable_catalog
             .mget_database_names_by_ids(tenant, db_ids)
             .await?;
-
-        let other = self
+        let mut_db_names = self
             .mutable_catalog
-            .mget_database_names_by_ids(tenant, &mut_db_ids)
+            .mget_database_names_by_ids(tenant, db_ids)
             .await?;
 
-        dbs.extend(other);
-
-        Ok(dbs)
+        let mut db_names = Vec::with_capacity(db_ids.len());
+        for (mut_db_name, sys_db_name) in mut_db_names.into_iter().zip(sys_db_names.into_iter()) {
+            if mut_db_name.is_some() {
+                db_names.push(mut_db_name);
+            } else if sys_db_name.is_some() {
+                db_names.push(sys_db_name);
+            } else {
+                db_names.push(None);
+            }
+        }
+        Ok(db_names)
     }
 
     #[async_backtrace::framed]
@@ -666,6 +658,52 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_marked_deleted_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        self.mutable_catalog
+            .list_marked_deleted_indexes(tenant, table_id)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        self.mutable_catalog
+            .list_marked_deleted_table_indexes(tenant, table_id)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        index_ids: &[u64],
+    ) -> Result<()> {
+        self.mutable_catalog
+            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<()> {
+        self.mutable_catalog
+            .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
+            .await
+    }
+
+    #[async_backtrace::framed]
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
         self.mutable_catalog.update_index(req).await
     }
@@ -845,5 +883,9 @@ impl Catalog for DatabaseCatalog {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         self.mutable_catalog.list_dictionaries(req).await
+    }
+
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {
+        self.mutable_catalog.rename_dictionary(req).await
     }
 }

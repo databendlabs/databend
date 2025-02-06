@@ -35,7 +35,7 @@ use rand::Rng;
 
 use crate::sql_gen::SqlGenerator;
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_expr(&mut self, ty: &DataType) -> Expr {
         // avoid generate too complex expression
         if self.expr_depth == 0 {
@@ -82,16 +82,16 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     fn gen_column(&mut self, ty: &DataType) -> Expr {
         for bound_column in &self.bound_columns {
             if bound_column.data_type == *ty {
-                let column = if !bound_column.table_name.is_empty() && self.rng.gen_bool(0.2) {
+                let column = if bound_column.table_name.is_some() && self.rng.gen_bool(0.2) {
                     ColumnID::Position(ColumnPosition::create(None, bound_column.index))
                 } else {
                     let name = Identifier::from_name(None, bound_column.name.clone());
                     ColumnID::Name(name)
                 };
                 let table = if self.is_join
-                    || (!bound_column.table_name.is_empty() && self.rng.gen_bool(0.2))
+                    || (bound_column.table_name.is_some() && self.rng.gen_bool(0.2))
                 {
-                    Some(Identifier::from_name(None, bound_column.table_name.clone()))
+                    bound_column.table_name.clone()
                 } else {
                     None
                 };
@@ -267,11 +267,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 }
             }
             DataType::Geometry => {
-                let x: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
-                let y: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
+                let geo = self.gen_geometry();
                 let arg = Expr::Literal {
                     span: None,
-                    value: Literal::String(format!("POINT({} {})", x, y)),
+                    value: Literal::String(geo),
                 };
                 Expr::FunctionCall {
                     span: None,
@@ -496,7 +495,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         DataType::Timestamp
                     };
                     let expr = self.gen_expr(&expr_ty);
-                    let kind = match self.rng.gen_range(0..=9) {
+                    let kind = match self.rng.gen_range(0..=10) {
                         0 => IntervalKind::Year,
                         1 => IntervalKind::Quarter,
                         2 => IntervalKind::Month,
@@ -507,6 +506,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         7 => IntervalKind::Doy,
                         8 => IntervalKind::Dow,
                         9 => IntervalKind::Week,
+                        10 => IntervalKind::Epoch,
                         _ => unreachable!(),
                     };
                     Expr::Extract {
@@ -634,19 +634,18 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 }
             }
             DataType::Geometry => {
-                let (func_name, args) = match self.rng.gen_range(0..=1) {
+                let (func_name, args) = match self.rng.gen_range(0..=10) {
                     0 => {
                         let arg_ty = DataType::Number(NumberDataType::Float64);
                         let x = self.gen_expr(&arg_ty);
                         let y = self.gen_expr(&arg_ty);
                         ("st_makegeompoint", vec![x, y])
                     }
-                    1 => {
-                        let x: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
-                        let y: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
+                    _ => {
+                        let geo = self.gen_geometry();
                         let arg0 = Expr::Literal {
                             span: None,
-                            value: Literal::String(format!("POINT({} {})", x, y)),
+                            value: Literal::String(geo),
                         };
                         let args = if self.rng.gen_bool(0.5) {
                             let arg1_ty = DataType::Number(NumberDataType::Int32);
@@ -657,7 +656,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         };
                         ("st_geometryfromwkt", args)
                     }
-                    _ => unreachable!(),
                 };
                 Expr::FunctionCall {
                     span: None,
@@ -698,6 +696,106 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     self.gen_scalar_value(ty)
                 }
             }
+        }
+    }
+
+    pub(crate) fn gen_point(&mut self) -> String {
+        let x: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
+        let y: f64 = self.rng.gen_range(-1.7e10..=1.7e10);
+        format!("{} {}", x, y)
+    }
+
+    pub(crate) fn gen_points(&mut self) -> String {
+        let mut points = vec![];
+        for _ in 0..self.rng.gen_range(1..=6) {
+            let point = format!("{}", self.gen_point());
+            points.push(point);
+        }
+        points.join(", ")
+    }
+
+    pub(crate) fn gen_simple_geometry(&mut self) -> String {
+        match self.rng.gen_range(0..=5) {
+            0 => match self.rng.gen_range(0..=10) {
+                0 => "POINT EMPTY".to_string(),
+                _ => {
+                    format!("POINT({})", self.gen_point())
+                }
+            },
+            1 => match self.rng.gen_range(0..=10) {
+                0 => "MULTIPOINT EMPTY".to_string(),
+                _ => {
+                    let mut points = vec![];
+                    for _ in 0..self.rng.gen_range(1..=6) {
+                        let point = format!("({})", self.gen_point());
+                        points.push(point);
+                    }
+                    format!("MULTIPOINT({})", points.join(", "))
+                }
+            },
+            2 => match self.rng.gen_range(0..=10) {
+                0 => "LINESTRING EMPTY".to_string(),
+                _ => {
+                    let points = self.gen_points();
+                    format!("LINESTRING({})", points)
+                }
+            },
+            3 => match self.rng.gen_range(0..=10) {
+                0 => "MULTILINESTRING EMPTY".to_string(),
+                _ => {
+                    let mut lines = vec![];
+                    for _ in 0..self.rng.gen_range(1..=6) {
+                        let points = self.gen_points();
+                        let line = format!("({})", points);
+                        lines.push(line);
+                    }
+                    format!("MULTILINESTRING({})", lines.join(", "))
+                }
+            },
+            4 => match self.rng.gen_range(0..=10) {
+                0 => "POLYGON EMPTY".to_string(),
+                _ => {
+                    let mut polygons = vec![];
+                    for _ in 0..self.rng.gen_range(1..=6) {
+                        let points = self.gen_points();
+                        let polygon = format!("({})", points);
+                        polygons.push(polygon);
+                    }
+                    format!("POLYGON({})", polygons.join(", "))
+                }
+            },
+            5 => match self.rng.gen_range(0..=10) {
+                0 => "MULTIPOLYGON EMPTY".to_string(),
+                _ => {
+                    let mut polygons = vec![];
+                    for _ in 0..self.rng.gen_range(1..=6) {
+                        let points = self.gen_points();
+                        let polygon = format!("(({}))", points);
+                        polygons.push(polygon);
+                    }
+                    format!("MULTIPOLYGON({})", polygons.join(", "))
+                }
+            },
+            _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn gen_geometry(&mut self) -> String {
+        let geo = match self.rng.gen_range(0..=8) {
+            0 => {
+                let mut geos = vec![];
+                for _ in 0..self.rng.gen_range(1..=4) {
+                    geos.push(self.gen_simple_geometry());
+                }
+                format!("GEOMETRYCOLLECTION({})", geos.join(", "))
+            }
+            _ => self.gen_simple_geometry(),
+        };
+        if self.rng.gen_bool(0.4) {
+            let srid = self.rng.gen_range(1..=10000);
+            format!("SRID={};{}", srid, geo)
+        } else {
+            geo
         }
     }
 

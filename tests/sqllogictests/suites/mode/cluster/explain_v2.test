@@ -43,14 +43,14 @@ Exchange
 └── Filter
     ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
     ├── filters: [(t1.a (#0) > 3 OR (t2.a (#2) > 5 AND t1.a (#0) > 1))]
-    ├── estimated rows: 99.60
+    ├── estimated rows: 99.68
     └── HashJoin
         ├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
         ├── join type: INNER
         ├── build keys: [t2.a (#2)]
         ├── probe keys: [t1.a (#0)]
         ├── filters: []
-        ├── estimated rows: 99.84
+        ├── estimated rows: 99.92
         ├── Exchange(Build)
         │   ├── output columns: [t2.a (#2), t2.b (#3)]
         │   ├── exchange type: Broadcast
@@ -168,23 +168,27 @@ query T
 explain select count(1) as c, count(b) as d, max(a) as e from t1 order by c, e, d limit 10;
 ----
 Limit
-├── output columns: [count(1) (#2), max(a) (#4), count(b) (#3)]
+├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 1.00
 └── Sort
-    ├── output columns: [count(1) (#2), max(a) (#4), count(b) (#3)]
+    ├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
     ├── sort keys: [count(1) ASC NULLS LAST, max(a) ASC NULLS LAST, count(b) ASC NULLS LAST]
     ├── estimated rows: 1.00
     └── EvalScalar
-        ├── output columns: [count(1) (#2), max(a) (#4), count(b) (#3)]
-        ├── expressions: [99, count(1) (#2)]
+        ├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
+        ├── expressions: [99]
         ├── estimated rows: 1.00
         └── EvalScalar
-            ├── output columns: [count(1) (#2)]
-            ├── expressions: [100]
+            ├── output columns: [count(1) (#2), count(b) (#3)]
+            ├── expressions: [count(1) (#2)]
             ├── estimated rows: 1.00
-            └── DummyTableScan
+            └── EvalScalar
+                ├── output columns: [count(1) (#2)]
+                ├── expressions: [100]
+                ├── estimated rows: 1.00
+                └── DummyTableScan
 
 query T
 explain select (t1.a + 1) as c,(t1.b+1) as d, (t2.a+1) as e from t1 join t2 on t1.a = t2.a order by c, d, e limit 10;
@@ -316,12 +320,12 @@ query T
 explain select sum(a) from (SELECT number AS a FROM numbers(10)) x right join (SELECT number AS a FROM numbers(5)) y using(a);
 ----
 AggregateFinal
-├── output columns: [sum(a) (#2)]
+├── output columns: [sum(a) (#3)]
 ├── group by: []
 ├── aggregate functions: [sum(number)]
 ├── estimated rows: 1.00
 └── Exchange
-    ├── output columns: [sum(a) (#2)]
+    ├── output columns: [sum(a) (#3)]
     ├── exchange type: Merge
     └── AggregatePartial
         ├── group by: []
@@ -331,12 +335,12 @@ AggregateFinal
             ├── output columns: [numbers.number (#1)]
             ├── join type: RIGHT OUTER
             ├── build keys: [CAST(y.a (#1) AS UInt64 NULL)]
-            ├── probe keys: [x.a (#0)]
+            ├── probe keys: [x.a (#2)]
             ├── filters: []
             ├── estimated rows: 50.00
             ├── Exchange(Build)
             │   ├── output columns: [numbers.number (#1)]
-            │   ├── exchange type: Hash(y.a (#1))
+            │   ├── exchange type: Hash(CAST(y.a (#1) AS UInt64 NULL))
             │   └── TableScan
             │       ├── table: default.system.numbers
             │       ├── output columns: [number (#1)]
@@ -347,17 +351,21 @@ AggregateFinal
             │       ├── push downs: [filters: [], limit: NONE]
             │       └── estimated rows: 5.00
             └── Exchange(Probe)
-                ├── output columns: [numbers.number (#0)]
-                ├── exchange type: Hash(x.a (#0))
-                └── TableScan
-                    ├── table: default.system.numbers
-                    ├── output columns: [number (#0)]
-                    ├── read rows: 10
-                    ├── read size: < 1 KiB
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 10.00
+                ├── output columns: [a (#2)]
+                ├── exchange type: Hash(x.a (#2))
+                └── EvalScalar
+                    ├── output columns: [a (#2)]
+                    ├── expressions: [CAST(x.a (#0) AS UInt64 NULL)]
+                    ├── estimated rows: 10.00
+                    └── TableScan
+                        ├── table: default.system.numbers
+                        ├── output columns: [number (#0)]
+                        ├── read rows: 10
+                        ├── read size: < 1 KiB
+                        ├── partitions total: 1
+                        ├── partitions scanned: 1
+                        ├── push downs: [filters: [], limit: NONE]
+                        └── estimated rows: 10.00
 
 statement ok
 drop table t1;
@@ -420,39 +428,43 @@ query T
 EXPLAIN SELECT a.cluster_node, b.query_node FROM (SELECT name as cluster_node FROM system.clusters) AS a LEFT JOIN (SELECT DISTINCT node_id as query_node FROM system.query_log) AS b ON a.cluster_node = b.query_node
 ----
 Exchange
-├── output columns: [clusters.name (#0), query_log.node_id (#10)]
+├── output columns: [clusters.name (#0), query_node (#62)]
 ├── exchange type: Merge
 └── HashJoin
-    ├── output columns: [clusters.name (#0), query_log.node_id (#10)]
+    ├── output columns: [clusters.name (#0), query_node (#62)]
     ├── join type: LEFT OUTER
-    ├── build keys: [b.query_node (#10)]
+    ├── build keys: [b.query_node (#62)]
     ├── probe keys: [CAST(a.cluster_node (#0) AS String NULL)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── Exchange(Build)
-    │   ├── output columns: [query_log.node_id (#10)]
+    │   ├── output columns: [query_node (#62)]
     │   ├── exchange type: Broadcast
-    │   └── AggregateFinal
-    │       ├── output columns: [query_log.node_id (#10)]
-    │       ├── group by: [node_id]
-    │       ├── aggregate functions: []
+    │   └── EvalScalar
+    │       ├── output columns: [query_node (#62)]
+    │       ├── expressions: [CAST(b.query_node (#10) AS String NULL)]
     │       ├── estimated rows: 0.00
-    │       └── Exchange
+    │       └── AggregateFinal
     │           ├── output columns: [query_log.node_id (#10)]
-    │           ├── exchange type: Hash(0)
-    │           └── AggregatePartial
-    │               ├── group by: [node_id]
-    │               ├── aggregate functions: []
-    │               ├── estimated rows: 0.00
-    │               └── TableScan
-    │                   ├── table: default.system.query_log
-    │                   ├── output columns: [node_id (#10)]
-    │                   ├── read rows: 0
-    │                   ├── read size: 0
-    │                   ├── partitions total: 0
-    │                   ├── partitions scanned: 0
-    │                   ├── push downs: [filters: [], limit: NONE]
-    │                   └── estimated rows: 0.00
+    │           ├── group by: [node_id]
+    │           ├── aggregate functions: []
+    │           ├── estimated rows: 0.00
+    │           └── Exchange
+    │               ├── output columns: [query_log.node_id (#10)]
+    │               ├── exchange type: Hash(0)
+    │               └── AggregatePartial
+    │                   ├── group by: [node_id]
+    │                   ├── aggregate functions: []
+    │                   ├── estimated rows: 0.00
+    │                   └── TableScan
+    │                       ├── table: default.system.query_log
+    │                       ├── output columns: [node_id (#10)]
+    │                       ├── read rows: 0
+    │                       ├── read size: 0
+    │                       ├── partitions total: 0
+    │                       ├── partitions scanned: 0
+    │                       ├── push downs: [filters: [], limit: NONE]
+    │                       └── estimated rows: 0.00
     └── TableScan(Probe)
         ├── table: default.system.clusters
         ├── output columns: [name (#0)]

@@ -14,9 +14,8 @@
 
 use std::collections::HashSet;
 
-use databend_common_arrow::native::read as nread;
 use databend_common_expression::ColumnId;
-use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_pruner::VirtualBlockMetaIndex;
 
 use super::VirtualColumnReader;
 use crate::io::BlockReader;
@@ -25,108 +24,81 @@ use crate::io::NativeSourceData;
 impl VirtualColumnReader {
     pub fn sync_read_native_data(
         &self,
-        loc: &str,
+        virtual_block_meta: &Option<&VirtualBlockMetaIndex>,
     ) -> Option<(NativeSourceData, Option<HashSet<ColumnId>>)> {
-        let op = self.reader.operator.blocking();
-        let meta = op.stat(loc).ok()?;
-        let mut reader = self
-            .reader
-            .operator
-            .blocking()
-            .reader(loc)
-            .ok()?
-            .into_std_read(0..meta.content_length())
-            .ok()?;
+        let Some(virtual_block_meta) = virtual_block_meta else {
+            return None;
+        };
 
-        let metadata = nread::reader::read_meta(&mut reader).ok()?;
-        let schema = nread::reader::infer_schema(&mut reader).ok()?;
+        let virtual_loc = &virtual_block_meta.virtual_block_location;
+        let metas = virtual_block_meta
+            .virtual_column_metas
+            .values()
+            .cloned()
+            .collect();
 
-        let num_rows: u64 = metadata[0].pages.iter().map(|p| p.num_values).sum();
-        debug_assert!(
-            metadata
-                .iter()
-                .all(|c| c.pages.iter().map(|p| p.num_values).sum::<u64>() == num_rows)
-        );
-
-        let mut virtual_src_cnts = self.virtual_src_cnts.clone();
+        let readers =
+            BlockReader::sync_read_native_column(self.dal.clone(), virtual_loc, metas, None)
+                .ok()?;
+        let virtual_indices = self.build_virtual_indices(virtual_block_meta);
 
         let mut results = NativeSourceData::new();
-        for (index, virtual_column) in self.virtual_column_infos.iter().enumerate() {
-            for (i, f) in schema.fields.iter().enumerate() {
-                if f.name == virtual_column.name {
-                    let metas = vec![ColumnMeta::Native(metadata[i].clone())];
-                    let readers =
-                        BlockReader::sync_read_native_column(self.dal.clone(), loc, metas, None)
-                            .ok()?;
+        for (virtual_index, reader) in virtual_indices.into_iter().zip(readers.into_iter()) {
+            results.insert(virtual_index, vec![reader]);
+        }
+        let ignore_column_ids =
+            self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
 
-                    let virtual_index = self.source_schema.num_fields() + index;
-                    results.insert(virtual_index, readers);
-                    if let Some(cnt) = virtual_src_cnts.get_mut(&virtual_column.source_name) {
-                        *cnt -= 1;
-                    }
-                    break;
-                }
-            }
-        }
-        if !results.is_empty() {
-            let ignore_column_ids = self.generate_ignore_column_ids(virtual_src_cnts);
-            Some((results, ignore_column_ids))
-        } else {
-            None
-        }
+        Some((results, ignore_column_ids))
     }
 
     pub async fn read_native_data(
         &self,
-        loc: &str,
+        virtual_block_meta: &Option<&VirtualBlockMetaIndex>,
     ) -> Option<(NativeSourceData, Option<HashSet<ColumnId>>)> {
-        let meta = self.reader.operator.stat(loc).await.ok()?;
-        let reader = self.reader.operator.reader(loc).await.ok()?;
+        let Some(virtual_block_meta) = virtual_block_meta else {
+            return None;
+        };
 
-        let metadata = nread::reader::read_meta_async(reader.clone(), meta.content_length() as _)
-            .await
-            .ok()?;
-        let schema = nread::reader::infer_schema_async(reader, meta.content_length())
-            .await
-            .ok()?;
+        let virtual_loc = &virtual_block_meta.virtual_block_location;
+        let metas = virtual_block_meta
+            .virtual_column_metas
+            .values()
+            .cloned()
+            .collect();
 
-        let num_rows: u64 = metadata[0].pages.iter().map(|p| p.num_values).sum();
-        debug_assert!(
-            metadata
-                .iter()
-                .all(|c| c.pages.iter().map(|p| p.num_values).sum::<u64>() == num_rows)
-        );
+        let (_, readers) =
+            BlockReader::read_native_columns_data(self.dal.clone(), virtual_loc, 0, metas, None)
+                .await
+                .ok()?;
+        let virtual_indices = self.build_virtual_indices(virtual_block_meta);
 
-        let mut virtual_src_cnts = self.virtual_src_cnts.clone();
         let mut results = NativeSourceData::new();
-        for (index, virtual_column) in self.virtual_column_infos.iter().enumerate() {
-            for (i, f) in schema.fields.iter().enumerate() {
-                if f.name == virtual_column.name {
-                    let metas = vec![ColumnMeta::Native(metadata[i].clone())];
-                    let (_, readers) = BlockReader::read_native_columns_data(
-                        self.dal.clone(),
-                        loc,
-                        i,
-                        metas,
-                        None,
-                    )
-                    .await
-                    .ok()?;
-                    let virtual_index = self.source_schema.num_fields() + index;
-                    results.insert(virtual_index, readers);
+        for (virtual_index, reader) in virtual_indices.into_iter().zip(readers.into_iter()) {
+            results.insert(virtual_index, vec![reader]);
+        }
+        let ignore_column_ids =
+            self.generate_ignore_column_ids(&virtual_block_meta.ignored_source_column_ids);
 
-                    if let Some(cnt) = virtual_src_cnts.get_mut(&virtual_column.source_name) {
-                        *cnt -= 1;
-                    }
-                    break;
-                }
+        Some((results, ignore_column_ids))
+    }
+
+    fn build_virtual_indices(&self, virtual_block_meta: &VirtualBlockMetaIndex) -> Vec<usize> {
+        let mut virtual_indices = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
+        for (index, virtual_column_info) in self
+            .virtual_column_info
+            .virtual_column_fields
+            .iter()
+            .enumerate()
+        {
+            if virtual_block_meta
+                .virtual_column_metas
+                .contains_key(&virtual_column_info.column_id)
+            {
+                let virtual_index = self.source_schema.num_fields() + index;
+                virtual_indices.push(virtual_index);
             }
         }
-        if !results.is_empty() {
-            let ignore_column_ids = self.generate_ignore_column_ids(virtual_src_cnts);
-            Some((results, ignore_column_ids))
-        } else {
-            None
-        }
+        virtual_indices
     }
 }

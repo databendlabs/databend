@@ -17,6 +17,7 @@ use std::str;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
+use databend_common_base::version::DATABEND_COMMIT_VERSION;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::InnerConfig;
@@ -227,7 +228,8 @@ impl TestFixture {
     /// Init the license manager.
     /// Register the cluster to the metastore.
     async fn init_global_with_config(config: &InnerConfig) -> Result<()> {
-        set_panic_hook();
+        let binary_version = DATABEND_COMMIT_VERSION.clone();
+        set_panic_hook(binary_version);
         std::env::set_var("UNIT_TEST", "TRUE");
 
         #[cfg(debug_assertions)]
@@ -236,7 +238,7 @@ impl TestFixture {
             databend_common_base::base::GlobalInstance::init_testing(&thread_name);
         }
 
-        GlobalServices::init_with(config).await?;
+        GlobalServices::init_with(config, false).await?;
         OssLicenseManager::init(config.query.tenant_id.tenant_name().to_string())?;
 
         // Cluster register.
@@ -337,7 +339,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
@@ -362,7 +363,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
@@ -398,7 +398,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
@@ -434,7 +433,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
@@ -479,7 +477,6 @@ impl TestFixture {
             engine: Engine::Fuse,
             engine_options: Default::default(),
             storage_params: None,
-            part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
@@ -738,17 +735,13 @@ impl TestFixture {
             schema,
             (0..num_of_block)
                 .map(|idx| {
-                    let mut title_builder =
-                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
-                    let mut content_builder =
-                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
+                    let mut title_builder = StringColumnBuilder::with_capacity(rows_per_block);
+                    let mut content_builder = StringColumnBuilder::with_capacity(rows_per_block);
 
                     for i in 0..rows_per_block {
                         let j = (idx * rows_per_block + i) % sample_books.len();
-                        title_builder.put_str(sample_books[j].0);
-                        title_builder.commit_row();
-                        content_builder.put_str(sample_books[j].1);
-                        content_builder.commit_row();
+                        title_builder.put_and_commit(sample_books[j].0);
+                        content_builder.put_and_commit(sample_books[j].1);
                     }
                     let title_column = Column::String(title_builder.build());
                     let content_column = Column::String(content_builder.build());

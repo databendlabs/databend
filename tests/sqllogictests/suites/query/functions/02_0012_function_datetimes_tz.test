@@ -22,6 +22,171 @@ statement ok
 set timezone='Asia/Shanghai'
 
 query T
+select last_day(to_date('2024-10-22'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_date('2024-10-27'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_date('2024-02-01'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_date('2024-02-01'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_date('2024-02-01'), year);
+----
+2024-12-31
+
+query T
+select last_day(to_timestamp('2024-10-24 01:00:00'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-10-24 23:00:00'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-10-27 01:00:00'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-10-27 23:00:00'), week);
+----
+2024-10-27
+
+query T
+select last_day(to_timestamp('2024-02-11 01:00:00'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_timestamp('2024-02-11 23:00:00'), month);
+----
+2024-02-29
+
+query T
+select last_day(to_timestamp('2024-02-11 01:00:00'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_timestamp('2024-02-11 23:00:00'), quarter);
+----
+2024-03-31
+
+query T
+select last_day(to_timestamp('2024-02-11 01:00:00'), year);
+----
+2024-12-31
+
+query T
+select last_day(to_timestamp('2024-02-11 23:00:00'), year);
+----
+2024-12-31
+
+query T
+select previous_day(to_date('2024-10-25'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_date('2024-10-25'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_date('2024-10-25'), saturday);
+----
+2024-10-19
+
+query T
+select previous_day(to_timestamp('2024-10-25 01:00:00'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_timestamp('2024-10-25 23:00:00'), monday);
+----
+2024-10-21
+
+query T
+select previous_day(to_timestamp('2024-10-25 01:00:00'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_timestamp('2024-10-25 23:00:00'), friday);
+----
+2024-10-18
+
+query T
+select previous_day(to_timestamp('2024-10-25 01:00:00'), sunday);
+----
+2024-10-20
+
+query T
+select previous_day(to_timestamp('2024-10-25 23:00:00'), sunday);
+----
+2024-10-20
+
+query T
+select next_day(to_date('2024-10-25'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_date('2024-10-25'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_date('2024-10-25'), saturday);
+----
+2024-10-26
+
+query T
+select next_day(to_timestamp('2024-10-25 01:00:00'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_timestamp('2024-10-25 23:00:00'), monday);
+----
+2024-10-28
+
+query T
+select next_day(to_timestamp('2024-10-25 01:00:00'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_timestamp('2024-10-25 23:00:00'), friday);
+----
+2024-11-01
+
+query T
+select next_day(to_timestamp('2024-10-25 01:00:00'), sunday);
+----
+2024-10-27
+
+query T
+select next_day(to_timestamp('2024-10-25 23:00:00'), sunday);
+----
+2024-10-27
+
+query T
 select to_timestamp(1630320462000000)
 ----
 2021-08-30 18:47:42.000000
@@ -305,9 +470,9 @@ statement ok
 set timezone = 'Asia/Shanghai'
 
 query T
-select add_months(to_timestamp(1619822911999000), 1)
+select add_months(to_timestamp(1619822911999000), 1), to_timestamp(1619822911999000)
 ----
-2021-06-01 14:48:31.999000
+2021-06-01 06:48:31.999000 2021-05-01 06:48:31.999000
 
 query T
 select to_timestamp(1583013600000000)
@@ -315,9 +480,9 @@ select to_timestamp(1583013600000000)
 2020-03-01 06:00:00.000000
 
 query T
-select add_years(to_timestamp(1583013600000000), 1)
+select add_years(to_timestamp(1583013600000000), 1), to_timestamp(1583013600000000)
 ----
-2021-03-01 14:00:00.000000
+2021-03-01 06:00:00.000000 2020-03-01 06:00:00.000000
 
 statement ok
 set timezone= 'UTC';
@@ -428,13 +593,15 @@ select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_
 statement ok
 set timezone='Europe/London';
 
-statement error 1006
-----
+query T
 select to_date(to_timestamp('2021-03-28 01:00'));
-
-statement error 1006
 ----
+2021-03-28
+
+query T
 select '2021-03-28 01:59:59'::timestamp;
+----
+2021-03-28 02:59:59.000000
 
 statement ok
 set timezone='Asia/Shanghai';
@@ -444,8 +611,10 @@ select to_date('1941-03-15');
 ----
 1941-03-15
 
-statement error 1006
+query T
 select to_date('1941-03-15 00:00:00');
+----
+1941-03-15
 
 query T
 select to_date('1941-03-15 02:00:00');
@@ -563,29 +732,40 @@ set timezone='Asia/Shanghai';
 statement ok
 unset enable_dst_hour_fix;
 
-statement error 1006
+query T
 select to_timestamp('1947-04-15 00:00:00')
+----
+1947-04-15 01:00:00.000000
 
 query T
 select try_to_timestamp('1947-04-15 00:00:00')
 ----
-NULL
+1947-04-15 01:00:00.000000
 
-statement error 1006
+query T
 select to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
+----
+1947-04-15 01:00:00.000000
 
 query T
 select try_to_timestamp('1947-04-15 00:00:00', '%Y-%m-%d %H:%M:%S')
 ----
-NULL
+1947-04-15 01:00:00.000000
 
 query T
 select to_date('1947-04-15')
 ----
 1947-04-15
 
-statement error 1006
+query T
 select to_date('1947-04-15 00:00:00')
+----
+1947-04-15
+
+query T
+select to_date('1941-03-15 00:00:00')
+----
+1941-03-15
 
 query T
 select to_timestamp('1990-09-16 01:00:00');
@@ -644,8 +824,10 @@ select to_datetime('1', '%s')
 ----
 1970-01-01 00:00:01.000000
 
-statement error 1006
+query T
 select to_timestamp('200,2000', '%s,%Y');
+----
+2000-01-01 00:03:20.000000
 
 statement ok
 unset parse_datetime_ignore_remainder;
@@ -654,10 +836,6 @@ query T
 select to_datetime('1', '%s')
 ----
 1970-01-01 00:00:01.000000
-
-statement error 1006
-select to_timestamp('200,2000', '%s,%Y');
-
 
 statement ok
 set timezone='UTC';
@@ -688,8 +866,255 @@ select to_year(to_date('1919-04-13','%Y-%m-%d'));
 ----
 1919
 
-statement ok
-unset timezone;
+query T
+SELECT DATE_ADD(month, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1941-04-15 01:00:00.000000
+
+query T
+SELECT DATE_ADD(year, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1942-03-15 01:00:00.000000
+
+# format: -10-29 11:46:11.267412
+query T
+SELECT substr(DATE_ADD(year, 1, now())::String, 5)=substr(now()::String, 5);
+----
+1
+
+# format: 2024
+query T
+SELECT substr(DATE_ADD(year, 1, now())::String, 1, 4)=substr(now()::String, 1, 4)+1;
+----
+1
+
+# format: 11:47:46.704107(time)
+query T
+SELECT substr(DATE_ADD(month, 1, now())::String, 11)=substr(now()::String, 11);
+----
+1
+
+# format: 11
+query T
+select sum( ((m1 + number) % 12 = m2 or ((m1 + number) % 12  + m2 = 12))::Int ) from (
+        select  number, DATE_ADD(month, number, now()) as d, to_month(now()) as m1, to_month(d) as m2
+        from numbers(1000)
+);
+----
+1000
+
+# format: 2024
+query T
+SELECT
+substr(DATE_ADD(month, 1, now())::String, 1,4) =
+CASE
+WHEN substr(now()::String, 6, 2) = '12' THEN (substr(now()::String, 1, 4)::int + 1)::String
+ELSE substr(now()::String, 1, 4)
+END;
+----
+1
+
+query T
+select to_monday(to_date('1919-04-13','%Y-%m-%d'));
+----
+1919-04-07
+
+query T
+select to_year(to_date('1919-04-13','%Y-%m-%d'));
+----
+1919
 
 statement ok
 unset enable_dst_hour_fix;
+
+query T
+SELECT DATE_ADD(month, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1941-04-15 01:00:00.000000
+
+query T
+SELECT DATE_ADD(year, 1, '1941-03-15 00:00:00'::timestamp);
+----
+1942-03-15 01:00:00.000000
+
+statement ok
+unset timezone;
+
+# format: -10-29 11:46:11.267412
+query T
+SELECT substr(DATE_ADD(year, 1, now())::String, 5)=substr(now()::String, 5);
+----
+1
+
+# format: 2024
+query T
+SELECT substr(DATE_ADD(year, 1, now())::String, 1, 4)=substr(now()::String, 1, 4)+1;
+----
+1
+
+# format: 11:47:46.704107(time)
+query T
+SELECT substr(DATE_ADD(month, 1, now())::String, 11)=substr(now()::String, 11);
+----
+1
+
+# format: 11
+query T
+select sum( ((m1 + number) % 12 = m2 or ((m1 + number) % 12  + m2 = 12))::Int ) from (
+        select  number, DATE_ADD(month, number, now()) as d, to_month(now()) as m1, to_month(d) as m2
+        from numbers(1000)
+);
+----
+1000
+
+# format: 2024
+query T
+SELECT substr(DATE_ADD(month, 1, now())::String, 1, 4) =
+CASE
+   WHEN substr(now()::String, 6, 2) = '12' THEN (substr(now()::String, 1,4)::int+1)::String
+   ELSE (substr(now()::String, 1, 4)::int)::String
+END;
+----
+1
+
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+SELECT convert_timezone('America/Los_Angeles', '2024-11-01 11:36:10')
+----
+2024-10-31 20:36:10.000000
+
+statement ok
+set timezone='UTC';
+
+statement ok
+create or replace table t(a string null, c timestamp null);
+
+statement ok
+insert into t values('America/Los_Angeles','1970-01-01 00:00:00'), ('America/Los_Angeles','2024-10-31 22:21:15'), (null, '1970-01-01 00:00:00'), ('Asia/Shanghai', '1970-01-01 00:00:00'), ('Asia/Shanghai', '2024-10-31 22:21:15'),('Asia/Shanghai', null), (null, null);
+
+# UTC to America/Los_Angeles,  20240-03-10 ~ 2024-11-03 is UTC-7(dst), other is UTC-8
+query T
+select a, c, CONVERT_TIMEZONE(a, c) from t order by a,c;
+----
+America/Los_Angeles 1970-01-01 00:00:00.000000 1969-12-31 16:00:00.000000
+America/Los_Angeles 2024-10-31 22:21:15.000000 2024-10-31 15:21:15.000000
+Asia/Shanghai 1970-01-01 00:00:00.000000 1970-01-01 08:00:00.000000
+Asia/Shanghai 2024-10-31 22:21:15.000000 2024-11-01 06:21:15.000000
+Asia/Shanghai NULL NULL
+NULL 1970-01-01 00:00:00.000000 NULL
+NULL NULL NULL
+
+statement ok
+set timezone='Asia/Shanghai';
+
+
+query T
+select convert_timezone('Asia/Shanghai', '1947-04-15 00:00:00');
+----
+1947-04-15 01:00:00.000000
+
+statement ok
+set enable_dst_hour_fix=1;
+
+# 1947-04-15 00:00:00 is not exists in Asia/Shanghai. Such timings cannot be guaranteed to meet completely
+# consider use date_add/sub calc the offset.
+query T
+select convert_timezone('UTC', '1947-04-15 00:00:00');
+----
+1947-04-14 15:00:00.000000
+
+statement ok
+unset enable_dst_hour_fix;
+
+statement ok
+drop table if exists t;
+
+statement ok
+unset timezone;
+
+# UTC +5:45
+statement ok
+set timezone='Asia/Kathmandu';
+
+query T
+select to_start_of_second('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:54:33.000000
+
+query T
+select to_start_of_minute('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:54:00.000000
+
+query T
+select to_start_of_five_minutes('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:50:00.000000
+
+query T
+select to_start_of_ten_minutes('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:50:00.000000
+
+query T
+select to_start_of_fifteen_minutes('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:45:00.000000
+
+query T
+select time_slot('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:30:00.000000
+
+query T
+select to_start_of_hour('2024-11-14 11:54:33.667269');
+----
+2024-11-14 11:00:00.000000
+
+query T
+select to_start_of_day('2024-11-14 11:54:33.667269');
+----
+2024-11-14 00:00:00.000000
+
+
+statement ok
+set enable_strict_datetime_parser = 0;
+
+query T
+select to_date('2017-5-23 0:00:00')
+----
+2017-05-23
+
+query T
+select to_date('2018-1-22')
+----
+2018-01-22
+
+query T
+select to_date('2021/10/14')
+----
+2021-10-14
+
+query T
+select to_date('20201231')
+----
+2020-12-31
+
+query T
+select to_date('2017-3-16 0:00:00')
+----
+2017-03-16
+
+query T
+select to_timestamp('2017-02-03 14:55:08 '), to_timestamp('2017_', '%Y_'), to_timestamp('2017_03', '%Y_%m');
+----
+2017-02-03 14:55:08.000000 2017-01-01 00:00:00.000000 2017-03-01 00:00:00.000000
+
+statement error 1006
+select to_timestamp('1684275059752');
+
+statement ok
+unset enable_strict_datetime_parser;

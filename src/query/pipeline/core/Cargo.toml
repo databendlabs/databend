@@ -18,13 +18,12 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
-log = "0.4.21"
-petgraph = "0.6.2"
+log = { workspace = true }
+petgraph = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
 

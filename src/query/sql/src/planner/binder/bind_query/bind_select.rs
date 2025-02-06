@@ -38,6 +38,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use log::warn;
@@ -48,7 +50,6 @@ use crate::planner::binder::Binder;
 use crate::planner::query_executor::QueryExecutor;
 use crate::AsyncFunctionRewriter;
 use crate::ColumnBinding;
-use crate::VirtualColumnRewriter;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -71,6 +72,13 @@ impl Binder {
                 );
             }
         }
+
+        // whether allow rewrite virtual column and pushdown
+        let allow_pushdown = LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::VirtualColumn)
+            .is_ok();
+        bind_context.virtual_column_context.allow_pushdown = allow_pushdown;
+
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             let select_list = &stmt.select_list;
             self.bind_dummy_table(bind_context, select_list)?
@@ -133,10 +141,15 @@ impl Binder {
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
 
-        let have_srfs = !from_context.srfs.is_empty();
-        if have_srfs {
-            // Bind set returning functions first.
-            s_expr = self.bind_project_set(&mut from_context, s_expr)?;
+        // Rewrite Set-returning functions, if the argument contains aggregation function or group item,
+        // set as lazy Set-returning functions.
+        if !from_context.srf_info.srfs.is_empty() {
+            self.rewrite_project_set_select(&mut from_context)?;
+        }
+
+        // Bind Set-returning functions before filter plan and aggregate plan.
+        if !from_context.srf_info.srfs.is_empty() {
+            s_expr = self.bind_project_set(&mut from_context, s_expr, false)?;
         }
 
         // To support using aliased column in `WHERE` clause,
@@ -178,7 +191,7 @@ impl Binder {
         )?;
 
         // After all analysis is done.
-        if !have_srfs {
+        if from_context.srf_info.srfs.is_empty() {
             // Ignore SRFs.
             self.analyze_lazy_materialization(
                 &from_context,
@@ -207,6 +220,11 @@ impl Binder {
             s_expr = self.bind_window_function(window_info, s_expr)?;
         }
 
+        // Bind lazy Set-returning functions after aggregate plan.
+        if !from_context.srf_info.lazy_srf_set.is_empty() {
+            s_expr = self.bind_project_set(&mut from_context, s_expr, true)?;
+        }
+
         if let Some(qualify) = qualify {
             s_expr = self.bind_qualify(&mut from_context, qualify, s_expr)?;
         }
@@ -214,7 +232,7 @@ impl Binder {
         if stmt.distinct {
             s_expr = self.bind_distinct(
                 stmt.span,
-                &from_context,
+                &mut from_context,
                 &projections,
                 &mut scalar_items,
                 s_expr,
@@ -223,7 +241,7 @@ impl Binder {
 
         s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
 
-        if !order_by.is_empty() {
+        if !order_items.items.is_empty() {
             s_expr = self.bind_order_by(&from_context, order_items, &select_list, s_expr)?;
         }
 
@@ -237,15 +255,22 @@ impl Binder {
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
 
         // rewrite variant inner fields as virtual columns
-        let mut virtual_column_rewriter =
-            VirtualColumnRewriter::new(self.ctx.clone(), self.metadata.clone());
-        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
+        if !from_context
+            .virtual_column_context
+            .virtual_column_indices
+            .is_empty()
+        {
+            s_expr = self.rewrite_virtual_column(&mut from_context, s_expr)?;
+        }
 
         // add internal column binding into expr
         s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
+        output_context
+            .cte_context
+            .set_cte_context(from_context.cte_context.clone());
         output_context.columns = from_context.columns;
 
         Ok((s_expr, output_context))
@@ -265,7 +290,7 @@ struct SelectRewriter<'a> {
 }
 
 // helper functions to SelectRewriter
-impl<'a> SelectRewriter<'a> {
+impl SelectRewriter<'_> {
     fn compare_unquoted_ident(&self, a: &str, b: &str) -> bool {
         if self.is_unquoted_ident_case_sensitive {
             a == b

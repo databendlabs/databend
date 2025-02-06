@@ -42,6 +42,8 @@ use core::ops::SubAssign;
 use core::str::FromStr;
 use std::error::Error;
 
+use bytemuck::Pod;
+use bytemuck::Zeroable;
 use micromarshal::Unmarshal;
 use num_traits::float::FloatCore;
 use num_traits::AsPrimitive;
@@ -582,6 +584,11 @@ impl<T: Bounded> Bounded for OrderedFloat<T> {
         OrderedFloat(T::max_value())
     }
 }
+
+unsafe impl Zeroable for OrderedFloat<f32> {}
+unsafe impl Pod for OrderedFloat<f32> {}
+unsafe impl Zeroable for OrderedFloat<f64> {}
+unsafe impl Pod for OrderedFloat<f64> {}
 
 impl<T: FromStr> FromStr for OrderedFloat<T> {
     type Err = T::Err;

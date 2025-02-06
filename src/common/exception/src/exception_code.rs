@@ -212,6 +212,10 @@ build_exceptions! {
     // Geometry errors.
     GeometryError(1801),
     InvalidGeometryFormat(1802),
+
+    // UDF errors.
+    UDFRuntimeError(1810),
+
     // Tantivy errors.
     TantivyError(1901),
     TantivyOpenReadError(1902),
@@ -293,6 +297,14 @@ build_exceptions! {
     // Cluster error codes.
     ClusterUnknownNode(2401),
     ClusterNodeAlreadyExists(2402),
+    InvalidWarehouse(2403),
+    NoResourcesAvailable(2404),
+    WarehouseAlreadyExists(2405),
+    UnknownWarehouse(2406),
+    WarehouseOperateConflict(2407),
+    EmptyNodesForWarehouse(2408),
+    WarehouseClusterAlreadyExists(2409),
+    WarehouseClusterNotExists(2410),
 
     // Stage error codes.
     UnknownStage(2501),
@@ -414,8 +426,9 @@ build_exceptions! {
     // recluster error codes
     NoNeedToRecluster(4011),
     NoNeedToCompact(4012),
+    UnsupportedClusterType(4013),
 
-    RefreshTableInfoFailure(4012),
+    RefreshTableInfoFailure(4021),
 }
 
 // Service errors [5001,6000].

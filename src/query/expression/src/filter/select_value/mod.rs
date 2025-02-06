@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
+use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::Result;
 
 use crate::types::string::StringColumn;
@@ -29,7 +29,7 @@ mod select_column;
 mod select_column_scalar;
 mod select_scalar;
 
-impl<'a> Selector<'a> {
+impl Selector<'_> {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn select_type_values_cmp<T: ValueType>(
         &self,

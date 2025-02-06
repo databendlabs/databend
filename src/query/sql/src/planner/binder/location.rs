@@ -42,7 +42,6 @@ use databend_common_storage::STDIN_FD;
 use opendal::raw::normalize_path;
 use opendal::raw::normalize_root;
 use opendal::Scheme;
-use percent_encoding::percent_decode_str;
 
 /// secure_omission will fix omitted endpoint url schemes into 'https://'
 #[inline]
@@ -398,11 +397,28 @@ fn parse_webhdfs_params(l: &mut UriLocation, root: String) -> Result<StoragePara
     let endpoint_url = format!("{prefix}://{}", l.name);
 
     let delegation = l.connection.get("delegation").cloned().unwrap_or_default();
+    let disable_list_batch = l
+        .connection
+        .get("disable_list_batch")
+        .map(|v| v.to_lowercase().parse::<bool>())
+        .unwrap_or(Ok(true))
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "disable_list_batch should be `TRUE` or `FALSE`, parse error with: {:?}",
+                    e,
+                ),
+            )
+        })?;
+    let user_name = l.connection.get("user_name").cloned().unwrap_or_default();
 
     let sp = StorageParams::Webhdfs(StorageWebhdfsConfig {
         endpoint_url,
         root,
         delegation,
+        disable_list_batch,
+        user_name,
     });
 
     l.connection
@@ -538,10 +554,9 @@ pub async fn parse_uri_location(
         Scheme::Cos => parse_cos_params(l, root)?,
         Scheme::Http => {
             // Make sure path has been percent decoded before parse pattern.
-            let path = percent_decode_str(&l.path).decode_utf8_lossy();
             let cfg = StorageHttpConfig {
                 endpoint_url: format!("{}://{}", l.protocol, l.name),
-                paths: globiter::Pattern::parse(&path)
+                paths: globiter::Pattern::parse(&l.path)
                     .map_err(|err| {
                         Error::new(
                             ErrorKind::InvalidInput,
@@ -594,11 +609,7 @@ pub async fn get_storage_params_from_options(
 
     let mut location = if let Some(connection) = connection {
         let connection = ctx.get_connection(connection).await?;
-        let location = UriLocation::from_uri(
-            location.to_string(),
-            "".to_string(),
-            connection.storage_params,
-        )?;
+        let location = UriLocation::from_uri(location.to_string(), connection.storage_params)?;
         if location.protocol.to_lowercase() != connection.storage_type {
             return Err(ErrorCode::BadArguments(format!(
                 "Incorrect CREATE query: protocol in location {:?} is not equal to connection {:?}",
@@ -607,7 +618,7 @@ pub async fn get_storage_params_from_options(
         };
         location
     } else {
-        UriLocation::from_uri(location.to_string(), "".to_string(), BTreeMap::new())?
+        UriLocation::from_uri(location.to_string(), BTreeMap::new())?
     };
     let sp = parse_storage_params_from_uri(
         &mut location,

@@ -24,6 +24,7 @@ use std::time::SystemTime;
 use dashmap::DashMap;
 use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
+use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
@@ -31,10 +32,11 @@ use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table_context::ContextError;
-use databend_common_catalog::table_context::MaterializedCtesBlocks;
 use databend_common_catalog::table_context::StageAttachment;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::OnErrorMode;
@@ -58,6 +60,7 @@ use parking_lot::RwLock;
 use uuid::Uuid;
 
 use crate::clusters::Cluster;
+use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
@@ -67,6 +70,8 @@ type DatabaseAndTable = (String, String, String);
 
 /// Data that needs to be shared in a query context.
 pub struct QueryContextShared {
+    // Query level
+    pub(crate) query_settings: Arc<Settings>,
     /// total_scan_values for scan stats
     pub(in crate::sessions) total_scan_values: Arc<Progress>,
     /// scan_progress for scan metrics of datablocks (uncompressed)
@@ -88,13 +93,15 @@ pub struct QueryContextShared {
     pub(in crate::sessions) session: Arc<Session>,
     pub(in crate::sessions) runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
-    pub(in crate::sessions) cluster_cache: Arc<Cluster>,
+    pub(in crate::sessions) cluster_cache: Arc<RwLock<Arc<Cluster>>>,
+    pub(in crate::sessions) warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     pub(in crate::sessions) running_query_text_hash: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) running_query_parameterized_hash: Arc<RwLock<Option<String>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
+    pub(in crate::sessions) streams_refs: Arc<RwLock<HashMap<DatabaseAndTable, bool>>>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
@@ -123,12 +130,15 @@ pub struct QueryContextShared {
 
     // Client User-Agent
     pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
-    /// Key is (cte index, used_count), value contains cte's materialized blocks
-    pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
 
     pub(in crate::sessions) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
 
     pub(in crate::sessions) runtime_filters: Arc<RwLock<HashMap<IndexType, RuntimeFilterInfo>>>,
+
+    pub(in crate::sessions) runtime_filter_ready:
+        Arc<RwLock<HashMap<IndexType, Vec<Arc<RuntimeFilterReady>>>>>,
+
+    pub(in crate::sessions) wait_runtime_filter: Arc<RwLock<HashMap<IndexType, bool>>>,
 
     pub(in crate::sessions) merge_into_join: Arc<RwLock<MergeIntoJoin>>,
 
@@ -136,6 +146,11 @@ pub struct QueryContextShared {
     pub(in crate::sessions) query_cache_metrics: DataCacheMetrics,
 
     pub(in crate::sessions) query_queued_duration: Arc<RwLock<Duration>>,
+
+    pub(in crate::sessions) cluster_spill_progress: Arc<RwLock<HashMap<String, SpillProgress>>>,
+    pub(in crate::sessions) spilled_files:
+        Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
+    pub(in crate::sessions) unload_callbacked: AtomicBool,
 }
 
 impl QueryContextShared {
@@ -144,9 +159,10 @@ impl QueryContextShared {
         cluster_cache: Arc<Cluster>,
     ) -> Result<Arc<QueryContextShared>> {
         Ok(Arc::new(QueryContextShared {
+            query_settings: Settings::create(session.get_current_tenant()),
             catalog_manager: CatalogManager::instance(),
             session,
-            cluster_cache,
+            cluster_cache: Arc::new(RwLock::new(cluster_cache)),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
             total_scan_values: Arc::new(Progress::create()),
@@ -162,6 +178,7 @@ impl QueryContextShared {
             running_query_parameterized_hash: Arc::new(RwLock::new(None)),
             aborting: Arc::new(AtomicBool::new(false)),
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
+            streams_refs: Default::default(),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
             stage_attachment: Arc::new(RwLock::new(None)),
@@ -169,8 +186,8 @@ impl QueryContextShared {
             finish_time: Default::default(),
             on_error_map: Arc::new(RwLock::new(None)),
             on_error_mode: Arc::new(RwLock::new(None)),
-            copy_status: Arc::new(Default::default()),
-            mutation_status: Arc::new(Default::default()),
+            copy_status: Default::default(),
+            mutation_status: Default::default(),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
@@ -178,7 +195,6 @@ impl QueryContextShared {
             enable_sort_spill: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
-            materialized_cte_tables: Arc::new(Default::default()),
             join_spill_progress: Arc::new(Progress::create()),
             agg_spill_progress: Arc::new(Progress::create()),
             group_by_spill_progress: Arc::new(Progress::create()),
@@ -186,9 +202,16 @@ impl QueryContextShared {
             query_cache_metrics: DataCacheMetrics::new(),
             query_profiles: Arc::new(RwLock::new(HashMap::new())),
             runtime_filters: Default::default(),
+            runtime_filter_ready: Default::default(),
+            wait_runtime_filter: Default::default(),
             merge_into_join: Default::default(),
             multi_table_insert_status: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
+
+            cluster_spill_progress: Default::default(),
+            spilled_files: Default::default(),
+            unload_callbacked: AtomicBool::new(false),
+            warehouse_cache: Arc::new(RwLock::new(None)),
         }))
     }
 
@@ -246,12 +269,39 @@ impl QueryContextShared {
         // TODO: Wait for the query to be processed (write out the last error)
     }
 
+    pub fn set_cluster(&self, cluster: Arc<Cluster>) {
+        let mut cluster_cache = self.cluster_cache.write();
+        *cluster_cache = cluster;
+    }
+
     pub fn get_cluster(&self) -> Arc<Cluster> {
-        self.cluster_cache.clone()
+        self.cluster_cache.read().clone()
+    }
+
+    pub async fn get_warehouse_clusters(&self) -> Result<Arc<Cluster>> {
+        if let Some(warehouse) = self.warehouse_cache.read().as_ref() {
+            return Ok(warehouse.clone());
+        }
+
+        let config = GlobalConfig::instance();
+        let discovery = ClusterDiscovery::instance();
+        let warehouse = discovery.discover_warehouse_nodes(&config).await?;
+
+        let mut write_guard = self.warehouse_cache.write();
+
+        if write_guard.is_none() {
+            *write_guard = Some(warehouse.clone());
+        }
+
+        Ok(write_guard.as_ref().cloned().expect("expect cluster."))
     }
 
     pub fn get_current_catalog(&self) -> String {
         self.session.get_current_catalog()
+    }
+
+    pub fn set_current_catalog(&self, catalog_name: String) {
+        self.session.set_current_catalog(catalog_name)
     }
 
     pub fn get_aborting(&self) -> Arc<AtomicBool> {
@@ -326,7 +376,6 @@ impl QueryContextShared {
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         // Always get same table metadata in the same query
-
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
 
         let already_in_cache = { self.tables_refs.lock().contains_key(&table_meta_key) };

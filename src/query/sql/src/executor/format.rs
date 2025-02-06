@@ -38,7 +38,6 @@ use crate::executor::physical_plans::CommitSink;
 use crate::executor::physical_plans::ConstantTableScan;
 use crate::executor::physical_plans::CopyIntoLocation;
 use crate::executor::physical_plans::CopyIntoTable;
-use crate::executor::physical_plans::CteScan;
 use crate::executor::physical_plans::DistributedInsertSelect;
 use crate::executor::physical_plans::EvalScalar;
 use crate::executor::physical_plans::Exchange;
@@ -49,7 +48,6 @@ use crate::executor::physical_plans::Filter;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::HashJoin;
 use crate::executor::physical_plans::Limit;
-use crate::executor::physical_plans::MaterializedCte;
 use crate::executor::physical_plans::Mutation;
 use crate::executor::physical_plans::MutationManipulate;
 use crate::executor::physical_plans::MutationOrganize;
@@ -154,19 +152,6 @@ impl PhysicalPlan {
 
                 Ok(FormatTreeNode::with_children(
                     format!("RangeJoin: {}", plan.join_type),
-                    children,
-                ))
-            }
-            PhysicalPlan::CteScan(cte_scan) => cte_scan_to_format_tree(cte_scan),
-            PhysicalPlan::MaterializedCte(materialized_cte) => {
-                let right_child = materialized_cte.right.format_join(metadata)?;
-                let left_child = materialized_cte.left.format_join(metadata)?;
-                let children = vec![
-                    FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
-                    FormatTreeNode::with_children("Left".to_string(), vec![left_child]),
-                ];
-                Ok(FormatTreeNode::with_children(
-                    format!("MaterializedCte: {}", materialized_cte.cte_idx),
                     children,
                 ))
             }
@@ -295,7 +280,6 @@ pub fn format_partial_tree(
                 children,
             ))
         }
-        PhysicalPlan::CteScan(cte_scan) => cte_scan_to_format_tree(cte_scan),
         PhysicalPlan::UnionAll(union_all) => {
             let left_child = format_partial_tree(&union_all.left, metadata, profs)?;
             let right_child = format_partial_tree(&union_all.right, metadata, profs)?;
@@ -366,6 +350,9 @@ fn to_format_tree(
             distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
         }
         PhysicalPlan::Recluster(_) => Ok(FormatTreeNode::new("Recluster".to_string())),
+        PhysicalPlan::HilbertSerialize(_) => {
+            Ok(FormatTreeNode::new("HilbertSerialize".to_string()))
+        }
         PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
@@ -389,12 +376,8 @@ fn to_format_tree(
         }
         PhysicalPlan::MutationOrganize(plan) => format_merge_into_organize(plan, metadata, profs),
         PhysicalPlan::AddStreamColumn(plan) => format_add_stream_column(plan, metadata, profs),
-        PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::RecursiveCteScan(_) => {
             Ok(FormatTreeNode::new("RecursiveCTEScan".to_string()))
-        }
-        PhysicalPlan::MaterializedCte(plan) => {
-            materialized_cte_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
         PhysicalPlan::ExpressionScan(plan) => expression_scan_to_format_tree(plan, metadata, profs),
@@ -744,8 +727,25 @@ fn table_scan_to_format_tree(
         });
 
     let virtual_columns = plan.source.push_downs.as_ref().and_then(|extras| {
-        extras.virtual_columns.as_ref().map(|columns| {
-            let mut names = columns.iter().map(|c| c.name.clone()).collect::<Vec<_>>();
+        extras.virtual_column.as_ref().map(|virtual_column| {
+            let mut names = virtual_column
+                .virtual_column_fields
+                .iter()
+                .filter(|c| c.is_created)
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>();
+            names.sort();
+            names.iter().join(", ")
+        })
+    });
+    let not_created_virtual_columns = plan.source.push_downs.as_ref().and_then(|extras| {
+        extras.virtual_column.as_ref().map(|virtual_column| {
+            let mut names = virtual_column
+                .virtual_column_fields
+                .iter()
+                .filter(|c| !c.is_created)
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>();
             names.sort();
             names.iter().join(", ")
         })
@@ -768,17 +768,24 @@ fn table_scan_to_format_tree(
     // Part stats.
     children.extend(part_stats_info_to_format_tree(&plan.source.statistics));
     // Push downs.
-    let push_downs = match virtual_columns {
-        Some(virtual_columns) => {
-            format!(
-                "push downs: [filters: [{filters}], limit: {limit}, virtual_columns: [{virtual_columns}]]"
-            )
-        }
-        None => {
-            format!("push downs: [filters: [{filters}], limit: {limit}]")
-        }
-    };
+    let push_downs = format!("push downs: [filters: [{filters}], limit: {limit}]");
     children.push(FormatTreeNode::new(push_downs));
+
+    // Virtual columns.
+    if let Some(virtual_columns) = virtual_columns {
+        if !virtual_columns.is_empty() {
+            let virtual_columns = format!("virtual columns: [{virtual_columns}]");
+            children.push(FormatTreeNode::new(virtual_columns));
+        }
+    }
+    if let Some(not_created_virtual_columns) = not_created_virtual_columns {
+        if !not_created_virtual_columns.is_empty() {
+            let not_created_virtual_columns =
+                format!("not created virtual columns: [{not_created_virtual_columns}]");
+            children.push(FormatTreeNode::new(not_created_virtual_columns));
+        }
+    }
+
     // Aggregating index
     if let Some(agg_index) = agg_index {
         let (_, agg_index_sql, _) = metadata
@@ -818,20 +825,6 @@ fn table_scan_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "TableScan".to_string(),
-        children,
-    ))
-}
-
-fn cte_scan_to_format_tree(plan: &CteScan) -> Result<FormatTreeNode<String>> {
-    let mut children = vec![FormatTreeNode::new(format!(
-        "CTE index: {}, sub index: {}",
-        plan.cte_idx.0, plan.cte_idx.1
-    ))];
-    let items = plan_stats_info_to_format_tree(&plan.stat);
-    children.extend(items);
-
-    Ok(FormatTreeNode::with_children(
-        "CTEScan".to_string(),
         children,
     ))
 }
@@ -1753,25 +1746,6 @@ fn udf_to_format_tree(
     children.extend(vec![to_format_tree(&plan.input, metadata, profs)?]);
 
     Ok(FormatTreeNode::with_children("Udf".to_string(), children))
-}
-
-fn materialized_cte_to_format_tree(
-    plan: &MaterializedCte,
-    metadata: &Metadata,
-    profs: &HashMap<u32, PlanProfile>,
-) -> Result<FormatTreeNode<String>> {
-    let children = vec![
-        FormatTreeNode::new(format!(
-            "output columns: [{}]",
-            format_output_columns(plan.output_schema()?, metadata, true)
-        )),
-        to_format_tree(&plan.right, metadata, profs)?,
-        to_format_tree(&plan.left, metadata, profs)?,
-    ];
-    Ok(FormatTreeNode::with_children(
-        "MaterializedCTE".to_string(),
-        children,
-    ))
 }
 
 fn format_output_columns(

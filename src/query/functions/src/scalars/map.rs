@@ -34,6 +34,8 @@ use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::vectorize_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
+use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -42,7 +44,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use databend_common_hashtable::StackHashSet;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
@@ -61,11 +62,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<1>>, MapType<GenericType<0>, GenericType<1>>>(
             |keys, vals, output, ctx| {
                 let key_type = &ctx.generics[0];
-                if !key_type.is_boolean()
-                        && !key_type.is_string()
-                        && !key_type.is_numeric()
-                        && !key_type.is_decimal()
-                        && !key_type.is_date_or_date_time() {
+                if !check_valid_map_key_type(key_type) {
                     ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
                 } else if keys.len() != vals.len() {
                     ctx.set_error(output.len(), format!(
@@ -241,43 +238,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_function_factory("map_delete", |_, args_type| {
-        if args_type.len() < 2 {
-            return None;
-        }
-
-        let map_key_type = match args_type[0].remove_nullable() {
-            DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
-                Some(type_tuple[0].clone())
-            }
-            DataType::EmptyMap => None,
-            _ => return None,
-        };
-
-        if let Some(map_key_type) = map_key_type {
-            for arg_type in args_type.iter().skip(1) {
-                if arg_type != &map_key_type {
-                    return None;
-                }
-            }
-        } else {
-            let key_type = &args_type[1];
-            if !key_type.is_boolean()
-                && !key_type.is_string()
-                && !key_type.is_numeric()
-                && !key_type.is_decimal()
-                && !key_type.is_date_or_date_time()
-            {
-                return None;
-            }
-            for arg_type in args_type.iter().skip(2) {
-                if arg_type != key_type {
-                    return None;
-                }
-            }
-        }
-
-        let return_type = args_type[0].clone();
-
+        let return_type = check_map_arg_types(args_type)?;
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "map_delete".to_string(),
@@ -290,38 +251,52 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
                 eval: Box::new(move |args, _ctx| {
                     let input_length = args.iter().find_map(|arg| match arg {
-                        ValueRef::Column(col) => Some(col.len()),
+                        Value::Column(col) => Some(col.len()),
                         _ => None,
                     });
 
                     let mut output_map_builder =
                         ColumnBuilder::with_capacity(&return_type, input_length.unwrap_or(1));
 
+                    let mut delete_key_list = HashSet::new();
                     for idx in 0..(input_length.unwrap_or(1)) {
-                        let input_map_sref = match &args[0] {
-                            ValueRef::Scalar(map) => map.clone(),
-                            ValueRef::Column(map) => unsafe { map.index_unchecked(idx) },
+                        let input_map = match &args[0] {
+                            Value::Scalar(map) => map.as_ref(),
+                            Value::Column(map) => unsafe { map.index_unchecked(idx) },
                         };
 
-                        match &input_map_sref {
+                        match &input_map {
                             ScalarRef::Null | ScalarRef::EmptyMap => {
                                 output_map_builder.push_default();
                             }
                             ScalarRef::Map(col) => {
-                                let mut delete_key_list = HashSet::new();
-
+                                delete_key_list.clear();
                                 for input_key_item in args.iter().skip(1) {
                                     let input_key = match &input_key_item {
-                                        ValueRef::Scalar(scalar) => scalar.clone(),
-                                        ValueRef::Column(col) => unsafe {
-                                            col.index_unchecked(idx)
-                                        },
+                                        Value::Scalar(scalar) => scalar.as_ref(),
+                                        Value::Column(col) => unsafe { col.index_unchecked(idx) },
                                     };
-
-                                    delete_key_list.insert(input_key.to_owned());
+                                    match input_key {
+                                        ScalarRef::EmptyArray | ScalarRef::Null => {}
+                                        ScalarRef::Array(arr_col) => {
+                                            for arr_key in arr_col.iter() {
+                                                if arr_key == ScalarRef::Null {
+                                                    continue;
+                                                }
+                                                delete_key_list.insert(arr_key.to_owned());
+                                            }
+                                        }
+                                        _ => {
+                                            delete_key_list.insert(input_key.to_owned());
+                                        }
+                                    }
+                                }
+                                if delete_key_list.is_empty() {
+                                    output_map_builder.push(input_map);
+                                    continue;
                                 }
 
-                                let inner_builder_type = match input_map_sref.infer_data_type() {
+                                let inner_builder_type = match input_map.infer_data_type() {
                                     DataType::Map(box typ) => typ,
                                     _ => unreachable!(),
                                 };
@@ -330,7 +305,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     ColumnBuilder::with_capacity(&inner_builder_type, col.len());
 
                                 let input_map: KvColumn<AnyType, AnyType> =
-                                    MapType::try_downcast_scalar(&input_map_sref).unwrap();
+                                    MapType::try_downcast_scalar(&input_map).unwrap();
 
                                 input_map.iter().for_each(|(map_key, map_value)| {
                                     if !delete_key_list.contains(&map_key.to_owned()) {
@@ -371,4 +346,251 @@ pub fn register(registry: &mut FunctionRegistry) {
                     .any(|(k, _)| k == key)
             },
         );
+
+    registry.register_3_arg_core::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, MapType<GenericType<0>, GenericType<1>>, _, _>(
+        "map_insert",
+        |_, map_domain, key_domain, value_domain| {
+            let domain = map_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
+                        .unwrap_or((key_domain.clone(), value_domain.clone()))
+                });
+            FunctionDomain::Domain(domain)
+        },
+        vectorize_with_builder_3_arg::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, MapType<GenericType<0>, GenericType<1>>>(
+            |map, key, val, output, ctx| {
+                let key_type = &ctx.generics[0];
+                if !check_valid_map_key_type(key_type) {
+                    ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
+                    output.commit_row();
+                    return;
+                }
+                if let Some(map) = map {
+                    for (k, _) in map.iter() {
+                        if k == key {
+                            ctx.set_error(output.len(), format!("map key `{}` duplicate", key));
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                    for (k, v) in map.iter() {
+                        output.put_item((k, v));
+                    }
+                }
+                output.put_item((key, val));
+                output.commit_row();
+        })
+    );
+
+    registry.register_4_arg_core::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, BooleanType, MapType<GenericType<0>, GenericType<1>>, _, _>(
+        "map_insert",
+        |_, map_domain, key_domain, value_domain, _| {
+            let domain = map_domain
+                .value
+                .as_ref()
+                .map(|box inner_domain| {
+                    inner_domain
+                        .as_ref()
+                        .map(|(inner_key_domain, inner_value_domain)| (inner_key_domain.merge(key_domain), inner_value_domain.merge(value_domain)))
+                        .unwrap_or((key_domain.clone(), value_domain.clone()))
+                });
+            FunctionDomain::Domain(domain)
+        },
+        vectorize_with_builder_4_arg::<NullableType<MapType<GenericType<0>, GenericType<1>>>, GenericType<0>, GenericType<1>, BooleanType, MapType<GenericType<0>, GenericType<1>>>(
+            |map, key, val, update_flag, output, ctx| {
+                let key_type = &ctx.generics[0];
+                if !check_valid_map_key_type(key_type) {
+                    ctx.set_error(output.len(), format!("map keys can not be {}", key_type));
+                    output.commit_row();
+                    return;
+                }
+                let mut is_duplicate = false;
+                if let Some(map) = map {
+                    for (k, _) in map.iter() {
+                        if k == key && !update_flag {
+                            ctx.set_error(output.len(), format!("map key `{}` duplicate", key));
+                            output.commit_row();
+                            return;
+                        }
+                    }
+                    for (k, v) in map.iter() {
+                        if k == key {
+                            is_duplicate = true;
+                            output.put_item((k, val.clone()));
+                        } else {
+                            output.put_item((k, v));
+                        }
+                    }
+                }
+                if !is_duplicate {
+                    output.put_item((key, val));
+                }
+                output.commit_row();
+        })
+    );
+
+    registry.register_function_factory("map_pick", |_, args_type: &[DataType]| {
+        let return_type = check_map_arg_types(args_type)?;
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "map_pick".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: args_type[0].clone(),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, args_domain| {
+                    FunctionDomain::Domain(args_domain[0].clone())
+                }),
+                eval: Box::new(move |args, _ctx| {
+                    let input_length = args.iter().find_map(|arg| match arg {
+                        Value::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
+
+                    let mut output_map_builder =
+                        ColumnBuilder::with_capacity(&return_type, input_length.unwrap_or(1));
+
+                    let mut pick_key_list = HashSet::new();
+                    for idx in 0..(input_length.unwrap_or(1)) {
+                        let input_map = match &args[0] {
+                            Value::Scalar(map) => map.as_ref(),
+                            Value::Column(map) => unsafe { map.index_unchecked(idx) },
+                        };
+
+                        match &input_map {
+                            ScalarRef::Null | ScalarRef::EmptyMap => {
+                                output_map_builder.push_default();
+                            }
+                            ScalarRef::Map(col) => {
+                                pick_key_list.clear();
+                                for input_key_item in args.iter().skip(1) {
+                                    let input_key = match &input_key_item {
+                                        Value::Scalar(scalar) => scalar.as_ref(),
+                                        Value::Column(col) => unsafe { col.index_unchecked(idx) },
+                                    };
+                                    match input_key {
+                                        ScalarRef::EmptyArray | ScalarRef::Null => {}
+                                        ScalarRef::Array(arr_col) => {
+                                            for arr_key in arr_col.iter() {
+                                                if arr_key == ScalarRef::Null {
+                                                    continue;
+                                                }
+                                                pick_key_list.insert(arr_key.to_owned());
+                                            }
+                                        }
+                                        _ => {
+                                            pick_key_list.insert(input_key.to_owned());
+                                        }
+                                    }
+                                }
+                                if pick_key_list.is_empty() {
+                                    output_map_builder.push_default();
+                                    continue;
+                                }
+
+                                let inner_builder_type = match input_map.infer_data_type() {
+                                    DataType::Map(box typ) => typ,
+                                    _ => unreachable!(),
+                                };
+
+                                let mut filtered_kv_builder =
+                                    ColumnBuilder::with_capacity(&inner_builder_type, col.len());
+
+                                let input_map: KvColumn<AnyType, AnyType> =
+                                    MapType::try_downcast_scalar(&input_map).unwrap();
+
+                                input_map.iter().for_each(|(map_key, map_value)| {
+                                    if pick_key_list.contains(&map_key.to_owned()) {
+                                        filtered_kv_builder.push(ScalarRef::Tuple(vec![
+                                            map_key.clone(),
+                                            map_value.clone(),
+                                        ]));
+                                    }
+                                });
+                                output_map_builder
+                                    .push(ScalarRef::Map(filtered_kv_builder.build()));
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+
+                    match input_length {
+                        Some(_) => Value::Column(output_map_builder.build()),
+                        None => Value::Scalar(output_map_builder.build_scalar()),
+                    }
+                }),
+            },
+        }))
+    });
+}
+
+// Check map function arg types
+// 1. The first arg must be a Map or EmptyMap.
+// 2. The second arg can be an Array or EmptyArray.
+// 3. Multiple args with same key type is also valid.
+fn check_map_arg_types(args_type: &[DataType]) -> Option<DataType> {
+    if args_type.len() < 2 {
+        return None;
+    }
+
+    let map_key_type = match args_type[0].remove_nullable() {
+        DataType::Map(box DataType::Tuple(type_tuple)) if type_tuple.len() == 2 => {
+            Some(type_tuple[0].clone())
+        }
+        DataType::EmptyMap => None,
+        _ => return None,
+    };
+
+    // the second argument can be an array of keys.
+    let (is_array, array_key_type) = match args_type[1].remove_nullable() {
+        DataType::Array(box key_type) => (true, Some(key_type.remove_nullable())),
+        DataType::EmptyArray => (true, None),
+        _ => (false, None),
+    };
+    if is_array && args_type.len() != 2 {
+        return None;
+    }
+    if let Some(map_key_type) = map_key_type {
+        if is_array {
+            if let Some(array_key_type) = array_key_type {
+                if array_key_type != DataType::Null && array_key_type != map_key_type {
+                    return None;
+                }
+            }
+        } else {
+            for arg_type in args_type.iter().skip(1) {
+                let arg_type = arg_type.remove_nullable();
+                if arg_type != DataType::Null && arg_type != map_key_type {
+                    return None;
+                }
+            }
+        }
+    } else if is_array {
+        if let Some(array_key_type) = array_key_type {
+            if array_key_type != DataType::Null && !check_valid_map_key_type(&array_key_type) {
+                return None;
+            }
+        }
+    } else {
+        for arg_type in args_type.iter().skip(1) {
+            let arg_type = arg_type.remove_nullable();
+            if arg_type != DataType::Null && !check_valid_map_key_type(&arg_type) {
+                return None;
+            }
+        }
+    }
+    let return_type = args_type[0].clone();
+    Some(return_type)
+}
+
+fn check_valid_map_key_type(key_type: &DataType) -> bool {
+    key_type.is_boolean()
+        || key_type.is_string()
+        || key_type.is_number()
+        || key_type.is_decimal()
+        || key_type.is_date_or_date_time()
 }

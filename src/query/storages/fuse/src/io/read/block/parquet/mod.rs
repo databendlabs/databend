@@ -95,18 +95,16 @@ impl BlockReader {
                 Some(DataItem::RawData(data)) => {
                     // get the deserialized arrow array, which may be a nested array
                     let arrow_array = column_by_name(&record_batch, &name_paths[i]);
-                    let arrow2_array: Box<dyn databend_common_arrow::arrow::array::Array> =
-                        arrow_array.into();
                     if !column_node.is_nested {
                         if let Some(cache) = &array_cache {
                             let meta = column_metas.get(&field.column_id).unwrap();
                             let (offset, len) = meta.offset_length();
                             let key =
                                 TableDataCacheKey::new(block_path, field.column_id, offset, len);
-                            cache.insert(key.into(), (arrow2_array.clone(), data.len()));
+                            cache.insert(key.into(), (arrow_array.clone(), data.len()));
                         }
                     }
-                    Value::Column(Column::from_arrow(arrow2_array.as_ref(), &data_type)?)
+                    Value::Column(Column::from_arrow_rs(arrow_array, &data_type)?)
                 }
                 Some(DataItem::ColumnArray(cached)) => {
                     if column_node.is_nested {
@@ -115,7 +113,7 @@ impl BlockReader {
                             "unexpected nested field: nested leaf field hits cached",
                         ));
                     }
-                    Value::Column(Column::from_arrow(cached.0.as_ref(), &data_type)?)
+                    Value::Column(Column::from_arrow_rs(cached.0.clone(), &data_type)?)
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };

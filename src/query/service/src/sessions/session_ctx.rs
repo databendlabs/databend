@@ -83,6 +83,7 @@ pub struct SessionContext {
     /// some features like temp table will be unavailable.
     /// for mysql handler: simple use set id of `Session`
     client_session_id: RwLock<Option<String>>,
+    current_warehouse: RwLock<Option<String>>,
 }
 
 impl SessionContext {
@@ -106,6 +107,7 @@ impl SessionContext {
             txn_mgr: Mutex::new(TxnManager::init()),
             client_session_id: Default::default(),
             temp_tbl_mgr: Mutex::new(TempTblMgr::init()),
+            current_warehouse: Default::default(),
         })
     }
 
@@ -161,6 +163,16 @@ impl SessionContext {
 
     pub fn get_auth_role(&self) -> Option<String> {
         let lock = self.auth_role.read();
+        lock.clone()
+    }
+
+    pub fn set_current_warehouse(&self, w: Option<String>) {
+        let mut lock = self.current_warehouse.write();
+        *lock = w
+    }
+
+    pub fn get_current_warehouse(&self) -> Option<String> {
+        let lock = self.current_warehouse.read();
         lock.clone()
     }
 
@@ -297,7 +309,7 @@ impl SessionContext {
             index
         };
 
-        if idx < 0 || idx > (query_ids_len - 1) as i32 {
+        if query_ids_len < 1 || idx < 0 || idx > (query_ids_len - 1) as i32 {
             return "".to_string();
         }
 

@@ -17,8 +17,8 @@ use std::str::FromStr;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use databend_common_meta_types::new_log_id;
-use databend_common_meta_types::LogId;
+use databend_common_meta_types::raft_types::new_log_id;
+use databend_common_meta_types::raft_types::LogId;
 
 /// Structured snapshot id used by meta service
 #[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -153,7 +153,7 @@ impl Display for MetaSnapshotId {
 mod tests {
     use std::str::FromStr;
 
-    use databend_common_meta_types::new_log_id;
+    use databend_common_meta_types::raft_types::new_log_id;
 
     use crate::state_machine::snapshot_id::MetaSnapshotId;
 

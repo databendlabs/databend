@@ -46,7 +46,7 @@ impl TsvDecoder {
         let field_delimiter = fmt.params.field_delimiter.as_bytes()[0];
 
         // we only accept \r\n when len > 1
-        let trim_cr = fmt.params.field_delimiter.as_bytes().len() > 1;
+        let trim_cr = fmt.params.field_delimiter.len() > 1;
         // safe to unwrap, params are checked
         let record_delimiter = *fmt.params.record_delimiter.as_bytes().last().unwrap();
         Self {
@@ -179,7 +179,11 @@ impl TsvDecoder {
                 }
             }
         }
-        if let Some(e) = error { Err(e) } else { Ok(()) }
+        if let Some(e) = error {
+            Err(e)
+        } else {
+            Ok(())
+        }
     }
 }
 

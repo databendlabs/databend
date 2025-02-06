@@ -24,6 +24,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_meta_app::principal::UserInfo;
 use databend_common_script::ir::ColumnAccess;
 use databend_common_script::Client;
 use databend_common_sql::Planner;
@@ -101,6 +102,7 @@ impl Client for ScriptClient {
             .await?;
 
         let mut planner = Planner::new(ctx.clone());
+        // In script ignore query level settings.
         let (plan, _) = planner.plan_sql(query).await?;
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;
@@ -181,6 +183,25 @@ impl Client for ScriptClient {
             _ => Err(ErrorCode::ScriptExecutionError(format!(
                 "`is_true` called on non-boolean value {scalar}",
             ))),
+        }
+    }
+}
+
+#[derive(serde::Serialize)]
+pub struct AuditElement<'a, T: serde::Serialize> {
+    user: String,
+    hostname: String,
+    action_type: &'static str,
+    action: &'a T,
+}
+
+impl<'a, T: serde::Serialize> AuditElement<'a, T> {
+    pub fn create(user: &UserInfo, action_type: &'static str, action: &'a T) -> Self {
+        AuditElement {
+            action,
+            action_type,
+            user: user.name.clone(),
+            hostname: user.hostname.clone(),
         }
     }
 }

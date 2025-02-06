@@ -16,8 +16,10 @@ mod transform_window_partition_collect;
 mod window_partition_buffer;
 mod window_partition_exchange;
 mod window_partition_meta;
+mod window_partition_partial_top_n_exchange;
 
 pub use transform_window_partition_collect::*;
 pub use window_partition_buffer::*;
 pub use window_partition_exchange::*;
 pub use window_partition_meta::*;
+pub use window_partition_partial_top_n_exchange::*;

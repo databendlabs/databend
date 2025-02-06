@@ -18,9 +18,9 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_base::base::tokio::sync::Barrier;
+use databend_common_column::bitmap::Bitmap;
+use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::and_validities;
@@ -121,7 +121,7 @@ impl HashJoinProbeState {
                     .clone()
             })
             .collect::<Vec<_>>();
-        let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
         Ok(HashJoinProbeState {
             ctx,
             func_ctx,
@@ -278,7 +278,7 @@ impl HashJoinProbeState {
         // Thanks to the **adaptive** execution strategy of early filtering, we don't experience a performance decrease
         // when all keys have matches. This allows us to achieve the same performance as before.
         probe_state.num_keys += if let Some(valids) = &valids {
-            (valids.len() - valids.unset_bits()) as u64
+            (valids.len() - valids.null_count()) as u64
         } else {
             input_num_rows as u64
         };
@@ -508,7 +508,6 @@ impl HashJoinProbeState {
                     &generation_state.build_columns,
                     &generation_state.build_columns_data_type,
                     &generation_state.build_num_rows,
-                    &mut probe_state.generation_state.string_items_buf,
                 )?;
 
                 if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
@@ -597,7 +596,6 @@ impl HashJoinProbeState {
                 &generation_state.build_columns,
                 &generation_state.build_columns_data_type,
                 &generation_state.build_num_rows,
-                &mut probe_state.generation_state.string_items_buf,
             )?);
             build_indexes_idx = 0;
         }
@@ -659,7 +657,6 @@ impl HashJoinProbeState {
                 &generation_state.build_columns,
                 &generation_state.build_columns_data_type,
                 &generation_state.build_num_rows,
-                &mut probe_state.generation_state.string_items_buf,
             )?);
             build_indexes_idx = 0;
         }
@@ -747,7 +744,6 @@ impl HashJoinProbeState {
                 &generation_state.build_columns,
                 &generation_state.build_columns_data_type,
                 &generation_state.build_num_rows,
-                &mut probe_state.generation_state.string_items_buf,
             )?;
             result_blocks.push(self.merge_eq_block(
                 Some(build_block),

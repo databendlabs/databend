@@ -102,7 +102,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
         ScalarExpr::UDFCall(udf) => {
             format!(
                 "{}({})",
-                &udf.func_name,
+                &udf.handler,
                 udf.arguments
                     .iter()
                     .map(format_scalar)
@@ -112,6 +112,17 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
         }
         ScalarExpr::UDFLambdaCall(udf) => {
             format!("{}({})", &udf.func_name, format_scalar(&udf.scalar))
+        }
+        ScalarExpr::UDAFCall(udaf) => {
+            format!(
+                "{}({})",
+                &udaf.name,
+                udaf.arguments
+                    .iter()
+                    .map(format_scalar)
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
         }
         ScalarExpr::AsyncFunctionCall(async_func) => async_func.display_name.clone(),
     }
@@ -385,10 +396,23 @@ fn sort_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>
         .join(", ");
     let limit = op.limit.map_or("NONE".to_string(), |l| l.to_string());
 
-    FormatTreeNode::with_children("Sort".to_string(), vec![
-        FormatTreeNode::new(format!("sort keys: [{}]", scalars)),
-        FormatTreeNode::new(format!("limit: [{}]", limit)),
-    ])
+    let children = match &op.window_partition {
+        Some(window) => vec![
+            FormatTreeNode::new(format!("sort keys: [{}]", scalars)),
+            FormatTreeNode::new(format!("limit: [{}]", limit)),
+            FormatTreeNode::new(format!(
+                "window top: {}",
+                window.top.map_or("NONE".to_string(), |n| n.to_string())
+            )),
+            FormatTreeNode::new(format!("window function: {:?}", window.func)),
+        ],
+        None => vec![
+            FormatTreeNode::new(format!("sort keys: [{}]", scalars)),
+            FormatTreeNode::new(format!("limit: [{}]", limit)),
+        ],
+    };
+
+    FormatTreeNode::with_children("Sort".to_string(), children)
 }
 
 fn constant_scan_to_format_tree<I: IdHumanizer<ColumnId = IndexType, TableId = IndexType>>(

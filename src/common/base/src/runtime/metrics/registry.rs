@@ -38,13 +38,14 @@ use crate::runtime::metrics::family_metrics::FamilyHistogram as InnerFamilyHisto
 use crate::runtime::metrics::gauge::Gauge;
 use crate::runtime::metrics::histogram::Histogram;
 use crate::runtime::metrics::histogram::BUCKET_MILLISECONDS;
+use crate::runtime::metrics::histogram::BUCKET_ROWS;
 use crate::runtime::metrics::histogram::BUCKET_SECONDS;
 use crate::runtime::metrics::process_collector::ProcessCollector;
 use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::ThreadTracker;
 
-pub const MIN_HISTOGRAM_BOUND: f64 = i64::MIN as f64;
-pub const MAX_HISTOGRAM_BOUND: f64 = i64::MAX as f64;
+pub const MIN_HISTOGRAM_BOUND: f64 = f64::MIN;
+pub const MAX_HISTOGRAM_BOUND: f64 = f64::MAX;
 
 pub static GLOBAL_METRICS_REGISTRY: LazyLock<GlobalRegistry> =
     LazyLock::new(GlobalRegistry::create);
@@ -307,6 +308,11 @@ pub fn register_histogram_family_in_seconds<T: FamilyLabels>(name: &str) -> Fami
 pub fn register_histogram_family_in_milliseconds<T>(name: &str) -> FamilyHistogram<T>
 where T: FamilyLabels {
     register_histogram_family(name, BUCKET_MILLISECONDS.iter().copied())
+}
+
+pub fn register_histogram_family_in_rows<T>(name: &str) -> FamilyHistogram<T>
+where T: FamilyLabels {
+    register_histogram_family(name, BUCKET_ROWS.iter().copied())
 }
 
 pub type FamilyGauge<T> = Family<T, InnerFamilyGauge<T>>;

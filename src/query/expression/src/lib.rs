@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::len_without_is_empty)]
+#![allow(clippy::missing_transmute_annotations)]
 #![allow(clippy::arc_with_non_send_sync)]
 #![allow(internal_features)]
 // FIXME: we should avoid this by implementing Ord correctly.
@@ -22,13 +23,11 @@
 #![feature(fmt_internals)]
 #![feature(const_try)]
 #![feature(iterator_try_reduce)]
-#![feature(const_fmt_arguments_new)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
+#![allow(clippy::type_complexity)]
 #![feature(associated_type_defaults)]
-#![feature(const_maybe_uninit_as_mut_ptr)]
 #![feature(anonymous_lifetime_in_impl_trait)]
-#![feature(const_mut_refs)]
 #![feature(generic_const_exprs)]
 #![feature(trait_alias)]
 #![feature(vec_into_raw_parts)]
@@ -40,6 +39,7 @@
 #![feature(try_blocks)]
 #![feature(let_chains)]
 #![feature(trait_upcasting)]
+#![feature(alloc_layout_extra)]
 
 #[allow(dead_code)]
 mod block;
@@ -55,7 +55,12 @@ mod input_columns;
 mod kernels;
 mod property;
 mod register;
+mod register_comparison;
+#[allow(dead_code)]
+mod register_vectorize;
+
 pub mod row;
+pub mod sampler;
 pub mod schema;
 pub mod type_check;
 pub mod types;
@@ -74,7 +79,8 @@ pub use crate::hilbert::*;
 pub use crate::input_columns::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
-pub use crate::register::*;
+pub use crate::register_comparison::*;
+pub use crate::register_vectorize::*;
 pub use crate::row::*;
 pub use crate::schema::*;
 pub use crate::utils::block_thresholds::BlockThresholds;

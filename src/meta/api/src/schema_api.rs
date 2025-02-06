@@ -52,6 +52,8 @@ use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetIndexReply;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableReq;
@@ -72,6 +74,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -94,6 +97,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_kvapi::kvapi;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::Change;
@@ -162,6 +166,18 @@ pub trait SchemaApi: Send + Sync {
         name_ident: &IndexNameIdent,
     ) -> Result<Option<GetIndexReply>, MetaError>;
 
+    async fn list_marked_deleted_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply, MetaError>;
+
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply, MetaError>;
+
     async fn update_index(
         &self,
         id_ident: IndexIdIdent,
@@ -222,7 +238,11 @@ pub trait SchemaApi: Send + Sync {
 
     /// Get history of all tables in the specified database,
     /// that are dropped after retention boundary time, i.e., the tables that can be undropped.
-    async fn list_retainable_tables(&self, req: ListTableReq) -> Result<Vec<TableNIV>, KVAppError>;
+    async fn list_history_tables(
+        &self,
+        include_non_retainable: bool,
+        req: ListTableReq,
+    ) -> Result<Vec<TableNIV>, KVAppError>;
 
     /// List all tables in the database.
     ///
@@ -236,11 +256,12 @@ pub trait SchemaApi: Send + Sync {
     ///
     /// It returns None instead of KVAppError, if table_id does not exist
     async fn get_table_by_id(&self, table_id: MetaId)
-    -> Result<Option<SeqV<TableMeta>>, MetaError>;
+        -> Result<Option<SeqV<TableMeta>>, MetaError>;
 
     async fn mget_table_names_by_ids(
         &self,
         table_ids: &[MetaId],
+        get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>, KVAppError>;
 
     async fn mget_database_names_by_ids(
@@ -258,7 +279,7 @@ pub trait SchemaApi: Send + Sync {
     ) -> Result<GetTableCopiedFileReply, KVAppError>;
 
     async fn truncate_table(&self, req: TruncateTableReq)
-    -> Result<TruncateTableReply, KVAppError>;
+        -> Result<TruncateTableReply, KVAppError>;
 
     async fn upsert_table_option(
         &self,
@@ -323,7 +344,7 @@ pub trait SchemaApi: Send + Sync {
     ) -> Result<Option<(SeqV<CatalogId>, SeqV<CatalogMeta>)>, KVAppError>;
 
     async fn list_catalogs(&self, req: ListCatalogReq)
-    -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
+        -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
 
     // least visible time
 
@@ -372,6 +393,8 @@ pub trait SchemaApi: Send + Sync {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>, KVAppError>;
 
+    async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<(), KVAppError>;
+
     /// Generic get() implementation for any kvapi::Key.
     ///
     /// This method just return an `Option` of the value without seq number.
@@ -379,4 +402,18 @@ pub trait SchemaApi: Send + Sync {
     where
         K: kvapi::Key + Sync + 'static,
         K::ValueType: FromToProto + 'static;
+
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        index_ids: &[u64],
+    ) -> Result<(), MetaTxnError>;
+
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<(), MetaTxnError>;
 }

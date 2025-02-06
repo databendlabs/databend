@@ -42,9 +42,8 @@ use crate::processors::sort::Merger;
 /// For merge sort with limit, see [`super::transform_sort_merge_limit`]
 pub struct TransformSortMerge<R: Rows> {
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
     enable_loser_tree: bool,
-
+    limit: Option<usize>,
     block_size: usize,
     buffer: Vec<Option<(DataBlock, Column)>>,
 
@@ -60,14 +59,15 @@ pub struct TransformSortMerge<R: Rows> {
 impl<R: Rows> TransformSortMerge<R> {
     pub fn create(
         schema: DataSchemaRef,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
+        _sort_desc: Arc<Vec<SortColumnDescription>>,
         block_size: usize,
         enable_loser_tree: bool,
+        limit: Option<usize>,
     ) -> Self {
         TransformSortMerge {
             schema,
-            sort_desc,
             enable_loser_tree,
+            limit,
             block_size,
             buffer: vec![],
             aborting: Arc::new(AtomicBool::new(false)),
@@ -78,7 +78,7 @@ impl<R: Rows> TransformSortMerge<R> {
     }
 }
 
-impl<R: Rows + Send> MergeSort<R> for TransformSortMerge<R> {
+impl<R: Rows> MergeSort<R> for TransformSortMerge<R> {
     const NAME: &'static str = "TransformSortMerge";
 
     fn add_block(&mut self, block: DataBlock, init_rows: R, _input_index: usize) -> Result<()> {
@@ -133,7 +133,7 @@ impl<R: Rows + Send> MergeSort<R> for TransformSortMerge<R> {
     }
 }
 
-impl<R: Rows + Send> TransformSortMerge<R> {
+impl<R: Rows> TransformSortMerge<R> {
     fn merge_sort(&mut self, batch_size: usize) -> Result<Vec<DataBlock>> {
         if self.buffer.is_empty() {
             return Ok(vec![]);
@@ -170,16 +170,11 @@ impl<R: Rows + Send> TransformSortMerge<R> {
         batch_size: usize,
         size_hint: usize,
     ) -> Result<Vec<DataBlock>> {
-        let streams = self.buffer.drain(..).collect::<Vec<_>>();
+        let streams = self.buffer.drain(..).collect::<Vec<BlockStream>>();
         let mut result = Vec::with_capacity(size_hint);
 
-        let mut merger = Merger::<A, BlockStream>::create(
-            self.schema.clone(),
-            streams,
-            self.sort_desc.clone(),
-            batch_size,
-            None,
-        );
+        let mut merger =
+            Merger::<A, _>::create(self.schema.clone(), streams, batch_size, self.limit);
 
         while let Some(block) = merger.next_block()? {
             if unlikely(self.aborting.load(Ordering::Relaxed)) {
@@ -226,10 +221,11 @@ pub fn sort_merge(
         0,
         0,
         sort_spilling_batch_bytes,
-        MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree),
+        MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree, None),
     )?;
     for block in data_blocks {
         processor.transform(block)?;
     }
+
     processor.on_finish(true)
 }

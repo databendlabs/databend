@@ -42,6 +42,7 @@ use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
+use crate::plans::WindowPartition;
 use crate::BindContext;
 use crate::Binder;
 use crate::ColumnEntry;
@@ -116,10 +117,18 @@ impl Binder {
         let child = if !sort_items.is_empty() {
             let sort_plan = Sort {
                 items: sort_items,
-                limit: window_plan.limit,
+                limit: None,
                 after_exchange: None,
                 pre_projection: None,
-                window_partition: window_plan.partition_by.clone(),
+                window_partition: if window_plan.partition_by.is_empty() {
+                    None
+                } else {
+                    Some(WindowPartition {
+                        partition_by: window_plan.partition_by.clone(),
+                        top: None,
+                        func: window_plan.function.clone(),
+                    })
+                },
             };
             SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
         } else {
@@ -581,31 +590,29 @@ pub struct WindowAggregateRewriter<'a> {
 impl<'a> VisitorMut<'a> for WindowAggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         if let ScalarExpr::AggregateFunction(agg_func) = expr {
-            if let Some(index) = self
+            let Some(agg) = self
                 .bind_context
                 .aggregate_info
-                .aggregate_functions_map
-                .get(&agg_func.display_name)
-            {
-                let agg = &self.bind_context.aggregate_info.aggregate_functions[*index];
-                let column_binding = ColumnBindingBuilder::new(
-                    agg_func.display_name.clone(),
-                    agg.index,
-                    agg_func.return_type.clone(),
-                    Visibility::Visible,
-                )
-                .build();
-
-                *expr = BoundColumnRef {
-                    span: None,
-                    column: column_binding,
-                }
-                .into();
-
-                return Ok(());
-            } else {
+                .get_aggregate_function(&agg_func.display_name)
+            else {
                 return Err(ErrorCode::BadArguments("Invalid window function argument"));
+            };
+
+            let column_binding = ColumnBindingBuilder::new(
+                agg_func.display_name.clone(),
+                agg.index,
+                agg_func.return_type.clone(),
+                Visibility::Visible,
+            )
+            .build();
+
+            *expr = BoundColumnRef {
+                span: None,
+                column: column_binding,
             }
+            .into();
+
+            return Ok(());
         }
 
         walk_expr_mut(self, expr)

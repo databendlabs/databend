@@ -28,6 +28,7 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -63,7 +64,7 @@ impl AggregatingIndexRewriter {
                 ..
             } if !*distinct
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
-                    .contains(&&*name.name.to_ascii_lowercase().to_lowercase())
+                    .contains(&name.name.to_ascii_lowercase().to_lowercase().as_str())
                 && window.is_none()
                 && lambda.is_none() =>
             {
@@ -139,8 +140,8 @@ impl AggregatingIndexRewriter {
             }
         });
 
-        match group_by {
-            Some(group_by) => match group_by {
+        if let Some(group_by) = group_by {
+            match group_by {
                 GroupBy::Normal(groups) => {
                     groups.iter().for_each(|expr| {
                         // if group by item not in targets, we will add it in.
@@ -154,8 +155,7 @@ impl AggregatingIndexRewriter {
                     });
                 }
                 _ => unreachable!(),
-            },
-            None => {}
+            }
         }
 
         // replace the select list with our rewritten new select list.
@@ -198,47 +198,60 @@ impl AggregatingIndexRewriter {
 #[derive(Debug, Clone, Default, Visitor)]
 #[visitor(FunctionCall(enter), SelectStmt(enter), Query(enter))]
 pub struct AggregatingIndexChecker {
+    has_agg_function: bool,
+    has_group_by: bool,
+    has_selection: bool,
     not_support: bool,
 }
 
 impl AggregatingIndexChecker {
     pub fn is_supported(&self) -> bool {
-        !self.not_support
+        // Must have at least one of aggregate function, group by, or selection.
+        // An aggregating index like `select a + 1 from t` are useless and take up extra storage space.
+        !self.not_support && (self.has_agg_function || self.has_group_by || self.has_selection)
     }
 
     fn enter_function_call(&mut self, func: &FunctionCall) {
+        if self.not_support {
+            return;
+        }
         let FunctionCall {
             distinct: _,
             name,
             params: _,
             args: _,
-            window: _,
+            window,
             lambda: _,
         } = func;
 
-        if self.not_support {
-            return;
-        }
-
-        // is agg func but not support now.
-        if AggregateFunctionFactory::instance().contains(&name.name)
-            && !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&&*name.name.to_lowercase())
-        {
+        let name = name.name.to_lowercase();
+        let func_name = name.as_str();
+        if AggregateFunctionFactory::instance().contains(func_name) {
+            self.has_agg_function = true;
+            // is agg func but not support now.
+            if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&func_name) || window.is_some() {
+                self.not_support = true;
+            }
+        } else if let Some(func_property) = BUILTIN_FUNCTIONS.get_property(func_name) {
+            // set returning functions and non deterministic functions such as `now()` are not supported.
+            if func_property.kind == FunctionKind::SRF || func_property.non_deterministic {
+                self.not_support = true;
+            }
+        } else {
+            // Functions other than aggregate and scalar are not supported, such as window, UDF, etc.
             self.not_support = true;
-            return;
         }
-
-        self.not_support = BUILTIN_FUNCTIONS
-            .get_property(&name.name)
-            .map(|p| p.non_deterministic)
-            .unwrap_or(false);
     }
 
     fn enter_select_stmt(&mut self, stmt: &SelectStmt) {
         if self.not_support {
             return;
         }
-        if stmt.having.is_some() || stmt.window_list.is_some() || stmt.qualify.is_some() {
+        if stmt.having.is_some()
+            || stmt.window_list.is_some()
+            || stmt.qualify.is_some()
+            || stmt.top_n.is_some()
+        {
             self.not_support = true;
             return;
         }
@@ -250,12 +263,26 @@ impl AggregatingIndexChecker {
                 return;
             }
         }
-        for target in &stmt.select_list {
-            if target.has_window() {
+        if stmt.from.len() != 1 {
+            self.not_support = true;
+            return;
+        }
+        // only support select from one table.
+        match &stmt.from[0] {
+            TableReference::Table { .. } => {}
+            _ => {
                 self.not_support = true;
                 return;
             }
         }
+        for target in &stmt.select_list {
+            if target.is_star() {
+                self.not_support = true;
+                return;
+            }
+        }
+        self.has_selection = stmt.selection.is_some();
+        self.has_group_by = stmt.group_by.is_some();
     }
 
     fn enter_query(&mut self, query: &Query) {
@@ -289,7 +316,7 @@ impl RefreshAggregatingIndexRewriter {
                 ..
             } if !*distinct
                 && SUPPORTED_AGGREGATING_INDEX_FUNCTIONS
-                    .contains(&&*name.name.to_ascii_lowercase().to_lowercase())
+                    .contains(&name.name.to_ascii_lowercase().to_lowercase().as_str())
                 && window.is_none() =>
             {
                 self.has_agg_function = true;

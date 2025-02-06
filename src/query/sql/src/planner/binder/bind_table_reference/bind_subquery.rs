@@ -41,6 +41,9 @@ impl Binder {
                     .clone()
                     .unwrap_or_else(|| Box::new(BindContext::new())),
             );
+            new_bind_context
+                .cte_context
+                .set_cte_context(bind_context.cte_context.clone());
             self.bind_query(&mut new_bind_context, subquery)?
         };
 

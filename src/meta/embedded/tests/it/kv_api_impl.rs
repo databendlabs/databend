@@ -12,48 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::sync::Once;
+
 use databend_common_base::base::tokio;
-use databend_common_meta_embedded::MetaEmbedded;
 use databend_common_meta_kvapi::kvapi;
+use databend_common_meta_raft_store::mem_meta::MemMeta;
+use databend_common_tracing::init_logging;
+use databend_common_tracing::Config;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_write_read() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_write_read(&kv).await
+#[derive(Clone)]
+struct Builder;
+
+#[async_trait::async_trait]
+impl kvapi::ApiBuilder<MemMeta> for Builder {
+    async fn build(&self) -> MemMeta {
+        MemMeta::default()
+    }
+
+    async fn build_cluster(&self) -> Vec<MemMeta> {
+        unreachable!("InMemoryMeta does not support cluster")
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_kv_delete() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_delete(&kv).await
+async fn test_mem_meta_kv_api() -> anyhow::Result<()> {
+    setup_test();
+    kvapi::TestSuite {}.test_single_node(&Builder).await
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_update() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_update(&kv).await
-}
+fn setup_test() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let mut config = Config::new_testing();
+        config.file.prefix_filter = "".to_string();
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_timeout() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_timeout(&kv).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_meta() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_meta(&kv).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_list() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_list(&kv).await
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_kv_mget() -> anyhow::Result<()> {
-    let kv = MetaEmbedded::new_temp().await?;
-    kvapi::TestSuite {}.kv_mget(&kv).await
+        let guards = init_logging("meta_unittests", &config, BTreeMap::new());
+        Box::leak(Box::new(guards));
+    });
 }

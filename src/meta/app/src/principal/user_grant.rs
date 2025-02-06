@@ -21,6 +21,33 @@ use enumflags2::BitFlags;
 use crate::principal::UserPrivilegeSet;
 use crate::principal::UserPrivilegeType;
 
+// some statements like `SELECT 1`, `SHOW USERS`, `SHOW ROLES`, `SHOW TABLES` will be
+// rewritten to the queries on the system tables, we need to skip the privilege check on
+// these tables.
+pub const SYSTEM_TABLES_ALLOW_LIST: [&str; 21] = [
+    "catalogs",
+    "columns",
+    "databases",
+    "databases_with_history",
+    "dictionaries",
+    "tables",
+    "views",
+    "tables_with_history",
+    "views_with_history",
+    "password_policies",
+    "streams",
+    "streams_terse",
+    "virtual_columns",
+    "users",
+    "roles",
+    "stages",
+    "one",
+    "processes",
+    "user_functions",
+    "functions",
+    "indexes",
+];
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,
@@ -30,6 +57,7 @@ pub enum GrantObject {
     TableById(String, u64, u64),
     UDF(String),
     Stage(String),
+    Warehouse(String),
 }
 
 impl GrantObject {
@@ -62,6 +90,7 @@ impl GrantObject {
             (GrantObject::Table(_, _, _), _) => false,
             (GrantObject::Stage(lstage), GrantObject::Stage(rstage)) => lstage == rstage,
             (GrantObject::UDF(udf), GrantObject::UDF(rudf)) => udf == rudf,
+            (GrantObject::Warehouse(w), GrantObject::Warehouse(rw)) => w == rw,
             _ => false,
         }
     }
@@ -82,12 +111,16 @@ impl GrantObject {
             GrantObject::Stage(_) => {
                 UserPrivilegeSet::available_privileges_on_stage(available_ownership)
             }
+            GrantObject::Warehouse(_) => UserPrivilegeSet::available_privileges_on_warehouse(),
         }
     }
 
     pub fn catalog(&self) -> Option<String> {
         match self {
-            GrantObject::Global | GrantObject::Stage(_) | GrantObject::UDF(_) => None,
+            GrantObject::Global
+            | GrantObject::Stage(_)
+            | GrantObject::UDF(_)
+            | GrantObject::Warehouse(_) => None,
             GrantObject::Database(cat, _) | GrantObject::DatabaseById(cat, _) => Some(cat.clone()),
             GrantObject::Table(cat, _, _) | GrantObject::TableById(cat, _, _) => Some(cat.clone()),
         }
@@ -108,6 +141,7 @@ impl fmt::Display for GrantObject {
             }
             GrantObject::UDF(udf) => write!(f, "UDF {udf}"),
             GrantObject::Stage(stage) => write!(f, "STAGE {stage}"),
+            GrantObject::Warehouse(w) => write!(f, "WAREHOUSE {w}"),
         }
     }
 }
@@ -152,7 +186,7 @@ impl GrantEntry {
 }
 
 impl fmt::Display for GrantEntry {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::result::Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         let privileges: UserPrivilegeSet = self.privileges.into();
         let privileges_str = if self.has_all_available_privileges() {
             "ALL".to_string()

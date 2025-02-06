@@ -14,15 +14,11 @@
 
 use std::cmp::Ordering;
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
-use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 
 use super::list_domain::Candidate;
 use super::list_domain::EndDomain;
@@ -37,7 +33,6 @@ where
     S: SortedStream,
 {
     schema: DataSchemaRef,
-    sort_desc: Arc<Vec<SortColumnDescription>>,
     unsorted_streams: Vec<S>,
     pending_streams: VecDeque<usize>,
 
@@ -63,7 +58,6 @@ where
     pub fn new(
         schema: DataSchemaRef,
         streams: Vec<S>,
-        sort_desc: Arc<Vec<SortColumnDescription>>,
         batch_rows: usize,
         limit: Option<usize>,
     ) -> Self {
@@ -93,7 +87,6 @@ where
 
         Self {
             schema,
-            sort_desc,
             unsorted_streams: streams,
             pending_streams,
             buffer,
@@ -110,7 +103,7 @@ where
     }
 
     pub fn is_finished(&self) -> bool {
-        self.limit.map_or(false, |limit| self.total_rows >= limit)
+        self.limit.is_some_and(|limit| self.total_rows >= limit)
             || !self.has_pending_stream() && self.rows.iter().all(|x| x.is_none())
     }
 
@@ -128,7 +121,7 @@ where
                 continue;
             }
             if let Some((block, col)) = input {
-                self.rows[i] = Some(R::from_column(&col, &self.sort_desc)?);
+                self.rows[i] = Some(R::from_column(&col)?);
                 self.buffer[i] = block;
             }
         }
@@ -148,15 +141,19 @@ where
             }
         }
 
+        if self.is_finished() {
+            return Ok(vec![]);
+        }
+
         Ok(self.build_task())
     }
 
     fn calc_partition_point(&self) -> Partition {
-        let mut candidate = Candidate::new(&self.rows, EndDomain {
-            min: self.min_task,
-            max: self.max_task,
-        });
-        candidate.init();
+        let mut candidate =
+            Candidate::new(&self.rows, EndDomain::new(self.min_task, self.max_task));
+
+        let ok = candidate.init();
+        assert!(ok, "empty candidate");
 
         // if candidate.is_small_task() {
         // todo: Consider loading multiple blocks at the same time so that we can avoid cutting out too small a task
@@ -167,6 +164,7 @@ where
 
     fn build_task(&mut self) -> Vec<DataBlock> {
         let partition = self.calc_partition_point();
+        assert!(partition.total > 0);
 
         let id = self.next_task_id();
         self.total_rows += partition.total;
@@ -216,7 +214,9 @@ where
 }
 
 impl<R: Rows> List for Option<R> {
-    type Item<'a> = R::Item<'a> where R: 'a;
+    type Item<'a>
+        = R::Item<'a>
+    where R: 'a;
     fn len(&self) -> usize {
         match self {
             Some(r) => r.len(),
@@ -225,11 +225,15 @@ impl<R: Rows> List for Option<R> {
     }
 
     fn cmp_value<'a>(&'a self, i: usize, target: &R::Item<'a>) -> Ordering {
-        self.as_ref().unwrap().row(i).cmp(target)
+        let rows = self.as_ref().unwrap();
+        assert!(i < rows.len(), "len {}, index {}", rows.len(), i);
+        rows.row(i).cmp(target)
     }
 
     fn index(&self, i: usize) -> R::Item<'_> {
-        self.as_ref().unwrap().row(i)
+        let rows = self.as_ref().unwrap();
+        assert!(i < rows.len(), "len {}, index {}", rows.len(), i);
+        rows.row(i)
     }
 }
 
@@ -240,19 +244,5 @@ pub struct SortTaskMeta {
     pub input: usize,
 }
 
-impl SortTaskMeta {
-    pub fn as_meta(self) -> BlockMetaInfoPtr {
-        Box::new(self)
-    }
-}
-
 #[typetag::serde(name = "sort_task")]
-impl BlockMetaInfo for SortTaskMeta {
-    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        SortTaskMeta::downcast_ref_from(info).map_or(false, |info| self == info)
-    }
-
-    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
-        Box::new(*self)
-    }
-}
+impl BlockMetaInfo for SortTaskMeta {}

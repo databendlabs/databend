@@ -37,6 +37,7 @@ use super::Rows;
 pub type CommonRows = BinaryColumn;
 
 impl Rows for BinaryColumn {
+    const IS_ASC_COLUMN: bool = true;
     type Item<'a> = &'a [u8];
     type Type = BinaryType;
 
@@ -52,7 +53,7 @@ impl Rows for BinaryColumn {
         Column::Binary(self.clone())
     }
 
-    fn try_from_column(col: &Column, _: &[SortColumnDescription]) -> Option<Self> {
+    fn try_from_column(col: &Column) -> Option<Self> {
         col.as_binary().cloned()
     }
 
@@ -98,8 +99,10 @@ impl RowConverter<BinaryColumn> for CommonRowConverter {
                             let (_, validity) = c.validity();
                             let col = c.remove_nullable();
                             let col = col.as_variant().unwrap();
-                            let mut builder =
-                                BinaryColumnBuilder::with_capacity(col.len(), col.data().len());
+                            let mut builder = BinaryColumnBuilder::with_capacity(
+                                col.len(),
+                                col.total_bytes_len(),
+                            );
                             for (i, val) in col.iter().enumerate() {
                                 if let Some(validity) = validity {
                                     if unsafe { !validity.get_bit_unchecked(i) } {

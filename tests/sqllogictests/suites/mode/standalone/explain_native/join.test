@@ -8,13 +8,13 @@ statement ok
 drop table if exists t2
 
 statement ok
-create table t as select number from numbers(1)
+settings (ddl_column_type_nullable=0) create table t as select number from numbers(1)
 
 statement ok
-create table t1 as select number from numbers(10)
+settings (ddl_column_type_nullable=0) create table t1 as select number from numbers(10)
 
 statement ok
-create table t2 as select number from numbers(100)
+settings (ddl_column_type_nullable=0) create table t2 as select number from numbers(100)
 
 query T
 explain select t.number from t, t1 where t.number = t1.number
@@ -217,32 +217,32 @@ query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42
 ----
 HashJoin
-├── output columns: [b.x (#1), b.y (#2), a.x (#0)]
+├── output columns: [a.x (#0), b.y (#2), b.x (#1)]
 ├── join type: INNER
-├── build keys: [a.x (#0)]
-├── probe keys: [b.x (#1)]
+├── build keys: [b.x (#1)]
+├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 2.67
+├── estimated rows: 2.37
 ├── TableScan(Build)
-│   ├── table: default.default.onecolumn
-│   ├── output columns: [x (#0)]
+│   ├── table: default.default.twocolumn
+│   ├── output columns: [x (#1), y (#2)]
 │   ├── read rows: 4
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-│   ├── push downs: [filters: [is_true(onecolumn.x (#0) > 42)], limit: NONE]
+│   ├── push downs: [filters: [is_true(twocolumn.x (#1) > 42)], limit: NONE]
 │   └── estimated rows: 2.67
 └── TableScan(Probe)
-    ├── table: default.default.twocolumn
-    ├── output columns: [x (#1), y (#2)]
+    ├── table: default.default.onecolumn
+    ├── output columns: [x (#0)]
     ├── read rows: 4
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-    ├── push downs: [filters: [is_true(twocolumn.x (#1) > 42)], limit: NONE]
-    └── estimated rows: 3.00
+    ├── push downs: [filters: [is_true(onecolumn.x (#0) > 42)], limit: NONE]
+    └── estimated rows: 2.67
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
@@ -253,7 +253,7 @@ HashJoin
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 1.17
+├── estimated rows: 1.33
 ├── TableScan(Build)
 │   ├── table: default.default.onecolumn
 │   ├── output columns: [x (#0)]
@@ -273,7 +273,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
     ├── push downs: [filters: [is_true((twocolumn.x (#1) > 44 OR twocolumn.x (#1) < 43))], limit: NONE]
-    └── estimated rows: 1.75
+    └── estimated rows: 2.00
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
@@ -284,7 +284,7 @@ HashJoin
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 3.56
+├── estimated rows: 2.37
 ├── TableScan(Build)
 │   ├── table: default.default.twocolumn
 │   ├── output columns: [x (#1), y (#2)]
@@ -352,7 +352,7 @@ HashJoin
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
 ├── filters: []
-├── estimated rows: 3.56
+├── estimated rows: 2.67
 ├── TableScan(Build)
 │   ├── table: default.default.onecolumn
 │   ├── output columns: [x (#0)]
@@ -574,7 +574,7 @@ set enable_cbo = 0
 
 # https://github.com/datafuselabs/databend/issues/10523
 statement ok
-create table t1 as select * from numbers(1)
+settings (ddl_column_type_nullable=0) create table t1 as select * from numbers(1)
 
 query I
 select t1.number FROM
@@ -634,3 +634,79 @@ set enable_cbo = 1
 
 statement ok
 drop table t1
+
+statement ok
+CREATE OR REPLACE TABLE t1(a INT);
+
+statement ok
+CREATE OR REPLACE TABLE t2(a INT);
+
+statement ok
+INSERT INTO t1 VALUES(1), (2), (3), (4);
+
+statement ok
+INSERT INTO t2 VALUES(1);
+
+query T
+EXPLAIN SELECT * FROM t1 WHERE a >= (SELECT MAX(a) FROM t2);
+----
+HashJoin
+├── output columns: [t1.a (#0)]
+├── join type: INNER
+├── build keys: []
+├── probe keys: []
+├── filters: [t1.a (#0) >= CAST(scalar_subquery_2 (#2) AS Int32 NULL)]
+├── estimated rows: 4.00
+├── EvalScalar(Build)
+│   ├── output columns: [MAX(a) (#2)]
+│   ├── expressions: [1]
+│   ├── estimated rows: 1.00
+│   └── DummyTableScan
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 4.00
+
+query T
+EXPLAIN SELECT * FROM t1 WHERE a >= (SELECT a FROM t2 where a > 0);
+----
+HashJoin
+├── output columns: [t1.a (#0)]
+├── join type: INNER
+├── build keys: []
+├── probe keys: []
+├── filters: [t1.a (#0) >= scalar_subquery_1 (#1)]
+├── estimated rows: 4.00
+├── TableScan(Build)
+│   ├── table: default.default.t2
+│   ├── output columns: [a (#1)]
+│   ├── read rows: 1
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+│   ├── push downs: [filters: [is_true(t2.a (#1) > 0)], limit: NONE]
+│   └── estimated rows: 1.00
+└── TableScan(Probe)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+    ├── push downs: [filters: [], limit: NONE]
+    └── estimated rows: 4.00
+
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+DROP TABLE t2;

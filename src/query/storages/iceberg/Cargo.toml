@@ -25,16 +25,12 @@ databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
 iceberg = { workspace = true }
+iceberg-catalog-glue = { workspace = true }
 iceberg-catalog-hms = { workspace = true }
 iceberg-catalog-rest = { workspace = true }
-match-template = { workspace = true }
-ordered-float = { workspace = true }
 serde = { workspace = true }
-tokio = { workspace = true }
+serde_json = { workspace = true }
 typetag = { workspace = true }
 
 [lints]
 workspace = true
-
-[package.metadata.cargo-machete]
-ignored = ["match-template"]

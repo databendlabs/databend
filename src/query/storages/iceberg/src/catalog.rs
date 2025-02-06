@@ -79,6 +79,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -102,6 +103,8 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
+use iceberg_catalog_glue::GlueCatalog;
+use iceberg_catalog_glue::GlueCatalogConfig;
 use iceberg_catalog_hms::HmsCatalog;
 use iceberg_catalog_hms::HmsCatalogConfig;
 use iceberg_catalog_hms::HmsThriftTransport;
@@ -195,6 +198,28 @@ impl IcebergCatalog {
                 let ctl = RestCatalog::new(cfg);
                 Arc::new(ctl)
             }
+            IcebergCatalogOption::Glue(glue) => {
+                let cfg = GlueCatalogConfig::builder()
+                    .warehouse(glue.warehouse.clone())
+                    .props(
+                        glue.props
+                            .clone()
+                            .into_iter()
+                            .map(|(k, v)| (k.trim_matches('"').to_string(), v))
+                            .collect(),
+                    )
+                    .build();
+
+                // Due to the AWS Glue catalog creation being asynchronous, forced to run it a bit different way, so we don't have to make the outer function asynchronous.
+                let ctl = databend_common_base::runtime::block_on(GlueCatalog::new(cfg)).map_err(
+                    |err| {
+                        ErrorCode::BadArguments(format!(
+                            "There was an error building the AWS Glue catalog: {err:?}"
+                        ))
+                    },
+                )?;
+                Arc::new(ctl)
+            }
         };
 
         Ok(Self { info, ctl })
@@ -215,10 +240,18 @@ impl Catalog for IcebergCatalog {
         self.info.clone()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Ok(self)
+    }
+
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
+    }
+
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        unimplemented!()
     }
 
     #[async_backtrace::framed]
@@ -276,6 +309,7 @@ impl Catalog for IcebergCatalog {
         &self,
         _tenant: &Tenant,
         _table_ids: &[MetaId],
+        _get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
         Err(ErrorCode::Unimplemented(
             "Cannot get tables name by ids in HIVE catalog",
@@ -461,7 +495,6 @@ impl Catalog for IcebergCatalog {
     }
 
     // Table index
-
     #[async_backtrace::framed]
     async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
         unimplemented!()
@@ -501,7 +534,6 @@ impl Catalog for IcebergCatalog {
     }
 
     // Virtual column
-
     #[async_backtrace::framed]
     async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
@@ -526,7 +558,6 @@ impl Catalog for IcebergCatalog {
     }
 
     /// Table function
-
     // Get function by name.
     fn get_table_function(
         &self,
@@ -600,6 +631,10 @@ impl Catalog for IcebergCatalog {
         &self,
         _req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
+        unimplemented!()
+    }
+
+    async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
         unimplemented!()
     }
 }

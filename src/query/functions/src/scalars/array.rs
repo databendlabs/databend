@@ -24,6 +24,7 @@ use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -60,7 +61,6 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::SortColumnDescription;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use databend_common_hashtable::HashtableKeyable;
 use databend_common_hashtable::KeysRef;
 use databend_common_hashtable::StackHashSet;
@@ -129,7 +129,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
                 eval: Box::new(|args, ctx| {
                     let len = args.iter().find_map(|arg| match arg {
-                        ValueRef::Column(col) => Some(col.len()),
+                        Value::Column(col) => Some(col.len()),
                         _ => None,
                     });
 
@@ -139,10 +139,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     for idx in 0..(len.unwrap_or(1)) {
                         for arg in args {
                             match arg {
-                                ValueRef::Scalar(scalar) => {
-                                    builder.put_item(scalar.clone());
+                                Value::Scalar(scalar) => {
+                                    builder.put_item(scalar.as_ref());
                                 }
-                                ValueRef::Column(col) => unsafe {
+                                Value::Column(col) => unsafe {
                                     builder.put_item(col.index_unchecked(idx));
                                 },
                             }
@@ -153,6 +153,132 @@ pub fn register(registry: &mut FunctionRegistry) {
                     match len {
                         Some(_) => Value::Column(Column::Array(Box::new(builder.build().upcast()))),
                         None => Value::Scalar(Scalar::Array(builder.build_scalar())),
+                    }
+                }),
+            },
+        }))
+    });
+
+    // Returns a merged array of tuples in which the nth tuple contains all nth values of input arrays.
+    registry.register_function_factory("arrays_zip", |_, args_type| {
+        if args_type.is_empty() {
+            return None;
+        }
+        let args_type = args_type.to_vec();
+
+        let inner_types: Vec<DataType> = args_type
+            .iter()
+            .map(|arg_type| {
+                let is_nullable = arg_type.is_nullable();
+                match arg_type.remove_nullable() {
+                    DataType::Array(box inner_type) => {
+                        if is_nullable {
+                            inner_type.wrap_nullable()
+                        } else {
+                            inner_type.clone()
+                        }
+                    }
+                    _ => arg_type.clone(),
+                }
+            })
+            .collect();
+        let return_type = DataType::Array(Box::new(DataType::Tuple(inner_types.clone())));
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "arrays_zip".to_string(),
+                args_type: args_type.clone(),
+                return_type,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, args_domain| {
+                    let inner_domains = args_domain
+                        .iter()
+                        .map(|arg_domain| match arg_domain {
+                            Domain::Nullable(nullable_domain) => match &nullable_domain.value {
+                                Some(box Domain::Array(Some(inner_domain))) => {
+                                    Domain::Nullable(NullableDomain {
+                                        has_null: nullable_domain.has_null,
+                                        value: Some(Box::new(*inner_domain.clone())),
+                                    })
+                                }
+                                _ => Domain::Nullable(nullable_domain.clone()),
+                            },
+                            Domain::Array(Some(box inner_domain)) => inner_domain.clone(),
+                            _ => arg_domain.clone(),
+                        })
+                        .collect();
+                    FunctionDomain::Domain(Domain::Array(Some(Box::new(Domain::Tuple(
+                        inner_domains,
+                    )))))
+                }),
+                eval: Box::new(move |args, ctx| {
+                    let len = args.iter().find_map(|arg| match arg {
+                        Value::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
+
+                    let mut offset = 0;
+                    let mut offsets = Vec::new();
+                    offsets.push(0);
+                    let tuple_type = DataType::Tuple(inner_types.clone());
+                    let mut builder = ColumnBuilder::with_capacity(&tuple_type, 0);
+                    for i in 0..len.unwrap_or(1) {
+                        let mut is_diff_len = false;
+                        let mut array_len = None;
+                        for arg in args {
+                            let value = unsafe { arg.index_unchecked(i) };
+                            if let ScalarRef::Array(col) = value {
+                                if let Some(array_len) = array_len {
+                                    if array_len != col.len() {
+                                        is_diff_len = true;
+                                        let err = format!(
+                                            "array length must be equal, but got {} and {}",
+                                            array_len,
+                                            col.len()
+                                        );
+                                        ctx.set_error(builder.len(), err);
+                                        offsets.push(offset);
+                                        break;
+                                    }
+                                } else {
+                                    array_len = Some(col.len());
+                                }
+                            }
+                        }
+                        if is_diff_len {
+                            continue;
+                        }
+                        let array_len = array_len.unwrap_or(1);
+                        for j in 0..array_len {
+                            let mut tuple_values = Vec::with_capacity(args.len());
+                            for arg in args {
+                                let value = unsafe { arg.index_unchecked(i) };
+                                match value {
+                                    ScalarRef::Array(col) => {
+                                        let tuple_value = unsafe { col.index_unchecked(j) };
+                                        tuple_values.push(tuple_value.to_owned());
+                                    }
+                                    _ => {
+                                        tuple_values.push(value.to_owned());
+                                    }
+                                }
+                            }
+                            let tuple_value = Scalar::Tuple(tuple_values);
+                            builder.push(tuple_value.as_ref());
+                        }
+                        offset += array_len as u64;
+                        offsets.push(offset);
+                    }
+
+                    match len {
+                        Some(_) => {
+                            let array_column = ArrayColumn {
+                                values: builder.build(),
+                                offsets: offsets.into(),
+                            };
+                            Value::Column(Column::Array(Box::new(array_column)))
+                        }
+                        _ => Value::Scalar(Scalar::Array(builder.build())),
                     }
                 }),
             },
@@ -503,22 +629,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     );
 
-    fn eval_contains<T: ArgType>(
-        lhs: ValueRef<ArrayType<T>>,
-        rhs: ValueRef<T>,
-    ) -> Value<BooleanType>
-    where
-        T::Scalar: HashtableKeyable,
-    {
+    fn eval_contains<T: ArgType>(lhs: Value<ArrayType<T>>, rhs: Value<T>) -> Value<BooleanType>
+    where T::Scalar: HashtableKeyable {
         match lhs {
-            ValueRef::Scalar(array) => {
+            Value::Scalar(array) => {
                 let mut set = StackHashSet::<_, 128>::with_capacity(T::column_len(&array));
                 for val in T::iter_column(&array) {
                     let _ = set.set_insert(T::to_owned_scalar(val));
                 }
                 match rhs {
-                    ValueRef::Scalar(c) => Value::Scalar(set.contains(&T::to_owned_scalar(c))),
-                    ValueRef::Column(col) => {
+                    Value::Scalar(c) => Value::Scalar(set.contains(&c)),
+                    Value::Column(col) => {
                         let result = BooleanType::column_from_iter(
                             T::iter_column(&col).map(|c| set.contains(&T::to_owned_scalar(c))),
                             &[],
@@ -527,15 +648,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
             }
-            ValueRef::Column(array_column) => {
+            Value::Column(array_column) => {
                 let result = match rhs {
-                    ValueRef::Scalar(c) => BooleanType::column_from_iter(
-                        array_column.iter().map(|array| {
-                            T::iter_column(&array).contains(&T::upcast_gat(c.clone()))
-                        }),
+                    Value::Scalar(c) => BooleanType::column_from_iter(
+                        array_column
+                            .iter()
+                            .map(|array| T::iter_column(&array).contains(&T::to_scalar_ref(&c))),
                         &[],
                     ),
-                    ValueRef::Column(col) => BooleanType::column_from_iter(
+                    Value::Column(col) => BooleanType::column_from_iter(
                         array_column
                             .iter()
                             .zip(T::iter_column(&col))
@@ -573,18 +694,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| {
             match lhs {
-                ValueRef::Scalar(array) => {
+                Value::Scalar(array) => {
                     let mut set = StackHashSet::<_, 128>::with_capacity(StringType::column_len(&array));
                     for val in array.iter() {
                         let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
                         let _ = set.set_insert(key_ref);
                     }
                     match rhs {
-                        ValueRef::Scalar(val) =>  {
+                        Value::Scalar(val) =>  {
                             let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
                             Value::Scalar(set.contains( &key_ref))
                         },
-                        ValueRef::Column(col) => {
+                        Value::Column(col) => {
                             let result = BooleanType::column_from_iter(StringType::iter_column(&col).map(|val| {
                                 let key_ref = KeysRef::create(val.as_ptr() as usize, val.len());
                                 set.contains(&key_ref)
@@ -593,12 +714,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 },
-                ValueRef::Column(array_column) => {
+                Value::Column(array_column) => {
                     let result = match rhs {
-                        ValueRef::Scalar(c) => BooleanType::column_from_iter(array_column
+                        Value::Scalar(c) => BooleanType::column_from_iter(array_column
                             .iter()
-                            .map(|array| StringType::iter_column(&array).contains(&c)), &[]),
-                        ValueRef::Column(col) => BooleanType::column_from_iter(array_column
+                            .map(|array| StringType::iter_column(&array).contains(&c.as_str())), &[]),
+                        Value::Column(col) => BooleanType::column_from_iter(array_column
                             .iter()
                             .zip(StringType::iter_column(&col))
                             .map(|(array, c)| StringType::iter_column(&array).contains(&c)), &[]),
@@ -652,16 +773,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| {
             match lhs {
-                ValueRef::Scalar(array) => {
+                Value::Scalar(array) => {
                     let mut set = StackHashSet::<_, 128>::with_capacity(BooleanType::column_len(&array));
                     for val in array.iter() {
                         let _ = set.set_insert(val as u8);
                     }
                     match rhs {
-                        ValueRef::Scalar(val) =>  {
+                        Value::Scalar(val) =>  {
                             Value::Scalar(set.contains(&(val as u8)))
                         },
-                        ValueRef::Column(col) => {
+                        Value::Column(col) => {
                             let result = BooleanType::column_from_iter(BooleanType::iter_column(&col).map(|val| {
                                 set.contains(&(val as u8))
                             }), &[]);
@@ -669,12 +790,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
                 },
-                ValueRef::Column(array_column) => {
+                Value::Column(array_column) => {
                     let result = match rhs {
-                        ValueRef::Scalar(c) => BooleanType::column_from_iter(array_column
+                        Value::Scalar(c) => BooleanType::column_from_iter(array_column
                             .iter()
                             .map(|array| BooleanType::iter_column(&array).contains(&c)), &[]),
-                        ValueRef::Column(col) => BooleanType::column_from_iter(array_column
+                        Value::Column(col) => BooleanType::column_from_iter(array_column
                             .iter()
                             .zip(BooleanType::iter_column(&col))
                             .map(|(array, c)| BooleanType::iter_column(&array).contains(&c)), &[]),
@@ -761,19 +882,19 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn register_array_aggr(registry: &mut FunctionRegistry) {
     fn eval_array_aggr(
         name: &str,
-        args: &[ValueRef<AnyType>],
+        args: &[Value<AnyType>],
         ctx: &mut EvalContext,
     ) -> Value<AnyType> {
         match &args[0] {
-            ValueRef::Scalar(scalar) => match scalar {
-                ScalarRef::EmptyArray | ScalarRef::Null => {
+            Value::Scalar(scalar) => match &scalar {
+                Scalar::EmptyArray | Scalar::Null => {
                     if name == "count" {
                         Value::Scalar(Scalar::Number(NumberScalar::UInt64(0)))
                     } else {
                         Value::Scalar(Scalar::Null)
                     }
                 }
-                ScalarRef::Array(col) => {
+                Scalar::Array(col) => {
                     let len = col.len();
                     match eval_aggr(name, vec![], &[col.clone()], len) {
                         Ok((res_col, _)) => {
@@ -788,7 +909,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                 }
                 _ => unreachable!(),
             },
-            ValueRef::Column(column) => {
+            Value::Column(column) => {
                 let return_type = eval_aggr_return_type(name, &[column.data_type()]).unwrap();
                 let mut builder = ColumnBuilder::with_capacity(&return_type, column.len());
                 for arr in column.iter() {

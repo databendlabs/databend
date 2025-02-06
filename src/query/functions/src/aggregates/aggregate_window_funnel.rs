@@ -21,13 +21,13 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -36,6 +36,8 @@ use databend_common_expression::types::NumberType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::with_integer_mapped_type;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -51,6 +53,8 @@ use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_params;
 use crate::aggregates::assert_variadic_arguments;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::BUILTIN_FUNCTIONS;
 
@@ -177,17 +181,19 @@ where
         Ok(DataType::Number(NumberDataType::UInt8))
     }
 
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: AggrState) {
         place.write(AggregateWindowFunnelState::<T::Scalar>::new);
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateWindowFunnelState<T::Scalar>>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<
+            AggregateWindowFunnelState<T::Scalar>,
+        >()));
     }
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -235,7 +241,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -248,7 +254,7 @@ where
         let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
 
         for ((row, timestamp), place) in T::iter_column(&tcolumn).enumerate().zip(places.iter()) {
-            let state = (place.next(offset)).get::<AggregateWindowFunnelState<T::Scalar>>();
+            let state = AggrState::new(*place, loc).get::<AggregateWindowFunnelState<T::Scalar>>();
             let timestamp = T::to_owned_scalar(timestamp);
             for (i, filter) in dcolumns.iter().enumerate() {
                 if filter.get_bit(row) {
@@ -259,7 +265,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let tcolumn = T::try_downcast_column(&columns[0]).unwrap();
         let timestamp = unsafe { T::index_column_unchecked(&tcolumn, row) };
         let timestamp = T::to_owned_scalar(timestamp);
@@ -274,19 +280,19 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         let mut rhs: AggregateWindowFunnelState<T::Scalar> = borsh_deserialize_state(reader)?;
         state.merge(&mut rhs);
         Ok(())
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         let other = rhs.get::<AggregateWindowFunnelState<T::Scalar>>();
         state.merge(other);
@@ -294,7 +300,7 @@ where
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let builder = UInt8Type::try_downcast_builder(builder).unwrap();
         let result = self.get_event_level(place);
         builder.push(result);
@@ -305,7 +311,7 @@ where
         true
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         std::ptr::drop_in_place(state);
     }
@@ -370,7 +376,7 @@ where
     /// The level path must be 1---2---3---...---check_events_size, find the max event level that satisfied the path in the sliding window.
     /// If found, returns the max event level, else return 0.
     /// The Algorithm complexity is O(n).
-    fn get_event_level(&self, place: StateAddr) -> u8 {
+    fn get_event_level(&self, place: AggrState) -> u8 {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
         if state.events_list.is_empty() {
             return 0;

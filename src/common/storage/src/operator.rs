@@ -60,6 +60,7 @@ use opendal::Operator;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
+use crate::StorageHttpClient;
 
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
     LazyLock::new(|| register_counter_family("opendal_retries_count"));
@@ -186,7 +187,7 @@ pub fn init_azblob_operator(cfg: &StorageAzblobConfig) -> Result<impl Builder> {
         // Credential
         .account_name(&cfg.account_name)
         .account_key(&cfg.account_key)
-        .http_client(HttpClient::with(GLOBAL_HTTP_CLIENT.inner()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -211,7 +212,7 @@ fn init_gcs_operator(cfg: &StorageGcsConfig) -> Result<impl Builder> {
         .bucket(&cfg.bucket)
         .root(&cfg.root)
         .credential(&cfg.credential)
-        .http_client(HttpClient::with(GLOBAL_HTTP_CLIENT.inner()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -286,6 +287,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.region("us-east-1");
     }
 
+    // Always enable versioning support.
+    builder = builder.enable_versioning(true);
+
     // Credential.
     builder = builder
         .access_key_id(&cfg.access_key_id)
@@ -308,7 +312,7 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder = builder.enable_virtual_host_style();
     }
 
-    builder = builder.http_client(HttpClient::with(GLOBAL_HTTP_CLIENT.inner()));
+    builder = builder.http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -325,7 +329,7 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Builder> {
         // Credential
         .access_key_id(&cfg.access_key_id)
         .secret_access_key(&cfg.secret_access_key)
-        .http_client(HttpClient::with(GLOBAL_HTTP_CLIENT.inner()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -341,7 +345,7 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
         .root(&cfg.root)
         .server_side_encryption(&cfg.server_side_encryption)
         .server_side_encryption_key_id(&cfg.server_side_encryption_key_id)
-        .http_client(HttpClient::with(GLOBAL_HTTP_CLIENT.inner()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -358,10 +362,15 @@ fn init_moka_operator(v: &StorageMokaConfig) -> Result<impl Builder> {
 
 /// init_webhdfs_operator will init a WebHDFS operator
 fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Builder> {
-    let builder = services::Webhdfs::default()
+    let mut builder = services::Webhdfs::default()
         .endpoint(&v.endpoint_url)
         .root(&v.root)
-        .delegation(&v.delegation);
+        .delegation(&v.delegation)
+        .user_name(&v.user_name);
+
+    if v.disable_list_batch {
+        builder = builder.disable_list_batch();
+    }
 
     Ok(builder)
 }
@@ -374,7 +383,7 @@ fn init_cos_operator(cfg: &StorageCosConfig) -> Result<impl Builder> {
         .secret_key(&cfg.secret_key)
         .bucket(&cfg.bucket)
         .root(&cfg.root)
-        .http_client(HttpClient::with(GLOBAL_HTTP_CLIENT.inner()));
+        .http_client(HttpClient::with(StorageHttpClient::default()));
 
     Ok(builder)
 }
@@ -412,7 +421,9 @@ impl RetryInterceptor for DatabendRetryInterceptor {
 #[derive(Clone, Debug)]
 pub struct DataOperator {
     operator: Operator,
+    spill_operator: Option<Operator>,
     params: StorageParams,
+    spill_params: Option<StorageParams>,
 }
 
 impl DataOperator {
@@ -421,60 +432,69 @@ impl DataOperator {
         self.operator.clone()
     }
 
+    pub fn spill_operator(&self) -> Operator {
+        match &self.spill_operator {
+            Some(op) => op.clone(),
+            None => self.operator.clone(),
+        }
+    }
+
+    pub fn spill_params(&self) -> Option<&StorageParams> {
+        self.spill_params.as_ref()
+    }
+
     pub fn params(&self) -> StorageParams {
         self.params.clone()
     }
 
     #[async_backtrace::framed]
-    pub async fn init(conf: &StorageConfig) -> databend_common_exception::Result<()> {
-        GlobalInstance::set(Self::try_create(&conf.params).await?);
+    pub async fn init(
+        conf: &StorageConfig,
+        spill_params: Option<StorageParams>,
+    ) -> databend_common_exception::Result<()> {
+        GlobalInstance::set(Self::try_create(conf, spill_params).await?);
 
         Ok(())
     }
 
     /// Create a new data operator without check.
-    pub fn try_new(sp: &StorageParams) -> databend_common_exception::Result<DataOperator> {
-        let operator = init_operator(sp)?;
+    pub fn try_new(
+        conf: &StorageConfig,
+        spill_params: Option<StorageParams>,
+    ) -> databend_common_exception::Result<DataOperator> {
+        let operator = init_operator(&conf.params)?;
+        let spill_operator = spill_params.as_ref().map(init_operator).transpose()?;
 
         Ok(DataOperator {
             operator,
-            params: sp.clone(),
+            params: conf.params.clone(),
+            spill_operator,
+            spill_params,
         })
     }
 
     #[async_backtrace::framed]
-    pub async fn try_create(sp: &StorageParams) -> databend_common_exception::Result<DataOperator> {
-        let sp = sp.clone();
+    pub async fn try_create(
+        conf: &StorageConfig,
+        spill_params: Option<StorageParams>,
+    ) -> databend_common_exception::Result<DataOperator> {
+        let operator = init_operator(&conf.params)?;
+        check_operator(&operator, &conf.params).await?;
 
-        let operator = init_operator(&sp)?;
-
-        // OpenDAL will send a real request to underlying storage to check whether it works or not.
-        // If this check failed, it's highly possible that the users have configured it wrongly.
-        //
-        // Make sure the check is called inside GlobalIORuntime to prevent
-        // IO hang on reuse connection.
-        let op = operator.clone();
-        if let Err(cause) = GlobalIORuntime::instance()
-            .spawn(async move {
-                let res = op.stat("/").await;
-                match res {
-                    Ok(_) => Ok(()),
-                    Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
-                    Err(e) => Err(e),
-                }
-            })
-            .await
-            .expect("join must succeed")
-        {
-            return Err(ErrorCode::StorageUnavailable(format!(
-                "current configured storage is not available: config: {:?}, cause: {cause}",
-                sp
-            )));
-        }
+        let spill_operator = match &spill_params {
+            Some(params) => {
+                let op = init_operator(params)?;
+                check_operator(&op, params).await?;
+                Some(op)
+            }
+            None => None,
+        };
 
         Ok(DataOperator {
             operator,
-            params: sp.clone(),
+            params: conf.params.clone(),
+            spill_operator,
+            spill_params,
         })
     }
 
@@ -489,4 +509,34 @@ impl DataOperator {
     pub fn instance() -> DataOperator {
         GlobalInstance::get()
     }
+}
+
+pub async fn check_operator(
+    operator: &Operator,
+    params: &StorageParams,
+) -> databend_common_exception::Result<()> {
+    // OpenDAL will send a real request to underlying storage to check whether it works or not.
+    // If this check failed, it's highly possible that the users have configured it wrongly.
+    //
+    // Make sure the check is called inside GlobalIORuntime to prevent
+    // IO hang on reuse connection.
+    let op = operator.clone();
+
+    GlobalIORuntime::instance()
+        .spawn(async move {
+            let res = op.stat("/").await;
+            match res {
+                Ok(_) => Ok(()),
+                Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(()),
+                Err(e) => Err(e),
+            }
+        })
+        .await
+        .expect("join must succeed")
+        .map_err(|cause| {
+            ErrorCode::StorageUnavailable(format!(
+                "current configured storage is not available: config: {:?}, cause: {cause}",
+                params
+            ))
+        })
 }

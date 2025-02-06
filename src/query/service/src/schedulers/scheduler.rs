@@ -17,8 +17,6 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_sinks::EmptySink;
 use databend_common_sql::planner::query_executor::QueryExecutor;
 use databend_common_sql::Planner;
 use futures_util::TryStreamExt;
@@ -47,17 +45,8 @@ pub async fn build_query_pipeline(
     ignore_result: bool,
 ) -> Result<PipelineBuildResult> {
     let mut build_res = build_query_pipeline_without_render_result_set(ctx, plan).await?;
-    if matches!(plan, PhysicalPlan::UnionAll { .. }) {
-        // Union doesn't need to add extra processor to project the result.
-        // It will be handled in union processor.
-        if ignore_result {
-            build_res
-                .main_pipeline
-                .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
-        }
-        return Ok(build_res);
-    }
     let input_schema = plan.output_schema()?;
+
     PipelineBuilder::build_result_projection(
         &ctx.get_function_context()?,
         input_schema,
@@ -76,6 +65,10 @@ pub async fn build_query_pipeline_without_render_result_set(
     let build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan).await
     } else {
+        if plan.is_warehouse_distributed_plan() {
+            ctx.set_cluster(ctx.get_warehouse_cluster().await?);
+        }
+
         build_distributed_pipeline(ctx, plan).await
     }?;
     Ok(build_res)
@@ -114,13 +107,20 @@ pub async fn build_distributed_pipeline(
 
     let exchange_manager = ctx.get_exchange_manager();
 
-    let mut build_res = exchange_manager
+    match exchange_manager
         .commit_actions(ctx.clone(), fragments_actions)
-        .await?;
-
-    let settings = ctx.get_settings();
-    build_res.set_max_threads(settings.get_max_threads()? as usize);
-    Ok(build_res)
+        .await
+    {
+        Ok(mut build_res) => {
+            let settings = ctx.get_settings();
+            build_res.set_max_threads(settings.get_max_threads()? as usize);
+            Ok(build_res)
+        }
+        Err(error) => {
+            exchange_manager.on_finished_query(&ctx.get_id(), Some(error.clone()));
+            Err(error)
+        }
+    }
 }
 
 pub struct ServiceQueryExecutor {

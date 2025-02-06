@@ -18,6 +18,7 @@ use std::time::SystemTime;
 
 use databend_common_base::base::tokio::sync::RwLock;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -78,6 +79,7 @@ pub struct Progresses {
     pub write_progress: ProgressValues,
     pub result_progress: ProgressValues,
     pub total_scan: ProgressValues,
+    pub spill_progress: SpillProgress,
 }
 
 impl Progresses {
@@ -87,6 +89,7 @@ impl Progresses {
             write_progress: ctx.get_write_progress_value(),
             result_progress: ctx.get_result_progress_value(),
             total_scan: ctx.get_total_scan_value(),
+            spill_progress: ctx.get_total_spill_progress(),
         }
     }
 }
@@ -146,6 +149,7 @@ pub struct Executor {
 // may store these new session state, and pass it to the next http query request.
 #[derive(Debug, Clone)]
 pub struct ExecutorSessionState {
+    pub current_catalog: String,
     pub current_database: String,
     pub current_role: Option<String>,
     pub secondary_roles: Option<Vec<String>>,
@@ -158,6 +162,7 @@ pub struct ExecutorSessionState {
 impl ExecutorSessionState {
     pub fn new(session: Arc<Session>) -> Self {
         Self {
+            current_catalog: session.get_current_catalog(),
             current_database: session.get_current_database(),
             current_role: session.get_current_role().map(|r| r.name),
             secondary_roles: session.get_secondary_roles(),

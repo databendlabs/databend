@@ -63,7 +63,7 @@ impl Session {
         session_ctx: Box<SessionContext>,
         mysql_connection_id: Option<u32>,
     ) -> Result<Session> {
-        let status = Arc::new(Default::default());
+        let status = Default::default();
         Ok(Session {
             id,
             typ: RwLock::new(typ),
@@ -200,6 +200,10 @@ impl Session {
         self.session_ctx.get_current_catalog()
     }
 
+    pub fn set_current_catalog(&self, catalog_name: String) {
+        self.session_ctx.set_current_catalog(catalog_name)
+    }
+
     pub fn get_current_tenant(&self) -> Tenant {
         self.session_ctx.get_current_tenant()
     }
@@ -281,6 +285,16 @@ impl Session {
     }
 
     #[async_backtrace::framed]
+    pub async fn set_current_warehouse(&self, w: Option<String>) -> Result<()> {
+        self.privilege_mgr().set_current_warehouse(w).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_current_warehouse(&self) -> Option<String> {
+        self.session_ctx.get_current_warehouse()
+    }
+
+    #[async_backtrace::framed]
     pub async fn validate_privilege(
         &self,
         object: &GrantObject,
@@ -310,8 +324,13 @@ impl Session {
     }
 
     #[async_backtrace::framed]
-    pub async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
-        self.privilege_mgr().get_visibility_checker().await
+    pub async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker> {
+        self.privilege_mgr()
+            .get_visibility_checker(ignore_ownership)
+            .await
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {
@@ -387,7 +406,7 @@ impl Session {
                     id
                 } else {
                     return Err(ErrorCode::BadArguments(
-                        "can not use temp table in http handler if token is not used",
+                        "can not use temp table in http handler if cookie is not enabled",
                     ));
                 }
             }

@@ -2,42 +2,49 @@
 >>>> create database db01;
 >>>> drop database if exists dbnotexists;
 >>>> GRANT SELECT ON db01.tbnotexists TO 'test-user'
-Error: APIError: ResponseError with 1025: Unknown table 'tbnotexists'
+Error: APIError: QueryFailed: [1025]Unknown table 'tbnotexists'
 <<<<
 >>>> GRANT SELECT ON dbnotexists.* TO 'test-user'
-Error: APIError: ResponseError with 1003: Unknown database 'dbnotexists'
+Error: APIError: QueryFailed: [1003]Unknown database 'dbnotexists'
 <<<<
 === check list user's local stage ===
 === no err ===
 information_schema
 system
 test -- insert
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public]
+2
 1
 2
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
 1
 2
 test -- update
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Update] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Update] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+1
 2
 3
 test -- delete
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+1
 true
 test -- insert overwrite
+1
 2
+1
 3
 test -- optimize table
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Super] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
 true
 test -- select
 1
 1
 1
 1
+1
+1
 test -- select view
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default2'.'v_t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default2'.'v_t20_0012' for user 'test-user'@'%' with roles [public,test-role1,test-role2]
 1
 test -- clustering_information
 true
@@ -51,15 +58,15 @@ grant_db
 information_schema
 system
 test -- show tables from system
-Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
+Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
 test -- show tables from grant_db
 t
-Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
+Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'system'
 test -- show columns from one from system
 dummy	TINYINT UNSIGNED	NO		NULL	NULL
 c1	INT	NO		NULL	NULL
 0
-Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for table 'system.tasks'
+Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for table 'system.tasks'
 catalog	VARCHAR	NO		NULL	NULL
 cluster_by	VARCHAR	NO		NULL	NULL
 comment	VARCHAR	NO		NULL	NULL
@@ -67,6 +74,7 @@ created_on	TIMESTAMP	NO		NULL	NULL
 data_compressed_size	BIGINT UNSIGNED	YES		NULL	NULL
 data_size	BIGINT UNSIGNED	YES		NULL	NULL
 database	VARCHAR	NO		NULL	NULL
+database_id	BIGINT UNSIGNED	NO		NULL	NULL
 dropped_on	TIMESTAMP	YES		NULL	NULL
 engine	VARCHAR	NO		NULL	NULL
 engine_full	VARCHAR	NO		NULL	NULL
@@ -82,50 +90,61 @@ table_id	BIGINT UNSIGNED	NO		NULL	NULL
 table_type	VARCHAR	NO		NULL	NULL
 total_columns	BIGINT UNSIGNED	NO		NULL	NULL
 updated_on	TIMESTAMP	NO		NULL	NULL
-Error: APIError: ResponseError with 1063: Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
+Error: APIError: QueryFailed: [1063]Permission denied: User 'a'@'%' does not have the required privileges for database 'nogrant'
 1
 0
 0
 0
 === Test: show grants on privilege check ===
-Error: APIError: ResponseError with 1063: Permission denied: privilege USAGE is required on udf root_func for user b.
-Error: APIError: ResponseError with 1063: Permission denied: privilege READ is required on stage root_stage for user b. Or no need to show the stage privilege
-Error: APIError: ResponseError with 1063: Permission denied: No privilege on database root_db for user b.
-Error: APIError: ResponseError with 1063: Permission denied: No privilege on table root_table for user b.
-Error: APIError: ResponseError with 1063: Permission denied: No privilege on table root_table for user b.
-1	1	356
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Database|Table|UDF|Stage.
-Error: APIError: ResponseError with 1063: Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege USAGE is required on udf root_func for user b.
+Error: APIError: QueryFailed: [1063]Permission denied: privilege READ is required on stage root_stage for user b. Or no need to show the stage privilege
+Error: APIError: QueryFailed: [1063]Permission denied: No privilege on database root_db for user b.
+Error: APIError: QueryFailed: [1063]Permission denied: No privilege on table root_table for user b.
+Error: APIError: QueryFailed: [1063]Permission denied: No privilege on table root_table for user b.
+1	1	374
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t' for user 'b'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s3 for user 'b'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Warehouse|Database|Table|UDF|Stage.
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Select] is required on 'default'.'default'.'t1' for user 'b'@'%' with roles [public]
+0
+1
 a b/data_UUID_0000_00000000.parquet	1	0	NULL	NULL
 === check db/table_id ===
 Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
-CREATE system  USER b GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
-SELECT default  USER b GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+CREATE default  USER b GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
+SELECT system  USER b GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
 SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
 SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 SELECT,INSERT default.c.t  USER b GRANT SELECT,INSERT ON 'default'.'c'.'t' TO 'b'@'%'
 OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
+1
 Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
-CREATE system  USER b GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
-SELECT default  USER b GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+CREATE default  USER b GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
+SELECT system  USER b GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
 SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
 SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 SELECT,INSERT default.c.t1  USER b GRANT SELECT,INSERT ON 'default'.'c'.'t1' TO 'b'@'%'
 OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
+1
 2
 Read s3  USER b GRANT Read ON STAGE s3 TO 'b'@'%'
-CREATE system  USER b GRANT CREATE ON 'default'.'system'.* TO 'b'@'%'
-SELECT default  USER b GRANT SELECT ON 'default'.'default'.* TO 'b'@'%'
+CREATE default  USER b GRANT CREATE ON 'default'.'default'.* TO 'b'@'%'
+SELECT system  USER b GRANT SELECT ON 'default'.'system'.* TO 'b'@'%'
 SELECT,INSERT,DELETE default.default.t  USER b GRANT SELECT,INSERT,DELETE ON 'default'.'default'.'t' TO 'b'@'%'
 SELECT default.default.t1  USER b GRANT SELECT ON 'default'.'default'.'t1' TO 'b'@'%'
 SELECT,INSERT default.d.t1  USER b GRANT SELECT,INSERT ON 'default'.'d'.'t1' TO 'b'@'%'
 OWNERSHIP default.default.t2  USER b GRANT OWNERSHIP ON 'default'.'default'.'t2' TO 'b'@'%'
 1
+1
 2
 3
+=== set privilege check ===
+100
+100
+1
+1
+=== set privilege check succ ===

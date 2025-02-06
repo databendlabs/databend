@@ -17,7 +17,7 @@ use std::ops::Range;
 
 use super::binary::BinaryColumn;
 use super::binary::BinaryColumnBuilder;
-use super::binary::BinaryIterator;
+use super::binary::BinaryColumnIter;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -37,7 +37,7 @@ impl ValueType for BitmapType {
     type ScalarRef<'a> = &'a [u8];
     type Column = BinaryColumn;
     type Domain = ();
-    type ColumnIterator<'a> = BinaryIterator<'a>;
+    type ColumnIterator<'a> = BinaryColumnIter<'a>;
     type ColumnBuilder = BinaryColumnBuilder;
 
     #[inline]
@@ -161,7 +161,7 @@ impl ValueType for BitmapType {
     }
 
     fn column_memory_size(col: &Self::Column) -> usize {
-        col.data().len() + col.offsets().len() * 8
+        col.memory_size()
     }
 
     #[inline(always)]

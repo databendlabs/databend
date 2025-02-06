@@ -81,12 +81,15 @@ fn run_parser_with_dialect<P, O>(
     }
 }
 
+// UPDATE_GOLDENFILES=1 cargo test --package databend-common-ast --test it -- parser::test_statement
 #[test]
 fn test_statement() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("stmt.txt").unwrap();
     let cases = &[
         r#"show databases"#,
+        r#"show drop databases"#,
+        r#"show drop databases like 'db%'"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
         r#"show drop tables"#,
@@ -129,17 +132,14 @@ fn test_statement() {
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
-        r#"
-            create table if not exists a.b (a int) 's3://testbucket/admin/data/'
-                connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
-                location_prefix = 'db';
-        "#,
         r#"truncate table a;"#,
         r#"truncate table "a".b;"#,
         r#"drop table a;"#,
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
         r#"create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');"#,
+        r#"select current_catalog();"#,
+        r#"use catalog ctl;"#,
         r#"create database if not exists a;"#,
         r#"create database ctl.t engine = Default;"#,
         r#"create database t engine = Default;"#,
@@ -191,6 +191,8 @@ fn test_statement() {
         r#"select * from t4;"#,
         r#"select top 2 * from t4;"#,
         r#"select * from aa.bb;"#,
+        r#"from aa.bb select *;"#,
+        r#"from aa.bb"#,
         r#"select * from a, b, c;"#,
         r#"select * from a, b, c order by "db"."a"."c1";"#,
         r#"select * from a join b on a.a = b.a;"#,
@@ -200,9 +202,12 @@ fn test_statement() {
         r#"select * from a semi join b on a.a = b.a;"#,
         r#"select * from a left anti join b on a.a = b.a;"#,
         r#"select * from a anti join b on a.a = b.a;"#,
+        r#"SETTINGS (max_thread=1, timezone='Asia/Shanghai') select 1;"#,
+        r#"SETTINGS (max_thread=1) select * from a anti join b on a.a = b.a;"#,
         r#"select * from a right semi join b on a.a = b.a;"#,
         r#"select * from a right anti join b on a.a = b.a;"#,
         r#"select * from a full outer join b on a.a = b.a;"#,
+        r#"select * FROM fuse_compat_table ignore_result;"#,
         r#"select * from a inner join b on a.a = b.a;"#,
         r#"select * from a left outer join b using(a);"#,
         r#"select * from a right outer join b using(a);"#,
@@ -289,6 +294,7 @@ fn test_statement() {
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON *.* TO 'test-grant';"#,
@@ -552,6 +558,10 @@ fn test_statement() {
         r#"GRANT usage ON UDF a TO 'test-grant';"#,
         r#"REVOKE usage ON UDF a FROM 'test-grant';"#,
         r#"REVOKE all ON UDF a FROM 'test-grant';"#,
+        r#"GRANT all ON warehouse a TO role 'test-grant';"#,
+        r#"GRANT usage ON warehouse a TO role 'test-grant';"#,
+        r#"REVOKE usage ON warehouse a FROM role 'test-grant';"#,
+        r#"REVOKE all ON warehouse a FROM role 'test-grant';"#,
         r#"SHOW GRANTS ON TABLE db1.tb1;"#,
         r#"SHOW GRANTS ON DATABASE db;"#,
         r#"UPDATE db1.tb1 set a = a + 1, b = 2 WHERE c > 3;"#,
@@ -590,19 +600,23 @@ fn test_statement() {
         "#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
+        r#"SELECT * FROM t GROUP BY all"#,
+        r#"SELECT * FROM t GROUP BY a, b, c, d"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, c, d)"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS (a, b, (c, d))"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (c), (d, e))"#,
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
         r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
         r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
+        r#"SELECT * FROM t GROUP BY a, ROLLUP (b, c)"#,
+        r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b)), a, ROLLUP (b, c)"#,
         r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
         r#"CREATE OR REPLACE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
         r#"DESC MASKING POLICY email_mask"#,
         r#"DROP MASKING POLICY IF EXISTS email_mask"#,
         r#"CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
-        r#"CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
-        r#"ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
+        r#"CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2']::string as v1, b[0][1]::int as v2) FOR t"#,
+        r#"ALTER VIRTUAL COLUMN (a['k1']['k2'] as v1, b[0][1] as v2) FOR t"#,
         r#"DROP VIRTUAL COLUMN FOR t"#,
         r#"REFRESH VIRTUAL COLUMN FOR t"#,
         r#"CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
@@ -755,6 +769,8 @@ fn test_statement() {
         r#"SELECT first_value(d) respect nulls OVER (w) FROM e;"#,
         r#"SELECT sum(d) IGNORE NULLS OVER (w) FROM e;"#,
         r#"SELECT sum(d) OVER w FROM e WINDOW w AS (PARTITION BY f ORDER BY g);"#,
+        r#"SELECT number, rank() OVER (PARTITION BY number % 3 ORDER BY number)
+  FROM numbers(10) where number > 10 and number > 9 and number > 8;"#,
         r#"GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';"#,
@@ -763,6 +779,7 @@ fn test_statement() {
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));"#,
         r#"CREATE OR REPLACE FUNCTION isnotempty_test_replace AS(p) -> not(is_null(p))  DESC = 'This is a description';"#,
         r#"CREATE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"ALTER FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE OR REPLACE FUNCTION binary_reverse (BINARY) RETURNS BINARY LANGUAGE python HANDLER = 'binary_reverse' ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"CREATE file format my_orc type = orc"#,
         r#"CREATE file format my_orc type = orc missing_field_as=field_default"#,
@@ -788,6 +805,9 @@ fn test_statement() {
         "#,
         r#"DROP FUNCTION binary_reverse;"#,
         r#"DROP FUNCTION isnotempty;"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE FUNCTION IF NOT EXISTS my_agg (INT) STATE { s STRING, i INT NOT NULL } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
+        r#"ALTER FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript AS 'some code';"#,
         r#"
             EXECUTE IMMEDIATE
             $$
@@ -973,6 +993,8 @@ fn test_statement_error() {
         r#"REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;"#,
         r#"GRANT OWNERSHIP ON *.* TO ROLE 'd20_0015_owner';"#,
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)"#,
+        r#"CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';"#,
+        r#"CREATE FUNCTION my_agg (INT) STATE { s STRIN } RETURNS BOOLEAN LANGUAGE javascript ADDRESS = 'http://0.0.0.0:8815';"#,
         r#"drop table :a"#,
         r#"drop table IDENTIFIER(a)"#,
         r#"drop table IDENTIFIER(:a)"#,
@@ -1085,7 +1107,17 @@ fn test_query() {
         r#"select * from t1 except select * from t2"#,
         r#"select * from t1 union select * from t2 union select * from t3"#,
         r#"select * from t1 union select * from t2 union all select * from t3"#,
+        r#"select * from (
+                (SELECT f, g FROM union_fuzz_result1
+                EXCEPT
+                SELECT f, g FROM union_fuzz_result2)
+                UNION ALL
+                (SELECT f, g FROM union_fuzz_result2
+                EXCEPT
+                SELECT f, g FROM union_fuzz_result1)
+        )"#,
         r#"select * from t1 union select * from t2 intersect select * from t3"#,
+        r#"(select * from t1 union select * from t2) intersect select * from t3"#,
         r#"(select * from t1 union select * from t2) union select * from t3"#,
         r#"select * from t1 union (select * from t2 union select * from t3)"#,
         r#"SELECT * FROM ((SELECT *) EXCEPT (SELECT *)) foo"#,
@@ -1221,6 +1253,7 @@ fn test_expr() {
         r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
+        r#"QUANTILE_CONT(0.5)(salary) OVER (PARTITION BY department ORDER BY hire_date)"#,
         r#"ARRAY_APPLY([1,2,3], x -> x + 1)"#,
         r#"ARRAY_FILTER(col, y -> y % 2 = 0)"#,
         r#"(current_timestamp, current_timestamp(), now())"#,
@@ -1228,6 +1261,7 @@ fn test_expr() {
         r#"MAP_FILTER({1:1,2:2,3:4}, (k, v) -> k > v)"#,
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
+        r#"INTERVAL '1 YEAR'"#,
     ];
 
     for case in cases {

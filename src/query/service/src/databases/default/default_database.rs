@@ -99,26 +99,7 @@ impl DefaultDatabase {
             })
             .collect::<Vec<_>>();
 
-        if self.ctx.disable_table_info_refresh {
-            Ok(table_infos)
-        } else {
-            let mut refreshed = Vec::with_capacity(table_infos.len());
-            for table_info in table_infos {
-                refreshed.push(
-                    self.ctx
-                        .storage_factory
-                        .refresh_table_info(table_info.clone())
-                        .await
-                        .map_err(|err| {
-                            err.add_message_back(format!(
-                                "(while refresh table info on {})",
-                                table_info.name
-                            ))
-                        })?,
-                );
-            }
-            Ok(refreshed)
-        }
+        Ok(table_infos)
     }
 }
 #[async_trait::async_trait]
@@ -133,7 +114,7 @@ impl Database for DefaultDatabase {
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
         let storage = &self.ctx.storage_factory;
-        storage.get_table(table_info)
+        storage.get_table(table_info, self.ctx.disable_table_info_refresh)
     }
 
     // Get one table by db and table name.
@@ -165,15 +146,6 @@ impl Database for DefaultDatabase {
         };
 
         let table_info = Arc::new(table_info);
-
-        let table_info = if self.ctx.disable_table_info_refresh {
-            table_info
-        } else {
-            self.ctx
-                .storage_factory
-                .refresh_table_info(table_info)
-                .await?
-        };
 
         self.get_table_by_info(table_info.as_ref())
     }
@@ -221,7 +193,10 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables_history(
+        &self,
+        include_non_retainable: bool,
+    ) -> Result<Vec<Arc<dyn Table>>> {
         // `get_table_history` will not fetch the tables that created before the
         // "metasrv time travel functions" is added.
         // thus, only the table-infos of dropped tables are used.
@@ -230,10 +205,10 @@ impl Database for DefaultDatabase {
         let mut dropped = self
             .ctx
             .meta
-            .list_retainable_tables(ListTableReq::new(
-                self.get_tenant(),
-                self.db_info.database_id,
-            ))
+            .list_history_tables(
+                include_non_retainable,
+                ListTableReq::new(self.get_tenant(), self.db_info.database_id),
+            )
             .await?
             .into_iter()
             .filter(|i| i.value().drop_on.is_some())

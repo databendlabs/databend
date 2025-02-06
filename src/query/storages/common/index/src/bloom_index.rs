@@ -17,8 +17,6 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,6 +25,8 @@ use databend_common_expression::eval_function;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::AnyType;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::NullableType;
@@ -272,11 +272,15 @@ impl BloomIndex {
 
             // create filter per column
             let mut filter_builder = Xor8Builder::create();
-            if validity.as_ref().map(|v| v.unset_bits()).unwrap_or(0) > 0 {
+            if validity.as_ref().map(|v| v.null_count()).unwrap_or(0) > 0 {
                 let validity = validity.unwrap();
                 let it = column.deref().iter().zip(validity.iter()).map(
                     |(v, b)| {
-                        if !b { &0 } else { v }
+                        if !b {
+                            &0
+                        } else {
+                            v
+                        }
                     },
                 );
                 filter_builder.add_digests(it);
@@ -545,7 +549,7 @@ impl BloomIndex {
     /// If it does, the bloom index for the column will not be established.
     fn check_large_string(column: &Column) -> bool {
         if let Column::String(v) = &column {
-            let bytes_per_row = v.data().len() / v.len().max(1);
+            let bytes_per_row = v.total_bytes_len() / v.len().max(1);
             if bytes_per_row > 256 {
                 return true;
             }
@@ -568,30 +572,24 @@ fn visit_expr_column_eq_constant(
             return_type,
             ..
         } if id.name() == "eq" => match args.as_slice() {
-            [
-                Expr::ColumnRef {
-                    id,
-                    data_type: column_type,
-                    ..
-                },
-                Expr::Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                },
-            ]
-            | [
-                Expr::Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                },
-                Expr::ColumnRef {
-                    id,
-                    data_type: column_type,
-                    ..
-                },
-            ] => {
+            [Expr::ColumnRef {
+                id,
+                data_type: column_type,
+                ..
+            }, Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }]
+            | [Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }, Expr::ColumnRef {
+                id,
+                data_type: column_type,
+                ..
+            }] => {
                 // decimal don't respect datatype equal
                 // debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
@@ -603,22 +601,16 @@ fn visit_expr_column_eq_constant(
                     }
                 }
             }
-            [
-                Expr::FunctionCall { id, args, .. },
-                Expr::Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                },
-            ]
-            | [
-                Expr::Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                },
-                Expr::FunctionCall { id, args, .. },
-            ] => {
+            [Expr::FunctionCall { id, args, .. }, Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }]
+            | [Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }, Expr::FunctionCall { id, args, .. }] => {
                 if id.name() == "get" {
                     if let Some(new_expr) =
                         visit_map_column(*span, args, scalar, scalar_type, return_type, visitor)?
@@ -628,42 +620,36 @@ fn visit_expr_column_eq_constant(
                     }
                 }
             }
-            [
-                Expr::Cast {
-                    expr:
-                        box Expr::FunctionCall {
-                            id,
-                            args,
-                            return_type,
-                            ..
-                        },
-                    dest_type,
-                    ..
-                },
-                Expr::Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                },
-            ]
-            | [
-                Expr::Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                },
-                Expr::Cast {
-                    expr:
-                        box Expr::FunctionCall {
-                            id,
-                            args,
-                            return_type,
-                            ..
-                        },
-                    dest_type,
-                    ..
-                },
-            ] => {
+            [Expr::Cast {
+                expr:
+                    box Expr::FunctionCall {
+                        id,
+                        args,
+                        return_type,
+                        ..
+                    },
+                dest_type,
+                ..
+            }, Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }]
+            | [Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }, Expr::Cast {
+                expr:
+                    box Expr::FunctionCall {
+                        id,
+                        args,
+                        return_type,
+                        ..
+                    },
+                dest_type,
+                ..
+            }] => {
                 if id.name() == "get" {
                     // Only support cast variant value in map to string value
                     if return_type.remove_nullable() != DataType::Variant

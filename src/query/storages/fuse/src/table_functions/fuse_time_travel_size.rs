@@ -15,10 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
@@ -30,7 +32,6 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use futures_util::TryStreamExt;
 use log::info;
-use opendal::Metakey;
 use opendal::Operator;
 
 use super::parse_opt_opt_args;
@@ -39,6 +40,7 @@ use crate::table_functions::string_literal;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
+use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 
 pub struct FuseTimeTravelSizeArgs {
     pub database_name: Option<String>,
@@ -81,14 +83,20 @@ impl SimpleArgFunc for FuseTimeTravelSize {
         TableSchemaRefExt::create(vec![
             TableField::new("database_name", TableDataType::String),
             TableField::new("table_name", TableDataType::String),
+            TableField::new("is_dropped", TableDataType::Boolean),
             TableField::new(
                 "time_travel_size",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
                 "latest_snapshot_size",
-                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
             ),
+            TableField::new(
+                "data_retention_period_in_hours",
+                TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
+            ),
+            TableField::new("error", TableDataType::String.wrap_nullable()),
         ])
     }
 
@@ -100,8 +108,11 @@ impl SimpleArgFunc for FuseTimeTravelSize {
     ) -> Result<DataBlock> {
         let mut database_names = Vec::new();
         let mut table_names = Vec::new();
+        let mut is_droppeds = Vec::new();
         let mut sizes = Vec::new();
         let mut latest_snapshot_sizes = Vec::new();
+        let mut data_retention_period_in_hours = Vec::new();
+        let mut errors = Vec::new();
         let catalog = ctx.get_default_catalog()?;
         let dbs = match &args.database_name {
             Some(db_name) => {
@@ -120,6 +131,9 @@ impl SimpleArgFunc for FuseTimeTravelSize {
             }
         };
         for db in dbs {
+            if db.name() == "system" || db.name() == "information_schema" {
+                continue;
+            }
             let tables = match &args.table_name {
                 Some(table_name) => {
                     let start = std::time::Instant::now();
@@ -129,7 +143,7 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                 }
                 None => {
                     let start = std::time::Instant::now();
-                    let tables = db.list_tables().await?;
+                    let tables = db.list_tables_history(true).await?;
                     info!("list_tables cost: {:?}", start.elapsed());
                     tables
                 }
@@ -144,49 +158,82 @@ impl SimpleArgFunc for FuseTimeTravelSize {
                     continue;
                 }
                 let (time_travel_size, latest_snapshot_size) = calc_tbl_size(fuse_table).await?;
+                let data_retention_period_in_hour = fuse_table
+                    .table_info
+                    .meta
+                    .options
+                    .get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS)
+                    .map(|v| v.parse::<u64>())
+                    .transpose()?;
+                let is_dropped = fuse_table.table_info.meta.drop_on.is_some();
                 database_names.push(db.name().to_string());
                 table_names.push(tbl.name().to_string());
+                is_droppeds.push(is_dropped);
                 sizes.push(time_travel_size);
-                latest_snapshot_sizes.push(latest_snapshot_size);
+                data_retention_period_in_hours.push(data_retention_period_in_hour);
+                match latest_snapshot_size {
+                    Ok(size) => {
+                        latest_snapshot_sizes.push(Some(size));
+                        errors.push(None);
+                    }
+                    Err(e) => {
+                        latest_snapshot_sizes.push(None);
+                        errors.push(Some(e.to_string()));
+                    }
+                }
             }
         }
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(database_names),
             StringType::from_data(table_names),
+            BooleanType::from_data(is_droppeds),
             UInt64Type::from_data(sizes),
-            UInt64Type::from_data(latest_snapshot_sizes),
+            UInt64Type::from_opt_data(latest_snapshot_sizes),
+            UInt64Type::from_opt_data(data_retention_period_in_hours),
+            StringType::from_opt_data(errors),
         ]))
     }
 }
 
 async fn get_time_travel_size(storage_prefix: &str, op: &Operator) -> Result<u64> {
-    let mut lister = op
-        .lister_with(storage_prefix)
-        .recursive(true)
-        .metakey(Metakey::ContentLength)
-        .await?;
+    let mut lister = op.lister_with(storage_prefix).recursive(true).await?;
     let mut size = 0;
     while let Some(entry) = lister.try_next().await? {
-        size += entry.metadata().content_length();
+        // Skip directories while calculating size
+        if entry.metadata().is_dir() {
+            continue;
+        }
+        let mut content_length = entry.metadata().content_length();
+        if content_length == 0 {
+            content_length = op.stat(entry.path()).await?.content_length();
+        }
+        size += content_length;
     }
     Ok(size)
 }
 
-async fn calc_tbl_size(tbl: &FuseTable) -> Result<(u64, u64)> {
+async fn calc_tbl_size(tbl: &FuseTable) -> Result<(u64, Result<u64>)> {
+    info!(
+        "fuse_time_travel_size start calc_tbl_size:{}",
+        tbl.get_table_info().desc
+    );
     let operator = tbl.get_operator();
     let storage_prefix = tbl.get_storage_prefix();
     let start = std::time::Instant::now();
     let time_travel_size = get_time_travel_size(storage_prefix, &operator).await?;
     info!("get_time_travel_size cost: {:?}", start.elapsed());
-    let snapshot_location = tbl.snapshot_loc().await?;
+    let snapshot_location = tbl.snapshot_loc();
     let latest_snapshot_size = match snapshot_location {
         Some(snapshot_location) => {
             let start = std::time::Instant::now();
-            let (snapshot, _) = SnapshotsIO::read_snapshot(snapshot_location, operator).await?;
+            info!("fuse_time_travel_size will read: {}", snapshot_location);
+            let snapshot = SnapshotsIO::read_snapshot(snapshot_location, operator).await;
             info!("read_snapshot cost: {:?}", start.elapsed());
-            snapshot.summary.compressed_byte_size + snapshot.summary.index_size
+            snapshot.map(|(snapshot, _)| {
+                snapshot.summary.compressed_byte_size + snapshot.summary.index_size
+            })
         }
-        None => 0,
+        None => Ok(0),
     };
     Ok((time_travel_size, latest_snapshot_size))
 }

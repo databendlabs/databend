@@ -75,7 +75,7 @@ pub fn check<Index: ColumnIndex>(
             args,
             params,
         } => {
-            let args_expr: Vec<_> = args
+            let mut args_expr: Vec<_> = args
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
@@ -84,41 +84,26 @@ pub fn check<Index: ColumnIndex>(
             // c:int16 = 12456 will be resolve as `to_int32(c) == to_int32(12456)`
             // This may hurt the bloom filter, we should try cast to literal as the datatype of column
             if name == "eq" && args_expr.len() == 2 {
-                match args_expr.as_slice() {
-                    [
-                        e,
-                        Expr::Constant {
-                            span,
-                            scalar,
-                            data_type: src_ty,
-                        },
-                    ]
-                    | [
-                        Expr::Constant {
-                            span,
-                            scalar,
-                            data_type: src_ty,
-                        },
-                        e,
-                    ] => {
-                        let src_ty = src_ty.remove_nullable();
+                match args_expr.as_mut_slice() {
+                    [e, Expr::Constant {
+                        span,
+                        scalar,
+                        data_type,
+                    }]
+                    | [Expr::Constant {
+                        span,
+                        scalar,
+                        data_type,
+                    }, e] => {
+                        let src_ty = data_type.remove_nullable();
                         let dest_ty = e.data_type().remove_nullable();
 
                         if dest_ty.is_integer() && src_ty.is_integer() {
-                            if let Ok(scalar) =
+                            if let Ok(casted_scalar) =
                                 cast_scalar(*span, scalar.clone(), dest_ty, fn_registry)
                             {
-                                return check_function(
-                                    *span,
-                                    name,
-                                    params,
-                                    &[e.clone(), Expr::Constant {
-                                        span: *span,
-                                        data_type: scalar.as_ref().infer_data_type(),
-                                        scalar,
-                                    }],
-                                    fn_registry,
-                                );
+                                *scalar = casted_scalar;
+                                *data_type = scalar.as_ref().infer_data_type();
                             }
                         }
                     }
@@ -196,6 +181,15 @@ pub fn check_cast<Index: ColumnIndex>(
             }
         }
 
+        if !can_cast_to(expr.data_type(), dest_type) {
+            return Err(ErrorCode::BadArguments(format!(
+                "unable to cast type `{}` to type `{}`",
+                expr.data_type(),
+                dest_type,
+            ))
+            .set_span(span));
+        }
+
         Ok(Expr::Cast {
             span,
             is_try,
@@ -256,7 +250,11 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
             ErrorCode::InvalidArgument(format!("Expect {}, but got {}", T::data_type(), origin_ty))
                 .set_span(span)
         }),
-        _ => Err(ErrorCode::InvalidArgument("Need constant number").set_span(span)),
+        _ => Err(ErrorCode::InvalidArgument(format!(
+            "Need constant number, but got {}",
+            expr.sql_display()
+        ))
+        .set_span(span)),
     }
 }
 
@@ -549,6 +547,34 @@ pub fn unify(
     }
 }
 
+fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
+    match (src_ty, dest_ty) {
+        (src_ty, dest_ty) if src_ty == dest_ty => true,
+
+        (DataType::Null, _)
+        | (DataType::EmptyArray, DataType::Array(_))
+        | (DataType::EmptyMap, DataType::Map(_))
+        | (DataType::Variant, DataType::Array(_))
+        | (DataType::Variant, DataType::Map(_)) => true,
+
+        (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
+            if fields_src_ty.len() == fields_dest_ty.len() =>
+        {
+            true
+        }
+
+        (DataType::Nullable(box inner_src_ty), DataType::Nullable(box inner_dest_ty))
+        | (DataType::Nullable(box inner_src_ty), inner_dest_ty)
+        | (inner_src_ty, DataType::Nullable(box inner_dest_ty))
+        | (DataType::Array(box inner_src_ty), DataType::Array(box inner_dest_ty))
+        | (DataType::Map(box inner_src_ty), DataType::Map(box inner_dest_ty)) => {
+            can_cast_to(inner_src_ty, inner_dest_ty)
+        }
+
+        (src_ty, dest_ty) => get_simple_cast_function(false, src_ty, dest_ty).is_some(),
+    }
+}
+
 pub fn can_auto_cast_to(
     src_ty: &DataType,
     dest_ty: &DataType,
@@ -740,6 +766,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "to_float32",
     "to_float64",
     "to_timestamp",
+    "to_interval",
     "to_date",
     "to_variant",
     "to_boolean",

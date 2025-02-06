@@ -12,7 +12,7 @@ test = true
 
 [features]
 tracing = ["tokio/tracing"]
-jemalloc = []
+jemalloc = ["tikv-jemalloc-sys", "tikv-jemalloc-ctl"]
 disable_initial_exec_tls = ["tikv-jemalloc-sys/disable_initial_exec_tls"]
 memory-profiling = [
     "tikv-jemalloc-sys/stats",
@@ -26,6 +26,8 @@ databend-common-exception = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 borsh = { workspace = true }
+bytemuck = { workspace = true }
+bytes = { workspace = true }
 bytesize = { workspace = true }
 chrono = { workspace = true }
 ctrlc = { workspace = true }
@@ -54,8 +56,8 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 state = { workspace = true }
-tikv-jemalloc-ctl = { workspace = true }
-tikv-jemalloc-sys = { workspace = true }
+tikv-jemalloc-ctl = { workspace = true, optional = true }
+tikv-jemalloc-sys = { workspace = true, optional = true }
 tokio = { workspace = true }
 unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
@@ -66,6 +68,7 @@ procfs = { workspace = true }
 [dev-dependencies]
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+quickcheck = { workspace = true }
 rand = { workspace = true }
 serde_test = { workspace = true }
 

@@ -72,6 +72,7 @@ use databend_common_meta_app::schema::LockInfo;
 use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::RenameDatabaseReply;
 use databend_common_meta_app::schema::RenameDatabaseReq;
+use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReply;
 use databend_common_meta_app::schema::RenameTableReq;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
@@ -152,6 +153,11 @@ impl Catalog for ImmutableCatalog {
         CatalogInfo::default().into()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        let me = self.as_ref().clone();
+        Ok(Arc::new(me))
+    }
+
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         match db_name {
@@ -162,6 +168,10 @@ impl Catalog for ImmutableCatalog {
                 db_name
             ))),
         }
+    }
+
+    async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
+        Ok(vec![self.sys_db.clone(), self.info_schema_db.clone()])
     }
 
     #[async_backtrace::framed]
@@ -209,11 +219,14 @@ impl Catalog for ImmutableCatalog {
         &self,
         _tenant: &Tenant,
         table_ids: &[MetaId],
+        _get_dropped_table: bool,
     ) -> Result<Vec<Option<String>>> {
         let mut table_name = Vec::with_capacity(table_ids.len());
         for id in table_ids {
             if let Some(table) = self.sys_db_meta.get_by_id(id) {
                 table_name.push(Some(table.name().to_string()));
+            } else {
+                table_name.push(None);
             }
         }
         Ok(table_name)
@@ -260,6 +273,8 @@ impl Catalog for ImmutableCatalog {
                 res.push(Some("system".to_string()));
             } else if self.info_schema_db.get_db_info().database_id.db_id == *id {
                 res.push(Some("information_schema".to_string()));
+            } else {
+                res.push(None);
             }
         }
         Ok(res)
@@ -564,6 +579,10 @@ impl Catalog for ImmutableCatalog {
         &self,
         _req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
+        unimplemented!()
+    }
+
+    async fn rename_dictionary(&self, _req: RenameDictionaryReq) -> Result<()> {
         unimplemented!()
     }
 }

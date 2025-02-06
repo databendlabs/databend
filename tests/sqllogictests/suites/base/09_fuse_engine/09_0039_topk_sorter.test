@@ -39,5 +39,18 @@ select * from test where url like '%google%' order by event_time limit 10;
 0 2024-01-03 00:00:00.000000 http://www.google.com/xxx/
 0 2024-01-04 00:00:00.000000 http://www.google.com/xxx/
 
+
+statement ok
+create table test_k storage_format = 'native' as select * from test;
+
+
+query ITT
+select * from test_k where url like '%google%' order by event_time limit 1;
+----
+0 2024-01-01 00:00:00.000000 http://www.google.com/xxx/
+
 statement ok
 drop table test
+
+statement ok
+drop table test_k

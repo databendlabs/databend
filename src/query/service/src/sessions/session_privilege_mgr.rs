@@ -75,9 +75,13 @@ pub trait SessionPrivilegeManager {
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
-    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
+    async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker>;
 
     // fn show_grants(&self);
+    async fn set_current_warehouse(&self, warehouse: Option<String>) -> Result<()>;
 }
 
 pub struct SessionPrivilegeManagerImpl<'a> {
@@ -133,7 +137,7 @@ impl<'a> SessionPrivilegeManagerImpl<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
+impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
     // granted by external authenticator, it will overwrite the current user's granted roles, and
@@ -220,6 +224,30 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
         let tenant = self.session_ctx.get_current_tenant();
         let effective_roles = role_cache.find_related_roles(&tenant, &role_names).await?;
         Ok(effective_roles)
+    }
+
+    async fn set_current_warehouse(&self, warehouse: Option<String>) -> Result<()> {
+        let warehouse = match &warehouse {
+            Some(warehouse) => {
+                let effective_roles = self.get_all_effective_roles().await?;
+                effective_roles.iter().find_map(|role| {
+                    role.grants.entries().iter().find_map(|grant| {
+                        if let GrantObject::Warehouse(rw) = grant.object() {
+                            if warehouse == rw {
+                                Some(warehouse.to_string())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                })
+            }
+            None => None,
+        };
+        self.session_ctx.set_current_warehouse(warehouse);
+        Ok(())
     }
 
     // Returns all the roles the current session has. If the user have been granted auth_role,
@@ -336,27 +364,31 @@ impl<'a> SessionPrivilegeManager for SessionPrivilegeManagerImpl<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+    async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+    ) -> Result<GrantObjectVisibilityChecker> {
         // TODO(liyz): is it check the visibility according onwerships?
-        let user_api = UserApiProvider::instance();
-        let ownerships = user_api
-            .role_api(&self.session_ctx.get_current_tenant())
-            .get_ownerships()
-            .await?;
         let roles = self.get_all_effective_roles().await?;
         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
 
-        let ownership_objects = if roles_name.contains(&"account_admin".to_string()) {
-            vec![]
-        } else {
-            let mut ownership_objects = vec![];
-            for ownership in ownerships {
-                if roles_name.contains(&ownership.data.role) {
-                    ownership_objects.push(ownership.data.object);
+        let ownership_objects =
+            if roles_name.contains(&"account_admin".to_string()) || ignore_ownership {
+                vec![]
+            } else {
+                let user_api = UserApiProvider::instance();
+                let ownerships = user_api
+                    .role_api(&self.session_ctx.get_current_tenant())
+                    .get_ownerships()
+                    .await?;
+                let mut ownership_objects = vec![];
+                for ownership in ownerships {
+                    if roles_name.contains(&ownership.data.role) {
+                        ownership_objects.push(ownership.data.object);
+                    }
                 }
-            }
-            ownership_objects
-        };
+                ownership_objects
+            };
 
         Ok(GrantObjectVisibilityChecker::new(
             &self.get_current_user()?,

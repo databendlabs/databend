@@ -105,8 +105,6 @@ impl Binder {
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
                         aliases,
-                        self.m_cte_bound_ctx.clone(),
-                        self.ctes_map.clone(),
                     );
                     let (bound_expr, _) = scalar_binder.bind(&order.expr)?;
 
@@ -149,6 +147,10 @@ impl Binder {
                                 },
                             )
                             .map_err(|e| ErrorCode::SemanticError(e.message()))?;
+
+                        if let ScalarExpr::ConstantExpr(..) = rewrite_scalar {
+                            continue;
+                        }
 
                         let column_binding =
                             if let ScalarExpr::BoundColumnRef(col) = &rewrite_scalar {
@@ -217,7 +219,7 @@ impl Binder {
             limit: None,
             after_exchange: None,
             pre_projection: None,
-            window_partition: vec![],
+            window_partition: None,
         };
         let new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child));
         Ok(new_expr)
@@ -310,7 +312,7 @@ impl Binder {
                     Ok(UDFCall {
                         span: udf.span,
                         name: udf.name.clone(),
-                        func_name: udf.func_name.clone(),
+                        handler: udf.handler.clone(),
                         display_name: udf.display_name.clone(),
                         udf_type: udf.udf_type.clone(),
                         arg_types: udf.arg_types.clone(),

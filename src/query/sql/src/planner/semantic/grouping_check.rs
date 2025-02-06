@@ -39,7 +39,7 @@ impl<'a> GroupingChecker<'a> {
     }
 }
 
-impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
+impl VisitorMut<'_> for GroupingChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         if let Some(index) = self.bind_context.aggregate_info.group_items_map.get(expr) {
             let column = &self.bind_context.aggregate_info.group_items[*index];
@@ -70,55 +70,57 @@ impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
             return Ok(());
         }
 
-        if let ScalarExpr::WindowFunction(window) = expr {
-            if let Some(column) = self
-                .bind_context
-                .windows
-                .window_functions_map
-                .get(&window.display_name)
-            {
-                // The exprs in `win` has already been rewrittern to `BoundColumnRef` in `WindowRewriter`.
-                // So we need to check the exprs in `bind_context.windows`
-                let mut window_info = self.bind_context.windows.window_functions[*column].clone();
-                // Just check if the exprs are in grouping items.
-                for part in window_info.partition_by_items.iter_mut() {
-                    self.visit(&mut part.scalar)?;
-                }
-                // Just check if the exprs are in grouping items.
-                for order in window_info.order_by_items.iter_mut() {
-                    self.visit(&mut order.order_by_item.scalar)?;
-                }
-                // Just check if the exprs are in grouping items.
-                for arg in window_info.arguments.iter_mut() {
-                    self.visit(&mut arg.scalar)?;
+        match expr {
+            ScalarExpr::WindowFunction(window) => {
+                if let Some(column) = self
+                    .bind_context
+                    .windows
+                    .window_functions_map
+                    .get(&window.display_name)
+                {
+                    // The exprs in `win` has already been rewrittern to `BoundColumnRef` in `WindowRewriter`.
+                    // So we need to check the exprs in `bind_context.windows`
+                    let mut window_info =
+                        self.bind_context.windows.window_functions[*column].clone();
+                    // Just check if the exprs are in grouping items.
+                    for part in window_info.partition_by_items.iter_mut() {
+                        self.visit(&mut part.scalar)?;
+                    }
+                    // Just check if the exprs are in grouping items.
+                    for order in window_info.order_by_items.iter_mut() {
+                        self.visit(&mut order.order_by_item.scalar)?;
+                    }
+                    // Just check if the exprs are in grouping items.
+                    for arg in window_info.arguments.iter_mut() {
+                        self.visit(&mut arg.scalar)?;
+                    }
+
+                    let column_binding = ColumnBindingBuilder::new(
+                        window.display_name.clone(),
+                        window_info.index,
+                        Box::new(window_info.func.return_type()),
+                        Visibility::Visible,
+                    )
+                    .build();
+                    *expr = BoundColumnRef {
+                        span: None,
+                        column: column_binding,
+                    }
+                    .into();
+                    return Ok(());
                 }
 
-                let column_binding = ColumnBindingBuilder::new(
-                    window.display_name.clone(),
-                    window_info.index,
-                    Box::new(window_info.func.return_type()),
-                    Visibility::Visible,
-                )
-                .build();
-                *expr = BoundColumnRef {
-                    span: None,
-                    column: column_binding,
-                }
-                .into();
-                return Ok(());
+                return Err(ErrorCode::Internal("Group Check: Invalid window function"));
             }
+            ScalarExpr::AggregateFunction(agg) => {
+                let Some(agg_func) = self
+                    .bind_context
+                    .aggregate_info
+                    .get_aggregate_function(&agg.display_name)
+                else {
+                    return Err(ErrorCode::Internal("Invalid aggregate function"));
+                };
 
-            return Err(ErrorCode::Internal("Group Check: Invalid window function"));
-        }
-
-        if let ScalarExpr::AggregateFunction(agg) = expr {
-            if let Some(column) = self
-                .bind_context
-                .aggregate_info
-                .aggregate_functions_map
-                .get(&agg.display_name)
-            {
-                let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
                 let column_binding = ColumnBindingBuilder::new(
                     agg.display_name.clone(),
                     agg_func.index,
@@ -133,8 +135,48 @@ impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
                 .into();
                 return Ok(());
             }
+            ScalarExpr::UDAFCall(udaf) => {
+                let Some(agg_func) = self
+                    .bind_context
+                    .aggregate_info
+                    .get_aggregate_function(&udaf.display_name)
+                else {
+                    return Err(ErrorCode::Internal("Invalid udaf function"));
+                };
 
-            return Err(ErrorCode::Internal("Invalid aggregate function"));
+                let column_binding = ColumnBindingBuilder::new(
+                    udaf.display_name.clone(),
+                    agg_func.index,
+                    Box::new(agg_func.scalar.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
+                *expr = BoundColumnRef {
+                    span: None,
+                    column: column_binding,
+                }
+                .into();
+                return Ok(());
+            }
+            ScalarExpr::BoundColumnRef(column_ref) => {
+                if let Some(index) = self
+                    .bind_context
+                    .srf_info
+                    .srfs_map
+                    .get(&column_ref.column.column_name)
+                {
+                    // If the srf has been rewrote as a column,
+                    // check whether the srf arguments are group item.
+                    let srf_item = &self.bind_context.srf_info.srfs[*index];
+                    if let ScalarExpr::FunctionCall(func) = &srf_item.scalar {
+                        for mut arg in func.arguments.clone() {
+                            walk_expr_mut(self, &mut arg)?;
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+            _ => {}
         }
 
         walk_expr_mut(self, expr)
@@ -144,8 +186,8 @@ impl<'a> VisitorMut<'_> for GroupingChecker<'a> {
         if self
             .bind_context
             .aggregate_info
-            .aggregate_functions_map
-            .contains_key(&column.column.column_name)
+            .get_aggregate_function(&column.column.column_name)
+            .is_some()
         {
             // Be replaced by `WindowRewriter`.
             return Ok(());

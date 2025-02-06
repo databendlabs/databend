@@ -37,9 +37,11 @@ pub async fn read_metadata_async_cached(
     operator: &Operator,
     file_size: Option<u64>,
 ) -> Result<Arc<ParquetMetaData>> {
-    let reader = MetaReader::meta_data_reader(operator.clone());
+    let info = operator.info();
+    let location = format!("{}/{}/{}", info.name(), info.root(), path);
+    let reader = MetaReader::meta_data_reader(operator.clone(), location.len() - path.len());
     let load_params = LoadParams {
-        location: path.to_owned(),
+        location,
         len_hint: file_size,
         ver: 0,
         put_cache: true,
@@ -101,7 +103,7 @@ pub async fn read_metas_in_parallel(
     Ok(metas)
 }
 
-fn check_parquet_schema(
+pub(crate) fn check_parquet_schema(
     expect: &SchemaDescriptor,
     actual: &SchemaDescriptor,
     path: &str,
@@ -246,15 +248,15 @@ fn check_memory_usage(max_memory_usage: u64) -> Result<()> {
     Ok(())
 }
 
-pub struct LoaderWrapper<T>(T);
+pub struct LoaderWrapper<T>(T, usize);
 pub type ParquetMetaReader = InMemoryItemCacheReader<ParquetMetaData, LoaderWrapper<Operator>>;
 
 pub struct MetaReader;
 impl MetaReader {
-    pub fn meta_data_reader(dal: Operator) -> ParquetMetaReader {
+    pub fn meta_data_reader(dal: Operator, prefix_len: usize) -> ParquetMetaReader {
         ParquetMetaReader::new(
             CacheManager::instance().get_parquet_meta_data_cache(),
-            LoaderWrapper(dal),
+            LoaderWrapper(dal, prefix_len),
         )
     }
 }
@@ -263,15 +265,12 @@ impl MetaReader {
 impl Loader<ParquetMetaData> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<ParquetMetaData> {
+        let location = &params.location[self.1..];
         let size = match params.len_hint {
             Some(v) => v,
-            None => self.0.stat(&params.location).await?.content_length(),
+            None => self.0.stat(location).await?.content_length(),
         };
-        databend_common_storage::parquet_rs::read_metadata_async(
-            &params.location,
-            &self.0,
-            Some(size),
-        )
-        .await
+        databend_common_storage::parquet_rs::read_metadata_async(location, &self.0, Some(size))
+            .await
     }
 }

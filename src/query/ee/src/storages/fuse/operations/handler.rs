@@ -13,16 +13,17 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::FuseTable;
 use databend_enterprise_vacuum_handler::vacuum_handler::VacuumDropTablesResult;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 use databend_enterprise_vacuum_handler::VacuumHandler;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 
@@ -54,11 +55,12 @@ impl VacuumHandler for RealVacuumHandler {
 
     async fn do_vacuum_temporary_files(
         &self,
+        abort_checker: AbortChecker,
         temporary_dir: String,
-        retain: Option<Duration>,
+        options: &VacuumTempOptions,
         vacuum_limit: usize,
     ) -> Result<usize> {
-        do_vacuum_temporary_files(temporary_dir, retain, vacuum_limit).await
+        do_vacuum_temporary_files(abort_checker, temporary_dir, options, vacuum_limit).await
     }
 }
 

@@ -29,11 +29,9 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::TableContext;
 
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
@@ -115,15 +113,16 @@ impl TransformWindowPartitionCollect {
             partition_id[*partition] = new_partition_id;
         }
 
+        let location_prefix = ctx.query_id_spill_prefix();
         let spill_config = SpillerConfig {
             spiller_type: SpillerType::Window,
-            location_prefix: query_spill_prefix(ctx.get_tenant().tenant_name(), &ctx.get_id()),
+            location_prefix,
             disk_spill,
             use_parquet: settings.get_spilling_file_format()?.is_parquet(),
         };
 
         // Create an inner `Spiller` to spill data.
-        let operator = DataOperator::instance().operator();
+        let operator = DataOperator::instance().spill_operator();
         let spiller = Spiller::create(ctx, operator, spill_config)?;
 
         // Create the window partition buffer.

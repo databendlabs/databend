@@ -14,6 +14,7 @@
 
 use std::panic::PanicHookInfo;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use backtrace::Backtrace;
 use backtrace::BacktraceFrame;
@@ -21,19 +22,21 @@ use databend_common_base::runtime::LimitMemGuard;
 use databend_common_exception::USER_SET_ENABLE_BACKTRACE;
 use log::error;
 
-pub fn set_panic_hook() {
+pub fn set_panic_hook(version: String) {
     // Set a panic hook that records the panic as a `tracing` event at the
     // `ERROR` verbosity level.
     //
     // If we are currently in a span when the panic occurred, the logged event
     // will include the current span, allowing the context in which the panic
     // occurred to be recorded.
-    std::panic::set_hook(Box::new(|panic| {
+    let version = Arc::new(version);
+    std::panic::set_hook(Box::new(move |panic| {
         let _guard = LimitMemGuard::enter_unlimited();
-        log_panic(panic);
+        log_panic(panic, version.clone());
     }));
 }
 
+#[allow(dead_code)]
 fn should_backtrace() -> bool {
     // if user not specify or user set to enable, we should backtrace
     match USER_SET_ENABLE_BACKTRACE.load(Ordering::Relaxed) {
@@ -43,7 +46,7 @@ fn should_backtrace() -> bool {
     }
 }
 
-pub fn log_panic(panic: &PanicHookInfo) {
+pub fn log_panic(panic: &PanicHookInfo, version: Arc<String>) {
     let backtrace_str = backtrace(50);
 
     eprintln!("{}", panic);
@@ -51,6 +54,7 @@ pub fn log_panic(panic: &PanicHookInfo) {
 
     if let Some(location) = panic.location() {
         error!(
+            version = version,
             backtrace = &backtrace_str,
             "panic.file" = location.file(),
             "panic.line" = location.line(),
@@ -58,7 +62,7 @@ pub fn log_panic(panic: &PanicHookInfo) {
             "{}", panic,
         );
     } else {
-        error!(backtrace = backtrace_str; "{}", panic);
+        error!(version=version, backtrace = backtrace_str; "{}", panic);
     }
 }
 
@@ -70,15 +74,11 @@ pub fn captures_frames(frames: &mut Vec<BacktraceFrame>) {
 }
 
 pub fn backtrace(frames: usize) -> String {
-    if should_backtrace() {
-        let mut frames = Vec::with_capacity(frames);
-        captures_frames(&mut frames);
-        let mut backtrace = Backtrace::from(frames);
-        backtrace.resolve();
-        format!("{:?}", backtrace)
-    } else {
-        String::new()
-    }
+    let mut frames = Vec::with_capacity(frames);
+    captures_frames(&mut frames);
+    let mut backtrace = Backtrace::from(frames);
+    backtrace.resolve();
+    format!("{:?}", backtrace)
 }
 
 #[cfg(test)]

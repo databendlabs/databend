@@ -45,7 +45,7 @@ use crate::sql_gen::Column;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+impl<R: Rng> SqlGenerator<'_, R> {
     pub(crate) fn gen_query(&mut self) -> Query {
         self.cte_tables.clear();
         self.bound_tables.clear();
@@ -236,6 +236,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             orders.push(order_by_expr);
                         }
                     }
+                    _ => unimplemented!(),
                 }
             } else {
                 for _ in 0..order_nums {
@@ -303,6 +304,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
         let select_list = self.gen_select_list(&group_by);
         let selection = self.gen_selection();
+
+        let having = self.gen_selection();
+        let window_list = self.gen_window_list();
+        let qualify = self.gen_qualify();
+
         SelectStmt {
             span: None,
             // TODO
@@ -313,9 +319,9 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             from,
             selection,
             group_by,
-            having: self.gen_selection(),
-            window_list: self.gen_window_list(),
-            qualify: None, // todo: add qualify.
+            having,
+            window_list,
+            qualify,
         }
     }
 
@@ -332,9 +338,20 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 res.push(window_def);
             }
-            return Some(res);
+            Some(res)
+        } else {
+            None
         }
-        None
+    }
+
+    fn gen_qualify(&mut self) -> Option<Expr> {
+        if self.rng.gen_bool(0.1) {
+            let ty = self.gen_data_type();
+            let qualify = self.gen_expr(&ty);
+            Some(qualify)
+        } else {
+            None
+        }
     }
 
     fn gen_group_by(&mut self) -> Option<GroupBy> {
@@ -351,12 +368,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             groupby_items.push(groupby_item);
         }
 
-        match self.rng.gen_range(0..=4) {
+        match self.rng.gen_range(0..=2) {
             0 => Some(GroupBy::Normal(groupby_items)),
             1 => Some(GroupBy::All),
             2 => Some(GroupBy::GroupingSets(vec![groupby_items])),
-            3 => Some(GroupBy::Cube(groupby_items)),
-            4 => Some(GroupBy::Rollup(groupby_items)),
             _ => unreachable!(),
         }
     }
@@ -370,9 +385,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         };
 
         match group_by {
-            Some(GroupBy::Normal(group_by))
-            | Some(GroupBy::Cube(group_by))
-            | Some(GroupBy::Rollup(group_by)) => {
+            Some(GroupBy::Normal(group_by)) => {
                 let ty = self.gen_data_type();
                 let agg_expr = self.gen_agg_func(&ty);
                 targets.push(SelectTarget::AliasedExpr {
@@ -409,7 +422,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     alias: None,
                 }));
             }
-            None => {
+            _ => {
                 let select_num = self.rng.gen_range(1..=7);
                 for _ in 0..select_num {
                     let ty = self.gen_data_type();
@@ -463,17 +476,15 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             self.cte_tables[len - i - 1].clone()
         };
         let schema = table.schema.clone();
-        let table_name = Identifier::from_name(None, table.name.clone());
-
-        self.bound_table(table);
+        self.bound_table(table.clone());
 
         let table_ref = TableReference::Table {
             span: None,
             // TODO
             catalog: None,
             // TODO
-            database: None,
-            table: table_name,
+            database: table.db_name.clone(),
+            table: table.name.clone(),
             // TODO
             alias: None,
             // TODO
@@ -506,18 +517,17 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
         match name {
             "numbers" | "numbers_mt" | "numbers_local" => {
-                let table = Table {
-                    name: name.to_string(),
-                    schema: TableSchemaRefExt::create(vec![TableField::new(
-                        "number",
-                        TableDataType::Number(NumberDataType::UInt64),
-                    )]),
-                };
+                let table_name = Identifier::from_name(None, name.to_string());
+                let schema = TableSchemaRefExt::create(vec![TableField::new(
+                    "number",
+                    TableDataType::Number(NumberDataType::UInt64),
+                )]);
+                let table = Table::new(None, table_name.clone(), schema);
                 self.bound_table(table);
                 TableReference::TableFunction {
                     span: None,
                     lateral: false,
-                    name: Identifier::from_name(None, name),
+                    name: table_name,
                     params: vec![Expr::Literal {
                         span: None,
                         value: Literal::UInt64(self.rng.gen_range(0..=10)),
@@ -577,17 +587,17 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 };
                 let (ty1, param1) = gen_expr(idx);
                 let (_, param2) = gen_expr(idx);
-                let table = Table {
-                    name: name.to_string(),
-                    schema: TableSchemaRefExt::create(vec![TableField::new(name, ty1)]),
-                };
+
+                let table_name = Identifier::from_name(None, name.to_string());
+                let schema = TableSchemaRefExt::create(vec![TableField::new(name, ty1)]);
+                let table = Table::new(None, table_name.clone(), schema);
                 let (_, param3) = gen_expr(2);
                 self.bound_table(table);
 
                 TableReference::TableFunction {
                     span: None,
                     lateral: false,
-                    name: Identifier::from_name(None, name),
+                    name: table_name,
                     params: if self.rng.gen_bool(0.5) {
                         vec![param1, param2]
                     } else {
@@ -710,29 +720,29 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
     pub(crate) fn gen_subquery_table(&mut self, schema: TableSchemaRef) -> (Table, TableAlias) {
         let name = self.gen_random_name();
-        let table_name = format!("t{}", name);
+        let table_name = Identifier::from_name(None, format!("t{}", name));
         let mut columns = Vec::with_capacity(schema.num_fields());
         for field in schema.fields() {
             let column = Identifier::from_name(None, field.name.clone());
             columns.push(column);
         }
         let alias = TableAlias {
-            name: Identifier::from_name(None, table_name.clone()),
+            name: table_name.clone(),
             columns,
         };
-        let table = Table::new(table_name, schema);
+        let table = Table::new(None, table_name, schema);
 
         (table, alias)
     }
 
     pub(crate) fn bound_table(&mut self, table: Table) {
         for (i, field) in table.schema.fields().iter().enumerate() {
-            let column = Column {
-                table_name: table.name.clone(),
-                name: field.name.clone(),
-                index: i + 1,
-                data_type: DataType::from(&field.data_type),
-            };
+            let column = Column::new(
+                Some(table.name.clone()),
+                field.name.clone(),
+                i + 1,
+                DataType::from(&field.data_type),
+            );
             self.bound_columns.push(column);
         }
         self.bound_tables.push(table);

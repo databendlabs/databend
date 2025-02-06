@@ -1,4 +1,6 @@
 two insertions
+2
+1
 latest snapshot should contain 3 rows
 3
 alter table add a column

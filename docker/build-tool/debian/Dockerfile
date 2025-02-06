@@ -25,10 +25,8 @@ RUN chmod +x /build/scripts/setup/dev_setup.sh && \
 
 RUN ln -s $(readlink -f `which javac` | sed "s:/bin/javac::") /opt/java
 
-RUN curl -sSfLo /tmp/mold.tar.gz https://github.com/rui314/mold/releases/download/v2.4.0/mold-2.4.0-$(uname -m)-linux.tar.gz && \
-    tar --strip-components=1 -xzf /tmp/mold.tar.gz -C /usr/local && \
-    rm -rf /tmp/mold.tar.gz && \
-    ln -sf /usr/local/bin/mold /usr/bin/$(uname -m)-linux-gnu-ld
+RUN curl -sSfLo /tmp/mold.tar.gz https://github.com/rui314/mold/releases/download/v2.35.1/mold-2.35.1-$(uname -m)-linux.tar.gz && \
+    tar --strip-components=1 -xzf /tmp/mold.tar.gz -C /usr/local && rm -rf /tmp/mold.tar.gz
 
 ENV LIBZ_SYS_STATIC=1
 ENV LZMA_API_STATIC=1

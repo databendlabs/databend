@@ -40,6 +40,26 @@ use crate::pipelines::processors::TransformAddStreamColumns;
 use crate::pipelines::PipelineBuilder;
 
 impl PipelineBuilder {
+    /// The flow of Pipeline is as follows:
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┐
+    // └──────────┘     └───────────────┘     └─────────┘    │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │     ┌──────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┤────►│MultiSortMerge├────►│Resize(N)├───┐
+    // └──────────┘     └───────────────┘     └─────────┘    │     └──────────────┘     └─────────┘   │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │                                        │
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┘                                        │
+    // └──────────┘     └───────────────┘     └─────────┘                                             │
+    // ┌──────────────────────────────────────────────────────────────────────────────────────────────┘
+    // │         ┌──────────────┐
+    // │    ┌───►│SerializeBlock├───┐
+    // │    │    └──────────────┘   │
+    // │    │    ┌──────────────┐   │    ┌─────────┐    ┌────────────────┐     ┌─────────────┐     ┌──────────┐
+    // └───►│───►│SerializeBlock├───┤───►│Resize(1)├───►│SerializeSegment├────►│ReclusterAggr├────►│CommitSink│
+    //      │    └──────────────┘   │    └─────────┘    └────────────────┘     └─────────────┘     └──────────┘
+    //      │    ┌──────────────┐   │
+    //      └───►│SerializeBlock├───┘
+    //           └──────────────┘
     pub(crate) fn build_recluster(&mut self, recluster: &Recluster) -> Result<()> {
         match recluster.tasks.len() {
             0 => self.main_pipeline.add_source(EmptySource::create, 1),
@@ -68,6 +88,7 @@ impl PipelineBuilder {
                     update_stream_columns: table.change_tracking_enabled(),
                     data_mask_policy: None,
                     table_index: usize::MAX,
+                    scan_id: usize::MAX,
                 };
 
                 {
@@ -133,7 +154,6 @@ impl PipelineBuilder {
                 let sort_block_size =
                     block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
 
-                self.ctx.set_enable_sort_spill(false);
                 let sort_pipeline_builder =
                     SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))?
                         .with_block_size_hit(sort_block_size)

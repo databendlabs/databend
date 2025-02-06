@@ -87,7 +87,7 @@ impl Operator for Filter {
         let (input_cardinality, mut statistics) =
             (stat_info.cardinality, stat_info.statistics.clone());
         // Derive cardinality
-        let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
+        let mut sb = SelectivityEstimator::new(&mut statistics, input_cardinality, HashSet::new());
         let mut selectivity = MAX_SELECTIVITY;
         for pred in self.predicates.iter() {
             // Compute selectivity for each conjunction

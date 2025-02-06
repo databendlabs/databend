@@ -15,16 +15,18 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use boolean::TrueIdxIter;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Scalar;
+use databend_common_expression::SELECTIVITY_THRESHOLD;
 use ethnum::i256;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
@@ -39,10 +41,118 @@ use super::aggregate_scalar_state::TYPE_MIN;
 use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
+use crate::aggregates::aggregate_min_max_any_decimal::MinMaxAnyDecimalState;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
 use crate::with_compare_mapped_type;
-use crate::with_simple_no_number_mapped_type;
+use crate::with_simple_no_number_no_string_mapped_type;
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub struct MinMaxStringState<C>
+where C: ChangeIf<StringType>
+{
+    pub value: Option<String>,
+    #[borsh(skip)]
+    _c: PhantomData<C>,
+}
+
+impl<C> Default for MinMaxStringState<C>
+where C: ChangeIf<StringType> + Default
+{
+    fn default() -> Self {
+        Self {
+            value: None,
+            _c: PhantomData,
+        }
+    }
+}
+
+impl<C> UnaryState<StringType, StringType> for MinMaxStringState<C>
+where C: ChangeIf<StringType> + Default
+{
+    fn add(
+        &mut self,
+        other: <StringType as ValueType>::ScalarRef<'_>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        match &self.value {
+            Some(v) => {
+                if C::change_if(&StringType::to_scalar_ref(v), &other) {
+                    self.value = Some(StringType::to_owned_scalar(other));
+                }
+            }
+            None => {
+                self.value = Some(StringType::to_owned_scalar(other));
+            }
+        }
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        other: StringColumn,
+        validity: Option<&Bitmap>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let column_len = StringType::column_len(&other);
+        if column_len == 0 {
+            return Ok(());
+        }
+
+        let column_iter = 0..other.len();
+        if let Some(validity) = validity {
+            if validity.null_count() == column_len {
+                return Ok(());
+            }
+            let v = column_iter
+                .zip(validity)
+                .filter(|(_, valid)| *valid)
+                .map(|(idx, _)| idx)
+                .reduce(|l, r| {
+                    if !C::change_if_ordering(StringColumn::compare(&other, l, &other, r)) {
+                        l
+                    } else {
+                        r
+                    }
+                });
+            if let Some(v) = v {
+                let _ = self.add(other.index(v).unwrap(), function_data);
+            }
+        } else {
+            let v = column_iter.reduce(|l, r| {
+                if !C::change_if_ordering(StringColumn::compare(&other, l, &other, r)) {
+                    l
+                } else {
+                    r
+                }
+            });
+            if let Some(v) = v {
+                let _ = self.add(other.index(v).unwrap(), function_data);
+            }
+        }
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        if let Some(v) = &rhs.value {
+            self.add(v.as_str(), None)?;
+        }
+        Ok(())
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: &mut <StringType as ValueType>::ColumnBuilder,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        if let Some(v) = &self.value {
+            StringType::push_item(builder, v.as_str());
+        } else {
+            StringType::push_default(builder);
+        }
+        Ok(())
+    }
+}
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub struct MinMaxAnyState<T, C>
@@ -105,19 +215,27 @@ where
         }
 
         let column_iter = T::iter_column(&other);
-        if let Some(validity) = validity {
-            if validity.unset_bits() == column_len {
-                return Ok(());
-            }
-            for (data, valid) in column_iter.zip(validity.iter()) {
-                if valid {
-                    let _ = self.add(data, function_data);
+        if let Some(v) = validity {
+            if v.true_count() as f64 / v.len() as f64 >= SELECTIVITY_THRESHOLD {
+                let value = column_iter
+                    .zip(v.iter())
+                    .filter(|(_, v)| *v)
+                    .map(|(v, _)| v)
+                    .reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
+
+                if let Some(value) = value {
+                    self.add(value, function_data)?;
                 }
-            }
+            } else {
+                for idx in TrueIdxIter::new(v.len(), Some(v)) {
+                    let v = unsafe { T::index_column_unchecked(&other, idx) };
+                    self.add(v, function_data)?;
+                }
+            };
         } else {
             let v = column_iter.reduce(|l, r| if !C::change_if(&l, &r) { l } else { r });
             if let Some(v) = v {
-                let _ = self.add(v, function_data);
+                self.add(v, function_data)?;
             }
         }
         Ok(())
@@ -161,7 +279,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
 
     with_compare_mapped_type!(|CMP| match CMP_TYPE {
         CMP => {
-            with_simple_no_number_mapped_type!(|T| match data_type {
+            with_simple_no_number_no_string_mapped_type!(|T| match data_type {
                 DataType::T => {
                     let return_type = data_type.clone();
                     let func = AggregateUnaryFunction::<MinMaxAnyState<T, CMP>, T, T>::try_create(
@@ -169,6 +287,19 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                         return_type,
                         params,
                         data_type,
+                    )
+                    .with_need_drop(need_drop);
+
+                    Ok(Arc::new(func))
+                }
+                DataType::String => {
+                    let return_type = data_type.clone();
+                    let func = AggregateUnaryFunction::<
+                        MinMaxStringState<CMP>,
+                        StringType,
+                        StringType,
+                    >::try_create(
+                        display_name, return_type, params, data_type
                     )
                     .with_need_drop(need_drop);
 
@@ -195,7 +326,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                     };
                     let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
                     AggregateUnaryFunction::<
-                        MinMaxAnyState<DecimalType<i128>, CMP>,
+                        MinMaxAnyDecimalState<DecimalType<i128>, CMP>,
                         DecimalType<i128>,
                         DecimalType<i128>,
                     >::try_create_unary(
@@ -209,7 +340,7 @@ pub fn try_create_aggregate_min_max_any_function<const CMP_TYPE: u8>(
                     };
                     let return_type = DataType::Decimal(DecimalDataType::from_size(decimal_size)?);
                     AggregateUnaryFunction::<
-                        MinMaxAnyState<DecimalType<i256>, CMP>,
+                        MinMaxAnyDecimalState<DecimalType<i256>, CMP>,
                         DecimalType<i256>,
                         DecimalType<i256>,
                     >::try_create_unary(

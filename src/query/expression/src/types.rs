@@ -24,6 +24,7 @@ pub mod empty_map;
 pub mod generic;
 pub mod geography;
 pub mod geometry;
+pub mod interval;
 pub mod map;
 pub mod null;
 pub mod nullable;
@@ -35,9 +36,9 @@ pub mod variant;
 
 use std::cmp::Ordering;
 use std::fmt::Debug;
+use std::iter::TrustedLen;
 use std::ops::Range;
 
-use databend_common_arrow::arrow::trusted_len::TrustedLen;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -49,7 +50,9 @@ pub use self::array::ArrayType;
 pub use self::binary::BinaryColumn;
 pub use self::binary::BinaryType;
 pub use self::bitmap::BitmapType;
+pub use self::boolean::Bitmap;
 pub use self::boolean::BooleanType;
+pub use self::boolean::MutableBitmap;
 pub use self::date::DateType;
 pub use self::decimal::*;
 pub use self::empty_array::EmptyArrayType;
@@ -57,6 +60,8 @@ pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
 pub use self::geography::GeographyColumn;
 pub use self::geography::GeographyType;
+pub use self::geometry::GeometryType;
+pub use self::interval::IntervalType;
 pub use self::map::MapType;
 pub use self::null::NullType;
 pub use self::nullable::NullableColumn;
@@ -94,6 +99,7 @@ pub enum DataType {
     Tuple(Vec<DataType>),
     Variant,
     Geometry,
+    Interval,
     Geography,
 
     // Used internally for generic types
@@ -106,10 +112,6 @@ impl DataType {
             DataType::Null | DataType::Nullable(_) => self.clone(),
             _ => Self::Nullable(Box::new(self.clone())),
         }
-    }
-
-    pub fn is_nullable(&self) -> bool {
-        matches!(self, &DataType::Nullable(_))
     }
 
     pub fn is_nullable_or_null(&self) -> bool {
@@ -146,6 +148,7 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::Date
+            | DataType::Interval
             | DataType::Bitmap
             | DataType::Variant
             | DataType::Geometry
@@ -170,6 +173,7 @@ impl DataType {
             | DataType::Decimal(_)
             | DataType::Timestamp
             | DataType::Date
+            | DataType::Interval
             | DataType::Bitmap
             | DataType::Variant
             | DataType::Geometry
@@ -199,10 +203,6 @@ impl DataType {
         }
     }
 
-    pub fn is_numeric(&self) -> bool {
-        matches!(self, DataType::Number(_))
-    }
-
     #[inline]
     pub fn is_integer(&self) -> bool {
         match self {
@@ -217,11 +217,6 @@ impl DataType {
             DataType::Number(ty) => ALL_FLOAT_TYPES.contains(ty),
             _ => false,
         }
-    }
-
-    #[inline]
-    pub fn is_decimal(&self) -> bool {
-        matches!(self, DataType::Decimal(_ty))
     }
 
     #[inline]
@@ -313,12 +308,23 @@ impl DataType {
             _ => None,
         }
     }
+
+    pub fn is_physical_binary(&self) -> bool {
+        matches!(
+            self,
+            DataType::Binary
+                | DataType::Bitmap
+                | DataType::Variant
+                | DataType::Geometry
+                | DataType::Geography
+        )
+    }
 }
 
 pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     type Scalar: Debug + Clone + PartialEq;
     type ScalarRef<'a>: Debug + Clone + PartialEq;
-    type Column: Debug + Clone + PartialEq;
+    type Column: Debug + Clone + PartialEq + Send;
     type Domain: Debug + Clone + PartialEq;
     type ColumnIterator<'a>: Iterator<Item = Self::ScalarRef<'a>> + TrustedLen;
     type ColumnBuilder: Debug + Clone;
@@ -371,6 +377,14 @@ pub trait ValueType: Debug + Clone + PartialEq + Sized + 'static {
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
     unsafe fn index_column_unchecked(col: &Self::Column, index: usize) -> Self::ScalarRef<'_>;
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    unsafe fn index_column_unchecked_scalar(col: &Self::Column, index: usize) -> Self::Scalar {
+        Self::to_owned_scalar(Self::index_column_unchecked(col, index))
+    }
+
     fn slice_column(col: &Self::Column, range: Range<usize>) -> Self::Column;
     fn iter_column(col: &Self::Column) -> Self::ColumnIterator<'_>;
     fn column_to_builder(col: Self::Column) -> Self::ColumnBuilder;

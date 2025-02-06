@@ -53,8 +53,6 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             aliases,
-            self.m_cte_bound_ctx.clone(),
-            self.ctes_map.clone(),
         );
         let (mut scalar, _) = scalar_binder.bind(qualify)?;
         let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
@@ -114,7 +112,7 @@ impl<'a> QualifyChecker<'a> {
     }
 }
 
-impl<'a> VisitorMut<'_> for QualifyChecker<'a> {
+impl VisitorMut<'_> for QualifyChecker<'_> {
     fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
         if let ScalarExpr::WindowFunction(window) = expr {
             if let Some(column) = self
@@ -147,29 +145,27 @@ impl<'a> VisitorMut<'_> for QualifyChecker<'a> {
         }
 
         if let ScalarExpr::AggregateFunction(agg) = expr {
-            if let Some(column) = self
+            let Some(agg_func) = self
                 .bind_context
                 .aggregate_info
-                .aggregate_functions_map
-                .get(&agg.display_name)
-            {
-                let agg_func = &self.bind_context.aggregate_info.aggregate_functions[*column];
-                let column_binding = ColumnBindingBuilder::new(
-                    agg.display_name.clone(),
-                    agg_func.index,
-                    Box::new(agg_func.scalar.data_type()?),
-                    Visibility::Visible,
-                )
-                .build();
-                *expr = BoundColumnRef {
-                    span: None,
-                    column: column_binding,
-                }
-                .into();
-                return Ok(());
-            }
+                .get_aggregate_function(&agg.display_name)
+            else {
+                return Err(ErrorCode::Internal("Invalid aggregate function"));
+            };
 
-            return Err(ErrorCode::Internal("Invalid aggregate function"));
+            let column_binding = ColumnBindingBuilder::new(
+                agg.display_name.clone(),
+                agg_func.index,
+                Box::new(agg_func.scalar.data_type()?),
+                Visibility::Visible,
+            )
+            .build();
+            *expr = BoundColumnRef {
+                span: None,
+                column: column_binding,
+            }
+            .into();
+            return Ok(());
         }
 
         walk_expr_mut(self, expr)

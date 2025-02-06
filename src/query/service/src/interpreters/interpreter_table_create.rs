@@ -379,10 +379,9 @@ impl CreateTableInterpreter {
             schema: schema.clone(),
             engine: self.plan.engine.to_string(),
             storage_params: self.plan.storage_params.clone(),
-            part_prefix: self.plan.part_prefix.clone(),
             options,
             engine_options: self.plan.engine_options.clone(),
-            default_cluster_key: None,
+            cluster_key: None,
             field_comments,
             drop_on: None,
             statistics: statistics.unwrap_or_default(),
@@ -403,7 +402,7 @@ impl CreateTableInterpreter {
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
-            if !is_valid_create_opt(&key) {
+            if !is_valid_create_opt(&key, &self.plan.engine) {
                 error!("invalid opt for fuse table in create table statement");
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "table option {key} is invalid for create table statement",
@@ -412,7 +411,8 @@ impl CreateTableInterpreter {
         }
 
         if let Some(cluster_key) = &self.plan.cluster_key {
-            table_meta = table_meta.push_cluster_key(cluster_key.clone());
+            table_meta.cluster_key = Some(cluster_key.clone());
+            table_meta.cluster_key_seq += 1;
         }
 
         let req = CreateTableReq {

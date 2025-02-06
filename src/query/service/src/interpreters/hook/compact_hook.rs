@@ -27,6 +27,7 @@ use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::Recluster;
 use databend_common_sql::plans::RelOperator;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;
@@ -78,43 +79,53 @@ async fn do_hook_compact(
     }
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
-        let compaction_limits = match compact_target.mutation_kind {
-            MutationKind::Insert => {
-                let compaction_num_block_hint = ctx.get_compaction_num_block_hint(&compact_target.table);
-                info!("table {} hint number of blocks need to be compacted {}", compact_target.table, compaction_num_block_hint);
-                if compaction_num_block_hint == 0 {
-                    return Ok(());
-                }
-                CompactionLimits {
-                    segment_limit: None,
-                    block_limit: Some(compaction_num_block_hint as usize),
-                }
-            }
-            _ => {
-                let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
-                CompactionLimits {
-                    segment_limit: Some(auto_compaction_segments_limit as usize),
-                    block_limit: None,
-                }
-            }
-        };
-
-        let op_name = &trace_ctx.operation_name;
-        metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
-
-        let compact_start_at = Instant::now();
         if info.res.is_ok() {
+            let op_name = &trace_ctx.operation_name;
+            metrics_inc_compact_hook_main_operation_time_ms(op_name, trace_ctx.start.elapsed().as_millis() as u64);
             info!("execute {op_name} finished successfully. running table optimization job.");
+
+            let compact_start_at = Instant::now();
+            let compaction_limits = match compact_target.mutation_kind {
+                MutationKind::Insert => {
+                    let compaction_num_block_hint = ctx.get_compaction_num_block_hint(&compact_target.table);
+                    info!("table {} hint number of blocks need to be compacted {}", compact_target.table, compaction_num_block_hint);
+                    if compaction_num_block_hint == 0 {
+                        return Ok(());
+                    }
+                    CompactionLimits {
+                        segment_limit: None,
+                        block_limit: Some(compaction_num_block_hint as usize),
+                    }
+                }
+                _ => {
+                    let auto_compaction_segments_limit = ctx.get_settings().get_auto_compaction_segments_limit()?;
+                    CompactionLimits {
+                        segment_limit: Some(auto_compaction_segments_limit as usize),
+                        block_limit: None,
+                    }
+                }
+            };
+
+            // keep the original progress value
+            let write_progress = ctx.get_write_progress();
+            let write_progress_value = write_progress.as_ref().get_values();
+            let scan_progress = ctx.get_scan_progress();
+            let scan_progress_value = scan_progress.as_ref().get_values();
+
             match GlobalIORuntime::instance().block_on({
                 compact_table(ctx, compact_target, compaction_limits, lock_opt)
             }) {
                 Ok(_) => {
                     info!("execute {op_name} finished successfully. table optimization job finished.");
                 }
-                Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e) }
+                Err(e) => { info!("execute {op_name} finished successfully. table optimization job failed. {:?}", e); }
             }
+
+            // reset the progress value
+            write_progress.set(&write_progress_value);
+            scan_progress.set(&scan_progress_value);
+            metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
         }
-        metrics_inc_compact_hook_compact_time_ms(&trace_ctx.operation_name, compact_start_at.elapsed().as_millis() as u64);
 
         Ok(())
     });
@@ -139,11 +150,6 @@ async fn compact_table(
         )
         .await?;
     let settings = ctx.get_settings();
-    // keep the original progress value
-    let progress_value = ctx.get_write_progress_value();
-
-    let do_recluster = !table.cluster_keys(ctx.clone()).is_empty();
-    let do_compact = compaction_limits.block_limit.is_some() || !do_recluster;
 
     // evict the table from cache
     ctx.evict_table_from_cache(
@@ -152,7 +158,8 @@ async fn compact_table(
         &compact_target.table,
     )?;
 
-    if do_compact {
+    {
+        // do compact.
         let compact_block = RelOperator::CompactBlock(OptimizeCompactBlock {
             catalog: compact_target.catalog.clone(),
             database: compact_target.database.clone(),
@@ -179,31 +186,46 @@ async fn compact_table(
                 PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
             // Clears previously generated segment locations to avoid duplicate data in the refresh phase
-            ctx.clear_segment_locations()?;
+            ctx.clear_written_segment_locations()?;
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute()?;
             drop(complete_executor);
         }
     }
 
-    if do_recluster {
-        let recluster = RelOperator::Recluster(Recluster {
-            catalog: compact_target.catalog,
-            database: compact_target.database,
-            table: compact_target.table,
-            filters: None,
-            limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
-        });
-        let s_expr = SExpr::create_leaf(Arc::new(recluster));
-        let recluster_interpreter =
-            ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
-        // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
-        // we do not need to use `PipelineCompleteExecutor` to execute it.
-        let build_res = recluster_interpreter.execute2().await?;
-        assert!(build_res.main_pipeline.is_empty());
+    {
+        // do recluster.
+        if let Some(cluster_type) = table.cluster_type() {
+            if cluster_type == ClusterType::Linear {
+                // evict the table from cache
+                ctx.evict_table_from_cache(
+                    &compact_target.catalog,
+                    &compact_target.database,
+                    &compact_target.table,
+                )?;
+                ctx.set_enable_sort_spill(false);
+                let recluster = RelOperator::Recluster(Recluster {
+                    catalog: compact_target.catalog,
+                    database: compact_target.database,
+                    table: compact_target.table,
+                    limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
+                    filters: None,
+                });
+                let s_expr = SExpr::create_leaf(Arc::new(recluster));
+                let recluster_interpreter = ReclusterTableInterpreter::try_create(
+                    ctx.clone(),
+                    s_expr,
+                    None,
+                    lock_opt,
+                    false,
+                )?;
+                // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
+                // we do not need to use `PipelineCompleteExecutor` to execute it.
+                let build_res = recluster_interpreter.execute2().await?;
+                debug_assert!(build_res.main_pipeline.is_empty());
+            }
+        }
     }
 
-    // reset the progress value
-    ctx.get_write_progress().set(&progress_value);
     Ok(())
 }

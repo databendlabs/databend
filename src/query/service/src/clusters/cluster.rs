@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::ops::RangeInclusive;
@@ -31,6 +32,9 @@ use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
+use databend_common_cache::Cache;
+use databend_common_cache::LruCache;
+use databend_common_cache::MemSized;
 pub use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -38,24 +42,27 @@ use databend_common_config::DATABEND_COMMIT_VERSION;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_grpc::ConnectionFactory;
-use databend_common_management::ClusterApi;
-use databend_common_management::ClusterMgr;
+use databend_common_management::WarehouseApi;
+use databend_common_management::WarehouseMgr;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::NodeInfo;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_types::SeqValue;
 use databend_common_metrics::cluster::*;
+use databend_enterprise_resources_management::ResourcesManagement;
 use futures::future::select;
 use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
 use log::error;
+use log::info;
 use log::warn;
-use parking_lot::RwLock;
 use rand::thread_rng;
 use rand::Rng;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::time::sleep;
 
 use crate::servers::flight::FlightClient;
 
@@ -63,11 +70,11 @@ pub struct ClusterDiscovery {
     local_id: String,
     local_secret: String,
     heartbeat: Mutex<ClusterHeartbeat>,
-    api_provider: Arc<dyn ClusterApi>,
+    warehouse_manager: Arc<dyn WarehouseApi>,
     cluster_id: String,
     tenant_id: String,
     flight_address: String,
-    cached_cluster: RwLock<Option<Arc<Cluster>>>,
+    lru_cache: parking_lot::Mutex<LruCache<String, CachedNode>>,
 }
 
 // avoid leak FlightClient to common-xxx
@@ -78,25 +85,33 @@ pub trait ClusterHelper {
     fn is_empty(&self) -> bool;
     fn is_local(&self, node: &NodeInfo) -> bool;
     fn local_id(&self) -> String;
+    fn ordered_index(&self) -> usize;
+    fn index_of_nodeid(&self, node_id: &str) -> Option<usize>;
 
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>>;
 
-    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+    async fn do_action<T: Serialize + Send + Clone, Res: for<'de> Deserialize<'de> + Send>(
         &self,
         path: &str,
         message: HashMap<String, T>,
-        timeout: u64,
+        flight_params: FlightParams,
     ) -> Result<HashMap<String, Res>>;
 }
 
 #[async_trait::async_trait]
 impl ClusterHelper for Cluster {
     fn create(nodes: Vec<Arc<NodeInfo>>, local_id: String) -> Arc<Cluster> {
-        Arc::new(Cluster { local_id, nodes })
+        let unassign = nodes.iter().all(|node| !node.assigned_warehouse());
+        Arc::new(Cluster {
+            unassign,
+            local_id,
+            nodes,
+        })
     }
 
     fn empty() -> Arc<Cluster> {
         Arc::new(Cluster {
+            unassign: false,
             local_id: String::from(""),
             nodes: Vec::new(),
         })
@@ -114,15 +129,30 @@ impl ClusterHelper for Cluster {
         self.local_id.clone()
     }
 
+    fn ordered_index(&self) -> usize {
+        let mut nodes = self.get_nodes();
+        nodes.sort_by(|a, b| a.id.cmp(&b.id));
+        nodes
+            .iter()
+            .position(|x| x.id == self.local_id)
+            .unwrap_or(0)
+    }
+
+    fn index_of_nodeid(&self, node_id: &str) -> Option<usize> {
+        let mut nodes = self.get_nodes();
+        nodes.sort_by(|a, b| a.id.cmp(&b.id));
+        nodes.iter().position(|x| x.id == node_id)
+    }
+
     fn get_nodes(&self) -> Vec<Arc<NodeInfo>> {
         self.nodes.to_vec()
     }
 
-    async fn do_action<T: Serialize + Send, Res: for<'de> Deserialize<'de> + Send>(
+    async fn do_action<T: Serialize + Send + Clone, Res: for<'de> Deserialize<'de> + Send>(
         &self,
         path: &str,
         message: HashMap<String, T>,
-        timeout: u64,
+        flight_params: FlightParams,
     ) -> Result<HashMap<String, Res>> {
         fn get_node<'a>(nodes: &'a [Arc<NodeInfo>], id: &str) -> Result<&'a Arc<NodeInfo>> {
             for node in nodes {
@@ -137,28 +167,49 @@ impl ClusterHelper for Cluster {
             )))
         }
 
-        let mut futures = Vec::with_capacity(message.len());
+        let mut response = HashMap::with_capacity(message.len());
         for (id, message) in message {
             let node = get_node(&self.nodes, &id)?;
 
-            futures.push({
+            let do_action_with_retry = {
                 let config = GlobalConfig::instance();
                 let flight_address = node.flight_address.clone();
                 let node_secret = node.secret.clone();
 
                 async move {
-                    let mut conn = create_client(&config, &flight_address).await?;
-                    Ok::<_, ErrorCode>((
-                        id,
-                        conn.do_action::<_, Res>(path, node_secret, message, timeout)
-                            .await?,
-                    ))
+                    let mut attempt = 0;
+
+                    loop {
+                        let mut conn = create_client(&config, &flight_address).await?;
+                        match conn
+                            .do_action::<_, Res>(
+                                path,
+                                node_secret.clone(),
+                                message.clone(),
+                                flight_params.timeout,
+                            )
+                            .await
+                        {
+                            Ok(result) => return Ok(result),
+                            Err(e)
+                                if e.code() == ErrorCode::CANNOT_CONNECT_NODE
+                                    && attempt < flight_params.retry_times =>
+                            {
+                                // only retry when error is network problem
+                                info!("retry do_action, attempt: {}", attempt);
+                                attempt += 1;
+                                sleep(Duration::from_secs(flight_params.retry_interval)).await;
+                            }
+                            Err(e) => return Err(e),
+                        }
+                    }
                 }
-            });
+            };
+
+            response.insert(id, do_action_with_retry.await?);
         }
 
-        let responses: Vec<(String, Res)> = futures::future::try_join_all(futures).await?;
-        Ok(responses.into_iter().collect::<HashMap<String, Res>>())
+        Ok(response)
     }
 }
 
@@ -192,7 +243,7 @@ impl ClusterDiscovery {
         Ok(Arc::new(ClusterDiscovery {
             local_id: cfg.query.node_id.clone(),
             local_secret: cfg.query.node_secret.clone(),
-            api_provider: provider.clone(),
+            warehouse_manager: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
                 provider,
@@ -202,7 +253,7 @@ impl ClusterDiscovery {
             cluster_id: cfg.query.cluster_id.clone(),
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             flight_address: cfg.query.flight_api_address.clone(),
-            cached_cluster: Default::default(),
+            lru_cache: parking_lot::Mutex::new(LruCache::with_items_capacity(100)),
         }))
     }
 
@@ -213,20 +264,21 @@ impl ClusterDiscovery {
     fn create_provider(
         cfg: &InnerConfig,
         metastore: MetaStore,
-    ) -> Result<(Duration, Arc<dyn ClusterApi>)> {
+    ) -> Result<(Duration, Arc<dyn WarehouseApi>)> {
         // TODO: generate if tenant or cluster id is empty
         let tenant_id = &cfg.query.tenant_id;
-        let cluster_id = &cfg.query.cluster_id;
         let lift_time = Duration::from_secs(60);
-        let cluster_manager =
-            ClusterMgr::create(metastore, tenant_id.tenant_name(), cluster_id, lift_time)?;
+        let cluster_manager = WarehouseMgr::create(metastore, tenant_id.tenant_name(), lift_time)?;
 
         Ok((lift_time, Arc::new(cluster_manager)))
     }
 
-    #[async_backtrace::framed]
-    pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
-        match self.api_provider.get_nodes().await {
+    async fn create_cluster_with_try_connect(
+        &self,
+        config: &InnerConfig,
+        nodes: Result<Vec<NodeInfo>>,
+    ) -> Result<Arc<Cluster>> {
+        match nodes {
             Err(cause) => {
                 metric_incr_cluster_error_count(
                     &self.local_id,
@@ -264,42 +316,116 @@ impl ClusterDiscovery {
                     &self.flight_address,
                     cluster_nodes.len() as f64,
                 );
-                let res = Cluster::create(res, self.local_id.clone());
-                *self.cached_cluster.write() = Some(res.clone());
-                Ok(res)
-            }
-        }
-    }
 
-    fn cached_cluster(self: &Arc<Self>) -> Option<Arc<Cluster>> {
-        (*self.cached_cluster.read()).clone()
-    }
-
-    pub async fn find_node_by_id(
-        self: Arc<Self>,
-        id: &str,
-        config: &InnerConfig,
-    ) -> Result<Option<Arc<NodeInfo>>> {
-        let (mut cluster, mut is_cached) = if let Some(cluster) = self.cached_cluster() {
-            (cluster, true)
-        } else {
-            (self.discover(config).await?, false)
-        };
-        while is_cached {
-            for node in cluster.get_nodes() {
-                if node.id == id {
-                    return Ok(Some(node.clone()));
+                // compatibility, for self-managed nodes, we allow queries to continue executing even when the heartbeat fails.
+                if cluster_nodes.is_empty() && !config.query.cluster_id.is_empty() {
+                    let mut cluster = Cluster::empty();
+                    let mut_cluster = Arc::get_mut(&mut cluster).unwrap();
+                    mut_cluster.local_id = self.local_id.clone();
+                    return Ok(cluster);
                 }
+
+                Ok(Cluster::create(res, self.local_id.clone()))
             }
-            cluster = self.discover(config).await?;
-            is_cached = false;
         }
+    }
+
+    pub async fn discover_warehouse_nodes(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
+        let nodes = match config.query.cluster_id.is_empty() {
+            true => {
+                self.warehouse_manager
+                    .discover_warehouse_nodes(&config.query.node_id)
+                    .await
+            }
+            false => {
+                self.warehouse_manager
+                    .list_warehouse_nodes(self.cluster_id.clone())
+                    .await
+            }
+        };
+
+        self.create_cluster_with_try_connect(config, nodes).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
+        let nodes = match config.query.cluster_id.is_empty() {
+            true => self.warehouse_manager.discover(&config.query.node_id).await,
+            false => {
+                self.warehouse_manager
+                    .list_warehouse_cluster_nodes(&self.cluster_id, &self.cluster_id)
+                    .await
+            }
+        };
+
+        self.create_cluster_with_try_connect(config, nodes).await
+    }
+
+    pub async fn find_node_by_warehouse(
+        self: Arc<Self>,
+        warehouse: &str,
+    ) -> Result<Option<Arc<NodeInfo>>> {
+        let nodes = self
+            .warehouse_manager
+            .list_warehouse_nodes(warehouse.to_string())
+            .await?;
+
+        let mut warehouse_clusters_nodes = Vec::new();
+        let mut warehouse_clusters_nodes_index = HashMap::new();
+
+        for node in nodes {
+            match warehouse_clusters_nodes_index
+                .entry((node.version.to_string(), node.cluster_id.clone()))
+            {
+                Entry::Vacant(v) => {
+                    v.insert(warehouse_clusters_nodes.len());
+                    warehouse_clusters_nodes.push(vec![Arc::new(node)]);
+                }
+                Entry::Occupied(v) => {
+                    warehouse_clusters_nodes[*v.get()].push(Arc::new(node));
+                }
+            };
+        }
+
+        if warehouse_clusters_nodes.is_empty() {
+            return Ok(None);
+        }
+
+        let system_time = std::time::SystemTime::now();
+        let system_timestamp = system_time
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("expect time");
+
+        let millis = system_timestamp.as_millis();
+        let cluster_idx = (millis % warehouse_clusters_nodes_index.len() as u128) as usize;
+        let pick_cluster_nodes = &warehouse_clusters_nodes[cluster_idx];
+        let nodes_idx = (millis % pick_cluster_nodes.len() as u128) as usize;
+        Ok(Some(pick_cluster_nodes[nodes_idx].clone()))
+    }
+
+    pub async fn find_node_by_id(self: Arc<Self>, id: &str) -> Result<Option<Arc<NodeInfo>>> {
+        {
+            let mut lru_cache = self.lru_cache.lock();
+            if let Some(node_info) = lru_cache.get(id) {
+                return Ok(Some(node_info.node.clone()));
+            }
+        }
+
+        if let Some(node_info) = self.warehouse_manager.get_node_info(id).await? {
+            let cache_object = Arc::new(node_info);
+            let mut lru_cache = self.lru_cache.lock();
+            lru_cache.insert(id.to_string(), CachedNode {
+                node: cache_object.clone(),
+            });
+            return Ok(Some(cache_object));
+        }
+
         Ok(None)
     }
 
     #[async_backtrace::framed]
     async fn drop_invalid_nodes(self: &Arc<Self>, node_info: &NodeInfo) -> Result<()> {
-        let current_nodes_info = match self.api_provider.get_nodes().await {
+        let online_nodes = match self.warehouse_manager.list_online_nodes().await {
             Ok(nodes) => nodes,
             Err(cause) => {
                 metric_incr_cluster_error_count(
@@ -313,12 +439,11 @@ impl ClusterDiscovery {
             }
         };
 
-        for before_node in current_nodes_info {
+        for before_node in online_nodes {
             // Restart in a very short time(< heartbeat timeout) after abnormal shutdown, Which will
             // lead to some invalid information
             if before_node.flight_address.eq(&node_info.flight_address) {
-                let drop_invalid_node =
-                    self.api_provider.drop_node(before_node.id, MatchSeq::GE(1));
+                let drop_invalid_node = self.warehouse_manager.shutdown_node(before_node.id);
                 if let Err(cause) = drop_invalid_node.await {
                     warn!("Drop invalid node failure: {:?}", cause);
                 }
@@ -341,10 +466,7 @@ impl ClusterDiscovery {
 
         let mut mut_signal_pin = signal.as_mut();
         let signal_future = Box::pin(mut_signal_pin.next());
-        let drop_node = Box::pin(
-            self.api_provider
-                .drop_node(self.local_id.clone(), MatchSeq::GE(1)),
-        );
+        let drop_node = Box::pin(self.warehouse_manager.shutdown_node(self.local_id.clone()));
         match futures::future::select(drop_node, signal_future).await {
             Either::Left((drop_node_result, _)) => {
                 if let Err(drop_node_failure) = drop_node_result {
@@ -387,7 +509,7 @@ impl ClusterDiscovery {
             if let Ok(socket_addr) = SocketAddr::from_str(lookup_ip) {
                 let ip_addr = socket_addr.ip();
                 if ip_addr.is_loopback() || ip_addr.is_unspecified() {
-                    if let Some(local_addr) = self.api_provider.get_local_addr().await? {
+                    if let Some(local_addr) = self.warehouse_manager.get_local_addr().await? {
                         let local_socket_addr = SocketAddr::from_str(&local_addr)?;
                         let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
                         warn!(
@@ -403,7 +525,7 @@ impl ClusterDiscovery {
             }
         }
 
-        let node_info = NodeInfo::create(
+        let mut node_info = NodeInfo::create(
             self.local_id.clone(),
             self.local_secret.clone(),
             cpus,
@@ -413,17 +535,23 @@ impl ClusterDiscovery {
             DATABEND_COMMIT_VERSION.to_string(),
         );
 
+        let resources_management = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+        resources_management.init_node(&mut node_info).await?;
+
         self.drop_invalid_nodes(&node_info).await?;
-        match self.api_provider.add_node(node_info.clone()).await {
-            Ok(_) => self.start_heartbeat(node_info).await,
+
+        match self.warehouse_manager.start_node(node_info).await {
+            Ok(seq_node) => self.start_heartbeat(seq_node).await,
             Err(cause) => Err(cause.add_message_back("(while cluster api add_node).")),
         }
     }
 
     #[async_backtrace::framed]
-    async fn start_heartbeat(self: &Arc<Self>, node_info: NodeInfo) -> Result<()> {
+    async fn start_heartbeat(self: &Arc<Self>, seq_node: SeqV<NodeInfo>) -> Result<()> {
         let mut heartbeat = self.heartbeat.lock().await;
-        heartbeat.start(node_info);
+        let seq = seq_node.seq;
+        let node_info = seq_node.into_value().unwrap();
+        heartbeat.start(node_info, seq);
         Ok(())
     }
 }
@@ -432,7 +560,7 @@ struct ClusterHeartbeat {
     timeout: Duration,
     shutdown: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
-    cluster_api: Arc<dyn ClusterApi>,
+    cluster_api: Arc<dyn WarehouseApi>,
     shutdown_handler: Option<JoinHandle<()>>,
     cluster_id: String,
     tenant_id: String,
@@ -441,7 +569,7 @@ struct ClusterHeartbeat {
 impl ClusterHeartbeat {
     pub fn create(
         timeout: Duration,
-        cluster_api: Arc<dyn ClusterApi>,
+        cluster_api: Arc<dyn WarehouseApi>,
         cluster_id: String,
         tenant_id: String,
     ) -> ClusterHeartbeat {
@@ -456,7 +584,7 @@ impl ClusterHeartbeat {
         }
     }
 
-    fn heartbeat_loop(&self, node: NodeInfo) -> impl Future<Output = ()> + 'static {
+    fn heartbeat_loop(&self, mut node: NodeInfo, seq: u64) -> impl Future<Output = ()> + 'static {
         let shutdown = self.shutdown.clone();
         let shutdown_notify = self.shutdown_notify.clone();
         let cluster_api = self.cluster_api.clone();
@@ -467,6 +595,7 @@ impl ClusterHeartbeat {
         async move {
             let mut shutdown_notified = Box::pin(shutdown_notify.notified());
 
+            let mut match_seq = seq;
             while !shutdown.load(Ordering::Relaxed) {
                 let mills = {
                     let mut rng = thread_rng();
@@ -481,16 +610,21 @@ impl ClusterHeartbeat {
                     }
                     Either::Right((_, new_shutdown_notified)) => {
                         shutdown_notified = new_shutdown_notified;
-                        let heartbeat = cluster_api.heartbeat(&node, MatchSeq::GE(1));
-                        if let Err(failure) = heartbeat.await {
-                            metric_incr_cluster_heartbeat_count(
-                                &node.id,
-                                &node.flight_address,
-                                &cluster_id,
-                                &tenant_id,
-                                "failure",
-                            );
-                            error!("Cluster cluster api heartbeat failure: {:?}", failure);
+                        let heartbeat = cluster_api.heartbeat_node(&mut node, match_seq);
+                        match heartbeat.await {
+                            Ok(new_match_seq) => {
+                                match_seq = new_match_seq;
+                            }
+                            Err(failure) => {
+                                metric_incr_cluster_heartbeat_count(
+                                    &node.id,
+                                    &node.flight_address,
+                                    &cluster_id,
+                                    &tenant_id,
+                                    "failure",
+                                );
+                                error!("Cluster cluster api heartbeat failure: {:?}", failure);
+                            }
                         }
                     }
                 }
@@ -502,9 +636,9 @@ impl ClusterHeartbeat {
         (duration / 3).as_millis()..=((duration / 3) * 2).as_millis()
     }
 
-    pub fn start(&mut self, node_info: NodeInfo) {
+    pub fn start(&mut self, node_info: NodeInfo, seq: u64) {
         self.shutdown_handler = Some(databend_common_base::runtime::spawn(
-            self.heartbeat_loop(node_info),
+            self.heartbeat_loop(node_info, seq),
         ));
     }
 
@@ -541,4 +675,22 @@ pub async fn create_client(config: &InnerConfig, address: &str) -> Result<Flight
     Ok(FlightClient::new(FlightServiceClient::new(
         ConnectionFactory::create_rpc_channel(address.to_owned(), timeout, rpc_tls_config).await?,
     )))
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct FlightParams {
+    pub(crate) timeout: u64,
+    pub(crate) retry_times: u64,
+    pub(crate) retry_interval: u64,
+}
+
+#[derive(Clone)]
+pub struct CachedNode {
+    pub node: Arc<NodeInfo>,
+}
+
+impl MemSized for CachedNode {
+    fn mem_bytes(&self) -> usize {
+        0
+    }
 }

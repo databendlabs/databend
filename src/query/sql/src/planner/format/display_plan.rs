@@ -47,6 +47,7 @@ impl Plan {
             Plan::ShowCreateCatalog(_) => Ok("ShowCreateCatalog".to_string()),
             Plan::CreateCatalog(_) => Ok("CreateCatalog".to_string()),
             Plan::DropCatalog(_) => Ok("DropCatalog".to_string()),
+            Plan::UseCatalog(_) => Ok("UseCatalog".to_string()),
 
             // Databases
             Plan::ShowCreateDatabase(_) => Ok("ShowCreateDatabase".to_string()),
@@ -196,6 +197,7 @@ impl Plan {
             Plan::ExecuteImmediate(_) => Ok("ExecuteImmediate".to_string()),
             Plan::CreateProcedure(_) => Ok("CreateProcedure".to_string()),
             Plan::DropProcedure(_) => Ok("DropProcedure".to_string()),
+            Plan::DescProcedure(_) => Ok("DescProcedure".to_string()),
             Plan::CallProcedure(_) => Ok("CallProcedure".to_string()),
             // Plan::ShowCreateProcedure(_) => Ok("ShowCreateProcedure".to_string()),
             // Plan::RenameProcedure(_) => Ok("ProcedureDatabase".to_string()),
@@ -211,6 +213,21 @@ impl Plan {
             Plan::CreateDictionary(_) => Ok("CreateDictionary".to_string()),
             Plan::DropDictionary(_) => Ok("DropDictionary".to_string()),
             Plan::ShowCreateDictionary(_) => Ok("ShowCreateDictionary".to_string()),
+            Plan::RenameDictionary(_) => Ok("RenameDictionary".to_string()),
+            Plan::ShowWarehouses => Ok("ShowWarehouses".to_string()),
+            Plan::ShowOnlineNodes => Ok("ShowOnlineNodes".to_string()),
+            Plan::DropWarehouse(_) => Ok("DropWarehouse".to_string()),
+            Plan::ResumeWarehouse(_) => Ok("ResumeWarehouse".to_string()),
+            Plan::SuspendWarehouse(_) => Ok("SuspendWarehouse".to_string()),
+            Plan::RenameWarehouse(_) => Ok("RenameWarehouse".to_string()),
+            Plan::InspectWarehouse(_) => Ok("InspectWarehouse".to_string()),
+            Plan::DropWarehouseCluster(_) => Ok("DropWarehouseCluster".to_string()),
+            Plan::RenameWarehouseCluster(_) => Ok("RenameWarehouseCluster".to_string()),
+            Plan::CreateWarehouse(_) => Ok("CreateWarehouse".to_string()),
+            Plan::UseWarehouse(_) => Ok("UseWarehouse".to_string()),
+            Plan::AddWarehouseCluster(_) => Ok("AddWarehouseCluster".to_string()),
+            Plan::AssignWarehouseNodes(_) => Ok("AddWarehouseClusterNode".to_string()),
+            Plan::UnassignWarehouseNodes(_) => Ok("DropWarehouseClusterNode".to_string()),
         }
     }
 }

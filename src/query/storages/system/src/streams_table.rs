@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::Semaphore;
@@ -39,7 +40,6 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
-use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::operations::acquire_task_permit;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -80,7 +80,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             .iter()
             .map(|e| (e.name(), e.clone()))
             .collect::<Vec<_>>();
-        let visibility_checker = ctx.get_visibility_checker().await?;
+        let visibility_checker = ctx.get_visibility_checker(false).await?;
         let user_api = UserApiProvider::instance();
 
         let mut catalogs = vec![];
@@ -162,8 +162,9 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                 HashMap::new()
             };
 
-            let mut source_db_ids = vec![];
-            let mut source_tb_ids = vec![];
+            let mut source_db_id_set = HashSet::new();
+            let mut source_tb_id_set = HashSet::new();
+            let mut source_db_tb_ids = vec![];
             for db in final_dbs {
                 let db_id = db.get_db_info().database_id.db_id;
                 let db_name = db.name();
@@ -184,7 +185,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
 
                 let mut handlers = Vec::new();
                 for table in tables {
-                    // If db1 is visible, do not means db1.table1 is visible. An user may have a grant about db1.table2, so db1 is visible
+                    // If db1 is visible, do not mean db1.table1 is visible. A user may have a grant about db1.table2, so db1 is visible
                     // for her, but db1.table1 may be not visible. So we need an extra check about table here after db visibility check.
                     let t_id = table.get_id();
                     if visibility_checker.check_table_visibility(
@@ -198,15 +199,22 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                         let stream_info = table.get_table_info();
                         let stream_table = StreamTable::try_from_table(table.as_ref())?;
 
-                        source_db_ids.push(
-                            stream_table
-                                .source_database_id(ctl.as_ref())
-                                .await
-                                .unwrap_or(0),
-                        );
+                        let source_db_id = stream_table.source_database_id(ctl.as_ref()).await.ok();
+                        if let Some(source_db_id) = source_db_id {
+                            source_db_id_set.insert(source_db_id);
+                        }
                         let source_tb_id = stream_table.source_table_id().ok();
-                        source_tb_ids.push(source_tb_id.unwrap_or(0));
-
+                        if let Some(source_tb_id) = source_tb_id {
+                            source_tb_id_set.insert(source_tb_id);
+                        }
+                        match (source_db_id, source_tb_id) {
+                            (Some(source_db_id), Some(source_tb_id)) => {
+                                source_db_tb_ids.push(Some((source_db_id, source_tb_id)));
+                            }
+                            (_, _) => {
+                                source_db_tb_ids.push(None);
+                            }
+                        }
                         catalogs.push(ctl_name.as_str());
                         databases.push(db_name.to_owned());
                         names.push(stream_table.name().to_string());
@@ -250,13 +258,11 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                                         let fuse_table =
                                             FuseTable::try_from_table(source.as_ref()).unwrap();
                                         if let Some(location) = stream_table.snapshot_loc() {
-                                            reason = SnapshotsIO::read_snapshot(
-                                                location,
-                                                fuse_table.get_operator(),
-                                            )
-                                            .await
-                                            .err()
-                                            .map_or("".to_string(), |e| e.display_text());
+                                            reason = fuse_table
+                                                .changes_read_offset_snapshot(&location)
+                                                .await
+                                                .err()
+                                                .map_or("".to_string(), |e| e.display_text());
                                         }
                                     }
                                     Err(e) => {
@@ -277,19 +283,40 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                 invalid_reason.append(&mut joint);
             }
 
+            let mut source_db_ids = source_db_id_set.into_iter().collect::<Vec<u64>>();
+            source_db_ids.sort();
             let source_db_names = ctl
                 .mget_database_names_by_ids(&tenant, &source_db_ids)
                 .await?;
-            let source_table_names = ctl.mget_table_names_by_ids(&tenant, &source_tb_ids).await?;
-            for (db, tb) in source_db_names
+            let source_db_map = source_db_ids
                 .into_iter()
-                .zip(source_table_names.into_iter())
-            {
-                let desc = match (db, tb) {
-                    (Some(db), Some(tb)) => Some(format!("{db}.{tb}")),
-                    _ => None,
-                };
-                table_name.push(desc);
+                .zip(source_db_names.into_iter())
+                .filter(|(_, db_name)| db_name.is_some())
+                .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
+                .collect::<HashMap<_, _>>();
+
+            let mut source_tb_ids = source_tb_id_set.into_iter().collect::<Vec<u64>>();
+            source_tb_ids.sort();
+            let source_tb_names = ctl
+                .mget_table_names_by_ids(&tenant, &source_tb_ids, false)
+                .await?;
+            let source_tb_map = source_tb_ids
+                .into_iter()
+                .zip(source_tb_names.into_iter())
+                .filter(|(_, tb_name)| tb_name.is_some())
+                .map(|(tb_id, tb_name)| (tb_id, tb_name.unwrap()))
+                .collect::<HashMap<_, _>>();
+
+            for source_db_tb_id in source_db_tb_ids.into_iter() {
+                if let Some((db_id, tb_id)) = source_db_tb_id {
+                    if let Some(db) = source_db_map.get(&db_id) {
+                        if let Some(tb) = source_tb_map.get(&tb_id) {
+                            table_name.push(Some(format!("{db}.{tb}")));
+                            continue;
+                        }
+                    }
+                }
+                table_name.push(None);
             }
         }
 

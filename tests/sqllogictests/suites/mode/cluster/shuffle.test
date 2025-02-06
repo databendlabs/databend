@@ -17,7 +17,7 @@ statement ok
 set disable_join_reorder = 1;
 
 query T
-explain select * from (select t1.number, t2.number from t1 right outer join (SELECT number FROM t2 QUALIFY row_number() OVER ( PARTITION BY number ORDER BY number DESC ) = 1) AS t2 ON t1.number = t2.number) as tt(a, b) order by a;
+explain select * from (select t1.number, t2.number from t1 right outer join (SELECT number FROM t2 QUALIFY row_number() OVER (PARTITION BY number ORDER BY number DESC ) = 1) AS t2 ON t1.number = t2.number) as tt(a, b) order by a;
 ----
 Sort
 ├── output columns: [t1.number (#0), t2.number (#1)]
@@ -39,10 +39,10 @@ Sort
             ├── estimated rows: 0.01
             ├── Filter(Build)
             │   ├── output columns: [t2.number (#1)]
-            │   ├── filters: [row_number() OVER ( PARTITION BY number ORDER BY number DESC ) (#2) = 1]
+            │   ├── filters: [row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2) = 1]
             │   ├── estimated rows: 0.01
             │   └── Window
-            │       ├── output columns: [t2.number (#1), row_number() OVER ( PARTITION BY number ORDER BY number DESC ) (#2)]
+            │       ├── output columns: [t2.number (#1), row_number() OVER (PARTITION BY number ORDER BY number DESC) (#2)]
             │       ├── aggregate function: [row_number]
             │       ├── partition by: [number]
             │       ├── order by: [number]
@@ -77,7 +77,6 @@ Sort
                     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 3 to 3>]
                     ├── push downs: [filters: [], limit: NONE]
                     └── estimated rows: 5.00
-
 
 statement ok
 drop table if exists t1;

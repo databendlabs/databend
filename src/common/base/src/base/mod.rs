@@ -28,7 +28,7 @@ mod take_mut;
 mod uniq_id;
 mod watch_notify;
 
-pub use dma::dma_buffer_as_vec;
+pub use dma::dma_buffer_to_bytes;
 pub use dma::dma_read_file;
 pub use dma::dma_read_file_range;
 pub use dma::dma_write_file_vectored;
@@ -41,6 +41,7 @@ pub use ordered_float::OrderedFloat;
 pub use profiling::Profiling;
 pub use progress::Progress;
 pub use progress::ProgressValues;
+pub use progress::SpillProgress;
 pub use select::select3;
 pub use select::Select3Output;
 pub use semaphore::Semaphore;

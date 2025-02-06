@@ -12,9 +12,9 @@ doctest = false
 test = true
 
 [dependencies]
-arrow-array = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
+base64 = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dashmap = { workspace = true }
@@ -27,6 +27,7 @@ databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-license = { workspace = true }
+databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
@@ -47,7 +48,9 @@ databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-fail-safe = { workspace = true }
+databend-enterprise-hilbert-clustering = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
+databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-storage-encryption = { workspace = true }
 databend-enterprise-storage-quota = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
@@ -64,11 +67,7 @@ futures-util = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
 opendal = { workspace = true }
-tempfile = "3.4.0"
-
-# aws sdk
-aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1.17.0"
+tempfile = { workspace = true }
 
 [dev-dependencies]
 jsonb = { workspace = true }

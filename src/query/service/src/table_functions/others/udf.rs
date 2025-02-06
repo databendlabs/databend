@@ -18,6 +18,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use arrow_array::LargeStringArray;
 use arrow_array::RecordBatch;
 use arrow_schema::Field;
 use arrow_schema::Schema;
@@ -121,10 +122,6 @@ impl UdfEchoTable {
 
 #[async_trait::async_trait]
 impl Table for UdfEchoTable {
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -145,12 +142,14 @@ impl Table for UdfEchoTable {
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
 
-        let mut client =
-            UDFFlightClient::connect(&self.address, connect_timeout, request_timeout, 65536)
-                .await?
-                .with_tenant(ctx.get_tenant().tenant_name())?
-                .with_func_name("builtin_echo")?
-                .with_query_id(&ctx.get_id())?;
+        let endpoint =
+            UDFFlightClient::build_endpoint(&self.address, connect_timeout, request_timeout)?;
+        let mut client = UDFFlightClient::connect(endpoint, connect_timeout, 65536)
+            .await?
+            .with_tenant(ctx.get_tenant().tenant_name())?
+            .with_func_name("builtin_echo")?
+            .with_handler_name("builtin_echo")?
+            .with_query_id(&ctx.get_id())?;
 
         let array = arrow_array::LargeStringArray::from(vec![self.arg.clone()]);
         let schema = Schema::new(vec![Field::new(
@@ -164,7 +163,7 @@ impl Table for UdfEchoTable {
         let result = result_batch
             .column(0)
             .as_any()
-            .downcast_ref::<arrow_array::LargeStringArray>()
+            .downcast_ref::<LargeStringArray>()
             .unwrap();
         let result = result.value(0).to_string();
         let parts = vec![Arc::new(Box::new(StringPart { value: result }) as _)];

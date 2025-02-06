@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ColumnID as AstColumnID;
+use databend_common_ast::ast::ColumnMatchMode;
 use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::CopyIntoTableSource;
 use databend_common_ast::ast::CopyIntoTableStmt;
 use databend_common_ast::ast::Expr;
@@ -35,6 +36,7 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values_with_placeholder;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::Span;
 use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table_context::StageAttachment;
@@ -53,13 +55,11 @@ use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::FileFormatOptionsReader;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
-use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
-use indexmap::IndexMap;
 use log::debug;
 use log::warn;
 use parking_lot::RwLock;
@@ -76,7 +76,7 @@ use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
 
-impl<'a> Binder {
+impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_copy_into_table(
         &mut self,
@@ -152,12 +152,26 @@ impl<'a> Binder {
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
 
-        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+        let validation_mode = ValidationMode::from_str(stmt.options.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
         let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), location).await?;
-        self.apply_copy_into_table_options(stmt, &mut stage_info)
-            .await?;
+        if !stmt.file_format.is_empty() {
+            stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
+        }
+        let mut options = stmt.options.clone();
+        stage_info
+            .file_format_params
+            .check_copy_options(&mut options)?;
+
+        if !(stmt.options.purge && stmt.options.force)
+            && stmt.options.max_files > COPY_MAX_FILES_PER_COMMIT
+        {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "max_files {} is too large, max_files should be less than {COPY_MAX_FILES_PER_COMMIT}",
+                stmt.options.max_files
+            )));
+        }
         let pattern = match &stmt.pattern {
             None => None,
             Some(pattern) => Some(Self::resolve_copy_pattern(self.ctx.clone(), pattern)?),
@@ -168,15 +182,12 @@ impl<'a> Binder {
             files: stmt.files.clone(),
             pattern,
         };
-        let required_values_schema: DataSchemaRef = Arc::new(
-            match &stmt.dst_columns {
-                Some(cols) => self.schema_project(&table.schema(), cols)?,
-                None => self.schema_project(&table.schema(), &[])?,
-            }
-            .into(),
-        );
+        let stage_schema = match &stmt.dst_columns {
+            Some(cols) => self.schema_project(&table.schema(), cols)?,
+            None => self.schema_project(&table.schema(), &[])?,
+        };
 
-        let stage_schema = infer_table_schema(&required_values_schema)?;
+        let required_values_schema: DataSchemaRef = Arc::new(stage_schema.clone().into());
 
         let default_values = if stage_info.file_format_params.need_field_default() {
             Some(
@@ -195,7 +206,6 @@ impl<'a> Binder {
             is_transform,
             no_file_to_copy: false,
             from_attachment: false,
-            force: stmt.force,
             stage_table_info: StageTableInfo {
                 schema: stage_schema,
                 files_info,
@@ -205,14 +215,15 @@ impl<'a> Binder {
                 is_select: false,
                 default_values,
                 copy_into_location_options: Default::default(),
+                copy_into_table_options: stmt.options.clone(),
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
             required_values_schema: required_values_schema.clone(),
             write_mode: CopyIntoTableMode::Copy,
             query: None,
-
             enable_distributed: false,
+            files_collected: false,
         })
     }
 
@@ -228,15 +239,25 @@ impl<'a> Binder {
 
         if use_query {
             let mut select_list = Vec::with_capacity(plan.required_source_schema.num_fields());
+            let case_sensitive = plan
+                .stage_table_info
+                .copy_into_table_options
+                .column_match_mode
+                == Some(ColumnMatchMode::CaseSensitive);
             for dest_field in plan.required_source_schema.fields().iter() {
                 let column = Expr::ColumnRef {
                     span: None,
                     column: ColumnRef {
                         database: None,
                         table: None,
-                        column: AstColumnID::Name(Identifier::from_name(
+                        column: AstColumnID::Name(Identifier::from_name_with_quoted(
                             None,
-                            dest_field.name().to_string(),
+                            if case_sensitive {
+                                dest_field.name().to_string()
+                            } else {
+                                dest_field.name().to_lowercase().to_string()
+                            },
+                            Some('"'),
                         )),
                     },
                 };
@@ -253,7 +274,10 @@ impl<'a> Binder {
                 };
                 select_list.push(SelectTarget::AliasedExpr {
                     expr: Box::new(expr),
-                    alias: None,
+                    alias: Some(Identifier::from_name(
+                        Span::None,
+                        dest_field.name().to_string(),
+                    )),
                 });
             }
 
@@ -268,7 +292,7 @@ impl<'a> Binder {
     pub(crate) async fn bind_attachment(
         &mut self,
         attachment: StageAttachment,
-    ) -> Result<(StageInfo, StageFilesInfo)> {
+    ) -> Result<(StageInfo, StageFilesInfo, CopyIntoTableOptions)> {
         let (mut stage_info, path) =
             resolve_stage_location(self.ctx.as_ref(), &attachment.location[1..]).await?;
 
@@ -289,16 +313,21 @@ impl<'a> Binder {
             }
             stage_info.file_format_params = params;
         }
+        let mut copy_options = CopyIntoTableOptions::default();
         if let Some(ref options) = attachment.copy_options {
-            stage_info.copy_options.apply(options, true)?;
+            copy_options.apply(options, true)?;
         }
+        copy_options.force = true;
+        stage_info
+            .file_format_params
+            .check_copy_options(&mut copy_options)?;
 
         let files_info = StageFilesInfo {
             path,
             files: None,
             pattern: None,
         };
-        Ok((stage_info, files_info))
+        Ok((stage_info, files_info, copy_options))
     }
 
     /// Bind COPY INFO <table> FROM <location>
@@ -328,7 +357,7 @@ impl<'a> Binder {
 
         let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
 
-        let (stage_info, files_info) = self.bind_attachment(attachment).await?;
+        let (stage_info, files_info, options) = self.bind_attachment(attachment).await?;
 
         // list the files to be copied in binding phase
         // note that, this method(`bind_copy_from_attachment`) are used by
@@ -355,7 +384,6 @@ impl<'a> Binder {
             required_source_schema: data_schema.clone(),
             required_values_schema,
             values_consts: const_columns,
-            force: true,
             stage_table_info: StageTableInfo {
                 schema: stage_schema,
                 files_info,
@@ -365,6 +393,7 @@ impl<'a> Binder {
                 is_select: false,
                 default_values: Some(default_values),
                 copy_into_location_options: Default::default(),
+                copy_into_table_options: options,
             },
             write_mode,
             query: None,
@@ -372,6 +401,7 @@ impl<'a> Binder {
 
             enable_distributed: false,
             is_transform: false,
+            files_collected: true,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)
@@ -384,13 +414,18 @@ impl<'a> Binder {
         &mut self,
         bind_context: &BindContext,
         mut plan: CopyIntoTablePlan,
-        select_list: &'a [SelectTarget],
+        select_list: &[SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
         plan.collect_files(self.ctx.as_ref()).await?;
         if plan.no_file_to_copy {
             return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
+        let case_sensitive = plan
+            .stage_table_info
+            .copy_into_table_options
+            .column_match_mode
+            == Some(ColumnMatchMode::CaseSensitive);
 
         let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
@@ -401,6 +436,7 @@ impl<'a> Binder {
                 plan.stage_table_info.files_info.clone(),
                 alias,
                 plan.stage_table_info.files_to_copy.clone(),
+                case_sensitive,
             )
             .await?;
 
@@ -443,8 +479,7 @@ impl<'a> Binder {
         // disable variant check to allow copy invalid JSON into tables
         let disable_variant_check = plan
             .stage_table_info
-            .stage_info
-            .copy_options
+            .copy_into_table_options
             .disable_variant_check;
         if disable_variant_check {
             let hints = Hint {
@@ -474,44 +509,6 @@ impl<'a> Binder {
         }));
 
         Ok(Plan::CopyIntoTable(Box::new(plan)))
-    }
-
-    #[async_backtrace::framed]
-    pub async fn apply_copy_into_table_options(
-        &mut self,
-        stmt: &CopyIntoTableStmt,
-        stage: &mut StageInfo,
-    ) -> Result<()> {
-        if !stmt.file_format.is_empty() {
-            stage.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
-        }
-
-        stage.copy_options.on_error =
-            OnErrorMode::from_str(&stmt.on_error).map_err(ErrorCode::SyntaxException)?;
-
-        if stmt.size_limit != 0 {
-            stage.copy_options.size_limit = stmt.size_limit;
-        }
-
-        stage.copy_options.split_size = stmt.split_size;
-        stage.copy_options.purge = stmt.purge;
-        stage.copy_options.disable_variant_check = stmt.disable_variant_check;
-        stage.copy_options.return_failed_only = stmt.return_failed_only;
-
-        if stmt.max_files != 0 {
-            stage.copy_options.max_files = stmt.max_files;
-        }
-
-        if !(stage.copy_options.purge && stmt.force)
-            && stage.copy_options.max_files > COPY_MAX_FILES_PER_COMMIT
-        {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "max_files {} is too large, max_files should be less than {COPY_MAX_FILES_PER_COMMIT}",
-                stage.copy_options.max_files
-            )));
-        }
-
-        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -572,8 +569,6 @@ impl<'a> Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
         );
         let mut values = Vec::with_capacity(data_schema.fields.len());
         for field in &data_schema.fields {

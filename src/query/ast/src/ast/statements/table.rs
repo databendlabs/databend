@@ -116,7 +116,7 @@ pub struct ShowDropTablesStmt {
 
 impl Display for ShowDropTablesStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "SHOW DROP TABLE")?;
+        write!(f, "SHOW DROP TABLES")?;
         if let Some(database) = &self.database {
             write!(f, " FROM {database}")?;
         }
@@ -192,19 +192,20 @@ pub enum TableType {
 
 impl Display for CreateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE ")?;
+        write!(f, "CREATE")?;
         if let CreateOption::CreateOrReplace = self.create_option {
-            write!(f, "OR REPLACE ")?;
+            write!(f, " OR REPLACE")?;
         }
         match self.table_type {
             TableType::Normal => {}
-            TableType::Transient => write!(f, "TRANSIENT ")?,
-            TableType::Temporary => write!(f, "TEMPORARY ")?,
+            TableType::Transient => write!(f, " TRANSIENT ")?,
+            TableType::Temporary => write!(f, " TEMPORARY ")?,
         };
-        write!(f, "TABLE ")?;
+        write!(f, " TABLE")?;
         if let CreateOption::CreateIfNotExists = self.create_option {
-            write!(f, "IF NOT EXISTS ")?;
+            write!(f, " IF NOT EXISTS")?;
         }
+        write!(f, " ")?;
         write_dot_separated_list(
             f,
             self.catalog
@@ -380,11 +381,11 @@ pub struct AlterTableStmt {
 
 impl Display for AlterTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "ALTER TABLE ")?;
+        write!(f, "ALTER TABLE")?;
         if self.if_exists {
-            write!(f, "IF EXISTS ")?;
+            write!(f, " IF EXISTS")?;
         }
-        write!(f, "{}", self.table_reference)?;
+        write!(f, " {}", self.table_reference)?;
         write!(f, " {}", self.action)
     }
 }
@@ -462,7 +463,7 @@ impl Display for AlterTableAction {
                 write!(f, "DROP COLUMN {column}")?;
             }
             AlterTableAction::AlterTableClusterKey { cluster_by } => {
-                write!(f, " {cluster_by}")?;
+                write!(f, "{cluster_by}")?;
             }
             AlterTableAction::DropTableClusterKey => {
                 write!(f, "DROP CLUSTER KEY")?;
@@ -741,6 +742,21 @@ impl Display for Engine {
             Engine::Random => write!(f, "RANDOM"),
             Engine::Iceberg => write!(f, "ICEBERG"),
             Engine::Delta => write!(f, "DELTA"),
+        }
+    }
+}
+
+impl From<&str> for Engine {
+    fn from(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "null" => Engine::Null,
+            "memory" => Engine::Memory,
+            "fuse" => Engine::Fuse,
+            "view" => Engine::View,
+            "random" => Engine::Random,
+            "iceberg" => Engine::Iceberg,
+            "delta" => Engine::Delta,
+            _ => unreachable!("invalid engine: {}", s),
         }
     }
 }

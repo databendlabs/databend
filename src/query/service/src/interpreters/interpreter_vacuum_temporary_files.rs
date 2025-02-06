@@ -20,9 +20,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_sql::plans::VacuumTemporaryFilesPlan;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
+use databend_enterprise_vacuum_handler::vacuum_handler::VacuumTempOptions;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -57,11 +57,12 @@ impl Interpreter for VacuumTemporaryFilesInterpreter {
 
         let handler = get_vacuum_handler();
 
-        let temporary_files_prefix = query_spill_prefix(self.ctx.get_tenant().tenant_name(), "");
+        let temporary_files_prefix = self.ctx.query_tenant_spill_prefix();
         let removed_files = handler
             .do_vacuum_temporary_files(
+                self.ctx.clone().get_abort_checker(),
                 temporary_files_prefix,
-                self.plan.retain,
+                &VacuumTempOptions::VacuumCommand(self.plan.retain),
                 self.plan.limit.map(|x| x as usize).unwrap_or(usize::MAX),
             )
             .await?;

@@ -20,7 +20,7 @@ use std::ptr::NonNull;
 use std::sync::Arc;
 
 use bumpalo::Bump;
-use databend_common_base::mem_allocator::MmapAllocator;
+use databend_common_base::mem_allocator::DefaultAllocator;
 
 use crate::container::Container;
 use crate::container::HeapContainer;
@@ -102,7 +102,7 @@ pub struct DictionaryStringHashTable<V> {
     arena: Arc<Bump>,
     dict_keys: usize,
     entries_len: usize,
-    pub(crate) entries: HeapContainer<DictionaryEntry<V>, MmapAllocator>,
+    pub(crate) entries: HeapContainer<DictionaryEntry<V>, DefaultAllocator>,
     pub dictionary_hashset: StringHashSet<[u8]>,
 }
 
@@ -116,7 +116,7 @@ impl<V> DictionaryStringHashTable<V> {
             arena: bump.clone(),
             dict_keys,
             entries_len: 0,
-            entries: unsafe { HeapContainer::new_zeroed(256, MmapAllocator::default()) },
+            entries: unsafe { HeapContainer::new_zeroed(256, DefaultAllocator {}) },
             dictionary_hashset: StringHashSet::new(bump),
         }
     }
@@ -283,10 +283,26 @@ impl<V> DictionaryStringHashTable<V> {
 impl<V> HashtableLike for DictionaryStringHashTable<V> {
     type Key = DictionaryKeys;
     type Value = V;
-    type EntryRef<'a> = DictionaryEntryRef<'a, V> where Self: 'a, V: 'a;
-    type EntryMutRef<'a> = DictionaryMutEntryRef<'a, V> where Self: 'a, V: 'a;
-    type Iterator<'a> = DictionaryTableIter<'a, V> where Self: 'a, V: 'a;
-    type IteratorMut<'a> = DictionaryTableMutIter<'a, V> where Self: 'a, V: 'a;
+    type EntryRef<'a>
+        = DictionaryEntryRef<'a, V>
+    where
+        Self: 'a,
+        V: 'a;
+    type EntryMutRef<'a>
+        = DictionaryMutEntryRef<'a, V>
+    where
+        Self: 'a,
+        V: 'a;
+    type Iterator<'a>
+        = DictionaryTableIter<'a, V>
+    where
+        Self: 'a,
+        V: 'a;
+    type IteratorMut<'a>
+        = DictionaryTableMutIter<'a, V>
+    where
+        Self: 'a,
+        V: 'a;
 
     fn len(&self) -> usize {
         self.entries_len
@@ -436,7 +452,7 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
                 }
             }
 
-            self.entries = HeapContainer::new_zeroed(0, MmapAllocator::default());
+            self.entries = HeapContainer::new_zeroed(0, DefaultAllocator {});
         }
 
         self.dictionary_hashset.clear();
@@ -458,7 +474,7 @@ where Self: 'a
     }
 }
 
-impl<'a, V> Copy for DictionaryEntryRef<'a, V> {}
+impl<V> Copy for DictionaryEntryRef<'_, V> {}
 
 impl<'a, V> DictionaryEntryRef<'a, V>
 where Self: 'a
@@ -545,7 +561,7 @@ pub struct DictionaryTableIter<'a, V> {
     dict_keys: usize,
 }
 
-unsafe impl<'a, V> TrustedLen for DictionaryTableIter<'a, V> {}
+unsafe impl<V> TrustedLen for DictionaryTableIter<'_, V> {}
 
 impl<'a, V> Iterator for DictionaryTableIter<'a, V> {
     type Item = DictionaryEntryRef<'a, V>;
@@ -599,7 +615,7 @@ impl<'a, V> Iterator for DictionaryTableMutIter<'a, V> {
 }
 
 pub struct DictionarySlotIter<'a> {
-    empty: Option<&'a TableEmpty<(), MmapAllocator>>,
+    empty: Option<&'a TableEmpty<(), DefaultAllocator>>,
     entities_slice: &'a [Entry<FallbackKey, ()>],
     i: usize,
 }
@@ -644,7 +660,7 @@ pub struct DictionaryTableKeySlotIter<'a, T> {
     dictionary_hashset: &'a StringHashSet<[u8]>,
 }
 
-impl<'a, T> Iterator for DictionaryTableKeySlotIter<'a, T> {
+impl<T> Iterator for DictionaryTableKeySlotIter<'_, T> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {

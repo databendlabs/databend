@@ -2,7 +2,7 @@ statement ok
 drop table if exists t1;
 
 statement ok
-create table t1 (a int);
+create or replace table t1 (a int);
 
 # right join with empty build side
 query II
@@ -82,7 +82,7 @@ statement ok
 drop table if exists t1;
 
 statement ok
-create table t1(a int, b int)
+create or replace table t1(a int, b int)
 
 statement ok
 insert into t1 values(1, 2), (2, 4), (3, 6), (4, 8), (5, 10)
@@ -91,7 +91,7 @@ statement ok
 drop table if exists t2
 
 statement ok
-create table t2(a int, b int)
+create or replace table t2(a int, b int)
 
 statement ok
 insert into t2 values(1, 2), (1, 4), (1, 6), (1, 8), (1, 10);
@@ -124,10 +124,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1 (id int, val bigint unsigned default 0);
+create or replace table t1 (id int, val bigint unsigned default 0);
 
 statement ok
-create table t2 (id int, val bigint unsigned default 0);
+create or replace table t2 (id int, val bigint unsigned default 0);
 
 statement ok
 insert into t1 values(1, 1696549154011), (2, 1696549154013);
@@ -153,13 +153,13 @@ statement ok
 drop table t2;
 
 statement ok
-create table t(id int);
+create or replace table t(id int);
 
 statement ok
 insert into t values(1), (2);
 
 statement ok
-create table t1(id int, col1 varchar);
+create or replace table t1(id int, col1 varchar);
 
 statement ok
 insert into t1 values(1, 'c'), (3, 'd');
@@ -203,13 +203,13 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(a int, b int);
+create or replace table t1(a int, b int);
 
 statement ok
 insert into t1 values(1, 1),(2, 2),(3, 3);
 
 statement ok
-create table t2(a int, b int);
+create or replace table t2(a int, b int);
 
 statement ok
 insert into t2 values(1, 1),(2, 2);
@@ -237,13 +237,13 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1(a int, b int, c int, d int);
+create or replace table t1(a int, b int, c int, d int);
 
 statement ok
 insert into t1 values(1, 2, 3, 4);
 
 statement ok
-create table t2(a int, b int, c int, d int);
+create or replace table t2(a int, b int, c int, d int);
 
 statement ok
 insert into t2 values(1, 2, 3, 4);
@@ -255,7 +255,7 @@ statement ok
 drop table if exists t;
 
 statement ok
-create table t(a int);
+create or replace table t(a int);
 
 statement ok
 insert into t values(1),(2),(3);
@@ -275,4 +275,13 @@ select * from (select number from numbers(5)) t2 full outer join (select a, 'A' 
 3 3 A
 
 statement ok
+select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number and 123;
+
+statement error
+select * from (select number from numbers(5)) t2 full outer join (select a, 'A' as name from t) t1 on t1.a = t2.number and 11981933213501947393::DATE;
+
+statement ok
 drop table if exists t;
+
+statement ok
+with v2 as (SELECT 'xx' || cast(number as string) AS invoice_nr FROM numbers(135) group by invoice_nr order by invoice_nr) select v2.invoice_nr from v2 where EXISTS (SELECT cast(number as string) AS invoice_nr FROM numbers(800) where v2.invoice_nr = cast(number as string)) ignore_result;

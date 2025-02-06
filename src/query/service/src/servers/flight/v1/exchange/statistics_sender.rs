@@ -81,8 +81,9 @@ impl StatisticsSender {
                             notified = right;
                             sleep_future = Box::pin(sleep(Duration::from_millis(100)));
 
-                            if let Err(_cause) = Self::send_progress(&ctx, &tx).await {
-                                ctx.get_exchange_manager().shutdown_query(&query_id);
+                            if let Err(cause) = Self::send_progress(&ctx, &tx).await {
+                                ctx.get_exchange_manager()
+                                    .shutdown_query(&query_id, Some(cause));
                                 return;
                             }
 
@@ -229,6 +230,10 @@ impl StatisticsSender {
             progress_info.push(ProgressInfo::ResultProgress(result_progress_values));
         }
 
+        let stats = ctx.get_spill_file_stats(None);
+        if stats.file_nums != 0 {
+            progress_info.push(ProgressInfo::SpillTotalStats(stats))
+        }
         progress_info
     }
 

@@ -46,7 +46,7 @@ impl Binder {
         cte_types: &mut Vec<DataType>,
     ) -> Result<()> {
         match expr.plan() {
-            RelOperator::Join(_) | RelOperator::UnionAll(_) | RelOperator::MaterializedCte(_) => {
+            RelOperator::Join(_) | RelOperator::UnionAll(_) => {
                 self.count_r_cte_scan(expr.child(0)?, cte_scan_names, cte_types)?;
                 self.count_r_cte_scan(expr.child(1)?, cte_scan_names, cte_types)?;
             }
@@ -72,7 +72,6 @@ impl Binder {
 
             RelOperator::Exchange(_)
             | RelOperator::Scan(_)
-            | RelOperator::CteScan(_)
             | RelOperator::DummyTableScan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
@@ -187,7 +186,7 @@ impl TableIdentifier {
                             QuotedIdent(&database.name, self.dialect.default_ident_quote())
                         )
                     }
-                    Some(NameResolutionSuggest::Unqoted) => {
+                    Some(NameResolutionSuggest::Unquoted) => {
                         format!(
                             "Unknown database {catalog}.{database} (quoted). Did you mean {} (unquoted)?",
                             &database.name
@@ -205,7 +204,7 @@ impl TableIdentifier {
                             QuotedIdent(&table.name, self.dialect.default_ident_quote())
                         )
                     }
-                    Some(NameResolutionSuggest::Unqoted) => {
+                    Some(NameResolutionSuggest::Unquoted) => {
                         format!(
                             "Unknown table {catalog}.{database}.{table} (quoted). Did you mean {} (unquoted)?",
                             &table.name

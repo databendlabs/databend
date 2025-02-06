@@ -19,7 +19,6 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use databend_common_pipeline_core::query_spill_prefix;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::add_k_way_merge_sort;
 use databend_common_pipeline_transforms::processors::sort::utils::add_order_field;
@@ -34,6 +33,7 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::transforms::create_transform_sort_spill;
+use crate::pipelines::processors::transforms::create_transform_stream_sort_spill;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
@@ -276,28 +276,43 @@ impl SortPipelineBuilder {
 
         if may_spill {
             let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
+            let location_prefix = self.ctx.query_id_spill_prefix();
+
             let config = SpillerConfig {
                 spiller_type: SpillerType::OrderBy,
-                location_prefix: query_spill_prefix(
-                    self.ctx.get_tenant().tenant_name(),
-                    &self.ctx.get_id(),
-                ),
+                location_prefix,
                 disk_spill: None,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
+            let settings = self.ctx.get_settings();
+            let enable_experimental_stream_sort_spilling =
+                settings.get_enable_experimental_stream_sort_spilling()?;
             pipeline.add_transform(|input, output| {
-                let op = DataOperator::instance().operator();
+                let op = DataOperator::instance().spill_operator();
                 let spiller = Spiller::create(self.ctx.clone(), op, config.clone())?;
-                Ok(ProcessorPtr::create(create_transform_sort_spill(
-                    input,
-                    output,
-                    schema.clone(),
-                    self.sort_desc.clone(),
-                    self.limit,
-                    spiller,
-                    output_order_col,
-                    enable_loser_tree,
-                )))
+                if enable_experimental_stream_sort_spilling {
+                    Ok(ProcessorPtr::create(create_transform_stream_sort_spill(
+                        input,
+                        output,
+                        schema.clone(),
+                        self.sort_desc.clone(),
+                        self.limit,
+                        spiller,
+                        output_order_col,
+                        enable_loser_tree,
+                    )))
+                } else {
+                    Ok(ProcessorPtr::create(create_transform_sort_spill(
+                        input,
+                        output,
+                        schema.clone(),
+                        self.sort_desc.clone(),
+                        self.limit,
+                        spiller,
+                        output_order_col,
+                        enable_loser_tree,
+                    )))
+                }
             })?;
         }
 

@@ -27,7 +27,7 @@ pub fn build_compact_block_no_split_pipeline(
     thresholds: BlockThresholds,
     max_threads: usize,
 ) -> Result<()> {
-    // has been resize 1.
+    pipeline.try_resize(1)?;
     pipeline.add_accumulating_transformer(|| BlockCompactNoSplitBuilder::new(thresholds));
     pipeline.try_resize(max_threads)?;
     pipeline.add_block_meta_transformer(TransformCompactBlock::default);
@@ -79,7 +79,7 @@ impl AccumulatingTransform for BlockCompactNoSplitBuilder {
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         self.accumulated_rows += data.num_rows();
-        self.accumulated_bytes += data.memory_size();
+        self.accumulated_bytes += crate::processors::memory_size(&data);
         if !self
             .thresholds
             .check_large_enough(self.accumulated_rows, self.accumulated_bytes)
@@ -94,12 +94,12 @@ impl AccumulatingTransform for BlockCompactNoSplitBuilder {
             res.push(Self::create_output_data(&mut self.staged_blocks));
         }
 
-        if !self.check_for_compact() && !self.pending_blocks.is_empty() {
-            // blocks > 2N
-            res.push(Self::create_output_data(&mut self.pending_blocks));
-        } else {
+        if self.pending_blocks.is_empty() || self.check_for_compact() {
             // N <= blocks < 2N
             std::mem::swap(&mut self.staged_blocks, &mut self.pending_blocks);
+        } else {
+            // blocks > 2N
+            res.push(Self::create_output_data(&mut self.pending_blocks));
         }
         self.staged_blocks.push(data);
         self.reset_accumulated();
@@ -107,29 +107,11 @@ impl AccumulatingTransform for BlockCompactNoSplitBuilder {
     }
 
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
-        match (
-            self.pending_blocks.is_empty(),
-            self.staged_blocks.is_empty(),
-        ) {
-            (true, true) => Ok(vec![]),
-            (true, false) => Ok(vec![Self::create_output_data(&mut self.staged_blocks)]),
-            (false, true) => Ok(vec![Self::create_output_data(&mut self.pending_blocks)]),
-            (false, false) => {
-                for block in &self.staged_blocks {
-                    self.accumulated_rows += block.num_rows();
-                    self.accumulated_bytes += block.memory_size();
-                }
-                if self.check_for_compact() {
-                    self.staged_blocks.append(&mut self.pending_blocks);
-                    Ok(vec![Self::create_output_data(&mut self.staged_blocks)])
-                } else {
-                    // blocks > 2N
-                    Ok(vec![
-                        Self::create_output_data(&mut self.staged_blocks),
-                        Self::create_output_data(&mut self.pending_blocks),
-                    ])
-                }
-            }
+        self.staged_blocks.append(&mut self.pending_blocks);
+        if self.staged_blocks.is_empty() {
+            Ok(vec![])
+        } else {
+            Ok(vec![Self::create_output_data(&mut self.staged_blocks)])
         }
     }
 }

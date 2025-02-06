@@ -310,6 +310,18 @@ pub enum ExprElement {
         unit: IntervalKind,
         date: Expr,
     },
+    LastDay {
+        unit: IntervalKind,
+        date: Expr,
+    },
+    PreviousDay {
+        unit: Weekday,
+        date: Expr,
+    },
+    NextDay {
+        unit: Weekday,
+        date: Expr,
+    },
     Hole {
         name: String,
     },
@@ -416,6 +428,9 @@ impl ExprElement {
             ExprElement::DateDiff { .. } => Affix::Nilfix,
             ExprElement::DateSub { .. } => Affix::Nilfix,
             ExprElement::DateTrunc { .. } => Affix::Nilfix,
+            ExprElement::LastDay { .. } => Affix::Nilfix,
+            ExprElement::PreviousDay { .. } => Affix::Nilfix,
+            ExprElement::NextDay { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
             ExprElement::VariableAccess { .. } => Affix::Nilfix,
         }
@@ -459,6 +474,9 @@ impl Expr {
             Expr::DateDiff { .. } => Affix::Nilfix,
             Expr::DateSub { .. } => Affix::Nilfix,
             Expr::DateTrunc { .. } => Affix::Nilfix,
+            Expr::LastDay { .. } => Affix::Nilfix,
+            Expr::PreviousDay { .. } => Affix::Nilfix,
+            Expr::NextDay { .. } => Affix::Nilfix,
             Expr::Hole { .. } => Affix::Nilfix,
         }
     }
@@ -653,6 +671,21 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 date: Box::new(date),
             },
             ExprElement::DateTrunc { unit, date } => Expr::DateTrunc {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date: Box::new(date),
+            },
+            ExprElement::LastDay { unit, date } => Expr::LastDay {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date: Box::new(date),
+            },
+            ExprElement::PreviousDay { unit, date } => Expr::PreviousDay {
+                span: transform_span(elem.span.tokens),
+                unit,
+                date: Box::new(date),
+            },
+            ExprElement::NextDay { unit, date } => Expr::NextDay {
                 span: transform_span(elem.span.tokens),
                 unit,
                 date: Box::new(date),
@@ -928,12 +961,33 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule! {
             TRIM
             ~ "("
-            ~ #subexpr(0)
+            ~ #subexpr(0) ~ ("," ~ #subexpr(0))?
             ~ ^")"
         },
-        |(_, _, expr, _)| ExprElement::Trim {
-            expr: Box::new(expr),
-            trim_where: None,
+        |(name, _, expr, trim_str, _)| {
+            if let Some(trim_str) = trim_str {
+                let trim_str = trim_str.1;
+                ExprElement::FunctionCall {
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier {
+                            span: Some(name.span),
+                            name: name.text().to_owned(),
+                            quote: None,
+                            ident_type: IdentifierType::None,
+                        },
+                        args: vec![expr, trim_str],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                }
+            } else {
+                ExprElement::Trim {
+                    expr: Box::new(expr),
+                    trim_where: None,
+                }
+            }
         },
     );
     let trim_from = map(
@@ -1040,19 +1094,20 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             },
         },
     );
-    let function_call_with_params = map(
+    let function_call_with_params_window = map(
         rule! {
             #function_name
-            ~ ("(" ~ #comma_separated_list1(subexpr(0)) ~ ")")?
+            ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            ~ #window_function?
         },
-        |(name, params, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
+        |(name, _, params, _, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
             func: FunctionCall {
                 distinct: opt_distinct.is_some(),
                 name,
                 args: opt_args.unwrap_or_default(),
-                params: params.map(|(_, x, _)| x).unwrap_or_default(),
-                window: None,
+                params,
+                window,
                 lambda: None,
             },
         },
@@ -1222,6 +1277,27 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         |(_, _, unit, _, date, _)| ExprElement::DateTrunc { unit, date },
     );
 
+    let last_day = map(
+        rule! {
+            LAST_DAY ~ "(" ~ #subexpr(0) ~ "," ~ #interval_kind ~ ")"
+        },
+        |(_, _, date, _, unit, _)| ExprElement::LastDay { unit, date },
+    );
+
+    let previous_day = map(
+        rule! {
+            PREVIOUS_DAY ~ "(" ~ #subexpr(0) ~ "," ~ #weekday ~ ")"
+        },
+        |(_, _, date, _, unit, _)| ExprElement::PreviousDay { unit, date },
+    );
+
+    let next_day = map(
+        rule! {
+            NEXT_DAY ~ "(" ~ #subexpr(0) ~ "," ~ #weekday ~ ")"
+        },
+        |(_, _, date, _, unit, _)| ExprElement::NextDay { unit, date },
+    );
+
     let date_expr = map(
         rule! {
             DATE ~ #consumed(literal_string)
@@ -1245,6 +1321,19 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 value: Literal::String(date),
             }),
             target_type: TypeName::Timestamp,
+        },
+    );
+
+    let interval_expr = map(
+        rule! {
+            INTERVAL ~ #consumed(literal_string)
+        },
+        |(_, (span, date))| ExprElement::Cast {
+            expr: Box::new(Expr::Literal {
+                span: transform_span(span.tokens),
+                value: Literal::String(date),
+            }),
+            target_type: TypeName::Interval,
         },
     );
 
@@ -1281,18 +1370,24 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #json_op : "<operator>"
                 | #unary_op : "<operator>"
                 | #cast : "`CAST(... AS ...)`"
-                | #date_add: "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_diff: "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_sub: "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
-                | #date_trunc: "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
-                | #date_expr: "`DATE <str_literal>`"
-                | #timestamp_expr: "`TIMESTAMP <str_literal>`"
-                | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
                 | #pg_cast : "`::<type_name>`"
-                | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
-                | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
                 | #position : "`POSITION(... IN ...)`"
                 | #variable_access: "`$<ident>`"
+            ),
+            rule! (
+                #date_add : "`DATE_ADD(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_diff : "`DATE_DIFF(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_sub : "`DATE_SUB(..., ..., (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW))`"
+                | #date_trunc : "`DATE_TRUNC((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
+                | #last_day : "`LAST_DAY(..., (YEAR | QUARTER | MONTH | WEEK)))`"
+                | #previous_day : "`PREVIOUS_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
+                | #next_day : "`NEXT_DAY(..., (Sunday | Monday | Tuesday | Wednesday | Thursday | Friday | Saturday))`"
+                | #date_expr : "`DATE <str_literal>`"
+                | #timestamp_expr : "`TIMESTAMP <str_literal>`"
+                | #interval : "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
+                | #interval_expr : "`INTERVAL <str_literal>`"
+                | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK) FROM ...)`"
+                | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | WEEK), ...)`"
             ),
             rule!(
                 #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
@@ -1304,9 +1399,11 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #count_all_with_window : "`COUNT(*) OVER ...`"
                 | #function_call_with_lambda : "`function(..., x -> ...)`"
                 | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-                | #function_call_with_params : "`function(...)(...)`"
+                | #function_call_with_params_window : "`function(...)(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
                 | #function_call : "`function(...)`"
-                | #case : "`CASE ... END`"
+            ),
+            rule!(
+                #case : "`CASE ... END`"
                 | #tuple : "`(<expr> [, ...])`"
                 | #subquery : "`(SELECT ...)`"
                 | #column_ref : "<column>"
@@ -1628,6 +1725,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_date = value(TypeName::Date, rule! { DATE });
+    let ty_interval = value(TypeName::Interval, rule! { INTERVAL });
     let ty_datetime = map(
         rule! { ( DATETIME | TIMESTAMP ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
         |(_, _)| TypeName::Timestamp,
@@ -1668,6 +1766,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             rule! {
             ( #ty_date
             | #ty_datetime
+            | #ty_interval
             | #ty_binary
             | #ty_string
             | #ty_variant
@@ -1692,57 +1791,128 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     )(i)
 }
 
-pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
+pub fn weekday(i: Input) -> IResult<Weekday> {
     alt((
-        value(IntervalKind::Year, rule! { YEAR }),
-        value(IntervalKind::Quarter, rule! { QUARTER }),
-        value(IntervalKind::Month, rule! { MONTH }),
-        value(IntervalKind::Day, rule! { DAY }),
-        value(IntervalKind::Hour, rule! { HOUR }),
-        value(IntervalKind::Minute, rule! { MINUTE }),
-        value(IntervalKind::Second, rule! { SECOND }),
-        value(IntervalKind::Doy, rule! { DOY }),
-        value(IntervalKind::Dow, rule! { DOW }),
-        value(IntervalKind::Week, rule! { WEEK }),
+        value(Weekday::Sunday, rule! { SUNDAY }),
+        value(Weekday::Monday, rule! { MONDAY }),
+        value(Weekday::Tuesday, rule! { TUESDAY }),
+        value(Weekday::Wednesday, rule! { WEDNESDAY }),
+        value(Weekday::Thursday, rule! { THURSDAY }),
+        value(Weekday::Friday, rule! { FRIDAY }),
+        value(Weekday::Saturday, rule! { SATURDAY }),
         value(
-            IntervalKind::Year,
-            rule! { #literal_string_eq_ignore_case("YEAR")  },
+            Weekday::Sunday,
+            rule! { #literal_string_eq_ignore_case("SUNDAY") },
         ),
         value(
-            IntervalKind::Quarter,
-            rule! { #literal_string_eq_ignore_case("QUARTER") },
+            Weekday::Monday,
+            rule! { #literal_string_eq_ignore_case("MONDAY") },
         ),
         value(
-            IntervalKind::Month,
-            rule! { #literal_string_eq_ignore_case("MONTH")  },
+            Weekday::Tuesday,
+            rule! { #literal_string_eq_ignore_case("TUESDAY") },
         ),
         value(
-            IntervalKind::Day,
-            rule! { #literal_string_eq_ignore_case("DAY")  },
+            Weekday::Wednesday,
+            rule! { #literal_string_eq_ignore_case("WEDNESDAY") },
         ),
         value(
-            IntervalKind::Hour,
-            rule! { #literal_string_eq_ignore_case("HOUR")  },
+            Weekday::Thursday,
+            rule! { #literal_string_eq_ignore_case("THURSDAY") },
         ),
         value(
-            IntervalKind::Minute,
-            rule! { #literal_string_eq_ignore_case("MINUTE")  },
+            Weekday::Friday,
+            rule! { #literal_string_eq_ignore_case("FRIDAY") },
         ),
         value(
-            IntervalKind::Second,
-            rule! { #literal_string_eq_ignore_case("SECOND")  },
+            Weekday::Saturday,
+            rule! { #literal_string_eq_ignore_case("SATURDAY") },
         ),
-        value(
-            IntervalKind::Doy,
-            rule! { #literal_string_eq_ignore_case("DOY")  },
+    ))(i)
+}
+
+pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
+    let year = value(IntervalKind::Year, rule! { YEAR });
+    let quarter = value(IntervalKind::Quarter, rule! { QUARTER });
+    let month = value(IntervalKind::Month, rule! { MONTH });
+    let day = value(IntervalKind::Day, rule! { DAY });
+    let hour = value(IntervalKind::Hour, rule! { HOUR });
+    let minute = value(IntervalKind::Minute, rule! { MINUTE });
+    let second = value(IntervalKind::Second, rule! { SECOND });
+    let doy = value(IntervalKind::Doy, rule! { DOY });
+    let dow = value(IntervalKind::Dow, rule! { DOW });
+    let week = value(IntervalKind::Week, rule! { WEEK });
+    let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
+    let year_str = value(
+        IntervalKind::Year,
+        rule! { #literal_string_eq_ignore_case("YEAR")  },
+    );
+    let quarter_str = value(
+        IntervalKind::Quarter,
+        rule! { #literal_string_eq_ignore_case("QUARTER") },
+    );
+    let month_str = value(
+        IntervalKind::Month,
+        rule! { #literal_string_eq_ignore_case("MONTH")  },
+    );
+    let day_str = value(
+        IntervalKind::Day,
+        rule! { #literal_string_eq_ignore_case("DAY")  },
+    );
+    let hour_str = value(
+        IntervalKind::Hour,
+        rule! { #literal_string_eq_ignore_case("HOUR")  },
+    );
+    let minute_str = value(
+        IntervalKind::Minute,
+        rule! { #literal_string_eq_ignore_case("MINUTE")  },
+    );
+    let second_str = value(
+        IntervalKind::Second,
+        rule! { #literal_string_eq_ignore_case("SECOND")  },
+    );
+    let doy_str = value(
+        IntervalKind::Doy,
+        rule! { #literal_string_eq_ignore_case("DOY")  },
+    );
+    let dow_str = value(
+        IntervalKind::Dow,
+        rule! { #literal_string_eq_ignore_case("DOW")  },
+    );
+    let week_str = value(
+        IntervalKind::Week,
+        rule! { #literal_string_eq_ignore_case("WEEK")  },
+    );
+    let epoch_str = value(
+        IntervalKind::Epoch,
+        rule! { #literal_string_eq_ignore_case("EPOCH")  },
+    );
+    alt((
+        rule!(
+            #year
+            | #quarter
+            | #month
+            | #day
+            | #hour
+            | #minute
+            | #second
+            | #doy
+            | #dow
+            | #week
+            | #epoch
         ),
-        value(
-            IntervalKind::Dow,
-            rule! { #literal_string_eq_ignore_case("DOW")  },
-        ),
-        value(
-            IntervalKind::Week,
-            rule! { #literal_string_eq_ignore_case("WEEK")  },
+        rule!(
+            #year_str
+            | #quarter_str
+            | #month_str
+            | #day_str
+            | #hour_str
+            | #minute_str
+            | #second_str
+            | #doy_str
+            | #dow_str
+            | #week_str
+            | #epoch_str
         ),
     ))(i)
 }
@@ -1803,12 +1973,14 @@ pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
     let exp = match e_part {
         Some(s) => match s.parse::<i32>() {
             Ok(i) => i,
-            Err(_) => return Ok(Literal::Float64(fast_float::parse(text)?)),
+            Err(_) => return Ok(Literal::Float64(fast_float2::parse(text)?)),
         },
         None => 0,
     };
-    if i_part.len() as i32 + exp > 76 {
-        Ok(Literal::Float64(fast_float::parse(text)?))
+
+    let p = i_part.len() as i32 + exp - f_part.len() as i32;
+    if !(-76..=76).contains(&p) {
+        Ok(Literal::Float64(fast_float2::parse(text)?))
     } else {
         let mut digits = String::with_capacity(76);
         digits.push_str(i_part);
@@ -1850,7 +2022,7 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
     if text.is_empty() {
         return Ok(Literal::UInt64(0));
     } else if text.len() > 76 {
-        return Ok(Literal::Float64(fast_float::parse(text)?));
+        return Ok(Literal::Float64(fast_float2::parse(text)?));
     }
 
     let value = i256::from_str_radix(text, radix)?;

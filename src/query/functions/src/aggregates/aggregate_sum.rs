@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use boolean::TrueIdxIter;
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::buffer::Buffer;
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::number::*;
+use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::types::*;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_number_mapped_type;
@@ -28,12 +30,14 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
+use databend_common_expression::SELECTIVITY_THRESHOLD;
 use num_traits::AsPrimitive;
 
 use super::assert_unary_arguments;
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregate_unary::UnaryState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateUnaryFunction;
 
 pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 'static {
@@ -45,7 +49,7 @@ pub trait SumState: BorshSerialize + BorshDeserialize + Send + Sync + Default + 
     fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()>;
 
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()>;
-    fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()>;
+    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()>;
 
     fn merge_result(
         &mut self,
@@ -89,14 +93,19 @@ where
     TSum: Number + std::ops::AddAssign,
 {
     match validity {
-        Some(v) if v.unset_bits() > 0 => {
+        Some(v) => {
             let mut sum = TSum::default();
-            inner.iter().zip(v.iter()).for_each(|(t, b)| {
-                if b {
-                    sum += t.as_();
-                }
-            });
-
+            if v.true_count() as f64 / v.len() as f64 >= SELECTIVITY_THRESHOLD {
+                inner.iter().zip(v.iter()).for_each(|(t, b)| {
+                    if b {
+                        sum += t.as_();
+                    }
+                });
+            } else {
+                TrueIdxIter::new(v.len(), Some(v)).for_each(|idx| {
+                    sum += unsafe { inner.get_unchecked(idx).as_() };
+                });
+            }
             sum
         }
         _ => {
@@ -159,18 +168,20 @@ pub struct DecimalSumState<const OVERFLOW: bool, T>
 where
     T: ValueType,
     T::Scalar: Decimal,
+    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
 {
-    pub value: T::Scalar,
+    pub value: <T::Scalar as Decimal>::U64Array,
 }
 
 impl<const OVERFLOW: bool, T> Default for DecimalSumState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
+    T::Scalar: Decimal + std::ops::AddAssign,
+    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
 {
     fn default() -> Self {
         Self {
-            value: T::Scalar::zero(),
+            value: <T::Scalar as Decimal>::U64Array::default(),
         }
     }
 }
@@ -178,15 +189,18 @@ where
 impl<const OVERFLOW: bool, T> UnaryState<T, T> for DecimalSumState<OVERFLOW, T>
 where
     T: ValueType,
-    T::Scalar: Decimal + std::ops::AddAssign + BorshSerialize + BorshDeserialize,
+    T::Scalar: Decimal + std::ops::AddAssign,
+    <T::Scalar as Decimal>::U64Array: BorshSerialize + BorshDeserialize,
 {
     fn add(
         &mut self,
         other: T::ScalarRef<'_>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        self.value += T::to_owned_scalar(other);
-        if OVERFLOW && (self.value > T::Scalar::MAX || self.value < T::Scalar::MIN) {
+        let mut value = T::Scalar::from_u64_array(self.value);
+        value += T::to_owned_scalar(other);
+
+        if OVERFLOW && (value > T::Scalar::MAX || value < T::Scalar::MIN) {
             return Err(ErrorCode::Overflow(format!(
                 "Decimal overflow: {:?} not in [{}, {}]",
                 self.value,
@@ -194,11 +208,57 @@ where
                 T::Scalar::MAX,
             )));
         }
+        self.value = value.to_u64_array();
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        other: T::Column,
+        validity: Option<&Bitmap>,
+        function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        if !OVERFLOW {
+            let mut sum = T::Scalar::from_u64_array(self.value);
+            let col = T::upcast_column(other);
+            let buffer = DecimalType::<T::Scalar>::try_downcast_column(&col).unwrap();
+            match validity {
+                Some(validity) if validity.null_count() > 0 => {
+                    buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
+                        if b {
+                            sum += *t;
+                        }
+                    });
+                }
+                _ => {
+                    buffer.iter().for_each(|t| {
+                        sum += *t;
+                    });
+                }
+            }
+            self.value = sum.to_u64_array();
+        } else {
+            match validity {
+                Some(validity) => {
+                    for (data, valid) in T::iter_column(&other).zip(validity.iter()) {
+                        if valid {
+                            self.add(data, function_data)?;
+                        }
+                    }
+                }
+                None => {
+                    for value in T::iter_column(&other) {
+                        self.add(value, function_data)?;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
     fn merge(&mut self, rhs: &Self) -> Result<()> {
-        self.add(T::to_scalar_ref(&rhs.value), None)
+        let v = T::Scalar::from_u64_array(rhs.value);
+        self.add(T::to_scalar_ref(&v), None)
     }
 
     fn merge_result(
@@ -206,7 +266,65 @@ where
         builder: &mut T::ColumnBuilder,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
-        T::push_item(builder, T::to_scalar_ref(&self.value));
+        let v = T::Scalar::from_u64_array(self.value);
+        T::push_item(builder, T::to_scalar_ref(&v));
+        Ok(())
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Default)]
+pub struct IntervalSumState {
+    pub value: months_days_micros,
+}
+
+impl UnaryState<IntervalType, IntervalType> for IntervalSumState {
+    fn add(
+        &mut self,
+        other: months_days_micros,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        self.value += other;
+        Ok(())
+    }
+
+    fn add_batch(
+        &mut self,
+        other: Buffer<months_days_micros>,
+        validity: Option<&Bitmap>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        let col = IntervalType::upcast_column(other);
+        let buffer = IntervalType::try_downcast_column(&col).unwrap();
+        match validity {
+            Some(validity) if validity.null_count() > 0 => {
+                buffer.iter().zip(validity.iter()).for_each(|(t, b)| {
+                    if b {
+                        self.value += *t;
+                    }
+                });
+            }
+            _ => {
+                buffer.iter().for_each(|t| {
+                    self.value += *t;
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        let res = self.value.total_micros() + rhs.value.total_micros();
+        self.value = months_days_micros(res as i128);
+        Ok(())
+    }
+
+    fn merge_result(
+        &mut self,
+        builder: &mut Vec<months_days_micros>,
+        _function_data: Option<&dyn FunctionData>,
+    ) -> Result<()> {
+        IntervalType::push_item(builder, IntervalType::to_scalar_ref(&self.value));
         Ok(())
     }
 }
@@ -262,6 +380,15 @@ pub fn try_create_aggregate_sum_function(
                     display_name, return_type, params, arguments[0].clone()
                 )
             }
+        }
+        DataType::Interval => {
+            let return_type = DataType::Interval;
+            AggregateUnaryFunction::<IntervalSumState, IntervalType, IntervalType>::try_create_unary(
+                display_name,
+                return_type,
+                params,
+                arguments[0].clone(),
+            )
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
             let p = MAX_DECIMAL256_PRECISION;

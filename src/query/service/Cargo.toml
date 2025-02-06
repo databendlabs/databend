@@ -13,32 +13,32 @@ test = true
 
 [features]
 default = ["simd"]
-simd = ["databend-common-arrow/simd"]
+simd = ["databend-common-column/simd"]
 python-udf = ["arrow-udf-python"]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
-
+jemalloc = ["databend-common-storages-system/jemalloc"]
 memory-profiling = ["databend-common-base/memory-profiling", "databend-common-http/memory-profiling"]
 storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
 io-uring = [
-    # "databend-common-meta-embedded/io-uring",
     "databend-common-meta-store/io-uring",
-    # "databend-common-meta-sled-store/io-uring",
-    # "databend-common-meta-raft-store/io-uring",
 ]
 
 enable_queries_executor = []
 
 [dependencies]
+anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true, features = ["lz4", "zstd"] }
 arrow-schema = { workspace = true }
+arrow-select = { workspace = true }
 arrow-udf-js = { workspace = true }
 arrow-udf-python = { workspace = true, optional = true }
 arrow-udf-wasm = { workspace = true }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
+async-compat = { workspace = true }
 async-recursion = { workspace = true }
 async-stream = { workspace = true }
 async-trait = { workspace = true }
@@ -52,15 +52,14 @@ byteorder = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-config = { workspace = true, features = [] }
 ctor = { workspace = true }
 dashmap = { workspace = true }
-databend-common-arrow = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-cloud-control = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
@@ -74,7 +73,6 @@ databend-common-license = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
-databend-common-meta-embedded = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
@@ -110,6 +108,7 @@ databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
+databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
 databend-enterprise-virtual-column = { workspace = true }
@@ -132,6 +131,7 @@ http = { workspace = true }
 humantime = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 jsonb = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
@@ -153,6 +153,7 @@ poem = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
 recursive = { workspace = true }
+redis = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 rustls = { workspace = true }
@@ -166,10 +167,8 @@ serde_urlencoded = { workspace = true }
 sha2 = { workspace = true }
 socket2 = { workspace = true }
 sqlx = { workspace = true }
-strength_reduce = { workspace = true }
 sysinfo = { workspace = true }
 tempfile = { workspace = true }
-time = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true, features = ["net"] }
 toml = { workspace = true, default-features = false }
@@ -182,19 +181,15 @@ xorf = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { workspace = true }
-criterion = { workspace = true }
 goldenfile = { workspace = true }
 hex = { workspace = true }
 hyper-util = { workspace = true }
 jwt-simple = { workspace = true }
 maplit = { workspace = true }
 mysql_async = { workspace = true }
-num = { workspace = true }
-ordered-float = { workspace = true }
 p256 = { workspace = true }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
-rmp-serde = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 tower = { workspace = true }

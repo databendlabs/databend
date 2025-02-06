@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::mem;
 
 use databend_common_ast::ast::AlterVirtualColumnStmt;
 use databend_common_ast::ast::CreateVirtualColumnStmt;
@@ -24,23 +26,30 @@ use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::RefreshVirtualColumnStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowVirtualColumnsStmt;
+use databend_common_ast::ast::VirtualColumn;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::get_simple_cast_function;
+use databend_common_expression::types::DataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
+use databend_common_meta_app::schema::VirtualField;
 use log::debug;
 
 use crate::binder::Binder;
 use crate::normalize_identifier;
+use crate::optimizer::SExpr;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::DropVirtualColumnPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RewriteKind;
+use crate::resolve_type_name;
 use crate::BindContext;
 use crate::SelectBuilder;
+use crate::VirtualColumnRewriter;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -84,6 +93,7 @@ impl Binder {
                 database,
                 table,
                 virtual_columns,
+                auto_generated: false,
             },
         )))
     }
@@ -122,6 +132,7 @@ impl Binder {
             database,
             table,
             virtual_columns,
+            auto_generated: false,
         })))
     }
 
@@ -195,12 +206,33 @@ impl Binder {
     #[async_backtrace::framed]
     async fn analyze_virtual_columns(
         &mut self,
-        virtual_columns: &[Expr],
+        virtual_columns: &[VirtualColumn],
         schema: TableSchemaRef,
-    ) -> Result<Vec<String>> {
-        let mut virtual_names = HashSet::with_capacity(virtual_columns.len());
+    ) -> Result<Vec<VirtualField>> {
+        let mut alias_name_set = HashSet::new();
+        let mut virtual_field_map = BTreeMap::new();
         for virtual_column in virtual_columns.iter() {
-            let mut expr = virtual_column;
+            let mut typ = None;
+            let mut expr = *virtual_column.expr.clone();
+            match expr {
+                Expr::Cast {
+                    expr: inner_expr,
+                    target_type,
+                    ..
+                } => {
+                    expr = *inner_expr.clone();
+                    typ = Some(target_type);
+                }
+                Expr::TryCast {
+                    expr: inner_expr,
+                    target_type,
+                    ..
+                } => {
+                    expr = *inner_expr.clone();
+                    typ = Some(target_type);
+                }
+                _ => {}
+            }
             let mut paths = VecDeque::new();
             while let Expr::MapAccess {
                 expr: inner_expr,
@@ -208,13 +240,13 @@ impl Binder {
                 ..
             } = expr
             {
-                expr = &**inner_expr;
+                expr = *inner_expr;
                 let path = match accessor {
                     MapAccessor::Bracket {
                         key: box Expr::Literal { value, .. },
                     } => value.clone(),
                     MapAccessor::Colon { key } => Literal::String(key.name.clone()),
-                    MapAccessor::DotNumber { key } => Literal::UInt64(*key),
+                    MapAccessor::DotNumber { key } => Literal::UInt64(key),
                     _ => {
                         return Err(ErrorCode::SemanticError(format!(
                             "Unsupported accessor: {:?}",
@@ -229,7 +261,7 @@ impl Binder {
                     "Virtual Column should be a inner field of Variant Column",
                 ));
             }
-            if let Expr::ColumnRef { column, .. } = expr {
+            if let Expr::ColumnRef { ref column, .. } = expr {
                 if let Ok(field) = schema.field_with_name(column.column.name()) {
                     if field.data_type().remove_nullable() != TableDataType::Variant {
                         return Err(ErrorCode::SemanticError(
@@ -253,7 +285,56 @@ impl Binder {
                         }
                         virtual_name.push(']');
                     }
-                    virtual_names.insert(virtual_name);
+
+                    let data_type = if let Some(typ) = typ {
+                        let data_type = resolve_type_name(&typ, false)?;
+                        let dest_type = DataType::from(&data_type.remove_nullable());
+                        let cast_func_name =
+                            get_simple_cast_function(true, &DataType::Variant, &dest_type);
+                        if cast_func_name.is_none() {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "Unsupported cast data type: {:?}",
+                                typ
+                            )));
+                        }
+                        data_type.wrap_nullable()
+                    } else {
+                        TableDataType::Nullable(Box::new(TableDataType::Variant))
+                    };
+
+                    if virtual_field_map.contains_key(&virtual_name) {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Duplicate virtual column: {}",
+                            virtual_name
+                        )));
+                    }
+
+                    let alias_name = virtual_column
+                        .alias
+                        .as_ref()
+                        .map(|ident| self.normalize_identifier(ident).name.clone());
+
+                    if let Some(alias_name) = &alias_name {
+                        if schema.field_with_name(alias_name).is_ok() {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "Virtual column alias name {} conflict with table field",
+                                alias_name
+                            )));
+                        }
+                        if alias_name_set.contains(alias_name) {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "Virtual column alias name {} duplicate",
+                                alias_name
+                            )));
+                        }
+                        alias_name_set.insert(alias_name.clone());
+                    }
+                    let virtual_field = VirtualField {
+                        expr: virtual_name.clone(),
+                        data_type,
+                        alias_name: alias_name.clone(),
+                    };
+                    virtual_field_map.insert(virtual_name, virtual_field);
                 } else {
                     return Err(ErrorCode::SemanticError(format!(
                         "Column is not exist: {:?}",
@@ -267,10 +348,8 @@ impl Binder {
                 )));
             }
         }
-        let mut virtual_columns: Vec<_> = virtual_names.into_iter().collect();
-        virtual_columns.sort();
-
-        Ok(virtual_columns)
+        let virtual_fields = virtual_field_map.into_values().collect::<Vec<_>>();
+        Ok(virtual_fields)
     }
 
     #[async_backtrace::framed]
@@ -333,5 +412,26 @@ impl Binder {
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowVirtualColumns)
             .await
+    }
+
+    // Rewrite virtual columns, add virtual column index to Scan plan.
+    pub(in crate::planner::binder) fn rewrite_virtual_column(
+        &mut self,
+        bind_context: &mut BindContext,
+        s_expr: SExpr,
+    ) -> Result<SExpr> {
+        if bind_context
+            .virtual_column_context
+            .virtual_column_indices
+            .is_empty()
+        {
+            return Ok(s_expr);
+        }
+        let virtual_column_indices =
+            mem::take(&mut bind_context.virtual_column_context.virtual_column_indices);
+        let mut s_expr = s_expr.clone();
+        let mut virtual_column_rewriter = VirtualColumnRewriter::new(virtual_column_indices);
+        s_expr = virtual_column_rewriter.rewrite(&s_expr)?;
+        Ok(s_expr)
     }
 }

@@ -54,37 +54,42 @@ static SNAPSHOT_STATISTICS_V3: TableSnapshotStatisticsVersion =
 #[derive(Clone)]
 pub struct TableMetaLocationGenerator {
     prefix: String,
-    part_prefix: String,
+
+    block_location_prefix: String,
+    segment_info_location_prefix: String,
+    bloom_index_location_prefix: String,
+    agg_index_location_prefix: String,
+    inverted_index_location_prefix: String,
 }
 
 impl TableMetaLocationGenerator {
     pub fn with_prefix(prefix: String) -> Self {
+        let block_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_BLOCK_PREFIX,);
+        let bloom_index_location_prefix =
+            format!("{}/{}/", &prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX);
+        let segment_info_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_PREFIX);
+        let agg_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_AGG_INDEX_PREFIX);
+        let inverted_index_location_prefix =
+            format!("{}/{}/", &prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
         Self {
             prefix,
-            part_prefix: "".to_string(),
+            block_location_prefix,
+            segment_info_location_prefix,
+            bloom_index_location_prefix,
+            agg_index_location_prefix,
+            inverted_index_location_prefix,
         }
-    }
-
-    pub fn with_part_prefix(mut self, part_prefix: String) -> Self {
-        self.part_prefix = part_prefix;
-        self
     }
 
     pub fn prefix(&self) -> &str {
         &self.prefix
     }
 
-    pub fn part_prefix(&self) -> &str {
-        &self.part_prefix
-    }
-
     pub fn gen_block_location(&self) -> (Location, Uuid) {
         let part_uuid = Uuid::new_v4();
         let location_path = format!(
-            "{}/{}/{}{}_v{}.parquet",
-            &self.prefix,
-            FUSE_TBL_BLOCK_PREFIX,
-            &self.part_prefix,
+            "{}{}_v{}.parquet",
+            self.block_location_prefix(),
             part_uuid.as_simple(),
             DataBlock::VERSION,
         );
@@ -92,12 +97,15 @@ impl TableMetaLocationGenerator {
         ((location_path, DataBlock::VERSION), part_uuid)
     }
 
+    pub fn block_location_prefix(&self) -> &str {
+        &self.block_location_prefix
+    }
+
     pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
         (
             format!(
-                "{}/{}/{}_v{}.parquet",
-                &self.prefix,
-                FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
+                "{}{}_v{}.parquet",
+                self.block_bloom_index_prefix(),
                 block_id.as_simple(),
                 BlockFilter::VERSION,
             ),
@@ -105,15 +113,22 @@ impl TableMetaLocationGenerator {
         )
     }
 
+    pub fn block_bloom_index_prefix(&self) -> &str {
+        &self.bloom_index_location_prefix
+    }
+
     pub fn gen_segment_info_location(&self) -> String {
         let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(
-            "{}/{}/{}_v{}.mpk",
-            &self.prefix,
-            FUSE_TBL_SEGMENT_PREFIX,
+            "{}{}_v{}.mpk",
+            self.segment_info_prefix(),
             segment_uuid,
             SegmentInfo::VERSION,
         )
+    }
+
+    pub fn segment_info_prefix(&self) -> &str {
+        &self.segment_info_location_prefix
     }
 
     pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
@@ -174,6 +189,28 @@ impl TableMetaLocationGenerator {
         let prefix = splits[..len - 2].join("/");
         let block_name = trim_vacuum2_object_prefix(splits[len - 1]);
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
+    }
+
+    pub fn agg_index_location_prefix(&self) -> &str {
+        &self.agg_index_location_prefix
+    }
+
+    pub fn inverted_index_location_prefix(&self) -> &str {
+        &self.inverted_index_location_prefix
+    }
+
+    pub fn gen_specific_inverted_index_prefix(
+        &self,
+        index_name: &str,
+        index_version: &str,
+    ) -> String {
+        let short_ver: String = index_version.chars().take(7).collect();
+        format!(
+            "{}/{}/{}",
+            self.inverted_index_location_prefix(),
+            index_name,
+            short_ver,
+        )
     }
 
     pub fn gen_inverted_index_location_from_block_location(

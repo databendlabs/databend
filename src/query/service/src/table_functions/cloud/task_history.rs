@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use chrono::DateTime;
-use chrono_tz::Tz::UTC;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -45,6 +44,7 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::plans::task_run_schema;
 use databend_common_storages_factory::Table;
 use databend_common_storages_system::parse_task_runs_to_datablock;
+use jiff::tz::TimeZone;
 
 pub struct TaskHistoryTable {
     table_info: TableInfo,
@@ -87,10 +87,6 @@ impl TaskHistoryTable {
 
 #[async_trait::async_trait]
 impl Table for TaskHistoryTable {
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -151,7 +147,7 @@ impl TaskHistorySource {
     async fn build_request(&self) -> Result<ShowTaskRunsRequest> {
         let tenant = self.ctx.get_tenant();
         let available_roles = self.ctx.get_available_roles().await?;
-        return Ok(ShowTaskRunsRequest {
+        Ok(ShowTaskRunsRequest {
             tenant_id: tenant.tenant_name().to_string(),
             scheduled_time_start: self
                 .args_parsed
@@ -176,7 +172,7 @@ impl TaskHistorySource {
             page_size: None,
             previous_page_token: None,
             task_ids: vec![],
-        });
+        })
     }
 }
 
@@ -249,18 +245,18 @@ fn parse_date_or_timestamp(v: &Scalar) -> Option<String> {
     if v.as_timestamp().is_some() {
         Some(
             v.as_timestamp()
-                .map(|s| s.to_timestamp(UTC).to_rfc3339())
+                .map(|s| s.to_timestamp(TimeZone::UTC).to_string())
                 .unwrap(),
         )
     } else if v.as_date().is_some() {
         Some(
             v.as_date()
                 .map(|s| {
-                    s.to_date(UTC)
-                        .and_hms_opt(0, 0, 0)
+                    s.to_date(TimeZone::UTC)
+                        .at(0, 0, 0, 0)
+                        .in_tz("UTC")
                         .unwrap()
-                        .and_utc()
-                        .to_rfc3339()
+                        .to_string()
                 })
                 .unwrap(),
         )

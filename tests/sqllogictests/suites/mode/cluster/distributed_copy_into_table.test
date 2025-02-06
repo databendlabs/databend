@@ -6,7 +6,7 @@ statement ok
 create or replace stage st FILE_FORMAT = (TYPE = CSV);
 
 statement ok
-create or replace table table_random(a int not null,b string not null,c string not null) ENGINE = Random;
+create or replace table table_random(a int not null,b string not null,c string not null) ENGINE = Random min_string_len = 1;
 
 statement ok
 copy into @st from (select a,b,c from table_random limit 1000000);
@@ -182,6 +182,25 @@ query I
 select count(*) from test_order;
 ----
 4000000
+
+statement ok
+create or replace table test_memory engine = Memory as select number, (number + 1) d from numbers(100000);
+
+query I
+select count() from test_memory
+----
+100000
+
+statement ok
+insert into test_memory select number, sum(number) from numbers(100000) group by number;
+
+query I
+select count() from test_memory
+----
+200000
+
+statement ok
+drop table test_memory;
 
 statement ok
 set enable_distributed_copy_into = 0;

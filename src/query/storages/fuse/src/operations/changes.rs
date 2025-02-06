@@ -27,11 +27,11 @@ use databend_common_catalog::plan::StreamTablePart;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
+use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::decimal::Decimal128Type;
-use databend_common_expression::AbortChecker;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
@@ -39,6 +39,7 @@ use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
@@ -75,7 +76,7 @@ impl FuseTable {
         } else {
             self.clone()
         };
-        let location = source.snapshot_loc().await?;
+        let location = source.snapshot_loc();
         let seq = match navigation {
             Some(NavigationPoint::StreamInfo(info)) => info
                 .options()
@@ -119,6 +120,7 @@ impl FuseTable {
 
     pub async fn get_changes_query(
         &self,
+        ctx: Arc<dyn TableContext>,
         mode: &StreamMode,
         base_location: &Option<String>,
         table_desc: String,
@@ -152,56 +154,63 @@ impl FuseTable {
                 )
             }
             StreamMode::Standard => {
+                let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
+
                 let a_table_alias = format!("_change_insert${}", suffix);
-                let a_cols = cols.join(", ");
-
                 let d_table_alias = format!("_change_delete${}", suffix);
-                let d_cols = cols
-                    .iter()
-                    .map(|s| format!("d_{}", s))
-                    .collect::<Vec<_>>()
-                    .join(", ");
 
+                let mut a_cols_vec = Vec::with_capacity(cols.len());
+                let mut d_alias_vec = Vec::with_capacity(cols.len());
+                let mut d_cols_vec = Vec::with_capacity(cols.len());
+                for col in cols {
+                    a_cols_vec.push(format!("{quote}{col}{quote}"));
+                    d_alias_vec.push(format!("{quote}{col}{quote} as d_{col}"));
+                    d_cols_vec.push(format!("d_{col}"));
+                }
+                let a_cols = a_cols_vec.join(", ");
+                let d_cols_alias = d_alias_vec.join(", ");
+                let d_cols = d_cols_vec.join(", ");
+
+                let cte_name = format!("_change${}", suffix);
                 format!(
-                    "with _change({a_cols}, change$action, change$row_id, \
-                        {d_cols}, d_change$action, d_change$row_id) as materialized \
+                    "with {cte_name} as materialized \
                     ( \
                         select * \
                         from ( \
-                            select *, \
+                            select {a_cols}, \
                                     _row_version, \
-                                    'INSERT' as change$action, \
+                                    'INSERT' as a_change$action, \
                                     if(is_not_null(_origin_block_id), \
                                         concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
                                         {a_table_alias}._base_row_id \
-                                    ) as change$row_id \
+                                    ) as a_change$row_id \
                             from {table_desc} as {a_table_alias} \
                         ) as A \
                         FULL OUTER JOIN ( \
-                            select *, \
+                            select {d_cols_alias}, \
                                     _row_version, \
-                                    'DELETE' as change$action, \
+                                    'DELETE' as d_change$action, \
                                     if(is_not_null(_origin_block_id), \
                                         concat(to_uuid(_origin_block_id), lpad(hex(_origin_block_row_num), 6, '0')), \
                                         {d_table_alias}._base_row_id \
-                                    ) as change$row_id \
+                                    ) as d_change$row_id \
                             from {table_desc} as {d_table_alias} \
                         ) as D \
-                        on A.change$row_id = D.change$row_id \
-                        where A.change$row_id is null or D.change$row_id is null or A._row_version > D._row_version \
+                        on A.a_change$row_id = D.d_change$row_id \
+                        where A.a_change$row_id is null or D.d_change$row_id is null or A._row_version > D._row_version \
                     ) \
                     select {a_cols}, \
-                            change$action, \
-                            change$row_id, \
+                            a_change$action as change$action, \
+                            a_change$row_id as change$row_id, \
                             d_change$action is not null as change$is_update \
-                    from _change \
-                    where change$action is not null \
+                    from {cte_name} \
+                    where a_change$action is not null \
                     union all \
                     select {d_cols}, \
                             d_change$action, \
                             d_change$row_id, \
-                            change$action is not null as change$is_update \
-                    from _change \
+                            a_change$action is not null \
+                    from {cte_name} \
                     where d_change$action is not null",
                 )
             }
@@ -222,9 +231,8 @@ impl FuseTable {
                         let latest_segments: HashSet<&Location> =
                             HashSet::from_iter(&latest_snapshot.segments);
 
-                        let (base_snapshot, _) =
-                            SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator())
-                                .await?;
+                        let base_snapshot =
+                            self.changes_read_offset_snapshot(base_location).await?;
                         let base_segments = HashSet::from_iter(&base_snapshot.segments);
 
                         // If the base segments are a subset of the latest segments,
@@ -284,7 +292,10 @@ impl FuseTable {
             if !self.is_native() || self.cluster_key_meta().is_none() {
                 (vec![], None)
             } else {
-                (self.cluster_keys(ctx.clone()), self.cluster_key_meta())
+                (
+                    self.linear_cluster_keys(ctx.clone()),
+                    self.cluster_key_meta(),
+                )
             };
         let bloom_index_cols = self.bloom_index_cols();
         let mut pruner = FusePruner::create_with_pages(
@@ -296,6 +307,7 @@ impl FuseTable {
             cluster_keys,
             bloom_index_cols,
             None,
+            self.get_storage_format(),
         )?;
 
         let block_metas = pruner.stream_pruning(blocks).await?;
@@ -337,7 +349,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         base: &Option<String>,
     ) -> Result<(Vec<Arc<BlockMeta>>, Vec<Arc<BlockMeta>>)> {
-        let latest = self.snapshot_loc().await?;
+        let latest = self.snapshot_loc();
 
         let latest_segments = if let Some(snapshot) = latest {
             let (sn, _) =
@@ -348,8 +360,7 @@ impl FuseTable {
         };
 
         let base_segments = if let Some(snapshot) = base {
-            let (sn, _) =
-                SnapshotsIO::read_snapshot(snapshot.to_string(), self.get_operator()).await?;
+            let sn = self.changes_read_offset_snapshot(snapshot).await?;
             HashSet::from_iter(sn.segments.clone())
         } else {
             HashSet::new()
@@ -434,8 +445,7 @@ impl FuseTable {
             return self.table_statistics(ctx, true, None).await;
         };
 
-        let (base_snapshot, _) =
-            SnapshotsIO::read_snapshot(base_location.clone(), self.get_operator()).await?;
+        let base_snapshot = self.changes_read_offset_snapshot(base_location).await?;
         let base_summary = base_snapshot.summary.clone();
         let latest_summary = if let Some(snapshot) = self.read_table_snapshot().await? {
             snapshot.summary.clone()
@@ -496,6 +506,19 @@ impl FuseTable {
                     Ok(min_stats())
                 }
             }
+        }
+    }
+
+    pub async fn changes_read_offset_snapshot(
+        &self,
+        base_location: &String,
+    ) -> Result<Arc<TableSnapshot>> {
+        match SnapshotsIO::read_snapshot(base_location.to_string(), self.get_operator()).await {
+            Ok((base_snapshot, _)) => Ok(base_snapshot),
+            Err(_) => Err(ErrorCode::IllegalStream(format!(
+                "Failed to read the offset snapshot: {:?}, maybe purged",
+                base_location
+            ))),
         }
     }
 }

@@ -78,11 +78,8 @@ impl AsyncSource for ParquetInferSchemaSource {
             FileLocation::Stage(location.to_string())
         } else if let Some(connection_name) = &self.args_parsed.connection_name {
             let conn = self.ctx.get_connection(connection_name).await?;
-            let uri = UriLocation::from_uri(
-                self.args_parsed.location.clone(),
-                "".to_string(),
-                conn.storage_params,
-            )?;
+            let uri =
+                UriLocation::from_uri(self.args_parsed.location.clone(), conn.storage_params)?;
             let proto = conn.storage_type.parse::<Scheme>()?;
             if proto != uri.protocol.parse::<Scheme>()? {
                 return Err(ErrorCode::BadArguments(format!(
@@ -92,11 +89,8 @@ impl AsyncSource for ParquetInferSchemaSource {
             }
             FileLocation::Uri(uri)
         } else {
-            let uri = UriLocation::from_uri(
-                self.args_parsed.location.clone(),
-                "".to_string(),
-                BTreeMap::default(),
-            )?;
+            let uri =
+                UriLocation::from_uri(self.args_parsed.location.clone(), BTreeMap::default())?;
             FileLocation::Uri(uri)
         };
         let (stage_info, path) = resolve_file_location(self.ctx.as_ref(), &file_location).await?;
@@ -105,7 +99,7 @@ impl AsyncSource for ParquetInferSchemaSource {
             .get_settings()
             .get_enable_experimental_rbac_check()?;
         if enable_experimental_rbac_check {
-            let visibility_checker = self.ctx.get_visibility_checker().await?;
+            let visibility_checker = self.ctx.get_visibility_checker(false).await?;
             if !(stage_info.is_temporary
                 || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
                 || stage_info.stage_type == StageType::User

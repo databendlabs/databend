@@ -15,21 +15,23 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_base::headers::HEADER_DEDUPLICATE_LABEL;
 use databend_common_base::headers::HEADER_NODE_ID;
 use databend_common_base::headers::HEADER_QUERY_ID;
-use databend_common_base::headers::HEADER_SESSION_ID;
 use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
+use databend_common_base::headers::HEADER_WAREHOUSE;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
-use databend_common_config::QUERY_SEMVER;
+use databend_common_config::DATABEND_SEMVER;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::user_token::TokenType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::NodeInfo;
+use databend_enterprise_resources_management::ResourcesManagement;
 use fastrace::func_name;
 use headers::authorization::Basic;
 use headers::authorization::Bearer;
@@ -39,6 +41,7 @@ use http::HeaderMap;
 use http::HeaderValue;
 use http::StatusCode;
 use log::error;
+use log::info;
 use log::warn;
 use opentelemetry::baggage::BaggageExt;
 use opentelemetry::propagation::Extractor;
@@ -46,6 +49,7 @@ use opentelemetry::propagation::TextMapPropagator;
 use opentelemetry_sdk::propagation::BaggagePropagator;
 use poem::error::ResponseError;
 use poem::error::Result as PoemResult;
+use poem::web::cookie::Cookie;
 use poem::web::Json;
 use poem::Addr;
 use poem::Endpoint;
@@ -62,6 +66,8 @@ use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
 use crate::servers::http::error::QueryError;
+use crate::servers::http::v1::unix_ts;
+use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::SessionClaim;
 use crate::servers::HttpHandlerKind;
@@ -69,11 +75,15 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 const USER_AGENT: &str = "User-Agent";
 const TRACE_PARENT: &str = "traceparent";
+const COOKIE_LAST_ACCESS_TIME: &str = "last_access_time";
+const COOKIE_SESSION_ID: &str = "session_id";
+const COOKIE_COOKIE_ENABLED: &str = "cookie_enabled";
 #[derive(Debug, Copy, Clone)]
 pub enum EndpointKind {
     Login,
     Logout,
     Refresh,
+    HeartBeat,
     StartQuery,
     PollQuery,
     Clickhouse,
@@ -91,7 +101,10 @@ impl EndpointKind {
     pub fn may_need_sticky(&self) -> bool {
         matches!(
             self,
-            EndpointKind::StartQuery | EndpointKind::PollQuery | EndpointKind::Logout
+            EndpointKind::StartQuery
+                | EndpointKind::PollQuery
+                | EndpointKind::Logout
+                | EndpointKind::HeartBeat
         )
     }
     pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
@@ -102,6 +115,7 @@ impl EndpointKind {
             | EndpointKind::PollQuery
             | EndpointKind::Logout
             | EndpointKind::SystemInfo
+            | EndpointKind::HeartBeat
             | EndpointKind::UploadToStage => {
                 if GlobalConfig::instance().query.management_mode {
                     Ok(None)
@@ -134,7 +148,7 @@ impl HTTPSessionMiddleware {
 }
 
 pub struct HeaderExtractor<'a>(pub &'a http::HeaderMap);
-impl<'a> Extractor for HeaderExtractor<'a> {
+impl Extractor for HeaderExtractor<'_> {
     /// Get a value for a key from the HeaderMap.  If the value is not valid ASCII, returns None.
     fn get(&self, key: &str) -> Option<&str> {
         self.0.get(key).and_then(|value| value.to_str().ok())
@@ -311,6 +325,12 @@ pub struct HTTPSessionEndpoint<E> {
     pub auth_manager: Arc<AuthMgr>,
 }
 
+fn make_cookie(name: impl Into<String>, value: impl Into<String>) -> Cookie {
+    let mut cookie = Cookie::new_with_str(name, value);
+    cookie.set_path("/");
+    cookie
+}
+
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(&self, req: &Request, query_id: String) -> Result<HttpQueryContext> {
@@ -326,10 +346,13 @@ impl<E> HTTPSessionEndpoint<E> {
             session.set_current_tenant(tenant);
         }
 
-        let header_client_session_id = req
-            .headers()
-            .get(HEADER_SESSION_ID)
-            .map(|v| v.to_str().unwrap().to_string());
+        // cookie_enabled is used to recognize old clients that not support cookie yet.
+        // for these old clients, there is no session id available, thus can not use temp table.
+        let cookie_enabled = req.cookie().get(COOKIE_COOKIE_ENABLED).is_some();
+        let cookie_session_id = req
+            .cookie()
+            .get(COOKIE_SESSION_ID)
+            .map(|s| s.value_str().to_string());
         let (user_name, authed_client_session_id) = self
             .auth_manager
             .auth(
@@ -338,9 +361,52 @@ impl<E> HTTPSessionEndpoint<E> {
                 self.endpoint_kind.need_user_info(),
             )
             .await?;
-        let client_session_id = authed_client_session_id.or(header_client_session_id);
-        if let Some(id) = client_session_id.clone() {
-            session.set_client_session_id(id)
+
+        let client_session_id = match (&authed_client_session_id, &cookie_session_id) {
+            (Some(id1), Some(id2)) => {
+                if id1 != id2 {
+                    return Err(ErrorCode::AuthenticateFailure(format!(
+                        "session id in token ({}) != session id in cookie({}) ",
+                        id1, id2
+                    )));
+                }
+                Some(id1.clone())
+            }
+            (Some(id), None) => {
+                req.cookie().add(make_cookie(COOKIE_SESSION_ID, id));
+                Some(id.clone())
+            }
+            (None, Some(id)) => Some(id.clone()),
+            (None, None) => {
+                if cookie_enabled {
+                    let id = Uuid::new_v4().to_string();
+                    info!("new session id: {}", id);
+                    req.cookie().add(make_cookie(COOKIE_SESSION_ID, &id));
+                    Some(id)
+                } else {
+                    None
+                }
+            }
+        };
+        if let Some(id) = &client_session_id {
+            session.set_client_session_id(id.clone());
+            let last_access_time = req
+                .cookie()
+                .get(COOKIE_LAST_ACCESS_TIME)
+                .map(|s| s.value_str().to_string());
+            if let Some(ts) = &last_access_time {
+                let ts = ts
+                    .parse::<u64>()
+                    .map_err(|_| ErrorCode::BadArguments(format!("bad last_access_time {}", ts)))?;
+                ClientSessionManager::instance()
+                    .refresh_state(session.get_current_tenant(), id, &user_name, ts)
+                    .await?;
+            }
+        }
+
+        if cookie_enabled {
+            let ts = unix_ts().as_secs().to_string();
+            req.cookie().add(make_cookie(COOKIE_LAST_ACCESS_TIME, ts));
         }
 
         let session = session_manager.register_session(session)?;
@@ -441,39 +507,89 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         let headers = req.headers().clone();
 
-        if self.endpoint_kind.may_need_sticky()
-            && let Some(sticky_node_id) = headers.get(HEADER_STICKY)
-        {
-            let sticky_node_id = sticky_node_id
-                .to_str()
-                .map_err(|e| {
-                    HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
-                        "Invalid Header ({HEADER_STICKY}: {sticky_node_id:?}): {e}"
-                    )))
-                })?
-                .to_string();
-            let local_id = GlobalConfig::instance().query.node_id.clone();
-            if local_id != sticky_node_id {
-                let config = GlobalConfig::instance();
-                return if let Some(node) = ClusterDiscovery::instance()
-                    .find_node_by_id(&sticky_node_id, &config)
-                    .await
-                    .map_err(HttpErrorCode::server_error)?
-                {
-                    log::info!(
-                        "forwarding /v1{} from {local_id} to {sticky_node_id}",
-                        req.uri()
-                    );
-                    forward_request(req, node).await
-                } else {
-                    let msg = format!("sticky_node_id '{sticky_node_id}' not found in cluster",);
-                    warn!("{}", msg);
-                    Err(Error::from(HttpErrorCode::bad_request(
-                        ErrorCode::BadArguments(msg),
-                    )))
-                };
+        if self.endpoint_kind.may_need_sticky() {
+            if let Some(sticky_node_id) = headers.get(HEADER_STICKY) {
+                let sticky_node_id = sticky_node_id
+                    .to_str()
+                    .map_err(|e| {
+                        HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
+                            "Invalid Header ({HEADER_STICKY}: {sticky_node_id:?}): {e}"
+                        )))
+                    })?
+                    .to_string();
+                let local_id = GlobalConfig::instance().query.node_id.clone();
+                if local_id != sticky_node_id {
+                    return if let Some(node) = ClusterDiscovery::instance()
+                        .find_node_by_id(&sticky_node_id)
+                        .await
+                        .map_err(HttpErrorCode::server_error)?
+                    {
+                        log::info!(
+                            "forwarding /v1{} from {local_id} to {sticky_node_id}",
+                            req.uri()
+                        );
+                        forward_request(req, node).await
+                    } else {
+                        let msg =
+                            format!("sticky_node_id '{sticky_node_id}' not found in cluster",);
+                        warn!("{}", msg);
+                        Err(Error::from(HttpErrorCode::bad_request(
+                            ErrorCode::BadArguments(msg),
+                        )))
+                    };
+                }
+            } else if let Some(warehouse) = headers.get(HEADER_WAREHOUSE) {
+                let resources_management = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+                if resources_management.support_forward_warehouse_request() {
+                    req.headers_mut().remove(HEADER_WAREHOUSE);
+
+                    let warehouse = warehouse
+                        .to_str()
+                        .map_err(|e| {
+                            HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(
+                                "Invalid value for header ({HEADER_WAREHOUSE}: {warehouse:?}): {e}"
+                            )))
+                        })?
+                        .to_string();
+
+                    let cluster_discovery = ClusterDiscovery::instance();
+
+                    let forward_node = cluster_discovery.find_node_by_warehouse(&warehouse).await;
+
+                    match forward_node {
+                        Err(error) => {
+                            return Err(HttpErrorCode::server_error(
+                                error.add_message_back("(while in warehouse request forward)"),
+                            )
+                            .into());
+                        }
+                        Ok(None) => {
+                            let msg = format!("Not find the '{}' warehouse; it is possible that all nodes of the warehouse have gone offline. Please exit the client and reconnect, or use `use warehouse <new_warehouse>`", warehouse);
+                            warn!("{}", msg);
+                            return Err(Error::from(HttpErrorCode::bad_request(
+                                ErrorCode::UnknownWarehouse(msg),
+                            )));
+                        }
+                        Ok(Some(node)) => {
+                            let local_id = GlobalConfig::instance().query.node_id.clone();
+                            if node.id != local_id {
+                                log::info!(
+                                    "forwarding /v1{} from {} to warehouse {}({})",
+                                    req.uri(),
+                                    local_id,
+                                    warehouse,
+                                    node.id
+                                );
+                                return forward_request(req, node).await;
+                            }
+                        }
+                    }
+                }
+
+                log::warn!("Ignore header ({HEADER_WAREHOUSE}: {warehouse:?})");
             }
         }
+
         let method = req.method().clone();
         let uri = req.uri().clone();
 
@@ -547,7 +663,7 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
             .into_response(),
     };
     resp.headers_mut()
-        .insert(HEADER_VERSION, QUERY_SEMVER.to_string().parse().unwrap());
+        .insert(HEADER_VERSION, DATABEND_SEMVER.to_string().parse().unwrap());
     Ok(resp)
 }
 

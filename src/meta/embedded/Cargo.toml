@@ -12,7 +12,7 @@ doctest = false
 test = true
 
 [features]
-io-uring = ["databend-common-meta-sled-store/io-uring", "databend-common-meta-raft-store/io-uring"]
+io-uring = ["databend-common-meta-raft-store/io-uring"]
 
 [dependencies]
 async-trait = { workspace = true }
@@ -20,17 +20,12 @@ databend-common-base = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
-databend-common-meta-sled-store = { workspace = true }
-databend-common-meta-stoerr = { workspace = true }
-databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 fastrace = { workspace = true }
-log = { workspace = true }
-tempfile = "3.4.0"
 
 [dev-dependencies]
 anyhow = { workspace = true }
-test-harness = "0.1.1"
+test-harness = { workspace = true }
 
 [lints]
 workspace = true

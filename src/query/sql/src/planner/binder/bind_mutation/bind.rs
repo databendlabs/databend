@@ -32,7 +32,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::ROW_VERSION_COL_NAME;
-use indexmap::IndexMap;
 
 use crate::binder::bind_mutation::mutation_expression::MutationExpression;
 use crate::binder::bind_mutation::mutation_expression::MutationExpressionBindResult;
@@ -258,8 +257,6 @@ impl Binder {
             &name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
         );
 
         // Bind matched clause columns and add update fields and exprs
@@ -355,9 +352,9 @@ impl Binder {
         false
     }
 
-    async fn bind_matched_clause<'a>(
+    async fn bind_matched_clause(
         &mut self,
-        scalar_binder: &mut ScalarBinder<'a>,
+        scalar_binder: &mut ScalarBinder<'_>,
         clause: &MatchedClause,
         schema: TableSchemaRef,
         all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,
@@ -443,9 +440,9 @@ impl Binder {
         Ok(MatchedEvaluator { condition, update })
     }
 
-    async fn bind_unmatched_clause<'a>(
+    async fn bind_unmatched_clause(
         &mut self,
-        scalar_binder: &mut ScalarBinder<'a>,
+        scalar_binder: &mut ScalarBinder<'_>,
         clause: &UnmatchedClause,
         table_schema: TableSchemaRef,
         all_source_columns: Option<HashMap<FieldIndex, ScalarExpr>>,

@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
 
 use crate::clusters::ClusterHelper;
+use crate::clusters::FlightParams;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::TRUNCATE_TABLE;
@@ -31,7 +32,7 @@ pub struct TruncateTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: TruncateTablePlan,
 
-    proxy_to_cluster: bool,
+    proxy_to_warehouse: bool,
 }
 
 impl TruncateTableInterpreter {
@@ -39,7 +40,7 @@ impl TruncateTableInterpreter {
         Ok(TruncateTableInterpreter {
             ctx,
             plan,
-            proxy_to_cluster: true,
+            proxy_to_warehouse: true,
         })
     }
 
@@ -47,7 +48,7 @@ impl TruncateTableInterpreter {
         Ok(TruncateTableInterpreter {
             ctx,
             plan,
-            proxy_to_cluster: false,
+            proxy_to_warehouse: false,
         })
     }
 }
@@ -84,20 +85,24 @@ impl Interpreter for TruncateTableInterpreter {
         // check mutability
         table.check_mutable()?;
 
-        if self.proxy_to_cluster && table.broadcast_truncate_to_cluster() {
-            let cluster = self.ctx.get_cluster();
+        if self.proxy_to_warehouse && table.broadcast_truncate_to_warehouse() {
+            let warehouse = self.ctx.get_warehouse_cluster().await?;
 
-            let mut message = HashMap::with_capacity(cluster.nodes.len());
-            for node_info in &cluster.nodes {
-                if node_info.id != cluster.local_id {
+            let mut message = HashMap::with_capacity(warehouse.nodes.len());
+            for node_info in &warehouse.nodes {
+                if node_info.id != warehouse.local_id {
                     message.insert(node_info.id.clone(), self.plan.clone());
                 }
             }
 
             let settings = self.ctx.get_settings();
-            let timeout = settings.get_flight_client_timeout()?;
-            cluster
-                .do_action::<_, ()>(TRUNCATE_TABLE, message, timeout)
+            let flight_params = FlightParams {
+                timeout: settings.get_flight_client_timeout()?,
+                retry_times: settings.get_flight_max_retry_times()?,
+                retry_interval: settings.get_flight_retry_interval()?,
+            };
+            warehouse
+                .do_action::<_, ()>(TRUNCATE_TABLE, message, flight_params)
                 .await?;
         }
 

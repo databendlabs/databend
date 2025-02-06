@@ -30,7 +30,7 @@ use databend_common_expression::types::number::Int64Type;
 use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt8Type;
 use databend_common_expression::types::number::F64;
-use databend_common_expression::types::string::StringColumn;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -45,6 +45,7 @@ use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::Column;
@@ -57,9 +58,7 @@ use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
-use databend_common_expression::ValueRef;
 use databend_common_io::number::FmtCacheEntry;
 use rand::Rng;
 use rand::SeedableRng;
@@ -93,8 +92,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_byte_size(val.into());
-            output.put_str(&new_val);
-            output.commit_row();
+            output.put_and_commit(new_val);
         }),
     );
 
@@ -103,8 +101,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_number_size(val.into());
-            output.put_str(&new_val);
-            output.commit_row();
+            output.put_and_commit(new_val);
         }),
     );
 
@@ -209,9 +206,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                 .unwrap_or(FunctionDomain::Full)
         },
         |val, ctx| match val {
-            ValueRef::Scalar(None) => Value::Scalar(Scalar::default_value(&ctx.generics[0])),
-            ValueRef::Scalar(Some(scalar)) => Value::Scalar(scalar.to_owned()),
-            ValueRef::Column(NullableColumn { column, .. }) => Value::Column(column),
+            Value::Scalar(None) => Value::Scalar(Scalar::default_value(&ctx.generics[0])),
+            Value::Scalar(Some(scalar)) => Value::Scalar(scalar.to_owned()),
+            Value::Column(NullableColumn { column, .. }) => Value::Column(column),
         },
     );
 
@@ -232,18 +229,24 @@ pub fn register(registry: &mut FunctionRegistry) {
         "gen_random_uuid",
         |_| FunctionDomain::Full,
         |ctx| {
-            let mut values: Vec<u8> = Vec::with_capacity(ctx.num_rows * 36);
-            let mut offsets: Vec<u64> = Vec::with_capacity(ctx.num_rows);
-            offsets.push(0);
+            let mut builder = StringColumnBuilder::with_capacity(ctx.num_rows);
 
             for _ in 0..ctx.num_rows {
-                let value = Uuid::new_v4();
-                offsets.push(offsets.last().unwrap() + 36u64);
-                write!(&mut values, "{:x}", value).unwrap();
+                let value = Uuid::now_v7();
+                write!(&mut builder.row_buffer, "{}", value).unwrap();
+                builder.commit_row();
             }
-            let col = StringColumn::new(values.into(), offsets.into());
-            Value::Column(col)
+
+            Value::Column(builder.build())
         },
+    );
+
+    registry.register_passthrough_nullable_2_arg::<StringType, StringType, Float64Type, _, _>(
+        "jaro_winkler",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_2_arg::<StringType, StringType, Float64Type>(|s1, s2, _ctx| {
+            jaro_winkler::jaro_winkler(s1, s2).into()
+        }),
     );
 }
 
@@ -260,7 +263,7 @@ fn register_inet_aton(registry: &mut FunctionRegistry) {
         error_to_null(eval_inet_aton),
     );
 
-    fn eval_inet_aton(val: ValueRef<StringType>, ctx: &mut EvalContext) -> Value<UInt32Type> {
+    fn eval_inet_aton(val: Value<StringType>, ctx: &mut EvalContext) -> Value<UInt32Type> {
         vectorize_with_builder_1_arg::<StringType, UInt32Type>(|addr_str, output, ctx| {
             match addr_str.parse::<Ipv4Addr>() {
                 Ok(addr) => {
@@ -289,13 +292,12 @@ fn register_inet_ntoa(registry: &mut FunctionRegistry) {
         error_to_null(eval_inet_ntoa),
     );
 
-    fn eval_inet_ntoa(val: ValueRef<Int64Type>, ctx: &mut EvalContext) -> Value<StringType> {
+    fn eval_inet_ntoa(val: Value<Int64Type>, ctx: &mut EvalContext) -> Value<StringType> {
         vectorize_with_builder_1_arg::<Int64Type, StringType>(|val, output, ctx| {
             match num_traits::cast::cast::<i64, u32>(val) {
                 Some(val) => {
                     let addr_str = Ipv4Addr::from(val.to_be_bytes()).to_string();
-                    output.put_str(&addr_str);
-                    output.commit_row();
+                    output.put_and_commit(addr_str);
                 }
                 None => {
                     ctx.set_error(
@@ -315,13 +317,13 @@ macro_rules! register_simple_domain_type_run_diff {
             "running_difference",
             |_, _| FunctionDomain::MayThrow,
             move |arg1, ctx| match arg1 {
-                ValueRef::Scalar(_val) => {
+                Value::Scalar(_val) => {
                     let mut builder =
                         NumberType::<$source_primitive_type>::create_builder(1, ctx.generics);
                     builder.push($zero);
                     Value::Scalar(NumberType::<$source_primitive_type>::build_scalar(builder))
                 }
-                ValueRef::Column(col) => {
+                Value::Column(col) => {
                     let a_iter = NumberType::<$source_primitive_type>::iter_column(&col);
                     let b_iter = NumberType::<$source_primitive_type>::iter_column(&col);
                     let size = col.len();
@@ -371,10 +373,10 @@ fn register_grouping(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(move |args, _| match &args[0] {
-                    ValueRef::Scalar(ScalarRef::Number(NumberScalar::UInt32(v))) => Value::Scalar(
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt32(v))) => Value::Scalar(
                         Scalar::Number(NumberScalar::UInt32(compute_grouping(&params, *v))),
                     ),
-                    ValueRef::Column(Column::Number(NumberColumn::UInt32(col))) => {
+                    Value::Column(Column::Number(NumberColumn::UInt32(col))) => {
                         let output = col
                             .iter()
                             .map(|v| compute_grouping(&params, *v))
@@ -407,8 +409,7 @@ fn register_num_to_char(registry: &mut FunctionRegistry) {
                     .and_then(|entry| entry.process_i64(value))
                 {
                     Ok(s) => {
-                        builder.put_str(&s);
-                        builder.commit_row()
+                        builder.put_and_commit(s);
                     }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
@@ -491,4 +492,187 @@ pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
         grouping |= ((grouping_id & (1 << j)) >> j) << i;
     }
     grouping
+}
+// this implementation comes from https://github.com/joshuaclayton/jaro_winkler
+pub(crate) mod jaro_winkler {
+    #![deny(missing_docs)]
+
+    //! `jaro_winkler` is a crate for calculating Jaro-Winkler distance of two strings.
+    //!
+    //! # Examples
+    //!
+    //! ```
+    //! use jaro_winkler::jaro_winkler;
+    //!
+    //! assert_eq!(jaro_winkler("martha", "marhta"), 0.9611111111111111);
+    //! assert_eq!(jaro_winkler("", "words"), 0.0);
+    //! assert_eq!(jaro_winkler("same", "same"), 1.0);
+    //! ```
+
+    enum DataWrapper {
+        Vec(Vec<bool>),
+        Bitwise(u128),
+    }
+
+    impl DataWrapper {
+        fn build(len: usize) -> Self {
+            if len <= 128 {
+                DataWrapper::Bitwise(0)
+            } else {
+                let mut internal = Vec::with_capacity(len);
+                internal.extend(std::iter::repeat(false).take(len));
+                DataWrapper::Vec(internal)
+            }
+        }
+
+        fn get(&self, idx: usize) -> bool {
+            match self {
+                DataWrapper::Vec(v) => v[idx],
+                DataWrapper::Bitwise(v1) => (v1 >> idx) & 1 == 1,
+            }
+        }
+
+        fn set_true(&mut self, idx: usize) {
+            match self {
+                DataWrapper::Vec(v) => v[idx] = true,
+                DataWrapper::Bitwise(v1) => *v1 |= 1 << idx,
+            }
+        }
+    }
+
+    /// Calculates the Jaro-Winkler distance of two strings.
+    ///
+    /// The return value is between 0.0 and 1.0, where 1.0 means the strings are equal.
+    pub fn jaro_winkler(left_: &str, right_: &str) -> f64 {
+        let llen = left_.len();
+        let rlen = right_.len();
+
+        let (left, right, s1_len, s2_len) = if llen < rlen {
+            (right_, left_, rlen, llen)
+        } else {
+            (left_, right_, llen, rlen)
+        };
+
+        match (s1_len, s2_len) {
+            (0, 0) => return 1.0,
+            (0, _) | (_, 0) => return 0.0,
+            (_, _) => (),
+        }
+
+        if left == right {
+            return 1.0;
+        }
+
+        let range = matching_distance(s1_len, s2_len);
+        let mut s1m = DataWrapper::build(s1_len);
+        let mut s2m = DataWrapper::build(s2_len);
+        let mut matching: f64 = 0.0;
+        let mut transpositions: f64 = 0.0;
+        let left_as_bytes = left.as_bytes();
+        let right_as_bytes = right.as_bytes();
+
+        for (i, item) in right_as_bytes.iter().enumerate().take(s2_len) {
+            let mut j = (i as isize - range as isize).max(0) as usize;
+            let l = (i + range + 1).min(s1_len);
+            while j < l {
+                if item == &left_as_bytes[j] && !s1m.get(j) {
+                    s1m.set_true(j);
+                    s2m.set_true(i);
+                    matching += 1.0;
+                    break;
+                }
+
+                j += 1;
+            }
+        }
+
+        if matching == 0.0 {
+            return 0.0;
+        }
+
+        let mut l = 0;
+
+        for (i, item) in right_as_bytes.iter().enumerate().take(s2_len - 1) {
+            if s2m.get(i) {
+                let mut j = l;
+
+                while j < s1_len {
+                    if s1m.get(j) {
+                        l = j + 1;
+                        break;
+                    }
+
+                    j += 1;
+                }
+
+                if item != &left_as_bytes[j] {
+                    transpositions += 1.0;
+                }
+            }
+        }
+        transpositions = (transpositions / 2.0).ceil();
+
+        let jaro = (matching / (s1_len as f64)
+            + matching / (s2_len as f64)
+            + (matching - transpositions) / matching)
+            / 3.0;
+
+        let prefix_length = left_as_bytes
+            .iter()
+            .zip(right_as_bytes)
+            .take(4)
+            .take_while(|(l, r)| l == r)
+            .count() as f64;
+
+        jaro + prefix_length * 0.1 * (1.0 - jaro)
+    }
+
+    fn matching_distance(s1_len: usize, s2_len: usize) -> usize {
+        let max = s1_len.max(s2_len) as f32;
+        ((max / 2.0).floor() - 1.0) as usize
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn different_is_zero() {
+            assert_eq!(jaro_winkler("foo", "bar"), 0.0);
+        }
+
+        #[test]
+        fn same_is_one() {
+            assert_eq!(jaro_winkler("foo", "foo"), 1.0);
+            assert_eq!(jaro_winkler("", ""), 1.0);
+        }
+
+        #[test]
+        fn test_hello() {
+            assert_eq!(jaro_winkler("hell", "hello"), 0.96);
+        }
+
+        macro_rules! assert_within {
+            ($x:expr, $y:expr, delta=$d:expr) => {
+                assert!(($x - $y).abs() <= $d)
+            };
+        }
+
+        #[test]
+        fn test_boundary() {
+            let long_value = "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s Doc-tests jaro running 0 tests test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s";
+            let longer_value = "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured;test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured;test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured;test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured;test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s Doc-tests jaro running 0 tests test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s";
+            let result = jaro_winkler(long_value, longer_value);
+            assert_within!(result, 0.82, delta = 0.01);
+        }
+
+        #[test]
+        fn test_close_to_boundary() {
+            let long_value = "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s Doc-tests jaro running 0 tests test";
+            assert_eq!(long_value.len(), 129);
+            let longer_value = "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured;test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured;test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured;test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured;test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s Doc-tests jaro running 0 tests test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s";
+            let result = jaro_winkler(long_value, longer_value);
+            assert_within!(result, 0.8, delta = 0.001);
+        }
+    }
 }

@@ -33,7 +33,7 @@ pub struct NameResolutionContext {
 
 pub enum NameResolutionSuggest {
     Quoted,
-    Unqoted,
+    Unquoted,
 }
 
 impl NameResolutionContext {
@@ -48,7 +48,7 @@ impl NameResolutionContext {
         ) {
             (false, true, false) => Some(NameResolutionSuggest::Quoted),
             (true, false, true) if !ident_needs_quote(&ident.name) => {
-                Some(NameResolutionSuggest::Unqoted)
+                Some(NameResolutionSuggest::Unquoted)
             }
             _ => None,
         }
@@ -109,7 +109,7 @@ pub struct IdentifierNormalizer<'a> {
     pub ctx: &'a NameResolutionContext,
 }
 
-impl<'a> IdentifierNormalizer<'a> {
+impl IdentifierNormalizer<'_> {
     fn enter_identifier(&mut self, ident: &mut Identifier) {
         let normalized_ident = normalize_identifier(ident, self.ctx);
         *ident = normalized_ident;

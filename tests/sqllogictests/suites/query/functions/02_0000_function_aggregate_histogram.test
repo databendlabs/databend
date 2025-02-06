@@ -1,5 +1,18 @@
+statement error 2004
+SELECT histogram(n, [10, 20, 30, 40, 50]) FROM numbers(100) t(n);
+
+query T
+SELECT histogram(n, 1) FROM numbers(100) t(n);
+----
+[{"lower":"0","upper":"99","ndv":100,"count":100,"pre_sum":0}]
+
+query T
+SELECT histogram(3)(n) FROM numbers(100) t(n);
+----
+[{"lower":"0","upper":"33","ndv":34,"count":34,"pre_sum":0},{"lower":"34","upper":"67","ndv":34,"count":34,"pre_sum":34},{"lower":"68","upper":"99","ndv":32,"count":32,"pre_sum":68}]
+
 statement ok
-create table histagg (
+create or replace table histagg (
     c_id INT,
     c_tinyint TINYINT,
     c_smallint SMALLINT,
@@ -18,42 +31,42 @@ create table histagg (
 
 statement ok
 INSERT INTO histagg values
-    (1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+    (1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, 'not null'),
     (1, 10, 20, 30, 4444444444444, 0.1, 0.222, 3333.33, 'c', 'varchar1', 'string1',
     '2022-12-01', '2022-12-01 22:23:23', 'not null');
 
 statement ok
 INSERT INTO histagg values
-    (1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+    (1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, 'not null'),
     (1, 11, 21, 33, 4444444444444, 0.1, 0.222, 3333.33, 'c', 'varchar1', 'string1',
     '2022-12-01', '2022-12-01 22:23:23', 'not null');
 
 statement ok
 INSERT INTO histagg values
-    (1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+    (1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, 'not null'),
     (1, 11, 12, 13, 1444444444444, 1.1, 1.222, 13333.33, 'd', 'varchar2', 'string2',
     '2022-12-02', '2022-12-02 22:23:23', 'not null');
 
 statement ok
 INSERT INTO histagg values
-    (2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+    (2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, 'not null'),
     (2, 21, 22, 23, 2444444444444, 2.1, 2.222, 23333.33, 'f', 'varchar3', 'string3',
     '2022-12-03', '2022-12-03 22:23:23', 'not null');
 
 statement ok
 INSERT INTO histagg values
-    (2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+    (2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, 'not null'),
     (2, 31, 32, 33, 3444444444444, 3.1, 3.222, 33333.33, 'l', 'varchar3', 'string3',
     '2022-12-03', '2022-12-03 22:23:23', 'not null');
 
 statement ok
 INSERT INTO histagg values
-    (2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 
+    (2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
     NULL, NULL, 'not null'),
     (2, 10, 20, 30, 944444444444, 9.1, 9.222, 93333.33, 'p', 'varchar9', 'string9',
     '2022-12-09', '2022-12-09 22:23:23', 'not null');
@@ -139,7 +152,7 @@ select histogram() from histagg;
 statement error
 select histogram(c_id, "1") from histagg;
 
-statement error
+statement ok
 select histogram(c_id, 1.1) from histagg;
 
 statement error

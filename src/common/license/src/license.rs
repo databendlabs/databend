@@ -73,6 +73,10 @@ pub enum Feature {
     StorageQuota(StorageQuota),
     #[serde(alias = "amend_table", alias = "AMEND_TABLE")]
     AmendTable,
+    #[serde(alias = "system_management", alias = "SYSTEM_MANAGEMENT")]
+    SystemManagement,
+    #[serde(alias = "hilbert_clustering", alias = "HILBERT_CLUSTERING")]
+    HilbertClustering,
     #[serde(other)]
     Unknown,
 }
@@ -119,6 +123,8 @@ impl fmt::Display for Feature {
                 write!(f, ")")
             }
             Feature::AmendTable => write!(f, "amend_table"),
+            Feature::SystemManagement => write!(f, "system_management"),
+            Feature::HilbertClustering => write!(f, "hilbert_clustering"),
             Feature::Unknown => write!(f, "unknown"),
         }
     }
@@ -166,7 +172,8 @@ impl Feature {
             | (Feature::InvertedIndex, Feature::InvertedIndex)
             | (Feature::VirtualColumn, Feature::VirtualColumn)
             | (Feature::AttacheTable, Feature::AttacheTable)
-            | (Feature::StorageEncryption, Feature::StorageEncryption) => Ok(true),
+            | (Feature::StorageEncryption, Feature::StorageEncryption)
+            | (Feature::HilbertClustering, Feature::HilbertClustering) => Ok(true),
             (_, _) => Ok(false),
         }
     }
@@ -202,7 +209,7 @@ impl LicenseInfo {
         /// sort all features in alphabet order and ignore test feature
         struct DisplayFeatures<'a>(&'a LicenseInfo);
 
-        impl<'a> fmt::Display for DisplayFeatures<'a> {
+        impl fmt::Display for DisplayFeatures<'_> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 let Some(features) = self.0.features.clone() else {
                     return write!(f, "Unlimited");
@@ -335,6 +342,11 @@ mod tests {
         );
 
         assert_eq!(
+            Feature::HilbertClustering,
+            serde_json::from_str::<Feature>("\"hilbert_clustering\"").unwrap()
+        );
+
+        assert_eq!(
             Feature::Unknown,
             serde_json::from_str::<Feature>("\"ssss\"").unwrap()
         );
@@ -367,11 +379,12 @@ mod tests {
                     storage_usage: Some(1),
                 }),
                 Feature::AmendTable,
+                Feature::HilbertClustering,
             ]),
         };
 
         assert_eq!(
-            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,background_service,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,inverted_index,license_info,storage_encryption,storage_quota(storage_usage: 1),stream,vacuum,virtual_column] }",
+            "LicenseInfo{ type: enterprise, org: databend, tenants: [databend_tenant,foo], features: [aggregate_index,amend_table,attach_table,background_service,compute_quota(threads_num: 1, memory_usage: 1),computed_column,data_mask,hilbert_clustering,inverted_index,license_info,storage_encryption,storage_quota(storage_usage: 1),stream,vacuum,virtual_column] }",
             license_info.to_string()
         );
     }

@@ -94,6 +94,8 @@ fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
                 endpoint_url: "https://webhdfs.example.com".to_string(),
                 root: "/path/to/stage/files".to_string(),
                 delegation: "<delegation_token>".to_string(),
+                disable_list_batch: false,
+                user_name: String::new(),
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(

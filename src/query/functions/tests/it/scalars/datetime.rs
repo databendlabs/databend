@@ -47,6 +47,8 @@ fn test_to_timestamp(file: &mut impl Write) {
     run_ast(file, "to_timestamp(0)", &[]);
     run_ast(file, "to_timestamp(100)", &[]);
     run_ast(file, "to_timestamp(315360000000)", &[]);
+    run_ast(file, "to_timestamp('2023-01-11')", &[]);
+    run_ast(file, "to_timestamp('2023-01-11')::int64::timestamp", &[]);
     run_ast(file, "to_timestamp(315360000000000)", &[]);
     run_ast(file, "to_timestamp(253402300800000000)", &[]);
     run_ast(file, "to_timestamp(a)", &[(
@@ -69,6 +71,8 @@ fn test_to_date(file: &mut impl Write) {
     run_ast(file, "to_date(-100)", &[]);
     run_ast(file, "to_date(-0)", &[]);
     run_ast(file, "to_date(0)", &[]);
+    run_ast(file, "to_date('2023-01-11')", &[]);
+    run_ast(file, "to_int32(to_date('2023-01-11'))::date", &[]);
     run_ast(file, "to_date(100)", &[]);
     run_ast(file, "to_date(2932896)", &[]);
     run_ast(file, "to_date(2932897)", &[]);
@@ -597,6 +601,33 @@ fn test_rounder_functions(file: &mut impl Write) {
     run_ast(file, "date_trunc(hour, to_timestamp(1630812366))", &[]);
     run_ast(file, "date_trunc(minute, to_timestamp(1630812366))", &[]);
     run_ast(file, "date_trunc(second, to_timestamp(1630812366))", &[]);
+
+    run_ast(file, "last_day(to_timestamp(1630812366), year)", &[]);
+    run_ast(file, "last_day(to_timestamp(1630812366), quarter)", &[]);
+    run_ast(file, "last_day(to_timestamp(1630812366), month)", &[]);
+    run_ast(file, "last_day(to_timestamp(1630812366), week)", &[]);
+
+    run_ast(file, "previous_day(to_timestamp(1630812366), monday)", &[]);
+    run_ast(file, "previous_day(to_timestamp(1630812366), tuesday)", &[]);
+    run_ast(
+        file,
+        "previous_day(to_timestamp(1630812366), wednesday)",
+        &[],
+    );
+    run_ast(file, "previous_day(to_timestamp(1630812366), thursday)", &[
+    ]);
+    run_ast(file, "previous_day(to_timestamp(1630812366), friday)", &[]);
+    run_ast(file, "previous_day(to_timestamp(1630812366), saturday)", &[
+    ]);
+    run_ast(file, "previous_day(to_timestamp(1630812366), sunday)", &[]);
+
+    run_ast(file, "next_day(to_timestamp(1630812366), monday)", &[]);
+    run_ast(file, "next_day(to_timestamp(1630812366), tuesday)", &[]);
+    run_ast(file, "next_day(to_timestamp(1630812366), wednesday)", &[]);
+    run_ast(file, "next_day(to_timestamp(1630812366), thursday)", &[]);
+    run_ast(file, "next_day(to_timestamp(1630812366), friday)", &[]);
+    run_ast(file, "next_day(to_timestamp(1630812366), saturday)", &[]);
+    run_ast(file, "next_day(to_timestamp(1630812366), sunday)", &[]);
 }
 
 fn test_date_date_diff(file: &mut impl Write) {

@@ -116,24 +116,6 @@ impl SessionManager {
         Ok(())
     }
 
-    pub fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
-        let query_config = &GlobalConfig::instance().query;
-        if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
-            settings.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
-        }
-
-        if let Some(max_storage_io_requests) = query_config.max_storage_io_requests {
-            settings.set_max_storage_io_requests(max_storage_io_requests)?;
-        }
-
-        if let Some(enterprise_license_key) = query_config.databend_enterprise_license.clone() {
-            unsafe {
-                settings.set_enterprise_license(enterprise_license_key)?;
-            }
-        }
-        Ok(())
-    }
-
     pub fn create_with_settings(
         &self,
         typ: SessionType,

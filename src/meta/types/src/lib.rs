@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+#![allow(non_local_definitions)]
 #![feature(no_sanitize)]
 
 //! This crate defines data types used in meta data storage service.
@@ -62,6 +63,7 @@ pub use applied_state::AppliedState;
 pub use change::Change;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
+pub use cluster::NodeType;
 pub use endpoint::Endpoint;
 pub use errors::meta_api_errors::MetaAPIError;
 pub use errors::meta_api_errors::MetaDataError;
@@ -121,39 +123,3 @@ pub use crate::grpc_helper::GrpcHelper;
 pub use crate::non_empty::NonEmptyStr;
 pub use crate::non_empty::NonEmptyString;
 pub use crate::raft_snapshot_data::SnapshotData;
-pub use crate::raft_types::new_log_id;
-pub use crate::raft_types::AppendEntriesRequest;
-pub use crate::raft_types::AppendEntriesResponse;
-pub use crate::raft_types::ChangeMembershipError;
-pub use crate::raft_types::ClientWriteError;
-pub use crate::raft_types::CommittedLeaderId;
-pub use crate::raft_types::Entry;
-pub use crate::raft_types::EntryPayload;
-pub use crate::raft_types::ErrorSubject;
-pub use crate::raft_types::Fatal;
-pub use crate::raft_types::ForwardToLeader;
-pub use crate::raft_types::InstallSnapshotError;
-pub use crate::raft_types::InstallSnapshotRequest;
-pub use crate::raft_types::InstallSnapshotResponse;
-pub use crate::raft_types::LogId;
-pub use crate::raft_types::LogIndex;
-pub use crate::raft_types::Membership;
-pub use crate::raft_types::MembershipNode;
-pub use crate::raft_types::NetworkError;
-pub use crate::raft_types::NodeId;
-pub use crate::raft_types::RPCError;
-pub use crate::raft_types::RaftError;
-pub use crate::raft_types::RaftMetrics;
-pub use crate::raft_types::RemoteError;
-pub use crate::raft_types::Snapshot;
-pub use crate::raft_types::SnapshotMeta;
-pub use crate::raft_types::SnapshotMismatch;
-pub use crate::raft_types::SnapshotResponse;
-pub use crate::raft_types::StorageError;
-pub use crate::raft_types::StoredMembership;
-pub use crate::raft_types::StreamingError;
-pub use crate::raft_types::Term;
-pub use crate::raft_types::TypeConfig;
-pub use crate::raft_types::Vote;
-pub use crate::raft_types::VoteRequest;
-pub use crate::raft_types::VoteResponse;

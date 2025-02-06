@@ -169,11 +169,6 @@ impl ShowCreateTableInterpreter {
         {
             let mut create_defs = vec![];
             for (idx, field) in schema.fields().iter().enumerate() {
-                let nullable = if field.is_nullable() {
-                    " NULL".to_string()
-                } else {
-                    " NOT NULL".to_string()
-                };
                 let default_expr = match field.default_expr() {
                     Some(expr) => {
                         format!(" DEFAULT {expr}")
@@ -201,15 +196,10 @@ impl ShowCreateTableInterpreter {
                 } else {
                     "".to_string()
                 };
-                let column_str = format!(
-                    "  {} {}{}{}{}{}",
-                    display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect),
-                    field.data_type().remove_recursive_nullable().sql_name(),
-                    nullable,
-                    default_expr,
-                    computed_expr,
-                    comment
-                );
+                let ident = display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect);
+                let data_type = field.data_type().sql_name_explicit_null();
+                let column_str =
+                    format!("  {ident} {data_type}{default_expr}{computed_expr}{comment}");
 
                 create_defs.push(column_str);
             }
@@ -256,7 +246,7 @@ impl ShowCreateTableInterpreter {
         let table_engine = format!(") ENGINE={}", engine);
         table_create_sql.push_str(table_engine.as_str());
 
-        if let Some((_, cluster_keys_str)) = table_info.meta.cluster_key() {
+        if let Some(cluster_keys_str) = &table_info.meta.cluster_key {
             let cluster_type = table_info
                 .options()
                 .get(OPT_KEY_CLUSTER_TYPE)
@@ -281,7 +271,7 @@ impl ShowCreateTableInterpreter {
 
         if engine != "ICEBERG" && engine != "DELTA" {
             if let Some(sp) = &table_info.meta.storage_params {
-                table_create_sql.push_str(format!(" LOCATION = '{}'", sp).as_str());
+                table_create_sql.push_str(format!(" '{}' ", sp).as_str());
             }
         }
 

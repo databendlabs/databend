@@ -27,7 +27,7 @@ use crate::binder::MutationStrategy;
 use crate::plans::Plan;
 use crate::BindContext;
 
-impl<'a> Binder {
+impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
