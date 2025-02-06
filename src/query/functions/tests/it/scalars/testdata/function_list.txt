@@ -1675,6 +1675,8 @@ Functions overloads:
 1 epoch(Timestamp NULL) :: Float64 NULL
 2 epoch(Int64) :: Interval
 3 epoch(Int64 NULL) :: Interval NULL
+4 epoch(Interval) :: Float64
+5 epoch(Interval NULL) :: Float64 NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean
@@ -3558,6 +3560,8 @@ Functions overloads:
 1 to_day_of_month(Date NULL) :: UInt8 NULL
 2 to_day_of_month(Timestamp) :: UInt8
 3 to_day_of_month(Timestamp NULL) :: UInt8 NULL
+4 to_day_of_month(Interval) :: Int64
+5 to_day_of_month(Interval NULL) :: Int64 NULL
 0 to_day_of_week(Date) :: UInt8
 1 to_day_of_week(Date NULL) :: UInt8 NULL
 2 to_day_of_week(Timestamp) :: UInt8
@@ -3644,6 +3648,8 @@ Functions overloads:
 5 to_hex(Binary NULL) :: String NULL
 0 to_hour(Timestamp) :: UInt8
 1 to_hour(Timestamp NULL) :: UInt8 NULL
+2 to_hour(Interval) :: Int64
+3 to_hour(Interval NULL) :: Int64 NULL
 0 to_hours(Int64) :: Interval
 1 to_hours(Int64 NULL) :: Interval NULL
 0 to_int16(Variant) :: Int16
@@ -3772,6 +3778,8 @@ Functions overloads:
 1 to_last_of_year(Date NULL) :: Date NULL
 2 to_last_of_year(Timestamp) :: Date
 3 to_last_of_year(Timestamp NULL) :: Date NULL
+0 to_microsecond(Interval) :: Int64
+1 to_microsecond(Interval NULL) :: Int64 NULL
 0 to_microseconds(Int64) :: Interval
 1 to_microseconds(Int64 NULL) :: Interval NULL
 0 to_millennia(Int64) :: Interval
@@ -3780,6 +3788,8 @@ Functions overloads:
 1 to_milliseconds(Int64 NULL) :: Interval NULL
 0 to_minute(Timestamp) :: UInt8
 1 to_minute(Timestamp NULL) :: UInt8 NULL
+2 to_minute(Interval) :: Int64
+3 to_minute(Interval NULL) :: Int64 NULL
 0 to_minutes(Int64) :: Interval
 1 to_minutes(Int64 NULL) :: Interval NULL
 0 to_monday(Date) :: Date
@@ -3790,6 +3800,8 @@ Functions overloads:
 1 to_month(Date NULL) :: UInt8 NULL
 2 to_month(Timestamp) :: UInt8
 3 to_month(Timestamp NULL) :: UInt8 NULL
+4 to_month(Interval) :: Int64
+5 to_month(Interval NULL) :: Int64 NULL
 0 to_months(Int64) :: Interval
 1 to_months(Int64 NULL) :: Interval NULL
 0 to_next_friday(Date) :: Date
@@ -3856,6 +3868,8 @@ Functions overloads:
 3 to_quarter(Timestamp NULL) :: UInt8 NULL
 0 to_second(Timestamp) :: UInt8
 1 to_second(Timestamp NULL) :: UInt8 NULL
+2 to_second(Interval) :: Float64
+3 to_second(Interval NULL) :: Float64 NULL
 0 to_seconds(Int64) :: Interval
 1 to_seconds(Int64 NULL) :: Interval NULL
 0 to_start_of_day(Timestamp) :: Timestamp
@@ -4066,6 +4080,8 @@ Functions overloads:
 1 to_year(Date NULL) :: UInt16 NULL
 2 to_year(Timestamp) :: UInt16
 3 to_year(Timestamp NULL) :: UInt16 NULL
+4 to_year(Interval) :: Int64
+5 to_year(Interval NULL) :: Int64 NULL
 0 to_years(Int64) :: Interval
 1 to_years(Int64 NULL) :: Interval NULL
 0 to_yyyymm(Date) :: UInt32

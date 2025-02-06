@@ -829,6 +829,7 @@ pub enum IntervalKind {
     Week,
     Dow,
     Epoch,
+    MicroSecond,
 }
 
 impl Display for IntervalKind {
@@ -845,6 +846,7 @@ impl Display for IntervalKind {
             IntervalKind::Dow => "DOW",
             IntervalKind::Week => "WEEK",
             IntervalKind::Epoch => "EPOCH",
+            IntervalKind::MicroSecond => "MICROSECOND",
         })
     }
 }
