@@ -15,14 +15,13 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::atomic::AtomicI64;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bytesize::ByteSize;
 use log::info;
 
-use crate::runtime::memory::stat_buffer::BYTES_BUCKET;
+use crate::base::GlobalSequence;
 
 /// The program mem stat
 ///
@@ -37,19 +36,15 @@ const MINIMUM_MEMORY_LIMIT: i64 = 256 * 1024 * 1024;
 /// - Every stat that is fed to a child is also fed to its parent.
 /// - A MemStat has at most one parent.
 pub struct MemStat {
+    pub(crate) id: usize,
     name: Option<String>,
 
     pub(crate) used: AtomicI64,
-
-    pub(crate) peak_used: AtomicI64,
 
     /// The limit of max used memory for this tracker.
     ///
     /// Set to 0 to disable the limit.
     limit: AtomicI64,
-
-    // histogram for alloc
-    bytes_bucket: [AtomicUsize; 23],
 
     parent_memory_stat: Vec<Arc<MemStat>>,
 }
@@ -57,36 +52,11 @@ pub struct MemStat {
 impl MemStat {
     pub const fn global() -> Self {
         Self {
+            id: 0,
             name: None,
             used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
-            peak_used: AtomicI64::new(0),
             parent_memory_stat: vec![],
-            bytes_bucket: [
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-            ],
         }
     }
 
@@ -95,46 +65,18 @@ impl MemStat {
     }
 
     pub fn create_child(name: String, parent_memory_stat: Vec<Arc<MemStat>>) -> Arc<MemStat> {
+        let id = match GlobalSequence::next() {
+            0 => GlobalSequence::next(),
+            id => id,
+        };
+
         Arc::new(MemStat {
+            id,
             name: Some(name),
             used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
-            peak_used: AtomicI64::new(0),
             parent_memory_stat,
-            bytes_bucket: [
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-                AtomicUsize::new(0),
-            ],
         })
-    }
-
-    pub fn get_memory_alloc_buckets(&self) -> Vec<(usize, usize)> {
-        let mut res = Vec::with_capacity(23);
-        for (count, size) in self.bytes_bucket.iter().zip(BYTES_BUCKET) {
-            res.push((size, count.load(Ordering::Relaxed)));
-        }
-        res
     }
 
     pub fn get_parent_memory_stat(&self) -> Vec<Arc<MemStat>> {
@@ -150,12 +92,6 @@ impl MemStat {
         self.limit.store(size, Ordering::Relaxed);
     }
 
-    pub fn record_bytes_buckets(&self, buckets: [usize; 23]) {
-        for (idx, bucket) in buckets.into_iter().enumerate() {
-            self.bytes_bucket[idx].fetch_add(bucket, Ordering::Relaxed);
-        }
-    }
-
     /// Feed memory usage stat to MemStat and return if it exceeds the limit.
     ///
     /// It feeds `state` to the this tracker and all of its ancestors, including GLOBAL_TRACKER.
@@ -168,7 +104,6 @@ impl MemStat {
         let mut used = self.used.fetch_add(batch_memory_used, Ordering::Relaxed);
 
         used += batch_memory_used;
-        let old_peak_used = self.peak_used.fetch_max(used, Ordering::Relaxed);
 
         for (idx, parent_memory_stat) in self.parent_memory_stat.iter().enumerate() {
             if let Err(cause) = parent_memory_stat
@@ -177,11 +112,6 @@ impl MemStat {
                 if NEED_ROLLBACK {
                     // We only roll back the memory that alloc failed
                     self.used.fetch_sub(current_memory_alloc, Ordering::Relaxed);
-
-                    if used > old_peak_used {
-                        self.peak_used
-                            .fetch_sub(current_memory_alloc, Ordering::Relaxed);
-                    }
 
                     for index in 0..idx {
                         self.parent_memory_stat[index].rollback(current_memory_alloc);
@@ -194,11 +124,6 @@ impl MemStat {
 
         if let Err(cause) = self.check_limit(used) {
             if NEED_ROLLBACK {
-                if used > old_peak_used {
-                    self.peak_used
-                        .fetch_sub(current_memory_alloc, Ordering::Relaxed);
-                }
-
                 // NOTE: we cannot rollback peak_used of parent mem stat in this case
                 // self.peak_used.store(peak_used, Ordering::Relaxed);
                 self.rollback(current_memory_alloc);
@@ -216,15 +141,6 @@ impl MemStat {
         for parent_memory_stat in &self.parent_memory_stat {
             parent_memory_stat.rollback(memory_usage)
         }
-    }
-
-    pub fn movein_memory(&self, size: i64) {
-        let used = self.used.fetch_add(size, Ordering::Relaxed);
-        self.peak_used.fetch_max(used + size, Ordering::Relaxed);
-    }
-
-    pub fn moveout_memory(&self, size: i64) {
-        self.used.fetch_sub(size, Ordering::Relaxed);
     }
 
     /// Check if used memory is out of the limit.
@@ -249,12 +165,6 @@ impl MemStat {
         self.used.load(Ordering::Relaxed)
     }
 
-    #[inline]
-    #[allow(unused)]
-    pub fn get_peak_memory_usage(&self) -> i64 {
-        self.peak_used.load(Ordering::Relaxed)
-    }
-
     #[allow(unused)]
     pub fn log_memory_usage(&self) {
         let name = self.name.clone().unwrap_or_else(|| String::from("global"));
@@ -264,18 +174,6 @@ impl MemStat {
             "Current memory usage({}): {}.",
             name,
             ByteSize::b(memory_usage)
-        );
-    }
-
-    #[allow(unused)]
-    pub fn log_peek_memory_usage(&self) {
-        let name = self.name.clone().unwrap_or_else(|| String::from("global"));
-        let peak_memory_usage = self.peak_used.load(Ordering::Relaxed);
-        let peak_memory_usage = std::cmp::max(0, peak_memory_usage) as u64;
-        info!(
-            "Peak memory usage({}): {}.",
-            name,
-            ByteSize::b(peak_memory_usage)
         );
     }
 }
@@ -324,7 +222,6 @@ mod tests {
         mem_stat.record_memory::<false>(-1, -1).unwrap();
 
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 2);
-        assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 3);
 
         Ok(())
     }
@@ -342,18 +239,10 @@ mod tests {
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT
         );
-        assert_eq!(
-            mem_stat.peak_used.load(Ordering::Relaxed),
-            1 + MINIMUM_MEMORY_LIMIT
-        );
 
         assert!(mem_stat.record_memory::<false>(1, 1).is_err());
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
-            1 + MINIMUM_MEMORY_LIMIT + 1
-        );
-        assert_eq!(
-            mem_stat.peak_used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT + 1
         );
 
@@ -362,18 +251,10 @@ mod tests {
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT + 1
         );
-        assert_eq!(
-            mem_stat.peak_used.load(Ordering::Relaxed),
-            1 + MINIMUM_MEMORY_LIMIT + 1
-        );
 
         assert!(mem_stat.record_memory::<true>(-1, -1).is_err());
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
-            1 + MINIMUM_MEMORY_LIMIT + 1
-        );
-        assert_eq!(
-            mem_stat.peak_used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT + 1
         );
 
@@ -381,10 +262,6 @@ mod tests {
         assert_eq!(
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT
-        );
-        assert_eq!(
-            mem_stat.peak_used.load(Ordering::Relaxed),
-            1 + MINIMUM_MEMORY_LIMIT + 1
         );
 
         Ok(())
@@ -401,18 +278,14 @@ mod tests {
         mem_stat.record_memory::<false>(-1, -1).unwrap();
 
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 2);
-        assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 3);
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);
-        assert_eq!(child_mem_stat.peak_used.load(Ordering::Relaxed), 0);
 
         child_mem_stat.record_memory::<false>(1, 1).unwrap();
         child_mem_stat.record_memory::<false>(2, 2).unwrap();
         child_mem_stat.record_memory::<false>(-1, -1).unwrap();
 
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 4);
-        assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 5);
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 2);
-        assert_eq!(child_mem_stat.peak_used.load(Ordering::Relaxed), 3);
 
         Ok(())
     }
@@ -433,12 +306,7 @@ mod tests {
             mem_stat.used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT
         );
-        assert_eq!(
-            mem_stat.peak_used.load(Ordering::Relaxed),
-            1 + MINIMUM_MEMORY_LIMIT
-        );
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);
-        assert_eq!(child_mem_stat.peak_used.load(Ordering::Relaxed), 0);
 
         child_mem_stat.record_memory::<false>(1, 1).unwrap();
         assert!(child_mem_stat
@@ -449,15 +317,7 @@ mod tests {
             1 + MINIMUM_MEMORY_LIMIT + 1 + MINIMUM_MEMORY_LIMIT
         );
         assert_eq!(
-            mem_stat.peak_used.load(Ordering::Relaxed),
-            1 + MINIMUM_MEMORY_LIMIT + 1 + MINIMUM_MEMORY_LIMIT
-        );
-        assert_eq!(
             child_mem_stat.used.load(Ordering::Relaxed),
-            1 + MINIMUM_MEMORY_LIMIT
-        );
-        assert_eq!(
-            child_mem_stat.peak_used.load(Ordering::Relaxed),
             1 + MINIMUM_MEMORY_LIMIT
         );
 
@@ -472,9 +332,7 @@ mod tests {
             .record_memory::<true>(1 + MINIMUM_MEMORY_LIMIT, 1 + MINIMUM_MEMORY_LIMIT)
             .is_err());
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
-        assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 0);
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);
-        assert_eq!(child_mem_stat.peak_used.load(Ordering::Relaxed), 0);
 
         // child failure
         let mem_stat = MemStat::create("TEST".to_string());
@@ -489,7 +347,6 @@ mod tests {
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
         // assert_eq!(mem_stat.peak_used.load(Ordering::Relaxed), 0);
         assert_eq!(child_mem_stat.used.load(Ordering::Relaxed), 0);
-        assert_eq!(child_mem_stat.peak_used.load(Ordering::Relaxed), 0);
 
         Ok(())
     }

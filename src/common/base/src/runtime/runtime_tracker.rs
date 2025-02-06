@@ -43,20 +43,18 @@
 //! and will be restored when `poll()` returns.
 
 use std::alloc::AllocError;
-use std::alloc::Layout;
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
-use std::ptr::NonNull;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
 use pin_project_lite::pin_project;
 
+use crate::runtime::memory::GlobalStatBuffer;
 use crate::runtime::memory::MemStat;
 use crate::runtime::memory::OutOfLimit;
-use crate::runtime::memory::StatBuffer;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::Profile;
 
@@ -73,24 +71,24 @@ pub struct LimitMemGuard {
 impl LimitMemGuard {
     pub fn enter_unlimited() -> Self {
         Self {
-            saved: StatBuffer::current().set_unlimited_flag(true),
+            saved: GlobalStatBuffer::current().set_unlimited_flag(true),
         }
     }
 
     pub fn enter_limited() -> Self {
         Self {
-            saved: StatBuffer::current().set_unlimited_flag(false),
+            saved: GlobalStatBuffer::current().set_unlimited_flag(false),
         }
     }
 
     pub(crate) fn is_unlimited() -> bool {
-        StatBuffer::current().is_unlimited()
+        GlobalStatBuffer::current().is_unlimited()
     }
 }
 
 impl Drop for LimitMemGuard {
     fn drop(&mut self) {
-        StatBuffer::current().set_unlimited_flag(self.saved);
+        GlobalStatBuffer::current().set_unlimited_flag(self.saved);
     }
 }
 
@@ -114,7 +112,7 @@ pub struct TrackingGuard {
 
 impl Drop for TrackingGuard {
     fn drop(&mut self) {
-        let _ = StatBuffer::current().flush::<false>(0);
+        let _ = GlobalStatBuffer::current().flush::<false>(0);
 
         TRACKER.with(|x| {
             let mut thread_tracker = x.borrow_mut();
@@ -148,7 +146,7 @@ impl<T: Future> Future for TrackingFuture<T> {
 
 impl Drop for ThreadTracker {
     fn drop(&mut self) {
-        StatBuffer::current().mark_destroyed();
+        GlobalStatBuffer::current().mark_destroyed();
     }
 }
 
@@ -187,7 +185,7 @@ impl ThreadTracker {
         let mut guard = TrackingGuard {
             saved: tracking_payload,
         };
-        let _ = StatBuffer::current().flush::<false>(0);
+        let _ = GlobalStatBuffer::current().flush::<false>(0);
 
         TRACKER.with(move |x| {
             let mut thread_tracker = x.borrow_mut();
@@ -226,64 +224,12 @@ impl ThreadTracker {
         })
     }
 
-    pub fn pack_layout(layout: Layout) -> Layout {
-        if layout.size() <= 512 {
-            return layout;
-        }
-
-        unsafe {
-            Layout::from_size_align_unchecked(layout.size() + size_of::<usize>(), layout.align())
-        }
-    }
-
-    pub fn pack_tracker(layout: Layout, pack_ptr: NonNull<[u8]>) -> NonNull<[u8]> {
-        if layout.size() <= 512 {
-            return pack_ptr;
-        }
-
-        unsafe {
-            let addr = pack_ptr.as_non_null_ptr();
-            addr.add(layout.size()).cast::<usize>().write(1);
-            NonNull::from_raw_parts(pack_ptr.to_raw_parts().0, layout.size())
-        }
-    }
-
-    pub fn grow_pack(old: Layout, new: Layout, ptr: NonNull<[u8]>) -> NonNull<[u8]> {
-        unsafe {
-            let address = ptr.as_non_null_ptr();
-
-            let mut old_ptr = address.add(old.size());
-            let mut new_ptr = address.add(new.size());
-
-            for _idx in 0..size_of::<usize>() {
-                std::ptr::swap(old_ptr.as_mut(), new_ptr.as_mut());
-                old_ptr = old_ptr.add(1);
-                new_ptr = new_ptr.add(1);
-            }
-
-            NonNull::from_raw_parts(ptr.to_raw_parts().0, new.size())
-        }
-    }
-
-    pub fn shrink_pack(old: Layout, new: Layout, ptr: NonNull<u8>) {
-        unsafe {
-            let mut old_ptr = ptr.add(old.size());
-            let mut new_ptr = ptr.add(new.size());
-
-            for _idx in 0..size_of::<usize>() {
-                std::ptr::swap(old_ptr.as_mut(), new_ptr.as_mut());
-                old_ptr = old_ptr.add(1);
-                new_ptr = new_ptr.add(1);
-            }
-        }
-    }
-
     /// Accumulate stat about allocated memory.
     ///
     /// `size` is the positive number of allocated bytes.
     #[inline]
     pub fn alloc(size: i64) -> Result<(), AllocError> {
-        if let Err(out_of_limit) = StatBuffer::current().alloc(size) {
+        if let Err(out_of_limit) = GlobalStatBuffer::current().alloc(size) {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
             if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 let _guard = LimitMemGuard::enter_unlimited();
@@ -300,25 +246,23 @@ impl ThreadTracker {
     /// `size` is positive number of bytes of the memory to deallocate.
     #[inline]
     pub fn dealloc(size: i64) {
-        StatBuffer::current().dealloc(size)
+        GlobalStatBuffer::current().dealloc(size)
     }
 
-    pub fn movein_memory(size: i64) {
-        TRACKER.with(|tracker| {
-            let thread_tracker = tracker.borrow();
-            if let Some(mem_stat) = &thread_tracker.payload.mem_stat {
-                mem_stat.movein_memory(size);
-            }
-        })
-    }
-
-    pub fn moveout_memory(size: i64) {
-        TRACKER.with(|tracker| {
-            let thread_tracker = tracker.borrow();
-            if let Some(mem_stat) = &thread_tracker.payload.mem_stat {
-                mem_stat.moveout_memory(size);
-            }
-        })
+    // pub fn with_mem_stat<R, F: FnOnce(&Arc<MemStat>) -> R>(f: F) -> R {
+    //     // TRACKER.with()
+    //     TRACKER.try_with(|tracker| {
+    //         let tracker = tracker.borrow();
+    //         tracker.
+    //     })
+    // }
+    pub fn mem_stat() -> Option<&'static Arc<MemStat>> {
+        TRACKER
+            .try_with(|tracker| {
+                let tracker = tracker.borrow();
+                unsafe { std::mem::transmute(tracker.payload.mem_stat.as_ref()) }
+            })
+            .unwrap_or(None)
     }
 
     pub fn record_memory<const ROLLBACK: bool>(batch: i64, cur: i64) -> Result<(), OutOfLimit> {
