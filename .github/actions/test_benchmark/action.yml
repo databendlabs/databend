@@ -24,6 +24,7 @@ runs:
       run: |
         ./benchmark_local.sh
     - name: Check Result
+      working-directory: benchmark/clickbench
       shell: bash
       run: |
         cat result.json
