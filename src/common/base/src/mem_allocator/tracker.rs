@@ -653,3 +653,51 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::alloc::{AllocError, Allocator, Layout};
+    use std::sync::atomic::Ordering;
+    use crate::mem_allocator::{StdAllocator};
+    use crate::mem_allocator::tracker::MetaTrackerAllocator;
+    use crate::runtime::{MemStat, ThreadTracker};
+
+    static TAIL_SIZE: i64 = 8;
+
+    #[test]
+    fn test_alloc_with_mem_stat() -> Result<(), AllocError> {
+        let mem_stat = MemStat::create(String::from("test"));
+
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.mem_stat = Some(mem_stat.clone());
+        let _guard = ThreadTracker::tracking(tracking_payload);
+
+        let mut sum = 0;
+        let allocator = MetaTrackerAllocator::<StdAllocator>::default();
+
+        while sum <= 4 * 1024 * 2014 {
+            let small_allocate = allocator.allocate(Layout::array::<u8>(511).unwrap())?;
+            assert_eq!(small_allocate.len(), 511);
+            sum += small_allocate.len() as i64;
+        }
+
+        // un-tracking small allocate
+        assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+
+        let mut sum = 0;
+        while sum <= 4 * 1024 * 1024 {
+            assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+            let large_allocate = allocator.allocate(Layout::array::<u8>(512).unwrap())?;
+            assert_eq!(large_allocate.len(), 512);
+            sum += 512 + TAIL_SIZE;
+        }
+
+        assert_eq!(mem_stat.used.load(Ordering::Relaxed), sum);
+
+        let memory_usage = mem_stat.used.load(Ordering::Relaxed);
+        let large_allocate = allocator.allocate(Layout::array::<u8>(4 * 1024 * 1024).unwrap())?;
+        assert_eq!(large_allocate.len(), 4 * 1024 * 1024);
+        assert_eq!(mem_stat.used.load(Ordering::Relaxed), memory_usage + 4 * 1024 * 1024 + TAIL_SIZE);
+        Ok(())
+    }
+}

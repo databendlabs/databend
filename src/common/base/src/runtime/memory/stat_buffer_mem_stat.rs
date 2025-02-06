@@ -72,7 +72,7 @@ impl MemStatBuffer {
     pub fn alloc(
         &mut self,
         mem_stat: &Arc<MemStat>,
-        mut memory_usage: i64,
+        memory_usage: i64,
     ) -> Result<(), OutOfLimit> {
         if self.destroyed_thread_local_macro {
             mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
@@ -80,12 +80,11 @@ impl MemStatBuffer {
         }
 
         if mem_stat.id != self.cur_mem_stat_id {
-            std::mem::swap(&mut self.memory_usage, &mut memory_usage);
-            let flush_res = self.flush::<false>(memory_usage, 0);
+            let memory_usage = std::mem::take(&mut self.memory_usage);
+            self.flush::<false>(memory_usage, 0)?;
 
             self.cur_mem_stat = Some(mem_stat.clone());
             self.cur_mem_stat_id = mem_stat.id;
-            return flush_res;
         }
 
         if self.incr(memory_usage) >= MEM_STAT_BUFFER_SIZE {
