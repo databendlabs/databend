@@ -271,3 +271,43 @@ fn list_all_builtin_functions() {
 fn check_ambiguity() {
     BUILTIN_FUNCTIONS.check_ambiguity()
 }
+
+#[test]
+fn test_if_function() -> Result<()> {
+    use databend_common_expression::types::*;
+    use databend_common_expression::FromData;
+    use databend_common_expression::Scalar;
+    let raw_expr = parser::parse_raw_expr("if(eq(n,1), sum_sid + 1,100)", &[
+        ("n", UInt8Type::data_type()),
+        ("sum_sid", Int32Type::data_type().wrap_nullable()),
+    ]);
+    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+    let block = DataBlock::new(
+        vec![
+            BlockEntry {
+                data_type: UInt8Type::data_type(),
+                value: Value::Column(UInt8Type::from_data(vec![2_u8, 1])),
+            },
+            BlockEntry {
+                data_type: Int32Type::data_type().wrap_nullable(),
+                value: Value::Scalar(Scalar::Number(NumberScalar::Int32(2400_i32))),
+            },
+        ],
+        2,
+    );
+    let func_ctx = FunctionContext::default();
+    let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+    let result = evaluator.run(&expr).unwrap();
+    let result = result
+        .as_column()
+        .unwrap()
+        .clone()
+        .as_nullable()
+        .unwrap()
+        .clone();
+
+    let bm = Bitmap::from_iter([true, true]);
+    assert_eq!(result.validity, bm);
+    assert_eq!(result.column, Int64Type::from_data(vec![100, 2401]));
+    Ok(())
+}

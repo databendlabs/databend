@@ -33,6 +33,7 @@ use databend_common_ast::ast::MergeOption;
 use databend_common_ast::ast::MergeSource;
 use databend_common_ast::ast::MergeUpdateExpr;
 use databend_common_ast::ast::ReplaceStmt;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_ast::ast::UpdateExpr;
@@ -67,32 +68,66 @@ enum MutTableAction {
 }
 
 impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
-    pub(crate) fn gen_insert(&mut self, table: &Table, row_count: usize) -> InsertStmt {
-        let table_name = Identifier::from_name(None, table.name.clone());
+    pub(crate) fn gen_insert(&mut self, table: &Table, row_count: usize) -> Vec<InsertStmt> {
         let data_types = table
             .schema
             .fields()
             .iter()
             .map(|f| (&f.data_type).into())
             .collect::<Vec<DataType>>();
-        let source = self.gen_insert_source(&data_types, row_count);
 
-        InsertStmt {
-            // TODO
-            hints: None,
-            with: None,
-            catalog: None,
-            database: None,
-            table: table_name,
-            // TODO
-            columns: vec![],
-            source,
-            // TODO
-            overwrite: false,
+        let num = self.rng.gen_range(1..=5);
+        let mut insert_stmts = Vec::with_capacity(num);
+        for _ in 0..num {
+            let source = self.gen_insert_source(&data_types, row_count);
+            let insert_stmt = InsertStmt {
+                // TODO
+                hints: None,
+                with: None,
+                catalog: None,
+                database: table.db_name.clone(),
+                table: table.name.clone(),
+                // TODO
+                columns: vec![],
+                source,
+                // TODO
+                overwrite: false,
+            };
+            insert_stmts.push(insert_stmt);
         }
+        insert_stmts
     }
 
-    pub(crate) fn gen_delete(&mut self) -> DeleteStmt {
+    pub(crate) fn gen_dml_stmt(&mut self) -> Vec<Statement> {
+        let num = self.rng.gen_range(1..=10);
+        let mut dml_stmts = Vec::with_capacity(num);
+        for _ in 0..num {
+            // generate merge, replace, update, delete
+            let dml_stmt = match self.rng.gen_range(0..=20) {
+                0..=10 => {
+                    let merge_stmt = self.gen_merge();
+                    Statement::MergeInto(merge_stmt)
+                }
+                11..=15 => {
+                    let replace_stmt = self.gen_replace();
+                    Statement::Replace(replace_stmt)
+                }
+                16..=19 => {
+                    let update_stmt = self.gen_update();
+                    Statement::Update(update_stmt)
+                }
+                20 => {
+                    let delete_stmt = self.gen_delete();
+                    Statement::Delete(delete_stmt)
+                }
+                _ => unreachable!(),
+            };
+            dml_stmts.push(dml_stmt);
+        }
+        dml_stmts
+    }
+
+    fn gen_delete(&mut self) -> DeleteStmt {
         let hints = self.gen_hints();
         let (_table, table_reference) = self.random_select_table();
         let selection = Some(self.gen_expr(&DataType::Boolean));
@@ -105,7 +140,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_update(&mut self) -> UpdateStmt {
+    fn gen_update(&mut self) -> UpdateStmt {
         let hints = self.gen_hints();
         let (table, table_reference) = self.random_select_table();
         let selection = if self.rng.gen_bool(0.8) {
@@ -131,7 +166,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_replace(&mut self) -> ReplaceStmt {
+    fn gen_replace(&mut self) -> ReplaceStmt {
         let hints = self.gen_hints();
         let (table, _) = self.random_select_table();
         let fields = self.random_select_fields(&table);
@@ -152,8 +187,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         ReplaceStmt {
             hints,
             catalog: None,
-            database: None,
-            table: Identifier::from_name(None, table.name.clone()),
+            database: table.db_name.clone(),
+            table: table.name.clone(),
             on_conflict_columns,
             columns,
             source,
@@ -161,7 +196,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_merge(&mut self) -> MergeIntoStmt {
+    fn gen_merge(&mut self) -> MergeIntoStmt {
         let hints = self.gen_hints();
         self.cte_tables.clear();
         self.bound_tables.clear();
@@ -261,8 +296,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         MergeIntoStmt {
             hints,
             catalog: None,
-            database: None,
-            table_ident: Identifier::from_name(None, table.name),
+            database: table.db_name.clone(),
+            table_ident: table.name.clone(),
             source,
             target_alias: None,
             join_expr,
@@ -296,8 +331,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         let table_reference = TableReference::Table {
             span: Span::default(),
             catalog: None,
-            database: None,
-            table: Identifier::from_name(None, table.name.clone()),
+            database: table.db_name.clone(),
+            table: table.name.clone(),
             alias: None,
             temporal: None,
             with_options: None,
@@ -350,7 +385,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
     fn mut_table(table: &mut Table, action: MutTableAction) {
         let mut new_schema = table.schema.as_ref().clone();
         match action {
-            MutTableAction::RenameTable(name) => table.name = name,
+            MutTableAction::RenameTable(name) => table.name = Identifier::from_name(None, name),
             MutTableAction::AddColumn((add_column_option, column)) => {
                 let field = Self::from_column_to_field(&column);
 
@@ -389,7 +424,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         table: &Table,
         row_count: usize,
     ) -> Option<(AlterTableStmt, Table, Option<InsertStmt>)> {
-        if self.rng.gen_bool(0.3) {
+        if self.rng.gen_bool(0.5) {
             return None;
         }
         let mut new_table = table.clone();
@@ -476,7 +511,6 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         Self::mut_table(&mut new_table, mut_action);
 
         let insert_stmt_opt = if let Some(new_column) = new_column {
-            let table_name = Identifier::from_name(None, table.name.clone());
             let columns = vec![new_column.name.clone()];
             let data_type = resolve_type_name(&new_column.data_type, true).unwrap();
             let data_types = vec![(&data_type).into()];
@@ -487,8 +521,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 hints: None,
                 with: None,
                 catalog: None,
-                database: None,
-                table: table_name,
+                database: table.db_name.clone(),
+                table: table.name.clone(),
                 columns,
                 source,
                 overwrite: false,
@@ -500,8 +534,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         let table_reference = TableReference::Table {
             span: Span::default(),
             catalog: None,
-            database: None,
-            table: Identifier::from_name(None, table.name.clone()),
+            database: table.db_name.clone(),
+            table: table.name.clone(),
             alias: None,
             temporal: None,
             with_options: None,
@@ -565,6 +599,13 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                             ScalarRef::Binary(v) => {
                                 buf.extend_from_slice("to_binary('".as_bytes());
                                 buf.extend_from_slice(v);
+                                buf.extend_from_slice("')".as_bytes());
+                            }
+                            // TODO: support auto cast to Geography
+                            ScalarRef::Geography(v) => {
+                                buf.extend_from_slice("st_geographyfromewkt('".as_bytes());
+                                let s = v.to_ewkt().unwrap();
+                                buf.extend_from_slice(s.as_bytes());
                                 buf.extend_from_slice("')".as_bytes());
                             }
                             _ => {

@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs::create_dir_all;
+use std::fs::File;
 use std::future::Future;
+use std::io::BufWriter;
+use std::io::Write;
 use std::time::Duration;
 
-use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
 use databend_common_ast::ast::DropTableStmt;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
@@ -28,15 +33,19 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_sql::resolve_type_name;
+use jiff::fmt::strtime;
+use jiff::Zoned;
 use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
 
 use crate::http_client::HttpClient;
-use crate::http_client::QueryResponse;
 use crate::query_fuzzer::QueryFuzzer;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
+use crate::util::read_sql_from_test_dirs;
+
+const LOG_FILE_FORMAT: &str = "%Y-%m-%d-%H-%M-%S-%f";
 
 const KNOWN_ERRORS: &[&str] = &[
     // Errors caused by illegal parameters
@@ -59,6 +68,12 @@ const KNOWN_ERRORS: &[&str] = &[
     "invalid directed edge index",
     "invalid coordinate range",
     "window function calls cannot be nested",
+    "attempt to shift left with overflow",
+    "attempt to shift right with overflow",
+    "attempt to subtract with overflow",
+    "attempt to add with overflow",
+    "attempt to multiply with overflow",
+    "map keys have to be unique",
     // Unsupported features
     "Row format is not yet support for",
     "to_decimal not support this DataType",
@@ -84,6 +99,7 @@ pub struct Runner {
     pub(crate) client: HttpClient,
     db: String,
     timeout: u64,
+    file_buf: BufWriter<File>,
 }
 
 impl Runner {
@@ -92,11 +108,20 @@ impl Runner {
         username: String,
         password: String,
         db: String,
+        log_path: String,
         count: usize,
         seed: Option<u64>,
         timeout: u64,
     ) -> Result<Self> {
         let client = HttpClient::create(host, username, password).await?;
+
+        // Create SQL log directory and file.
+        create_dir_all(&log_path)?;
+        let now = Zoned::now();
+        let time = strtime::format(LOG_FILE_FORMAT, &now).unwrap();
+        let log_path = format!("{}/databend-sqlsmith.{}.sql", log_path, time);
+        let file = File::create(log_path)?;
+        let file_buf = BufWriter::new(file);
 
         Ok(Self {
             count,
@@ -104,7 +129,164 @@ impl Runner {
             client,
             db,
             timeout,
+            file_buf,
         })
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        let create_db_sql = format!("CREATE OR REPLACE database {}", self.db);
+        let _ = self.run_sql(create_db_sql, None).await;
+        let use_db_sql = format!("USE {}", self.db);
+        let _ = self.run_sql(use_db_sql, None).await;
+
+        let settings = self.get_settings().await?;
+
+        let mut rng = Self::generate_rng(self.seed);
+        let mut generator = SqlGenerator::new(&mut rng, settings);
+        let table_stmts = generator.gen_base_tables(&self.db);
+        let tables = self.create_base_table(table_stmts).await?;
+        let row_count = 10;
+
+        let mut new_tables = tables.clone();
+        for (i, table) in tables.iter().enumerate() {
+            let insert_stmts = generator.gen_insert(table, row_count);
+            for insert_stmt in insert_stmts.into_iter() {
+                let insert_sql = insert_stmt.to_string();
+                let _ = self.run_sql(insert_sql, None).await;
+            }
+            let alter_stmt_opt = generator.gen_alter(table, row_count);
+            if let Some((alter_stmt, new_table, insert_stmt_opt)) = alter_stmt_opt {
+                let alter_sql = alter_stmt.to_string();
+                let _ = self.run_sql(alter_sql, None).await;
+                // save new table schema
+                new_tables[i] = new_table;
+                if let Some(insert_stmt) = insert_stmt_opt {
+                    let insert_sql = insert_stmt.to_string();
+                    let _ = self.run_sql(insert_sql, None).await;
+                }
+            }
+        }
+        generator.tables = new_tables;
+
+        let enable_merge = "set enable_experimental_merge_into = 1".to_string();
+        let _ = self.run_sql(enable_merge, None).await;
+        let dml_stmts = generator.gen_dml_stmt();
+        for dml_stmt in dml_stmts.into_iter() {
+            let dml_sql = dml_stmt.to_string();
+            let _ = self.run_sql(dml_sql, None).await;
+        }
+
+        // generate query
+        let mut conn_error_cnt = 0;
+        for _ in 0..self.count {
+            let query = generator.gen_query();
+            let query_sql = query.to_string();
+            let is_conn_error = self.run_sql(query_sql, Some(query)).await;
+            if is_conn_error {
+                conn_error_cnt += 1;
+            }
+            // Query server panic, exist
+            if conn_error_cnt >= 3 {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn run_fuzz(&mut self, fuzz_path: &str) -> Result<()> {
+        let sqls = read_sql_from_test_dirs(fuzz_path)?;
+        let mut conn_error_cnt = 0;
+        let mut query_fuzzer = QueryFuzzer::new();
+        for sql in sqls {
+            tracing::info!("orig sql: {}", sql);
+            let Ok(tokens) = tokenize_sql(&sql) else {
+                continue;
+            };
+            let Ok((stmt, _)) = parse_sql(&tokens, Dialect::PostgreSQL) else {
+                continue;
+            };
+            let fuzz_stmt = query_fuzzer.fuzz(stmt);
+            let fuzz_sql = fuzz_stmt.to_string();
+            tracing::info!("fuzz sql: {}", fuzz_sql);
+            if let Statement::Query(_) = fuzz_stmt {
+                let is_conn_error = self.run_sql(fuzz_sql, None).await;
+                if is_conn_error {
+                    conn_error_cnt += 1;
+                }
+                // Query server panic, exist
+                if conn_error_cnt >= 3 {
+                    break;
+                }
+            } else if let Err(err) = self.client.query(&fuzz_sql).await {
+                tracing::error!("fuzz sql err: {}", err);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn run_sql(&mut self, query_sql: String, query: Option<Query>) -> bool {
+        // Write SQL to log file for replay.
+        writeln!(self.file_buf, "{};", query_sql).unwrap();
+
+        let mut timeout_err = None;
+        let mut is_error = false;
+        let mut is_conn_error = false;
+        let mut try_reduce = false;
+        let mut err_code = 0;
+        let mut err_message = String::new();
+        Self::check_timeout(
+            async {
+                match self.client.query(&query_sql).await {
+                    Ok(responses) => {
+                        if let Some(error) = &responses[0].error {
+                            let value = error.as_object().unwrap();
+                            let code = value["code"].as_u64().unwrap();
+                            let message = value["message"].as_str().unwrap();
+                            if code == 1005 || code == 1065 || code == 2004 || code == 1010 {
+                                return;
+                            }
+                            if KNOWN_ERRORS
+                                .iter()
+                                .any(|known_err| message.starts_with(known_err))
+                            {
+                                return;
+                            }
+                            is_error = true;
+                            err_code = code;
+                            err_message = format!("error: {}", message);
+                            try_reduce = true;
+                        }
+                    }
+                    Err(err) => {
+                        // 1910 is ReqwestError, Query server may have panic, need exist
+                        if err.code() == 1910 {
+                            is_conn_error = true;
+                        }
+                        is_error = true;
+                        err_message = format!("http err: {}", err);
+                    }
+                }
+            },
+            self.timeout,
+            &mut timeout_err,
+        )
+        .await;
+
+        if let Some(timeout_err) = timeout_err {
+            tracing::info!("sql: {}", query_sql);
+            tracing::error!("sql timeout: {}", timeout_err);
+        } else if is_error {
+            tracing::info!("sql: {}", query_sql);
+            if try_reduce {
+                if let Some(query) = query {
+                    let reduced_query = self.try_reduce_query(err_code, query).await;
+                    tracing::info!("reduced sql: {}", reduced_query.to_string());
+                }
+            }
+            tracing::error!(err_message);
+        }
+        is_conn_error
     }
 
     fn generate_rng(seed: Option<u64>) -> impl Rng {
@@ -122,13 +304,12 @@ impl Runner {
         let mut tables = Vec::with_capacity(table_stmts.len());
         for (drop_table_stmt, create_table_stmt) in table_stmts {
             let drop_table_sql = drop_table_stmt.to_string();
-            tracing::info!("drop_table_sql: {}", drop_table_sql);
-            Self::check_res(self.client.query(&drop_table_sql).await);
+            let _ = self.run_sql(drop_table_sql, None).await;
             let create_table_sql = create_table_stmt.to_string();
-            tracing::info!("create_table_sql: {}", create_table_sql);
-            Self::check_res(self.client.query(&create_table_sql).await);
+            let _ = self.run_sql(create_table_sql, None).await;
 
-            let table_name = create_table_stmt.table.name.clone();
+            let db_name = create_table_stmt.database.clone();
+            let table_name = create_table_stmt.table.clone();
             let mut fields = Vec::new();
             if let CreateTableSource::Columns(columns, _) = create_table_stmt.source.unwrap() {
                 for column in columns {
@@ -139,7 +320,7 @@ impl Runner {
             }
             let schema = TableSchemaRefExt::create(fields);
 
-            let table = Table::new(table_name, schema);
+            let table = Table::new(db_name, table_name, schema);
             tables.push(table);
         }
         Ok(tables)
@@ -178,180 +359,5 @@ impl Runner {
         if let Err(e) = tokio::time::timeout(Duration::from_secs(sec), future).await {
             *timeout_err = Some(format!("{}", e));
         }
-    }
-
-    fn check_res(responses: Result<Vec<QueryResponse>>) {
-        match responses {
-            Ok(responses) => {
-                if let Some(error) = &responses[0].error {
-                    let value = error.as_object().unwrap();
-                    let code = value["code"].as_u64().unwrap();
-                    let message = value["message"].as_str().unwrap();
-                    if code == 1005 || code == 1065 {
-                        return;
-                    }
-                    if KNOWN_ERRORS
-                        .iter()
-                        .any(|known_err| message.starts_with(known_err))
-                    {
-                        return;
-                    }
-                    let err = format!("sql exec err code: {} message: {}", code, message);
-                    tracing::error!(err);
-                }
-            }
-            Err(err) => {
-                let err = format!("http err: {}", err);
-                tracing::error!(err);
-            }
-        }
-    }
-
-    pub async fn run_fuzz(&mut self) -> Result<()> {
-        let sqls = vec!["select 1, 'a'", "select 2, 'b'"];
-        let mut query_fuzzer = QueryFuzzer::new();
-        for sql in sqls {
-            let tokens = tokenize_sql(sql).unwrap();
-            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
-            let fuzz_stmt = query_fuzzer.fuzz(stmt);
-            let fuzz_sql = format!("{}", fuzz_stmt);
-            // todo
-            println!("fuzz_sql={:?}", fuzz_sql)
-        }
-
-        Ok(())
-    }
-
-    pub async fn run(&mut self) -> Result<()> {
-        self.run_fuzz().await?;
-
-        let create_db_sql = format!("CREATE OR REPLACE database {}", self.db);
-        let _ = self.client.query(&create_db_sql).await?;
-        let use_db_sql = format!("USE {}", self.db);
-        let _ = self.client.query(&use_db_sql).await?;
-
-        let settings = self.get_settings().await?;
-
-        let mut rng = Self::generate_rng(self.seed);
-        let mut generator = SqlGenerator::new(&mut rng, settings);
-        let table_stmts = generator.gen_base_tables();
-        let tables = self.create_base_table(table_stmts).await?;
-        let row_count = 10;
-
-        let mut new_tables = tables.clone();
-        for (i, table) in tables.iter().enumerate() {
-            let insert_stmt = generator.gen_insert(table, row_count);
-            let insert_sql = insert_stmt.to_string();
-            tracing::info!("insert_sql: {}", insert_sql);
-            Self::check_res(self.client.query(&insert_sql).await);
-
-            let alter_stmt_opt = generator.gen_alter(table, row_count);
-            if let Some((alter_stmt, new_table, insert_stmt_opt)) = alter_stmt_opt {
-                if let AlterTableAction::RenameTable { ref new_table } = alter_stmt.action {
-                    let drop_table_stmt = DropTableStmt {
-                        if_exists: true,
-                        catalog: None,
-                        database: None,
-                        table: new_table.clone(),
-                        all: false,
-                    };
-                    let drop_table_sql = drop_table_stmt.to_string();
-                    tracing::info!("drop_table_sql: {}", drop_table_sql);
-                    Self::check_res(self.client.query(&drop_table_sql).await);
-                }
-                let alter_sql = alter_stmt.to_string();
-                tracing::info!("alter_sql: {}", alter_sql);
-                Self::check_res(self.client.query(&alter_sql).await);
-                // save new table schema
-                new_tables[i] = new_table;
-                if let Some(insert_stmt) = insert_stmt_opt {
-                    let insert_sql = insert_stmt.to_string();
-                    tracing::info!("after alter insert_sql: {}", insert_sql);
-                    Self::check_res(self.client.query(&insert_sql).await);
-                }
-            }
-        }
-        generator.tables = new_tables;
-
-        let enable_merge = "set enable_experimental_merge_into = 1".to_string();
-        Self::check_res(self.client.query(&enable_merge).await);
-        // generate merge, replace, update, delete
-        for _ in 0..20 {
-            let sql = match generator.rng.gen_range(0..=20) {
-                0..=10 => generator.gen_merge().to_string(),
-                11..=15 => generator.gen_replace().to_string(),
-                16..=19 => generator.gen_update().to_string(),
-                20 => generator.gen_delete().to_string(),
-                _ => unreachable!(),
-            };
-            let mut timeout_err = None;
-            tracing::info!("dml sql: {}", sql);
-            Self::check_timeout(
-                async { Self::check_res(self.client.query(&sql).await) },
-                self.timeout,
-                &mut timeout_err,
-            )
-            .await;
-            if let Some(timeout_err) = timeout_err {
-                tracing::error!("sql timeout: {}", timeout_err);
-            }
-        }
-
-        // generate query
-        for _ in 0..self.count {
-            let query = generator.gen_query();
-            let query_sql = query.to_string();
-            let mut timeout_err = None;
-            let mut is_error = false;
-            let mut try_reduce = false;
-            let mut err_code = 0;
-            let mut err_message = String::new();
-            Self::check_timeout(
-                async {
-                    match self.client.query(&query_sql).await {
-                        Ok(responses) => {
-                            if let Some(error) = &responses[0].error {
-                                let value = error.as_object().unwrap();
-                                let code = value["code"].as_u64().unwrap();
-                                let message = value["message"].as_str().unwrap();
-                                if code == 1005 || code == 1065 || code == 2004 || code == 1010 {
-                                    return;
-                                }
-                                if KNOWN_ERRORS
-                                    .iter()
-                                    .any(|known_err| message.starts_with(known_err))
-                                {
-                                    return;
-                                }
-                                is_error = true;
-                                err_code = code;
-                                err_message = format!("error: {}", message);
-                                try_reduce = true;
-                            }
-                        }
-                        Err(err) => {
-                            is_error = true;
-                            err_message = format!("http err: {}", err);
-                        }
-                    }
-                },
-                self.timeout,
-                &mut timeout_err,
-            )
-            .await;
-
-            if let Some(timeout_err) = timeout_err {
-                tracing::info!("query_sql: {}", query_sql);
-                tracing::error!("sql timeout: {}", timeout_err);
-            } else if is_error {
-                tracing::info!("query_sql: {}", query_sql);
-                if try_reduce {
-                    let reduced_query = self.try_reduce_query(err_code, query).await;
-                    tracing::info!("reduced query_sql: {}", reduced_query.to_string());
-                }
-                tracing::error!(err_message);
-            }
-        }
-        Ok(())
     }
 }

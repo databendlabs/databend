@@ -1190,6 +1190,21 @@ pub struct WebhdfsStorageConfig {
     #[clap(long = "storage-webhdfs-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub webhdfs_root: String,
+    /// Disable list batch if hdfs doesn't support yet.
+    #[clap(
+        long = "storage-webhdfs-disable-list-batch",
+        value_name = "VALUE",
+        default_value_t
+    )]
+    #[serde(rename = "disable_list_batch")]
+    pub webhdfs_disable_list_batch: bool,
+    #[clap(
+        long = "storage-webhdfs-user-name",
+        value_name = "VALUE",
+        default_value_t
+    )]
+    #[serde(rename = "user_name")]
+    pub webhdfs_user_name: String,
 }
 
 impl Default for WebhdfsStorageConfig {
@@ -1202,7 +1217,8 @@ impl Debug for WebhdfsStorageConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("WebhdfsStorageConfig")
             .field("endpoint_url", &self.webhdfs_endpoint_url)
-            .field("webhdfs_root", &self.webhdfs_root)
+            .field("root", &self.webhdfs_root)
+            .field("user_name", &self.webhdfs_user_name)
             .field("delegation", &mask_string(&self.webhdfs_delegation, 3))
             .finish()
     }
@@ -1214,6 +1230,8 @@ impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
             webhdfs_delegation: v.delegation,
             webhdfs_endpoint_url: v.endpoint_url,
             webhdfs_root: v.root,
+            webhdfs_disable_list_batch: v.disable_list_batch,
+            webhdfs_user_name: v.user_name,
         }
     }
 }
@@ -1226,6 +1244,8 @@ impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
             delegation: value.webhdfs_delegation,
             endpoint_url: value.webhdfs_endpoint_url,
             root: value.webhdfs_root,
+            disable_list_batch: value.webhdfs_disable_list_batch,
+            user_name: value.webhdfs_user_name,
         })
     }
 }
@@ -2728,6 +2748,15 @@ pub struct CacheConfig {
     )]
     pub block_meta_count: u64,
 
+    /// Max number of **segment** which all of its block meta will be cached.
+    /// Note that a segment may contain multiple block metadata entries.
+    #[clap(
+        long = "cache-segment-block-metas-count",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub segment_block_metas_count: u64,
+
     /// Max number of cached table statistic meta
     #[clap(
         long = "cache-table-meta-statistic-count",
@@ -3088,6 +3117,7 @@ mod cache_config_converters {
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
                 block_meta_count: value.block_meta_count,
+                segment_block_metas_count: value.segment_block_metas_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -3132,6 +3162,7 @@ mod cache_config_converters {
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
                 table_meta_segment_count: None,
+                segment_block_metas_count: value.segment_block_metas_count,
             }
         }
     }

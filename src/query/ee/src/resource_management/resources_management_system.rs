@@ -62,11 +62,15 @@ impl ResourcesManagement for SystemResourcesManagement {
         Ok(())
     }
 
-    async fn create_warehouse(&self, name: String, nodes: Vec<SelectedNode>) -> Result<()> {
+    async fn create_warehouse(
+        &self,
+        name: String,
+        nodes: Vec<SelectedNode>,
+    ) -> Result<WarehouseInfo> {
         self.warehouse_manager.create_warehouse(name, nodes).await
     }
 
-    async fn drop_warehouse(&self, name: String) -> Result<()> {
+    async fn drop_warehouse(&self, name: String) -> Result<WarehouseInfo> {
         self.warehouse_manager.drop_warehouse(name).await
     }
 

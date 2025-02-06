@@ -181,6 +181,11 @@ impl Settings {
         self.try_get_u64("max_block_size")
     }
 
+    // Set max_block_size.
+    pub fn set_max_block_size(&self, val: u64) -> Result<()> {
+        self.try_set_u64("max_block_size", val)
+    }
+
     // Max block size for parquet reader
     pub fn get_parquet_max_block_size(&self) -> Result<u64> {
         self.try_get_u64("parquet_max_block_size")
@@ -312,6 +317,10 @@ impl Settings {
     /// # Safety
     pub unsafe fn get_disable_join_reorder(&self) -> Result<bool> {
         Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
+    }
+
+    pub fn get_max_push_down_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_push_down_limit")? as usize)
     }
 
     pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
@@ -824,6 +833,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_prune_pipeline")? == 1)
     }
 
+    pub fn get_enable_prune_cache(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_prune_cache")? == 1)
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }
@@ -852,5 +865,13 @@ impl Settings {
     /// # Safety
     pub unsafe fn set_warehouse(&self, warehouse: String) -> Result<()> {
         self.unchecked_set_setting(String::from("warehouse"), warehouse)
+    }
+
+    pub fn get_hilbert_num_range_ids(&self) -> Result<u64> {
+        self.try_get_u64("hilbert_num_range_ids")
+    }
+
+    pub fn get_hilbert_sample_size_per_block(&self) -> Result<u64> {
+        self.try_get_u64("hilbert_sample_size_per_block")
     }
 }

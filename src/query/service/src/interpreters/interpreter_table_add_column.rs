@@ -18,6 +18,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ComputedExpr;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
@@ -27,6 +28,7 @@ use databend_common_meta_types::MatchSeq;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::AddColumnOption;
 use databend_common_sql::plans::AddTableColumnPlan;
+use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::Planner;
 use databend_common_storages_fuse::FuseTable;
@@ -38,6 +40,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::info;
 
 use crate::interpreters::interpreter_table_create::is_valid_column;
+use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::MutationInterpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -75,7 +78,7 @@ impl Interpreter for AddTableColumnInterpreter {
         // check mutability
         tbl.check_mutable()?;
 
-        let table_info = tbl.get_table_info();
+        let mut table_info = tbl.get_table_info().clone();
         let engine = table_info.engine();
         if matches!(engine, VIEW_ENGINE | STREAM_ENGINE) {
             return Err(ErrorCode::TableEngineNotSupported(format!(
@@ -91,7 +94,6 @@ impl Interpreter for AddTableColumnInterpreter {
         }
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
-        let mut new_table_meta = table_info.meta.clone();
         let field = self.plan.field.clone();
         if field.computed_expr().is_some() {
             LicenseManagerSwitch::instance()
@@ -104,11 +106,47 @@ impl Interpreter for AddTableColumnInterpreter {
         is_valid_column(field.name())?;
         let index = match &self.plan.option {
             AddColumnOption::First => 0,
-            AddColumnOption::After(name) => new_table_meta.schema.index_of(name)? + 1,
-            AddColumnOption::End => new_table_meta.schema.num_fields(),
+            AddColumnOption::After(name) => table_info.meta.schema.index_of(name)? + 1,
+            AddColumnOption::End => table_info.meta.schema.num_fields(),
         };
-        new_table_meta.add_column(&field, &self.plan.comment, index)?;
+        table_info
+            .meta
+            .add_column(&field, &self.plan.comment, index)?;
 
+        // if the new column is a stored computed field,
+        // need rebuild the table to generate stored computed column.
+        if let Some(ComputedExpr::Stored(_)) = field.computed_expr {
+            let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
+            let prev_snapshot_id = fuse_table
+                .read_table_snapshot()
+                .await
+                .map_or(None, |v| v.map(|snapshot| snapshot.snapshot_id));
+
+            // computed columns will generated from other columns.
+            let new_schema = table_info.meta.schema.remove_computed_fields();
+            let query_fields = new_schema
+                .fields()
+                .iter()
+                .map(|field| format!("`{}`", field.name))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let sql = format!(
+                "SELECT {} FROM `{}`.`{}`",
+                query_fields, self.plan.database, self.plan.table
+            );
+
+            return build_select_insert_plan(
+                self.ctx.clone(),
+                sql,
+                table_info.clone(),
+                new_schema.into(),
+                prev_snapshot_id,
+            )
+            .await;
+        }
+
+        let mut new_table_meta = table_info.meta.clone();
         let _ = generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
@@ -119,14 +157,14 @@ impl Interpreter for AddTableColumnInterpreter {
             new_table_meta,
         };
 
-        let _resp = catalog.update_single_table_meta(req, table_info).await?;
+        let _resp = catalog.update_single_table_meta(req, &table_info).await?;
 
         // If the column is not deterministic, update to refresh the value with default expr.
         if !self.plan.is_deterministic {
             self.ctx
                 .evict_table_from_cache(catalog_name, db_name, tbl_name)?;
             let query = format!(
-                "update `{}`.`{}` set `{}` = {};",
+                "UPDATE `{}`.`{}` SET `{}` = {};",
                 db_name,
                 tbl_name,
                 field.name(),
@@ -135,8 +173,13 @@ impl Interpreter for AddTableColumnInterpreter {
             let mut planner = Planner::new(self.ctx.clone());
             let (plan, _) = planner.plan_sql(&query).await?;
             if let Plan::DataMutation { s_expr, schema, .. } = plan {
-                let interpreter =
-                    MutationInterpreter::try_create(self.ctx.clone(), *s_expr, schema)?;
+                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                let interpreter = MutationInterpreter::try_create(
+                    self.ctx.clone(),
+                    *s_expr,
+                    schema,
+                    mutation.metadata.clone(),
+                )?;
                 let _ = interpreter.execute(self.ctx.clone()).await?;
                 return Ok(PipelineBuildResult::create());
             }

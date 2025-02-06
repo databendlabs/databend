@@ -87,7 +87,7 @@ pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy)]
 pub enum ClusterType {
     Linear,
     Hilbert,

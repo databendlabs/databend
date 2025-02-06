@@ -69,6 +69,8 @@ use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -346,6 +348,61 @@ impl Catalog for MutableCatalog {
         let got = self.ctx.meta.get_index(&req.name_ident).await?;
         let got = got.ok_or_else(|| AppError::from(req.name_ident.unknown_error("get_index")))?;
         Ok(got)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_marked_deleted_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        let res = self
+            .ctx
+            .meta
+            .list_marked_deleted_indexes(tenant, table_id)
+            .await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        Ok(self
+            .ctx
+            .meta
+            .list_marked_deleted_table_indexes(tenant, table_id)
+            .await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        index_ids: &[u64],
+    ) -> Result<()> {
+        Ok(self
+            .ctx
+            .meta
+            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
+            .await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<()> {
+        Ok(self
+            .ctx
+            .meta
+            .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
+            .await?)
     }
 
     #[async_backtrace::framed]

@@ -23,6 +23,7 @@ use arrow_flight::flight_service_client::FlightServiceClient;
 use arrow_flight::FlightDescriptor;
 use arrow_select::concat::concat_batches;
 use databend_common_base::headers::HEADER_FUNCTION;
+use databend_common_base::headers::HEADER_FUNCTION_HANDLER;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::version::DATABEND_SEMVER;
@@ -120,43 +121,38 @@ impl UDFFlightClient {
         })
     }
 
-    /// Set tenant for the UDF client.
-    pub fn with_tenant(mut self, tenant: &str) -> Result<Self> {
-        let key = HEADER_TENANT.to_lowercase();
-        let key = MetadataKey::from_str(key.as_str()).map_err(|err| {
-            ErrorCode::UDFDataError(format!("Parse tenant header key error: {err}"))
-        })?;
-        let value = MetadataValue::from_str(tenant).map_err(|err| {
-            ErrorCode::UDFDataError(format!("Parse tenant header value error: {err}"))
-        })?;
-        self.headers.insert(key, value);
+    pub fn with_headers<'a, H: IntoIterator<Item = (&'a str, &'a str)>>(
+        mut self,
+        headers: H,
+    ) -> Result<Self> {
+        for (key, value) in headers.into_iter() {
+            let key = MetadataKey::from_str(key)
+                .map_err(|err| ErrorCode::UDFDataError(format!("Parse key {key} error: {err}")))?;
+            let value = MetadataValue::from_str(value).map_err(|err| {
+                ErrorCode::UDFDataError(format!("Parse value {value} error: {err}"))
+            })?;
+            self.headers.insert(key, value);
+        }
         Ok(self)
+    }
+
+    /// Set tenant for the UDF client.
+    pub fn with_tenant(self, tenant: &str) -> Result<Self> {
+        self.with_headers([(HEADER_TENANT, tenant)])
     }
 
     /// Set function name for the UDF client.
-    pub fn with_func_name(mut self, func_name: &str) -> Result<Self> {
-        let key = HEADER_FUNCTION.to_lowercase();
-        let key = MetadataKey::from_str(key.as_str()).map_err(|err| {
-            ErrorCode::UDFDataError(format!("Parse function name header key error: {err}"))
-        })?;
-        let value = MetadataValue::from_str(func_name).map_err(|err| {
-            ErrorCode::UDFDataError(format!("Parse function name header value error: {err}"))
-        })?;
-        self.headers.insert(key, value);
-        Ok(self)
+    pub fn with_func_name(self, func_name: &str) -> Result<Self> {
+        self.with_headers([(HEADER_FUNCTION, func_name)])
+    }
+
+    pub fn with_handler_name(self, handler_name: &str) -> Result<Self> {
+        self.with_headers([(HEADER_FUNCTION_HANDLER, handler_name)])
     }
 
     /// Set query id for the UDF client.
-    pub fn with_query_id(mut self, query_id: &str) -> Result<Self> {
-        let key = HEADER_QUERY_ID.to_lowercase();
-        let key = MetadataKey::from_str(key.as_str()).map_err(|err| {
-            ErrorCode::UDFDataError(format!("Parse query id header key error: {err}"))
-        })?;
-        let value = MetadataValue::from_str(query_id).map_err(|err| {
-            ErrorCode::UDFDataError(format!("Parse query id header value error: {err}"))
-        })?;
-        self.headers.insert(key, value);
-        Ok(self)
+    pub fn with_query_id(self, query_id: &str) -> Result<Self> {
+        self.with_headers([(HEADER_QUERY_ID, query_id)])
     }
 
     fn make_request<T>(&self, t: T) -> Request<T> {
@@ -187,14 +183,18 @@ impl UDFFlightClient {
         let flight_info = self.inner.get_flight_info(request).await?.into_inner();
         let schema = flight_info
             .try_decode_schema()
-            .map_err(|err| ErrorCode::UDFDataError(format!("Decode UDF schema error: {err}")))
+            .map_err(|err| {
+                ErrorCode::UDFDataError(format!(
+                    "Decode UDF schema failed on UDF function {func_name}: {err}"
+                ))
+            })
             .and_then(|schema| DataSchema::try_from(&schema))?;
 
         let fields_num = schema.fields().len();
         if fields_num == 0 {
-            return Err(ErrorCode::UDFSchemaMismatch(
-                "UDF Server should return at least one column",
-            ));
+            return Err(ErrorCode::UDFSchemaMismatch(format!(
+                "UDF Server should return at least one column on UDF function {func_name}"
+            )));
         }
 
         let (input_fields, output_fields) = schema.fields().split_at(fields_num - 1);
@@ -208,7 +208,8 @@ impl UDFFlightClient {
             .collect::<Vec<_>>();
         if remote_arg_types != arg_types {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
-                "UDF arg types mismatch, remote arg types: ({:?}), defined arg types: ({:?})",
+                "UDF arg types mismatch on UDF function {}, remote arg types: ({:?}), defined arg types: ({:?})",
+                func_name,
                 remote_arg_types
                     .iter()
                     .map(ToString::to_string)
@@ -224,8 +225,10 @@ impl UDFFlightClient {
 
         if &expect_return_type[0] != return_type {
             return Err(ErrorCode::UDFSchemaMismatch(format!(
-                "UDF return type mismatch, actual return type: {}",
-                expect_return_type[0]
+                "UDF return type mismatch on UDF function {}, expected return type: {}, actual return type: {}",
+                func_name,
+                expect_return_type[0],
+                return_type
             )));
         }
 
@@ -255,13 +258,17 @@ impl UDFFlightClient {
         let record_batch_stream = FlightRecordBatchStream::new_from_flight_data(
             flight_data_stream.map_err(|err| err.into()),
         )
-        .map_err(|err| ErrorCode::UDFDataError(format!("Decode record batch error: {err}")));
+        .map_err(|err| {
+            ErrorCode::UDFDataError(format!(
+                "Decode record batch failed on UDF function {func_name}: {err}"
+            ))
+        });
 
         let batches: Vec<RecordBatch> = record_batch_stream.try_collect().await?;
         if batches.is_empty() {
-            return Err(ErrorCode::EmptyDataFromServer(
-                "Get empty data from UDF Server",
-            ));
+            return Err(ErrorCode::EmptyDataFromServer(format!(
+                "Get empty data from UDF Server on UDF function {func_name}"
+            )));
         }
 
         let schema = batches[0].schema();

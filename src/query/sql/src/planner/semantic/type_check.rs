@@ -14,7 +14,9 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::mem;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::vec;
@@ -52,7 +54,6 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::InvertedIndexInfo;
 use databend_common_catalog::plan::InvertedIndexOption;
-use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
@@ -100,7 +101,6 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
-use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
@@ -168,8 +168,8 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
+use crate::IndexType;
 use crate::MetadataRef;
-use crate::TableEntry;
 use crate::Visibility;
 
 /// A helper for type checking.
@@ -274,8 +274,8 @@ impl<'a> TypeChecker<'a> {
 
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
-                        if let Some(virtual_computed_expr) = column.virtual_computed_expr {
-                            let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
+                        if let Some(virtual_expr) = column.virtual_expr {
+                            let sql_tokens = tokenize_sql(virtual_expr.as_str())?;
                             let expr = parse_expr(&sql_tokens, self.dialect)?;
                             return self.resolve(&expr);
                         } else {
@@ -297,21 +297,15 @@ impl<'a> TypeChecker<'a> {
                             self.metadata.clone(),
                             true,
                         )?;
-                        if let Some(virtual_computed_expr) = column.virtual_computed_expr {
-                            let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
-                            let expr = parse_expr(&sql_tokens, self.dialect)?;
-                            return self.resolve(&expr);
-                        } else {
-                            let data_type = *column.data_type.clone();
-                            (
-                                BoundColumnRef {
-                                    span: *span,
-                                    column,
-                                }
-                                .into(),
-                                data_type,
-                            )
-                        }
+                        let data_type = *column.data_type.clone();
+                        (
+                            BoundColumnRef {
+                                span: *span,
+                                column,
+                            }
+                            .into(),
+                            data_type,
+                        )
                     }
                     NameResolutionResult::Alias { scalar, .. } => {
                         (scalar.clone(), scalar.data_type()?)
@@ -1110,7 +1104,12 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs)?,
 
-            Expr::Hole { .. } => unreachable!("hole is impossible in trivial query"),
+            Expr::Hole { span, .. } => {
+                return Err(ErrorCode::SemanticError(
+                    "Hole expression is impossible in trivial query".to_string(),
+                )
+                .set_span(*span))
+            }
         };
         Ok(Box::new((scalar, data_type)))
     }
@@ -1193,6 +1192,21 @@ impl<'a> TypeChecker<'a> {
 
         let frame =
             self.resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())?;
+
+        if matches!(&frame.start_bound, WindowFuncFrameBound::Following(None)) {
+            return Err(ErrorCode::SemanticError(
+                "Frame start cannot be UNBOUNDED FOLLOWING".to_string(),
+            )
+            .set_span(span));
+        }
+
+        if matches!(&frame.end_bound, WindowFuncFrameBound::Preceding(None)) {
+            return Err(ErrorCode::SemanticError(
+                "Frame end cannot be UNBOUNDED PRECEDING".to_string(),
+            )
+            .set_span(span));
+        }
+
         let data_type = func.return_type();
         let window_func = WindowFunc {
             span,
@@ -1729,19 +1743,14 @@ impl<'a> TypeChecker<'a> {
             && arguments.len() == 2
             && params.is_empty()
         {
-            let max_num_buckets = ConstantExpr::try_from(arguments[1].clone());
+            let max_num_buckets: u64 = check_number(
+                None,
+                &FunctionContext::default(),
+                &arguments[1].as_expr()?,
+                &BUILTIN_FUNCTIONS,
+            )?;
 
-            let is_positive_integer = match &max_num_buckets {
-                Ok(v) => v.value.is_positive(),
-                Err(_) => false,
-            } && arg_types[1].is_integer();
-            if !is_positive_integer {
-                return Err(ErrorCode::SemanticError(
-                    "The max_num_buckets of `histogram` must be a constant positive int",
-                ));
-            }
-
-            vec![max_num_buckets.unwrap().value]
+            vec![Scalar::Number(NumberScalar::UInt64(max_num_buckets))]
         } else {
             params
         };
@@ -1931,16 +1940,17 @@ impl<'a> TypeChecker<'a> {
             vec![inner_ty.clone()]
         };
 
-        let columns = params
+        let lambda_columns = params
             .iter()
             .zip(inner_tys.iter())
             .map(|(col, ty)| (col.clone(), ty.clone()))
             .collect::<Vec<_>>();
 
+        let mut lambda_context = self.bind_context.clone();
         let box (lambda_expr, lambda_type) = parse_lambda_expr(
             self.ctx.clone(),
-            self.bind_context.clone(),
-            &columns,
+            &mut lambda_context,
+            &lambda_columns,
             &lambda.expr,
         )?;
 
@@ -2034,20 +2044,24 @@ impl<'a> TypeChecker<'a> {
             _ => {
                 struct LambdaVisitor<'a> {
                     bind_context: &'a BindContext,
+                    arg_index: HashSet<IndexType>,
                     args: Vec<ScalarExpr>,
                     fields: Vec<DataField>,
                 }
 
                 impl<'a> ScalarVisitor<'a> for LambdaVisitor<'a> {
                     fn visit_bound_column_ref(&mut self, col: &'a BoundColumnRef) -> Result<()> {
-                        let contains = self
+                        if self.arg_index.contains(&col.column.index) {
+                            return Ok(());
+                        }
+                        self.arg_index.insert(col.column.index);
+                        let is_outer_column = self
                             .bind_context
                             .all_column_bindings()
                             .iter()
                             .map(|c| c.index)
                             .contains(&col.column.index);
-                        // add outer scope columns first
-                        if contains {
+                        if is_outer_column {
                             let arg = ScalarExpr::BoundColumnRef(col.clone());
                             self.args.push(arg);
                             let field = DataField::new(
@@ -2060,24 +2074,30 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
 
+                // Collect outer scope columns as arguments first.
                 let mut lambda_visitor = LambdaVisitor {
                     bind_context: self.bind_context,
+                    arg_index: HashSet::new(),
                     args: Vec::new(),
                     fields: Vec::new(),
                 };
                 lambda_visitor.visit(&lambda_expr)?;
 
-                // add lambda columns at end
-                let mut fields = lambda_visitor.fields.clone();
-                let column_len = self.bind_context.all_column_bindings().len();
-                for (i, inner_ty) in inner_tys.into_iter().enumerate() {
-                    let lambda_field = DataField::new(&format!("{}", column_len + i), inner_ty);
-                    fields.push(lambda_field);
+                let mut lambda_args = mem::take(&mut lambda_visitor.args);
+                lambda_args.push(arg);
+                let mut lambda_fields = mem::take(&mut lambda_visitor.fields);
+                // Add lambda columns as arguments at end.
+                for (lambda_column_name, lambda_column_type) in lambda_columns.into_iter() {
+                    for column in lambda_context.all_column_bindings().iter().rev() {
+                        if column.column_name == lambda_column_name {
+                            let lambda_field =
+                                DataField::new(&format!("{}", column.index), lambda_column_type);
+                            lambda_fields.push(lambda_field);
+                            break;
+                        }
+                    }
                 }
-                let lambda_schema = DataSchema::new(fields);
-                let mut args = lambda_visitor.args.clone();
-                args.push(arg);
-
+                let lambda_schema = DataSchema::new(lambda_fields);
                 let expr = lambda_expr
                     .type_check(&lambda_schema)?
                     .project_column_ref(|index| {
@@ -2091,7 +2111,7 @@ impl<'a> TypeChecker<'a> {
                     LambdaFunc {
                         span,
                         func_name: func_name.to_string(),
-                        args,
+                        args: lambda_args,
                         lambda_expr: Box::new(remote_lambda_expr),
                         lambda_display,
                         return_type: Box::new(return_type.clone()),
@@ -2622,6 +2642,12 @@ impl<'a> TypeChecker<'a> {
                 )
                 .set_span(span));
             }
+            ExprContext::QualifyClause => {
+                return Err(ErrorCode::SemanticError(
+                    "set-returning functions cannot be used in QUALIFY clause".to_string(),
+                )
+                .set_span(span));
+            }
             _ => {}
         }
 
@@ -2923,6 +2949,7 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Doy => self.resolve_function(span, "to_day_of_year", vec![], &[arg]),
             ASTIntervalKind::Dow => self.resolve_function(span, "to_day_of_week", vec![], &[arg]),
             ASTIntervalKind::Week => self.resolve_function(span, "to_week_of_year", vec![], &[arg]),
+            ASTIntervalKind::Epoch => self.resolve_function(span, "epoch", vec![], &[arg]),
         }
     }
 
@@ -2980,6 +3007,16 @@ impl<'a> TypeChecker<'a> {
                     span,
                     "to_start_of_month", vec![],
                     &[date],
+                )
+            }
+            ASTIntervalKind::Week => {
+                self.resolve_function(
+                    span,
+                    "to_start_of_week", vec![],
+                    &[date, &Expr::Literal {
+                        span: None,
+                        value: Literal::UInt64(1)
+                    }],
                 )
             }
             ASTIntervalKind::Day => {
@@ -4652,28 +4689,6 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
-    async fn get_virtual_columns(
-        &self,
-        table_entry: &TableEntry,
-        table: Arc<dyn Table>,
-    ) -> Result<Option<HashMap<String, TableDataType>>> {
-        let table_id = table.get_id();
-        let req = ListVirtualColumnsReq::new(self.ctx.get_tenant(), Some(table_id));
-        let catalog = self.ctx.get_catalog(table_entry.catalog()).await?;
-
-        if let Ok(virtual_column_metas) = catalog.list_virtual_columns(req).await {
-            if !virtual_column_metas.is_empty() {
-                let mut virtual_column_name_map =
-                    HashMap::with_capacity(virtual_column_metas[0].virtual_columns.len());
-                for (name, typ) in virtual_column_metas[0].virtual_columns.iter() {
-                    virtual_column_name_map.insert(name.clone(), typ.clone());
-                }
-                return Ok(Some(virtual_column_name_map));
-            }
-        }
-        Ok(None)
-    }
-
     fn try_rewrite_virtual_column(
         &mut self,
         base_column: &BaseTableColumn,
@@ -4682,42 +4697,6 @@ impl<'a> TypeChecker<'a> {
         if !self.bind_context.virtual_column_context.allow_pushdown {
             return Ok(None);
         }
-
-        let metadata = self.metadata.read().clone();
-        let table_entry = metadata.table(base_column.table_index);
-
-        let table = table_entry.table();
-        // Ignore tables that do not support virtual columns
-        if !table.support_virtual_columns() {
-            return Ok(None);
-        }
-        let schema = table.schema();
-
-        if !self
-            .bind_context
-            .virtual_column_context
-            .table_indices
-            .contains(&base_column.table_index)
-        {
-            let virtual_column_name_map = databend_common_base::runtime::block_on(
-                self.get_virtual_columns(table_entry, table),
-            )?;
-            self.bind_context
-                .virtual_column_context
-                .table_indices
-                .insert(base_column.table_index);
-            if let Some(virtual_column_name_map) = virtual_column_name_map {
-                self.bind_context
-                    .virtual_column_context
-                    .virtual_column_names
-                    .insert(base_column.table_index, virtual_column_name_map);
-                self.bind_context
-                    .virtual_column_context
-                    .next_column_ids
-                    .insert(base_column.table_index, schema.next_column_id);
-            }
-        }
-
         if let Some(virtual_column_name_map) = self
             .bind_context
             .virtual_column_context
@@ -4746,7 +4725,11 @@ impl<'a> TypeChecker<'a> {
 
             let mut index = 0;
             // Check for duplicate virtual columns
-            for table_column in metadata.virtual_columns_by_table_index(base_column.table_index) {
+            for table_column in self
+                .metadata
+                .read()
+                .virtual_columns_by_table_index(base_column.table_index)
+            {
                 if table_column.name() == name {
                     index = table_column.index();
                     break;

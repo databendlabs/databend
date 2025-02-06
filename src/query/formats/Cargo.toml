@@ -19,6 +19,7 @@ databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-settings = { workspace = true }
+databend-functions-scalar-datetime = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 
@@ -28,6 +29,7 @@ base64 = { workspace = true }
 bstr = { workspace = true }
 chrono-tz = { workspace = true }
 geozero = { workspace = true }
+goldenfile = { workspace = true }
 hex = { workspace = true }
 jiff = { workspace = true }
 jsonb = { workspace = true }

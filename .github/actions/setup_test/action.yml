@@ -1,0 +1,44 @@
+name: "Setup For GNU Test"
+description: "Setup For GNU Test"
+inputs:
+  path:
+    description: "default to ./target/${BUILD_PROFILE}/"
+    required: false
+    default: ""
+  artifacts:
+    description: "Artifacts to download, only works with s3/gcs"
+    required: false
+    default: "meta,query"
+runs:
+  using: "composite"
+  steps:
+    - id: target
+      shell: bash
+      run: |
+        arch=$(uname -m)
+        target="${arch}-unknown-linux-gnu"
+        echo "target=${target}" >> $GITHUB_OUTPUT
+
+    - uses: ./.github/actions/setup_bendsql
+
+    - uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ steps.target.outputs.target }}
+        category: full
+        artifacts: ${{ inputs.artifacts }}
+        path: ${{ inputs.path }}
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: "11"
+
+    - name: setup java env
+      shell: bash
+      run: |
+        echo "LD_LIBRARY_PATH=${{ env.JAVA_HOME }}/lib/server:${{ env.LD_LIBRARY_PATH }}" >> $GITHUB_ENV

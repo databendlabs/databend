@@ -189,7 +189,7 @@ impl<'a> ClusteringInformation<'a> {
                 (cluster_key, exprs)
             }
             (Some(a), None) => {
-                let exprs = self.table.cluster_keys(self.ctx.clone());
+                let exprs = self.table.linear_cluster_keys(self.ctx.clone());
                 let exprs = exprs
                     .iter()
                     .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
@@ -205,13 +205,17 @@ impl<'a> ClusteringInformation<'a> {
             }
         };
 
-        let cluster_type = if default_cluster_key_id.is_some() {
-            self.table
-                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear)
-                .to_string()
-        } else {
-            "linear".to_string()
-        };
+        if default_cluster_key_id.is_some() {
+            let typ = self
+                .table
+                .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+            if matches!(typ, ClusterType::Hilbert) {
+                return Err(ErrorCode::UnsupportedClusterType(
+                    "Unsupported 'hilbert' type, please use `hilbert_clustering_information` instead",
+                ));
+            }
+        }
+        let cluster_type = "linear".to_string();
 
         let snapshot = self.table.read_table_snapshot().await?;
         let now = Utc::now();

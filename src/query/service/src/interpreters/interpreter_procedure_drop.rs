@@ -62,10 +62,22 @@ impl Interpreter for DropProcedureInterpreter {
             .drop_procedure(&drop_procedure_req.name_ident)
             .await?;
         if dropped.is_none() && !self.plan.if_exists {
-            return Err(ErrorCode::UnknownProcedure(format!(
-                "Unknown procedure '{}' while drop procedure",
-                drop_procedure_req.name_ident
-            )));
+            {
+                // try drop old name:
+                let old_drop_procedure_req = DropProcedureReq {
+                    name_ident: self.plan.old_name.clone(),
+                };
+                let dropped = UserApiProvider::instance()
+                    .procedure_api(&tenant)
+                    .drop_procedure(&old_drop_procedure_req.name_ident)
+                    .await?;
+                if dropped.is_none() {
+                    return Err(ErrorCode::UnknownProcedure(format!(
+                        "Unknown procedure '{}' while drop procedure",
+                        drop_procedure_req.name_ident.procedure_name()
+                    )));
+                }
+            }
         }
 
         Ok(PipelineBuildResult::create())

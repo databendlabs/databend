@@ -25,7 +25,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
-use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::SegmentsIO;
@@ -85,7 +85,7 @@ impl TableMetaFunc for FuseSegment {
             std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         for chunk in segment_locations.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, true)
                 .await?;
 
             for (idx, segment) in segments.into_iter().enumerate() {

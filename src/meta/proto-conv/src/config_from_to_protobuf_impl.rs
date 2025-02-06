@@ -66,9 +66,9 @@ impl FromToProto for mt::storage::StorageParams {
                     mt::storage::StorageHuggingfaceConfig::from_pb(s)?,
                 ))
             }
-            None => Err(Incompatible {
-                reason: "StageStorage.storage cannot be None".to_string(),
-            }),
+            None => Err(Incompatible::new(
+                "StageStorage.storage cannot be None".to_string(),
+            )),
         }
     }
 
@@ -101,9 +101,10 @@ impl FromToProto for mt::storage::StorageParams {
             mt::storage::StorageParams::Huggingface(v) => Ok(pb::StorageConfig {
                 storage: Some(pb::storage_config::Storage::Huggingface(v.to_pb()?)),
             }),
-            others => Err(Incompatible {
-                reason: format!("stage type: {} not supported", others),
-            }),
+            others => Err(Incompatible::new(format!(
+                "stage type: {} not supported",
+                others
+            ))),
         }
     }
 }
@@ -260,6 +261,8 @@ impl FromToProto for StorageWebhdfsConfig {
             endpoint_url: p.endpoint_url,
             root: p.root,
             delegation: p.delegation,
+            disable_list_batch: p.disable_list_batch,
+            user_name: p.user_name,
         })
     }
 
@@ -270,9 +273,9 @@ impl FromToProto for StorageWebhdfsConfig {
             endpoint_url: self.endpoint_url.clone(),
             root: self.root.clone(),
             delegation: self.delegation.clone(),
+            disable_list_batch: self.disable_list_batch,
 
-            username: String::new(), // reserved for future use
-            password: String::new(), // reserved for future use
+            user_name: self.user_name.clone(),
         })
     }
 }

@@ -49,6 +49,7 @@ use databend_storages_common_pruner::TopNPrunner;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 use opendal::Operator;
 use sha2::Digest;
@@ -104,6 +105,18 @@ impl FuseTable {
         );
         match snapshot {
             Some(snapshot) => {
+                // To optimize the Hilbert clustering logic, it is necessary to pre-set the selected segments.
+                // Since the recluster logic requires scanning the table twice, fetching the segments directly
+                // can avoid redundant selection logic and ensure that the same data is accessed during both scans.
+                // TODO(zhyass): refactor if necessary.
+                let selected_segment = ctx.get_selected_segment_locations();
+                let segment_locs = if !selected_segment.is_empty() {
+                    selected_segment
+                } else {
+                    snapshot.segments.clone()
+                };
+                let segment_len = segment_locs.len();
+
                 let snapshot_loc = self
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
@@ -115,10 +128,10 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if !dry_run && snapshot.segments.len() > nodes_num && distributed_pruning {
-                    let mut segments = Vec::with_capacity(snapshot.segments.len());
-                    for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                        segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
+                if !dry_run && segment_len > nodes_num && distributed_pruning {
+                    let mut segments = Vec::with_capacity(segment_locs.len());
+                    for (idx, segment_location) in segment_locs.into_iter().enumerate() {
+                        segments.push(FuseLazyPartInfo::create(idx, segment_location))
                     }
 
                     return Ok((
@@ -126,8 +139,8 @@ impl FuseTable {
                             Some(snapshot_loc),
                             snapshot.summary.row_count as usize,
                             snapshot.summary.compressed_byte_size as usize,
-                            snapshot.segments.len(),
-                            snapshot.segments.len(),
+                            segment_len,
+                            segment_len,
                         ),
                         Partitions::create(PartitionsShuffleKind::Mod, segments),
                     ));
@@ -136,8 +149,7 @@ impl FuseTable {
                 let snapshot_loc = Some(snapshot_loc);
                 let table_schema = self.schema_with_stream();
                 let summary = snapshot.summary.block_count as usize;
-                let segments_location =
-                    create_segment_location_vector(snapshot.segments.clone(), snapshot_loc);
+                let segments_location = create_segment_location_vector(segment_locs, snapshot_loc);
 
                 self.prune_snapshot_blocks(
                     ctx.clone(),
@@ -194,34 +206,37 @@ impl FuseTable {
                     )
                 });
 
-        if let Some((_stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
-            let sender = part_info_tx.clone();
-            info!("prune pipeline: get prune result from cache");
-            source_pipeline.set_on_init(move || {
-                // We cannot use the runtime associated with the query to avoid increasing its lifetime.
-                GlobalIORuntime::instance().spawn(async move {
-                    // avoid block global io runtime
-                    let runtime = Runtime::with_worker_threads(2, Some("send-parts".to_string()))?;
+        if ctx.get_settings().get_enable_prune_cache()? {
+            if let Some((_stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+                let sender = part_info_tx.clone();
+                info!("prune pipeline: get prune result from cache");
+                source_pipeline.set_on_init(move || {
+                    // We cannot use the runtime associated with the query to avoid increasing its lifetime.
+                    GlobalIORuntime::instance().spawn(async move {
+                        // avoid block global io runtime
+                        let runtime =
+                            Runtime::with_worker_threads(2, Some("send-parts".to_string()))?;
 
-                    let join_handler = runtime.spawn(async move {
-                        for part in part.partitions {
-                            // the sql may be killed or early stop, ignore the error
-                            if let Err(_e) = sender.send(Ok(part)).await {
-                                break;
+                        let join_handler = runtime.spawn(async move {
+                            for part in part.partitions {
+                                // the sql may be killed or early stop, ignore the error
+                                if let Err(_e) = sender.send(Ok(part)).await {
+                                    break;
+                                }
                             }
+                        });
+
+                        if let Err(cause) = join_handler.await {
+                            log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
                         }
+
+                        Result::Ok(())
                     });
 
-                    if let Err(cause) = join_handler.await {
-                        log::warn!("Join error while in prune pipeline, cause: {:?}", cause);
-                    }
-
-                    Result::Ok(())
+                    Ok(())
                 });
-
-                Ok(())
-            });
-            return Ok(None);
+                return Ok(None);
+            }
         }
 
         let mut prune_pipeline = Pipeline::create();
@@ -414,7 +429,7 @@ impl FuseTable {
             .as_ref()
             .filter(|p| p.order_by.is_empty() && p.filters.is_none())
             .and_then(|p| p.limit);
-
+        let enable_prune_cache = ctx.get_settings().get_enable_prune_cache()?;
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
             limit,
@@ -429,16 +444,20 @@ impl FuseTable {
                 top_k.clone(),
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
+                enable_prune_cache,
             )
         })?;
 
-        prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
-            if let Ok(()) = info.res {
-                // only populating cache when the pipeline is finished successfully
-                send_part_state.populating_cache();
-            }
-            Ok(())
-        });
+        if enable_prune_cache {
+            info!("prune pipeline: enable prune cache");
+            prune_pipeline.set_on_finished(move |info: &ExecutionInfo| {
+                if let Ok(()) = info.res {
+                    // only populating cache when the pipeline is finished successfully
+                    send_part_state.populating_cache();
+                }
+                Ok(())
+            });
+        }
 
         Ok(())
     }
@@ -471,31 +490,32 @@ impl FuseTable {
             None
         };
 
-        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
-            FusePruner::create(
-                &ctx,
-                dal,
-                table_schema.clone(),
-                &push_downs,
-                self.bloom_index_cols(),
-                bloom_index_builder,
-                self.get_storage_format(),
-            )?
-        } else {
-            let cluster_keys = self.cluster_keys(ctx.clone());
+        let pruner =
+            if !self.is_native() || self.cluster_type().is_none_or(|v| v != ClusterType::Linear) {
+                FusePruner::create(
+                    &ctx,
+                    dal,
+                    table_schema.clone(),
+                    &push_downs,
+                    self.bloom_index_cols(),
+                    bloom_index_builder,
+                    self.get_storage_format(),
+                )?
+            } else {
+                let cluster_keys = self.linear_cluster_keys(ctx.clone());
 
-            FusePruner::create_with_pages(
-                &ctx,
-                dal,
-                table_schema,
-                &push_downs,
-                self.cluster_key_meta.clone(),
-                cluster_keys,
-                self.bloom_index_cols(),
-                bloom_index_builder,
-                self.get_storage_format(),
-            )?
-        };
+                FusePruner::create_with_pages(
+                    &ctx,
+                    dal,
+                    table_schema,
+                    &push_downs,
+                    self.cluster_key_meta.clone(),
+                    cluster_keys,
+                    self.bloom_index_cols(),
+                    bloom_index_builder,
+                    self.get_storage_format(),
+                )?
+            };
         Ok(pruner)
     }
 

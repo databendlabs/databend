@@ -20,6 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
+use databend_common_sql::plans::Mutation;
 use log::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
@@ -338,14 +339,17 @@ impl InterpreterFactory {
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
-            Plan::ReclusterTable { s_expr, is_final } => {
-                Ok(Arc::new(ReclusterTableInterpreter::try_create(
-                    ctx,
-                    *s_expr.clone(),
-                    LockTableOption::LockWithRetry,
-                    *is_final,
-                )?))
-            }
+            Plan::ReclusterTable {
+                s_expr,
+                hilbert_query,
+                is_final,
+            } => Ok(Arc::new(ReclusterTableInterpreter::try_create(
+                ctx,
+                *s_expr.clone(),
+                hilbert_query.clone(),
+                LockTableOption::LockWithRetry,
+                *is_final,
+            )?)),
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),
@@ -472,9 +476,15 @@ impl InterpreterFactory {
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
             Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
-            Plan::DataMutation { s_expr, schema, .. } => Ok(Arc::new(
-                MutationInterpreter::try_create(ctx, *s_expr.clone(), schema.clone())?,
-            )),
+            Plan::DataMutation { s_expr, schema, .. } => {
+                let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                Ok(Arc::new(MutationInterpreter::try_create(
+                    ctx,
+                    *s_expr.clone(),
+                    schema.clone(),
+                    mutation.metadata.clone(),
+                )?))
+            }
 
             // Roles
             Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
@@ -709,6 +719,9 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::DescProcedure(p) => {
+                Ok(Arc::new(DescProcedureInterpreter::try_create(*p.clone())?))
+            }
             Plan::CallProcedure(p) => Ok(Arc::new(CallProcedureInterpreter::try_create(
                 ctx,
                 *p.clone(),

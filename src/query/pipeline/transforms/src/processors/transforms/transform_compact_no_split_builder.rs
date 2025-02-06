@@ -27,7 +27,7 @@ pub fn build_compact_block_no_split_pipeline(
     thresholds: BlockThresholds,
     max_threads: usize,
 ) -> Result<()> {
-    // has been resize 1.
+    pipeline.try_resize(1)?;
     pipeline.add_accumulating_transformer(|| BlockCompactNoSplitBuilder::new(thresholds));
     pipeline.try_resize(max_threads)?;
     pipeline.add_block_meta_transformer(TransformCompactBlock::default);
@@ -79,7 +79,7 @@ impl AccumulatingTransform for BlockCompactNoSplitBuilder {
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         self.accumulated_rows += data.num_rows();
-        self.accumulated_bytes += data.memory_size();
+        self.accumulated_bytes += crate::processors::memory_size(&data);
         if !self
             .thresholds
             .check_large_enough(self.accumulated_rows, self.accumulated_bytes)

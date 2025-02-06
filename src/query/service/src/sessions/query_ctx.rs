@@ -152,7 +152,9 @@ pub struct QueryContext {
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
-    inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    written_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    // Used by hilbert clustering when do recluster.
+    selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
@@ -179,9 +181,10 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
-            block_threshold: Arc::new(RwLock::new(BlockThresholds::default())),
+            written_segment_locs: Default::default(),
+            block_threshold: Default::default(),
             m_cte_temp_table: Default::default(),
+            selected_segment_locs: Default::default(),
         })
     }
 
@@ -319,6 +322,9 @@ impl QueryContext {
 
     pub fn update_init_query_id(&self, id: String) {
         self.shared.spilled_files.write().clear();
+        self.shared
+            .unload_callbacked
+            .store(false, Ordering::Release);
         self.shared.cluster_spill_progress.write().clear();
         *self.shared.init_query_id.write() = id;
     }
@@ -466,6 +472,12 @@ impl QueryContext {
             _ => table,
         };
         Ok(table)
+    }
+
+    pub fn mark_unload_callbacked(&self) -> bool {
+        self.shared
+            .unload_callbacked
+            .fetch_or(true, Ordering::SeqCst)
     }
 
     pub fn unload_spill_meta(&self) {
@@ -883,10 +895,7 @@ impl TableContext for QueryContext {
         let settings = self.get_settings();
 
         let tz_string = settings.get_timezone()?;
-        let tz = tz_string.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
-        let jiff_tz = TimeZone::get(&tz_string).map_err(|e| {
+        let tz = TimeZone::get(&tz_string).map_err(|e| {
             ErrorCode::InvalidTimezone(format!(
                 "Timezone has been checked and should be valid but got error: {}",
                 e
@@ -903,9 +912,8 @@ impl TableContext for QueryContext {
         let random_function_seed = settings.get_random_function_seed()?;
 
         Ok(FunctionContext {
-            tz,
             now,
-            jiff_tz,
+            tz,
             rounding_mode,
             disable_variant_check,
 
@@ -971,6 +979,10 @@ impl TableContext for QueryContext {
 
     fn get_cluster(&self) -> Arc<Cluster> {
         self.shared.get_cluster()
+    }
+
+    fn set_cluster(&self, cluster: Arc<Cluster>) {
+        self.shared.set_cluster(cluster)
     }
 
     // Get all the processes list info.
@@ -1137,10 +1149,9 @@ impl TableContext for QueryContext {
             if actual_batch_limit != max_batch_size {
                 return Err(ErrorCode::StorageUnsupported(
                     format!(
-                    "Within the same transaction, the batch size for a stream must remain consistent {:?} {:?}",
+                        "Within the same transaction, the batch size for a stream must remain consistent {:?} {:?}",
                         actual_batch_limit, max_batch_size
                     )
-
                 ));
             }
         } else if max_batch_size.is_some() {
@@ -1220,25 +1231,39 @@ impl TableContext for QueryContext {
         })
     }
 
-    fn add_segment_location(&self, segment_loc: Location) -> Result<()> {
-        let mut segment_locations = self.inserted_segment_locs.write();
+    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()> {
+        let mut segment_locations = self.written_segment_locs.write();
         segment_locations.insert(segment_loc);
         Ok(())
     }
 
-    fn clear_segment_locations(&self) -> Result<()> {
-        let mut segment_locations = self.inserted_segment_locs.write();
+    fn clear_written_segment_locations(&self) -> Result<()> {
+        let mut segment_locations = self.written_segment_locs.write();
         segment_locations.clear();
         Ok(())
     }
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
         Ok(self
-            .inserted_segment_locs
+            .written_segment_locs
             .read()
             .iter()
             .cloned()
             .collect::<Vec<_>>())
+    }
+
+    fn add_selected_segment_location(&self, segment_loc: Location) {
+        let mut segment_locations = self.selected_segment_locs.write();
+        segment_locations.insert(segment_loc);
+    }
+
+    fn get_selected_segment_locations(&self) -> Vec<Location> {
+        self.selected_segment_locs.read().iter().cloned().collect()
+    }
+
+    fn clear_selected_segment_locations(&self) {
+        let mut segment_locations = self.selected_segment_locs.write();
+        segment_locations.clear();
     }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
@@ -1696,6 +1721,10 @@ impl TableContext for QueryContext {
             streams_meta.push(stream.clone());
         }
         Ok(streams_meta)
+    }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        self.shared.get_warehouse_clusters().await
     }
 }
 

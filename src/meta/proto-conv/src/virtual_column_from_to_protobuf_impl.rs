@@ -15,6 +15,8 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use std::collections::BTreeMap;
+
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::TableDataType;
@@ -37,32 +39,28 @@ impl FromToProto for mt::VirtualColumnMeta {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
-        let virtual_columns = if p.data_types.is_empty() {
-            p.virtual_columns
-                .iter()
-                .map(|v| {
-                    (
-                        v.clone(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    )
-                })
-                .collect()
-        } else {
-            if p.virtual_columns.len() != p.data_types.len() {
-                return Err(Incompatible {
-                    reason: format!(
-                        "Incompatible virtual columns length is {}, but data types length is {}",
-                        p.virtual_columns.len(),
-                        p.data_types.len()
-                    ),
-                });
-            }
-            let mut virtual_columns = Vec::new();
-            for (v, ty) in p.virtual_columns.iter().zip(p.data_types.iter()) {
-                virtual_columns.push((v.clone(), TableDataType::from_pb(ty.clone())?));
-            }
-            virtual_columns
-        };
+        if !p.data_types.is_empty() && p.virtual_columns.len() != p.data_types.len() {
+            return Err(Incompatible::new(format!(
+                "Incompatible virtual columns length is {}, but data types length is {}",
+                p.virtual_columns.len(),
+                p.data_types.len()
+            )));
+        }
+        let mut virtual_columns = Vec::with_capacity(p.virtual_columns.len());
+        for (i, expr) in p.virtual_columns.iter().enumerate() {
+            let data_type = if let Some(ty) = p.data_types.get(i) {
+                TableDataType::from_pb(ty.clone())?
+            } else {
+                TableDataType::Nullable(Box::new(TableDataType::Variant))
+            };
+            let alias_name = p.alias_names.get(&(i as u64)).cloned();
+            let virtual_column = mt::VirtualField {
+                expr: expr.clone(),
+                data_type,
+                alias_name,
+            };
+            virtual_columns.push(virtual_column);
+        }
 
         let v = Self {
             table_id: p.table_id,
@@ -72,16 +70,21 @@ impl FromToProto for mt::VirtualColumnMeta {
                 Some(updated_on) => Some(DateTime::<Utc>::from_pb(updated_on)?),
                 None => None,
             },
+            auto_generated: p.auto_generated,
         };
         Ok(v)
     }
 
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let mut data_types = Vec::new();
-        let mut virtual_columns = Vec::new();
-        for (v, ty) in self.virtual_columns.iter() {
-            data_types.push(ty.to_pb()?);
-            virtual_columns.push(v.clone());
+        let mut data_types = Vec::with_capacity(self.virtual_columns.len());
+        let mut virtual_columns = Vec::with_capacity(self.virtual_columns.len());
+        let mut alias_names = BTreeMap::new();
+        for (i, virtual_field) in self.virtual_columns.iter().enumerate() {
+            data_types.push(virtual_field.data_type.to_pb()?);
+            virtual_columns.push(virtual_field.expr.clone());
+            if let Some(alias_name) = &virtual_field.alias_name {
+                alias_names.insert(i as u64, alias_name.clone());
+            }
         }
         let p = pb::VirtualColumnMeta {
             ver: VER,
@@ -94,6 +97,8 @@ impl FromToProto for mt::VirtualColumnMeta {
                 None => None,
             },
             data_types,
+            alias_names,
+            auto_generated: self.auto_generated,
         };
         Ok(p)
     }

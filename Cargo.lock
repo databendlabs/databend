@@ -219,9 +219,9 @@ dependencies = [
 
 [[package]]
 name = "anyerror"
-version = "0.1.10"
+version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0aaeb671913f64cfbe528d9f2236832902c7f32db31b9ec3790f675fceb937c6"
+checksum = "71add24cc141a1e8326f249b74c41cfd217aeb2a67c9c6cf9134d175469afd49"
 dependencies = [
  "serde",
 ]
@@ -670,6 +670,19 @@ dependencies = [
  "event-listener-strategy",
  "futures-core",
  "pin-project-lite",
+]
+
+[[package]]
+name = "async-compat"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bab94bde396a3f7b4962e396fdad640e241ed797d4d8d77fc8c237d14c58fc0"
+dependencies = [
+ "futures-core",
+ "futures-io",
+ "once_cell",
+ "pin-project-lite",
+ "tokio",
 ]
 
 [[package]]
@@ -1517,7 +1530,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3ef8005764f53cd4dca619f5bf64cafd4664dada50ece25e4d81de54c80cc0b"
 dependencies = [
  "once_cell",
- "proc-macro-crate 3.1.0",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.95",
@@ -2918,7 +2931,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "serde",
  "serde_json",
  "serfig",
@@ -3121,6 +3134,7 @@ dependencies = [
  "ethnum",
  "foreign_vec",
  "hex",
+ "log",
  "match-template",
  "num-traits",
  "proptest",
@@ -3195,7 +3209,7 @@ dependencies = [
  "libc",
  "object",
  "once_cell",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "parquet",
  "paste",
  "prost",
@@ -3227,8 +3241,6 @@ dependencies = [
  "base64 0.22.1",
  "borsh",
  "bumpalo",
- "chrono",
- "chrono-tz 0.8.6",
  "comfy-table",
  "criterion",
  "databend-common-ast",
@@ -3260,7 +3272,9 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "pretty_assertions",
+ "proptest",
  "rand",
+ "rand_distr",
  "recursive",
  "roaring",
  "rust_decimal",
@@ -3289,9 +3303,11 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-settings",
+ "databend-functions-scalar-datetime",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "geozero",
+ "goldenfile",
  "hex",
  "jiff",
  "jsonb",
@@ -3315,7 +3331,6 @@ dependencies = [
  "borsh",
  "bstr",
  "bumpalo",
- "chrono",
  "comfy-table",
  "crc32fast",
  "criterion",
@@ -3333,6 +3348,7 @@ dependencies = [
  "databend-functions-scalar-datetime",
  "databend-functions-scalar-decimal",
  "databend-functions-scalar-geo",
+ "databend-functions-scalar-integer-basic-arithmetic",
  "databend-functions-scalar-math",
  "databend-functions-scalar-numeric-basic-arithmetic",
  "ethnum",
@@ -3381,7 +3397,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "hickory-resolver",
- "hyper 0.14.30",
  "hyper 1.4.1",
  "hyper-util",
  "jwt-simple",
@@ -3543,7 +3558,7 @@ dependencies = [
  "maplit",
  "num-derive",
  "num-traits",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "paste",
  "prost",
  "serde",
@@ -3781,7 +3796,7 @@ dependencies = [
  "lz4",
  "match-template",
  "num",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "rand",
  "ringbuffer",
  "roaring",
@@ -3976,6 +3991,7 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-hilbert-clustering",
  "databend-storages-common-cache",
  "databend-storages-common-io",
  "databend-storages-common-session",
@@ -3991,7 +4007,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "parking_lot 0.12.3",
  "prqlc",
  "rand",
@@ -4027,7 +4043,7 @@ dependencies = [
  "futures",
  "http 1.1.0",
  "log",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "parquet",
  "prometheus-client",
  "regex",
@@ -4136,7 +4152,7 @@ dependencies = [
  "itertools 0.13.0",
  "jsonb",
  "log",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "parking_lot 0.12.3",
  "parquet",
  "rand",
@@ -4144,7 +4160,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "siphasher",
- "sys-info",
  "tantivy",
  "tantivy-common",
  "tantivy-fst",
@@ -4184,7 +4199,7 @@ dependencies = [
  "futures",
  "hive_metastore",
  "log",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "parquet",
  "recursive",
  "serde",
@@ -4294,7 +4309,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "orc-rust",
  "serde",
  "serde_json",
@@ -4330,7 +4345,7 @@ dependencies = [
  "ethnum",
  "futures",
  "log",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "parquet",
  "rand",
  "serde",
@@ -4375,7 +4390,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "parquet",
  "serde",
  "serde_json",
@@ -4416,7 +4431,7 @@ dependencies = [
  "enum-as-inner",
  "futures",
  "log",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "parquet",
  "serde",
  "serde_json",
@@ -4481,7 +4496,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "parking_lot 0.12.3",
  "regex",
  "serde",
@@ -4628,6 +4643,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-enterprise-hilbert-clustering"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "databend-common-base",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-storages-common-table-meta",
+]
+
+[[package]]
 name = "databend-enterprise-inverted-index"
 version = "0.1.0"
 dependencies = [
@@ -4687,6 +4714,7 @@ dependencies = [
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-fail-safe",
+ "databend-enterprise-hilbert-clustering",
  "databend-enterprise-inverted-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-storage-encryption",
@@ -4705,7 +4733,7 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "log",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "tantivy",
  "tempfile",
 ]
@@ -4776,7 +4804,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-expression",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",
@@ -4799,7 +4826,6 @@ dependencies = [
 name = "databend-functions-scalar-datetime"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
@@ -4838,6 +4864,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-functions-scalar-integer-basic-arithmetic"
+version = "0.1.0"
+dependencies = [
+ "databend-common-expression",
+ "databend-functions-scalar-numeric-basic-arithmetic",
+ "match-template",
+ "num-traits",
+]
+
+[[package]]
 name = "databend-functions-scalar-math"
 version = "0.1.0"
 dependencies = [
@@ -4854,7 +4890,6 @@ name = "databend-functions-scalar-numeric-basic-arithmetic"
 version = "0.1.0"
 dependencies = [
  "databend-common-expression",
- "databend-functions-scalar-decimal",
  "match-template",
  "num-traits",
  "strength_reduce",
@@ -4967,6 +5002,7 @@ dependencies = [
  "arrow-udf-wasm",
  "async-backtrace",
  "async-channel 1.9.0",
+ "async-compat",
  "async-recursion",
  "async-stream",
  "async-trait",
@@ -5073,7 +5109,7 @@ dependencies = [
  "mysql_async",
  "naive-cityhash",
  "num_cpus",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "opensrv-mysql",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -5127,24 +5163,21 @@ dependencies = [
  "bollard",
  "clap",
  "cookie",
- "databend-common-base",
  "databend-common-exception",
  "env_logger 0.11.5",
  "futures-util",
- "msql-srv",
  "mysql_async",
- "mysql_common 0.32.4",
  "rand",
  "recursive",
+ "redis",
  "regex",
  "reqwest",
  "serde",
  "serde_json",
  "sqllogictest",
- "sqlparser 0.50.0",
  "testcontainers",
+ "testcontainers-modules",
  "thiserror",
- "threadpool",
  "tokio",
  "url",
  "walkdir",
@@ -5260,7 +5293,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
- "opendal 0.51.0",
+ "opendal 0.51.1",
 ]
 
 [[package]]
@@ -8834,27 +8867,30 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.1.14"
+version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9d9d414fc817d3e3d62b2598616733f76c4cc74fbac96069674739b881295c8"
+checksum = "c607c728e28764fecde611a2764a3a5db19ae21dcec46f292244f5cc5c085a81"
 dependencies = [
  "jiff-tzdb",
  "jiff-tzdb-platform",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
  "serde",
  "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "jiff-tzdb"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91335e575850c5c4c673b9bd467b0e025f164ca59d0564f69d0c2ee0ffad4653"
+checksum = "cf2cec2f5d266af45a071ece48b1fb89f3b00b2421ac3a5fe10285a6caaa60d3"
 
 [[package]]
 name = "jiff-tzdb-platform"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9835f0060a626fe59f160437bc725491a6af23133ea906500027d1bd2f8f4329"
+checksum = "a63c62e404e7b92979d2792352d885a7f8f83fd1d0d31eea582d77b2ceca697e"
 dependencies = [
  "jiff-tzdb",
 ]
@@ -9707,18 +9743,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "msql-srv"
-version = "0.11.0"
-source = "git+https://github.com/databendlabs/msql-srv.git?rev=cd443dd#cd443dd062e2d64e029c82d7114ce5a6b324f73c"
-dependencies = [
- "byteorder",
- "chrono",
- "mysql_common 0.31.0",
- "nom",
- "rustls 0.23.18",
-]
-
-[[package]]
 name = "multer"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9762,24 +9786,6 @@ checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
 name = "mysql-common-derive"
-version = "0.30.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56b0d8a0db9bf6d2213e11f2c701cb91387b0614361625ab7b9743b41aa4938f"
-dependencies = [
- "darling",
- "heck 0.4.1",
- "num-bigint",
- "proc-macro-crate 1.3.1",
- "proc-macro-error 1.0.4",
- "proc-macro2",
- "quote",
- "syn 2.0.95",
- "termcolor",
- "thiserror",
-]
-
-[[package]]
-name = "mysql-common-derive"
 version = "0.31.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afe0450cc9344afff34915f8328600ab5ae19260802a334d0f72d2d5bdda3bfe"
@@ -9787,7 +9793,7 @@ dependencies = [
  "darling",
  "heck 0.4.1",
  "num-bigint",
- "proc-macro-crate 3.1.0",
+ "proc-macro-crate",
  "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
@@ -9810,7 +9816,7 @@ dependencies = [
  "futures-util",
  "keyed_priority_queue",
  "lru",
- "mysql_common 0.32.4",
+ "mysql_common",
  "native-tls",
  "pem",
  "percent-encoding",
@@ -9825,46 +9831,6 @@ dependencies = [
  "tokio-util",
  "twox-hash",
  "url",
-]
-
-[[package]]
-name = "mysql_common"
-version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06f19e4cfa0ab5a76b627cec2d81331c49b034988eaf302c3bafeada684eadef"
-dependencies = [
- "base64 0.21.7",
- "bigdecimal",
- "bindgen",
- "bitflags 2.6.0",
- "bitvec",
- "btoi",
- "byteorder",
- "bytes",
- "cc",
- "chrono",
- "cmake",
- "crc32fast",
- "flate2",
- "frunk",
- "lazy_static",
- "mysql-common-derive 0.30.2",
- "num-bigint",
- "num-traits",
- "rand",
- "regex",
- "rust_decimal",
- "saturating",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "smallvec",
- "subprocess",
- "thiserror",
- "time",
- "uuid",
- "zstd 0.12.4",
 ]
 
 [[package]]
@@ -9888,7 +9854,7 @@ dependencies = [
  "flate2",
  "frunk",
  "lazy_static",
- "mysql-common-derive 0.31.1",
+ "mysql-common-derive",
  "num-bigint",
  "num-traits",
  "rand",
@@ -10201,7 +10167,7 @@ version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
 dependencies = [
- "proc-macro-crate 3.1.0",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.95",
@@ -10259,8 +10225,8 @@ dependencies = [
 
 [[package]]
 name = "object_store_opendal"
-version = "0.48.3"
-source = "git+https://github.com/apache/opendal?rev=f7f9990#f7f9990f95146400c3aef8afc11804e4a6e3afe3"
+version = "0.49.0"
+source = "git+https://github.com/apache/opendal?rev=b8a3b7a#b8a3b7aa093d8695d89d579e146907850bb6565c"
 dependencies = [
  "async-trait",
  "bytes",
@@ -10268,7 +10234,7 @@ dependencies = [
  "futures",
  "futures-util",
  "object_store",
- "opendal 0.51.0",
+ "opendal 0.51.1",
  "pin-project",
  "tokio",
 ]
@@ -10340,8 +10306,8 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.51.0"
-source = "git+https://github.com/apache/opendal?rev=f7f9990#f7f9990f95146400c3aef8afc11804e4a6e3afe3"
+version = "0.51.1"
+source = "git+https://github.com/apache/opendal?rev=b8a3b7a#b8a3b7aa093d8695d89d579e146907850bb6565c"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -10416,7 +10382,7 @@ dependencies = [
  "byteorder",
  "bytes",
  "chrono",
- "mysql_common 0.32.4",
+ "mysql_common",
  "nom",
  "pin-project-lite",
  "tokio",
@@ -10563,7 +10529,7 @@ dependencies = [
 [[package]]
 name = "orc-rust"
 version = "0.5.0"
-source = "git+https://github.com/datafusion-contrib/orc-rust?rev=dfb1ede#dfb1ede8f875566372568346ad47b359e1a9c92a"
+source = "git+https://github.com/youngsofun/orc-rust?rev=6c5ac57#6c5ac578d8790e3f79bde4764ccea7e5e76a0f0d"
 dependencies = [
  "arrow",
  "async-trait",
@@ -11093,7 +11059,7 @@ version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a62fea1692d80a000126f9b28d865012a160b80000abb53ccf152b428222c155"
 dependencies = [
- "proc-macro-crate 3.1.0",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.95",
@@ -11113,9 +11079,18 @@ dependencies = [
 
 [[package]]
 name = "portable-atomic"
-version = "1.7.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
+checksum = "280dc24453071f1b63954171985a0b0d30058d287960968b9b2aca264c8d4ee6"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
+dependencies = [
+ "portable-atomic",
+]
 
 [[package]]
 name = "postcard"
@@ -11231,16 +11206,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "353e1ca18966c16d9deb1c69278edbc5f194139612772bd9537af60ac231e1e6"
 dependencies = [
  "elliptic-curve",
-]
-
-[[package]]
-name = "proc-macro-crate"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
-dependencies = [
- "once_cell",
- "toml_edit 0.19.15",
 ]
 
 [[package]]
@@ -13416,15 +13381,6 @@ dependencies = [
 
 [[package]]
 name = "sqlparser"
-version = "0.50.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2e5b515a2bd5168426033e9efbfd05500114833916f1d5c268f938b4ee130ac"
-dependencies = [
- "log",
-]
-
-[[package]]
-name = "sqlparser"
 version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fe11944a61da0da3f592e19a45ebe5ab92dc14a779907ff1f08fbb797bfefc7"
@@ -14274,6 +14230,15 @@ dependencies = [
  "tokio-tar",
  "tokio-util",
  "url",
+]
+
+[[package]]
+name = "testcontainers-modules"
+version = "0.11.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b4a531f812dedf1f0d844e69884d76fd7dd9b1967abc89550c6d270b2b55b9c"
+dependencies = [
+ "testcontainers",
 ]
 
 [[package]]

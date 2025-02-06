@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use itertools::Itertools;
+use log::info;
 use strength_reduce::StrengthReducedU64;
 
 use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
-use crate::get_layout_offsets;
 use crate::read;
 use crate::store;
 use crate::types::DataType;
+use crate::AggrState;
 use crate::AggregateFunctionRef;
 use crate::Column;
 use crate::ColumnBuilder;
@@ -35,6 +35,7 @@ use crate::InputColumns;
 use crate::PayloadFlushState;
 use crate::SelectVector;
 use crate::StateAddr;
+use crate::StatesLayout;
 use crate::BATCH_SIZE;
 use crate::MAX_PAGE_SIZE;
 
@@ -65,8 +66,7 @@ pub struct Payload {
     pub validity_offsets: Vec<usize>,
     pub hash_offset: usize,
     pub state_offset: usize,
-    pub state_addr_offsets: Vec<usize>,
-    pub state_layout: Option<Layout>,
+    pub states_layout: Option<StatesLayout>,
 
     // if set, the payload contains at least duplicate rows
     pub min_cardinality: Option<usize>,
@@ -78,25 +78,27 @@ unsafe impl Sync for Payload {}
 pub struct Page {
     pub(crate) data: Vec<MaybeUninit<u8>>,
     pub(crate) rows: usize,
+    // state_offset = state_rows * agg_len
+    // which mark that the offset to clean the agg states
+    pub(crate) state_offsets: usize,
     pub(crate) capacity: usize,
+}
+
+impl Page {
+    pub fn is_partial_state(&self, agg_len: usize) -> bool {
+        self.rows * agg_len != self.state_offsets
+    }
 }
 
 pub type Pages = Vec<Page>;
 
-// TODO FIXME
 impl Payload {
     pub fn new(
         arena: Arc<Bump>,
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
+        states_layout: Option<StatesLayout>,
     ) -> Self {
-        let mut state_addr_offsets = Vec::new();
-        let state_layout = if !aggrs.is_empty() {
-            Some(get_layout_offsets(&aggrs, &mut state_addr_offsets).unwrap())
-        } else {
-            None
-        };
-
         let mut tuple_size = 0;
         let mut validity_offsets = Vec::with_capacity(group_types.len());
         for x in group_types.iter() {
@@ -146,8 +148,7 @@ impl Payload {
             validity_offsets,
             hash_offset,
             state_offset,
-            state_addr_offsets,
-            state_layout,
+            states_layout,
         }
     }
 
@@ -167,21 +168,26 @@ impl Payload {
     }
 
     #[inline]
-    pub fn writable_page(&mut self) -> &mut Page {
+    pub fn writable_page(&mut self) -> (&mut Page, usize) {
         if self.current_write_page == 0
             || self.pages[self.current_write_page - 1].rows
                 == self.pages[self.current_write_page - 1].capacity
         {
             self.current_write_page += 1;
             if self.current_write_page > self.pages.len() {
+                let data = Vec::with_capacity(self.row_per_page * self.tuple_size);
                 self.pages.push(Page {
-                    data: Vec::with_capacity(self.row_per_page * self.tuple_size),
+                    data,
                     rows: 0,
+                    state_offsets: 0,
                     capacity: self.row_per_page,
                 });
             }
         }
-        &mut self.pages[self.current_write_page - 1]
+        (
+            &mut self.pages[self.current_write_page - 1],
+            self.current_write_page - 1,
+        )
     }
 
     #[inline]
@@ -194,31 +200,27 @@ impl Payload {
         select_vector: &SelectVector,
         group_hashes: &[u64],
         address: &mut [*const u8],
+        page_index: &mut [usize],
         new_group_rows: usize,
         group_columns: InputColumns,
     ) {
         let tuple_size = self.tuple_size;
-        let mut page = self.writable_page();
+        let (mut page, mut page_index_value) = self.writable_page();
         for idx in select_vector.iter().take(new_group_rows).copied() {
             address[idx] = unsafe { page.data.as_ptr().add(page.rows * tuple_size) as *const u8 };
+            page_index[idx] = page_index_value;
             page.rows += 1;
 
             if page.rows == page.capacity {
-                page = self.writable_page();
+                (page, page_index_value) = self.writable_page();
             }
         }
-
-        self.total_rows += new_group_rows;
-
-        debug_assert_eq!(
-            self.total_rows,
-            self.pages.iter().map(|x| x.rows).sum::<usize>()
-        );
 
         self.append_rows(
             select_vector,
             group_hashes,
             address,
+            page_index,
             new_group_rows,
             group_columns,
         )
@@ -229,6 +231,7 @@ impl Payload {
         select_vector: &SelectVector,
         group_hashes: &[u64],
         address: &mut [*const u8],
+        page_index: &mut [usize],
         new_group_rows: usize,
         group_columns: InputColumns,
     ) {
@@ -287,21 +290,48 @@ impl Payload {
 
         write_offset += 8;
         debug_assert!(write_offset == self.state_offset);
-        if let Some(layout) = self.state_layout {
+        if let Some(StatesLayout {
+            layout, states_loc, ..
+        }) = &self.states_layout
+        {
             // write states
-            for idx in select_vector.iter().take(new_group_rows).copied() {
-                let place = self.arena.alloc_layout(layout);
+            let (array_layout, padded_size) = layout.repeat(new_group_rows).unwrap();
+            // Bump only allocates but does not drop, so there is no use after free for any item.
+            let place = self.arena.alloc_layout(array_layout);
+            for (idx, place) in select_vector
+                .iter()
+                .take(new_group_rows)
+                .copied()
+                .enumerate()
+                .map(|(i, idx)| (idx, unsafe { place.add(padded_size * i) }))
+            {
                 unsafe {
                     let dst = address[idx].add(write_offset);
                     store::<u64>(&(place.as_ptr() as u64), dst as *mut u8);
                 }
 
                 let place = StateAddr::from(place);
-                for (aggr, offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
-                    aggr.init_state(place.next(*offset));
+                let page = &mut self.pages[page_index[idx]];
+                for (aggr, loc) in self.aggrs.iter().zip(states_loc.iter()) {
+                    aggr.init_state(AggrState::new(place, loc));
+                    page.state_offsets += 1;
+                }
+            }
+
+            #[cfg(debug_assertions)]
+            {
+                for page in self.pages.iter() {
+                    assert_eq!(page.rows * self.aggrs.len(), page.state_offsets);
                 }
             }
         }
+
+        self.total_rows += new_group_rows;
+
+        debug_assert_eq!(
+            self.total_rows,
+            self.pages.iter().map(|x| x.rows).sum::<usize>()
+        );
     }
 
     pub fn combine(&mut self, mut other: Payload) {
@@ -327,7 +357,8 @@ impl Payload {
         address: &[*const u8],
     ) {
         let tuple_size = self.tuple_size;
-        let mut page = self.writable_page();
+        let agg_len = self.aggrs.len();
+        let (mut page, _) = self.writable_page();
         for i in 0..row_count {
             let index = select_vector[i];
 
@@ -339,9 +370,10 @@ impl Payload {
                 )
             }
             page.rows += 1;
+            page.state_offsets += agg_len;
 
             if page.rows == page.capacity {
-                page = self.writable_page();
+                (page, _) = self.writable_page();
             }
         }
 
@@ -390,15 +422,14 @@ impl Payload {
         true
     }
 
-    pub fn empty_block(&self) -> DataBlock {
-        let columns = self
-            .aggrs
-            .iter()
-            .map(|f| ColumnBuilder::with_capacity(&f.return_type().unwrap(), 0).build())
+    pub fn empty_block(&self, fake_rows: Option<usize>) -> DataBlock {
+        let fake_rows = fake_rows.unwrap_or(0);
+        let columns = (0..self.aggrs.len())
+            .map(|_| ColumnBuilder::repeat_default(&DataType::Binary, fake_rows).build())
             .chain(
                 self.group_types
                     .iter()
-                    .map(|t| ColumnBuilder::with_capacity(t, 0).build()),
+                    .map(|t| ColumnBuilder::repeat_default(t, fake_rows).build()),
             )
             .collect_vec();
         DataBlock::new_from_columns(columns)
@@ -409,25 +440,44 @@ impl Drop for Payload {
     fn drop(&mut self) {
         drop_guard(move || {
             // drop states
-            if !self.state_move_out {
-                for (aggr, addr_offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
-                    if aggr.need_manual_drop_state() {
-                        'PAGE_END: for page in self.pages.iter() {
-                            for row in 0..page.rows {
-                                let ptr = self.data_ptr(page, row);
-                                unsafe {
-                                    let state_addr =
-                                        read::<u64>(ptr.add(self.state_offset) as _) as usize;
+            if self.state_move_out {
+                return;
+            }
 
-                                    // row is reserved, but not written (maybe throw by oom error)
-                                    if state_addr == 0 {
-                                        break 'PAGE_END;
-                                    }
+            let Some(states_layout) = self.states_layout.as_ref() else {
+                return;
+            };
 
-                                    let state_place = StateAddr::new(state_addr);
-                                    aggr.drop_state(state_place.next(*addr_offset));
-                                }
-                            }
+            'FOR: for (idx, (aggr, loc)) in self
+                .aggrs
+                .iter()
+                .zip(states_layout.states_loc.iter())
+                .enumerate()
+            {
+                if !aggr.need_manual_drop_state() {
+                    continue;
+                }
+
+                for page in self.pages.iter() {
+                    let is_partial_state = page.is_partial_state(self.aggrs.len());
+
+                    if is_partial_state && idx == 0 {
+                        info!(
+                            "Cleaning partial page, state_offsets: {}, row: {}, agg length: {}",
+                            page.state_offsets,
+                            page.rows,
+                            self.aggrs.len()
+                        );
+                    }
+                    for row in 0..page.state_offsets.div_ceil(self.aggrs.len()) {
+                        // When OOM, some states are not initialized, we don't need to destroy them
+                        if is_partial_state && row * self.aggrs.len() + idx >= page.state_offsets {
+                            continue 'FOR;
+                        }
+                        let ptr = self.data_ptr(page, row);
+                        unsafe {
+                            let state_addr = read::<u64>(ptr.add(self.state_offset) as _) as usize;
+                            aggr.drop_state(AggrState::new(StateAddr::new(state_addr), loc));
                         }
                     }
                 }

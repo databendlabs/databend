@@ -324,6 +324,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("max_push_down_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "Sets the maximum number of rows limit that can be pushed down to the leaf operator.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that hash join can use before spilling data to storage during query execution, 0 is unlimited",
@@ -1158,6 +1165,28 @@ impl DefaultSettings {
                     scope: SettingScope::Session,
                     range: None,
                 }),
+                ("hilbert_num_range_ids", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024),
+                    desc: "Specifies the domain of range IDs in Hilbert clustering. A larger value provides finer granularity, but may incur a performance cost.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=65535)),
+                }),
+                ("hilbert_sample_size_per_block", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Specifies the number of sample points per block used in Hilbert clustering.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
+                ("enable_prune_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable to cache the pruning result",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+
             ]);
 
             Ok(Arc::new(DefaultSettings {

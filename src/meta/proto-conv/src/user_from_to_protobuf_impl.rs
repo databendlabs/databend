@@ -53,14 +53,12 @@ impl FromToProto for mt::principal::AuthInfo {
                 need_change,
             })) => Ok(mt::principal::AuthInfo::Password {
                 hash_value,
-                hash_method: FromPrimitive::from_i32(hash_method).ok_or_else(|| Incompatible {
-                    reason: format!("invalid PasswordHashMethod: {}", hash_method),
+                hash_method: FromPrimitive::from_i32(hash_method).ok_or_else(|| {
+                    Incompatible::new(format!("invalid PasswordHashMethod: {}", hash_method))
                 })?,
                 need_change: need_change.unwrap_or_default(),
             }),
-            None => Err(Incompatible {
-                reason: "AuthInfo cannot be None".to_string(),
-            }),
+            None => Err(Incompatible::new("AuthInfo cannot be None".to_string())),
         }
     }
 
@@ -160,9 +158,7 @@ impl FromToProto for mt::principal::GrantObject {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let Some(object) = p.object else {
-            return Err(Incompatible {
-                reason: "GrantObject cannot be None".to_string(),
-            });
+            return Err(Incompatible::new("GrantObject cannot be None".to_string()));
         };
 
         match object {
@@ -269,8 +265,8 @@ impl FromToProto for mt::principal::GrantEntry {
         let privileges =
             BitFlags::<mt::principal::UserPrivilegeType, u64>::from_bits_truncate(p.privileges);
         Ok(mt::principal::GrantEntry::new(
-            mt::principal::GrantObject::from_pb(p.object.ok_or_else(|| Incompatible {
-                reason: "GrantEntry.object can not be None".to_string(),
+            mt::principal::GrantObject::from_pb(p.object.ok_or_else(|| {
+                Incompatible::new("GrantEntry.object can not be None".to_string())
             })?)?,
             privileges,
         ))
@@ -339,20 +335,19 @@ impl FromToProto for mt::principal::UserInfo {
             name: p.name.clone(),
             hostname: p.hostname.clone(),
             auth_info: mt::principal::AuthInfo::from_pb(p.auth_info.ok_or_else(|| {
-                Incompatible {
-                    reason: format!("USER {}: UserInfo.auth_info cannot be None", &p.name),
-                }
+                Incompatible::new(format!(
+                    "USER {}: UserInfo.auth_info cannot be None",
+                    &p.name
+                ))
             })?)?,
             grants: mt::principal::UserGrantSet::from_pb(p.grants.ok_or_else(|| {
-                Incompatible {
-                    reason: format!("user {}: UserInfo.grants cannot be None", &p.name),
-                }
+                Incompatible::new(format!("user {}: UserInfo.grants cannot be None", &p.name))
             })?)?,
-            quota: mt::principal::UserQuota::from_pb(p.quota.ok_or_else(|| Incompatible {
-                reason: format!("user {}: UserInfo.quota cannot be None", &p.name),
+            quota: mt::principal::UserQuota::from_pb(p.quota.ok_or_else(|| {
+                Incompatible::new(format!("user {}: UserInfo.quota cannot be None", &p.name))
             })?)?,
-            option: mt::principal::UserOption::from_pb(p.option.ok_or_else(|| Incompatible {
-                reason: format!("user {}: UserInfo.option cannot be None", &p.name),
+            option: mt::principal::UserOption::from_pb(p.option.ok_or_else(|| {
+                Incompatible::new(format!("user {}: UserInfo.option cannot be None", &p.name))
             })?)?,
             history_auth_infos: p
                 .history_auth_infos

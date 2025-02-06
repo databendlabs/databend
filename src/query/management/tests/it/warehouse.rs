@@ -211,6 +211,32 @@ async fn test_drop_self_managed_warehouse() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_heartbeat_not_exists_self_managed_node() -> Result<()> {
+    let (_kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
+
+    let node_info = self_managed_node("test_node");
+
+    // heartbeat not exists node info
+    let mut heartbeat_node = node_info.clone();
+    let seq = warehouse_manager
+        .heartbeat_node(&mut heartbeat_node, 34234)
+        .await?;
+
+    assert_eq!(seq, 0);
+    assert_eq!(heartbeat_node, node_info);
+
+    let mut heartbeat_node = node_info.clone();
+    let seq = warehouse_manager
+        .heartbeat_node(&mut heartbeat_node, seq)
+        .await?;
+
+    assert_ne!(seq, 0);
+    assert_eq!(heartbeat_node, node_info);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_successfully_heartbeat_self_managed_node() -> Result<()> {
     let (kv, warehouse_manager, _nodes) = nodes(Duration::from_mins(60), 0).await?;
 
@@ -288,7 +314,22 @@ async fn test_successfully_create_system_managed_warehouse() -> Result<()> {
         SelectedNode::Random(None),
     ]);
 
-    create_warehouse.await?;
+    let cw = create_warehouse.await?;
+
+    assert!(
+        !matches!(cw, WarehouseInfo::SelfManaged(_)),
+        "Expected WarehouseInfo to not be SelfManaged"
+    );
+    if let WarehouseInfo::SystemManaged(sw) = cw {
+        assert_eq!(sw.id, "test_warehouse");
+        for warehouse in warehouse_manager.list_warehouses().await? {
+            if let WarehouseInfo::SystemManaged(w) = warehouse {
+                if w.id == sw.id {
+                    assert_eq!(w.role_id, sw.role_id)
+                }
+            }
+        }
+    }
 
     for node in &nodes {
         let online_node = format!("__fd_clusters_v6/test%2dtenant%2did/online_nodes/{}", node);
@@ -500,7 +541,8 @@ async fn test_create_warehouse_with_self_manage() -> Result<()> {
             None,
         )]);
 
-    create_warehouse.await
+    assert!(create_warehouse.await.is_ok());
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -910,7 +952,23 @@ async fn test_drop_system_managed_warehouse() -> Result<()> {
     create_warehouse.await?;
 
     let drop_warehouse = warehouse_manager.drop_warehouse(String::from("test_warehouse"));
-    drop_warehouse.await?;
+
+    let cw = drop_warehouse.await?;
+
+    assert!(
+        !matches!(cw, WarehouseInfo::SelfManaged(_)),
+        "Expected WarehouseInfo to not be SelfManaged"
+    );
+    if let WarehouseInfo::SystemManaged(sw) = cw {
+        assert_eq!(sw.id, "test_warehouse");
+        for warehouse in warehouse_manager.list_warehouses().await? {
+            if let WarehouseInfo::SystemManaged(w) = warehouse {
+                if w.id == sw.id {
+                    assert_eq!(w.role_id, sw.role_id)
+                }
+            }
+        }
+    }
 
     let create_warehouse =
         warehouse_manager.create_warehouse(String::from("test_warehouse"), vec![

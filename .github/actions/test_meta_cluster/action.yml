@@ -1,18 +1,9 @@
 name: "Test databend-meta cluster"
 description: "Download binaries, setup cluster by joining and leaving"
-inputs:
-  target:
-    description: ""
-    required: true
-    default: "x86_64-unknown-linux-gnu"
 runs:
   using: "composite"
   steps:
-    - name: Download artifact
-      uses: ./.github/actions/artifact_download
-      with:
-        sha: ${{ github.sha }}
-        target: ${{ inputs.target }}
+    - uses: ./.github/actions/setup_test
 
     - name: Test databend-meta cluster
       shell: bash

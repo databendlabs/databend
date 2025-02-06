@@ -82,16 +82,16 @@ impl<R: Rng> SqlGenerator<'_, R> {
     fn gen_column(&mut self, ty: &DataType) -> Expr {
         for bound_column in &self.bound_columns {
             if bound_column.data_type == *ty {
-                let column = if !bound_column.table_name.is_empty() && self.rng.gen_bool(0.2) {
+                let column = if bound_column.table_name.is_some() && self.rng.gen_bool(0.2) {
                     ColumnID::Position(ColumnPosition::create(None, bound_column.index))
                 } else {
                     let name = Identifier::from_name(None, bound_column.name.clone());
                     ColumnID::Name(name)
                 };
                 let table = if self.is_join
-                    || (!bound_column.table_name.is_empty() && self.rng.gen_bool(0.2))
+                    || (bound_column.table_name.is_some() && self.rng.gen_bool(0.2))
                 {
-                    Some(Identifier::from_name(None, bound_column.table_name.clone()))
+                    bound_column.table_name.clone()
                 } else {
                     None
                 };
@@ -495,7 +495,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         DataType::Timestamp
                     };
                     let expr = self.gen_expr(&expr_ty);
-                    let kind = match self.rng.gen_range(0..=9) {
+                    let kind = match self.rng.gen_range(0..=10) {
                         0 => IntervalKind::Year,
                         1 => IntervalKind::Quarter,
                         2 => IntervalKind::Month,
@@ -506,6 +506,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         7 => IntervalKind::Doy,
                         8 => IntervalKind::Dow,
                         9 => IntervalKind::Week,
+                        10 => IntervalKind::Epoch,
                         _ => unreachable!(),
                     };
                     Expr::Extract {

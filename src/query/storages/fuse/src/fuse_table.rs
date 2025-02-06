@@ -39,6 +39,7 @@ use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::CompactionLimits;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_context::AbortChecker;
@@ -64,13 +65,13 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
-use databend_common_sql::parse_hilbert_cluster_key;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -90,6 +91,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use futures_util::TryStreamExt;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -403,28 +405,25 @@ impl FuseTable {
         self.cluster_key_meta.clone().map(|v| v.0)
     }
 
-    pub fn cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
-        let table_meta = Arc::new(self.clone());
-        if let Some((_, order)) = &self.cluster_key_meta {
-            let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
-            let cluster_keys = match cluster_type {
-                ClusterType::Linear => parse_cluster_keys(ctx, table_meta.clone(), order),
-                ClusterType::Hilbert => parse_hilbert_cluster_key(ctx, table_meta.clone(), order),
-            }
-            .unwrap();
-
-            let cluster_keys = cluster_keys
-                .iter()
-                .map(|k| {
-                    k.project_column_ref(|index| {
-                        table_meta.schema().field(*index).name().to_string()
-                    })
-                    .as_remote_expr()
-                })
-                .collect();
-            return cluster_keys;
+    pub fn linear_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Vec<RemoteExpr<String>> {
+        if self
+            .cluster_type()
+            .is_none_or(|v| matches!(v, ClusterType::Hilbert))
+        {
+            return vec![];
         }
-        vec![]
+
+        let table_meta = Arc::new(self.clone());
+        let cluster_key_exprs = self.resolve_cluster_keys(ctx.clone()).unwrap();
+        let exprs = parse_cluster_keys(ctx, table_meta.clone(), cluster_key_exprs).unwrap();
+        let cluster_keys = exprs
+            .iter()
+            .map(|k| {
+                k.project_column_ref(|index| table_meta.schema().field(*index).name().to_string())
+                    .as_remote_expr()
+            })
+            .collect();
+        cluster_keys
     }
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
@@ -439,7 +438,7 @@ impl FuseTable {
     }
 
     pub fn cluster_key_types(&self, ctx: Arc<dyn TableContext>) -> Vec<DataType> {
-        let Some((_, cluster_key_str)) = &self.cluster_key_meta else {
+        let Some(ast_exprs) = self.resolve_cluster_keys(ctx.clone()) else {
             return vec![];
         };
         let cluster_type = self.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
@@ -447,7 +446,7 @@ impl FuseTable {
             ClusterType::Hilbert => vec![DataType::Binary],
             ClusterType::Linear => {
                 let cluster_keys =
-                    parse_cluster_keys(ctx, Arc::new(self.clone()), cluster_key_str).unwrap();
+                    parse_cluster_keys(ctx, Arc::new(self.clone()), ast_exprs).unwrap();
                 cluster_keys
                     .into_iter()
                     .map(|v| v.data_type().clone())
@@ -607,8 +606,8 @@ impl FuseTable {
 
 #[async_trait::async_trait]
 impl Table for FuseTable {
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -974,11 +973,12 @@ impl Table for FuseTable {
         };
 
         self.check_changes_valid(&db_tb_name, *seq)?;
+        let quote = ctx.get_settings().get_sql_dialect()?.default_ident_quote();
         self.get_changes_query(
             ctx,
             mode,
             location,
-            format!("{}.{} {}", database_name, table_name, desc),
+            format!("{quote}{database_name}{quote}.{quote}{table_name}{quote} {desc}"),
             *seq,
         )
         .await
@@ -1054,5 +1054,57 @@ impl Table for FuseTable {
 
     fn use_own_sample_block(&self) -> bool {
         true
+    }
+
+    async fn remove_aggregating_index_files(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        index_id: u64,
+    ) -> Result<u64> {
+        let prefix = format!(
+            "{}/{}",
+            self.meta_location_generator.agg_index_location_prefix(),
+            index_id
+        );
+        let op = &self.operator;
+        info!("remove_aggregating_index_files: {}", prefix);
+        let mut lister = op.lister_with(&prefix).recursive(true).await?;
+        let mut files = Vec::new();
+        while let Some(entry) = lister.try_next().await? {
+            if entry.metadata().is_dir() {
+                continue;
+            }
+            files.push(entry.path().to_string());
+        }
+
+        let op = Files::create(ctx, self.operator.clone());
+        let len = files.len() as u64;
+        op.remove_file_in_batch(files).await?;
+        Ok(len)
+    }
+
+    async fn remove_inverted_index_files(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        index_name: String,
+        index_version: String,
+    ) -> Result<u64> {
+        let prefix = self
+            .meta_location_generator
+            .gen_specific_inverted_index_prefix(&index_name, &index_version);
+        let op = &self.operator;
+        info!("remove_inverted_index_files: {}", prefix);
+        let mut lister = op.lister_with(&prefix).recursive(true).await?;
+        let mut files = Vec::new();
+        while let Some(entry) = lister.try_next().await? {
+            if entry.metadata().is_dir() {
+                continue;
+            }
+            files.push(entry.path().to_string());
+        }
+        let op = Files::create(ctx, self.operator.clone());
+        let len = files.len() as u64;
+        op.remove_file_in_batch(files).await?;
+        Ok(len)
     }
 }

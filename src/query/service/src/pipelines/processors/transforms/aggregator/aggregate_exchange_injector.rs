@@ -86,7 +86,12 @@ fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
     let mut state = PayloadFlushState::default();
 
     for _ in 0..buckets.capacity() {
-        let p = Payload::new(payload.arena.clone(), group_types.clone(), aggrs.clone());
+        let p = Payload::new(
+            payload.arena.clone(),
+            group_types.clone(),
+            aggrs.clone(),
+            payload.states_layout.clone(),
+        );
         buckets.push(p);
     }
 
@@ -134,6 +139,7 @@ fn scatter_partitioned_payload(
             Arc::new(Bump::new()),
             group_types.clone(),
             aggrs.clone(),
+            partitioned_payload.states_layout.clone(),
         ));
     }
 
@@ -173,26 +179,20 @@ impl FlightScatter for HashTableHashScatter {
                     AggregateMeta::Partitioned { .. } => unreachable!(),
                     AggregateMeta::AggregateSpilling(payload) => {
                         for p in scatter_partitioned_payload(payload, self.buckets)? {
-                            blocks.push(match p.len() == 0 {
-                                true => DataBlock::empty(),
-                                false => DataBlock::empty_with_meta(
-                                    AggregateMeta::create_agg_spilling(p),
-                                ),
-                            });
+                            blocks.push(DataBlock::empty_with_meta(
+                                AggregateMeta::create_agg_spilling(p),
+                            ));
                         }
                     }
                     AggregateMeta::AggregatePayload(p) => {
                         for payload in scatter_payload(p.payload, self.buckets)? {
-                            blocks.push(match payload.len() == 0 {
-                                true => DataBlock::empty(),
-                                false => {
-                                    DataBlock::empty_with_meta(AggregateMeta::create_agg_payload(
-                                        p.bucket,
-                                        payload,
-                                        p.max_partition_count,
-                                    ))
-                                }
-                            });
+                            blocks.push(DataBlock::empty_with_meta(
+                                AggregateMeta::create_agg_payload(
+                                    p.bucket,
+                                    payload,
+                                    p.max_partition_count,
+                                ),
+                            ));
                         }
                     }
                 };

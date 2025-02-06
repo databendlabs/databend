@@ -60,7 +60,7 @@ enum ObjectId {
 }
 
 // table functions that need `Super` privilege
-const SYSTEM_TABLE_FUNCTIONS: [&str; 1] = ["fuse_amend"];
+const SYSTEM_TABLE_FUNCTIONS: [&str; 2] = ["fuse_amend", "set_cache_capacity"];
 
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
@@ -1151,7 +1151,21 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Grant,false, false)
                     .await?;
             }
-            Plan::Set(_) | Plan::Unset(_) | Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
+            Plan::Set(plan) => {
+                use databend_common_ast::ast::SetType;
+                if let SetType::SettingsGlobal = plan.set_type {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
+            }
+            Plan::Unset(plan) => {
+                use databend_common_ast::ast::SetType;
+                if let SetType::SettingsGlobal = plan.unset_type {
+                    self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
+                        .await?;
+                }
+            }
+            Plan::Kill(_) | Plan::SetPriority(_) | Plan::System(_) => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)
                     .await?;
             }
@@ -1248,6 +1262,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::CallProcedure(_)
             | Plan::CreateProcedure(_)
             | Plan::DropProcedure(_)
+            | Plan::DescProcedure(_)
             /*| Plan::ShowCreateProcedure(_)
             | Plan::RenameProcedure(_)*/ => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)

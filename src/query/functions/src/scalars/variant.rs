@@ -896,11 +896,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         Scalar::Null => Value::Scalar(Scalar::Null),
                         _ => {
                             let mut buf = Vec::new();
-                            cast_scalar_to_variant(
-                                scalar.as_ref(),
-                                &ctx.func_ctx.jiff_tz,
-                                &mut buf,
-                            );
+                            cast_scalar_to_variant(scalar.as_ref(), &ctx.func_ctx.tz, &mut buf);
                             Value::Scalar(Scalar::Variant(buf))
                         }
                     },
@@ -912,7 +908,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                             _ => None,
                         };
-                        let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.jiff_tz);
+                        let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz);
                         if let Some(validity) = validity {
                             Value::Column(NullableColumn::new_column(
                                 Column::Variant(new_col),
@@ -944,7 +940,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 Scalar::Null => Value::Scalar(None),
                 _ => {
                     let mut buf = Vec::new();
-                    cast_scalar_to_variant(scalar.as_ref(), &ctx.func_ctx.jiff_tz, &mut buf);
+                    cast_scalar_to_variant(scalar.as_ref(), &ctx.func_ctx.tz, &mut buf);
                     Value::Scalar(Some(buf))
                 }
             },
@@ -954,7 +950,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Column::Nullable(box ref nullable_column) => nullable_column.validity.clone(),
                     _ => Bitmap::new_constant(true, col.len()),
                 };
-                let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.jiff_tz);
+                let new_col = cast_scalars_to_variants(col.iter(), &ctx.func_ctx.tz);
                 Value::Column(NullableColumn::new(new_col, validity))
             }
         },
@@ -1045,7 +1041,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let val = as_str(val);
             match val {
-                Some(val) => match string_to_date(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                Some(val) => match string_to_date(val.as_bytes(), &ctx.func_ctx.tz) {
                     Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
                         Ok(s) => output.push(s.get_days()),
                         Err(e) => {
@@ -1084,7 +1080,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let val = as_str(val);
             match val {
-                Some(val) => match string_to_date(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                Some(val) => match string_to_date(val.as_bytes(), &ctx.func_ctx.tz) {
                     Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
                         Ok(s) => output.push(s.get_days()),
                         Err(e) => {
@@ -1114,7 +1110,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let val = as_str(val);
             match val {
-                Some(val) => match string_to_timestamp(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                Some(val) => match string_to_timestamp(val.as_bytes(), &ctx.func_ctx.tz) {
                     Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                     Err(e) => {
                         ctx.set_error(
@@ -1145,7 +1141,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 let val = as_str(val);
                 match val {
-                    Some(val) => match string_to_timestamp(val.as_bytes(), &ctx.func_ctx.jiff_tz) {
+                    Some(val) => match string_to_timestamp(val.as_bytes(), &ctx.func_ctx.tz) {
                         Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                         Err(_) => {
                             output.push_null();
@@ -1763,7 +1759,7 @@ fn json_array_fn(args: &[Value<AnyType>], ctx: &mut EvalContext) -> Value<AnyTyp
         for column in &columns {
             let v = unsafe { column.index_unchecked(idx) };
             let mut val = vec![];
-            cast_scalar_to_variant(v, &ctx.func_ctx.jiff_tz, &mut val);
+            cast_scalar_to_variant(v, &ctx.func_ctx.tz, &mut val);
             items.push(val);
         }
         if let Err(err) = build_array(items.iter().map(|b| &b[..]), &mut builder.data) {
@@ -1829,7 +1825,7 @@ fn json_object_impl_fn(
                 }
                 set.insert(key);
                 let mut val = vec![];
-                cast_scalar_to_variant(v, &ctx.func_ctx.jiff_tz, &mut val);
+                cast_scalar_to_variant(v, &ctx.func_ctx.tz, &mut val);
                 kvs.push((key, val));
             }
             if !has_err {
@@ -2186,7 +2182,7 @@ fn json_object_insert_fn(
             _ => {
                 // if the new value is not a json value, cast it to json.
                 let mut new_val_buf = vec![];
-                cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.jiff_tz, &mut new_val_buf);
+                cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.tz, &mut new_val_buf);
                 jsonb::object_insert(value, new_key, &new_val_buf, update_flag, &mut builder.data)
             }
         };

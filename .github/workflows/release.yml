@@ -6,16 +6,22 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: The tags to be released
+        description: |
+          The tags to be released.
+          Nightly release dose not require a tag.
+          Stable release requires a nightly version (v1.0.0-nightly).
+          Patch release requires a stable version (v1.0.0).
         required: false
         type: string
-      stable:
-        description: Make a stable release
-        required: false
-        type: boolean
-  release:
-    types:
-      - published
+      type:
+        description: Release type, default to nightly
+        required: true
+        type: choice
+        default: nightly
+        options:
+          - nightly
+          - stable
+          - patch
 
 permissions:
   id-token: write
@@ -43,33 +49,33 @@ jobs:
         id: bump
         uses: actions/github-script@v7
         env:
-          STABLE: "${{ inputs.stable }}"
+          TYPE: "${{ inputs.type }}"
           TAG: "${{ inputs.tag }}"
         with:
           script: |
             const script = require('./.github/scripts/bump_version.js')
             await script({ github, context, core })
       - name: Create release
-        if: github.event_name == 'workflow_dispatch'
         env:
           # we need workflow:write permission to create release if there were any workflow changes
           # which is not possible for github actions token
           GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
         run: |
-          echo "Creating release ${{ steps.bump.outputs.tag }} from ${{ steps.bump.outputs.sha }}"
-          if [[ "${{ inputs.stable }}" == "true" ]]; then
-            previous=$(gh release list --limit 1 --exclude-pre-releases | cut -f 1)
-            echo "Stable release with previous release: $previous"
-            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --latest --draft
-          else
-            previous=$(gh release list --limit 10 | grep nightly | head -n 1 | cut -f 1)
-            echo "Nightly release with previous release: $previous"
-            gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag $previous --prerelease --draft
-          fi
+          case "${{ inputs.type }}" in
+            nightly)
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --prerelease --draft
+              ;;
+            stable)
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --latest --draft
+              ;;
+            patch)
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --prerelease --draft
+              ;;
+          esac
 
   changelog:
     runs-on: ubuntu-latest
-    if: inputs.stable
+    if: inputs.type == 'stable'
     needs: create_release
     steps:
       - name: Checkout Docs
@@ -281,16 +287,15 @@ jobs:
           REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
-          STABLE: ${{ inputs.stable }}
+          TYPE: ${{ inputs.type }}
         with:
           script: |
-            const version = process.env.VERSION;
-            const repos = [process.env.REPO_DOCKERHUB, process.env.REPO_ECR];
-            const stable = process.env.STABLE;
+            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR } = process.env;
+            const repos = [REPO_DOCKERHUB, REPO_ECR];
             let tags = [];
             for (const repo of repos) {
-              tags.push(`${repo}:${version}`);
-              if (stable === 'true') {
+              tags.push(`${repo}:${VERSION}`);
+              if (TYPE === 'stable') {
                 tags.push(`${repo}:latest`);
               } else {
                 tags.push(`${repo}:nightly`);
@@ -362,16 +367,15 @@ jobs:
           REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
-          STABLE: ${{ inputs.stable }}
+          TYPE: ${{ inputs.type }}
         with:
           script: |
-            const version = process.env.VERSION;
-            const repos = [process.env.REPO_DOCKERHUB, process.env.REPO_ECR];
-            const stable = process.env.STABLE;
+            const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR } = process.env;
+            const repos = [REPO_DOCKERHUB, REPO_ECR];
             let tags = [];
             for (const repo of repos) {
-              tags.push(`${repo}:${version}`);
-              if (stable === 'true') {
+              tags.push(`${repo}:${VERSION}`);
+              if (TYPE === 'stable') {
                 tags.push(`${repo}:latest`);
               } else {
                 tags.push(`${repo}:nightly`);
@@ -410,7 +414,7 @@ jobs:
           packager: ${{ matrix.packager }}
 
   # bindings_python:
-  #   if: inputs.stable
+  #   if: inputs.type == 'stable'
   #   needs: create_release
   #   uses: ./.github/workflows/bindings.python.yml
   #   secrets: inherit
@@ -450,7 +454,7 @@ jobs:
 
   deb:
     runs-on: ubuntu-latest
-    if: inputs.stable
+    if: inputs.type == 'stable'
     needs: [create_release, distribution]
     steps:
       - uses: actions/checkout@v4

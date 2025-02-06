@@ -522,6 +522,8 @@ pub struct StorageWebhdfsConfig {
     pub endpoint_url: String,
     pub root: String,
     pub delegation: String,
+    pub disable_list_batch: bool,
+    pub user_name: String,
 }
 
 impl Debug for StorageWebhdfsConfig {
@@ -529,7 +531,9 @@ impl Debug for StorageWebhdfsConfig {
         let mut ds = f.debug_struct("StorageWebhdfsConfig");
 
         ds.field("endpoint_url", &self.endpoint_url)
-            .field("root", &self.root);
+            .field("root", &self.root)
+            .field("disable_list_batch", &self.disable_list_batch)
+            .field("user_name", &self.user_name);
 
         ds.field("delegation", &mask_string(&self.delegation, 3));
 

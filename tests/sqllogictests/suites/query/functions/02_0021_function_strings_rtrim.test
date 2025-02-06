@@ -16,3 +16,7 @@ select rtrim(null)
 ----
 NULL
 
+query T
+select rtrim('aaabbaaa', 'aa')
+----
+aaabb

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -71,26 +70,32 @@ impl Rule for RulePushDownLimitWindow {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let limit: Limit = s_expr.plan().clone().try_into()?;
-        if let Some(mut count) = limit.limit {
-            count += limit.offset;
-            let window = s_expr.child(0)?;
-            let mut window_limit: LogicalWindow = window.plan().clone().try_into()?;
-            if should_apply(window.child(0)?, &window_limit)? {
-                let limit = window_limit.limit.map_or(count, |c| cmp::max(c, count));
-
-                if limit <= self.max_limit {
-                    window_limit.limit = Some(limit);
-                    let sort = SExpr::create_unary(
-                        Arc::new(RelOperator::Window(window_limit)),
-                        Arc::new(window.child(0)?.clone()),
-                    );
-
-                    let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
-                    result.set_applied_rule(&self.id);
-                    state.add_result(result);
-                }
-            }
+        let Some(mut count) = limit.limit else {
+            return Ok(());
+        };
+        count += limit.offset;
+        if count > self.max_limit {
+            return Ok(());
         }
+        let window = s_expr.child(0)?;
+        let mut window_limit: LogicalWindow = window.plan().clone().try_into()?;
+        let limit = window_limit.limit.map_or(count, |c| c.max(count));
+        if limit > self.max_limit {
+            return Ok(());
+        }
+        if !should_apply(window.child(0)?, &window_limit)? {
+            return Ok(());
+        }
+
+        window_limit.limit = Some(limit);
+        let sort = SExpr::create_unary(
+            Arc::new(RelOperator::Window(window_limit)),
+            Arc::new(window.child(0)?.clone()),
+        );
+        let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
+        result.set_applied_rule(&self.id);
+        state.add_result(result);
+
         Ok(())
     }
 

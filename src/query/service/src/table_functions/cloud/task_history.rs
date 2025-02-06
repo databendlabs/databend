@@ -87,10 +87,6 @@ impl TaskHistoryTable {
 
 #[async_trait::async_trait]
 impl Table for TaskHistoryTable {
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -258,7 +254,7 @@ fn parse_date_or_timestamp(v: &Scalar) -> Option<String> {
                 .map(|s| {
                     s.to_date(TimeZone::UTC)
                         .at(0, 0, 0, 0)
-                        .intz("UTC")
+                        .in_tz("UTC")
                         .unwrap()
                         .to_string()
                 })

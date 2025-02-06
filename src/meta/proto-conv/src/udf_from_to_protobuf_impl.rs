@@ -65,9 +65,7 @@ impl FromToProto for mt::UDFServer {
             arg_types.push(arg_type);
         }
         let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
-            || Incompatible {
-                reason: "UdfServer.return_type can not be None".to_string(),
-            },
+            || Incompatible::new("UdfServer.return_type can not be None".to_string()),
         )?)?);
 
         Ok(mt::UDFServer {
@@ -83,15 +81,21 @@ impl FromToProto for mt::UDFServer {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for arg_type in self.arg_types.iter() {
             let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| Incompatible {
-                    reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
                 })?
                 .to_pb()?;
             arg_types.push(arg_type);
         }
         let return_type = infer_schema_type(&self.return_type)
-            .map_err(|e| Incompatible {
-                reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+            .map_err(|e| {
+                Incompatible::new(format!(
+                    "Convert DataType to TableDataType failed: {}",
+                    e.message()
+                ))
             })?
             .to_pb()?;
 
@@ -121,9 +125,7 @@ impl FromToProto for mt::UDFScript {
             arg_types.push(arg_type);
         }
         let return_type = DataType::from(&TableDataType::from_pb(p.return_type.ok_or_else(
-            || Incompatible {
-                reason: "UDFScript.return_type can not be None".to_string(),
-            },
+            || Incompatible::new("UDFScript.return_type can not be None".to_string()),
         )?)?);
 
         Ok(mt::UDFScript {
@@ -140,15 +142,21 @@ impl FromToProto for mt::UDFScript {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for arg_type in self.arg_types.iter() {
             let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| Incompatible {
-                    reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
                 })?
                 .to_pb()?;
             arg_types.push(arg_type);
         }
         let return_type = infer_schema_type(&self.return_type)
-            .map_err(|e| Incompatible {
-                reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+            .map_err(|e| {
+                Incompatible::new(format!(
+                    "Convert DataType to TableDataType failed: {}",
+                    e.message()
+                ))
             })?
             .to_pb()?;
 
@@ -185,11 +193,10 @@ impl FromToProto for mt::UDAFScript {
             .map(|field| TableField::from_pb(field).map(|field| (&field).into()))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let return_type =
-            (&TableDataType::from_pb(p.return_type.ok_or_else(|| Incompatible {
-                reason: "UDAFScript.return_type can not be None".to_string(),
-            })?)?)
-                .into();
+        let return_type = (&TableDataType::from_pb(p.return_type.ok_or_else(|| {
+            Incompatible::new("UDAFScript.return_type can not be None".to_string())
+        })?)?)
+            .into();
 
         Ok(mt::UDAFScript {
             code: p.code,
@@ -205,8 +212,11 @@ impl FromToProto for mt::UDAFScript {
         let mut arg_types = Vec::with_capacity(self.arg_types.len());
         for arg_type in self.arg_types.iter() {
             let arg_type = infer_schema_type(arg_type)
-                .map_err(|e| Incompatible {
-                    reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+                .map_err(|e| {
+                    Incompatible::new(format!(
+                        "Convert DataType to TableDataType failed: {}",
+                        e.message()
+                    ))
                 })?
                 .to_pb()?;
             arg_types.push(arg_type);
@@ -218,11 +228,11 @@ impl FromToProto for mt::UDAFScript {
             .map(|field| {
                 TableField::new(
                     field.name(),
-                    infer_schema_type(field.data_type()).map_err(|e| Incompatible {
-                        reason: format!(
+                    infer_schema_type(field.data_type()).map_err(|e| {
+                        Incompatible::new(format!(
                             "Convert DataType to TableDataType failed: {}",
                             e.message()
-                        ),
+                        ))
                     })?,
                 )
                 .to_pb()
@@ -230,8 +240,11 @@ impl FromToProto for mt::UDAFScript {
             .collect::<Result<_, _>>()?;
 
         let return_type = infer_schema_type(&self.return_type)
-            .map_err(|e| Incompatible {
-                reason: format!("Convert DataType to TableDataType failed: {}", e.message()),
+            .map_err(|e| {
+                Incompatible::new(format!(
+                    "Convert DataType to TableDataType failed: {}",
+                    e.message()
+                ))
             })?
             .to_pb()?;
 
@@ -269,9 +282,9 @@ impl FromToProto for mt::UserDefinedFunction {
                 mt::UDFDefinition::UDAFScript(mt::UDAFScript::from_pb(udaf_script)?)
             }
             None => {
-                return Err(Incompatible {
-                    reason: "UserDefinedFunction.definition cannot be None".to_string(),
-                });
+                return Err(Incompatible::new(
+                    "UserDefinedFunction.definition cannot be None".to_string(),
+                ));
             }
         };
 

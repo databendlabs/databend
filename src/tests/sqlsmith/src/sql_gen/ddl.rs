@@ -33,7 +33,7 @@ use crate::sql_gen::SqlGenerator;
 
 const BASE_TABLE_NAMES: [&str; 4] = ["t1", "t2", "t3", "t4"];
 
-const SIMPLE_COLUMN_TYPES: [TypeName; 21] = [
+const SIMPLE_COLUMN_TYPES: [TypeName; 22] = [
     TypeName::Boolean,
     TypeName::UInt8,
     TypeName::UInt16,
@@ -56,15 +56,19 @@ const SIMPLE_COLUMN_TYPES: [TypeName; 21] = [
     TypeName::Date,
     TypeName::Timestamp,
     TypeName::String,
-    TypeName::Bitmap,
     TypeName::Variant,
+    TypeName::Bitmap,
     TypeName::Binary,
     TypeName::Geometry,
     TypeName::Geography,
+    TypeName::Interval,
 ];
 
 impl<R: Rng> SqlGenerator<'_, R> {
-    pub(crate) fn gen_base_tables(&mut self) -> Vec<(DropTableStmt, CreateTableStmt)> {
+    pub(crate) fn gen_base_tables(
+        &mut self,
+        db_name: &str,
+    ) -> Vec<(DropTableStmt, CreateTableStmt)> {
         let mut tables = Vec::with_capacity(BASE_TABLE_NAMES.len());
 
         let mut table_options = BTreeMap::new();
@@ -77,15 +81,15 @@ impl<R: Rng> SqlGenerator<'_, R> {
             let drop_table = DropTableStmt {
                 if_exists: true,
                 catalog: None,
-                database: None,
+                database: Some(Identifier::from_name(None, db_name)),
                 table: Identifier::from_name(None, table_name),
                 all: false,
             };
 
             let create_table = CreateTableStmt {
-                create_option: CreateOption::CreateIfNotExists,
+                create_option: CreateOption::CreateOrReplace,
                 catalog: None,
-                database: None,
+                database: Some(Identifier::from_name(None, db_name)),
                 table: Identifier::from_name(None, table_name),
                 source: Some(source),
                 engine: Some(Engine::Fuse),
@@ -102,13 +106,13 @@ impl<R: Rng> SqlGenerator<'_, R> {
 
     fn gen_nested_type(&mut self, depth: u8) -> TypeName {
         if depth == 0 {
-            let i = self.rng.gen_range(0..=19);
-            // replace bitmap with string, as generated bitmap value can't display
-            if i == 16 {
-                TypeName::Nullable(Box::new(TypeName::String))
-            } else {
-                // TODO: fix not null types as inner nested type
+            // TODO: fix
+            // ignore some types in nested type: Bitmap, Binary, Geometry, Geography, Interval
+            let i = self.rng.gen_range(0..=16);
+            if self.rng.gen_bool(0.3) {
                 TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
+            } else {
+                TypeName::NotNull(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
             }
         } else {
             match self.rng.gen_range(0..=2) {
@@ -164,16 +168,18 @@ impl<R: Rng> SqlGenerator<'_, R> {
     }
 
     pub(crate) fn gen_data_type_name(&mut self, idx: Option<usize>) -> TypeName {
+        let len = SIMPLE_COLUMN_TYPES.len();
         let i = match idx {
             Some(i) => i,
-            None => self.rng.gen_range(0..42),
+            None => self.rng.gen_range(0..len * 2 + 4),
         };
-        if i < 20 {
+        if i < len {
             TypeName::NotNull(Box::new(SIMPLE_COLUMN_TYPES[i].clone()))
-        } else if i < 40 {
-            TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i - 20].clone()))
+        } else if i < len * 2 {
+            TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i - len].clone()))
         } else {
-            let depth = self.rng.gen_range(1..=3);
+            // TODO: fix parse nested values
+            let depth = 1;
             self.gen_nested_type(depth)
         }
     }
@@ -200,13 +206,19 @@ impl<R: Rng> SqlGenerator<'_, R> {
     fn gen_table_source(&mut self) -> CreateTableSource {
         let mut column_defs = Vec::with_capacity(38);
 
-        for i in 0..42 {
+        let len = SIMPLE_COLUMN_TYPES.len() * 2 + 4;
+        for i in 0..len {
             let name = format!("c{}", i);
             let data_type = self.gen_data_type_name(Some(i));
 
             // TODO: computed expr
             // TODO: fix binary default value
-            let default_expr = if data_type != TypeName::NotNull(Box::new(TypeName::Binary)) {
+            // TODO: fix interval default value
+            // TODO: support `to_geography` function.
+            let default_expr = if data_type != TypeName::NotNull(Box::new(TypeName::Binary))
+                && data_type != TypeName::NotNull(Box::new(TypeName::Geography))
+                && data_type != TypeName::NotNull(Box::new(TypeName::Interval))
+            {
                 Some(ColumnExpr::Default(Box::new(gen_default_expr(&data_type))))
             } else {
                 None
@@ -296,14 +308,14 @@ fn gen_default_expr(type_name: &TypeName) -> Expr {
             span: None,
             value: Literal::String("POINT(0 0)".to_string()),
         },
+        TypeName::Interval => Expr::Literal {
+            span: None,
+            value: Literal::String("1 month 1 hour".to_string()),
+        },
         TypeName::Nullable(_) => Expr::Literal {
             span: None,
             value: Literal::Null,
         },
         TypeName::NotNull(box ty) => gen_default_expr(ty),
-        TypeName::Interval => Expr::Literal {
-            span: None,
-            value: Literal::String("1 month 1 hour".to_string()),
-        },
     }
 }

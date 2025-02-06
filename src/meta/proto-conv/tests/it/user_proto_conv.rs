@@ -321,6 +321,8 @@ pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
                 endpoint_url: "https://webhdfs.example.com".to_string(),
                 root: "/path/to/stage/files".to_string(),
                 delegation: "<delegation_token>".to_string(),
+                disable_list_batch: false,
+                user_name: String::new(),
             }),
         },
         is_temporary: false,
@@ -464,13 +466,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
         let res = mt::principal::UserInfo::from_pb(p);
         assert_eq!(
-            Incompatible {
-                reason: format!(
+            Incompatible::new(
+                format!(
                     "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
-            },
+            ),
             res.unwrap_err()
         );
     }
@@ -483,13 +485,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
         let res = mt::principal::StageFile::from_pb(p);
         assert_eq!(
-            Incompatible {
-                reason: format!(
+            Incompatible::new(
+                format!(
                     "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
-            },
+            ),
             res.unwrap_err()
         )
     }
@@ -502,13 +504,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
         let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
-            Incompatible {
-                reason: format!(
+            Incompatible::new(
+                format!(
                     "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
-            },
+            ),
             res.unwrap_err()
         )
     }
@@ -521,13 +523,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
         let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
-            Incompatible {
-                reason: format!(
+            Incompatible::new(
+                format!(
                     "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
-            },
+            ),
             res.unwrap_err()
         );
     }
@@ -540,13 +542,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
         let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
-            Incompatible {
-                reason: format!(
+            Incompatible::new(
+                format!(
                     "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
-            },
+            ),
             res.unwrap_err()
         );
     }
@@ -559,13 +561,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
         let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
-            Incompatible {
-                reason: format!(
+            Incompatible::new(
+                format!(
                     "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
-            },
+            ),
             res.unwrap_err()
         );
     }
@@ -578,13 +580,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
         let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
-            Incompatible {
-                reason: format!(
+            Incompatible::new(
+                format!(
                     "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
-            },
+            ),
             res.unwrap_err()
         )
     }
@@ -597,13 +599,13 @@ fn test_user_incompatible() -> anyhow::Result<()> {
 
         let res = mt::principal::StageInfo::from_pb(p);
         assert_eq!(
-            Incompatible {
-                reason: format!(
+            Incompatible::new(
+                format!(
                     "executable ver={} is smaller than the min reader version({}) that can read this message",
                     VER,
                     VER + 1
                 )
-            },
+            ),
             res.unwrap_err()
         )
     }

@@ -24,6 +24,7 @@ use databend_common_expression::types::number::SimpleDomain;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -152,6 +153,132 @@ pub fn register(registry: &mut FunctionRegistry) {
                     match len {
                         Some(_) => Value::Column(Column::Array(Box::new(builder.build().upcast()))),
                         None => Value::Scalar(Scalar::Array(builder.build_scalar())),
+                    }
+                }),
+            },
+        }))
+    });
+
+    // Returns a merged array of tuples in which the nth tuple contains all nth values of input arrays.
+    registry.register_function_factory("arrays_zip", |_, args_type| {
+        if args_type.is_empty() {
+            return None;
+        }
+        let args_type = args_type.to_vec();
+
+        let inner_types: Vec<DataType> = args_type
+            .iter()
+            .map(|arg_type| {
+                let is_nullable = arg_type.is_nullable();
+                match arg_type.remove_nullable() {
+                    DataType::Array(box inner_type) => {
+                        if is_nullable {
+                            inner_type.wrap_nullable()
+                        } else {
+                            inner_type.clone()
+                        }
+                    }
+                    _ => arg_type.clone(),
+                }
+            })
+            .collect();
+        let return_type = DataType::Array(Box::new(DataType::Tuple(inner_types.clone())));
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "arrays_zip".to_string(),
+                args_type: args_type.clone(),
+                return_type,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, args_domain| {
+                    let inner_domains = args_domain
+                        .iter()
+                        .map(|arg_domain| match arg_domain {
+                            Domain::Nullable(nullable_domain) => match &nullable_domain.value {
+                                Some(box Domain::Array(Some(inner_domain))) => {
+                                    Domain::Nullable(NullableDomain {
+                                        has_null: nullable_domain.has_null,
+                                        value: Some(Box::new(*inner_domain.clone())),
+                                    })
+                                }
+                                _ => Domain::Nullable(nullable_domain.clone()),
+                            },
+                            Domain::Array(Some(box inner_domain)) => inner_domain.clone(),
+                            _ => arg_domain.clone(),
+                        })
+                        .collect();
+                    FunctionDomain::Domain(Domain::Array(Some(Box::new(Domain::Tuple(
+                        inner_domains,
+                    )))))
+                }),
+                eval: Box::new(move |args, ctx| {
+                    let len = args.iter().find_map(|arg| match arg {
+                        Value::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
+
+                    let mut offset = 0;
+                    let mut offsets = Vec::new();
+                    offsets.push(0);
+                    let tuple_type = DataType::Tuple(inner_types.clone());
+                    let mut builder = ColumnBuilder::with_capacity(&tuple_type, 0);
+                    for i in 0..len.unwrap_or(1) {
+                        let mut is_diff_len = false;
+                        let mut array_len = None;
+                        for arg in args {
+                            let value = unsafe { arg.index_unchecked(i) };
+                            if let ScalarRef::Array(col) = value {
+                                if let Some(array_len) = array_len {
+                                    if array_len != col.len() {
+                                        is_diff_len = true;
+                                        let err = format!(
+                                            "array length must be equal, but got {} and {}",
+                                            array_len,
+                                            col.len()
+                                        );
+                                        ctx.set_error(builder.len(), err);
+                                        offsets.push(offset);
+                                        break;
+                                    }
+                                } else {
+                                    array_len = Some(col.len());
+                                }
+                            }
+                        }
+                        if is_diff_len {
+                            continue;
+                        }
+                        let array_len = array_len.unwrap_or(1);
+                        for j in 0..array_len {
+                            let mut tuple_values = Vec::with_capacity(args.len());
+                            for arg in args {
+                                let value = unsafe { arg.index_unchecked(i) };
+                                match value {
+                                    ScalarRef::Array(col) => {
+                                        let tuple_value = unsafe { col.index_unchecked(j) };
+                                        tuple_values.push(tuple_value.to_owned());
+                                    }
+                                    _ => {
+                                        tuple_values.push(value.to_owned());
+                                    }
+                                }
+                            }
+                            let tuple_value = Scalar::Tuple(tuple_values);
+                            builder.push(tuple_value.as_ref());
+                        }
+                        offset += array_len as u64;
+                        offsets.push(offset);
+                    }
+
+                    match len {
+                        Some(_) => {
+                            let array_column = ArrayColumn {
+                                values: builder.build(),
+                                offsets: offsets.into(),
+                            };
+                            Value::Column(Column::Array(Box::new(array_column)))
+                        }
+                        _ => Value::Scalar(Scalar::Array(builder.build())),
                     }
                 }),
             },

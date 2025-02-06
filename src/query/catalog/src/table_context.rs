@@ -234,6 +234,8 @@ pub trait TableContext: Send + Sync {
     fn get_settings(&self) -> Arc<Settings>;
     fn get_session_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
+    fn set_cluster(&self, cluster: Arc<Cluster>);
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
     fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>>;
@@ -279,11 +281,23 @@ pub trait TableContext: Send + Sync {
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles>;
 
-    fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
+    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()>;
 
-    fn clear_segment_locations(&self) -> Result<()>;
+    fn clear_written_segment_locations(&self) -> Result<()>;
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>>;
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>>;
+
+    fn add_selected_segment_location(&self, _segment_loc: Location) {
+        unimplemented!()
+    }
+
+    fn get_selected_segment_locations(&self) -> Vec<Location> {
+        unimplemented!()
+    }
+
+    fn clear_selected_segment_locations(&self) {
+        unimplemented!()
+    }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 

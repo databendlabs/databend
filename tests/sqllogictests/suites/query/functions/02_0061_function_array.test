@@ -398,8 +398,56 @@ select json_array_reduce([1,2,3,4]::Variant, (x, y) -> 3 + x + y), json_array_tr
 ----
 19 []
 
+query T
+SELECT arrays_zip(1, 'a', null);
+----
+[(1,'a',NULL)]
+
+query T
+SELECT arrays_zip([1,2,3], ['a','b','c'], 10);
+----
+[(1,'a',10),(2,'b',10),(3,'c',10)]
+
+statement error 1006
+SELECT arrays_zip([1,2,3], ['a','b'], 10);
+
+query T
+SELECT arrays_zip(col1, col2) FROM t3;
+----
+[(1,2),(2,2),(3,2)]
+[(4,NULL),(5,NULL)]
+[(NULL,4)]
+[(7,5),(8,5)]
+
+#issue 16794
+
+statement ok
+CREATE OR REPLACE TABLE u (id VARCHAR NULL);
+
+statement ok
+INSERT INTO u VALUES(1),(2);
+
+statement ok
+CREATE OR REPLACE TABLE c (
+  id VARCHAR NULL,
+  what_fuck BOOLEAN NOT NULL,
+  payload VARIANT NULL
+);
+
+statement ok
+INSERT INTO c VALUES(1, true, '[1,2]'),(1, false, '[3,4]'),(2, true, '123');
+
+query IT
+SELECT ids.id, array_filter(array_agg(px.payload), x -> x is not null) AS px_payload
+  FROM u ids LEFT JOIN c px ON px.id = ids.id
+  GROUP BY ids.id ORDER BY ids.id;
+----
+1 ['[1,2]','[3,4]']
+2 ['123']
+
 statement ok
 USE default
 
 statement ok
 DROP DATABASE array_func_test
+

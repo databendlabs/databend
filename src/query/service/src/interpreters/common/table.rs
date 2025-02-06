@@ -36,10 +36,10 @@ pub fn check_referenced_computed_columns(
                 Ok(expr) => {
                     if expr.data_type() != f.data_type() {
                         return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
-                            "expected computed column expression have type {}, but `{}` has type {}.",
+                            "expected computed column expression have type {}, but got type {}, may caused by modify column `{}`.",
                             f.data_type(),
-                            column,
                             expr.data_type(),
+                            column,
                         )));
                     }
                 }

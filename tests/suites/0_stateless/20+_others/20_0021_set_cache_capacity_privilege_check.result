@@ -1,0 +1,2 @@
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required to invoke table function [set_cache_capacity] for user 'test'@'%' with roles [public]
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Super] is required to invoke table function [set_cache_capacity] for user 'test'@'%' with roles [public]

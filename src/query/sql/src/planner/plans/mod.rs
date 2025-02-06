@@ -85,7 +85,7 @@ pub use plan::*;
 pub use presign::*;
 pub use project_set::*;
 pub use r_cte_scan::*;
-pub use recluster::Recluster;
+pub use recluster::*;
 pub use replace::Replace;
 pub use revert_table::RevertTablePlan;
 pub use scalar_expr::*;

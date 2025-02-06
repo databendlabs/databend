@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::Query;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -75,6 +76,7 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
+use crate::plans::DescProcedurePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
@@ -243,6 +245,7 @@ pub enum Plan {
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable {
         s_expr: Box<SExpr>,
+        hilbert_query: Option<Box<Query>>,
         is_final: bool,
     },
     RevertTable(Box<RevertTablePlan>),
@@ -391,6 +394,7 @@ pub enum Plan {
     ExecuteImmediate(Box<ExecuteImmediatePlan>),
     // ShowCreateProcedure(Box<ShowCreateProcedurePlan>),
     DropProcedure(Box<DropProcedurePlan>),
+    DescProcedure(Box<DescProcedurePlan>),
     CreateProcedure(Box<CreateProcedurePlan>),
     CallProcedure(Box<CallProcedurePlan>),
     // RenameProcedure(Box<RenameProcedurePlan>),
@@ -537,7 +541,7 @@ impl Plan {
                 DataField::new("cluster", DataType::String),
                 DataField::new("version", DataType::String),
             ]),
-
+            Plan::DescProcedure(plan) => plan.schema(),
             _ => Arc::new(DataSchema::empty()),
         }
     }

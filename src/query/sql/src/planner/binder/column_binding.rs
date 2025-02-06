@@ -36,8 +36,9 @@ pub struct ColumnBinding {
     pub data_type: Box<DataType>,
 
     pub visibility: Visibility,
-
-    pub virtual_computed_expr: Option<String>,
+    // Opitonal virtual expr, used by virtual computed column and variant virtual column,
+    // `virtual_expr` will be parsed and bind to a `ScalarExpr`.
+    pub virtual_expr: Option<String>,
 }
 
 const DUMMY_INDEX: usize = usize::MAX;
@@ -75,7 +76,7 @@ impl ColumnBinding {
             index,
             data_type,
             visibility: Visibility::Visible,
-            virtual_computed_expr: None,
+            virtual_expr: None,
         }
     }
 
@@ -104,7 +105,7 @@ pub struct ColumnBindingBuilder {
 
     pub visibility: Visibility,
 
-    pub virtual_computed_expr: Option<String>,
+    pub virtual_expr: Option<String>,
 }
 
 impl ColumnBindingBuilder {
@@ -123,7 +124,7 @@ impl ColumnBindingBuilder {
             index,
             data_type,
             visibility,
-            virtual_computed_expr: None,
+            virtual_expr: None,
         }
     }
 
@@ -147,8 +148,8 @@ impl ColumnBindingBuilder {
         self
     }
 
-    pub fn virtual_computed_expr(mut self, vir: Option<String>) -> ColumnBindingBuilder {
-        self.virtual_computed_expr = vir;
+    pub fn virtual_expr(mut self, virtual_expr: Option<String>) -> ColumnBindingBuilder {
+        self.virtual_expr = virtual_expr;
         self
     }
 
@@ -162,7 +163,7 @@ impl ColumnBindingBuilder {
             index: self.index,
             data_type: self.data_type,
             visibility: self.visibility,
-            virtual_computed_expr: self.virtual_computed_expr,
+            virtual_expr: self.virtual_expr,
         }
     }
 }

@@ -283,8 +283,7 @@ pub fn passthrough_nullable_1_arg<I1: ArgType, O: ArgType>(
 
                 match out {
                     Value::Column(out) => Value::Column(NullableColumn::new(out, args_validity)),
-                    Value::Scalar(out) if args_validity.get_bit(0) => Value::Scalar(Some(out)),
-                    _ => Value::Scalar(None),
+                    Value::Scalar(out) => Value::Scalar(Some(out)),
                 }
             }
             _ => Value::Scalar(None),
@@ -308,6 +307,7 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
         if let Some(validity) = ctx.validity.as_ref() {
             args_validity = &args_validity & validity;
         }
+
         ctx.validity = Some(args_validity.clone());
         match (arg1.value(), arg2.value()) {
             (Some(arg1), Some(arg2)) => {
@@ -315,8 +315,7 @@ pub fn passthrough_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
 
                 match out {
                     Value::Column(out) => Value::Column(NullableColumn::new(out, args_validity)),
-                    Value::Scalar(out) if args_validity.get_bit(0) => Value::Scalar(Some(out)),
-                    _ => Value::Scalar(None),
+                    Value::Scalar(out) => Value::Scalar(Some(out)),
                 }
             }
             _ => Value::Scalar(None),
@@ -352,8 +351,7 @@ pub fn passthrough_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgT
 
                 match out {
                     Value::Column(out) => Value::Column(NullableColumn::new(out, args_validity)),
-                    Value::Scalar(out) if args_validity.get_bit(0) => Value::Scalar(Some(out)),
-                    _ => Value::Scalar(None),
+                    Value::Scalar(out) => Value::Scalar(Some(out)),
                 }
             }
             _ => Value::Scalar(None),
@@ -397,8 +395,7 @@ pub fn passthrough_nullable_4_arg<
 
                 match out {
                     Value::Column(out) => Value::Column(NullableColumn::new(out, args_validity)),
-                    Value::Scalar(out) if args_validity.get_bit(0) => Value::Scalar(Some(out)),
-                    _ => Value::Scalar(None),
+                    Value::Scalar(out) => Value::Scalar(Some(out)),
                 }
             }
             _ => Value::Scalar(None),
@@ -427,8 +424,7 @@ pub fn combine_nullable_1_arg<I1: ArgType, O: ArgType>(
                         out.column,
                         &args_validity & &out.validity,
                     )),
-                    Value::Scalar(out) if args_validity.get_bit(0) => Value::Scalar(out),
-                    _ => Value::Scalar(None),
+                    Value::Scalar(out) => Value::Scalar(out),
                 }
             }
             _ => Value::Scalar(None),
@@ -465,8 +461,7 @@ pub fn combine_nullable_2_arg<I1: ArgType, I2: ArgType, O: ArgType>(
                         out.column,
                         &args_validity & &out.validity,
                     )),
-                    Value::Scalar(out) if args_validity.get_bit(0) => Value::Scalar(out),
-                    _ => Value::Scalar(None),
+                    Value::Scalar(out) => Value::Scalar(out),
                 }
             }
             _ => Value::Scalar(None),
@@ -505,8 +500,7 @@ pub fn combine_nullable_3_arg<I1: ArgType, I2: ArgType, I3: ArgType, O: ArgType>
                         out.column,
                         &args_validity & &out.validity,
                     )),
-                    Value::Scalar(out) if args_validity.get_bit(0) => Value::Scalar(out),
-                    _ => Value::Scalar(None),
+                    Value::Scalar(out) => Value::Scalar(out),
                 }
             }
             _ => Value::Scalar(None),
@@ -552,8 +546,7 @@ pub fn combine_nullable_4_arg<I1: ArgType, I2: ArgType, I3: ArgType, I4: ArgType
                         out.column,
                         &args_validity & &out.validity,
                     )),
-                    Value::Scalar(out) if args_validity.get_bit(0) => Value::Scalar(out),
-                    _ => Value::Scalar(None),
+                    Value::Scalar(out) => Value::Scalar(out),
                 }
             }
             _ => Value::Scalar(None),
