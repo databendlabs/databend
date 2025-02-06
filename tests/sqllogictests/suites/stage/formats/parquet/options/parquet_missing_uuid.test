@@ -22,10 +22,9 @@ query
 select * from t_uuid
 ----
 
-query
+# prepare data for copying into t_uuid
+statement ok
 copy into @data/parquet/unload/uuid/ from (select 1 as a)  file_format = (type = parquet)
-----
-1 1 374
 
 statement ok
 truncate table t_uuid
