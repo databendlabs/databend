@@ -8,6 +8,7 @@
 >>>> remove @my_stage;
 >>>> copy into @my_stage/a.csv from my_table
 3	13	387
+3	13
 >>>> select * from @my_stage order by a;
 1
 2
