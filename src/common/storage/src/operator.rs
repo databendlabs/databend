@@ -21,7 +21,6 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::http_client::GLOBAL_HTTP_CLIENT;
 use databend_common_base::runtime::metrics::register_counter_family;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::GlobalIORuntime;
