@@ -32,15 +32,16 @@ use crate::common;
 //
 // The message bytes are built from the output of `proto_conv::test_build_pb_buf()`
 #[test]
-fn test_decode_v112_virtual_column() -> anyhow::Result<()> {
-    let schema_v112 = vec![
+fn test_decode_v119_virtual_column() -> anyhow::Result<()> {
+    let schema_v119 = vec![
         8, 7, 18, 7, 118, 58, 107, 49, 58, 107, 50, 18, 7, 118, 91, 49, 93, 91, 50, 93, 18, 7, 118,
         58, 107, 51, 58, 107, 52, 26, 23, 50, 48, 50, 51, 45, 48, 51, 45, 48, 57, 32, 49, 48, 58,
         48, 48, 58, 48, 48, 32, 85, 84, 67, 34, 23, 50, 48, 50, 51, 45, 48, 53, 45, 50, 57, 32, 49,
-        48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 42, 18, 178, 2, 9, 210, 2, 0, 160, 6, 111, 168,
-        6, 24, 160, 6, 111, 168, 6, 24, 42, 18, 178, 2, 9, 210, 2, 0, 160, 6, 111, 168, 6, 24, 160,
-        6, 111, 168, 6, 24, 42, 18, 178, 2, 9, 146, 2, 0, 160, 6, 111, 168, 6, 24, 160, 6, 111,
-        168, 6, 24, 160, 6, 112, 168, 6, 24,
+        48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 42, 18, 178, 2, 9, 210, 2, 0, 160, 6, 119, 168,
+        6, 24, 160, 6, 119, 168, 6, 24, 42, 18, 178, 2, 9, 210, 2, 0, 160, 6, 119, 168, 6, 24, 160,
+        6, 119, 168, 6, 24, 42, 18, 178, 2, 9, 146, 2, 0, 160, 6, 119, 168, 6, 24, 160, 6, 119,
+        168, 6, 24, 50, 10, 8, 1, 18, 6, 118, 97, 108, 117, 101, 49, 50, 10, 8, 2, 18, 6, 118, 97,
+        108, 117, 101, 50, 56, 1, 160, 6, 119, 168, 6, 24,
     ];
 
     let want = || {
@@ -54,17 +55,17 @@ fn test_decode_v112_virtual_column() -> anyhow::Result<()> {
             VirtualField {
                 expr: "v[1][2]".to_string(),
                 data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                alias_name: None,
+                alias_name: Some("value1".to_string()),
             },
             VirtualField {
                 expr: "v:k3:k4".to_string(),
                 data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
-                alias_name: None,
+                alias_name: Some("value2".to_string()),
             },
         ];
         let created_on = Utc.with_ymd_and_hms(2023, 3, 9, 10, 0, 0).unwrap();
         let updated_on = Some(Utc.with_ymd_and_hms(2023, 5, 29, 10, 0, 0).unwrap());
-        let auto_generated = false;
+        let auto_generated = true;
 
         VirtualColumnMeta {
             table_id,
@@ -76,7 +77,7 @@ fn test_decode_v112_virtual_column() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), schema_v112.as_slice(), 112, want())?;
+    common::test_load_old(func_name!(), schema_v119.as_slice(), 119, want())?;
 
     Ok(())
 }

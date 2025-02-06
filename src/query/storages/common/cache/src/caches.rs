@@ -44,7 +44,7 @@ pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
 pub type SegmentBlockMetasCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
 
 /// In-memory cache of individual BlockMeta.
-pub type BlockMetaCache = InMemoryLruCache<Arc<BlockMeta>>;
+pub type BlockMetaCache = InMemoryLruCache<BlockMeta>;
 
 /// In memory object cache of TableSnapshot
 pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
@@ -186,8 +186,8 @@ impl From<Vec<Arc<BlockMeta>>> for CacheValue<Vec<Arc<BlockMeta>>> {
     }
 }
 
-impl From<Arc<BlockMeta>> for CacheValue<Arc<BlockMeta>> {
-    fn from(value: Arc<BlockMeta>) -> Self {
+impl From<BlockMeta> for CacheValue<BlockMeta> {
+    fn from(value: BlockMeta) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,

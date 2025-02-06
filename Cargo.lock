@@ -4804,7 +4804,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-expression",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",
@@ -8868,9 +8867,9 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.1.26"
+version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e58800dee30ca82a1c107c64a0effca7ccb4e6106645c0e3af40d5aaba9f5457"
+checksum = "c607c728e28764fecde611a2764a3a5db19ae21dcec46f292244f5cc5c085a81"
 dependencies = [
  "jiff-tzdb",
  "jiff-tzdb-platform",

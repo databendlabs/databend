@@ -1671,8 +1671,10 @@ Functions overloads:
 199 divide(Float64, Float64) :: Float64
 200 divide(Float64 NULL, Float64 NULL) :: Float64 NULL
 0 divnull(Float64 NULL, Float64 NULL) :: Float64 NULL
-0 epoch(Int64) :: Interval
-1 epoch(Int64 NULL) :: Interval NULL
+0 epoch(Timestamp) :: Float64
+1 epoch(Timestamp NULL) :: Float64 NULL
+2 epoch(Int64) :: Interval
+3 epoch(Int64 NULL) :: Interval NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean
@@ -3492,6 +3494,8 @@ Functions overloads:
 1 tan(Float64 NULL) :: Float64 NULL
 0 time_slot(Timestamp) :: Timestamp
 1 time_slot(Timestamp NULL) :: Timestamp NULL
+0 timestamp_diff(Timestamp, Timestamp) :: Interval
+1 timestamp_diff(Timestamp NULL, Timestamp NULL) :: Interval NULL
 0 to_base64(Binary) :: String
 1 to_base64(Binary NULL) :: String NULL
 0 to_binary(Variant) :: Binary
@@ -3929,7 +3933,7 @@ Functions overloads:
 34 to_string(Bitmap NULL) :: String NULL
 35 to_string(Geometry) :: String
 36 to_string(Geometry NULL) :: String NULL
-37 to_string(Interval) :: String NULL
+37 to_string(Interval) :: String
 38 to_string(Interval NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
@@ -4086,6 +4090,8 @@ Functions overloads:
 1 translate(String NULL, String NULL, String NULL) :: String NULL
 0 trim(String) :: String
 1 trim(String NULL) :: String NULL
+2 trim(String, String) :: String
+3 trim(String NULL, String NULL) :: String NULL
 0 trim_both(String, String) :: String
 1 trim_both(String NULL, String NULL) :: String NULL
 0 trim_leading(String, String) :: String

@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::io::Write;
 
+use databend_common_column::types::months_days_micros;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::date::clamp_date;
@@ -40,6 +41,7 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
+use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
@@ -370,6 +372,15 @@ fn string_to_format_timestamp(
     }
     if tm.second().is_none() {
         let _ = tm.set_second(Some(0));
+    }
+
+    if !ctx.func_ctx.enable_strict_datetime_parser {
+        if tm.day().is_none() {
+            let _ = tm.set_day(Some(1));
+        }
+        if tm.month().is_none() {
+            let _ = tm.set_month(Some(1));
+        }
     }
 
     let z = if tm.offset().is_none() {
@@ -1183,6 +1194,12 @@ fn register_diff_functions(registry: &mut FunctionRegistry) {
         |a, b, _| a - b,
     );
 
+    registry.register_2_arg::<TimestampType, TimestampType, IntervalType, _, _>(
+        "timestamp_diff",
+        |_, _, _| FunctionDomain::MayThrow,
+        |a, b, _| months_days_micros::new(0, 0, a - b),
+    );
+
     registry.register_2_arg::<TimestampType, TimestampType, Int64Type, _, _>(
         "minus",
         |_, lhs, rhs| {
@@ -1210,9 +1227,11 @@ fn register_diff_functions(registry: &mut FunctionRegistry) {
             let rm = rhs.max;
             let rn = rhs.min;
 
+            let min = EvalMonthsImpl::months_between(ln, rm);
+            let max = EvalMonthsImpl::months_between(lm, rn);
             FunctionDomain::Domain(SimpleDomain::<F64> {
-                min: EvalMonthsImpl::months_between(ln, rm).into(),
-                max: EvalMonthsImpl::months_between(lm, rn).into(),
+                min: min.into(),
+                max: max.into(),
             })
         },
         vectorize_2_arg::<DateType, DateType, Float64Type>(|a, b, _ctx| {
@@ -1514,6 +1533,17 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         vectorize_1_arg::<TimestampType, Int64Type>(|val, ctx| {
             ToNumberImpl::eval_timestamp::<ToUnixTimestamp, _>(val, ctx.func_ctx.tz.clone())
         }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<TimestampType, Float64Type, _, _>(
+        "epoch",
+        |_, domain| {
+            FunctionDomain::Domain(SimpleDomain::<F64> {
+                min: (domain.min as f64 / 1_000_000f64).into(),
+                max: (domain.max as f64 / 1_000_000f64).into(),
+            })
+        },
+        vectorize_1_arg::<TimestampType, Float64Type>(|val, _| (val as f64 / 1_000_000f64).into()),
     );
 
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt8Type, _, _>(
