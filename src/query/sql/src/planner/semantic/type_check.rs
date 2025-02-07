@@ -652,7 +652,6 @@ impl<'a> TypeChecker<'a> {
                 } else {
                     checked_expr.data_type().clone()
                 };
-
                 Box::new((
                     CastExpr {
                         span: expr.span(),
