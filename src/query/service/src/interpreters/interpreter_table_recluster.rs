@@ -54,7 +54,7 @@ use derive_visitor::DriveMut;
 use log::error;
 use log::warn;
 
-use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
+use crate::interpreters::hook::vacuum_hook::{hook_clear_m_cte_temp_table, hook_disk_temp_dir};
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::interpreter_insert_multi_table::scalar_expr_to_remote_expr;
 use crate::interpreters::Interpreter;
@@ -513,6 +513,8 @@ impl ReclusterTableInterpreter {
         drop(lock_guard);
 
         // vacuum temp files.
+        self.ctx.unload_spill_meta();
+        hook_clear_m_cte_temp_table(&self.ctx)?;
         hook_vacuum_temp_files(&self.ctx)?;
         hook_disk_temp_dir(&self.ctx)?;
 
