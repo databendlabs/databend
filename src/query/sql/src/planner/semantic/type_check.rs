@@ -2950,6 +2950,9 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Dow => self.resolve_function(span, "to_day_of_week", vec![], &[arg]),
             ASTIntervalKind::Week => self.resolve_function(span, "to_week_of_year", vec![], &[arg]),
             ASTIntervalKind::Epoch => self.resolve_function(span, "epoch", vec![], &[arg]),
+            ASTIntervalKind::MicroSecond => {
+                self.resolve_function(span, "to_microsecond", vec![], &[arg])
+            }
         }
     }
 
