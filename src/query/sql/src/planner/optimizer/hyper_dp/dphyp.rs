@@ -296,7 +296,6 @@ impl DPhpy {
             | RelOperator::RecursiveCteScan(_)
             | RelOperator::Mutation(_)
             | RelOperator::MutationSource(_)
-            | RelOperator::Recluster(_)
             | RelOperator::CompactBlock(_) => Ok((Arc::new(s_expr.clone()), true)),
         }
     }

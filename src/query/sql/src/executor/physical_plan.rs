@@ -25,7 +25,7 @@ use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;
-use super::physical_plans::HilbertSerialize;
+use super::physical_plans::HilbertPartition;
 use super::physical_plans::MutationManipulate;
 use super::physical_plans::MutationOrganize;
 use super::physical_plans::MutationSource;
@@ -138,7 +138,7 @@ pub enum PhysicalPlan {
 
     /// Recluster
     Recluster(Box<Recluster>),
-    HilbertSerialize(Box<HilbertSerialize>),
+    HilbertPartition(Box<HilbertPartition>),
 
     /// Multi table insert
     Duplicate(Box<Duplicate>),
@@ -356,7 +356,7 @@ impl PhysicalPlan {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
-            PhysicalPlan::HilbertSerialize(plan) => {
+            PhysicalPlan::HilbertPartition(plan) => {
                 plan.plan_id = *next_id;
                 *next_id += 1;
             }
@@ -450,7 +450,7 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(v) => v.plan_id,
             PhysicalPlan::CompactSource(v) => v.plan_id,
             PhysicalPlan::Recluster(v) => v.plan_id,
-            PhysicalPlan::HilbertSerialize(v) => v.plan_id,
+            PhysicalPlan::HilbertPartition(v) => v.plan_id,
             PhysicalPlan::Duplicate(v) => v.plan_id,
             PhysicalPlan::Shuffle(v) => v.plan_id,
             PhysicalPlan::ChunkFilter(v) => v.plan_id,
@@ -506,7 +506,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
             | PhysicalPlan::Recluster(_)
-            | PhysicalPlan::HilbertSerialize(_) => Ok(DataSchemaRef::default()),
+            | PhysicalPlan::HilbertPartition(_) => Ok(DataSchemaRef::default()),
             PhysicalPlan::Duplicate(plan) => plan.input.output_schema(),
             PhysicalPlan::Shuffle(plan) => plan.input.output_schema(),
             PhysicalPlan::ChunkFilter(plan) => plan.input.output_schema(),
@@ -566,7 +566,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExpressionScan(_) => "ExpressionScan".to_string(),
             PhysicalPlan::CacheScan(_) => "CacheScan".to_string(),
             PhysicalPlan::Recluster(_) => "Recluster".to_string(),
-            PhysicalPlan::HilbertSerialize(_) => "HilbertSerialize".to_string(),
+            PhysicalPlan::HilbertPartition(_) => "HilbertPartition".to_string(),
             PhysicalPlan::Udf(_) => "Udf".to_string(),
             PhysicalPlan::Duplicate(_) => "Duplicate".to_string(),
             PhysicalPlan::Shuffle(_) => "Shuffle".to_string(),
@@ -590,7 +590,7 @@ impl PhysicalPlan {
             | PhysicalPlan::ReplaceAsyncSourcer(_)
             | PhysicalPlan::Recluster(_)
             | PhysicalPlan::RecursiveCteScan(_) => Box::new(std::iter::empty()),
-            PhysicalPlan::HilbertSerialize(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::HilbertPartition(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::AggregateExpand(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -695,7 +695,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CacheScan(_)
             | PhysicalPlan::RecursiveCteScan(_)
             | PhysicalPlan::Recluster(_)
-            | PhysicalPlan::HilbertSerialize(_)
+            | PhysicalPlan::HilbertPartition(_)
             | PhysicalPlan::Duplicate(_)
             | PhysicalPlan::Shuffle(_)
             | PhysicalPlan::ChunkFilter(_)

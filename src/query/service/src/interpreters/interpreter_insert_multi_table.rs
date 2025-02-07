@@ -337,7 +337,10 @@ fn not(expr: ScalarExpr) -> ScalarExpr {
     })
 }
 
-fn scalar_expr_to_remote_expr(expr: &ScalarExpr, block_schema: &DataSchema) -> Result<RemoteExpr> {
+pub(crate) fn scalar_expr_to_remote_expr(
+    expr: &ScalarExpr,
+    block_schema: &DataSchema,
+) -> Result<RemoteExpr> {
     let expr = expr
         .as_expr()?
         .project_column_ref(|col| block_schema.index_of(&col.index.to_string()).unwrap());

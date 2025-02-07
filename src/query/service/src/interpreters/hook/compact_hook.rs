@@ -26,7 +26,7 @@ use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
-use databend_common_sql::plans::Recluster;
+use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::plans::RelOperator;
 use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
@@ -218,21 +218,16 @@ async fn compact_table(
                     &compact_target.table,
                 )?;
                 ctx.set_enable_sort_spill(false);
-                let recluster = RelOperator::Recluster(Recluster {
+                let recluster = ReclusterPlan {
                     catalog: compact_target.catalog,
                     database: compact_target.database,
                     table: compact_target.table,
                     limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
-                    filters: None,
-                });
-                let s_expr = SExpr::create_leaf(Arc::new(recluster));
-                let recluster_interpreter = ReclusterTableInterpreter::try_create(
-                    ctx.clone(),
-                    s_expr,
-                    None,
-                    lock_opt,
-                    false,
-                )?;
+                    selection: None,
+                    is_final: false,
+                };
+                let recluster_interpreter =
+                    ReclusterTableInterpreter::try_create(ctx.clone(), recluster, lock_opt)?;
                 // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
                 // we do not need to use `PipelineCompleteExecutor` to execute it.
                 let build_res = recluster_interpreter.execute2().await?;

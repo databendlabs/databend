@@ -152,7 +152,6 @@ fn find_group_by_keys(
         | RelOperator::RecursiveCteScan(_)
         | RelOperator::Mutation(_)
         | RelOperator::MutationSource(_)
-        | RelOperator::Recluster(_)
         | RelOperator::CompactBlock(_) => {}
     }
     Ok(())
