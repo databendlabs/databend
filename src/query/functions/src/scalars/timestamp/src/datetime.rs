@@ -1332,32 +1332,6 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
             }
         }),
     );
-    registry.register_passthrough_nullable_1_arg::<DateType, UInt64Type, _, _>(
-        "to_yyyymmddhh",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, UInt64Type>(|val, output, ctx| {
-            match ToNumberImpl::eval_date::<ToYYYYMMDDHH, _>(val, ctx.func_ctx.tz.clone()) {
-                Ok(t) => output.push(t),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
-                    output.push(0);
-                }
-            }
-        }),
-    );
-    registry.register_passthrough_nullable_1_arg::<DateType, UInt64Type, _, _>(
-        "to_yyyymmddhhmmss",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<DateType, UInt64Type>(|val, output, ctx| {
-            match ToNumberImpl::eval_date::<ToYYYYMMDDHHMMSS, _>(val, ctx.func_ctx.tz.clone()) {
-                Ok(t) => output.push(t),
-                Err(e) => {
-                    ctx.set_error(output.len(), format!("cannot parse to type `Date`. {}", e));
-                    output.push(0);
-                }
-            }
-        }),
-    );
     registry.register_passthrough_nullable_1_arg::<DateType, UInt16Type, _, _>(
         "to_year",
         |_, _| FunctionDomain::Full,
