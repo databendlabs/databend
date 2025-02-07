@@ -308,7 +308,9 @@ impl Processor for TransformHilbertPartitionCollect {
             State::Spill => self.buffer.spill().await?,
             State::Restore => {
                 self.restored_data_blocks = self.buffer.restore().await?;
-                self.state = State::Concat;
+                if !self.restored_data_blocks.is_empty() {
+                    self.state = State::Concat;
+                }
             }
             _ => unreachable!(),
         }
