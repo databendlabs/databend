@@ -417,6 +417,11 @@ select to_yyyymmddhhmmss(to_date(18875))
 ----
 20210905000000
 
+query I
+SELECT to_yyyymmddhhmmss('2023-11-12 09:38:18.165575')
+----
+20231112093818
+
 query B
 select to_yyyymmddhhmmss(to_datetime(1630833797000000))  =  20210905092317
 ----

@@ -4096,10 +4096,8 @@ Functions overloads:
 1 to_yyyymmddhh(Date NULL) :: UInt64 NULL
 2 to_yyyymmddhh(Timestamp) :: UInt64
 3 to_yyyymmddhh(Timestamp NULL) :: UInt64 NULL
-0 to_yyyymmddhhmmss(Date) :: UInt64
-1 to_yyyymmddhhmmss(Date NULL) :: UInt64 NULL
-2 to_yyyymmddhhmmss(Timestamp) :: UInt64
-3 to_yyyymmddhhmmss(Timestamp NULL) :: UInt64 NULL
+0 to_yyyymmddhhmmss(Timestamp) :: UInt64
+1 to_yyyymmddhhmmss(Timestamp NULL) :: UInt64 NULL
 0 today() :: Date
 0 tomorrow() :: Date
 0 translate(String, String, String) :: String
