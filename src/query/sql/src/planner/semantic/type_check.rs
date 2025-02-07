@@ -1116,7 +1116,12 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs)?,
 
-            Expr::Hole { .. } => unreachable!("hole is impossible in trivial query"),
+            Expr::Hole { span, .. } => {
+                return Err(ErrorCode::SemanticError(
+                    "Hole expression is impossible in trivial query".to_string(),
+                )
+                .set_span(*span))
+            }
         };
         Ok(Box::new((scalar, data_type)))
     }
@@ -2957,6 +2962,9 @@ impl<'a> TypeChecker<'a> {
             ASTIntervalKind::Dow => self.resolve_function(span, "to_day_of_week", vec![], &[arg]),
             ASTIntervalKind::Week => self.resolve_function(span, "to_week_of_year", vec![], &[arg]),
             ASTIntervalKind::Epoch => self.resolve_function(span, "epoch", vec![], &[arg]),
+            ASTIntervalKind::MicroSecond => {
+                self.resolve_function(span, "to_microsecond", vec![], &[arg])
+            }
         }
     }
 

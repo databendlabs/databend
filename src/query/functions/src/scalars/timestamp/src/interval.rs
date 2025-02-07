@@ -19,6 +19,7 @@ use databend_common_expression::date_helper::EvalMonthsImpl;
 use databend_common_expression::error_to_null;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::interval::string_to_interval;
+use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::StringType;
@@ -294,6 +295,74 @@ fn register_number_to_interval(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<Int64Type, IntervalType>(|val, output, _| {
             let res = months_days_micros::new((val * 12) as i32, 0, 0);
             output.push(res);
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
+        "to_year",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
+            output.push(val.months() as i64 / 12);
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
+        "to_month",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
+            output.push(val.months() as i64);
+        }),
+    );
+    // Directly return interval days. Extract need named to_day_of_month
+    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
+        "to_day_of_month",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
+            output.push(val.days() as i64);
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
+        "to_hour",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
+            let total_seconds = (val.microseconds() as f64) / 1_000_000.0;
+            let hours = (total_seconds / 3600.0) as i64;
+            output.push(hours);
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
+        "to_minute",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
+            let total_seconds = (val.microseconds() as f64) / 1_000_000.0;
+            let minutes = ((total_seconds % 3600.0) / 60.0) as i64;
+            output.push(minutes);
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<IntervalType, Float64Type, _, _>(
+        "to_second",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<IntervalType, Float64Type>(|val, output, _| {
+            let microseconds = val.microseconds() % 60_000_000;
+            let seconds = microseconds as f64 / 1_000_000.0;
+            output.push(seconds.into());
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<IntervalType, Int64Type, _, _>(
+        "to_microsecond",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<IntervalType, Int64Type>(|val, output, _| {
+            let microseconds = val.microseconds() % 60_000_000;
+            output.push(microseconds);
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<IntervalType, Float64Type, _, _>(
+        "epoch",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<IntervalType, Float64Type>(|val, output, _| {
+            let total_seconds = (val.total_micros() as f64) / 1_000_000.0;
+            output.push(total_seconds.into());
         }),
     );
 }

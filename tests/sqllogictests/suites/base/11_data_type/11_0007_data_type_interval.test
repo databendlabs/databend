@@ -41,3 +41,51 @@ select sum(c) from t where c <= interval '1 day';
 
 statement ok
 drop table t;
+
+onlyif http
+query T
+select EXTRACT(epoch from '1 day 2 hours 3 minutes'::INTERVAL);
+----
+93780.0
+
+onlyif http
+query T
+select EXTRACT(minute from '1 day 2 hours 3 minutes'::INTERVAL);
+----
+3
+
+onlyif http
+query T
+select EXTRACT(hour from '1 day 48 hours 3600 minutes'::INTERVAL);
+----
+108
+
+onlyif http
+query T
+select EXTRACT(day from '1 day 48 hours 3600 minutes'::INTERVAL);
+----
+1
+
+onlyif http
+query T
+select EXTRACT(second from '1 day 2 hours 3 minutes 200 seconds 100 microsecond'::INTERVAL);
+----
+20.0001
+
+onlyif http
+query T
+select EXTRACT(microsecond from '1 day 2 hours 3 minutes 200 seconds 100 microsecond'::INTERVAL);
+----
+20000100
+
+onlyif http
+query T
+select EXTRACT(month from '3 months 60 day 2 hours 3 minutes 200 seconds 100 microsecond'::INTERVAL);
+----
+3
+
+onlyif http
+query T
+select EXTRACT(year from '1 years 13 months 60 day 2 hours 3 minutes 200 seconds 100 microsecond'::INTERVAL);
+----
+2

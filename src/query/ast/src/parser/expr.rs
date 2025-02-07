@@ -1843,6 +1843,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
     let dow = value(IntervalKind::Dow, rule! { DOW });
     let week = value(IntervalKind::Week, rule! { WEEK });
     let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
+    let microsecond = value(IntervalKind::MicroSecond, rule! { MICROSECOND });
     let year_str = value(
         IntervalKind::Year,
         rule! { #literal_string_eq_ignore_case("YEAR")  },
@@ -1887,6 +1888,10 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         IntervalKind::Epoch,
         rule! { #literal_string_eq_ignore_case("EPOCH")  },
     );
+    let microsecond_str = value(
+        IntervalKind::MicroSecond,
+        rule! { #literal_string_eq_ignore_case("MICROSECOND")  },
+    );
     alt((
         rule!(
             #year
@@ -1900,6 +1905,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #dow
             | #week
             | #epoch
+            | #microsecond
         ),
         rule!(
             #year_str
@@ -1913,6 +1919,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
             | #dow_str
             | #week_str
             | #epoch_str
+            | #microsecond_str
         ),
     ))(i)
 }
@@ -1977,7 +1984,9 @@ pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
         },
         None => 0,
     };
-    if i_part.len() as i32 + exp > 76 {
+
+    let p = i_part.len() as i32 + exp - f_part.len() as i32;
+    if !(-76..=76).contains(&p) {
         Ok(Literal::Float64(fast_float2::parse(text)?))
     } else {
         let mut digits = String::with_capacity(76);

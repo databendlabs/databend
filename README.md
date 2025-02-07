@@ -67,24 +67,24 @@
 ## 🚀 Why Databend
 
 - **Full Control**: Deploy on **cloud** or **on-prem** to suit your needs.
-  
+
 - **Blazing-Fast Performance**: Built with **Rust** for high-speed query execution. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top)
-  
+
 - **Cost-Effective**: Scalable architecture that boosts **performance** and reduces **costs**. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch)
-  
+
 - **AI-Enhanced Analytics**: Leverage built-in **[AI Functions](https://docs.databend.com/guides/ai-functions/)** for smarter data insights.
-  
+
 - **Simplified ETL**: Direct **data ingestion** without the need for external ETL tools. 👉 [Data Loading](https://docs.databend.com/guides/load-data/)
-  
+
 - **Real-Time Data Updates**: Keep your analytics **up-to-date** with real-time incremental data updates. 👉 [Stream](https://docs.databend.com/guides/load-data/continuous-data-pipelines/stream)
-  
+
 - **Advanced Indexing**: Boost query performance with **[Virtual Column](https://docs.databend.com/guides/performance/virtual-column)**, **[Aggregating Index](https://docs.databend.com/guides/performance/aggregating-index)**, and **[Full-Text Index](https://docs.databend.com/guides/performance/fulltext-index)**.
-  
+
 - **ACID Compliance + Version Control**: Ensure reliable **transactions** with full ACID compliance and Git-like versioning.
-  
+
 - **Schema Flexibility**: Effortlessly handle **semi-structured data** with the flexible **[VARIANT](https://docs.databend.com/sql/sql-reference/data-types/variant)** data type.
-  
-- **Community-Driven Growth**: **Open-source** and continuously evolving with contributions from a global community.  
+
+- **Community-Driven Growth**: **Open-source** and continuously evolving with contributions from a global community.
 
 
 
@@ -296,7 +296,7 @@ Databend is released under a combination of two licenses: the [Apache License 2.
 
 When contributing to Databend, you can find the relevant license header in each file.
 
-For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://docs.databend.com/guides/overview/editions/dee/license).
+For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://docs.databend.com/guides/products/dee/license).
 
 ## 🙏 Acknowledgement
 

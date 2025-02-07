@@ -25,6 +25,7 @@ mod temp_dir;
 
 pub use cache::CacheAccessor;
 pub use cache::Unit;
+pub use caches::BlockMetaCache;
 pub use caches::CacheValue;
 pub use caches::CachedObject;
 pub use caches::SegmentBlockMetasCache;

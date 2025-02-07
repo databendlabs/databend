@@ -2489,7 +2489,7 @@ output         : 20210905
 
 ast            : to_yyyymmddhhmmss(to_date(18875))
 raw expr       : to_yyyymmddhhmmss(to_date(18875))
-checked expr   : to_yyyymmddhhmmss<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+checked expr   : to_yyyymmddhhmmss<Timestamp>(to_timestamp<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16))))
 optimized expr : 20210905000000_u64
 output type    : UInt64
 output domain  : {20210905000000..=20210905000000}
@@ -2605,7 +2605,7 @@ evaluation (internal):
 
 ast            : to_yyyymmddhhmmss(a)
 raw expr       : to_yyyymmddhhmmss(a::Date)
-checked expr   : to_yyyymmddhhmmss<Date>(a)
+checked expr   : to_yyyymmddhhmmss<Timestamp>(to_timestamp<Date>(a))
 evaluation:
 +--------+--------------+----------------------------+
 |        | a            | Output                     |
