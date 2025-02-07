@@ -14,30 +14,20 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::plan::Filters;
-use educe::Educe;
+use databend_common_ast::ast::Expr;
 
 use crate::optimizer::SExpr;
-use crate::plans::Operator;
-use crate::plans::RelOp;
 use crate::plans::RelOperator;
 
-#[derive(Debug, PartialEq, Clone, Educe)]
-#[educe(Eq, Hash)]
-pub struct Recluster {
+#[derive(Debug, Clone)]
+pub struct ReclusterPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
 
     pub limit: Option<usize>,
-    #[educe(Hash(ignore))]
-    pub filters: Option<Filters>,
-}
-
-impl Operator for Recluster {
-    fn rel_op(&self) -> RelOp {
-        RelOp::Recluster
-    }
+    pub selection: Option<Expr>,
+    pub is_final: bool,
 }
 
 pub fn set_update_stream_columns(s_expr: &SExpr) -> databend_common_exception::Result<SExpr> {

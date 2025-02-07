@@ -424,7 +424,6 @@ build_exceptions! {
     InvalidSessionState(4004),
 
     // recluster error codes
-    NoNeedToRecluster(4011),
     NoNeedToCompact(4012),
     UnsupportedClusterType(4013),
 
