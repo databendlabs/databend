@@ -672,9 +672,9 @@ mod tests {
         tracking_payload.mem_stat = Some(mem_stat.clone());
         let _guard = ThreadTracker::tracking(tracking_payload);
 
-        let mut sum = 0;
         let allocator = MetaTrackerAllocator::<StdAllocator>::default();
 
+        let mut sum = 0;
         while sum <= 4 * 1024 * 2014 {
             let small_allocate = allocator.allocate(Layout::array::<u8>(511).unwrap())?;
             assert_eq!(small_allocate.len(), 511);
@@ -698,6 +698,92 @@ mod tests {
         let large_allocate = allocator.allocate(Layout::array::<u8>(4 * 1024 * 1024).unwrap())?;
         assert_eq!(large_allocate.len(), 4 * 1024 * 1024);
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), memory_usage + 4 * 1024 * 1024 + TAIL_SIZE);
+        Ok(())
+    }
+
+    #[test]
+    fn test_dealloc_with_same_thread() -> Result<(), AllocError> {
+        unsafe {
+            let mem_stat = MemStat::create(String::from("test"));
+
+            let mut tracking_payload = ThreadTracker::new_tracking_payload();
+            tracking_payload.mem_stat = Some(mem_stat.clone());
+            let _guard = ThreadTracker::tracking(tracking_payload);
+
+            let allocator = MetaTrackerAllocator::<StdAllocator>::default();
+
+            let mut sum = 0;
+            while sum <= 4 * 1024 * 2014 {
+                let small_allocate = allocator.allocate(Layout::array::<u8>(511).unwrap())?;
+                assert_eq!(small_allocate.len(), 511);
+                allocator.deallocate(small_allocate.as_non_null_ptr(), Layout::array::<u8>(511).unwrap());
+                sum += small_allocate.len() as i64;
+            }
+
+            // un-tracking small allocate
+            assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+
+            let mut sum = 0;
+            while sum <= 4 * 1024 * 1024 {
+                assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+                let large_allocate = allocator.allocate(Layout::array::<u8>(512).unwrap())?;
+                assert_eq!(large_allocate.len(), 512);
+                allocator.deallocate(large_allocate.as_non_null_ptr(), Layout::array::<u8>(512).unwrap());
+                sum += 512 + TAIL_SIZE;
+            }
+
+            assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+
+            let large_allocate = allocator.allocate(Layout::array::<u8>(4 * 1024 * 1024).unwrap())?;
+            assert_eq!(large_allocate.len(), 4 * 1024 * 1024);
+            assert_eq!(mem_stat.used.load(Ordering::Relaxed), 4 * 1024 * 1024 + TAIL_SIZE);
+            allocator.deallocate(large_allocate.as_non_null_ptr(), Layout::array::<u8>(4 * 1024 * 1024).unwrap());
+            assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dealloc_with_diff_thread() -> Result<(), AllocError> {
+        // unsafe {
+        //     let mem_stat = MemStat::create(String::from("test"));
+        //
+        //     let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        //     tracking_payload.mem_stat = Some(mem_stat.clone());
+        //     let _guard = ThreadTracker::tracking(tracking_payload);
+        //
+        //     let allocator = MetaTrackerAllocator::<StdAllocator>::default();
+        //
+        //     let mut sum = 0;
+        //     while sum <= 4 * 1024 * 2014 {
+        //         let small_allocate = allocator.allocate(Layout::array::<u8>(511).unwrap())?;
+        //         assert_eq!(small_allocate.len(), 511);
+        //         allocator.deallocate(small_allocate.as_non_null_ptr(), Layout::array::<u8>(511).unwrap());
+        //         sum += small_allocate.len() as i64;
+        //     }
+        //
+        //     // un-tracking small allocate
+        //     assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+        //
+        //     let mut sum = 0;
+        //     while sum <= 4 * 1024 * 1024 {
+        //         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+        //         let large_allocate = allocator.allocate(Layout::array::<u8>(512).unwrap())?;
+        //         assert_eq!(large_allocate.len(), 512);
+        //         allocator.deallocate(large_allocate.as_non_null_ptr(), Layout::array::<u8>(512).unwrap());
+        //         sum += 512 + TAIL_SIZE;
+        //     }
+        //
+        //     assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+        //
+        //     let large_allocate = allocator.allocate(Layout::array::<u8>(4 * 1024 * 1024).unwrap())?;
+        //     assert_eq!(large_allocate.len(), 4 * 1024 * 1024);
+        //     assert_eq!(mem_stat.used.load(Ordering::Relaxed), 4 * 1024 * 1024 + TAIL_SIZE);
+        //     allocator.deallocate(large_allocate.as_non_null_ptr(), Layout::array::<u8>(4 * 1024 * 1024).unwrap());
+        //     assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+        // }
+
         Ok(())
     }
 }
