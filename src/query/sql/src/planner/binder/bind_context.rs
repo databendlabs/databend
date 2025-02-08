@@ -410,6 +410,23 @@ impl BindContext {
         }
     }
 
+    // Search cte info by name
+    pub fn search_cte_by_name(&self, cte_name: &str) -> Option<&CteContext> {
+        let mut bind_context: &BindContext = self;
+        loop {
+            if bind_context.cte_context.cte_map.contains_key(cte_name) {
+                return Some(&bind_context.cte_context);
+            }
+
+            if let Some(ref parent) = bind_context.parent {
+                bind_context = parent;
+            } else {
+                break;
+            }
+        }
+        None
+    }
+
     // Search bound column recursively from the parent context.
     // If current context found results, it'll stop searching.
     pub fn search_bound_columns_recursively(
