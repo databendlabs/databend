@@ -656,11 +656,18 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::alloc::{AllocError, Allocator, Layout};
+    use std::alloc::AllocError;
+    use std::alloc::Allocator;
+    use std::alloc::Layout;
+    use std::ptr::NonNull;
     use std::sync::atomic::Ordering;
-    use crate::mem_allocator::{StdAllocator};
+    use std::sync::Arc;
+
     use crate::mem_allocator::tracker::MetaTrackerAllocator;
-    use crate::runtime::{MemStat, ThreadTracker};
+    use crate::mem_allocator::StdAllocator;
+    use crate::runtime::MemStat;
+    use crate::runtime::Thread;
+    use crate::runtime::ThreadTracker;
 
     static TAIL_SIZE: i64 = 8;
 
@@ -697,7 +704,10 @@ mod tests {
         let memory_usage = mem_stat.used.load(Ordering::Relaxed);
         let large_allocate = allocator.allocate(Layout::array::<u8>(4 * 1024 * 1024).unwrap())?;
         assert_eq!(large_allocate.len(), 4 * 1024 * 1024);
-        assert_eq!(mem_stat.used.load(Ordering::Relaxed), memory_usage + 4 * 1024 * 1024 + TAIL_SIZE);
+        assert_eq!(
+            mem_stat.used.load(Ordering::Relaxed),
+            memory_usage + 4 * 1024 * 1024 + TAIL_SIZE
+        );
         Ok(())
     }
 
@@ -716,7 +726,10 @@ mod tests {
             while sum <= 4 * 1024 * 2014 {
                 let small_allocate = allocator.allocate(Layout::array::<u8>(511).unwrap())?;
                 assert_eq!(small_allocate.len(), 511);
-                allocator.deallocate(small_allocate.as_non_null_ptr(), Layout::array::<u8>(511).unwrap());
+                allocator.deallocate(
+                    small_allocate.as_non_null_ptr(),
+                    Layout::array::<u8>(511).unwrap(),
+                );
                 sum += small_allocate.len() as i64;
             }
 
@@ -728,17 +741,30 @@ mod tests {
                 assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
                 let large_allocate = allocator.allocate(Layout::array::<u8>(512).unwrap())?;
                 assert_eq!(large_allocate.len(), 512);
-                allocator.deallocate(large_allocate.as_non_null_ptr(), Layout::array::<u8>(512).unwrap());
+                allocator.deallocate(
+                    large_allocate.as_non_null_ptr(),
+                    Layout::array::<u8>(512).unwrap(),
+                );
                 sum += 512 + TAIL_SIZE;
             }
 
             assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
 
-            let large_allocate = allocator.allocate(Layout::array::<u8>(4 * 1024 * 1024).unwrap())?;
+            let large_allocate =
+                allocator.allocate(Layout::array::<u8>(4 * 1024 * 1024).unwrap())?;
             assert_eq!(large_allocate.len(), 4 * 1024 * 1024);
-            assert_eq!(mem_stat.used.load(Ordering::Relaxed), 4 * 1024 * 1024 + TAIL_SIZE);
-            allocator.deallocate(large_allocate.as_non_null_ptr(), Layout::array::<u8>(4 * 1024 * 1024).unwrap());
+            assert_eq!(
+                mem_stat.used.load(Ordering::Relaxed),
+                4 * 1024 * 1024 + TAIL_SIZE
+            );
+            allocator.deallocate(
+                large_allocate.as_non_null_ptr(),
+                Layout::array::<u8>(4 * 1024 * 1024).unwrap(),
+            );
             assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+            assert_eq!(Arc::strong_count(&mem_stat), 2);
+            drop(_guard);
+            assert_eq!(Arc::strong_count(&mem_stat), 1);
         }
 
         Ok(())
@@ -746,43 +772,105 @@ mod tests {
 
     #[test]
     fn test_dealloc_with_diff_thread() -> Result<(), AllocError> {
-        // unsafe {
-        //     let mem_stat = MemStat::create(String::from("test"));
-        //
-        //     let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        //     tracking_payload.mem_stat = Some(mem_stat.clone());
-        //     let _guard = ThreadTracker::tracking(tracking_payload);
-        //
-        //     let allocator = MetaTrackerAllocator::<StdAllocator>::default();
-        //
-        //     let mut sum = 0;
-        //     while sum <= 4 * 1024 * 2014 {
-        //         let small_allocate = allocator.allocate(Layout::array::<u8>(511).unwrap())?;
-        //         assert_eq!(small_allocate.len(), 511);
-        //         allocator.deallocate(small_allocate.as_non_null_ptr(), Layout::array::<u8>(511).unwrap());
-        //         sum += small_allocate.len() as i64;
-        //     }
-        //
-        //     // un-tracking small allocate
-        //     assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
-        //
-        //     let mut sum = 0;
-        //     while sum <= 4 * 1024 * 1024 {
-        //         assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
-        //         let large_allocate = allocator.allocate(Layout::array::<u8>(512).unwrap())?;
-        //         assert_eq!(large_allocate.len(), 512);
-        //         allocator.deallocate(large_allocate.as_non_null_ptr(), Layout::array::<u8>(512).unwrap());
-        //         sum += 512 + TAIL_SIZE;
-        //     }
-        //
-        //     assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
-        //
-        //     let large_allocate = allocator.allocate(Layout::array::<u8>(4 * 1024 * 1024).unwrap())?;
-        //     assert_eq!(large_allocate.len(), 4 * 1024 * 1024);
-        //     assert_eq!(mem_stat.used.load(Ordering::Relaxed), 4 * 1024 * 1024 + TAIL_SIZE);
-        //     allocator.deallocate(large_allocate.as_non_null_ptr(), Layout::array::<u8>(4 * 1024 * 1024).unwrap());
-        //     assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
-        // }
+        unsafe {
+            let mem_stat = MemStat::create(String::from("test"));
+
+            let mut tracking_payload = ThreadTracker::new_tracking_payload();
+            tracking_payload.mem_stat = Some(mem_stat.clone());
+
+            let allocator = Arc::new(MetaTrackerAllocator::<StdAllocator>::default());
+
+            let join_handle = Thread::spawn({
+                let tracking_payload = tracking_payload.clone();
+                let allocator = allocator.clone();
+                move || {
+                    let _guard = ThreadTracker::tracking(tracking_payload.clone());
+
+                    let mut small_allocates = Vec::new();
+
+                    let mut sum = 0;
+                    while sum <= 4 * 1024 * 2014 {
+                        let small_allocate = allocator
+                            .allocate(Layout::array::<u8>(511).unwrap())
+                            .unwrap();
+                        assert_eq!(small_allocate.len(), 511);
+                        sum += small_allocate.len() as i64;
+                        small_allocates.push(small_allocate.as_non_null_ptr().as_ptr() as usize);
+                    }
+
+                    small_allocates
+                }
+            });
+
+            let small_allocates = join_handle.join().unwrap();
+            for small_allocate in small_allocates {
+                // un-tracking small allocate
+                assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+                allocator.deallocate(
+                    NonNull::new(small_allocate as *const u8 as *mut u8).unwrap(),
+                    Layout::array::<u8>(511).unwrap(),
+                );
+            }
+
+            let join_handle = Thread::spawn({
+                let tracking_payload = tracking_payload.clone();
+                let allocator = allocator.clone();
+                move || {
+                    let _guard = ThreadTracker::tracking(tracking_payload.clone());
+
+                    let mut large_allocates = Vec::new();
+
+                    let mut sum = 0;
+                    while sum <= 4 * 1024 * 1024 {
+                        let large_allocate = allocator
+                            .allocate(Layout::array::<u8>(512).unwrap())
+                            .unwrap();
+                        assert_eq!(large_allocate.len(), 512);
+                        large_allocates.push(large_allocate.as_non_null_ptr().as_ptr() as usize);
+                        sum += 512 + TAIL_SIZE;
+                    }
+
+                    (sum, large_allocates)
+                }
+            });
+
+            let (sum, large_allocates) = join_handle.join().unwrap();
+            for large_allocate in large_allocates {
+                assert_eq!(mem_stat.used.load(Ordering::Relaxed), sum);
+                allocator.deallocate(
+                    NonNull::new(large_allocate as *const u8 as *mut u8).unwrap(),
+                    Layout::array::<u8>(512).unwrap(),
+                );
+            }
+
+            assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+
+            let join_handle = Thread::spawn({
+                let allocator = allocator.clone();
+                move || {
+                    let _guard = ThreadTracker::tracking(tracking_payload.clone());
+
+                    let large_allocate = allocator
+                        .allocate(Layout::array::<u8>(4 * 1024 * 1024).unwrap())
+                        .unwrap();
+                    assert_eq!(large_allocate.len(), 4 * 1024 * 1024);
+
+                    large_allocate.as_non_null_ptr().as_ptr() as usize
+                }
+            });
+
+            let large_allocate = join_handle.join().unwrap();
+            assert_eq!(
+                mem_stat.used.load(Ordering::Relaxed),
+                4 * 1024 * 1024 + TAIL_SIZE
+            );
+            allocator.deallocate(
+                NonNull::new(large_allocate as *const u8 as *mut u8).unwrap(),
+                Layout::array::<u8>(4 * 1024 * 1024).unwrap(),
+            );
+            assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
+            assert_eq!(Arc::strong_count(&mem_stat), 1);
+        }
 
         Ok(())
     }

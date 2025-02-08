@@ -1,3 +1,17 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::ptr::addr_of_mut;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -69,11 +83,7 @@ impl MemStatBuffer {
             .record_memory::<FALLBACK>(memory_usage, alloc)
     }
 
-    pub fn alloc(
-        &mut self,
-        mem_stat: &Arc<MemStat>,
-        memory_usage: i64,
-    ) -> Result<(), OutOfLimit> {
+    pub fn alloc(&mut self, mem_stat: &Arc<MemStat>, memory_usage: i64) -> Result<(), OutOfLimit> {
         if self.destroyed_thread_local_macro {
             mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
             return Ok(());
@@ -97,7 +107,7 @@ impl MemStatBuffer {
     }
 
     pub fn dealloc(&mut self, mem_stat: &Arc<MemStat>, memory_usage: i64) {
-        let mut memory_usage = -memory_usage;
+        let memory_usage = -memory_usage;
 
         if self.destroyed_thread_local_macro {
             mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
@@ -115,12 +125,11 @@ impl MemStatBuffer {
                 return;
             }
 
-            std::mem::swap(&mut self.memory_usage, &mut memory_usage);
+            let memory_usage = std::mem::take(&mut self.memory_usage);
             let _ = self.flush::<false>(memory_usage, 0);
 
             self.cur_mem_stat = Some(mem_stat.clone());
             self.cur_mem_stat_id = mem_stat.id;
-            return;
         }
 
         if self.incr(memory_usage) <= -MEM_STAT_BUFFER_SIZE || Arc::strong_count(mem_stat) == 1 {

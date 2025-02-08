@@ -57,6 +57,7 @@ use crate::runtime::memory::MemStat;
 use crate::runtime::memory::OutOfLimit;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::Profile;
+use crate::runtime::MemStatBuffer;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
@@ -146,6 +147,7 @@ impl<T: Future> Future for TrackingFuture<T> {
 
 impl Drop for ThreadTracker {
     fn drop(&mut self) {
+        MemStatBuffer::current().mark_destroyed();
         GlobalStatBuffer::current().mark_destroyed();
     }
 }
