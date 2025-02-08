@@ -23,6 +23,7 @@ use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
+use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -319,6 +320,7 @@ impl ReclusterTableInterpreter {
                     .unwrap_or_default();
                 let (stmt, _) = parse_sql(&tokens, sql_dialect)?;
 
+                let query_str = self.ctx.get_query_str();
                 let write_progress = self.ctx.get_write_progress();
                 let write_progress_value = write_progress.as_ref().get_values();
                 let mut planner = Planner::new_with_query_executor(
@@ -342,6 +344,7 @@ impl ReclusterTableInterpreter {
                 }
 
                 write_progress.set(&write_progress_value);
+                self.ctx.attach_query_str(QueryKind::Other, query_str);
                 let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone(), false);
                 let mut plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
                 let mut is_exchange = false;
