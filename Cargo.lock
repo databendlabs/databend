@@ -3001,6 +3001,7 @@ dependencies = [
  "bytes",
  "bytesize",
  "chrono",
+ "crc32fast",
  "ctrlc",
  "databend-common-building",
  "databend-common-exception",
