@@ -25,6 +25,10 @@ use crate::runtime::ThreadTracker;
 pub struct StdAllocator;
 
 impl StdAllocator {
+    pub const fn create() -> StdAllocator {
+        StdAllocator
+    }
+
     pub fn name() -> String {
         "std".to_string()
     }
