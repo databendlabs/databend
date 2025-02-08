@@ -103,6 +103,11 @@ impl Binder {
                     if self.bind_recursive_cte {
                         self.bind_r_cte_scan(bind_context, cte_info, &table_name, alias)
                     } else {
+                        if bind_context.cte_context.cte_name.as_ref() == Some(&table_name) {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "The cte {table_name} is not recursive, but it references itself.",
+                            )));
+                        }
                         self.bind_r_cte(*span, bind_context, cte_info, &table_name, alias)
                     }
                 } else {

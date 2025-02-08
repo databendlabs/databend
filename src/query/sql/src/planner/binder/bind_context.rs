@@ -215,6 +215,7 @@ impl CteContext {
     // Set cte context to current `BindContext`.
     pub fn set_cte_context(&mut self, cte_context: CteContext) {
         self.cte_map = cte_context.cte_map;
+        self.cte_name = cte_context.cte_name;
     }
 }
 
@@ -252,8 +253,22 @@ impl BindContext {
         }
     }
 
-    pub fn with_parent(parent: Box<BindContext>) -> Self {
-        BindContext {
+    pub fn depth(&self) -> usize {
+        if let Some(ref p) = self.parent {
+            return p.depth() + 1;
+        }
+        1
+    }
+
+    pub fn with_parent(parent: Box<BindContext>) -> Result<Self> {
+        const MAX_DEPTH: usize = 4096;
+        if parent.depth() >= MAX_DEPTH {
+            return Err(ErrorCode::Internal(
+                "Query binder exceeds the maximum iterations",
+            ));
+        }
+
+        Ok(BindContext {
             parent: Some(parent.clone()),
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
@@ -273,7 +288,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
-        }
+        })
     }
 
     /// Create a new BindContext with self's parent as its parent
@@ -408,25 +423,6 @@ impl BindContext {
         } else {
             Ok(result.remove(0))
         }
-    }
-
-    // Search cte info by name
-    pub fn search_cte_by_name(&self, cte_name: &str) -> Option<&CteContext> {
-        let mut bind_context: &BindContext = self;
-        let mut level = 0;
-        loop {
-            if level > 0 && bind_context.cte_context.cte_map.contains_key(cte_name) {
-                return Some(&bind_context.cte_context);
-            }
-
-            if let Some(ref parent) = bind_context.parent {
-                bind_context = parent;
-                level += 1;
-            } else {
-                break;
-            }
-        }
-        None
     }
 
     // Search bound column recursively from the parent context.
