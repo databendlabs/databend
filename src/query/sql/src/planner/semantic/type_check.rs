@@ -3134,11 +3134,11 @@ impl<'a> TypeChecker<'a> {
         );
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
-        let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
+        let mut bind_context = BindContext::with_parent(self.bind_context.clone())?;
         let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
         self.bind_context
             .cte_context
-            .set_cte_context(output_context.cte_context);
+            .set_cte_context_and_name(output_context.cte_context);
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
             && output_context.columns.len() > 1
@@ -4644,7 +4644,7 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr,
         list: &[Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
+        let mut bind_context = BindContext::with_parent(self.bind_context.clone())?;
         let mut values = Vec::with_capacity(list.len());
         for val in list.iter() {
             values.push(vec![val.clone()])

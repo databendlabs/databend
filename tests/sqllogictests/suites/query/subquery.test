@@ -7,6 +7,10 @@ DROP TABLE IF EXISTS c
 statement ok
 DROP TABLE IF EXISTS o
 
+
+query error 1065
+SELECT * FROM (SELECT 1 AS x) AS ss1 LEFT OUTER JOIN (SELECT 2 DIV 228 AS y) AS ss2 ON TRUE, LATERAL (SELECT ss2.y AS z LIMIT 1) AS ss3
+
 statement ok
 CREATE TABLE c (c_id INT NULL, bill VARCHAR NULL)
 
@@ -817,7 +821,7 @@ CREATE TABLE `merge_log` (
   `created_at` TIMESTAMP NULL
 ) ENGINE = FUSE;
 
-query 
+query
 SELECT
   (SELECT MAX(created_at)
    FROM merge_log
@@ -851,7 +855,7 @@ statement ok
 insert into test_group values ('2024-01-01', 100),('2024-01-01', 200),('2024-01-02', 400),('2024-01-02', 800);
 
 query TI
-select input_date, sum(value), 
+select input_date, sum(value),
 (select sum(value)
 	    from test_group b
 	    where b.input_date >= DATE_TRUNC(YEAR, input_date)

@@ -216,6 +216,12 @@ impl CteContext {
     pub fn set_cte_context(&mut self, cte_context: CteContext) {
         self.cte_map = cte_context.cte_map;
     }
+
+    // Set cte context to current `BindContext`.
+    pub fn set_cte_context_and_name(&mut self, cte_context: CteContext) {
+        self.cte_map = cte_context.cte_map;
+        self.cte_name = cte_context.cte_name;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -252,9 +258,31 @@ impl BindContext {
         }
     }
 
-    pub fn with_parent(parent: Box<BindContext>) -> Self {
-        BindContext {
-            parent: Some(parent.clone()),
+    pub fn depth(&self) -> usize {
+        if let Some(ref p) = self.parent {
+            return p.depth() + 1;
+        }
+        1
+    }
+
+    pub fn with_opt_parent(parent: Option<&BindContext>) -> Result<Self> {
+        if let Some(p) = parent {
+            Self::with_parent(p.clone())
+        } else {
+            Self::with_parent(Self::new())
+        }
+    }
+
+    pub fn with_parent(parent: BindContext) -> Result<Self> {
+        const MAX_DEPTH: usize = 4096;
+        if parent.depth() >= MAX_DEPTH {
+            return Err(ErrorCode::Internal(
+                "Query binder exceeds the maximum iterations",
+            ));
+        }
+
+        Ok(BindContext {
+            parent: Some(Box::new(parent.clone())),
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
@@ -273,7 +301,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
-        }
+        })
     }
 
     /// Create a new BindContext with self's parent as its parent
