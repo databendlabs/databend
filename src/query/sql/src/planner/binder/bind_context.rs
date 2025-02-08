@@ -215,6 +215,11 @@ impl CteContext {
     // Set cte context to current `BindContext`.
     pub fn set_cte_context(&mut self, cte_context: CteContext) {
         self.cte_map = cte_context.cte_map;
+    }
+
+    // Set cte context to current `BindContext`.
+    pub fn set_cte_context_and_name(&mut self, cte_context: CteContext) {
+        self.cte_map = cte_context.cte_map;
         self.cte_name = cte_context.cte_name;
     }
 }

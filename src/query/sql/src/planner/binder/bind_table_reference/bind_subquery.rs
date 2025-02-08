@@ -39,7 +39,7 @@ impl Binder {
                 BindContext::with_opt_parent(bind_context.parent.as_ref().map(|c| c.as_ref()))?;
             new_bind_context
                 .cte_context
-                .set_cte_context(bind_context.cte_context.clone());
+                .set_cte_context_and_name(bind_context.cte_context.clone());
             self.bind_query(&mut new_bind_context, subquery)?
         };
 
