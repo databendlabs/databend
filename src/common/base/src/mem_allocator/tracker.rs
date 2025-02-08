@@ -26,8 +26,15 @@ use crate::runtime::MemStat;
 use crate::runtime::MemStatBuffer;
 use crate::runtime::ThreadTracker;
 
+#[derive(Debug, Clone, Copy)]
 pub struct MetaTrackerAllocator<T: Allocator> {
     inner: T,
+}
+
+impl<T: Allocator> MetaTrackerAllocator<T> {
+    pub const fn create(inner: T) -> MetaTrackerAllocator<T> {
+        MetaTrackerAllocator { inner }
+    }
 }
 
 impl<T: Allocator + Default> Default for MetaTrackerAllocator<T> {

@@ -19,19 +19,20 @@ use std::alloc::Layout;
 use std::ptr::null_mut;
 use std::ptr::NonNull;
 
+use crate::mem_allocator::tracker::MetaTrackerAllocator;
 use crate::mem_allocator::DefaultAllocator;
 
 /// Global allocator, default is JeAllocator.
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct GlobalAllocator {
-    inner: DefaultAllocator,
+    inner: MetaTrackerAllocator<DefaultAllocator>,
 }
 
 impl GlobalAllocator {
     pub const fn create() -> GlobalAllocator {
         GlobalAllocator {
-            inner: DefaultAllocator::create(),
+            inner: MetaTrackerAllocator::create(DefaultAllocator::create()),
         }
     }
 

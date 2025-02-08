@@ -251,13 +251,6 @@ impl ThreadTracker {
         GlobalStatBuffer::current().dealloc(size)
     }
 
-    // pub fn with_mem_stat<R, F: FnOnce(&Arc<MemStat>) -> R>(f: F) -> R {
-    //     // TRACKER.with()
-    //     TRACKER.try_with(|tracker| {
-    //         let tracker = tracker.borrow();
-    //         tracker.
-    //     })
-    // }
     pub fn mem_stat() -> Option<&'static Arc<MemStat>> {
         TRACKER
             .try_with(|tracker| {
