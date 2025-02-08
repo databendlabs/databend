@@ -413,13 +413,15 @@ impl BindContext {
     // Search cte info by name
     pub fn search_cte_by_name(&self, cte_name: &str) -> Option<&CteContext> {
         let mut bind_context: &BindContext = self;
+        let mut level = 0;
         loop {
-            if bind_context.cte_context.cte_map.contains_key(cte_name) {
+            if level > 0 && bind_context.cte_context.cte_map.contains_key(cte_name) {
                 return Some(&bind_context.cte_context);
             }
 
             if let Some(ref parent) = bind_context.parent {
                 bind_context = parent;
+                level += 1;
             } else {
                 break;
             }
