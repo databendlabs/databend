@@ -349,6 +349,34 @@ impl<'a> Evaluator<'a> {
                 }
                 _ => unreachable!(),
             },
+            (
+                DataType::Nullable(box DataType::Variant) | DataType::Variant,
+                DataType::Nullable(box DataType::Boolean)
+                | DataType::Nullable(box DataType::Number(_))
+                | DataType::Nullable(box DataType::String)
+                | DataType::Nullable(box DataType::Date)
+                | DataType::Nullable(box DataType::Timestamp),
+            ) => {
+                // allow cast variant to nullable types.
+                let inner_dest_ty = dest_type.remove_nullable();
+                let cast_fn = format!("to_{}", inner_dest_ty.to_string().to_lowercase());
+                if let Some(new_value) = self.run_simple_cast(
+                    span,
+                    src_type,
+                    dest_type,
+                    value.clone(),
+                    &cast_fn,
+                    validity.clone(),
+                    options,
+                )? {
+                    Ok(new_value)
+                } else {
+                    Err(ErrorCode::BadArguments(format!(
+                        "unable to cast type `{src_type}` to type `{dest_type}`"
+                    ))
+                    .set_span(span))
+                }
+            }
             (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
                 Value::Scalar(_) => {

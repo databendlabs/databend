@@ -419,7 +419,7 @@ SELECT arrays_zip(col1, col2) FROM t3;
 [(NULL,4)]
 [(7,5),(8,5)]
 
-#issue 16794
+#issue 17400
 
 statement ok
 CREATE OR REPLACE TABLE u (id VARCHAR NULL);

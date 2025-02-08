@@ -94,7 +94,8 @@ async fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let _guards = init_logging("databend-metaverifier", &log_config, BTreeMap::new());
+    let guards = init_logging("databend-metaverifier", &log_config, BTreeMap::new());
+    Box::new(guards).leak();
 
     println!("config: {:?}", config);
     if config.grpc_api_address.is_empty() {
