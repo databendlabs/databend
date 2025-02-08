@@ -32,15 +32,11 @@ impl Binder {
         // If the subquery is a lateral subquery, we need to let it see the columns
         // from the previous queries.
         let (result, mut result_bind_context) = if lateral {
-            let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+            let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
             self.bind_query(&mut new_bind_context, subquery)?
         } else {
-            let mut new_bind_context = BindContext::with_parent(
-                bind_context
-                    .parent
-                    .clone()
-                    .unwrap_or_else(|| Box::new(BindContext::new())),
-            );
+            let mut new_bind_context =
+                BindContext::with_opt_parent(bind_context.parent.as_ref().map(|c| c.as_ref()))?;
             new_bind_context
                 .cte_context
                 .set_cte_context(bind_context.cte_context.clone());

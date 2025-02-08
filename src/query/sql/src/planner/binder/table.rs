@@ -96,7 +96,7 @@ impl Binder {
                 }
             }
         }
-        let bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let bind_context = BindContext::with_parent(bind_context.clone())?;
         Ok((
             SExpr::create_leaf(Arc::new(DummyTableScan.into())),
             bind_context,
@@ -235,7 +235,7 @@ impl Binder {
         cte_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
+        let mut new_bind_ctx = BindContext::with_parent(bind_context.clone())?;
         let mut metadata = self.metadata.write();
         let mut columns = cte_info.columns.clone();
         for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
@@ -356,7 +356,7 @@ impl Binder {
         change_type: Option<ChangeType>,
         sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
-        let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let mut bind_context = BindContext::with_parent(bind_context.clone())?;
 
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();

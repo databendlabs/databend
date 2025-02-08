@@ -260,7 +260,15 @@ impl BindContext {
         1
     }
 
-    pub fn with_parent(parent: Box<BindContext>) -> Result<Self> {
+    pub fn with_opt_parent(parent: Option<&BindContext>) -> Result<Self> {
+        if let Some(p) = parent {
+            Self::with_parent(p.clone())
+        } else {
+            Self::with_parent(Self::new())
+        }
+    }
+
+    pub fn with_parent(parent: BindContext) -> Result<Self> {
         const MAX_DEPTH: usize = 4096;
         if parent.depth() >= MAX_DEPTH {
             return Err(ErrorCode::Internal(
@@ -269,7 +277,7 @@ impl BindContext {
         }
 
         Ok(BindContext {
-            parent: Some(parent.clone()),
+            parent: Some(Box::new(parent.clone())),
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
