@@ -596,8 +596,13 @@ impl<'a> TypeChecker<'a> {
                 if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
                     return Ok(constant);
                 }
+
+                // cast variant to other type should nest wrap nullable,
+                // as we cast JSON null to SQL NULL.
+                let target_type = if data_type.remove_nullable() == DataType::Variant {
+                    checked_expr.data_type().nest_wrap_nullable()
                 // if the source type is nullable, cast target type should also be nullable.
-                let target_type = if data_type.is_nullable_or_null() {
+                } else if data_type.is_nullable_or_null() {
                     checked_expr.data_type().wrap_nullable()
                 } else {
                     checked_expr.data_type().clone()
@@ -640,15 +645,22 @@ impl<'a> TypeChecker<'a> {
                     return Ok(constant);
                 }
 
+                // cast variant to other type should nest wrap nullable,
+                // as we cast JSON null to SQL NULL.
+                let target_type = if data_type.remove_nullable() == DataType::Variant {
+                    checked_expr.data_type().nest_wrap_nullable()
+                } else {
+                    checked_expr.data_type().clone()
+                };
                 Box::new((
                     CastExpr {
                         span: expr.span(),
                         is_try: true,
                         argument: Box::new(scalar),
-                        target_type: Box::new(checked_expr.data_type().clone()),
+                        target_type: Box::new(target_type.clone()),
                     }
                     .into(),
-                    checked_expr.data_type().clone(),
+                    target_type,
                 ))
             }
 
@@ -1847,11 +1859,11 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if func_name.starts_with("json_") && !args.is_empty() {
             let target_type = if func_name.starts_with("json_array") {
-                TypeName::Array(Box::new(TypeName::Variant))
+                TypeName::Array(Box::new(TypeName::Nullable(Box::new(TypeName::Variant))))
             } else {
                 TypeName::Map {
                     key_type: Box::new(TypeName::String),
-                    val_type: Box::new(TypeName::Variant),
+                    val_type: Box::new(TypeName::Nullable(Box::new(TypeName::Variant))),
                 }
             };
             let func_name = &func_name[5..];
