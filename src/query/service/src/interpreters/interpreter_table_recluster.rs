@@ -319,6 +319,8 @@ impl ReclusterTableInterpreter {
                     .unwrap_or_default();
                 let (stmt, _) = parse_sql(&tokens, sql_dialect)?;
 
+                let write_progress = self.ctx.get_write_progress();
+                let write_progress_value = write_progress.as_ref().get_values();
                 let mut planner = Planner::new_with_query_executor(
                     self.ctx.clone(),
                     Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
@@ -339,6 +341,7 @@ impl ReclusterTableInterpreter {
                     *s_expr = set_update_stream_columns(&s_expr)?;
                 }
 
+                write_progress.set(&write_progress_value);
                 let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone(), false);
                 let mut plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
                 let mut is_exchange = false;

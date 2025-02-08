@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -57,6 +58,7 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::meta::Location;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -160,6 +162,9 @@ pub struct QueryContextShared {
     pub(in crate::sessions) unload_callbacked: AtomicBool,
     pub(in crate::sessions) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
     pub(in crate::sessions) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
+
+    // Used by hilbert clustering when do recluster.
+    pub(in crate::sessions) selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
 }
 
 impl QueryContextShared {
@@ -223,6 +228,7 @@ impl QueryContextShared {
             warehouse_cache: Arc::new(RwLock::new(None)),
             mem_stat: Arc::new(RwLock::new(None)),
             node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
+            selected_segment_locs: Default::default(),
         }))
     }
 
