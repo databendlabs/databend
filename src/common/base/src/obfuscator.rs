@@ -66,8 +66,8 @@ pub fn transform(x: u64, seed: u64) -> u64 {
     feistel_network(x, 64 - num_leading_zeros - 1, seed, 4)
 }
 
-type CodePoint = u32;
-type NGramHash = u32;
+pub type CodePoint = u32;
+pub type NGramHash = u32;
 
 #[derive(Debug, Clone)]
 pub struct MarkovModelParameters {
@@ -93,13 +93,13 @@ impl Default for MarkovModelParameters {
 }
 
 #[derive(Debug, Clone, Default)]
-struct Histogram {
+struct MapHistogram {
     total: usize,
     count_end: usize,
     buckets: BTreeMap<CodePoint, usize>,
 }
 
-impl Histogram {
+impl MapHistogram {
     fn add(&mut self, code: Option<CodePoint>) {
         if let Some(code) = code {
             self.total += 1;
@@ -107,26 +107,6 @@ impl Histogram {
         } else {
             self.count_end += 1;
         }
-    }
-
-    fn sample(&self, random: u64, end_multiplier: f64) -> Option<CodePoint> {
-        let range = self.total + (self.count_end as f64 * end_multiplier) as usize;
-        if range == 0 {
-            return None;
-        }
-
-        let mut random = random as usize % range;
-        self.buckets
-            .iter()
-            .find(|(_, weighted)| {
-                if random <= **weighted {
-                    true
-                } else {
-                    random -= **weighted;
-                    false
-                }
-            })
-            .map(|(code, _)| *code)
     }
 
     fn is_empty(&self) -> bool {
@@ -169,10 +149,32 @@ impl Histogram {
     }
 }
 
+impl<'a> Histogram<'a> for &'a MapHistogram {
+    fn sample(&self, random: u64, end_multiplier: f64) -> Option<CodePoint> {
+        let range = self.total + (self.count_end as f64 * end_multiplier) as usize;
+        if range == 0 {
+            return None;
+        }
+
+        let mut random = random as usize % range;
+        self.buckets
+            .iter()
+            .find(|(_, weighted)| {
+                if random <= **weighted {
+                    true
+                } else {
+                    random -= **weighted;
+                    false
+                }
+            })
+            .map(|(code, _)| *code)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MarkovModel {
     params: MarkovModelParameters,
-    table: HashMap<NGramHash, Histogram>,
+    table: HashMap<NGramHash, MapHistogram>,
 }
 
 impl MarkovModel {
@@ -197,7 +199,7 @@ impl MarkovModel {
             };
 
             for context_size in 0..self.params.order {
-                let context_hash = self.hash_context(context_size, code_points);
+                let context_hash = hash_context(self.params.order, context_size, code_points);
 
                 let histogram = self.table.entry(context_hash).or_default();
                 histogram.add(next_code_point);
@@ -251,80 +253,22 @@ impl MarkovModel {
 
     pub fn generate_writer(
         &self,
-        mut writer: &mut [u8],
+        writer: &mut [u8],
         desired_size: usize,
         seed: u64,
         determinator_data: &[u8],
         code_points: &mut Vec<CodePoint>,
     ) -> usize {
-        code_points.clear();
-
-        let determinator_size = determinator_data.len();
-        let sliding_window_size = self
-            .params
-            .determinator_sliding_window_size
-            .min(determinator_size);
-
-        let mut written = 0;
-
-        while !writer.is_empty() {
-            let Some(histogram) = (1..=self.params.order).rev().find_map(|size| {
-                let context_hash = self.hash_context(size, code_points);
-
-                let histogram = self.table.get(&context_hash)?;
-                if histogram.is_empty() {
-                    None
-                } else {
-                    Some(histogram)
-                }
-            }) else {
-                panic!("Logical error in markov model")
-            };
-
-            let mut hash = std::hash::DefaultHasher::new();
-            hash.write_u64(seed);
-
-            let sliding_window_overflow = if written + sliding_window_size > determinator_size {
-                written + sliding_window_size - determinator_size
-            } else {
-                0
-            };
-
-            let start = written - sliding_window_overflow;
-            let end = start + sliding_window_size;
-            hash.write(&determinator_data[start..end]);
-            hash.write_usize(sliding_window_overflow);
-            let determinator = hash.finish();
-
-            // If string is greater than desired_size, increase probability of end.
-            let greater_than_desired_size = written > desired_size;
-            let end_probability_multiplier = if greater_than_desired_size {
-                1.25_f64.powf((written - desired_size) as f64)
-            } else {
-                0.0
-            };
-
-            let Some(code) = histogram.sample(determinator, end_probability_multiplier) else {
-                return written;
-            };
-
-            // Heuristic: break at ASCII non-alnum code point.
-            // This allows to be close to desired_size but not break natural looking words.
-            if greater_than_desired_size && code < 128 && !is_alpha_numeric_ascii(code) {
-                return written;
-            }
-
-            let length = utf8_char_width((code >> 24) as u8).max(1);
-            if length > writer.len() {
-                return written;
-            }
-
-            let _ = writer.write(&code.to_le_bytes()[..length]).unwrap();
-            written += length;
-            code_points.push(code);
-        }
-
-        written
+        generate(
+            self,
+            self.params.order,
+            seed,
+            writer,
+            desired_size,
+            self.params.determinator_sliding_window_size,
+            determinator_data,
+            code_points,
+        )
     }
 
     pub fn generate(
@@ -347,18 +291,99 @@ impl MarkovModel {
         data.truncate(n);
         data
     }
+}
 
-    fn hash_context(&self, context_size: usize, code_points: &[CodePoint]) -> NGramHash {
-        const BEGIN: CodePoint = CodePoint::MAX;
-        std::iter::repeat_n(BEGIN, self.params.order)
-            .chain(code_points.iter().copied())
-            .skip(self.params.order + code_points.len() - context_size)
-            .fold(crc32fast::Hasher::new(), |mut acc, code| {
-                acc.write_u32(code);
-                acc
-            })
-            .finalize()
+impl<'a> Table<'a, &'a MapHistogram> for MarkovModel {
+    fn get(&'a self, context_hash: &NGramHash) -> Option<&'a MapHistogram> {
+        self.table.get(context_hash)
     }
+}
+
+pub fn generate<'a, T, H>(
+    table: &'a T,
+    order: usize,
+    seed: u64,
+    mut writer: &mut [u8],
+    desired_size: usize,
+    determinator_sliding_window_size: usize,
+    determinator_data: &[u8],
+    code_points: &mut Vec<CodePoint>,
+) -> usize
+where
+    T: Table<'a, H>,
+    H: Histogram<'a>,
+{
+    code_points.clear();
+
+    let determinator_size = determinator_data.len();
+    let sliding_window_size = determinator_sliding_window_size.min(determinator_size);
+
+    let mut written = 0;
+
+    while !writer.is_empty() {
+        let Some(histogram) = (1..=order).rev().find_map(|size| {
+            let context_hash = hash_context(order, size, code_points);
+            table.get(&context_hash)
+        }) else {
+            panic!("Logical error in markov model")
+        };
+
+        let mut hash = std::hash::DefaultHasher::new();
+        hash.write_u64(seed);
+
+        let sliding_window_overflow = if written + sliding_window_size > determinator_size {
+            written + sliding_window_size - determinator_size
+        } else {
+            0
+        };
+
+        let start = written - sliding_window_overflow;
+        let end = start + sliding_window_size;
+        hash.write(&determinator_data[start..end]);
+        hash.write_usize(sliding_window_overflow);
+        let determinator = hash.finish();
+
+        // If string is greater than desired_size, increase probability of end.
+        let greater_than_desired_size = written > desired_size;
+        let end_probability_multiplier = if greater_than_desired_size {
+            1.25_f64.powf((written - desired_size) as f64)
+        } else {
+            0.0
+        };
+
+        let Some(code) = histogram.sample(determinator, end_probability_multiplier) else {
+            return written;
+        };
+
+        // Heuristic: break at ASCII non-alnum code point.
+        // This allows to be close to desired_size but not break natural looking words.
+        if greater_than_desired_size && code < 128 && !is_alpha_numeric_ascii(code) {
+            return written;
+        }
+
+        let length = utf8_char_width((code >> 24) as u8).max(1);
+        if length > writer.len() {
+            return written;
+        }
+
+        let _ = writer.write(&code.to_le_bytes()[..length]).unwrap();
+        written += length;
+        code_points.push(code);
+    }
+
+    written
+}
+
+pub fn hash_context(order: usize, context_size: usize, code_points: &[CodePoint]) -> NGramHash {
+    const BEGIN: CodePoint = CodePoint::MAX;
+    std::iter::repeat_n(BEGIN, order)
+        .chain(code_points.iter().copied())
+        .skip(order + code_points.len() - context_size)
+        .fold(crc32fast::Hasher::new(), |mut acc, code| {
+            acc.write_u32(code);
+            acc
+        })
+        .finalize()
 }
 
 fn is_alpha_numeric_ascii(code: CodePoint) -> bool {
@@ -388,8 +413,16 @@ const UTF8_CHAR_WIDTH: &[u8; 256] = &[
     4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // F
 ];
 
-const fn utf8_char_width(b: u8) -> usize {
+pub const fn utf8_char_width(b: u8) -> usize {
     UTF8_CHAR_WIDTH[b as usize] as usize
+}
+
+pub trait Histogram<'a> {
+    fn sample(&self, random: u64, end_multiplier: f64) -> Option<CodePoint>;
+}
+
+pub trait Table<'a, H: Histogram<'a>> {
+    fn get(&'a self, context_hash: &NGramHash) -> Option<H>;
 }
 
 #[test]

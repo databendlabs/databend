@@ -15,11 +15,14 @@
 use std::alloc::Layout;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_base::obfuscator::hash_context;
+use databend_common_base::obfuscator::utf8_char_width;
+use databend_common_base::obfuscator::CodePoint;
+use databend_common_base::obfuscator::NGramHash;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::ArgType;
@@ -56,6 +59,7 @@ impl AggregateFunction for MarkovTarin {
     fn return_type(&self) -> Result<DataType> {
         Ok(DataType::Array(Box::new(DataType::Tuple(vec![
             UInt32Type::data_type(),                        // hash
+            UInt32Type::data_type(),                        // total
             UInt32Type::data_type(),                        // count_end
             MapType::<UInt32Type, UInt32Type>::data_type(), // buckets
         ]))))
@@ -139,15 +143,17 @@ impl AggregateFunction for MarkovTarin {
         let ColumnBuilder::Tuple(builders) = &mut array_builder.builder else {
             unreachable!()
         };
-        let [hash_builder, end_builder, bucket_builder] = &mut builders[..] else {
+        let [hash_builder, total_builder, end_builder, bucket_builder] = &mut builders[..] else {
             unreachable!()
         };
         let hash_builder = UInt32Type::try_downcast_builder(hash_builder).unwrap();
+        let total_builder = UInt32Type::try_downcast_builder(total_builder).unwrap();
         let end_builder = UInt32Type::try_downcast_builder(end_builder).unwrap();
         let bucket_builder =
             MapType::<UInt32Type, UInt32Type>::try_downcast_builder(bucket_builder).unwrap();
         for (hash, histogram) in model.table.iter() {
             hash_builder.push(*hash);
+            total_builder.push(histogram.total.unwrap());
             end_builder.push(histogram.count_end);
             for (c, w) in histogram.buckets.iter() {
                 bucket_builder.builder.keys.push(*c);
@@ -199,8 +205,11 @@ impl Default for MarkovModelParameters {
 
 #[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
 struct Histogram {
-    count_end: u32,
     buckets: BTreeMap<CodePoint, u32>,
+    count_end: u32,
+
+    #[borsh(skip)]
+    total: Option<u32>,
 }
 
 impl Histogram {
@@ -212,16 +221,8 @@ impl Histogram {
         }
     }
 
-    fn is_empty(&self) -> bool {
-        self.count_end == 0 && self.total() == 0
-    }
-
-    fn total(&self) -> u32 {
-        self.buckets.values().sum()
-    }
-
     fn frequency_cutoff(&mut self, limit: u32) {
-        if self.total() < limit {
+        if self.total.unwrap() < limit {
             self.buckets.clear();
             return;
         }
@@ -230,7 +231,7 @@ impl Histogram {
     }
 
     fn frequency_add(&mut self, n: u32) {
-        if self.total() == 0 {
+        if self.total.unwrap() == 0 {
             return;
         }
         self.count_end += n;
@@ -240,7 +241,7 @@ impl Histogram {
     }
 
     fn frequency_desaturate(&mut self, p: f64) {
-        let total = self.total();
+        let total = self.total.unwrap();
         if total == 0 {
             return;
         }
@@ -257,10 +258,11 @@ impl Histogram {
             *self.buckets.entry(*k).or_default() += *v
         }
     }
-}
 
-type CodePoint = u32;
-type NGramHash = u32;
+    fn update_total(&mut self) {
+        self.total = Some(self.buckets.values().sum())
+    }
+}
 
 #[derive(Default, BorshSerialize, BorshDeserialize)]
 pub struct MarkovModel {
@@ -282,7 +284,7 @@ impl MarkovModel {
             };
 
             for context_size in 0..order {
-                let context_hash = self.hash_context(order, context_size, code_points);
+                let context_hash = hash_context(order, context_size, code_points);
 
                 let histogram = self.table.entry(context_hash).or_default();
                 histogram.add(next_code_point);
@@ -304,47 +306,28 @@ impl MarkovModel {
     }
 
     pub fn finalize(&mut self, params: &MarkovModelParameters) {
-        if params.num_buckets_cutoff > 0 {
-            self.table
-                .retain(|_, histogram| histogram.buckets.len() >= params.num_buckets_cutoff);
-        }
+        self.table.retain(|_, histogram| {
+            if params.num_buckets_cutoff > 0 && histogram.buckets.len() < params.num_buckets_cutoff
+            {
+                return false;
+            }
 
-        if params.frequency_cutoff > 1 {
-            for histogram in self.table.values_mut() {
+            histogram.update_total();
+
+            if params.frequency_cutoff > 0 {
                 histogram.frequency_cutoff(params.frequency_cutoff);
             }
-        }
 
-        if params.frequency_add > 0 {
-            for histogram in self.table.values_mut() {
+            if params.frequency_add > 0 {
                 histogram.frequency_add(params.frequency_add);
             }
-        }
 
-        if params.frequency_desaturate > 0.0 {
-            for histogram in self.table.values_mut() {
+            if params.frequency_desaturate > 0.0 {
                 histogram.frequency_desaturate(params.frequency_desaturate);
             }
-        }
 
-        self.table.retain(|_, histogram| !histogram.is_empty());
-    }
-
-    fn hash_context(
-        &self,
-        order: usize,
-        context_size: usize,
-        code_points: &[CodePoint],
-    ) -> NGramHash {
-        const BEGIN: CodePoint = CodePoint::MAX;
-        std::iter::repeat_n(BEGIN, order)
-            .chain(code_points.iter().copied())
-            .skip(order + code_points.len() - context_size)
-            .fold(crc32fast::Hasher::new(), |mut acc, code| {
-                acc.write_u32(code);
-                acc
-            })
-            .finalize()
+            histogram.count_end != 0 && histogram.total.unwrap() != 0
+        });
     }
 
     fn merge(&mut self, rhs: &mut Self) {
@@ -358,31 +341,6 @@ impl MarkovModel {
             }
         }
     }
-}
-
-// https://tools.ietf.org/html/rfc3629
-const UTF8_CHAR_WIDTH: &[u8; 256] = &[
-    // 1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 0
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 1
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 2
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 3
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 4
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 5
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 6
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 7
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 8
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 9
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // A
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // B
-    0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // C
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, // D
-    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, // E
-    4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // F
-];
-
-const fn utf8_char_width(b: u8) -> usize {
-    UTF8_CHAR_WIDTH[b as usize] as usize
 }
 
 pub fn aggregate_markov_train_function_desc() -> AggregateFunctionDescription {
