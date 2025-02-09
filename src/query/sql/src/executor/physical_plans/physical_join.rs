@@ -37,17 +37,17 @@ pub enum PhysicalJoinType {
 
 // Choose physical join type by join conditions
 pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
-    if !join.equi_conditions.is_empty()
-        && !matches!(
-            join.join_type,
-            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
-        )
-    {
+    let check_asof = matches!(
+        join.join_type,
+        JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+    );
+
+    if !join.equi_conditions.is_empty() && !check_asof {
         // Contain equi condition, use hash join
         return Ok(PhysicalJoinType::Hash);
     }
 
-    if join.build_side_cache_info.is_some() {
+    if join.build_side_cache_info.is_some() && !check_asof {
         // There is a build side cache, use hash join.
         return Ok(PhysicalJoinType::Hash);
     }
@@ -55,8 +55,9 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     let left_rel_expr = RelExpr::with_s_expr(s_expr.child(0)?);
     let right_rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
     let right_stat_info = right_rel_expr.derive_cardinality()?;
-    if matches!(right_stat_info.statistics.precise_cardinality, Some(1))
-        || right_stat_info.cardinality == 1.0
+    if !check_asof
+        && (matches!(right_stat_info.statistics.precise_cardinality, Some(1))
+            || right_stat_info.cardinality == 1.0)
     {
         // If the output rows of build side is equal to 1, we use CROSS JOIN + FILTER instead of RANGE JOIN.
         return Ok(PhysicalJoinType::Hash);
@@ -81,10 +82,7 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             other_conditions,
         ));
     }
-    if matches!(
-        join.join_type,
-        JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
-    ) {
+    if check_asof {
         return Ok(PhysicalJoinType::AsofJoin(
             range_conditions,
             other_conditions,
