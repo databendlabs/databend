@@ -15,8 +15,6 @@
 use core::time::Duration;
 use std::sync::atomic::Ordering;
 
-use databend_common_arrow::arrow::bitmap::Bitmap;
-use databend_common_arrow::arrow::bitmap::MutableBitmap;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
@@ -429,7 +427,7 @@ impl RangeJoinState {
                 .value
                 .try_downcast::<UInt64Type>()
                 .unwrap();
-            if let ValueRef::Column(col) = column.as_ref() {
+            if let Value::Column(col) = column {
                 for val in UInt64Type::iter_column(&col) {
                     if !left_match.is_empty() {
                         left_match.set(val as usize, true);

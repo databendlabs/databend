@@ -40,6 +40,7 @@ use std::iter::TrustedLen;
 use std::ops::Range;
 
 pub use databend_common_io::deserialize_bitmap;
+pub use databend_common_base::base::OrderedFloat;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
@@ -196,7 +197,7 @@ impl DataType {
             DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MAX)),
             DataType::Date => Ok(Scalar::Date(DATE_MAX)),
             DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
-                ordered_float::OrderedFloat(f32::INFINITY),
+                OrderedFloat(f32::INFINITY),
             ))),
             DataType::Number(NumberDataType::Int32) => {
                 Ok(Scalar::Number(NumberScalar::Int32(i32::MAX)))
@@ -208,7 +209,7 @@ impl DataType {
                 Ok(Scalar::Number(NumberScalar::Int8(i8::MAX)))
             }
             DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
-                ordered_float::OrderedFloat(f64::INFINITY),
+                OrderedFloat(f64::INFINITY),
             ))),
             DataType::Number(NumberDataType::Int64) => {
                 Ok(Scalar::Number(NumberScalar::Int64(i64::MAX)))
@@ -224,7 +225,7 @@ impl DataType {
             DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MIN)),
             DataType::Date => Ok(Scalar::Date(DATE_MIN)),
             DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
-                ordered_float::OrderedFloat(f32::NEG_INFINITY),
+                OrderedFloat(f32::NEG_INFINITY),
             ))),
             DataType::Number(NumberDataType::Int32) => {
                 Ok(Scalar::Number(NumberScalar::Int32(i32::MIN)))
@@ -236,7 +237,7 @@ impl DataType {
                 Ok(Scalar::Number(NumberScalar::Int8(i8::MIN)))
             }
             DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
-                ordered_float::OrderedFloat(f64::NEG_INFINITY),
+                OrderedFloat(f64::NEG_INFINITY),
             ))),
             DataType::Number(NumberDataType::Int64) => {
                 Ok(Scalar::Number(NumberScalar::Int64(i64::MIN)))

@@ -602,7 +602,7 @@ pub fn bind_window_function_info(
         child
     };
 
-    let default_nulls_first = self.ctx.get_settings().get_nulls_first();
+    let default_nulls_first = ctx.get_settings().get_nulls_first();
 
     let mut sort_items: Vec<SortItem> = vec![];
     if !window_plan.partition_by.is_empty() {
