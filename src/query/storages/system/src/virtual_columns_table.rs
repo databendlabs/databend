@@ -84,11 +84,22 @@ impl AsyncSystemTable for VirtualColumnsTable {
                             virtual_column_meta
                                 .virtual_columns
                                 .iter()
-                                .map(|(name, ty)| {
-                                    if ty.remove_nullable() == TableDataType::Variant {
-                                        name.to_string()
+                                .map(|virtual_field| {
+                                    let virtual_expr = if virtual_field.data_type.remove_nullable()
+                                        == TableDataType::Variant
+                                    {
+                                        virtual_field.expr.to_string()
                                     } else {
-                                        format!("{}::{}", name, ty.remove_nullable())
+                                        format!(
+                                            "{}::{}",
+                                            virtual_field.expr,
+                                            virtual_field.data_type.remove_nullable()
+                                        )
+                                    };
+                                    if let Some(alias_name) = &virtual_field.alias_name {
+                                        format!("{} AS {}", virtual_expr, alias_name)
+                                    } else {
+                                        virtual_expr
                                     }
                                 })
                                 .join(", "),

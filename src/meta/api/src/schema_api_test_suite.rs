@@ -126,6 +126,7 @@ use databend_common_meta_app::schema::UpdateVirtualColumnReq;
 use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnIdent;
+use databend_common_meta_app::schema::VirtualField;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
 use databend_common_meta_app::KeyWithTenant;
@@ -6631,25 +6632,30 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec![
-                    (
-                        "variant:k1".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant[1]".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant:k1:k2".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::String)),
-                    ),
-                    (
-                        "variant:k1:k3".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                    VirtualField {
+                        expr: "variant:k1".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[1]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k2".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
                             NumberDataType::UInt64,
                         ))),
-                    ),
+                        alias_name: None,
+                    },
                 ],
+                auto_generated: false,
             };
 
             mt.create_virtual_column(req.clone()).await?;
@@ -6659,25 +6665,30 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec![
-                    (
-                        "variant:k1".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant[1]".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant:k1:k2".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::String)),
-                    ),
-                    (
-                        "variant:k1:k3".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                    VirtualField {
+                        expr: "variant:k1".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[1]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k2".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
                             NumberDataType::UInt64,
                         ))),
-                    ),
+                        alias_name: None,
+                    },
                 ],
+                auto_generated: false,
             };
 
             let res = mt.create_virtual_column(req).await;
@@ -6691,24 +6702,28 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                (
-                    "variant:k1".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Variant))
-                ),
-                (
-                    "variant[1]".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Variant))
-                ),
-                (
-                    "variant:k1:k2".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::String)),
-                ),
-                (
-                    "variant:k1:k3".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                VirtualField {
+                    expr: "variant:k1".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant[1]".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k1:k2".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k1:k3".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
                         NumberDataType::UInt64
                     ))),
-                ),
+                    alias_name: None
+                },
             ]);
 
             let req = ListVirtualColumnsReq::new(&tenant, Some(u64::MAX));
@@ -6723,25 +6738,30 @@ impl SchemaApiTestSuite {
                 if_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec![
-                    (
-                        "variant:k2".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant[2]".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant:k2:k3".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::String)),
-                    ),
-                    (
-                        "variant:k2:k4".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                    VirtualField {
+                        expr: "variant:k2".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[2]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k2:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k2:k4".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
                             NumberDataType::UInt64,
                         ))),
-                    ),
+                        alias_name: None,
+                    },
                 ],
+                auto_generated: false,
             };
 
             mt.update_virtual_column(req).await?;
@@ -6754,24 +6774,28 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                (
-                    "variant:k2".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Variant))
-                ),
-                (
-                    "variant[2]".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Variant))
-                ),
-                (
-                    "variant:k2:k3".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::String)),
-                ),
-                (
-                    "variant:k2:k4".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                VirtualField {
+                    expr: "variant:k2".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant[2]".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k2:k3".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k2:k4".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
                         NumberDataType::UInt64
                     ))),
-                ),
+                    alias_name: None
+                },
             ]);
         }
 
@@ -6799,25 +6823,30 @@ impl SchemaApiTestSuite {
                 if_exists: false,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec![
-                    (
-                        "variant:k3".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant[3]".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant:k3:k4".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::String)),
-                    ),
-                    (
-                        "variant:k3:k5".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                    VirtualField {
+                        expr: "variant:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[3]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k3:k4".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k3:k5".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
                             NumberDataType::UInt64,
                         ))),
-                    ),
+                        alias_name: None,
+                    },
                 ],
+                auto_generated: false,
             };
 
             let res = mt.update_virtual_column(req).await;
@@ -6830,25 +6859,30 @@ impl SchemaApiTestSuite {
                 create_option: CreateOption::Create,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec![
-                    (
-                        "variant:k1".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant[1]".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant:k1:k4".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::String)),
-                    ),
-                    (
-                        "variant:k1:k5".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Number(
+                    VirtualField {
+                        expr: "variant:k1".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant[1]".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k4".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k1:k5".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
                             NumberDataType::UInt64,
                         ))),
-                    ),
+                        alias_name: None,
+                    },
                 ],
+                auto_generated: false,
             };
 
             mt.create_virtual_column(req.clone()).await?;
@@ -6858,39 +6892,46 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                (
-                    "variant:k1".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Variant))
-                ),
-                (
-                    "variant[1]".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Variant))
-                ),
-                (
-                    "variant:k1:k4".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::String)),
-                ),
-                (
-                    "variant:k1:k5".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Number(
+                VirtualField {
+                    expr: "variant:k1".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant[1]".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k1:k4".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k1:k5".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
                         NumberDataType::UInt64
                     ))),
-                ),
+                    alias_name: None
+                },
             ]);
 
             let req = CreateVirtualColumnReq {
                 create_option: CreateOption::CreateOrReplace,
                 name_ident: name_ident.clone(),
                 virtual_columns: vec![
-                    (
-                        "variant:k2".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::Variant)),
-                    ),
-                    (
-                        "variant:k3".to_string(),
-                        TableDataType::Nullable(Box::new(TableDataType::String)),
-                    ),
+                    VirtualField {
+                        expr: "variant:k2".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                        alias_name: None,
+                    },
+                    VirtualField {
+                        expr: "variant:k3".to_string(),
+                        data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                        alias_name: None,
+                    },
                 ],
+                auto_generated: false,
             };
 
             mt.create_virtual_column(req.clone()).await?;
@@ -6900,14 +6941,16 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
-                (
-                    "variant:k2".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::Variant))
-                ),
-                (
-                    "variant:k3".to_string(),
-                    TableDataType::Nullable(Box::new(TableDataType::String)),
-                )
+                VirtualField {
+                    expr: "variant:k2".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+                    alias_name: None
+                },
+                VirtualField {
+                    expr: "variant:k3".to_string(),
+                    data_type: TableDataType::Nullable(Box::new(TableDataType::String)),
+                    alias_name: None
+                },
             ]);
         }
 

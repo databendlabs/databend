@@ -119,6 +119,31 @@ impl DataType {
         }
     }
 
+    pub fn nest_wrap_nullable(&self) -> Self {
+        match self {
+            DataType::Null => self.clone(),
+            DataType::Nullable(box inner_ty) => inner_ty.nest_wrap_nullable(),
+            DataType::Array(box inner_ty) => Self::Nullable(Box::new(Self::Array(Box::new(
+                inner_ty.nest_wrap_nullable(),
+            )))),
+            DataType::Map(box DataType::Tuple(inner_tys)) if inner_tys.len() == 2 => {
+                let key_ty = inner_tys[0].clone();
+                let val_ty = inner_tys[1].nest_wrap_nullable();
+                Self::Nullable(Box::new(Self::Map(Box::new(Self::Tuple(vec![
+                    key_ty, val_ty,
+                ])))))
+            }
+            DataType::Tuple(inner_tys) => {
+                let new_inner_tys = inner_tys
+                    .iter()
+                    .map(|inner_ty| inner_ty.nest_wrap_nullable())
+                    .collect();
+                Self::Nullable(Box::new(Self::Tuple(new_inner_tys)))
+            }
+            _ => Self::Nullable(Box::new(self.clone())),
+        }
+    }
+
     pub fn is_nullable_or_null(&self) -> bool {
         matches!(self, &DataType::Nullable(_) | &DataType::Null)
     }

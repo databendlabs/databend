@@ -165,6 +165,8 @@ impl ModifyTableColumnInterpreter {
                     let default_expr = default_expr.to_string();
                     new_schema.fields[i].default_expr = Some(default_expr);
                     let _ = field_default_value(self.ctx.clone(), &new_schema.fields[i])?;
+                } else {
+                    new_schema.fields[i].default_expr = None;
                 }
                 if old_field.data_type != field.data_type {
                     // Check if this column is referenced by computed columns.

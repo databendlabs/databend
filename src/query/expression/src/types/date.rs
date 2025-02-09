@@ -261,10 +261,10 @@ impl ArgType for DateType {
 #[inline]
 pub fn string_to_date(
     date_str: impl AsRef<[u8]>,
-    jiff_tz: &TimeZone,
+    tz: &TimeZone,
 ) -> databend_common_exception::Result<Date> {
     let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
-    match reader.read_date_text(jiff_tz) {
+    match reader.read_date_text(tz) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Ok(d),
             Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),

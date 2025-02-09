@@ -742,6 +742,33 @@ evaluation (internal):
 +--------+----------------------------------------------+
 
 
+ast            : ltrim(' aa','')
+raw expr       : ltrim(' aa', '')
+checked expr   : ltrim<String, String>(" aa", "")
+optimized expr : " aa"
+output type    : String
+output domain  : {" aa"..=" aa"}
+output         : ' aa'
+
+
+ast            : ltrim('\taa')
+raw expr       : ltrim('	aa')
+checked expr   : ltrim<String>("\taa")
+optimized expr : "\taa"
+output type    : String
+output domain  : {"\taa"..="\taa"}
+output         : '	aa'
+
+
+ast            : ltrim('#000000123','0#')
+raw expr       : ltrim('#000000123', '0#')
+checked expr   : ltrim<String, String>("#000000123", "0#")
+optimized expr : "123"
+output type    : String
+output domain  : {"123"..="123"}
+output         : '123'
+
+
 ast            : rtrim('   abc   ')
 raw expr       : rtrim('   abc   ')
 checked expr   : rtrim<String>("   abc   ")
@@ -817,6 +844,33 @@ evaluation (internal):
 | a      | StringColumn[abc,    abc,    abc   , abc   ] |
 | Output | StringColumn[abc,    abc,    abc, abc]       |
 +--------+----------------------------------------------+
+
+
+ast            : rtrim('aa ','')
+raw expr       : rtrim('aa ', '')
+checked expr   : rtrim<String, String>("aa ", "")
+optimized expr : "aa "
+output type    : String
+output domain  : {"aa "..="aa "}
+output         : 'aa '
+
+
+ast            : rtrim('aa\t')
+raw expr       : rtrim('aa	')
+checked expr   : rtrim<String>("aa\t")
+optimized expr : "aa\t"
+output type    : String
+output domain  : {"aa\t"..="aa\t"}
+output         : 'aa	'
+
+
+ast            : rtrim('$125.00','0.')
+raw expr       : rtrim('$125.00', '0.')
+checked expr   : rtrim<String, String>("$125.00", "0.")
+optimized expr : "$125"
+output type    : String
+output domain  : {"$125"..="$125"}
+output         : '$125'
 
 
 ast            : trim_leading('aaabbaaa', 'a')
@@ -1356,6 +1410,24 @@ evaluation (internal):
 | a      | StringColumn[abc,    abc,    abc   , abc   ] |
 | Output | StringColumn[abc, abc, abc, abc]             |
 +--------+----------------------------------------------+
+
+
+ast            : trim('\ta\t')
+raw expr       : trim('	a	')
+checked expr   : trim<String>("\ta\t")
+optimized expr : "\ta\t"
+output type    : String
+output domain  : {"\ta\t"..="\ta\t"}
+output         : '	a	'
+
+
+ast            : trim('*-*ABC-*-','*-')
+raw expr       : trim('*-*ABC-*-', '*-')
+checked expr   : trim<String, String>("*-*ABC-*-", "*-")
+optimized expr : "ABC"
+output type    : String
+output domain  : {"ABC"..="ABC"}
+output         : 'ABC'
 
 
 ast            : trim(both 'a' from 'aaabbaaa')

@@ -142,7 +142,7 @@ fn replace_column_binding(
                     column.column.data_type.clone(),
                     Visibility::Visible,
                 )
-                .virtual_computed_expr(column.column.virtual_computed_expr.clone())
+                .virtual_expr(column.column.virtual_expr.clone())
                 .build();
                 column.column = new_column;
             }
