@@ -190,7 +190,7 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         range_conditions: &[ScalarExpr],
         other_conditions: &mut Vec<ScalarExpr>,
-    ) -> Result<(WindowFunc, ScalarExpr, DataType), ErrorCode> {
+    ) -> Result<(WindowFunc, ScalarExpr, DataType)> {
         let right_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
         let left_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
 
@@ -360,6 +360,7 @@ impl PhysicalPlanBuilder {
         *window_index = index;
 
         let window_info = WindowFunctionInfo {
+            display_name: window.display_name.clone(),
             span: window.span,
             index,
             partition_by_items,
