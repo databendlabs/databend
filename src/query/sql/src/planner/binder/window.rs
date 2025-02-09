@@ -58,7 +58,7 @@ impl Binder {
         window_info: &WindowFunctionInfo,
         child: SExpr,
     ) -> Result<SExpr> {
-        bind_window_function_info(&self.ctx, window_info, child)    
+        bind_window_function_info(&self.ctx, window_info, child)
     }
 
     pub(super) fn analyze_window_definition(

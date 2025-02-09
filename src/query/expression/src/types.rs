@@ -39,8 +39,8 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ops::Range;
 
-pub use databend_common_io::deserialize_bitmap;
 pub use databend_common_base::base::OrderedFloat;
+pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;

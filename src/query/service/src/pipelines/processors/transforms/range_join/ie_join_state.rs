@@ -428,7 +428,7 @@ impl RangeJoinState {
                 .try_downcast::<UInt64Type>()
                 .unwrap();
             if let Value::Column(col) = column {
-                for val in UInt64Type::iter_column(&col) {
+                for val in UInt64Type::iter_column(col) {
                     if !left_match.is_empty() {
                         left_match.set(val as usize, true);
                     }
