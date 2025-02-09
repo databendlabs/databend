@@ -375,7 +375,8 @@ async fn main() -> anyhow::Result<()> {
         },
         ..Default::default()
     };
-    let _guards = init_logging("metactl", &log_config, BTreeMap::new());
+    let guards = init_logging("metactl", &log_config, BTreeMap::new());
+    Box::new(guards).leak();
 
     match app.command {
         Some(ref cmd) => match cmd {

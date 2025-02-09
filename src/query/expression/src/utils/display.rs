@@ -229,7 +229,7 @@ impl Display for ScalarRef<'_> {
             ScalarRef::String(s) => write!(f, "'{s}'"),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
-            ScalarRef::Interval(interval) => write!(f, "{}", interval_to_string(interval)),
+            ScalarRef::Interval(interval) => write!(f, "'{}'", interval_to_string(interval)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;

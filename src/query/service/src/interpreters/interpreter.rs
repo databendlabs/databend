@@ -27,7 +27,6 @@ use databend_common_base::base::short_sql;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -50,6 +49,7 @@ use log::info;
 use md5::Digest;
 use md5::Md5;
 
+use super::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
 use super::InterpreterMetrics;
@@ -359,12 +359,4 @@ fn need_acquire_lock(ctx: Arc<QueryContext>, stmt: &Statement) -> bool {
         ),
         _ => false,
     }
-}
-
-fn hook_clear_m_cte_temp_table(query_ctx: &Arc<QueryContext>) -> Result<()> {
-    let _ = GlobalIORuntime::instance().block_on(async move {
-        query_ctx.drop_m_cte_temp_table().await?;
-        Ok(())
-    });
-    Ok(())
 }

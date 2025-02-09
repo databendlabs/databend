@@ -932,6 +932,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             virtual_columns: req.virtual_columns.clone(),
             created_on: Utc::now(),
             updated_on: None,
+            auto_generated: req.auto_generated,
         };
 
         self.insert_name_value_with_create_option(
@@ -963,6 +964,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             |mut meta| {
                 meta.virtual_columns = req.virtual_columns.clone();
                 meta.updated_on = Some(Utc::now());
+                meta.auto_generated = req.auto_generated;
                 Some((meta, None))
             },
             not_found,

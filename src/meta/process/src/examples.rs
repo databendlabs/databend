@@ -61,11 +61,12 @@ impl Default for RaftConfig {
 async fn upgrade_09() -> anyhow::Result<()> {
     let config = Config::parse();
 
-    let _guards = init_logging(
+    let guards = init_logging(
         "databend-meta-upgrade-09",
         &LogConfig::default(),
         BTreeMap::new(),
     );
+    Box::new(guards).leak();
 
     eprintln!("config: {}", pretty(&config)?);
 
