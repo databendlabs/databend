@@ -166,6 +166,19 @@ impl WindowPartitionBuffer {
         Ok(vec![])
     }
 
+    // Restore data blocks from buffer and spilled files.
+    pub async fn restore_with_id(&mut self) -> Result<(usize, Vec<DataBlock>)> {
+        while self.next_to_restore_partition_id + 1 < self.num_partitions as isize {
+            self.next_to_restore_partition_id += 1;
+            let partition_id = self.next_to_restore_partition_id as usize;
+            let result = self.restore_by_id(partition_id).await?;
+            if !result.is_empty() {
+                return Ok((partition_id, result));
+            }
+        }
+        Ok((0, vec![]))
+    }
+
     pub async fn restore_by_id(&mut self, partition_id: usize) -> Result<Vec<DataBlock>> {
         // Restore large partitions from spilled files.
         let mut result = self.spiller.read_spilled_partition(&partition_id).await?;
