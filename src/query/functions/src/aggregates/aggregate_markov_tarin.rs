@@ -19,8 +19,7 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
-use databend_common_base::obfuscator::hash_context;
-use databend_common_base::obfuscator::utf8_char_width;
+use databend_common_base::obfuscator::consume;
 use databend_common_base::obfuscator::CodePoint;
 use databend_common_base::obfuscator::NGramHash;
 use databend_common_exception::ErrorCode;
@@ -145,7 +144,7 @@ impl AggregateFunction for MarkovTarin {
         let ColumnBuilder::Tuple(builders) = &mut array_builder.builder else {
             unreachable!()
         };
-        let [hash_builder, total_builder, end_builder, ColumnBuilder::Array(box bucket_builder)] =
+        let [hash_builder, total_builder, end_builder, ColumnBuilder::Map(box bucket_builder)] =
             &mut builders[..]
         else {
             unreachable!()
@@ -201,6 +200,7 @@ impl fmt::Display for MarkovTarin {
 pub struct MarkovModelParameters {
     pub order: usize,
 
+    // We can consider separating the process of modifying the model, so we don't need these parameters here
     pub frequency_cutoff: u32,
     pub num_buckets_cutoff: usize,
     pub frequency_add: u32,
@@ -238,11 +238,6 @@ impl Histogram {
     }
 
     fn frequency_cutoff(&mut self, limit: u32) {
-        if self.total.unwrap() < limit {
-            self.buckets.clear();
-            return;
-        }
-
         self.buckets.retain(|_, count| *count >= limit);
     }
 
@@ -281,58 +276,35 @@ impl Histogram {
 }
 
 #[derive(Default, BorshSerialize, BorshDeserialize)]
-pub struct MarkovModel {
+struct MarkovModel {
     table: BTreeMap<NGramHash, Histogram>,
 }
 
 impl MarkovModel {
-    pub fn consume(&mut self, order: usize, data: &[u8], code_points: &mut Vec<CodePoint>) {
-        code_points.clear();
-
-        let mut pos = 0;
-        loop {
-            let next_code_point = if pos < data.len() {
-                let (code, n) = Self::read_code_point(&data[pos..]);
-                pos += n;
-                Some(code)
-            } else {
-                None
-            };
-
-            for context_size in 0..order {
-                let context_hash = hash_context(order, context_size, code_points);
-
+    fn consume(&mut self, order: usize, data: &[u8], code_points: &mut Vec<CodePoint>) {
+        consume(
+            order,
+            data,
+            |context_hash, code| {
                 let histogram = self.table.entry(context_hash).or_default();
-                histogram.add(next_code_point);
-            }
-
-            if let Some(code) = next_code_point {
-                code_points.push(code);
-            } else {
-                break;
-            };
-        }
+                histogram.add(code);
+            },
+            code_points,
+        )
     }
 
-    fn read_code_point(data: &[u8]) -> (CodePoint, usize) {
-        let length = utf8_char_width(data[0]).max(1).min(data.len());
-        let mut buf = [0u8; 4];
-        buf[..length].copy_from_slice(&data[..length]);
-        (u32::from_le_bytes(buf), length)
-    }
-
-    pub fn finalize(&mut self, params: &MarkovModelParameters) {
-        self.table.retain(|_, histogram| {
+    fn finalize(&mut self, params: &MarkovModelParameters) {
+        for histogram in self.table.values_mut() {
             if params.num_buckets_cutoff > 0 && histogram.buckets.len() < params.num_buckets_cutoff
             {
-                return false;
+                histogram.buckets.clear();
             }
-
-            histogram.update_total();
 
             if params.frequency_cutoff > 0 {
                 histogram.frequency_cutoff(params.frequency_cutoff);
             }
+
+            histogram.update_total();
 
             if params.frequency_add > 0 {
                 histogram.frequency_add(params.frequency_add);
@@ -341,9 +313,7 @@ impl MarkovModel {
             if params.frequency_desaturate > 0.0 {
                 histogram.frequency_desaturate(params.frequency_desaturate);
             }
-
-            histogram.count_end != 0 && histogram.total.unwrap() != 0
-        });
+        }
     }
 
     fn merge(&mut self, rhs: &mut Self) {

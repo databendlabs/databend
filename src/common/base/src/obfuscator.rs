@@ -109,10 +109,6 @@ impl MapHistogram {
         }
     }
 
-    fn is_empty(&self) -> bool {
-        self.total + self.count_end == 0
-    }
-
     fn frequency_cutoff(&mut self, limit: usize) {
         if self.total < limit {
             self.buckets.clear();
@@ -169,6 +165,10 @@ impl<'a> Histogram<'a> for &'a MapHistogram {
             })
             .map(|(code, _)| *code)
     }
+
+    fn is_empty(&self) -> bool {
+        self.total == 0 && self.count_end == 0
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -186,44 +186,25 @@ impl MarkovModel {
     }
 
     pub fn consume(&mut self, data: &[u8], code_points: &mut Vec<CodePoint>) {
-        code_points.clear();
-
-        let mut pos = 0;
-        loop {
-            let next_code_point = if pos < data.len() {
-                let (code, n) = Self::read_code_point(&data[pos..]);
-                pos += n;
-                Some(code)
-            } else {
-                None
-            };
-
-            for context_size in 0..self.params.order {
-                let context_hash = hash_context(self.params.order, context_size, code_points);
-
+        consume(
+            self.params.order,
+            data,
+            |context_hash, code| {
                 let histogram = self.table.entry(context_hash).or_default();
-                histogram.add(next_code_point);
-            }
-
-            if let Some(code) = next_code_point {
-                code_points.push(code);
-            } else {
-                break;
-            };
-        }
-    }
-
-    fn read_code_point(data: &[u8]) -> (CodePoint, usize) {
-        let length = utf8_char_width(data[0]).max(1).min(data.len());
-        let mut buf = [0u8; 4];
-        buf[..length].copy_from_slice(&data[..length]);
-        (u32::from_le_bytes(buf), length)
+                histogram.add(code);
+            },
+            code_points,
+        );
     }
 
     pub fn finalize(&mut self) {
         if self.params.num_buckets_cutoff > 0 {
-            self.table
-                .retain(|_, histogram| histogram.buckets.len() >= self.params.num_buckets_cutoff);
+            for histogram in self.table.values_mut() {
+                if histogram.buckets.len() < self.params.num_buckets_cutoff {
+                    histogram.buckets.clear();
+                    histogram.total = 0;
+                }
+            }
         }
 
         if self.params.frequency_cutoff > 1 {
@@ -243,12 +224,6 @@ impl MarkovModel {
                 histogram.frequency_desaturate(self.params.frequency_desaturate);
             }
         }
-
-        self.table.retain(|_, histogram| !histogram.is_empty());
-    }
-
-    pub fn is_valid(&self) -> bool {
-        !self.table.is_empty()
     }
 
     pub fn generate_writer(
@@ -258,7 +233,7 @@ impl MarkovModel {
         seed: u64,
         determinator_data: &[u8],
         code_points: &mut Vec<CodePoint>,
-    ) -> usize {
+    ) -> Option<usize> {
         generate(
             self,
             self.params.order,
@@ -277,7 +252,7 @@ impl MarkovModel {
         desired_size: usize,
         seed: u64,
         determinator_data: &[u8],
-    ) -> Vec<u8> {
+    ) -> Option<Vec<u8>> {
         let mut data = vec![0; max_size];
         let mut code_points = Vec::new();
 
@@ -287,15 +262,49 @@ impl MarkovModel {
             seed,
             determinator_data,
             &mut code_points,
-        );
+        )?;
         data.truncate(n);
-        data
+        Some(data)
     }
+}
+
+fn read_code_point(data: &[u8]) -> (CodePoint, usize) {
+    let length = utf8_char_width(data[0]).max(1).min(data.len());
+    let mut buf = [0u8; 4];
+    buf[..length].copy_from_slice(&data[..length]);
+    (u32::from_le_bytes(buf), length)
 }
 
 impl<'a> Table<'a, &'a MapHistogram> for MarkovModel {
     fn get(&'a self, context_hash: &NGramHash) -> Option<&'a MapHistogram> {
         self.table.get(context_hash)
+    }
+}
+
+pub fn consume<F>(order: usize, data: &[u8], mut add_code: F, code_points: &mut Vec<CodePoint>)
+where F: FnMut(NGramHash, Option<CodePoint>) {
+    code_points.clear();
+
+    let mut pos = 0;
+    loop {
+        let next_code_point = if pos < data.len() {
+            let (code, n) = read_code_point(&data[pos..]);
+            pos += n;
+            Some(code)
+        } else {
+            None
+        };
+
+        for context_size in 0..order {
+            let context_hash = hash_context(order, context_size, code_points);
+            add_code(context_hash, next_code_point);
+        }
+
+        if let Some(code) = next_code_point {
+            code_points.push(code);
+        } else {
+            break;
+        };
     }
 }
 
@@ -308,11 +317,12 @@ pub fn generate<'a, T, H>(
     determinator_sliding_window_size: usize,
     determinator_data: &[u8],
     code_points: &mut Vec<CodePoint>,
-) -> usize
+) -> Option<usize>
 where
     T: Table<'a, H>,
     H: Histogram<'a>,
 {
+    use std::ops::ControlFlow;
     code_points.clear();
 
     let determinator_size = determinator_data.len();
@@ -321,11 +331,19 @@ where
     let mut written = 0;
 
     while !writer.is_empty() {
-        let Some(histogram) = (1..=order).rev().find_map(|size| {
+        let histogram = (1..=order).try_rfold(None, |prev, size| {
             let context_hash = hash_context(order, size, code_points);
-            table.get(&context_hash)
-        }) else {
-            panic!("Logical error in markov model")
+            match table.get(&context_hash) {
+                None => ControlFlow::Continue(prev),
+                Some(v) if v.is_empty() => ControlFlow::Continue(Some(v)),
+                Some(v) => ControlFlow::Break(v),
+            }
+        });
+
+        let histogram = match histogram {
+            ControlFlow::Break(v) => v,
+            ControlFlow::Continue(Some(v)) => v,
+            ControlFlow::Continue(None) => return None, // logical error in markov model,
         };
 
         let mut hash = std::hash::DefaultHasher::new();
@@ -352,18 +370,18 @@ where
         };
 
         let Some(code) = histogram.sample(determinator, end_probability_multiplier) else {
-            return written;
+            return Some(written);
         };
 
         // Heuristic: break at ASCII non-alnum code point.
         // This allows to be close to desired_size but not break natural looking words.
         if greater_than_desired_size && code < 128 && !is_alpha_numeric_ascii(code) {
-            return written;
+            return Some(written);
         }
 
         let length = utf8_char_width((code >> 24) as u8).max(1);
         if length > writer.len() {
-            return written;
+            return Some(written);
         }
 
         let _ = writer.write(&code.to_le_bytes()[..length]).unwrap();
@@ -371,10 +389,10 @@ where
         code_points.push(code);
     }
 
-    written
+    Some(written)
 }
 
-pub fn hash_context(order: usize, context_size: usize, code_points: &[CodePoint]) -> NGramHash {
+fn hash_context(order: usize, context_size: usize, code_points: &[CodePoint]) -> NGramHash {
     const BEGIN: CodePoint = CodePoint::MAX;
     std::iter::repeat_n(BEGIN, order)
         .chain(code_points.iter().copied())
@@ -413,12 +431,14 @@ const UTF8_CHAR_WIDTH: &[u8; 256] = &[
     4, 4, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // F
 ];
 
-pub const fn utf8_char_width(b: u8) -> usize {
+const fn utf8_char_width(b: u8) -> usize {
     UTF8_CHAR_WIDTH[b as usize] as usize
 }
 
 pub trait Histogram<'a> {
     fn sample(&self, random: u64, end_multiplier: f64) -> Option<CodePoint>;
+
+    fn is_empty(&self) -> bool;
 }
 
 pub trait Table<'a, H: Histogram<'a>> {
@@ -450,11 +470,11 @@ fn xxx2() {
     let desired_size = 15;
     let seed = 0;
 
-    let got = model.generate(10, desired_size, seed, b"buckets");
+    let got = model.generate(10, desired_size, seed, b"buckets").unwrap();
     let data = String::from_utf8_lossy(&got);
     println!("{data}");
 
-    let got = model.generate(10, desired_size, seed, b"buckets");
+    let got = model.generate(10, desired_size, seed, b"buckets").unwrap();
     let data = String::from_utf8_lossy(&got);
     println!("{data}");
 }

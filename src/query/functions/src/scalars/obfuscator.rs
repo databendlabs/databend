@@ -19,9 +19,10 @@ use databend_common_base::obfuscator::NGramHash;
 use databend_common_base::obfuscator::Table;
 use databend_common_column::buffer::Buffer;
 use databend_common_expression::types::map::KvPair;
-use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_expression::types::ArgType;
 use databend_common_expression::types::ArrayColumn;
 use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::NumberColumn;
@@ -61,6 +62,10 @@ impl Histogram<'_> for ColumnHistogram {
             })
             .map(|(code, _)| *code)
     }
+
+    fn is_empty(&self) -> bool {
+        self.total == 0 && self.count_end == 0
+    }
 }
 
 struct ColumnTable {
@@ -85,10 +90,7 @@ impl Table<'_, ColumnHistogram> for ColumnTable {
 
 impl ColumnTable {
     fn try_new(column: Column) -> Option<Self> {
-        let Column::Array(box array) = column else {
-            return None;
-        };
-        let Column::Tuple(mut tuple) = array.values else {
+        let Column::Tuple(mut tuple) = column else {
             return None;
         };
         if tuple.len() != 4 {
@@ -115,30 +117,59 @@ impl ColumnTable {
     }
 }
 
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+struct MarkovModelParameters {
+    order: usize,
+    seed: u64,
+    sliding_window_size: usize,
+}
+
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_3_arg::<ArrayType<GenericType<0>>,StringType,StringType,StringType,_,_>(
         "markov_generate",
-         |_,_,_,_|FunctionDomain::Full,
-          vectorize_with_builder_3_arg::<ArrayType<GenericType<0>>,StringType,StringType,_>(|model,_params,determinator,output:&mut StringColumnBuilder,ctx|{
-            let Some(table) = ColumnTable::try_new(model) else {
-                ctx.set_error(output.len(), "invalid model");
+         |_,_,_,_|FunctionDomain::MayThrow,
+          vectorize_with_builder_3_arg::<ArrayType<GenericType<0>>,StringType,StringType,StringType>(|model,params,determinator,output,ctx|{
+            let Some(table) = ColumnTable::try_new(model.clone()) else {
+                let expect = DataType::Array(Box::new(DataType::Tuple(vec![
+                    UInt32Type::data_type(),                        // hash
+                    UInt32Type::data_type(),                        // total
+                    UInt32Type::data_type(),                        // count_end
+                    MapType::<UInt32Type, UInt32Type>::data_type(), // buckets
+                ])));
+                let got = DataType::Array(Box::new(model.data_type()));
+                ctx.set_error(output.len(), format!("invalid model expect {expect:?}, but got {got:?}"));
                 output.commit_row();
                 return;
             };
-            let order = 5;
-            let seed = 0;
-            let determinator_sliding_window_size = 8;
+
+            let Ok(MarkovModelParameters{
+                order,
+                seed,
+                sliding_window_size,
+            }) = serde_json::from_str(params) else {
+                ctx.set_error(output.len(), "invalid params");
+                output.commit_row();
+                return;
+            };
+            if order == 0 {
+                ctx.set_error(output.len(), "invalid order");
+                output.commit_row();
+                return;
+            }
+
             let desired_size = determinator.chars().count();
             let mut writer = vec![0;determinator.len()*2];
             let mut code_points = Vec::new();
-            let n = generate(&table, order, seed, &mut writer, desired_size, determinator_sliding_window_size, determinator.as_bytes(), &mut code_points);
-            writer.truncate(n);
-            output.put_and_commit(std::str::from_utf8(&writer).unwrap());
+            match generate(&table, order, seed, &mut writer, desired_size, sliding_window_size, determinator.as_bytes(), &mut code_points) {
+                Some(n) => {
+                    writer.truncate(n);
+                    output.put_and_commit(std::str::from_utf8(&writer).unwrap());
+                },
+                None => {
+                    ctx.set_error(output.len(), "logical error in markov model");
+                    output.commit_row();
+                },
+            }
           })
         );
-}
-
-#[test]
-fn xxx() {
-    println!("x")
 }
