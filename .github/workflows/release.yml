@@ -40,6 +40,7 @@ jobs:
     outputs:
       version: ${{ steps.bump.outputs.tag }}
       sha: ${{ steps.bump.outputs.sha }}
+      type: ${{ steps.bump.outputs.type }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,7 +62,7 @@ jobs:
           # which is not possible for github actions token
           GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
         run: |
-          case "${{ inputs.type }}" in
+          case "${{ steps.bump.outputs.type }}" in
             nightly)
               gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --prerelease --draft
               ;;
@@ -71,6 +72,9 @@ jobs:
             patch)
               gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --prerelease --draft
               ;;
+            *)
+              echo "Invalid release type: ${{ steps.bump.outputs.type }}"
+              exit 1
           esac
 
   changelog:
