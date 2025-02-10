@@ -138,6 +138,11 @@ impl TransformHilbertPartitionCollect {
         let partitions: Vec<usize> = (0..num_partitions)
             .filter(|&partition| partition % num_processors == processor_id)
             .collect();
+        log::warn!(
+            "collect processor id: {}, partitions: {:?}",
+            processor_id,
+            partitions
+        );
 
         // Map each partition id to new partition id.
         let mut partition_id = vec![0; num_partitions];
@@ -185,6 +190,11 @@ impl TransformHilbertPartitionCollect {
             .and_then(WindowPartitionMeta::downcast_from)
         {
             for (partition_id, data_block) in meta.partitioned_data.into_iter() {
+                log::warn!(
+                    "collect processor id: {}, partition_id: {}",
+                    self.processor_id,
+                    partition_id
+                );
                 self.process_size += data_block.num_rows();
                 let partition_id = self.partition_id[partition_id];
                 self.partition_sizes[partition_id] += data_block.num_rows();
@@ -317,18 +327,12 @@ impl Processor for TransformHilbertPartitionCollect {
                 if let Some((partition_id, data_block)) = self.immediate_output_blocks.pop() {
                     self.restored_data_blocks = self.buffer.restore_by_id(partition_id).await?;
                     self.restored_data_blocks.push(data_block);
-                    log::warn!(
-                        "processor id: {}, restore id: {}",
-                        self.processor_id,
-                        partition_id
-                    );
                     self.state = State::Concat;
                 }
             }
             State::Spill => self.buffer.spill().await?,
             State::Restore => {
                 let (id, blocks) = self.buffer.restore_with_id().await?;
-                log::warn!("processor id: {}, restore id: {}", self.processor_id, id);
                 if !blocks.is_empty() {
                     self.restored_data_blocks = blocks;
                     self.state = State::Concat;
