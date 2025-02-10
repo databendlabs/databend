@@ -270,6 +270,11 @@ select CAST(116214450.599999999999999 AS DECIMAL(38, 14)) *
 
 ## div
 
+query B
+SELECT 1e100/1e-100 = 1e200, 1e-100/1e-100 = 1, 1e-100/1e100 > 0;
+----
+1 1 1
+
 query I
 SELECT CAST(4.56 AS DECIMAL(6, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS result;
 ----

@@ -1262,6 +1262,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::CallProcedure(_)
             | Plan::CreateProcedure(_)
             | Plan::DropProcedure(_)
+            | Plan::DescProcedure(_)
             /*| Plan::ShowCreateProcedure(_)
             | Plan::RenameProcedure(_)*/ => {
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::Super, false, false)

@@ -103,7 +103,7 @@ impl ProcedureMgr {
         Ok(dropped)
     }
 
-    #[fastrace::trace]
+    //#[fastrace::trace]
     pub async fn get_procedure(
         &self,
         req: &GetProcedureReq,

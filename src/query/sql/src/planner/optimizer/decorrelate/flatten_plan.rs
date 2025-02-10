@@ -71,9 +71,14 @@ impl SubqueryRewriter {
             let mut metadata = self.metadata.write();
             // Currently, we don't support left plan's from clause contains subquery.
             // Such as: select t2.a from (select a + 1 as a from t) as t2 where (select sum(a) from t as t1 where t1.a < t2.a) = 1;
-            let table_index = metadata
-                .table_index_by_column_indexes(correlated_columns)
-                .unwrap();
+            let table_index =
+                match metadata.table_index_by_column_indexes(correlated_columns) {
+                    Some(index) => index,
+                    None => return Err(ErrorCode::SemanticError(
+                        "Join left plan's from clause can't contain subquery to dcorrelated join right plan",
+                    )),
+                };
+
             let mut data_types = Vec::with_capacity(correlated_columns.len());
             let mut scalar_items = vec![];
             let mut scan_columns = ColumnSet::new();
@@ -231,7 +236,7 @@ impl SubqueryRewriter {
                 self.flatten_expression_scan(plan, scan, correlated_columns)
             }
 
-            _ => Err(ErrorCode::Internal(
+            _ => Err(ErrorCode::SemanticError(
                 "Invalid plan type for flattening subquery",
             )),
         }
@@ -694,7 +699,7 @@ impl SubqueryRewriter {
             .iter()
             .any(|index| correlated_columns.contains(index))
         {
-            return Err(ErrorCode::Internal(
+            return Err(ErrorCode::SemanticError(
                 "correlated columns in window functions not supported",
             ));
         }
