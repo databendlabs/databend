@@ -296,6 +296,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
+                ("query_tag", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_owned()),
+                    desc: "Sets the query tag for this session.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: None,
+                }),
                 ("enable_dphyp", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables dphyp join order algorithm.",
