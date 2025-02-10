@@ -128,9 +128,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             let order = 5;
             let seed = 0;
             let determinator_sliding_window_size = 8;
-            let desired_size = determinator.len();
-            let max_size = determinator.as_bytes().len()*2;
-            let mut writer = vec![0;max_size];
+            let desired_size = determinator.chars().count();
+            let mut writer = vec![0;determinator.len()*2];
             let mut code_points = Vec::new();
             let n = generate(&table, order, seed, &mut writer, desired_size, determinator_sliding_window_size, determinator.as_bytes(), &mut code_points);
             writer.truncate(n);

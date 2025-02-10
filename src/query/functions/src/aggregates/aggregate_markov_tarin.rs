@@ -25,6 +25,8 @@ use databend_common_base::obfuscator::CodePoint;
 use databend_common_base::obfuscator::NGramHash;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::array::ArrayColumnBuilder;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -143,23 +145,37 @@ impl AggregateFunction for MarkovTarin {
         let ColumnBuilder::Tuple(builders) = &mut array_builder.builder else {
             unreachable!()
         };
-        let [hash_builder, total_builder, end_builder, bucket_builder] = &mut builders[..] else {
+        let [hash_builder, total_builder, end_builder, ColumnBuilder::Array(box bucket_builder)] =
+            &mut builders[..]
+        else {
             unreachable!()
         };
         let hash_builder = UInt32Type::try_downcast_builder(hash_builder).unwrap();
         let total_builder = UInt32Type::try_downcast_builder(total_builder).unwrap();
         let end_builder = UInt32Type::try_downcast_builder(end_builder).unwrap();
-        let bucket_builder =
-            MapType::<UInt32Type, UInt32Type>::try_downcast_builder(bucket_builder).unwrap();
+
+        let ArrayColumnBuilder::<AnyType> {
+            builder: ColumnBuilder::Tuple(kv),
+            offsets: bucket_offsets,
+        } = bucket_builder
+        else {
+            unreachable!()
+        };
+        let [keys, values] = &mut kv[..] else {
+            unreachable!()
+        };
+        let keys = UInt32Type::try_downcast_builder(keys).unwrap();
+        let values = UInt32Type::try_downcast_builder(values).unwrap();
+
         for (hash, histogram) in model.table.iter() {
             hash_builder.push(*hash);
             total_builder.push(histogram.total.unwrap());
             end_builder.push(histogram.count_end);
             for (c, w) in histogram.buckets.iter() {
-                bucket_builder.builder.keys.push(*c);
-                bucket_builder.builder.values.push(*w);
+                keys.push(*c);
+                values.push(*w);
             }
-            bucket_builder.commit_row();
+            bucket_offsets.push(keys.len() as u64);
         }
         array_builder.commit_row();
         Ok(())
