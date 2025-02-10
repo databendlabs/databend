@@ -60,7 +60,19 @@ impl HttpFetch for StorageHttpClient {
             }
             m => m.as_str(),
         };
-        metrics_inc_storage_http_requests_count(host.to_string(), method.to_string());
+        // get first component in path as bucket name
+        let bucket = match url.path_segments() {
+            Some(mut segments) => match segments.next() {
+                Some(bucket) => bucket,
+                None => "-",
+            },
+            None => "-",
+        };
+        metrics_inc_storage_http_requests_count(
+            host.to_string(),
+            method.to_string(),
+            bucket.to_string(),
+        );
 
         let (parts, body) = req.into_parts();
 
