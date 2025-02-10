@@ -62,10 +62,7 @@ impl HttpFetch for StorageHttpClient {
         };
         // get first component in path as bucket name
         let bucket = match url.path_segments() {
-            Some(mut segments) => match segments.next() {
-                Some(bucket) => bucket,
-                None => "-",
-            },
+            Some(mut segments) => segments.next().unwrap_or("-"),
             None => "-",
         };
         metrics_inc_storage_http_requests_count(
