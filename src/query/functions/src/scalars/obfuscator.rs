@@ -19,12 +19,19 @@ use databend_common_base::obfuscator::NGramHash;
 use databend_common_base::obfuscator::Table;
 use databend_common_column::buffer::Buffer;
 use databend_common_expression::types::map::KvPair;
+use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::ArrayColumn;
+use databend_common_expression::types::ArrayType;
+use databend_common_expression::types::GenericType;
 use databend_common_expression::types::MapType;
 use databend_common_expression::types::NumberColumn;
+use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::Column;
+use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionRegistry;
 
 struct ColumnHistogram {
     total: u32,
@@ -108,23 +115,31 @@ impl ColumnTable {
     }
 }
 
+pub fn register(registry: &mut FunctionRegistry) {
+    registry.register_passthrough_nullable_3_arg::<ArrayType<GenericType<0>>,StringType,StringType,StringType,_,_>(
+        "markov_generate",
+         |_,_,_,_|FunctionDomain::Full,
+          vectorize_with_builder_3_arg::<ArrayType<GenericType<0>>,StringType,StringType,_>(|model,_params,determinator,output:&mut StringColumnBuilder,ctx|{
+            let Some(table) = ColumnTable::try_new(model) else {
+                ctx.set_error(output.len(), "invalid model");
+                output.commit_row();
+                return;
+            };
+            let order = 5;
+            let seed = 0;
+            let determinator_sliding_window_size = 8;
+            let desired_size = determinator.len();
+            let max_size = determinator.as_bytes().len()*2;
+            let mut writer = vec![0;max_size];
+            let mut code_points = Vec::new();
+            let n = generate(&table, order, seed, &mut writer, desired_size, determinator_sliding_window_size, determinator.as_bytes(), &mut code_points);
+            writer.truncate(n);
+            output.put_and_commit(std::str::from_utf8(&writer).unwrap());
+          })
+        );
+}
+
 #[test]
 fn xxx() {
-    // let table = ColumnTable {
-    //     hash: todo!(),
-    //     total: todo!(),
-    //     count_end: todo!(),
-    //     buckets: todo!(),
-    // };
-    // generate(
-    //     &table,
-    //     order,
-    //     seed,
-    //     writer,
-    //     desired_size,
-    //     determinator_sliding_window_size,
-    //     determinator_data,
-    //     code_points,
-    // );
     println!("x")
 }
