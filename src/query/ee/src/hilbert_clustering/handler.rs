@@ -97,12 +97,6 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
             return Ok(None);
         }
 
-        let rows_per_block =
-            block_thresholds.calc_rows_per_block(checker.total_size, checker.total_rows) as u64;
-        let block_size = ctx.get_settings().get_max_block_size()?;
-        ctx.get_settings()
-            .set_max_block_size(rows_per_block.min(block_size))?;
-
         let mut removed_statistics = Statistics::default();
         let mut removed_segment_indexes = Vec::with_capacity(target_segments.len());
         for (segment_loc, segment) in target_segments {

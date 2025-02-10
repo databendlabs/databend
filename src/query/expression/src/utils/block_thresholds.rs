@@ -80,14 +80,6 @@ impl BlockThresholds {
 
         let mut rows_per_block = total_rows.div_ceil(block_num_by_size);
         let max_bytes_per_block = match rows_per_block {
-            v if v < self.max_rows_per_block / 10 => {
-                // If block rows < 100_000, max_bytes_per_block set to 200M
-                2 * self.max_bytes_per_block
-            }
-            v if v < self.max_rows_per_block / 2 => {
-                // If block rows < 500_000, max_bytes_per_block set to 150M
-                3 * self.max_bytes_per_block / 2
-            }
             v if v < self.min_rows_per_block => {
                 // If block rows < 800_000, max_bytes_per_block set to 125M
                 5 * self.max_bytes_per_block / 4
