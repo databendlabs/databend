@@ -418,7 +418,7 @@ jobs:
           packager: ${{ matrix.packager }}
 
   # bindings_python:
-  #   if: inputs.type == 'stable'
+  #   if: needs.create_release.outputs.type == 'stable'
   #   needs: create_release
   #   uses: ./.github/workflows/bindings.python.yml
   #   secrets: inherit
