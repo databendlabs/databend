@@ -116,6 +116,8 @@ pub struct TransformHilbertPartitionCollect {
     // The buffer is used to control the memory usage of the window operator.
     buffer: WindowPartitionBuffer,
     state: State,
+    process_size: usize,
+    processor_id: usize,
 }
 
 impl TransformHilbertPartitionCollect {
@@ -171,6 +173,8 @@ impl TransformHilbertPartitionCollect {
             max_block_size,
             partition_sizes: vec![0; num_partitions],
             state: State::Consume,
+            process_size: 0,
+            processor_id,
         })
     }
 
@@ -181,6 +185,7 @@ impl TransformHilbertPartitionCollect {
             .and_then(WindowPartitionMeta::downcast_from)
         {
             for (partition_id, data_block) in meta.partitioned_data.into_iter() {
+                self.process_size += data_block.num_rows();
                 let partition_id = self.partition_id[partition_id];
                 self.partition_sizes[partition_id] += data_block.num_rows();
                 if self.partition_sizes[partition_id] >= self.max_block_size {
@@ -220,16 +225,16 @@ impl Processor for TransformHilbertPartitionCollect {
         }
 
         if self.output.is_finished() {
+            log::warn!(
+                "process id: {}, process rows: {}",
+                self.processor_id,
+                self.process_size
+            );
             return Ok(Event::Finished);
         }
 
         if !self.output.can_push() {
             return Ok(Event::NeedConsume);
-        }
-
-        if self.need_spill() {
-            self.state = State::Spill;
-            return Ok(Event::Async);
         }
 
         if let Some(data_block) = self.output_data_blocks.pop() {
@@ -239,6 +244,11 @@ impl Processor for TransformHilbertPartitionCollect {
 
         if !self.immediate_output_blocks.is_empty() {
             self.state = State::Flush;
+            return Ok(Event::Async);
+        }
+
+        if self.need_spill() {
+            self.state = State::Spill;
             return Ok(Event::Async);
         }
 
@@ -253,6 +263,11 @@ impl Processor for TransformHilbertPartitionCollect {
                 return Ok(Event::Sync);
             }
             self.output.finish();
+            log::warn!(
+                "process id: {}, process rows: {}",
+                self.processor_id,
+                self.process_size
+            );
             return Ok(Event::Finished);
         }
 
@@ -302,13 +317,20 @@ impl Processor for TransformHilbertPartitionCollect {
                 if let Some((partition_id, data_block)) = self.immediate_output_blocks.pop() {
                     self.restored_data_blocks = self.buffer.restore_by_id(partition_id).await?;
                     self.restored_data_blocks.push(data_block);
+                    log::warn!(
+                        "processor id: {}, restore id: {}",
+                        self.processor_id,
+                        partition_id
+                    );
                     self.state = State::Concat;
                 }
             }
             State::Spill => self.buffer.spill().await?,
             State::Restore => {
-                self.restored_data_blocks = self.buffer.restore().await?;
-                if !self.restored_data_blocks.is_empty() {
+                let (id, blocks) = self.buffer.restore_with_id().await?;
+                log::warn!("processor id: {}, restore id: {}", self.processor_id, id);
+                if !blocks.is_empty() {
+                    self.restored_data_blocks = blocks;
                     self.state = State::Concat;
                 }
             }
