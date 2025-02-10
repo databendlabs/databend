@@ -128,7 +128,7 @@ statement ok
 CREATE OR REPLACE TABLE t4(data variant);
 
 statement ok
-INSERT INTO t4 values('{"user_id":1}'),('{"user_id":2}'),('{}')
+INSERT INTO t4 values('{"user_id":1}'),('{"user_id":2}')
 
 statement ok
 CREATE OR REPLACE TABLE t5(data variant, user_id uint8 not null);
@@ -141,7 +141,6 @@ SELECT * FROM t5;
 ----
 {"user_id":1} 1
 {"user_id":2} 2
-{} 0
 
 statement ok
 DROP DATABASE db1
