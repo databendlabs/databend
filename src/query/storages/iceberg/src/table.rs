@@ -44,6 +44,8 @@ use databend_common_pipeline_core::Pipeline;
 use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use iceberg::io::FileIOBuilder;
+use iceberg::spec::DataContentType;
+use iceberg::spec::ManifestStatus;
 
 use crate::partition::IcebergPartInfo;
 use crate::predicate::PredicateBuilder;
@@ -305,14 +307,57 @@ impl Table for IcebergTable {
         &self.get_table_info().name
     }
 
-    // TODO load summary
     async fn table_statistics(
         &self,
         _ctx: Arc<dyn TableContext>,
         _require_fresh: bool,
         _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        Ok(None)
+        let table = self.table.clone();
+        let Some(snapshot) = table.metadata().current_snapshot() else {
+            return Ok(None);
+        };
+
+        let mut statistics = TableStatistics::default();
+        let mut num_rows = 0;
+        let mut data_size_compressed = 0;
+        let mut number_of_segments = 0;
+        let mut number_of_blocks = 0;
+
+        let manifest = snapshot
+            .load_manifest_list(table.file_io(), table.metadata())
+            .await
+            .map_err(|err| ErrorCode::Internal(format!("load manifest list error: {err:?}")))?;
+
+        for manifest_file in manifest.entries() {
+            number_of_segments += 1;
+
+            let manifest = manifest_file
+                .load_manifest(table.file_io())
+                .await
+                .map_err(|err| ErrorCode::Internal(format!("load manifest file error: {err:?}")))?;
+
+            manifest.entries().iter().for_each(|entry| {
+                if entry.status() == ManifestStatus::Deleted {
+                    return;
+                }
+                let data_file = entry.data_file();
+                if data_file.content_type() != DataContentType::Data {
+                    return;
+                }
+
+                num_rows += data_file.record_count();
+                data_size_compressed += data_file.file_size_in_bytes();
+                number_of_blocks += 1;
+            });
+        }
+
+        statistics.num_rows = Some(num_rows);
+        statistics.data_size_compressed = Some(data_size_compressed);
+        statistics.number_of_segments = Some(number_of_segments);
+        statistics.number_of_blocks = Some(number_of_blocks);
+
+        Ok(Some(statistics))
     }
 
     #[async_backtrace::framed]
