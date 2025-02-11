@@ -4224,6 +4224,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-pipeline-core",
+ "databend-common-storage",
  "databend-common-storages-parquet",
  "databend-storages-common-table-meta",
  "fastrace",
@@ -4235,6 +4236,7 @@ dependencies = [
  "serde",
  "serde_json",
  "typetag",
+ "uuid",
 ]
 
 [[package]]
