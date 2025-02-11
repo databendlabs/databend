@@ -3,6 +3,17 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/shell_env.sh
 
+factor=$1
+
+echo """
+INSTALL tpcds;
+LOAD tpcds;
+SELECT * FROM dsdgen(sf=$factor); -- sf can be other values, such as 0.1, 1, 10, ...
+EXPORT DATABASE '/tmp/tpcds_$factor/' (FORMAT CSV, DELIMITER '|');
+""" | duckdb
+
+mv /tmp/tpcds_$factor/ "$(pwd)/data/"
+
 # Create Database
 echo "CREATE DATABASE IF NOT EXISTS ${MYSQL_DATABASE}" | $BENDSQL_CLIENT_CONNECT_DEFAULT
 

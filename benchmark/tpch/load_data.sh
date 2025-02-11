@@ -116,5 +116,5 @@ for t in customer lineitem nation orders partsupp part region supplier
 do
     echo "$t"
     fp="`pwd`/data/$t.tbl"
-    echo "copy into ${MYSQL_DATABASE}.$t from 'fs://${fp}' file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
+    echo "copy into ${MYSQL_DATABASE}.$t from 'fs://${fp}' file_format = (type = CSV skip_header = 1 field_delimiter = '|' record_delimiter = '\n')" | $BENDSQL_CLIENT_CONNECT
 done
