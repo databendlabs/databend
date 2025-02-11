@@ -396,20 +396,13 @@ impl<'a> Evaluator<'a> {
                     validity.clone(),
                     options,
                 )? {
-                    // remove wrapped null values.
-                    let new_value = match new_value {
-                        Value::Scalar(scalar) => {
-                            if scalar == Scalar::Null {
-                                Value::Scalar(Scalar::default_value(dest_type))
-                            } else {
-                                Value::Scalar(scalar)
-                            }
-                        }
-                        Value::Column(column) => {
-                            let nullable_column = column.as_nullable().unwrap();
-                            Value::Column(nullable_column.column.clone())
-                        }
-                    };
+                    let (new_value, has_null) = new_value.remove_nullable();
+                    if has_null {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "unable to cast type `{src_type}` to type `{dest_type}`, result has null values"
+                        ))
+                        .set_span(span));
+                    }
                     Ok(new_value)
                 } else {
                     Err(ErrorCode::BadArguments(format!(
