@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod column;
+mod columnar;
 mod single_file_partition;
 
 mod cast;
 
 pub use cast::load_can_auto_cast_to;
-pub use column::*;
+pub use columnar::*;
 pub use single_file_partition::SingleFilePartition;
