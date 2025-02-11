@@ -29,10 +29,10 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::Column;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::Value;
 
 struct ColumnHistogram {
     total: u32,
@@ -68,6 +68,7 @@ impl Histogram<'_> for ColumnHistogram {
     }
 }
 
+#[derive(Clone)]
 struct ColumnTable {
     hash: Buffer<NGramHash>,
     total: Buffer<u32>,
@@ -128,48 +129,88 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_3_arg::<ArrayType<GenericType<0>>,StringType,StringType,StringType,_,_>(
         "markov_generate",
          |_,_,_,_|FunctionDomain::MayThrow,
-          vectorize_with_builder_3_arg::<ArrayType<GenericType<0>>,StringType,StringType,StringType>(|model,params,determinator,output,ctx|{
-            let Some(table) = ColumnTable::try_new(model.clone()) else {
-                let expect = DataType::Array(Box::new(DataType::Tuple(vec![
-                    UInt32Type::data_type(),                        // hash
-                    UInt32Type::data_type(),                        // total
-                    UInt32Type::data_type(),                        // count_end
-                    MapType::<UInt32Type, UInt32Type>::data_type(), // buckets
-                ])));
-                let got = DataType::Array(Box::new(model.data_type()));
-                ctx.set_error(output.len(), format!("invalid model expect {expect:?}, but got {got:?}"));
-                output.commit_row();
-                return;
-            };
+         move |model_arg, params_arg, determinator, ctx| {
 
-            let Ok(MarkovModelParameters{
-                order,
-                seed,
-                sliding_window_size,
-            }) = serde_json::from_str(params) else {
-                ctx.set_error(output.len(), "invalid params");
-                output.commit_row();
-                return;
-            };
-            if order == 0 {
-                ctx.set_error(output.len(), "invalid order");
-                output.commit_row();
-                return;
-            }
+            let generics = ctx.generics.to_vec();
+    
+            let input_all_scalars =
+                model_arg.is_scalar()  && params_arg.is_scalar() && determinator.is_scalar() ;
+            let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
+    
+            let mut output = StringType::create_builder(process_rows, &generics);
 
-            let desired_size = determinator.chars().count();
-            let mut writer = vec![0;determinator.len()*2];
+            let table = model_arg.as_scalar().and_then(|model|ColumnTable::try_new(model.clone()));
+            let params = params_arg.as_scalar().and_then(|params|serde_json::from_str::<MarkovModelParameters>(params).ok());
+
             let mut code_points = Vec::new();
-            match generate(&table, order, seed, &mut writer, desired_size, sliding_window_size, determinator.as_bytes(), &mut code_points) {
-                Some(n) => {
-                    writer.truncate(n);
-                    output.put_and_commit(std::str::from_utf8(&writer).unwrap());
-                },
-                None => {
-                    ctx.set_error(output.len(), "logical error in markov model");
-                    output.commit_row();
-                },
+            for index in 0..process_rows {
+                let table =  match &table {
+                    Some(table) => table.clone(),
+                    None => {
+                        let model = unsafe { model_arg.index_unchecked(index) };
+                        let Some(table) = ColumnTable::try_new(model.clone()) else {
+                            let expect = DataType::Array(Box::new(DataType::Tuple(vec![
+                                UInt32Type::data_type(),                        // hash
+                                UInt32Type::data_type(),                        // total
+                                UInt32Type::data_type(),                        // count_end
+                                MapType::<UInt32Type, UInt32Type>::data_type(), // buckets
+                            ])));
+                            let got = DataType::Array(Box::new(model.data_type()));
+                            ctx.set_error(output.len(), format!("invalid model expect {expect:?}, but got {got:?}"));
+                            output.commit_row();
+                            continue;
+                        };
+                        table
+                    },
+                };
+
+                let MarkovModelParameters{
+                    order,
+                    seed,
+                    sliding_window_size,
+                } = match params {
+                    Some(params) => params,
+                    None => {
+                        let params = unsafe { params_arg.index_unchecked(index) };
+                        let Ok(params) = serde_json::from_str::<MarkovModelParameters>(params) else {
+                            ctx.set_error(output.len(), "invalid params");
+                            output.commit_row();
+                            continue;
+                        };
+                        if params.order == 0 {
+                            ctx.set_error(output.len(), "invalid order");
+                            output.commit_row();
+                            continue;
+                        }
+                        if params.sliding_window_size == 0 {
+                            ctx.set_error(output.len(), "invalid sliding_window_size");
+                            output.commit_row();
+                            continue;
+                        }
+                        params
+                    },
+                };
+
+                let determinator = unsafe { determinator.index_unchecked(index) };
+                let desired_size = determinator.chars().count();
+                let mut writer = vec![0;determinator.len()*2];
+                
+                match generate(&table, order, seed, &mut writer, desired_size, sliding_window_size, determinator.as_bytes(), &mut code_points) {
+                    Some(n) => {
+                        writer.truncate(n);
+                        output.put_and_commit(std::str::from_utf8(&writer).unwrap());
+                    },
+                    None => {
+                        ctx.set_error(output.len(), "logical error in markov model");
+                        output.commit_row();
+                    },
+                }
             }
-          })
-        );
+            if input_all_scalars {
+                Value::Scalar(StringType::build_scalar(output))
+            } else {
+                Value::Column(StringType::build_column(output))
+            }
+        }
+    );
 }

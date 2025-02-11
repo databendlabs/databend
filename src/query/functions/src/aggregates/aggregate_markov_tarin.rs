@@ -49,7 +49,7 @@ use super::AggregateFunction;
 
 pub struct MarkovTarin {
     display_name: String,
-    params: MarkovModelParameters,
+    params: TrainParameters,
 }
 
 impl AggregateFunction for MarkovTarin {
@@ -197,7 +197,7 @@ impl fmt::Display for MarkovTarin {
 }
 
 #[derive(Debug, Clone)]
-pub struct MarkovModelParameters {
+struct TrainParameters {
     pub order: usize,
 
     // We can consider separating the process of modifying the model, so we don't need these parameters here
@@ -207,11 +207,11 @@ pub struct MarkovModelParameters {
     pub frequency_desaturate: f64,
 }
 
-impl Default for MarkovModelParameters {
+impl Default for TrainParameters {
     fn default() -> Self {
         Self {
             order: 5,
-            frequency_cutoff: 5,
+            frequency_cutoff: 0,
             num_buckets_cutoff: 0,
             frequency_add: 0,
             frequency_desaturate: 0.0,
@@ -293,7 +293,7 @@ impl MarkovModel {
         )
     }
 
-    fn finalize(&mut self, params: &MarkovModelParameters) {
+    fn finalize(&mut self, params: &TrainParameters) {
         for histogram in self.table.values_mut() {
             if params.num_buckets_cutoff > 0 && histogram.buckets.len() < params.num_buckets_cutoff
             {
@@ -334,10 +334,10 @@ pub fn aggregate_markov_train_function_desc() -> AggregateFunctionDescription {
         assert_unary_arguments(display_name, arguments.len())?;
 
         let params = match &params[..] {
-            [] => MarkovModelParameters::default(),
+            [] => TrainParameters::default(),
             [order] => {
                 let order = extract_number_param::<u64>(order.clone())? as usize;
-                MarkovModelParameters {
+                TrainParameters {
                     order,
                     ..Default::default()
                 }
@@ -350,7 +350,7 @@ pub fn aggregate_markov_train_function_desc() -> AggregateFunctionDescription {
                 let frequency_add = extract_number_param(frequency_add.clone())?;
                 let frequency_desaturate =
                     extract_number_param::<F64>(frequency_desaturate.clone())?.0;
-                MarkovModelParameters {
+                TrainParameters {
                     order,
                     frequency_cutoff,
                     num_buckets_cutoff,

@@ -2283,6 +2283,8 @@ Functions overloads:
 0 map_values(Map(Nothing)) :: Array(Nothing)
 1 map_values(Map(T0, T1)) :: Array(T1)
 2 map_values(Map(T0, T1) NULL) :: Array(T1) NULL
+0 markov_generate(Array(T0), String, String) :: String
+1 markov_generate(Array(T0) NULL, String NULL, String NULL) :: String NULL
 0 md5(String) :: String
 1 md5(String NULL) :: String NULL
 0 minus(Variant, Int32) :: Variant

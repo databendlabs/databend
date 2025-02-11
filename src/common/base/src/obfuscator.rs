@@ -17,55 +17,6 @@ use std::collections::HashMap;
 use std::hash::Hasher;
 use std::io::Write;
 
-/// Mask the least significant `num_bits` of `x`.
-fn mask_bits(x: u64, num_bits: usize) -> u64 {
-    x & ((1u64 << num_bits) - 1)
-}
-
-/// Apply Feistel network round to the least significant `num_bits` part of `x`.
-fn feistel_round(x: u64, num_bits: usize, seed: u64, round: usize) -> u64 {
-    let num_bits_left_half = num_bits / 2;
-    let num_bits_right_half = num_bits - num_bits_left_half;
-
-    let left_half = mask_bits(x >> num_bits_right_half, num_bits_left_half);
-    let right_half = mask_bits(x, num_bits_right_half);
-
-    let new_left_half = right_half;
-
-    let mut state = std::hash::DefaultHasher::new();
-    state.write_u64(right_half);
-    state.write_u64(seed);
-    state.write_usize(round);
-    let new_right_half = left_half ^ mask_bits(state.finish(), num_bits_left_half);
-
-    (new_left_half << num_bits_left_half) ^ new_right_half
-}
-
-/// Apply Feistel network with `num_rounds` to the least significant `num_bits` part of `x`.
-fn feistel_network(x: u64, num_bits: usize, seed: u64, num_rounds: usize) -> u64 {
-    let mut bits = mask_bits(x, num_bits);
-    for i in 0..num_rounds {
-        bits = feistel_round(bits, num_bits, seed, i);
-    }
-    (x & !((1u64 << num_bits) - 1)) ^ bits
-}
-
-/// Pseudorandom permutation within the set of numbers with the same log2(x).
-pub fn transform(x: u64, seed: u64) -> u64 {
-    // Keep 0 and 1 as is.
-    if x == 0 || x == 1 {
-        return x;
-    }
-
-    // Pseudorandom permutation of two elements.
-    if x == 2 || x == 3 {
-        return x ^ (seed & 1);
-    }
-
-    let num_leading_zeros = x.leading_zeros() as usize;
-    feistel_network(x, 64 - num_leading_zeros - 1, seed, 4)
-}
-
 pub type CodePoint = u32;
 pub type NGramHash = u32;
 
@@ -90,6 +41,16 @@ impl Default for MarkovModelParameters {
             determinator_sliding_window_size: 8,
         }
     }
+}
+
+pub trait Histogram<'a> {
+    fn sample(&self, random: u64, end_multiplier: f64) -> Option<CodePoint>;
+
+    fn is_empty(&self) -> bool;
+}
+
+pub trait Table<'a, H: Histogram<'a>> {
+    fn get(&'a self, context_hash: &NGramHash) -> Option<H>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -331,11 +292,12 @@ where
     let mut written = 0;
 
     while !writer.is_empty() {
+        let reach_desired_size = written >= desired_size;
         let histogram = (1..=order).try_rfold(None, |prev, size| {
             let context_hash = hash_context(order, size, code_points);
             match table.get(&context_hash) {
                 None => ControlFlow::Continue(prev),
-                Some(v) if v.is_empty() => ControlFlow::Continue(Some(v)),
+                Some(v) if !reach_desired_size && v.is_empty() => ControlFlow::Continue(Some(v)),
                 Some(v) => ControlFlow::Break(v),
             }
         });
@@ -362,8 +324,7 @@ where
         let determinator = hash.finish();
 
         // If string is greater than desired_size, increase probability of end.
-        let greater_than_desired_size = written > desired_size;
-        let end_probability_multiplier = if greater_than_desired_size {
+        let end_probability_multiplier = if reach_desired_size {
             1.25_f64.powf((written - desired_size) as f64)
         } else {
             0.0
@@ -375,7 +336,7 @@ where
 
         // Heuristic: break at ASCII non-alnum code point.
         // This allows to be close to desired_size but not break natural looking words.
-        if greater_than_desired_size && code < 128 && !is_alpha_numeric_ascii(code) {
+        if reach_desired_size && code < 128 && !is_alpha_numeric_ascii(code) {
             return Some(written);
         }
 
@@ -433,56 +394,4 @@ const UTF8_CHAR_WIDTH: &[u8; 256] = &[
 
 const fn utf8_char_width(b: u8) -> usize {
     UTF8_CHAR_WIDTH[b as usize] as usize
-}
-
-pub trait Histogram<'a> {
-    fn sample(&self, random: u64, end_multiplier: f64) -> Option<CodePoint>;
-
-    fn is_empty(&self) -> bool;
-}
-
-pub trait Table<'a, H: Histogram<'a>> {
-    fn get(&'a self, context_hash: &NGramHash) -> Option<H>;
-}
-
-#[test]
-fn xxx2() {
-    let mut model = MarkovModel::new(MarkovModelParameters {
-        frequency_cutoff: 2,
-        ..Default::default()
-    });
-
-    let mut buffer = Vec::new();
-
-    model.consume(b"data", &mut buffer);
-    model.consume(b"1431078573", &mut buffer);
-    model.consume(b"1431076677", &mut buffer);
-    model.consume(b"3466776677", &mut buffer);
-    model.consume(b"count_end", &mut buffer);
-    model.consume(b"buckets", &mut buffer);
-
-    println!("{model:?}");
-
-    model.finalize();
-
-    println!("{model:?}");
-
-    let desired_size = 15;
-    let seed = 0;
-
-    let got = model.generate(10, desired_size, seed, b"buckets").unwrap();
-    let data = String::from_utf8_lossy(&got);
-    println!("{data}");
-
-    let got = model.generate(10, desired_size, seed, b"buckets").unwrap();
-    let data = String::from_utf8_lossy(&got);
-    println!("{data}");
-}
-
-#[test]
-fn xxx() {
-    let x = 123456789;
-    let seed = 42;
-    let transformed = transform(x, seed);
-    println!("Transformed: {}", transformed);
 }
