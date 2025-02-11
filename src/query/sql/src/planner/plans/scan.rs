@@ -239,6 +239,7 @@ impl Operator for Scan {
                 let max = col_stat.max.unwrap();
                 let num_rows = num_rows.saturating_sub(col_stat.null_count);
                 let ndv = col_stat.ndv.unwrap_or(num_rows);
+                let ndv = std::cmp::min(num_rows, ndv);
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
                 {
