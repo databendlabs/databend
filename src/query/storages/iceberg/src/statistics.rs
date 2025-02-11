@@ -166,9 +166,7 @@ impl IcebergStatistics {
 
         let mut computed_statistics = HashMap::new();
         for field in IcebergTable::get_schema(table)?.fields() {
-            // The column id in iceberg is 1-based while the column id in Databend is 0-based.
-            let iceberg_col_id = field.column_id as i32 + 1;
-            let column_stats = get_column_stats(
+            let column_stats: Option<BasicColumnStatistics> = get_column_stats(
                 field,
                 &column_sizes,
                 &lower_bounds,
@@ -176,7 +174,7 @@ impl IcebergStatistics {
                 &null_value_counts,
             );
             if let Some(stats) = column_stats {
-                computed_statistics.insert(iceberg_col_id as ColumnId, stats);
+                computed_statistics.insert(field.column_id, stats);
             }
         }
 
