@@ -138,11 +138,6 @@ impl TransformHilbertPartitionCollect {
         let partitions: Vec<usize> = (0..num_partitions)
             .filter(|&partition| partition % num_processors == processor_id)
             .collect();
-        log::warn!(
-            "collect processor id: {}, partitions: {:?}",
-            processor_id,
-            partitions
-        );
 
         // Map each partition id to new partition id.
         let mut partition_id = vec![0; num_partitions];
@@ -150,6 +145,12 @@ impl TransformHilbertPartitionCollect {
             partition_id[*partition] = new_partition_id;
         }
 
+        log::warn!(
+            "new processor id: {}, partitions: {:?}, partition_id: {:?}",
+            processor_id,
+            partitions,
+            partition_id
+        );
         let location_prefix = ctx.query_id_spill_prefix();
         let spill_config = SpillerConfig {
             spiller_type: SpillerType::Window,
@@ -190,21 +191,21 @@ impl TransformHilbertPartitionCollect {
             .and_then(WindowPartitionMeta::downcast_from)
         {
             for (partition_id, data_block) in meta.partitioned_data.into_iter() {
-                log::warn!(
-                    "collect processor id: {}, partition_id: {}",
-                    self.processor_id,
-                    partition_id
-                );
                 self.process_size += data_block.num_rows();
-                let partition_id = self.partition_id[partition_id];
-                self.partition_sizes[partition_id] += data_block.num_rows();
-                if self.partition_sizes[partition_id] >= self.max_block_size {
-                    self.immediate_output_blocks
-                        .push((partition_id, data_block));
-                    self.partition_sizes[partition_id] = 0;
+                let new_id = self.partition_id[partition_id];
+                self.partition_sizes[new_id] += data_block.num_rows();
+                if self.partition_sizes[new_id] >= self.max_block_size {
+                    log::warn!(
+                        "immediate processor id: {}, partition_id: {}, new_id : {}",
+                        self.processor_id,
+                        partition_id,
+                        new_id
+                    );
+                    self.immediate_output_blocks.push((new_id, data_block));
+                    self.partition_sizes[new_id] = 0;
                     continue;
                 }
-                self.buffer.add_data_block(partition_id, data_block);
+                self.buffer.add_data_block(new_id, data_block);
             }
         }
         Ok(())
