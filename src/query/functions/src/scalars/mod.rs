@@ -37,6 +37,7 @@ pub mod dt_func {
 
 mod map;
 
+mod obfuscator;
 mod other;
 mod string;
 mod string_multi_args;
