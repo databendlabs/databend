@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::AbstractSegment;
+use databend_storages_common_table_meta::meta::ColumnOrientedSegment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -28,6 +29,7 @@ use fastrace::func_path;
 use fastrace::prelude::*;
 use opendal::Operator;
 
+use super::read::meta::ColumnOrientedSegmentReader;
 use crate::io::MetaReaders;
 
 #[derive(Clone)]
@@ -64,6 +66,26 @@ impl SegmentsIO {
         let reader = MetaReaders::segment_info_reader(dal, table_schema);
 
         // Keep in mind that segment_info_read must need a schema
+        let load_params = LoadParams {
+            location: path,
+            len_hint: None,
+            ver,
+            put_cache,
+        };
+
+        reader.read(&load_params).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn read_column_oriented_segment(
+        dal: Operator,
+        segment_location: Location,
+        table_schema: TableSchemaRef,
+        put_cache: bool,
+    ) -> Result<Arc<ColumnOrientedSegment>> {
+        let (path, ver) = segment_location;
+        let reader = ColumnOrientedSegmentReader((dal, table_schema));
+
         let load_params = LoadParams {
             location: path,
             len_hint: None,

@@ -12,9 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_readers;
+use std::sync::Arc;
 
-pub use meta_readers::ColumnOrientedSegmentReader;
-pub use meta_readers::CompactSegmentInfoReader;
-pub use meta_readers::MetaReaders;
-pub use meta_readers::TableSnapshotReader;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchemaRef;
+use databend_storages_common_table_meta::meta::ColumnOrientedSegment;
+use databend_storages_common_table_meta::meta::Location;
+use opendal::Operator;
+
+pub fn read_column_oriented_segment(
+    operator: Operator,
+    segment_location: Location,
+    table_schema: TableSchemaRef,
+) -> Result<Arc<ColumnOrientedSegment>> {
+    todo!()
+}

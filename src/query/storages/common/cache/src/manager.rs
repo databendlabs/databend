@@ -29,6 +29,7 @@ use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
+use crate::caches::ColumnOrientedSegmentCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
@@ -70,6 +71,7 @@ pub struct CacheManager {
     table_snapshot_cache: CacheSlot<TableSnapshotCache>,
     table_statistic_cache: CacheSlot<TableSnapshotStatisticCache>,
     compact_segment_info_cache: CacheSlot<CompactSegmentInfoCache>,
+    column_oriented_segment_cache: CacheSlot<ColumnOrientedSegmentCache>,
     bloom_index_filter_cache: CacheSlot<BloomIndexFilterCache>,
     bloom_index_meta_cache: CacheSlot<BloomIndexMetaCache>,
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,

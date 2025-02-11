@@ -21,5 +21,6 @@ mod segment_builder;
 pub use block_meta::AbstractBlockMeta;
 pub use cluster_statistics::AbstractClusterStatistics;
 pub use segment::AbstractSegment;
+pub use segment::ColumnOrientedSegment;
 pub use segment_builder::ColumnOrientedSegmentBuilder;
 pub use segment_builder::SegmentBuilder;
