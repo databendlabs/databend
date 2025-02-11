@@ -6,8 +6,6 @@ We use [DuckDB](https://github.com/duckdb/duckdb) to generate TPC-DS data.
 
 After installing DuckDB, you can use these commands to generate the data ([more information](https://github.com/duckdb/duckdb/tree/master/extension/tpcds)):
 
-After that, you can load data to Databend:
-
 ```shell
 ./load_data.sh 0.1
 ```
