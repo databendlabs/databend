@@ -327,12 +327,22 @@ impl Processor for TransformHilbertPartitionCollect {
                 if let Some((partition_id, data_block)) = self.immediate_output_blocks.pop() {
                     self.restored_data_blocks = self.buffer.restore_by_id(partition_id).await?;
                     self.restored_data_blocks.push(data_block);
+                    log::warn!(
+                        "flush processor id: {}, partition id: {}",
+                        self.processor_id,
+                        partition_id
+                    );
                     self.state = State::Concat;
                 }
             }
             State::Spill => self.buffer.spill().await?,
             State::Restore => {
                 let (id, blocks) = self.buffer.restore_with_id().await?;
+                log::warn!(
+                    "restore processor id: {}, partition id: {}",
+                    self.processor_id,
+                    id
+                );
                 if !blocks.is_empty() {
                     self.restored_data_blocks = blocks;
                     self.state = State::Concat;
