@@ -308,7 +308,7 @@ impl IcebergTable {
             .collect();
 
         Ok((
-            PartStatistics::new_estimated(None, read_rows, read_bytes, parts.len(), total_files),
+            PartStatistics::new_exact(read_rows, read_bytes, parts.len(), total_files),
             Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
     }
@@ -391,5 +391,9 @@ impl Table for IcebergTable {
 
     fn support_prewhere(&self) -> bool {
         false
+    }
+
+    fn has_exact_total_row_count(&self) -> bool {
+        true
     }
 }
