@@ -349,8 +349,8 @@ impl Value<AnyType> {
     pub fn remove_nullable(self) -> (Self, bool) {
         match self {
             Value::Scalar(Scalar::Null) => (Value::Scalar(Scalar::Null), true),
-            Value::Column(Column::Nullable(nullable_column)) => (
-                Value::Column(nullable_column.column.clone()),
+            Value::Column(Column::Nullable(box nullable_column)) => (
+                Value::Column(nullable_column.column),
                 nullable_column.validity.null_count() > 0,
             ),
             other => (other, false),
