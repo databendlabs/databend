@@ -345,6 +345,24 @@ impl Value<AnyType> {
         }
     }
 
+    // returns result without nullable and has_null flag
+    pub fn remove_nullable(self) -> (Self, bool) {
+        let mut has_null = false;
+        match self {
+            Value::Scalar(scalar) => {
+                if scalar == Scalar::Null {
+                    has_null = true;
+                }
+                (Value::Scalar(scalar), has_null)
+            }
+            Value::Column(column) => {
+                let nullable_column = column.as_nullable().unwrap();
+                has_null = nullable_column.validity.null_count() > 0;
+                (Value::Column(nullable_column.column.clone()), has_null)
+            }
+        }
+    }
+
     pub fn domain(&self, data_type: &DataType) -> Domain {
         match self {
             Value::Scalar(scalar) => scalar.as_ref().domain(data_type),

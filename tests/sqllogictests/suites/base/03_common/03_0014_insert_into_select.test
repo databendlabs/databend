@@ -143,4 +143,10 @@ SELECT * FROM t5;
 {"user_id":2} 2
 
 statement ok
+INSERT INTO t4 values('{}');
+
+statement error
+INSERT INTO t5 SELECT data, data:user_id AS user_id FROM t4;
+
+statement ok
 DROP DATABASE db1
