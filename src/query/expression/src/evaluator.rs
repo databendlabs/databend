@@ -377,9 +377,14 @@ impl<'a> Evaluator<'a> {
                     .set_span(span))
                 }
             }
-            (DataType::Nullable(box DataType::Variant) | DataType::Variant, other)
-                if !other.is_nullable() =>
-            {
+            (
+                DataType::Nullable(box DataType::Variant) | DataType::Variant,
+                DataType::Boolean
+                | DataType::Number(_)
+                | DataType::String
+                | DataType::Date
+                | DataType::Timestamp,
+            ) => {
                 // allow cast variant to not null types.
                 let cast_fn = format!("to_{}", dest_type.to_string().to_lowercase());
                 if let Some(new_value) = self.run_simple_cast(
