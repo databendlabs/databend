@@ -2,7 +2,7 @@
 
 ## Preparing the Table and Data
 
-We use [DuckDB](https://github.com/duckdb/duckdb) to generate TPC-DS data.
+We use [DuckDB](https://duckdb.org/docs/installation/) to generate TPC-DS data.
 
 After installing DuckDB, you can use these commands to generate the data ([more information](https://github.com/duckdb/duckdb/tree/master/extension/tpcds)):
 
