@@ -347,19 +347,13 @@ impl Value<AnyType> {
 
     // returns result without nullable and has_null flag
     pub fn remove_nullable(self) -> (Self, bool) {
-        let mut has_null = false;
         match self {
-            Value::Scalar(scalar) => {
-                if scalar == Scalar::Null {
-                    has_null = true;
-                }
-                (Value::Scalar(scalar), has_null)
-            }
-            Value::Column(column) => {
-                let nullable_column = column.as_nullable().unwrap();
-                has_null = nullable_column.validity.null_count() > 0;
-                (Value::Column(nullable_column.column.clone()), has_null)
-            }
+            Value::Scalar(Scalar::Null) => (Value::Scalar(Scalar::Null), true),
+            Value::Column(Column::Nullable(nullable_column)) => (
+                Value::Column(nullable_column.column.clone()),
+                nullable_column.validity.null_count() > 0,
+            ),
+            other => (other, false),
         }
     }
 
