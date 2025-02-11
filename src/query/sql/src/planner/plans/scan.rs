@@ -234,28 +234,25 @@ impl Operator for Scan {
                 continue;
             }
             if let Some(col_stat) = v.clone() {
-                // Safe to unwrap: min, max and ndv are all `Some(_)`.
+                // Safe to unwrap: min, max are all `Some(_)`.
                 let min = col_stat.min.unwrap();
                 let max = col_stat.max.unwrap();
-                let ndv = col_stat.ndv.unwrap();
+                let num_rows = num_rows.saturating_sub(col_stat.null_count);
+                let ndv = col_stat.ndv.unwrap_or(num_rows);
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
                 {
                     histogram.clone()
+                } else if num_rows != 0 {
+                    histogram_from_ndv(
+                        ndv,
+                        num_rows,
+                        Some((min.clone(), max.clone())),
+                        DEFAULT_HISTOGRAM_BUCKETS,
+                    )
+                    .ok()
                 } else {
-                    let num_rows = num_rows.saturating_sub(col_stat.null_count);
-                    let ndv = std::cmp::min(num_rows, ndv);
-                    if num_rows != 0 {
-                        histogram_from_ndv(
-                            ndv,
-                            num_rows,
-                            Some((min.clone(), max.clone())),
-                            DEFAULT_HISTOGRAM_BUCKETS,
-                        )
-                        .ok()
-                    } else {
-                        None
-                    }
+                    None
                 };
                 let column_stat = ColumnStat {
                     min,
