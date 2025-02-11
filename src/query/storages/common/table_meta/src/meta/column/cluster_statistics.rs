@@ -12,11 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod column;
-mod single_file_partition;
+use databend_common_expression::Scalar;
 
-mod cast;
+use crate::meta::ClusterStatistics;
 
-pub use cast::load_can_auto_cast_to;
-pub use column::*;
-pub use single_file_partition::SingleFilePartition;
+pub trait AbstractClusterStatistics {
+    fn cluster_key_id(&self) -> u32;
+    fn min(&self) -> &Vec<Scalar>;
+    fn max(&self) -> &Vec<Scalar>;
+}
+
+impl AbstractClusterStatistics for ClusterStatistics {
+    fn cluster_key_id(&self) -> u32 {
+        self.cluster_key_id
+    }
+
+    fn min(&self) -> &Vec<Scalar> {
+        &self.min
+    }
+
+    fn max(&self) -> &Vec<Scalar> {
+        &self.max
+    }
+}

@@ -86,6 +86,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -108,6 +109,7 @@ use crate::operations::ChangesDesc;
 use crate::operations::TruncateMode;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::Trim;
+use crate::FuseSegmentFormat;
 use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
@@ -129,6 +131,7 @@ pub struct FuseTable {
 
     pub(crate) cluster_key_meta: Option<ClusterKey>,
     pub(crate) storage_format: FuseStorageFormat,
+    pub(crate) segment_format: FuseSegmentFormat,
     pub(crate) table_compression: TableCompression,
     pub(crate) bloom_index_cols: BloomIndexColumns,
 
@@ -208,6 +211,12 @@ impl FuseTable {
             .cloned()
             .unwrap_or_default();
 
+        let segment_format = table_info
+            .options()
+            .get(OPT_KEY_SEGMENT_FORMAT)
+            .cloned()
+            .unwrap_or_default();
+
         let table_compression = table_info
             .options()
             .get(OPT_KEY_TABLE_COMPRESSION)
@@ -236,6 +245,7 @@ impl FuseTable {
             operator,
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
+            segment_format: FuseSegmentFormat::from_str(segment_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
             table_type,
             changes_desc: None,
@@ -882,7 +892,7 @@ impl Table for FuseTable {
 
         for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
             let segments = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
+                .read_segments_old::<Arc<CompactSegmentInfo>>(chunk, false)
                 .await?;
             let mut partial_col_stats = Vec::with_capacity(chunk_size);
             // 1. Carry the previously reduced ranges

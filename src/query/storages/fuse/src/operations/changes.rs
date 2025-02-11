@@ -377,7 +377,7 @@ impl FuseTable {
             .collect::<Vec<_>>();
         for chunk in diff_in_base.chunks(chunk_size) {
             let segments = fuse_segment_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments_old::<SegmentInfo>(chunk, true)
                 .await?;
             for segment in segments {
                 let segment = segment?;
@@ -394,7 +394,7 @@ impl FuseTable {
             .collect::<Vec<_>>();
         for chunk in diff_in_latest.chunks(chunk_size) {
             let segments = fuse_segment_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments_old::<SegmentInfo>(chunk, true)
                 .await?;
 
             for segment in segments {

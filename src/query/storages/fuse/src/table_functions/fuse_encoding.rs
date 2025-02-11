@@ -164,7 +164,7 @@ impl<'a> FuseEncodingImpl<'a> {
             let fields = schema.fields();
             for chunk in snapshot.segments.chunks(chunk_size) {
                 let segments = segments_io
-                    .read_segments::<SegmentInfo>(chunk, false)
+                    .read_segments_old::<SegmentInfo>(chunk, false)
                     .await?;
                 for segment in segments {
                     let segment = segment?;

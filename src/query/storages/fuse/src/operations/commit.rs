@@ -55,6 +55,7 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
+use super::new_serialize_segment_processor;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -62,7 +63,6 @@ use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TableMutationAggregator;
-use crate::operations::common::TransformSerializeSegment;
 use crate::operations::set_backoff;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
@@ -84,8 +84,7 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
-            proc.into_processor()
+            new_serialize_segment_processor(input, output, self, block_thresholds)
         })?;
 
         pipeline.add_async_accumulating_transformer(|| {
@@ -464,7 +463,7 @@ impl FuseTable {
 
             let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
             let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments::<SegmentInfo>(concurrently_appended_segment_locations, true)
+                .read_segments_old::<SegmentInfo>(concurrently_appended_segment_locations, true)
                 .await?;
 
             let mut new_statistics = base_summary.clone();

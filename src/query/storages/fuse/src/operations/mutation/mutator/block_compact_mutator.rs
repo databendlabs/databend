@@ -120,7 +120,7 @@ impl BlockCompactMutator {
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
             let mut segment_infos = segments_io
-                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
+                .read_segments_old::<Arc<CompactSegmentInfo>>(chunk, false)
                 .await?
                 .into_iter()
                 .map(|sg| {

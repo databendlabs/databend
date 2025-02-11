@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
@@ -51,8 +50,7 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::analyze_cluster_keys;
 use databend_storages_common_index::statistics_to_domain;
-use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::AbstractBlockMeta;
 use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use jsonb::Value as JsonbValue;
@@ -119,22 +117,23 @@ impl SimpleArgFunc for ClusteringInformationNew {
         args: &Self::Args,
         _plan: &DataSourcePlan,
     ) -> Result<DataBlock> {
-        let tenant_id = ctx.get_tenant();
-        let tbl = ctx
-            .get_catalog(CATALOG_DEFAULT)
-            .await?
-            .get_table(
-                &tenant_id,
-                args.database_name.as_str(),
-                args.table_name.as_str(),
-            )
-            .await?;
+        // let tenant_id = ctx.get_tenant();
+        // let tbl = ctx
+        //     .get_catalog(CATALOG_DEFAULT)
+        //     .await?
+        //     .get_table(
+        //         &tenant_id,
+        //         args.database_name.as_str(),
+        //         args.table_name.as_str(),
+        //     )
+        //     .await?;
 
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        // let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        ClusteringInformation::new(ctx.clone(), tbl, args.cluster_key.clone())
-            .get_clustering_info()
-            .await
+        // ClusteringInformation::new(ctx.clone(), tbl, args.cluster_key.clone())
+        //     .get_clustering_info()
+        //     .await
+        todo!()
     }
 }
 
@@ -255,14 +254,12 @@ impl<'a> ClusteringInformation<'a> {
         let total_block_count = snapshot.summary.block_count;
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in snapshot.segments.chunks(chunk_size) {
-            let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
-                .await?;
+            let segments = segments_io.read_segments(chunk, true).await?;
 
             for segment in segments.into_iter().flatten() {
-                for block in &segment.blocks {
+                for block in segment.blocks() {
                     let (min, max) =
-                        get_min_max_stats(&exprs, block, schema.clone(), default_cluster_key_id);
+                        get_min_max_stats(&exprs, &block, schema.clone(), default_cluster_key_id);
                     assert_eq!(min.len(), max.len());
                     let (min, max) = match min.iter().cmp_by(max.iter(), cmp_with_null) {
                         Ordering::Equal => {
@@ -447,14 +444,14 @@ impl<'a> ClusteringInformation<'a> {
 
 fn get_min_max_stats(
     exprs: &[Expr<String>],
-    block: &BlockMeta,
+    block: &Arc<dyn AbstractBlockMeta>,
     schema: Arc<TableSchema>,
     default_key_id: Option<u32>,
 ) -> (Vec<Scalar>, Vec<Scalar>) {
     if let Some(default_key_id) = default_key_id {
-        if let Some(v) = block.cluster_stats.as_ref() {
-            if v.cluster_key_id == default_key_id {
-                return (v.min.clone(), v.max.clone());
+        if let Some(v) = block.cluster_stats() {
+            if v.cluster_key_id() == default_key_id {
+                return (v.min().clone(), v.max().clone());
             }
         }
     }
@@ -462,7 +459,7 @@ fn get_min_max_stats(
     let func_ctx = FunctionContext::default();
     let mut mins = Vec::with_capacity(exprs.len());
     let mut maxs = Vec::with_capacity(exprs.len());
-    let col_stats = &block.col_stats;
+    let col_stats = block.col_stats();
     for expr in exprs {
         // Since the hilbert index does not calc domain, set min max directly.
         if expr.data_type().remove_nullable() == DataType::Binary {

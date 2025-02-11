@@ -20,6 +20,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_table_meta::meta::AbstractSegment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -76,7 +77,7 @@ impl SegmentsIO {
     // Read all segments information from s3 in concurrently.
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn read_segments<T>(
+    pub async fn read_segments_old<T>(
         &self,
         segment_locations: &[Location],
         put_cache: bool,
@@ -98,6 +99,43 @@ impl SegmentsIO {
                     compact_segment
                         .try_into()
                         .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
+                }
+                .in_span(Span::enter_with_local_parent(func_path!()))
+            })
+        });
+
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = threads_nums * 2;
+        execute_futures_in_parallel(
+            tasks,
+            threads_nums,
+            permit_nums,
+            "fuse-req-segments-worker".to_owned(),
+        )
+        .await
+    }
+
+    // Read all segments information from s3 in concurrently.
+    #[async_backtrace::framed]
+    #[fastrace::trace]
+    pub async fn read_segments(
+        &self,
+        segment_locations: &[Location],
+        put_cache: bool,
+    ) -> Result<Vec<Result<Arc<dyn AbstractSegment>>>> {
+        // combine all the tasks.
+        let mut iter = segment_locations.iter();
+        let tasks = std::iter::from_fn(|| {
+            iter.next().map(|location| {
+                let dal = self.operator.clone();
+                let table_schema = self.schema.clone();
+                let segment_location = location.clone();
+                async move {
+                    let compact_segment =
+                        Self::read_compact_segment(dal, segment_location, table_schema, put_cache)
+                            .await?;
+                    let segment: SegmentInfo = compact_segment.try_into()?;
+                    Ok(Arc::new(segment) as Arc<dyn AbstractSegment>)
                 }
                 .in_span(Span::enter_with_local_parent(func_path!()))
             })

@@ -47,7 +47,7 @@ use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
-use databend_query::storages::fuse::statistics::StatisticsAccumulator;
+use databend_query::storages::fuse::statistics::RowOrientedSegmentBuilder;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -314,7 +314,7 @@ fn test_reduce_cluster_statistics() -> databend_common_exception::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_accumulator() -> databend_common_exception::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
-    let mut stats_acc = StatisticsAccumulator::default();
+    let mut stats_acc = RowOrientedSegmentBuilder::default();
 
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
@@ -329,7 +329,7 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
     }
 
     assert_eq!(10, stats_acc.blocks_metas.len());
-    assert!(stats_acc.summary_row_count > 0);
+    assert!(stats_acc.row_count > 0);
     Ok(())
 }
 

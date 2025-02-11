@@ -393,7 +393,7 @@ pub async fn regenerate_statistics(
         }
 
         let segments = segments_io
-            .read_segments::<SegmentInfo>(chunk, true)
+            .read_segments_old::<SegmentInfo>(chunk, true)
             .await?;
         for segment in segments {
             let segment = segment?;

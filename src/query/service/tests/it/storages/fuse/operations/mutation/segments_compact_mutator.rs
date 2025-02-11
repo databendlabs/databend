@@ -46,7 +46,7 @@ use databend_common_storages_fuse::operations::SegmentCompactor;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
-use databend_common_storages_fuse::statistics::StatisticsAccumulator;
+use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
@@ -721,7 +721,7 @@ impl CompactSegmentTestFixture {
             tasks.push(async move {
                 let (schema, blocks) =
                     TestFixture::gen_sample_blocks_ex(num_blocks, rows_per_block, 1);
-                let mut stats_acc = StatisticsAccumulator::default();
+                let mut stats_acc = RowOrientedSegmentBuilder::default();
 
                 let mut collected_blocks = vec![];
                 for block in blocks {

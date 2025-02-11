@@ -94,7 +94,7 @@ impl TableMetaFunc for FuseBlock {
             std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
+                .read_segments_old::<SegmentInfo>(chunk, true)
                 .await?;
             for segment in segments {
                 let segment = segment?;

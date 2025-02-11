@@ -46,6 +46,7 @@ pub use fuse_column::FuseTableColumnStatisticsProvider;
 pub use fuse_part::FuseBlockPartInfo;
 pub use fuse_part::FuseLazyPartInfo;
 pub use fuse_table::FuseTable;
+pub use fuse_type::FuseSegmentFormat;
 pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
 pub use io::BlockReadResult;
