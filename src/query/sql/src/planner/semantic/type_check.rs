@@ -3183,7 +3183,8 @@ impl<'a> TypeChecker<'a> {
                                     .contains(func.name.to_string());
                         }
                         fn enter_expr(&mut self, expr: &Expr) {
-                            self.contain_agg = matches!(expr, Expr::CountAll { window: None, .. });
+                            self.contain_agg = self.contain_agg
+                                || matches!(expr, Expr::CountAll { window: None, .. });
                         }
                     }
                     let mut visitor = AggFuncVisitor { contain_agg: false };
