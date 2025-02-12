@@ -53,7 +53,7 @@ EvalScalar
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true((lineitem.l_orderkey (#0) < 1 OR lineitem.l_commitdate (#11) < '1992-01-31'))], limit: NONE]
-        └── estimated rows: 0.00
+        └── estimated rows: 600572.00
 
 query T
 explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1 and l_commitdate > '1992-01-31';
@@ -74,7 +74,7 @@ EvalScalar
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [and_filters(lineitem.l_orderkey (#0) < 1, lineitem.l_commitdate (#11) > '1992-01-31')], limit: NONE]
-        └── estimated rows: 0.00
+        └── estimated rows: 600572.00
 
 query T
 explain select 1 from  ctl.tpch.lineitem where l_orderkey > 1 and l_commitdate = '1992-01-22';
@@ -82,11 +82,11 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey > 1 and l_commitdate =
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 1.00
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(lineitem.l_orderkey (#0) > 1), is_true(lineitem.l_commitdate (#11) = '1992-01-22')]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 1.00
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
@@ -95,7 +95,7 @@ EvalScalar
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [and_filters(lineitem.l_orderkey (#0) > 1, lineitem.l_commitdate (#11) = '1992-01-22')], limit: NONE]
-        └── estimated rows: 0.00
+        └── estimated rows: 600572.00
 
 
 query T
@@ -117,7 +117,7 @@ EvalScalar
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [NOT is_not_null(lineitem.l_orderkey (#0))], limit: NONE]
-        └── estimated rows: 0.00
+        └── estimated rows: 600572.00
 
 query T
 explain select 1 from  ctl.tpch.lineitem where l_orderkey is null or l_commitdate is not null;
@@ -125,17 +125,17 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey is null or l_commitdat
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 0.00
+├── estimated rows: 600572.00
 └── Filter
     ├── output columns: []
     ├── filters: [(NOT is_not_null(lineitem.l_orderkey (#0)) OR is_not_null(lineitem.l_commitdate (#11)))]
-    ├── estimated rows: 0.00
+    ├── estimated rows: 600572.00
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
         ├── read rows: 600572
-        ├── read size: 14.27 MiB
-        ├── partitions total: 4
-        ├── partitions scanned: 4
+        ├── read size: 14.54 MiB
+        ├── partitions total: 18
+        ├── partitions scanned: 18
         ├── push downs: [filters: [(NOT is_not_null(lineitem.l_orderkey (#0)) OR is_not_null(lineitem.l_commitdate (#11)))], limit: NONE]
-        └── estimated rows: 0.00
+        └── estimated rows: 600572.00
