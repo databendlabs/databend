@@ -17,5 +17,5 @@ To run the TPC-DS Benchmark, first build `databend-sqllogictests` binary.
 Then, execute the following command in your shell:
 
 ```shell
-databend-sqllogictests --handlers mysql --database tpcds --run_dir tpcds --bench
+databend-sqllogictests --handlers mysql --database tpcds --run_dir tpcds --bench --run_file queries.test
 ```
