@@ -125,4 +125,28 @@ statement ok
 DROP TABLE test_insert
 
 statement ok
+CREATE OR REPLACE TABLE t4(data variant);
+
+statement ok
+INSERT INTO t4 values('{"user_id":1}'),('{"user_id":2}')
+
+statement ok
+CREATE OR REPLACE TABLE t5(data variant, user_id uint8 not null);
+
+statement ok
+INSERT INTO t5 SELECT data, data:user_id AS user_id FROM t4;
+
+query TI
+SELECT * FROM t5;
+----
+{"user_id":1} 1
+{"user_id":2} 2
+
+statement ok
+INSERT INTO t4 values('{}');
+
+statement error
+INSERT INTO t5 SELECT data, data:user_id AS user_id FROM t4;
+
+statement ok
 DROP DATABASE db1

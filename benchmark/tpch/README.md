@@ -3,6 +3,7 @@
 
 ## Preparing the Table and Data
 
+We use [DuckDB](https://duckdb.org/docs/installation/) to generate TPCH data.
 To prepare the table and data for the TPC-H Benchmark, run the following command in your shell:
 
 ```shell
