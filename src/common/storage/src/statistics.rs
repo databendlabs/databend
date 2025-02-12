@@ -184,19 +184,19 @@ impl Datum {
     }
 
     pub fn can_compare(&self, other: &Self) -> bool {
-        match (self, other) {
+        matches!(
+            (self, other),
             (Datum::Bool(_), Datum::Bool(_))
-            | (Datum::Int(_), Datum::Int(_))
-            | (Datum::Int(_), Datum::UInt(_))
-            | (Datum::Int(_), Datum::Float(_))
-            | (Datum::UInt(_), Datum::UInt(_))
-            | (Datum::UInt(_), Datum::Int(_))
-            | (Datum::UInt(_), Datum::Float(_))
-            | (Datum::Float(_), Datum::Float(_))
-            | (Datum::Float(_), Datum::Int(_))
-            | (Datum::Float(_), Datum::UInt(_))
-            | (Datum::Bytes(_), Datum::Bytes(_)) => true,
-            _ => false,
-        }
+                | (Datum::Int(_), Datum::Int(_))
+                | (Datum::Int(_), Datum::UInt(_))
+                | (Datum::Int(_), Datum::Float(_))
+                | (Datum::UInt(_), Datum::UInt(_))
+                | (Datum::UInt(_), Datum::Int(_))
+                | (Datum::UInt(_), Datum::Float(_))
+                | (Datum::Float(_), Datum::Float(_))
+                | (Datum::Float(_), Datum::Int(_))
+                | (Datum::Float(_), Datum::UInt(_))
+                | (Datum::Bytes(_), Datum::Bytes(_))
+        )
     }
 }
