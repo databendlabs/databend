@@ -368,7 +368,6 @@ impl ReclusterTableInterpreter {
                         }),
                         plan.output_schema()?.as_ref(),
                     )?;
-                    log::warn!("hilbert recluster expr: {:?}", expr);
                     plan = Box::new(PhysicalPlan::Exchange(Exchange {
                         plan_id: 0,
                         input: plan,

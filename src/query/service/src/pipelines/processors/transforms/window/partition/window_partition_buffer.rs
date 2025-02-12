@@ -158,93 +158,75 @@ impl WindowPartitionBuffer {
         while self.next_to_restore_partition_id + 1 < self.num_partitions as isize {
             self.next_to_restore_partition_id += 1;
             let partition_id = self.next_to_restore_partition_id as usize;
-            let result = self.restore_by_id(partition_id).await?;
+            // Restore large partitions from spilled files.
+            let mut result = self.spiller.read_spilled_partition(&partition_id).await?;
+
+            // Restore small merged partitions from spilled files.
+            let spilled_small_partitions =
+                std::mem::take(&mut self.spilled_small_partitions[partition_id]);
+            for index in spilled_small_partitions {
+                let out_of_memory_limit = self.out_of_memory_limit();
+                let (merged_partitions, restored, partial_restored) =
+                    &mut self.spilled_merged_partitions[index];
+                if *restored {
+                    continue;
+                }
+                let MergedPartition {
+                    location,
+                    partitions,
+                } = merged_partitions;
+                if out_of_memory_limit || *partial_restored {
+                    if let Some(pos) = partitions.iter().position(|(id, _)| *id == partition_id) {
+                        let data_block = self
+                            .spiller
+                            .read_chunk(location, &partitions[pos].1)
+                            .await?;
+                        self.restored_partition_buffer
+                            .add_data_block(partition_id, data_block);
+                        partitions.remove(pos);
+                        *partial_restored = true;
+                    }
+                } else {
+                    let partitioned_data = self
+                        .spiller
+                        .read_merged_partitions(merged_partitions)
+                        .await?;
+                    for (partition_id, data_block) in partitioned_data.into_iter() {
+                        self.restored_partition_buffer
+                            .add_data_block(partition_id, data_block);
+                    }
+                    *restored = true;
+                }
+            }
+
+            if !self.partition_buffer.is_partition_empty(partition_id) {
+                let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
+                if let Some(data_blocks) = self
+                    .partition_buffer
+                    .fetch_data_blocks(partition_id, &option)?
+                {
+                    result.extend(self.concat_data_blocks(data_blocks)?);
+                }
+            }
+
+            if !self
+                .restored_partition_buffer
+                .is_partition_empty(partition_id)
+            {
+                let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
+                if let Some(data_blocks) = self
+                    .restored_partition_buffer
+                    .fetch_data_blocks(partition_id, &option)?
+                {
+                    result.extend(self.concat_data_blocks(data_blocks)?);
+                }
+            }
+
             if !result.is_empty() {
                 return Ok(result);
             }
         }
         Ok(vec![])
-    }
-
-    // Restore data blocks from buffer and spilled files.
-    pub async fn restore_with_id(&mut self) -> Result<(usize, Vec<DataBlock>)> {
-        while self.next_to_restore_partition_id + 1 < self.num_partitions as isize {
-            self.next_to_restore_partition_id += 1;
-            let partition_id = self.next_to_restore_partition_id as usize;
-            let result = self.restore_by_id(partition_id).await?;
-            if !result.is_empty() {
-                return Ok((partition_id, result));
-            }
-        }
-        Ok((0, vec![]))
-    }
-
-    pub async fn restore_by_id(&mut self, partition_id: usize) -> Result<Vec<DataBlock>> {
-        // Restore large partitions from spilled files.
-        let mut result = self.spiller.read_spilled_partition(&partition_id).await?;
-
-        // Restore small merged partitions from spilled files.
-        let spilled_small_partitions =
-            std::mem::take(&mut self.spilled_small_partitions[partition_id]);
-        for index in spilled_small_partitions {
-            let out_of_memory_limit = self.out_of_memory_limit();
-            let (merged_partitions, restored, partial_restored) =
-                &mut self.spilled_merged_partitions[index];
-            if *restored {
-                continue;
-            }
-            let MergedPartition {
-                location,
-                partitions,
-            } = merged_partitions;
-            if out_of_memory_limit || *partial_restored {
-                if let Some(pos) = partitions.iter().position(|(id, _)| *id == partition_id) {
-                    let data_block = self
-                        .spiller
-                        .read_chunk(location, &partitions[pos].1)
-                        .await?;
-                    self.restored_partition_buffer
-                        .add_data_block(partition_id, data_block);
-                    partitions.remove(pos);
-                    *partial_restored = true;
-                }
-            } else {
-                let partitioned_data = self
-                    .spiller
-                    .read_merged_partitions(merged_partitions)
-                    .await?;
-                for (partition_id, data_block) in partitioned_data.into_iter() {
-                    self.restored_partition_buffer
-                        .add_data_block(partition_id, data_block);
-                }
-                *restored = true;
-            }
-        }
-
-        if !self.partition_buffer.is_partition_empty(partition_id) {
-            let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
-            if let Some(data_blocks) = self
-                .partition_buffer
-                .fetch_data_blocks(partition_id, &option)?
-            {
-                result.extend(self.concat_data_blocks(data_blocks)?);
-            }
-        }
-
-        if !self
-            .restored_partition_buffer
-            .is_partition_empty(partition_id)
-        {
-            let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
-            if let Some(data_blocks) = self
-                .restored_partition_buffer
-                .fetch_data_blocks(partition_id, &option)?
-            {
-                result.extend(self.concat_data_blocks(data_blocks)?);
-            }
-        }
-
-        Ok(result)
     }
 
     fn concat_data_blocks(&self, data_blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
