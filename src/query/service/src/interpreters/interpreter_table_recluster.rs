@@ -27,6 +27,7 @@ use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::bind_table;
@@ -44,6 +45,7 @@ use databend_common_sql::plans::set_update_stream_columns;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::ReclusterPlan;
+use databend_common_sql::query_executor::QueryExecutor;
 use databend_common_sql::IdentifierNormalizer;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Planner;
@@ -52,6 +54,7 @@ use databend_common_sql::TypeChecker;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 use databend_storages_common_table_meta::table::ClusterType;
 use derive_visitor::DriveMut;
+use itertools::Itertools;
 use log::error;
 use log::warn;
 
@@ -265,21 +268,62 @@ impl ReclusterTableInterpreter {
                     },
                 );
 
+                let subquery_executor = Arc::new(ServiceQueryExecutor::new(
+                    QueryContext::create_from(self.ctx.as_ref()),
+                ));
                 let partitions = settings.get_hilbert_num_range_ids()?;
                 let sample_size = settings.get_hilbert_sample_size_per_block()?;
                 let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
-                let mut hilbert_keys = Vec::with_capacity(cluster_key_strs.len());
-                for (index, cluster_key_str) in cluster_key_strs.into_iter().enumerate() {
+                for (index, cluster_key_str) in cluster_key_strs.iter().enumerate() {
                     keys_bounds.push(format!(
                         "range_bound({partitions}, {sample_size})({cluster_key_str}) AS bound_{index}"
                     ));
+                }
+                let keys_bounds_query =
+                    format!("SELECT {} FROM {database}.{table}", keys_bounds.join(", "));
+                let data_blocks = subquery_executor
+                    .execute_query_with_sql_string(&keys_bounds_query)
+                    .await?;
+                let keys_bounds = DataBlock::concat(&data_blocks)?;
+
+                let mut hilbert_keys = Vec::with_capacity(keys_bounds.num_columns());
+                for (entry, cluster_key_str) in keys_bounds
+                    .columns()
+                    .iter()
+                    .zip(cluster_key_strs.into_iter())
+                {
+                    let v = entry.value.index(0).unwrap().to_string();
                     hilbert_keys.push(format!(
-                        "hilbert_key(cast(ifnull(range_partition_id({table}.{cluster_key_str}, \
-                    _keys_bound.bound_{index}), {partitions}) as uint16))"
+                        "hilbert_key(cast(ifnull(range_partition_id({table}.{cluster_key_str}, {v}), {partitions}) as uint16))"
                     ));
                 }
-                let keys_bounds_str = keys_bounds.join(", ");
                 let hilbert_keys_str = hilbert_keys.join(", ");
+                let index_bound_query = format!(
+                    "WITH _source_data AS ( \
+                        SELECT \
+                            hilbert_index([{hilbert_keys_str}], 2) AS index \
+                        FROM {database}.{table} \
+                    ) \
+                    SELECT range_bound({total_partitions}, {sample_size})(index) AS bound \
+                        FROM _source_data"
+                );
+                let data_blocks = subquery_executor
+                    .execute_query_with_sql_string(&index_bound_query)
+                    .await?;
+                debug_assert!(data_blocks.len() == 1);
+                let val = data_blocks[0].value_at(0, 0).unwrap();
+                let col = val.as_array().unwrap().as_binary().unwrap();
+                let index_bound_str = col
+                    .iter()
+                    .map(|s| {
+                        let binary = s
+                            .iter()
+                            .map(|byte| format!("{:02X}", byte))
+                            .collect::<Vec<String>>()
+                            .join("");
+                        format!("unhex('{}')", binary)
+                    })
+                    .join(", ");
 
                 let quote = settings.get_sql_dialect()?.default_ident_quote();
                 let schema = tbl.schema_with_stream();
@@ -291,26 +335,11 @@ impl ReclusterTableInterpreter {
                     ));
                 }
                 let output_with_table_str = output_with_table.join(", ");
-
                 let query = format!(
-                    "WITH _keys_bound AS materialized ( \
-                        SELECT \
-                            {keys_bounds_str} \
-                        FROM {database}.{table} \
-                    ), \
-                    _source_data AS ( \
-                        SELECT \
-                            hilbert_index([{hilbert_keys_str}], 2) AS index \
-                        FROM _keys_bound, {database}.{table} \
-                    ), \
-                    _index_bound AS materialized ( \
-                        SELECT range_bound({total_partitions}, {sample_size})(index) AS bound \
-                        FROM _source_data \
-                    ) \
-                    SELECT \
+                    "SELECT \
                         {output_with_table_str}, \
-                        range_partition_id(hilbert_index([{hilbert_keys_str}], 2), _index_bound.bound)AS _predicate \
-                    FROM {database}.{table}, _index_bound, _keys_bound"
+                        range_partition_id(hilbert_index([{hilbert_keys_str}], 2), [{index_bound_str}])AS _predicate \
+                    FROM {database}.{table}"
                 );
                 let tokens = tokenize_sql(query.as_str())?;
                 let sql_dialect = self
@@ -323,12 +352,8 @@ impl ReclusterTableInterpreter {
                 let query_str = self.ctx.get_query_str();
                 let write_progress = self.ctx.get_write_progress();
                 let write_progress_value = write_progress.as_ref().get_values();
-                let mut planner = Planner::new_with_query_executor(
-                    self.ctx.clone(),
-                    Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
-                        self.ctx.as_ref(),
-                    ))),
-                );
+                let mut planner =
+                    Planner::new_with_query_executor(self.ctx.clone(), subquery_executor);
                 let plan = planner.plan_stmt(&stmt, false).await?;
                 let Plan::Query {
                     mut s_expr,
