@@ -14,14 +14,12 @@
 
 use std::sync::Arc;
 
-use arrow_array::RecordBatch;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_storages_common_table_meta::meta::AbstractSegment;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
-use databend_storages_common_table_meta::meta::Statistics;
 
 #[derive(Default)]
 pub struct RowOrientedSegmentBuilder {

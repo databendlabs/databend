@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::io::SeekFrom;
-use std::sync::Arc;
 
 use arrow_ipc::convert::try_schema_from_ipc_buffer;
 use bytes::Buf;
@@ -27,13 +26,10 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
-use databend_storages_common_table_meta::meta::AbstractSegment;
-use databend_storages_common_table_meta::meta::ColumnOrientedSegment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
-use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::TableSnapshotStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
@@ -42,7 +38,6 @@ use futures::AsyncSeek;
 use futures_util::AsyncSeekExt;
 use opendal::Buffer;
 use opendal::Operator;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::format::FileMetaData;
 use parquet::thrift::TSerializable;
 
@@ -140,22 +135,6 @@ impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
         let LoaderWrapper((operator, schema)) = &self;
         let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
         (version, schema.clone()).read(reader.reader())
-    }
-}
-
-#[async_trait::async_trait]
-impl Loader<ColumnOrientedSegment> for LoaderWrapper<(Operator, TableSchemaRef)> {
-    #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<ColumnOrientedSegment> {
-        let LoaderWrapper((operator, schema)) = &self;
-        let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        let mut record_reader = ParquetRecordBatchReader::try_new(reader.to_bytes(), usize::MAX)?;
-        let record = record_reader.next().unwrap()?;
-        assert!(record_reader.next().is_none());
-        Ok(ColumnOrientedSegment {
-            block_metas: record,
-            summary: Statistics::default(),
-        })
     }
 }
 

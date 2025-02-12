@@ -19,6 +19,9 @@ use arrow::datatypes::Field;
 use arrow::datatypes::Fields;
 use arrow::datatypes::Schema;
 use arrow::datatypes::SchemaRef;
+use databend_common_expression::types::DataType as DType;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableSchema;
 
 pub fn location_fields() -> Fields {
     Fields::from(vec![
@@ -31,15 +34,51 @@ pub fn location_type() -> DataType {
     DataType::Struct(location_fields())
 }
 
-pub fn segment_schema() -> SchemaRef {
-    Arc::new(Schema::new(vec![
+pub fn col_stats_type(col_type: &TableDataType) -> DataType {
+    let d_type = DType::from(col_type);
+    let arrow_type = DataType::from(&d_type);
+    DataType::Struct(Fields::from(vec![
+        Field::new("min", arrow_type.clone(), false),
+        Field::new("max", arrow_type, false),
+        Field::new("null_count", DataType::UInt64, false),
+        Field::new("in_memory_size", DataType::UInt64, false),
+        Field::new("distinct_of_values", DataType::UInt64, true),
+    ]))
+}
+
+pub fn col_meta_type() -> DataType {
+    DataType::Struct(Fields::from(vec![
+        Field::new("offset", DataType::UInt64, false),
+        Field::new("length", DataType::UInt64, false),
+        Field::new("num_values", DataType::UInt64, false),
+    ]))
+}
+
+pub fn segment_schema(table_schema: Arc<TableSchema>) -> SchemaRef {
+    let mut fields = vec![
         Field::new("row_count", DataType::UInt64, false),
         Field::new("block_size", DataType::UInt64, false),
         Field::new("file_size", DataType::UInt64, false),
         Field::new("location", location_type(), false),
-        // Field::new("bloom_filter_index_location", location_type(), true),
+        Field::new("bloom_filter_index_location", location_type(), true),
         Field::new("bloom_filter_index_size", DataType::UInt64, false),
         Field::new("inverted_index_size", DataType::UInt64, true),
         Field::new("compression", DataType::UInt8, false),
-    ]))
+        Field::new("create_on", DataType::Int64, false),
+        Field::new("cluster_stats", DataType::Utf8, true),
+    ];
+
+    for field in table_schema.leaf_fields() {
+        fields.push(Field::new(
+            format!("stat_{}", field.column_id()),
+            col_stats_type(&field.data_type()),
+            true,
+        ));
+        fields.push(Field::new(
+            format!("meta_{}", field.column_id()),
+            col_meta_type(),
+            true,
+        ));
+    }
+    Arc::new(Schema::new(fields))
 }

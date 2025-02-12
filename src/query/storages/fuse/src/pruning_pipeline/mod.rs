@@ -15,7 +15,6 @@
 mod async_block_prune_transform;
 mod block_metas_meta;
 mod block_prune_result_meta;
-mod column_oriented;
 mod extract_segment_transform;
 mod lazy_segment_meta;
 mod lazy_segment_receiver_source;

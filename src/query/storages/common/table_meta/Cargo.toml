@@ -13,6 +13,7 @@ dev = ["snap"]
 
 arrow = { workspace = true }
 bincode_v1 = { workspace = true }
+bytes = { workspace = true }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-datavalues = { workspace = true }

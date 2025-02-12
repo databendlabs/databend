@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
@@ -51,6 +52,8 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::analyze_cluster_keys;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::AbstractBlockMeta;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use jsonb::Value as JsonbValue;
@@ -117,23 +120,22 @@ impl SimpleArgFunc for ClusteringInformationNew {
         args: &Self::Args,
         _plan: &DataSourcePlan,
     ) -> Result<DataBlock> {
-        // let tenant_id = ctx.get_tenant();
-        // let tbl = ctx
-        //     .get_catalog(CATALOG_DEFAULT)
-        //     .await?
-        //     .get_table(
-        //         &tenant_id,
-        //         args.database_name.as_str(),
-        //         args.table_name.as_str(),
-        //     )
-        //     .await?;
+        let tenant_id = ctx.get_tenant();
+        let tbl = ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .get_table(
+                &tenant_id,
+                args.database_name.as_str(),
+                args.table_name.as_str(),
+            )
+            .await?;
 
-        // let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        // ClusteringInformation::new(ctx.clone(), tbl, args.cluster_key.clone())
-        //     .get_clustering_info()
-        //     .await
-        todo!()
+        ClusteringInformation::new(ctx.clone(), tbl, args.cluster_key.clone())
+            .get_clustering_info()
+            .await
     }
 }
 
@@ -254,10 +256,11 @@ impl<'a> ClusteringInformation<'a> {
         let total_block_count = snapshot.summary.block_count;
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in snapshot.segments.chunks(chunk_size) {
-            let segments = segments_io.read_segments(chunk, true).await?;
+            let segments: Vec<Result<SegmentInfo>> =
+                segments_io.read_segments_old(chunk, true).await?;
 
             for segment in segments.into_iter().flatten() {
-                for block in segment.blocks() {
+                for block in segment.blocks {
                     let (min, max) =
                         get_min_max_stats(&exprs, &block, schema.clone(), default_cluster_key_id);
                     assert_eq!(min.len(), max.len());
@@ -444,7 +447,7 @@ impl<'a> ClusteringInformation<'a> {
 
 fn get_min_max_stats(
     exprs: &[Expr<String>],
-    block: &Arc<dyn AbstractBlockMeta>,
+    block: &BlockMeta,
     schema: Arc<TableSchema>,
     default_key_id: Option<u32>,
 ) -> (Vec<Scalar>, Vec<Scalar>) {

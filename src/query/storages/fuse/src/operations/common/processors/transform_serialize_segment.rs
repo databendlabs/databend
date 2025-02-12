@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -135,7 +136,7 @@ pub fn new_serialize_segment_processor(
                 output,
                 table,
                 thresholds,
-                ColumnOrientedSegmentBuilder::default(),
+                ColumnOrientedSegmentBuilder::new(table.schema()),
             );
             Ok(ProcessorPtr::create(Box::new(processor)))
         }
@@ -165,7 +166,7 @@ pub fn new_serialize_segment_pipe_item(
                 output,
                 table,
                 thresholds,
-                ColumnOrientedSegmentBuilder::default(),
+                ColumnOrientedSegmentBuilder::new(table.schema()),
             );
             Ok(processor.into_pipe_item())
         }
@@ -248,7 +249,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     .build(self.thresholds, self.default_cluster_key_id)?;
 
                 self.state = State::SerializedSegment {
-                    data: segment_info.as_ref().to_bytes()?,
+                    data: segment_info.as_ref().serialize()?,
                     location: self.meta_locations.gen_segment_info_location(),
                     segment: segment_info,
                 }
