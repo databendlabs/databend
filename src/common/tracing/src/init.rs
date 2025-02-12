@@ -72,6 +72,16 @@ pub fn inject_span_to_tonic_request<T>(msg: impl tonic::IntoRequest<T>) -> tonic
     request
 }
 
+fn env_filter(level: &str) -> EnvFilter {
+    EnvFilter::new(
+        EnvFilterBuilder::new()
+            .filter(Some("databend::log::query"), LevelFilter::Off)
+            .filter(Some("databend::log::profile"), LevelFilter::Off)
+            .filter(Some("databend::log::structlog"), LevelFilter::Off)
+            .parse(level),
+    )
+}
+
 pub fn init_logging(
     log_name: &str,
     cfg: &Config,
@@ -180,13 +190,7 @@ pub fn init_logging(
         _drop_guards.push(flush_guard);
 
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                EnvFilterBuilder::new()
-                    .filter(Some("databend::log::query"), LevelFilter::Off)
-                    .filter(Some("databend::log::profile"), LevelFilter::Off)
-                    .filter(Some("databend::log::structlog"), LevelFilter::Off)
-                    .parse(&cfg.file.level),
-            ))
+            .filter(env_filter(&cfg.file.level))
             .filter(make_log_filter(&cfg.file.prefix_filter))
             .append(normal_log_file.with_layout(get_layout(&cfg.file.format)));
         logger = logger.dispatch(dispatch);
@@ -195,13 +199,7 @@ pub fn init_logging(
     // console logger
     if cfg.stderr.on {
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                EnvFilterBuilder::new()
-                    .filter(Some("databend::log::query"), LevelFilter::Off)
-                    .filter(Some("databend::log::profile"), LevelFilter::Off)
-                    .filter(Some("databend::log::structlog"), LevelFilter::Off)
-                    .parse(&cfg.stderr.level),
-            ))
+            .filter(env_filter(&cfg.stderr.level))
             .append(
                 logforth::append::Stderr::default().with_layout(get_layout(&cfg.stderr.format)),
             );
@@ -227,33 +225,15 @@ pub fn init_logging(
             .build()
             .expect("initialize opentelemetry logger");
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                EnvFilterBuilder::new()
-                    .filter(Some("databend::log::query"), LevelFilter::Off)
-                    .filter(Some("databend::log::profile"), LevelFilter::Off)
-                    .filter(Some("databend::log::structlog"), LevelFilter::Off)
-                    .parse(&cfg.otlp.level),
-            ))
+            .filter(env_filter(&cfg.otlp.level))
             .append(otel);
         logger = logger.dispatch(dispatch);
     }
 
     // log to fastrace
     if cfg.tracing.on || cfg.structlog.on {
-        let level = cfg
-            .tracing
-            .capture_log_level
-            .parse()
-            .ok()
-            .unwrap_or(LevelFilter::Info);
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                EnvFilterBuilder::new()
-                    .filter(Some("databend::log::query"), LevelFilter::Off)
-                    .filter(Some("databend::log::profile"), LevelFilter::Off)
-                    .filter(Some("databend::log::structlog"), LevelFilter::Off),
-            ))
-            .filter(level)
+            .filter(env_filter(&cfg.tracing.capture_log_level))
             .append(logforth::append::FastraceEvent::default());
         logger = logger.dispatch(dispatch);
     }
