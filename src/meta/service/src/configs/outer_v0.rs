@@ -411,7 +411,7 @@ impl Into<Config> for ConfigViaEnv {
                 file_dir: self.metasrv_log_file_dir,
                 file_format: self.metasrv_log_file_format,
                 file_limit: self.metasrv_log_file_limit,
-                file_prefix_filter: "databend_,openraft".to_string(),
+                file_prefix_filter: None,
             },
             stderr: StderrLogConfig {
                 stderr_on: self.metasrv_log_stderr_on,
@@ -726,12 +726,10 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
-    /// Log prefix filter, separated by comma.
-    /// For example, `"databend_,openraft"` enables logging for `databend_*` crates and `openraft` crate.
-    /// This filter does not affect `WARNING` and `ERROR` log.
-    #[clap(long = "log-file-prefix-filter", default_value = "databend_,openraft")]
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
     #[serde(rename = "prefix_filter")]
-    pub file_prefix_filter: String,
+    pub file_prefix_filter: Option<String>,
 }
 
 impl Default for FileLogConfig {
@@ -749,7 +747,6 @@ impl Into<InnerFileLogConfig> for FileLogConfig {
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
-            prefix_filter: self.file_prefix_filter,
         }
     }
 }
@@ -762,7 +759,8 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
-            file_prefix_filter: inner.prefix_filter,
+            // Deprecated Fields
+            file_prefix_filter: None,
         }
     }
 }

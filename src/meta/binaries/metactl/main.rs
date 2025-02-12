@@ -372,7 +372,6 @@ async fn main() -> anyhow::Result<()> {
             dir: ".databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
-            prefix_filter: "databend_".to_string(),
         },
         ..Default::default()
     };

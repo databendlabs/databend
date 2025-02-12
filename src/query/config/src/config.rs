@@ -2126,16 +2126,10 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
-    /// Log prefix filter, separated by comma.
-    /// For example, `"databend_,openraft"` enables logging for `databend_*` crates and `openraft` crate.
-    /// This filter does not affect `WARNING` and `ERROR` log.
-    #[clap(
-        long = "log-file-prefix-filter",
-        value_name = "VALUE",
-        default_value = "databend_,openraft"
-    )]
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
     #[serde(rename = "prefix_filter")]
-    pub file_prefix_filter: String,
+    pub file_prefix_filter: Option<String>,
 }
 
 impl Default for FileLogConfig {
@@ -2148,13 +2142,18 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerFileLogConfig> {
+        if self.file_prefix_filter.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`prefix_filter` is deprecated, use `level` with the syntax of env_logger instead."
+                    .to_string(),
+            ));
+        }
         Ok(InnerFileLogConfig {
             on: self.file_on,
             level: self.file_level,
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
-            prefix_filter: self.file_prefix_filter,
         })
     }
 }
@@ -2167,7 +2166,9 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
-            file_prefix_filter: inner.prefix_filter,
+
+            // Deprecated Fields
+            file_prefix_filter: None,
         }
     }
 }
