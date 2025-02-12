@@ -249,6 +249,7 @@ pub struct AttachTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub columns_opt: Option<Vec<Identifier>>,
     pub uri_location: UriLocation,
 }
 
@@ -262,6 +263,10 @@ impl Display for AttachTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
+
+        if let Some(cols) = &self.columns_opt {
+            write_comma_separated_list(f, cols.iter())?;
+        }
 
         write!(f, " {}", self.uri_location)?;
 

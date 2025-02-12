@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -71,9 +73,34 @@ impl AttachTableHandler for RealAttachTableHandler {
             number_of_blocks: Some(snapshot.summary.block_count),
         };
 
+        let attach_table_schema = if let Some(attached_columns) = &plan.attached_columns {
+            let schema = &snapshot.schema;
+            let mut fields_to_attach = vec![];
+            let mut invalid_cols = vec![];
+            for field in attached_columns {
+                match schema.field_with_name(&field.name) {
+                    Ok(f) => fields_to_attach.push(f.clone()),
+                    Err(_) => invalid_cols.push(field.name.as_str()),
+                }
+            }
+            if !invalid_cols.is_empty() {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Attached columns do not exist: {}",
+                    invalid_cols.join(",")
+                )));
+            }
+            TableSchema {
+                fields: fields_to_attach,
+                metadata: schema.metadata.clone(),
+                next_column_id: schema.next_column_id,
+            }
+        } else {
+            snapshot.schema.clone()
+        };
+
         let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
         let table_meta = TableMeta {
-            schema: Arc::new(snapshot.schema.clone()),
+            schema: Arc::new(attach_table_schema),
             engine: plan.engine.to_string(),
             storage_params: plan.storage_params.clone(),
             options,
