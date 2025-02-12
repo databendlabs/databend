@@ -32,7 +32,7 @@ EvalScalar
         ├── partitions total: 0
         ├── partitions scanned: 0
         ├── push downs: [filters: [is_true(lineitem.l_orderkey (#0) < 1)], limit: NONE]
-        └── estimated rows: 0.00
+        └── estimated rows: 600572.00
 
 query T
 explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1 or l_commitdate < '1992-01-31';
