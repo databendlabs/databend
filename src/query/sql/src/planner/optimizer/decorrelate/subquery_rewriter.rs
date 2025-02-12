@@ -254,6 +254,10 @@ impl SubqueryRewriter {
                 let mut subquery = subquery.clone();
                 subquery.subquery = Box::new(self.rewrite(&subquery.subquery)?);
 
+                if let Some(constant_subquery) = self.try_fold_constant_subquery(&subquery)? {
+                    return Ok((constant_subquery, s_expr.clone()));
+                }
+
                 // Check if the subquery is a correlated subquery.
                 // If it is, we'll try to flatten it and rewrite to join.
                 // If it is not, we'll just rewrite it to join

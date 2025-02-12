@@ -18,6 +18,9 @@ use std::sync::Arc;
 use databend_common_ast::Span;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
@@ -30,12 +33,15 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
+use crate::plans::ComparisonOp;
+use crate::plans::ConstantExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -516,5 +522,222 @@ impl SubqueryRewriter {
             }
             true
         }))
+    }
+
+    // Try folding the subquery into a constant value expression,
+    // which turns the join plan into a filter plan, so that the bloom filter
+    // can be used to reduce the amount of data that needs to be read.
+    pub fn try_fold_constant_subquery(
+        &self,
+        subquery: &SubqueryExpr,
+    ) -> Result<Option<ScalarExpr>> {
+        // (1) EvalScalar
+        //      \
+        //       DummyTableScan
+        //
+        // (2) EvalScalar
+        //      \
+        //       EvalScalar
+        //        \
+        //         ProjectSet
+        //          \
+        //           DummyTableScan
+        let matchers = vec![
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::DummyTableScan,
+                    children: vec![],
+                }],
+            },
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::EvalScalar,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::ProjectSet,
+                        children: vec![Matcher::MatchOp {
+                            op_type: RelOp::DummyTableScan,
+                            children: vec![],
+                        }],
+                    }],
+                }],
+            },
+        ];
+
+        let mut matched = false;
+        for matcher in matchers {
+            if matcher.matches(&subquery.subquery) {
+                matched = true;
+                break;
+            }
+        }
+        if !matched {
+            return Ok(None);
+        }
+
+        let child = subquery.subquery.child(0)?;
+        if let RelOperator::DummyTableScan(_) = child.plan() {
+            // subquery is a simple constant value.
+            // for example: `SELECT * FROM t WHERE id = (select 1);`
+            if let RelOperator::EvalScalar(eval) = subquery.subquery.plan() {
+                if eval.items.len() != 1 {
+                    return Ok(None);
+                }
+                let Ok(const_scalar) = ConstantExpr::try_from(eval.items[0].scalar.clone()) else {
+                    return Ok(None);
+                };
+                match (&subquery.child_expr, subquery.compare_op) {
+                    (Some(child_expr), Some(compare_op)) => {
+                        let func_name = compare_op.to_func_name().to_string();
+                        let func = ScalarExpr::FunctionCall(FunctionCall {
+                            span: subquery.span,
+                            func_name,
+                            params: vec![],
+                            arguments: vec![*child_expr.clone(), const_scalar.into()],
+                        });
+                        return Ok(Some(func));
+                    }
+                    (None, None) => match subquery.typ {
+                        SubqueryType::Scalar => {
+                            return Ok(Some(const_scalar.into()));
+                        }
+                        SubqueryType::Exists => {
+                            return Ok(Some(ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: subquery.span,
+                                value: Scalar::Boolean(true),
+                            })));
+                        }
+                        SubqueryType::NotExists => {
+                            return Ok(Some(ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: subquery.span,
+                                value: Scalar::Boolean(false),
+                            })));
+                        }
+                        _ => {}
+                    },
+                    (_, _) => {}
+                }
+            }
+        } else {
+            // subquery is a set returning function return constant values.
+            // for example: `SELECT * FROM t WHERE id IN (SELECT * FROM UNNEST(SPLIT('1,2,3', ',')) AS t1);`
+            let mut output_column_index = None;
+            if let RelOperator::EvalScalar(eval) = subquery.subquery.plan() {
+                if eval.items.len() != 1 {
+                    return Ok(None);
+                }
+                if let ScalarExpr::BoundColumnRef(bound_column) = &eval.items[0].scalar {
+                    output_column_index = Some(bound_column.column.index);
+                }
+            }
+            if output_column_index.is_none() {
+                return Ok(None);
+            }
+            let output_column_index = output_column_index.unwrap();
+
+            let mut srf_column_index = None;
+            if let RelOperator::EvalScalar(eval) = child.plan() {
+                if eval.items.len() != 1 || eval.items[0].index != output_column_index {
+                    return Ok(None);
+                }
+                if let ScalarExpr::FunctionCall(get_func) = &eval.items[0].scalar {
+                    if get_func.func_name == "get"
+                        && get_func.arguments.len() == 1
+                        && get_func.params.len() == 1
+                        && get_func.params[0] == Scalar::Number(NumberScalar::Int64(1))
+                    {
+                        if let ScalarExpr::BoundColumnRef(bound_column) = &get_func.arguments[0] {
+                            srf_column_index = Some(bound_column.column.index);
+                        }
+                    }
+                }
+            }
+            if srf_column_index.is_none() {
+                return Ok(None);
+            }
+            let srf_column_index = srf_column_index.unwrap();
+
+            let project_set_expr = child.child(0)?;
+            if let RelOperator::ProjectSet(project_set) = project_set_expr.plan() {
+                if project_set.srfs.len() != 1
+                    || project_set.srfs[0].index != srf_column_index
+                    || subquery.compare_op != Some(ComparisonOp::Equal)
+                    || subquery.typ != SubqueryType::Any
+                {
+                    return Ok(None);
+                }
+                let Ok(srf) = FunctionCall::try_from(project_set.srfs[0].scalar.clone()) else {
+                    return Ok(None);
+                };
+                if srf.arguments.len() != 1 {
+                    return Ok(None);
+                }
+                let Ok(const_scalar) = ConstantExpr::try_from(srf.arguments[0].clone()) else {
+                    return Ok(None);
+                };
+                let Some(child_expr) = &subquery.child_expr else {
+                    return Ok(None);
+                };
+                match &const_scalar.value {
+                    Scalar::EmptyArray => {
+                        return Ok(Some(ScalarExpr::ConstantExpr(ConstantExpr {
+                            span: subquery.span,
+                            value: Scalar::Null,
+                        })));
+                    }
+                    Scalar::Array(array_column) => {
+                        let mut funcs = Vec::with_capacity(array_column.len());
+                        for scalar in array_column.iter() {
+                            // Ignoring NULL values in equivalent filter
+                            if scalar == ScalarRef::Null {
+                                continue;
+                            }
+                            let value = ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: subquery.span,
+                                value: scalar.to_owned(),
+                            });
+                            let func = ScalarExpr::FunctionCall(FunctionCall {
+                                span: subquery.span,
+                                func_name: "eq".to_string(),
+                                params: vec![],
+                                arguments: vec![*child_expr.clone(), value],
+                            });
+                            funcs.push(func);
+                        }
+                        // If there is no equivalent function, the filter condition does not match,
+                        // return a NULL value.
+                        if funcs.is_empty() {
+                            return Ok(Some(ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: subquery.span,
+                                value: Scalar::Null,
+                            })));
+                        }
+
+                        let or_func = funcs
+                            .into_iter()
+                            .fold(None, |mut acc, func| {
+                                match acc.as_mut() {
+                                    None => acc = Some(func),
+                                    Some(acc) => {
+                                        *acc = ScalarExpr::FunctionCall(FunctionCall {
+                                            span: subquery.span,
+                                            func_name: "or".to_string(),
+                                            params: vec![],
+                                            arguments: vec![acc.clone(), func],
+                                        });
+                                    }
+                                }
+                                acc
+                            })
+                            .unwrap();
+                        return Ok(Some(or_func));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        Ok(None)
     }
 }

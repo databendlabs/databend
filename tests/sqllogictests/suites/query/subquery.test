@@ -680,6 +680,36 @@ query T
 SELECT  *, (SELECT SUM(a) FROM t3 WHERE b IN (SELECT b FROM t1 WHERE a = t2.a )) FROM t2 WHERE  b IN (SELECT b FROM t3 WHERE a > 1);
 ----
 
+query II
+SELECT * FROM t3 WHERE EXISTS (SELECT 1);
+----
+1 2
+3 4
+6 5
+
+query II
+SELECT * FROM t3 WHERE NOT EXISTS (SELECT 1);
+----
+
+query II
+SELECT * FROM t3 WHERE a = (SELECT 1);
+----
+1 2
+
+query II
+SELECT * FROM t3 WHERE a > (SELECT 1);
+----
+3 4
+6 5
+
+query II
+SELECT * FROM t3 WHERE a IN (SELECT * FROM unnest([]));
+----
+
+query II
+SELECT * FROM t3 WHERE a IN (SELECT * FROM unnest([1,2,null]));
+----
+1 2
 
 # https://github.com/datafuselabs/databend/issues/16099
 statement ok
