@@ -94,7 +94,6 @@ pub struct TransformHilbertPartitionCollect {
     restored_data_blocks: Vec<DataBlock>,
     output_data_blocks: Vec<DataBlock>,
 
-    max_block_size: usize,
     // The partition id is used to map the partition id to the new partition id.
     partition_id: Vec<usize>,
     // The buffer is used to control the memory usage of the window operator.
@@ -150,7 +149,6 @@ impl TransformHilbertPartitionCollect {
             buffer,
             output_data_blocks: vec![],
             restored_data_blocks: Vec::new(),
-            max_block_size,
             state: State::Consume,
         })
     }
@@ -201,14 +199,14 @@ impl Processor for TransformHilbertPartitionCollect {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data_blocks.pop() {
-            self.output.push_data(Ok(data_block));
-            return Ok(Event::NeedConsume);
-        }
-
         if self.need_spill() {
             self.state = State::Spill;
             return Ok(Event::Async);
+        }
+
+        if let Some(data_block) = self.output_data_blocks.pop() {
+            self.output.push_data(Ok(data_block));
+            return Ok(Event::NeedConsume);
         }
 
         if self.input.is_finished() {
