@@ -82,31 +82,24 @@ impl Exchange for HilbertPartitionExchange {
 
 enum State {
     Consume,
-    Flush,
     Spill,
     Restore,
     Concat,
-    Coalesce,
 }
 
 pub struct TransformHilbertPartitionCollect {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
-    immediate_output_blocks: Vec<(usize, DataBlock)>,
     restored_data_blocks: Vec<DataBlock>,
-    pending_small_blocks: Vec<DataBlock>,
     output_data_blocks: Vec<DataBlock>,
 
     max_block_size: usize,
     // The partition id is used to map the partition id to the new partition id.
     partition_id: Vec<usize>,
-    partition_sizes: Vec<usize>,
     // The buffer is used to control the memory usage of the window operator.
     buffer: WindowPartitionBuffer,
     state: State,
-    process_size: usize,
-    processor_id: usize,
 }
 
 impl TransformHilbertPartitionCollect {
@@ -134,12 +127,6 @@ impl TransformHilbertPartitionCollect {
             partition_id[*partition] = new_partition_id;
         }
 
-        log::warn!(
-            "new processor id: {}, partitions: {:?}, partition_id: {:?}",
-            processor_id,
-            partitions,
-            partition_id
-        );
         let location_prefix = ctx.query_id_spill_prefix();
         let spill_config = SpillerConfig {
             spiller_type: SpillerType::Window,
@@ -161,15 +148,10 @@ impl TransformHilbertPartitionCollect {
             output,
             partition_id,
             buffer,
-            immediate_output_blocks: vec![],
-            pending_small_blocks: vec![],
             output_data_blocks: vec![],
             restored_data_blocks: Vec::new(),
             max_block_size,
-            partition_sizes: vec![0; num_partitions],
             state: State::Consume,
-            process_size: 0,
-            processor_id,
         })
     }
 
@@ -180,21 +162,8 @@ impl TransformHilbertPartitionCollect {
             .and_then(WindowPartitionMeta::downcast_from)
         {
             for (partition_id, data_block) in meta.partitioned_data.into_iter() {
-                self.process_size += data_block.num_rows();
-                let new_id = self.partition_id[partition_id];
-                self.partition_sizes[new_id] += data_block.num_rows();
-                if self.partition_sizes[new_id] >= self.max_block_size {
-                    log::warn!(
-                        "immediate processor id: {}, partition_id: {}, new_id : {}",
-                        self.processor_id,
-                        partition_id,
-                        new_id
-                    );
-                    self.immediate_output_blocks.push((new_id, data_block));
-                    self.partition_sizes[new_id] = 0;
-                    continue;
-                }
-                self.buffer.add_data_block(new_id, data_block);
+                let partition_id = self.partition_id[partition_id];
+                self.buffer.add_data_block(partition_id, data_block);
             }
         }
         Ok(())
@@ -216,20 +185,15 @@ impl Processor for TransformHilbertPartitionCollect {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::Concat | State::Coalesce) {
+        if matches!(self.state, State::Concat) {
             return Ok(Event::Sync);
         }
 
-        if matches!(self.state, State::Flush | State::Restore | State::Spill) {
+        if matches!(self.state, State::Restore | State::Spill) {
             return Ok(Event::Async);
         }
 
         if self.output.is_finished() {
-            log::warn!(
-                "process id: {}, process rows: {}",
-                self.processor_id,
-                self.process_size
-            );
             return Ok(Event::Finished);
         }
 
@@ -240,11 +204,6 @@ impl Processor for TransformHilbertPartitionCollect {
         if let Some(data_block) = self.output_data_blocks.pop() {
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
-        }
-
-        if !self.immediate_output_blocks.is_empty() {
-            self.state = State::Flush;
-            return Ok(Event::Async);
         }
 
         if self.need_spill() {
@@ -258,16 +217,7 @@ impl Processor for TransformHilbertPartitionCollect {
                 return Ok(Event::Async);
             }
 
-            if !self.pending_small_blocks.is_empty() {
-                self.state = State::Coalesce;
-                return Ok(Event::Sync);
-            }
             self.output.finish();
-            log::warn!(
-                "process id: {}, process rows: {}",
-                self.processor_id,
-                self.process_size
-            );
             return Ok(Event::Finished);
         }
 
@@ -276,11 +226,6 @@ impl Processor for TransformHilbertPartitionCollect {
 
             if self.need_spill() {
                 self.state = State::Spill;
-                return Ok(Event::Async);
-            }
-
-            if !self.immediate_output_blocks.is_empty() {
-                self.state = State::Flush;
                 return Ok(Event::Async);
             }
         }
@@ -294,15 +239,6 @@ impl Processor for TransformHilbertPartitionCollect {
             State::Concat => {
                 let restored_data_blocks = std::mem::take(&mut self.restored_data_blocks);
                 let block = DataBlock::concat(&restored_data_blocks)?;
-                if block.num_rows() < self.max_block_size / 10 {
-                    self.pending_small_blocks.push(block);
-                } else {
-                    self.output_data_blocks.push(block);
-                }
-            }
-            State::Coalesce => {
-                let pending_small_blocks = std::mem::take(&mut self.pending_small_blocks);
-                let block = DataBlock::concat(&pending_small_blocks)?;
                 self.output_data_blocks.push(block);
             }
             _ => unreachable!(),
@@ -313,26 +249,9 @@ impl Processor for TransformHilbertPartitionCollect {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Flush => {
-                if let Some((partition_id, data_block)) = self.immediate_output_blocks.pop() {
-                    self.restored_data_blocks = self.buffer.restore_by_id(partition_id).await?;
-                    self.restored_data_blocks.push(data_block);
-                    log::warn!(
-                        "flush processor id: {}, partition id: {}",
-                        self.processor_id,
-                        partition_id
-                    );
-                    self.state = State::Concat;
-                }
-            }
             State::Spill => self.buffer.spill().await?,
             State::Restore => {
-                let (id, blocks) = self.buffer.restore_with_id().await?;
-                log::warn!(
-                    "restore processor id: {}, partition id: {}",
-                    self.processor_id,
-                    id
-                );
+                let blocks = self.buffer.restore().await?;
                 if !blocks.is_empty() {
                     self.restored_data_blocks = blocks;
                     self.state = State::Concat;
