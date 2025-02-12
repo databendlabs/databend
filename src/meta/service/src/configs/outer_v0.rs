@@ -28,6 +28,7 @@ use databend_common_tracing::QueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig;
 use databend_common_tracing::TracingConfig;
+use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -90,7 +91,7 @@ pub struct Config {
     pub config_file: String,
 
     /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-level", default_value = "INFO")]
+    #[clap(long = "log-level", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     pub log_level: String,
 
     /// Log file dir
@@ -141,7 +142,7 @@ impl Default for Config {
 impl From<Config> for InnerConfig {
     fn from(outer: Config) -> Self {
         let mut log: InnerLogConfig = outer.log.into();
-        if outer.log_level != "INFO" {
+        if outer.log_level != CONFIG_DEFAULT_LOG_LEVEL {
             log.file.level = outer.log_level.to_string();
         }
         if outer.log_dir != "./.databend/logs" {
@@ -706,7 +707,7 @@ pub struct FileLogConfig {
     pub file_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-file-level", default_value = "INFO")]
+    #[clap(long = "log-file-level", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub file_level: String,
 
@@ -774,7 +775,7 @@ pub struct StderrLogConfig {
     pub stderr_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-stderr-level", default_value = "INFO")]
+    #[clap(long = "log-stderr-level", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub stderr_level: String,
 

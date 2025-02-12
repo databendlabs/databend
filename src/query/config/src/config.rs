@@ -53,6 +53,7 @@ use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
+use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
@@ -1928,7 +1929,7 @@ impl From<InnerQueryConfig> for QueryConfig {
 #[serde(default)]
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-level", value_name = "VALUE", default_value = "INFO")]
+    #[clap(long = "log-level", value_name = "VALUE", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     pub level: String,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -2009,7 +2010,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
         }
 
         let mut file: InnerFileLogConfig = self.file.try_into()?;
-        if self.level != "INFO" {
+        if self.level != CONFIG_DEFAULT_LOG_LEVEL {
             file.level = self.level.to_string();
         }
         if self.dir != "./.databend/logs" {
@@ -2102,7 +2103,7 @@ pub struct FileLogConfig {
     pub file_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-file-level", value_name = "VALUE", default_value = "INFO")]
+    #[clap(long = "log-file-level", value_name = "VALUE", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub file_level: String,
 
@@ -2184,7 +2185,7 @@ pub struct StderrLogConfig {
     #[clap(
         long = "log-stderr-level",
         value_name = "VALUE",
-        default_value = "INFO"
+        default_value = CONFIG_DEFAULT_LOG_LEVEL
     )]
     #[serde(rename = "level")]
     pub stderr_level: String,
@@ -2236,7 +2237,7 @@ pub struct OTLPLogConfig {
     pub otlp_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-otlp-level", value_name = "VALUE", default_value = "INFO")]
+    #[clap(long = "log-otlp-level", value_name = "VALUE", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub otlp_level: String,
 
@@ -2424,7 +2425,7 @@ pub struct TracingConfig {
     #[clap(
         long = "log-tracing-level",
         value_name = "VALUE",
-        default_value = "INFO"
+        default_value = CONFIG_DEFAULT_LOG_LEVEL
     )]
     #[serde(rename = "capture_log_level")]
     pub tracing_capture_log_level: String,

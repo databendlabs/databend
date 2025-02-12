@@ -16,6 +16,9 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+// use the uncommon usage of Pascal Case level name to reduce the
+pub const CONFIG_DEFAULT_LOG_LEVEL: &str = "Warn,databend_=Info,openraft=Info";
+
 /// Config for logging.
 #[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
 pub struct Config {
@@ -74,7 +77,7 @@ impl Default for FileConfig {
     fn default() -> Self {
         Self {
             on: true,
-            level: "INFO".to_string(),
+            level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
             dir: "./.databend/logs".to_string(),
             format: "json".to_string(),
             limit: 48,
@@ -111,7 +114,7 @@ impl Default for StderrConfig {
     fn default() -> Self {
         Self {
             on: false,
-            level: "INFO".to_string(),
+            level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
             format: "text".to_string(),
         }
     }
@@ -138,7 +141,7 @@ impl Default for OTLPConfig {
     fn default() -> Self {
         Self {
             on: false,
-            level: "INFO".to_string(),
+            level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
             endpoint: OTLPEndpointConfig::default(),
         }
     }
@@ -240,7 +243,7 @@ impl Default for TracingConfig {
     fn default() -> Self {
         Self {
             on: false,
-            capture_log_level: "INFO".to_string(),
+            capture_log_level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
             otlp: OTLPEndpointConfig::default(),
         }
     }

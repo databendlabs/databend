@@ -37,12 +37,13 @@ use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
+use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize, Args)]
 pub struct GlobalArgs {
-    #[clap(long, default_value = "INFO")]
+    #[clap(long, default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     pub log_level: String,
 
     /// DEPRECATE: use subcommand instead.
