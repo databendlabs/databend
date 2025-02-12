@@ -60,6 +60,7 @@ do
     echo "$t"
     fp="`pwd`/data/$t.csv"
     echo "copy into ${MYSQL_DATABASE}.$t from 'fs://${fp}' file_format = (type = CSV skip_header = 1 field_delimiter = '|' record_delimiter = '\n')" | $BENDSQL_CLIENT_CONNECT
+    echo "analyze table ${MYSQL_DATABASE}.$t" | $BENDSQL_CLIENT_CONNECT
 done
 
 

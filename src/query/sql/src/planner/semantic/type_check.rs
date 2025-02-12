@@ -3169,10 +3169,10 @@ impl<'a> TypeChecker<'a> {
         if let SetExpr::Select(select_stmt) = &subquery.body {
             if typ == SubqueryType::Scalar {
                 let select = &select_stmt.select_list[0];
-                if let SelectTarget::AliasedExpr { expr, .. } = select {
+                if matches!(select, SelectTarget::AliasedExpr { .. }) {
                     // Check if contain aggregation function
                     #[derive(Visitor)]
-                    #[visitor(ASTFunctionCall(enter))]
+                    #[visitor(Expr(enter), ASTFunctionCall(enter))]
                     struct AggFuncVisitor {
                         contain_agg: bool,
                     }
@@ -3182,9 +3182,12 @@ impl<'a> TypeChecker<'a> {
                                 || AggregateFunctionFactory::instance()
                                     .contains(func.name.to_string());
                         }
+                        fn enter_expr(&mut self, expr: &Expr) {
+                            self.contain_agg = matches!(expr, Expr::CountAll { window: None, .. });
+                        }
                     }
                     let mut visitor = AggFuncVisitor { contain_agg: false };
-                    expr.drive(&mut visitor);
+                    select.drive(&mut visitor);
                     contain_agg = Some(visitor.contain_agg);
                 }
             }
