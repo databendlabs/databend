@@ -29,7 +29,7 @@ To run the TPC-H Benchmark, first build `databend-sqllogictests` binary.
 Then, execute the following command in your shell:
 
 ```shell
-databend-sqllogictests --handlers mysql --database tpch --run_dir tpch --bench
+databend-sqllogictests --handlers mysql --database tpch --run_dir tpch --bench --run_file queries.test
 ```
 
 ## More
