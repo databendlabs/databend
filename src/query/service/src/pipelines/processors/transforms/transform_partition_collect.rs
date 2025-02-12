@@ -50,7 +50,7 @@ impl HilbertPartitionExchange {
 }
 
 impl Exchange for HilbertPartitionExchange {
-    const NAME: &'static str = "Window";
+    const NAME: &'static str = "Hilbert";
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         // Extract the columns used for hash computation.
         let mut data_block = data_block.consume_convert_to_full();
@@ -62,24 +62,13 @@ impl Exchange for HilbertPartitionExchange {
             .iter()
             .map(|&id| (id % self.num_partitions as u64) as u16)
             .collect::<Vec<_>>();
-        let scatter_indices =
-            DataBlock::divide_indices_by_scatter_size(&indices, self.num_partitions);
-
-        let mut scatter_blocks = Vec::with_capacity(self.num_partitions);
         data_block.pop_columns(1);
-        for (partition_id, indices) in scatter_indices.iter().take(self.num_partitions).enumerate()
-        {
-            if indices.is_empty() {
-                continue;
-            }
-            let block = data_block.take_with_optimize_size(indices)?;
-            scatter_blocks.push((partition_id, block));
-        }
+        let scatter_blocks = DataBlock::scatter(&data_block, &indices, self.num_partitions)?;
 
         // Partition the data blocks to different processors.
         let mut output_data_blocks = vec![vec![]; n];
-        for (idx, data_block) in scatter_blocks.into_iter().enumerate() {
-            output_data_blocks[idx % n].push(data_block);
+        for (partition_id, data_block) in scatter_blocks.into_iter().enumerate() {
+            output_data_blocks[partition_id % n].push((partition_id, data_block));
         }
 
         // Union data blocks for each processor.
