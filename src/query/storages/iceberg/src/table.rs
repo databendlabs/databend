@@ -280,7 +280,7 @@ impl IcebergTable {
                 );
             }
             if let Some(filter) = &push_downs.filters {
-                let predicate = PredicateBuilder::default().build(&filter.filter);
+                let (_, predicate) = PredicateBuilder::build(&filter.filter);
                 scan = scan.with_filter(predicate)
             }
         }
