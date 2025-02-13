@@ -3374,6 +3374,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "proj4rs",
+ "proptest",
  "rand",
  "regex",
  "roaring",
