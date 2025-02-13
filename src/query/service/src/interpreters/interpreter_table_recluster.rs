@@ -267,7 +267,11 @@ impl ReclusterTableInterpreter {
                         acc
                     },
                 );
-
+                
+                let query_str = self.ctx.get_query_str();
+                let write_progress = self.ctx.get_write_progress();
+                let write_progress_value = write_progress.as_ref().get_values();
+                
                 let subquery_executor = Arc::new(ServiceQueryExecutor::new(
                     QueryContext::create_from(self.ctx.as_ref()),
                 ));
@@ -349,9 +353,6 @@ impl ReclusterTableInterpreter {
                     .unwrap_or_default();
                 let (stmt, _) = parse_sql(&tokens, sql_dialect)?;
 
-                let query_str = self.ctx.get_query_str();
-                let write_progress = self.ctx.get_write_progress();
-                let write_progress_value = write_progress.as_ref().get_values();
                 let mut planner =
                     Planner::new_with_query_executor(self.ctx.clone(), subquery_executor);
                 let plan = planner.plan_stmt(&stmt, false).await?;
