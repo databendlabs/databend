@@ -66,18 +66,18 @@ macro_rules! impl_transform {
                     2 | 3 => x ^ (seed as Self & 1),
                     -2 | -3 => -(-x ^ (seed as Self & 1)),
                     0.. => {
-                        let num_bits = 64 - 1 - x.leading_zeros() as usize;
-                        feistel_network(x as u64, num_bits, seed, 4) as Self
+                        let num_bits = Self::BITS - 1 - x.leading_zeros();
+                        feistel_network(x as u64, num_bits as usize, seed, 4) as Self
                     }
                     Self::MIN => {
-                        let num_bits = 64 - 1 - x.leading_zeros() as usize;
-                        let v = feistel_network(Self::MAX as u64 + 1, num_bits, seed, 4);
-                        -(mask_bits(v, num_bits) as Self)
+                        let num_bits = Self::BITS - 1 - x.leading_zeros();
+                        let v = feistel_network(Self::MAX as u64 + 1, num_bits as usize, seed, 4);
+                        -(mask_bits(v, num_bits as usize) as Self)
                     }
                     Self::MIN..0 => {
                         let x = -x as u64;
-                        let num_bits = 64 - 1 - x.leading_zeros() as usize;
-                        -(feistel_network(x, num_bits, seed, 4) as Self)
+                        let num_bits = 64 - 1 - x.leading_zeros();
+                        -(feistel_network(x, num_bits as usize, seed, 4) as Self)
                     }
                 }
             }
@@ -94,23 +94,29 @@ impl_transform!(i16);
 impl_transform!(i32);
 impl_transform!(i64);
 
+impl Transform for u64 {
+    fn transform(self, seed: u64) -> Self {
+        // Pseudorandom permutation within the set of numbers with the same log2(x).
+        let x = self;
+        match x {
+            // Keep 0 and 1 as is.
+            0 | 1 => x,
+            // Pseudorandom permutation of two elements.
+            2 | 3 => x ^ (seed & 1),
+            _ => {
+                let num_bits = 64 - 1 - x.leading_zeros() as usize;
+                feistel_network(x, num_bits, seed, 4)
+            }
+        }
+    }
+}
+
 pub fn register_feistel(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<UInt64Type, UInt64Type, UInt64Type, _, _>(
         "feistel_obfuscate",
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<UInt64Type, UInt64Type, UInt64Type>(|x, seed, output, _| {
-            // Pseudorandom permutation within the set of numbers with the same log2(x).
-            let v = match x {
-                // Keep 0 and 1 as is.
-                0 | 1 => x,
-                // Pseudorandom permutation of two elements.
-                2 | 3 => x ^ (seed & 1),
-                _ => {
-                    let num_bits = 64 - 1 - x.leading_zeros() as usize;
-                    feistel_network(x, num_bits, seed, 4)
-                }
-            };
-            output.push(v);
+            output.push(x.transform(seed));
         }),
     );
 
@@ -161,14 +167,97 @@ pub fn register_feistel(registry: &mut FunctionRegistry) {
 
 #[cfg(test)]
 mod tests {
+    use proptest::prelude::*;
+    use proptest::strategy::ValueTree;
+    use proptest::test_runner::TestCaseResult;
+    use proptest::test_runner::TestRunner;
+
+    use super::Transform;
+
     #[test]
-    fn xx() {
-        let x = i64::MAX as u64 + 1;
-        println!("{:?}", x.to_le_bytes());
-        let num_leading_zeros = x.leading_zeros() as usize;
-        println!("{num_leading_zeros}");
-        let x = feistel_network(x, 64 - 1 - num_leading_zeros, 0, 4);
-        println!("{x} {}", i64::MAX);
-        // println!(x & ((1 << 63) - 1))
+    fn test_transform() -> TestCaseResult {
+        let mut runner = TestRunner::default();
+
+        {
+            let input = (prop::num::u64::ANY, prop::num::u64::ANY);
+            for _ in 0..1000 {
+                let (x, seed) = input.new_tree(&mut runner).unwrap().current();
+                let got = Transform::transform(x, seed);
+                prop_assert_eq!(x > 0, got > 0, "u64 sign not match x:{} seed:{}", x, seed);
+                prop_assert_eq!(
+                    x.leading_zeros(),
+                    got.leading_zeros(),
+                    "u64 log2 not match x:{} seed:{}",
+                    x,
+                    seed
+                );
+            }
+        }
+
+        {
+            let input = (prop::num::i64::ANY, prop::num::u64::ANY);
+            for _ in 0..1000 {
+                let (x, seed) = input.new_tree(&mut runner).unwrap().current();
+                let got = Transform::transform(x, seed);
+                prop_assert_eq!(x > 0, got > 0, "i64 sign not match x:{} seed:{}", x, seed);
+                prop_assert_eq!(
+                    x.leading_zeros(),
+                    got.leading_zeros(),
+                    "i64 log2 not match x:{} seed:{}",
+                    x,
+                    seed
+                );
+            }
+        }
+
+        {
+            let input = (prop::num::i32::ANY, prop::num::u64::ANY);
+            for _ in 0..1000 {
+                let (x, seed) = input.new_tree(&mut runner).unwrap().current();
+                let got = Transform::transform(x, seed);
+                prop_assert_eq!(x > 0, got > 0, "i32 sign not match x:{} seed:{}", x, seed);
+                prop_assert_eq!(
+                    x.leading_zeros(),
+                    got.leading_zeros(),
+                    "i32 log2 not match x:{} seed:{}",
+                    x,
+                    seed
+                );
+            }
+        }
+
+        {
+            let input = (prop::num::i16::ANY, prop::num::u64::ANY);
+            for _ in 0..1000 {
+                let (x, seed) = input.new_tree(&mut runner).unwrap().current();
+                let got = Transform::transform(x, seed);
+                prop_assert_eq!(x > 0, got > 0, "i16 sign not match x:{} seed:{}", x, seed);
+                prop_assert_eq!(
+                    x.leading_zeros(),
+                    got.leading_zeros(),
+                    "i16 log2 not match x:{} seed:{}",
+                    x,
+                    seed
+                );
+            }
+        }
+
+        {
+            let input = (prop::num::i8::ANY, prop::num::u64::ANY);
+            for _ in 0..1000 {
+                let (x, seed) = input.new_tree(&mut runner).unwrap().current();
+                let got = Transform::transform(x, seed);
+                prop_assert_eq!(x > 0, got > 0, "i8 sign not match x:{} seed:{}", x, seed);
+                prop_assert_eq!(
+                    x.leading_zeros(),
+                    got.leading_zeros(),
+                    "i8 log2 not match x:{} seed:{}",
+                    x,
+                    seed
+                );
+            }
+        }
+
+        Ok(())
     }
 }
