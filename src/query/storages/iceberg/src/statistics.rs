@@ -131,7 +131,7 @@ impl IcebergStatistics {
                     .nan_value_counts()
                     .iter()
                     .for_each(|(col_id, count)| {
-                        nan_value_counts.insert(*col_id, *count);
+                        *nan_value_counts.entry(*col_id).or_default() += *count;
                     });
 
                 data_file
