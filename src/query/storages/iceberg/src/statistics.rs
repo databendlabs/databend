@@ -116,16 +116,16 @@ impl IcebergStatistics {
                 statistics.number_of_data_files += 1;
 
                 data_file.column_sizes().iter().for_each(|(col_id, size)| {
-                    column_sizes.insert(*col_id, *size);
+                    *column_sizes.entry(*col_id).or_default() += size;
                 });
                 data_file.value_counts().iter().for_each(|(col_id, count)| {
-                    value_counts.insert(*col_id, *count);
+                    *value_counts.entry(*col_id).or_default() += count;
                 });
                 data_file
                     .null_value_counts()
                     .iter()
                     .for_each(|(col_id, count)| {
-                        null_value_counts.insert(*col_id, *count);
+                        *null_value_counts.entry(*col_id).or_default() += count;
                     });
                 data_file
                     .nan_value_counts()
