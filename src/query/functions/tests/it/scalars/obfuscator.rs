@@ -19,7 +19,7 @@ use goldenfile::Mint;
 use super::run_ast;
 
 #[test]
-fn test_math() {
+fn test_feistel_obfuscate() {
     let mut mint = Mint::new("tests/it/scalars/testdata");
     let file = &mut mint.new_goldenfile("obfuscator.txt").unwrap();
 
@@ -35,9 +35,9 @@ fn test_math() {
         "a",
         Float32Type::from_data(vec![0.0, -0.0, 30.0, f32::MIN, f32::MAX]),
     )]);
+    run_ast(file, "feistel_obfuscate(a,0)", &[(
+        "a",
+        Float64Type::from_data(vec![0.0, -0.0, 30.0, f64::MIN, f64::MAX]),
+    )]);
     run_ast(file, "feistel_obfuscate(null,0)", &[]);
-
-    // run_ast(file, "feistel_obfuscate(1,0)", &[]);
-    // run_ast(file, "feistel_obfuscate(-2.3434,0)", &[]);
-    // run_ast(file, "feistel_obfuscate(-1,0)", &[]);
 }
