@@ -56,7 +56,8 @@ where F: FnOnce() -> anyhow::Result<()> + 'static {
 fn setup_test() {
     static INIT: Once = Once::new();
     INIT.call_once(|| {
-        let config = Config::new_testing();
+        let mut config = Config::new_testing();
+        config.file.level = "DEBUG".to_string();
 
         let guards = init_logging("meta_unittests", &config, BTreeMap::new());
         Box::leak(Box::new(guards));
