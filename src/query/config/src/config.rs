@@ -53,6 +53,7 @@ use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
+use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
@@ -1928,7 +1929,7 @@ impl From<InnerQueryConfig> for QueryConfig {
 #[serde(default)]
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-level", value_name = "VALUE", default_value = "INFO")]
+    #[clap(long = "log-level", value_name = "VALUE", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     pub level: String,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -2009,7 +2010,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
         }
 
         let mut file: InnerFileLogConfig = self.file.try_into()?;
-        if self.level != "INFO" {
+        if self.level != CONFIG_DEFAULT_LOG_LEVEL {
             file.level = self.level.to_string();
         }
         if self.dir != "./.databend/logs" {
@@ -2102,7 +2103,7 @@ pub struct FileLogConfig {
     pub file_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-file-level", value_name = "VALUE", default_value = "INFO")]
+    #[clap(long = "log-file-level", value_name = "VALUE", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub file_level: String,
 
@@ -2125,16 +2126,10 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
-    /// Log prefix filter, separated by comma.
-    /// For example, `"databend_,openraft"` enables logging for `databend_*` crates and `openraft` crate.
-    /// This filter does not affect `WARNING` and `ERROR` log.
-    #[clap(
-        long = "log-file-prefix-filter",
-        value_name = "VALUE",
-        default_value = "databend_,openraft"
-    )]
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
     #[serde(rename = "prefix_filter")]
-    pub file_prefix_filter: String,
+    pub file_prefix_filter: Option<String>,
 }
 
 impl Default for FileLogConfig {
@@ -2147,13 +2142,18 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerFileLogConfig> {
+        if self.file_prefix_filter.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`prefix_filter` is deprecated, use `level` with the syntax of env_logger instead."
+                    .to_string(),
+            ));
+        }
         Ok(InnerFileLogConfig {
             on: self.file_on,
             level: self.file_level,
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
-            prefix_filter: self.file_prefix_filter,
         })
     }
 }
@@ -2166,7 +2166,9 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
-            file_prefix_filter: inner.prefix_filter,
+
+            // Deprecated Fields
+            file_prefix_filter: None,
         }
     }
 }
@@ -2184,7 +2186,7 @@ pub struct StderrLogConfig {
     #[clap(
         long = "log-stderr-level",
         value_name = "VALUE",
-        default_value = "INFO"
+        default_value = CONFIG_DEFAULT_LOG_LEVEL
     )]
     #[serde(rename = "level")]
     pub stderr_level: String,
@@ -2236,7 +2238,7 @@ pub struct OTLPLogConfig {
     pub otlp_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-otlp-level", value_name = "VALUE", default_value = "INFO")]
+    #[clap(long = "log-otlp-level", value_name = "VALUE", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub otlp_level: String,
 
@@ -2424,7 +2426,7 @@ pub struct TracingConfig {
     #[clap(
         long = "log-tracing-level",
         value_name = "VALUE",
-        default_value = "INFO"
+        default_value = CONFIG_DEFAULT_LOG_LEVEL
     )]
     #[serde(rename = "capture_log_level")]
     pub tracing_capture_log_level: String,
