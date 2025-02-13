@@ -11,12 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Days;
+use chrono::Duration;
 use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_catalog::table::Table;
@@ -38,6 +38,8 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use futures_util::TryStreamExt;
 use log::info;
+use opendal::Entry;
+use opendal::Operator;
 use uuid::Version;
 #[async_backtrace::framed]
 pub async fn do_vacuum2(
@@ -66,6 +68,7 @@ pub async fn do_vacuum2(
             .snapshot_location_prefix(),
         lvt,
         true,
+        None,
     )
     .await?;
     let elapsed = start.elapsed();
@@ -80,7 +83,7 @@ pub async fn do_vacuum2(
 
     let start = std::time::Instant::now();
     let is_vacuum_all = retention_period_in_days == 0;
-    let Some((gc_root, snapshots_to_gc)) = select_gc_root(
+    let Some((gc_root, snapshots_to_gc, gc_root_meta_ts)) = select_gc_root(
         fuse_table,
         &snapshots_before_lvt,
         is_vacuum_all,
@@ -114,6 +117,7 @@ pub async fn do_vacuum2(
             .segment_location_prefix(),
         gc_root_timestamp,
         false,
+        Some(gc_root_meta_ts),
     )
     .await?;
     ctx.set_status_info(&format!(
@@ -159,6 +163,7 @@ pub async fn do_vacuum2(
         fuse_table.meta_location_generator().block_location_prefix(),
         gc_root_timestamp,
         false,
+        Some(gc_root_meta_ts),
     )
     .await?;
     ctx.set_status_info(&format!(
@@ -302,6 +307,7 @@ async fn list_until_prefix(
     path: &str,
     until: &str,
     need_one_more: bool,
+    gc_root_meta_ts: Option<DateTime<Utc>>,
 ) -> Result<Vec<String>> {
     info!("list until prefix: {}", until);
     let mut lister = fuse_table.get_operator().lister(path).await?;
@@ -314,9 +320,39 @@ async fn list_until_prefix(
             }
             break;
         }
-        paths.push(entry.path().to_string());
+        if gc_root_meta_ts.is_none()
+            || should_vacuum_segment_block(
+                &entry,
+                &fuse_table.get_operator(),
+                gc_root_meta_ts.unwrap(),
+            )
+            .await?
+        {
+            paths.push(entry.path().to_string());
+        }
     }
     Ok(paths)
+}
+
+async fn should_vacuum_segment_block(
+    entry: &Entry,
+    op: &Operator,
+    gc_root_meta_ts: DateTime<Utc>,
+) -> Result<bool> {
+    const MAX_TXN_DURATION_IN_DAYS: i64 = 3; // The max duration from the first block is written to the snapshot is written
+    if entry.path().starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
+        return Ok(true);
+    }
+    let last_modified = if let Some(v) = entry.metadata().last_modified() {
+        Some(v)
+    } else {
+        let meta = op.stat(entry.path()).await?;
+        meta.last_modified()
+    };
+    let Some(last_modified) = last_modified else {
+        return Ok(false);
+    };
+    Ok(last_modified + Duration::days(MAX_TXN_DURATION_IN_DAYS) < gc_root_meta_ts)
 }
 
 async fn list_until_timestamp(
@@ -324,6 +360,7 @@ async fn list_until_timestamp(
     path: &str,
     until: DateTime<Utc>,
     need_one_more: bool,
+    gc_root_meta_ts: Option<DateTime<Utc>>,
 ) -> Result<Vec<String>> {
     let uuid = uuid_from_date_time(until);
     let uuid_str = uuid.simple().to_string();
@@ -334,7 +371,7 @@ async fn list_until_timestamp(
         "{}{}{}",
         path, VACUUM2_OBJECT_KEY_PREFIX, timestamp_component
     );
-    list_until_prefix(fuse_table, path, &until, need_one_more).await
+    list_until_prefix(fuse_table, path, &until, need_one_more, gc_root_meta_ts).await
 }
 
 async fn read_snapshot_from_location(
@@ -360,7 +397,7 @@ async fn select_gc_root<'a>(
     respect_flash_back: bool,
     abort_checker: AbortChecker,
     lvt: DateTime<Utc>,
-) -> Result<Option<(Arc<TableSnapshot>, &'a [String])>> {
+) -> Result<Option<(Arc<TableSnapshot>, &'a [String], DateTime<Utc>)>> {
     let gc_root_path = if is_vacuum_all {
         // safe to unwrap, or we should have stopped vacuuming in set_lvt()
         fuse_table.snapshot_loc().unwrap()
@@ -398,12 +435,18 @@ async fn select_gc_root<'a>(
         gc_root_path
     };
     let gc_root = read_snapshot_from_location(fuse_table, &gc_root_path).await;
+    let gc_root_meta_ts = fuse_table
+        .get_operator()
+        .stat(&gc_root_path)
+        .await?
+        .last_modified()
+        .unwrap_or(DateTime::<Utc>::MIN_UTC);
     match gc_root {
         Ok(gc_root) => {
             info!("gc_root found: {:?}", gc_root);
             let gc_root_idx = snapshots_before_lvt.binary_search(&gc_root_path).unwrap();
             let snapshots_to_gc = &snapshots_before_lvt[..gc_root_idx];
-            Ok(Some((gc_root, snapshots_to_gc)))
+            Ok(Some((gc_root, snapshots_to_gc, gc_root_meta_ts)))
         }
         Err(e) => {
             info!("read gc_root {} failed: {:?}", gc_root_path, e);
