@@ -29,8 +29,6 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 
-use crate::FunctionRegistry;
-
 struct ColumnHistogram {
     total: u32,
     count_end: u32,
@@ -123,7 +121,7 @@ struct MarkovModelParameters {
 
 pub fn register(registry: &mut FunctionRegistry) {
     register_feistel(registry);
-    
+
     registry.register_passthrough_nullable_4_arg::<ArrayType<GenericType<0>>,StringType,UInt64Type,StringType,StringType,_,_>(
         "markov_generate",
          |_,_,_,_,_|FunctionDomain::MayThrow,
@@ -275,11 +273,11 @@ macro_rules! impl_transform {
                 let x = self;
                 match self {
                     // Keep 0 and 1 as is.
-                    0 | 1 | -1 => x,
+                    -1..=1 => x,
                     // Pseudorandom permutation of two elements.
-                    2 | 3 => x ^ (seed as Self & 1),
-                    -2 | -3 => -(-x ^ (seed as Self & 1)),
-                    0.. => {
+                    2..=3 => x ^ (seed as Self & 1),
+                    -3..=-2 => -(-x ^ (seed as Self & 1)),
+                    4.. => {
                         let num_bits = Self::BITS - 1 - x.leading_zeros();
                         feistel_network(x as u64, num_bits as usize, seed, 4) as Self
                     }
@@ -288,7 +286,7 @@ macro_rules! impl_transform {
                         let v = feistel_network(Self::MAX as u64 + 1, num_bits as usize, seed, 4);
                         -(mask_bits(v, num_bits as usize) as Self)
                     }
-                    Self::MIN..0 => {
+                    Self::MIN..=-4 => {
                         let x = -x as u64;
                         let num_bits = 64 - 1 - x.leading_zeros();
                         -(feistel_network(x, num_bits as usize, seed, 4) as Self)
