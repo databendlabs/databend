@@ -4233,6 +4233,7 @@ dependencies = [
  "iceberg-catalog-glue",
  "iceberg-catalog-hms",
  "iceberg-catalog-rest",
+ "log",
  "serde",
  "serde_json",
  "typetag",
