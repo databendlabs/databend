@@ -265,7 +265,9 @@ impl Display for AttachTableStmt {
         )?;
 
         if let Some(cols) = &self.columns_opt {
+            write!(f, " (")?;
             write_comma_separated_list(f, cols.iter())?;
+            write!(f, ")")?;
         }
 
         write!(f, " {}", self.uri_location)?;

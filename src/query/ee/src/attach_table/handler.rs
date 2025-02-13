@@ -25,6 +25,7 @@ use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use databend_enterprise_attach_table::AttachTableHandler;
 use databend_enterprise_attach_table::AttachTableHandlerWrapper;
@@ -73,13 +74,22 @@ impl AttachTableHandler for RealAttachTableHandler {
             number_of_blocks: Some(snapshot.summary.block_count),
         };
 
+        // `attach_table_schema` is the initial table schema, which is
+        // - A cloned schema of the table being attached to
+        // - Or a sub-schema of the table being attached to
+        //    if columns to include are explicitly specified in the "ATTACH TABLE" statement.
         let attach_table_schema = if let Some(attached_columns) = &plan.attached_columns {
+            // Columns to include are specified, let's check them
             let schema = &snapshot.schema;
-            let mut fields_to_attach = vec![];
+            let mut fields_to_attach = Vec::with_capacity(attached_columns.len());
+            let mut field_ids_to_include = Vec::with_capacity(attached_columns.len());
             let mut invalid_cols = vec![];
             for field in attached_columns {
                 match schema.field_with_name(&field.name) {
-                    Ok(f) => fields_to_attach.push(f.clone()),
+                    Ok(f) => {
+                        field_ids_to_include.push(f.column_id);
+                        fields_to_attach.push(f.clone())
+                    }
                     Err(_) => invalid_cols.push(field.name.as_str()),
                 }
             }
@@ -89,9 +99,23 @@ impl AttachTableHandler for RealAttachTableHandler {
                     invalid_cols.join(",")
                 )));
             }
+
+            let new_metadata = if !field_ids_to_include.is_empty() {
+                let ids = field_ids_to_include
+                    .iter()
+                    .map(|id| format!("{id}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let mut v = schema.metadata.clone();
+                v.insert(FUSE_OPT_KEY_ATTACH_COLUMN_IDS.to_owned(), ids);
+                v
+            } else {
+                schema.metadata.clone()
+            };
+
             TableSchema {
                 fields: fields_to_attach,
-                metadata: schema.metadata.clone(),
+                metadata: new_metadata,
                 next_column_id: schema.next_column_id,
             }
         } else {
