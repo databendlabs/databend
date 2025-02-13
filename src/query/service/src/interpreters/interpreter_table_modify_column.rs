@@ -54,6 +54,8 @@ use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -190,6 +192,7 @@ impl ModifyTableColumnInterpreter {
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let base_snapshot = fuse_table.read_table_snapshot().await?;
+        let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
         let table_meta_timestamps = self
             .ctx
             .get_table_meta_timestamps(fuse_table.get_id(), base_snapshot.clone())?;
@@ -442,6 +445,7 @@ impl ModifyTableColumnInterpreter {
             table_info,
             new_schema_without_computed_fields.into(),
             prev_snapshot_id,
+            table_meta_timestamps,
         )
         .await
     }
@@ -642,6 +646,7 @@ pub(crate) async fn build_select_insert_plan(
     table_info: TableInfo,
     new_schema: TableSchemaRef,
     prev_snapshot_id: Option<SnapshotId>,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<PipelineBuildResult> {
     // 1. build plan by sql
     let mut planner = Planner::new(ctx.clone());
@@ -677,6 +682,7 @@ pub(crate) async fn build_select_insert_plan(
         select_column_bindings,
         insert_schema: Arc::new(new_schema.into()),
         cast_needed: true,
+        table_meta_timestamps,
     }));
     let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
 
@@ -689,6 +695,7 @@ pub(crate) async fn build_select_insert_plan(
         true,
         prev_snapshot_id,
         None,
+        table_meta_timestamps,
     )?;
 
     Ok(build_res)

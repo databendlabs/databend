@@ -133,6 +133,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             table_info: plan.table_info.clone(),
+            table_meta_timestamps: plan.table_meta_timestamps,
         })))
     }
 

@@ -36,6 +36,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
+use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use log::info;
 
@@ -117,10 +118,11 @@ impl Interpreter for AddTableColumnInterpreter {
         // need rebuild the table to generate stored computed column.
         if let Some(ComputedExpr::Stored(_)) = field.computed_expr {
             let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
-            let prev_snapshot_id = fuse_table
-                .read_table_snapshot()
-                .await
-                .map_or(None, |v| v.map(|snapshot| snapshot.snapshot_id));
+            let base_snapshot = fuse_table.read_table_snapshot().await?;
+            let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
+            let table_meta_timestamps = self
+                .ctx
+                .get_table_meta_timestamps(fuse_table.get_id(), base_snapshot)?;
 
             // computed columns will generated from other columns.
             let new_schema = table_info.meta.schema.remove_computed_fields();
@@ -142,12 +144,13 @@ impl Interpreter for AddTableColumnInterpreter {
                 table_info.clone(),
                 new_schema.into(),
                 prev_snapshot_id,
+                table_meta_timestamps,
             )
             .await;
         }
 
         let mut new_table_meta = table_info.meta.clone();
-        let _ = generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
+        let _ = generate_new_snapshot(tbl.as_ref(), &mut new_table_meta, self.ctx.as_ref()).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
