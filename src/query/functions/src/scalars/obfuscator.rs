@@ -28,6 +28,7 @@ use databend_common_expression::types::MapType;
 use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt32Type;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::Column;
 use databend_common_expression::FunctionDomain;
@@ -121,15 +122,14 @@ impl ColumnTable {
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
 struct MarkovModelParameters {
     order: usize,
-    seed: u64,
     sliding_window_size: usize,
 }
 
 pub fn register(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_3_arg::<ArrayType<GenericType<0>>,StringType,StringType,StringType,_,_>(
+    registry.register_passthrough_nullable_4_arg::<ArrayType<GenericType<0>>,StringType,UInt64Type,StringType,StringType,_,_>(
         "markov_generate",
-         |_,_,_,_|FunctionDomain::MayThrow,
-         move |model_arg, params_arg, determinator, ctx| {
+         |_,_,_,_,_|FunctionDomain::MayThrow,
+         move |model_arg, params_arg, seed, determinator, ctx| {
             let generics = ctx.generics.to_vec();
 
             let input_all_scalars =
@@ -179,7 +179,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                 let MarkovModelParameters {
                     order,
-                    seed,
                     sliding_window_size,
                 } = match params {
                     Some(params) => params,
@@ -204,6 +203,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 };
 
+                let seed = unsafe { seed.index_unchecked(index) };
                 let determinator = unsafe { determinator.index_unchecked(index) };
                 let desired_size = determinator.chars().count();
                 let mut writer = vec![0; determinator.len() * 2];

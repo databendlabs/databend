@@ -58,7 +58,7 @@ statement ok
 create or replace table users_model as select markov_train(name) as name, markov_train(email) as email from users;
 
 query TT
-select users.name,markov_generate(users_model.name,params,users.name) as generate from (select name from users limit 20),users_model,(select '{"order":5,"sliding_window_size":8,"seed":0}' as params);
+select users.name,markov_generate(users_model.name,params,0,users.name) as generate from (select name from users limit 20),users_model,(select '{"order":5,"sliding_window_size":8}' as params);
 ----
 James Smith John Garcia
 Mary Johnson	Mary Johnson
@@ -82,7 +82,7 @@ William Martinez	Elizabeth Smith
 Elizabeth Smith	Williams
 
 query TT
-select users.email,markov_generate(users_model.email,params,users.email) as generate from (select email from users limit 20),users_model,(select '{"order":5,"sliding_window_size":8,"seed":0}' as params);
+select users.email,markov_generate(users_model.email,params,0,users.email) as generate from (select email from users limit 20),users_model,(select '{"order":5,"sliding_window_size":8}' as params);
 ----
 james.smith@gmail.com	mary.johnson@example.com
 mary.johnson@yahoo.com	patricia.davis@gmail.com
