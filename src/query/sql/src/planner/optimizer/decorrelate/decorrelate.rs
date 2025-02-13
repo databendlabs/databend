@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -20,6 +21,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 
@@ -714,8 +716,8 @@ impl SubqueryRewriter {
                         }
                         // If the number of values more than `max_inlist_to_or`, need convert to contains function.
                         if values.len() > self.ctx.get_settings().get_max_inlist_to_or()? as usize {
-                            let ty = values[0].as_ref().infer_data_type();
-                            let builder = ColumnBuilder::with_capacity(&ty, values.len());
+                            let ty = values.first().unwrap().as_ref().infer_data_type();
+                            let mut builder = ColumnBuilder::with_capacity(&ty, values.len());
                             for value in values.into_iter() {
                                 builder.push(value.as_ref());
                             }
@@ -729,6 +731,7 @@ impl SubqueryRewriter {
                                 params: vec![],
                                 arguments: vec![array_value, *child_expr.clone()],
                             });
+                            return Ok(Some(func));
                         }
 
                         let mut funcs = Vec::with_capacity(values.len());
