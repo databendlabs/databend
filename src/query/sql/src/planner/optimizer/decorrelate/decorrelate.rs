@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
@@ -59,8 +60,12 @@ use crate::MetadataRef;
 /// Correlated exists subquery -> Marker join
 ///
 /// More information can be found in the paper: Unnesting Arbitrary Queries
-pub fn decorrelate_subquery(metadata: MetadataRef, s_expr: SExpr) -> Result<SExpr> {
-    let mut rewriter = SubqueryRewriter::new(metadata, None);
+pub fn decorrelate_subquery(
+    ctx: Arc<dyn TableContext>,
+    metadata: MetadataRef,
+    s_expr: SExpr,
+) -> Result<SExpr> {
+    let mut rewriter = SubqueryRewriter::new(ctx, metadata, None);
     rewriter.rewrite(&s_expr)
 }
 
@@ -687,33 +692,59 @@ impl SubqueryRewriter {
                         })));
                     }
                     Scalar::Array(array_column) => {
-                        let mut funcs = Vec::with_capacity(array_column.len());
+                        let mut values = BTreeSet::new();
                         for scalar in array_column.iter() {
                             // Ignoring NULL values in equivalent filter
                             if scalar == ScalarRef::Null {
                                 continue;
                             }
-                            let value = ScalarExpr::ConstantExpr(ConstantExpr {
-                                span: subquery.span,
-                                value: scalar.to_owned(),
-                            });
-                            let func = ScalarExpr::FunctionCall(FunctionCall {
-                                span: subquery.span,
-                                func_name: "eq".to_string(),
-                                params: vec![],
-                                arguments: vec![*child_expr.clone(), value],
-                            });
-                            funcs.push(func);
+                            values.insert(scalar.to_owned());
                         }
-                        // If there is no equivalent function, the filter condition does not match,
+                        // If there are no equivalent values, the filter condition does not match,
                         // return a NULL value.
-                        if funcs.is_empty() {
+                        if values.is_empty() {
                             return Ok(Some(ScalarExpr::ConstantExpr(ConstantExpr {
                                 span: subquery.span,
                                 value: Scalar::Null,
                             })));
                         }
+                        // If the number of values more than `inlist_to_join_threshold`, need convert to join.
+                        if values.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()? {
+                            return Ok(None);
+                        }
+                        // If the number of values more than `max_inlist_to_or`, need convert to contains function.
+                        if values.len() > self.ctx.get_settings().get_max_inlist_to_or()? as usize {
+                            let ty = values[0].as_ref().infer_data_type();
+                            let builder = ColumnBuilder::with_capacity(&ty, values.len());
+                            for value in values.into_iter() {
+                                builder.push(value.as_ref());
+                            }
+                            let array_value = ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: subquery.span,
+                                value: Scalar::Array(builder.build()),
+                            });
+                            let func = ScalarExpr::FunctionCall(FunctionCall {
+                                span: subquery.span,
+                                func_name: "contains".to_string(),
+                                params: vec![],
+                                arguments: vec![array_value, *child_expr.clone()],
+                            });
+                        }
 
+                        let mut funcs = Vec::with_capacity(values.len());
+                        for value in values.into_iter() {
+                            let scalar_value = ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: subquery.span,
+                                value,
+                            });
+                            let func = ScalarExpr::FunctionCall(FunctionCall {
+                                span: subquery.span,
+                                func_name: "eq".to_string(),
+                                params: vec![],
+                                arguments: vec![*child_expr.clone(), scalar_value],
+                            });
+                            funcs.push(func);
+                        }
                         let or_func = funcs
                             .into_iter()
                             .fold(None, |mut acc, func| {
