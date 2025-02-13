@@ -39,8 +39,8 @@ tables=(
 force=${2:-"1"}
 if [ "$force" == "0" ]; then
     res=`echo "SELECT COUNT() from ${db}.call_center" | $BENDSQL_CLIENT_CONNECT`
-    if [ "$res" != "0" && "$res" != "" ]; then
-        echo "Database $db already exists and is not empty. Use force=1 to override it."
+    if [ "$res" != "0" -a "$res" != "" ]; then
+        echo "Table $db.call_center already exists and is not empty, size: ${res}. Use force=1 to override it."
         exit 0
     fi
 fi

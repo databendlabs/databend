@@ -188,19 +188,20 @@ pub fn collect_lazy_dir(file_path: &Path, lazy_dirs: &mut HashSet<LazyDir>) -> R
     Ok(())
 }
 
-pub fn lazy_prepare_data(lazy_dirs: &HashSet<LazyDir>) -> Result<()> {
+pub fn lazy_prepare_data(lazy_dirs: &HashSet<LazyDir>, force_load: bool) -> Result<()> {
+    let force_load_flag = if force_load { "1" } else { "0" };
     for lazy_dir in lazy_dirs {
         match lazy_dir {
             LazyDir::Tpch => {
                 PREPARE_TPCH.call_once(|| {
                     println!("Calling the script prepare_tpch_data.sh ...");
-                    run_script("prepare_tpch_data.sh", &["tpch_test", "0"]).unwrap();
+                    run_script("prepare_tpch_data.sh", &["tpch_test", force_load_flag]).unwrap();
                 });
             }
             LazyDir::Tpcds => {
                 PREPARE_TPCDS.call_once(|| {
                     println!("Calling the script prepare_tpcds_data.sh ...");
-                    run_script("prepare_tpcds_data.sh", &["tpcds", "0"]).unwrap();
+                    run_script("prepare_tpcds_data.sh", &["tpcds", force_load_flag]).unwrap();
                 });
             }
             LazyDir::Stage => {

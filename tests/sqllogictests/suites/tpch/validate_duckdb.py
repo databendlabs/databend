@@ -6,16 +6,15 @@ from rich import print
 
 sf = 1
 # Initialize a DuckDB instance
+duckdb_location = "/tmp/tpch.duck"
 con = duckdb.connect("/tmp/tpch.duck")
 con.install_extension("tpch")
 con.load_extension("tpch")
 
-# Execute the commands
-# con.execute(f"CALL dbgen(sf = 1)") # sf can be other values, such as 0.1, 1, 10, ...
-
+if not os.path.exists(duckdb_location) or os.path.getsize(duckdb_location) == 0:
+    con.execute(f"CALL dbgen(sf = {sf})")
 
 ### read queries.test
-
 # Initialize a dictionary to store the queries and results
 queries_dict = {}
 

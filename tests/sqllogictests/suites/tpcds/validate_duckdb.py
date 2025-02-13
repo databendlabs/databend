@@ -1,21 +1,25 @@
 import duckdb
 import re
+import os
 import decimal
 import databend_driver
 from rich import print
 
+
+## now we can't run Q38 Q39 Q69
+
 sf = 1
 # Initialize a DuckDB instance
-con = duckdb.connect("/tmp/tpcds.duck")
+duckdb_location = "/tmp/tpcds.duck"
+con = duckdb.connect(duckdb_location)
 con.install_extension("tpcds")
 con.load_extension("tpcds")
 
 # Execute the commands
-# con.execute(f"CALL dsdgen(sf = 0.1)") # sf can be other values, such as 0.1, 1, 10, ...
-
+if not os.path.exists(duckdb_location) or os.path.getsize(duckdb_location) == 0:
+    con.execute(f"CALL dsdgen(sf = {sf})")
 
 ### read queries.test
-
 # Initialize a dictionary to store the queries and results
 queries_dict = {}
 

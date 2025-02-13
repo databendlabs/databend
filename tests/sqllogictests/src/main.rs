@@ -280,7 +280,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
 
     if !args.bench {
         // lazy load test datas
-        lazy_prepare_data(&lazy_dirs)?;
+        lazy_prepare_data(&lazy_dirs, args.force_load)?;
     }
     // lazy run dictionaries containers
     let _dict_container = lazy_run_dictionary_containers(&lazy_dirs).await?;
