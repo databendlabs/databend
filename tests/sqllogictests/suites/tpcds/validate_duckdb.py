@@ -57,22 +57,29 @@ def compare_results(result, expected_result, num):
             print(f"Query {num} length checked error")
             return False
         for item_r, item_er in zip(r, er.values()):
-            if (item_r == None or item_r == "") and (item_er == None or item_er == "NULL" or item_er == ""):
+            if (item_r == None or item_r == "") and (
+                item_er == None or item_er == "NULL" or item_er == ""
+            ):
                 continue
             if isinstance(item_r, (decimal.Decimal, float, int)):
                 if int(decimal.Decimal(item_r)) != int(decimal.Decimal(item_er)):
-                    print(f"Query {num} checked decimal error, not eq {item_r} !=  {item_er}")
+                    print(
+                        f"Query {num} checked decimal error, not eq {item_r} !=  {item_er}"
+                    )
                     print(r, er.values())
                     return False
             elif str(item_r) != str(item_er):
                 print(r, er.values())
-                print(f"Query {num} checked string error, not eq {item_r} !=  {item_er}")
+                print(
+                    f"Query {num} checked string error, not eq {item_r} !=  {item_er}"
+                )
                 return False
     return True
 
 
 from databend_driver import BlockingDatabendClient
-client = BlockingDatabendClient('databend://root:@localhost:8000/tpcds?sslmode=disable')
+
+client = BlockingDatabendClient("databend://root:@localhost:8000/tpcds?sslmode=disable")
 databend_con = client.get_conn()
 
 for i in range(1, 100):

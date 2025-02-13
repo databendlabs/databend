@@ -1,9 +1,9 @@
-import duckdb,sys
+import duckdb, sys
 
 sf = sys.argv[1]
 
 # Initialize a DuckDB instance
-con = duckdb.connect(':memory:')
+con = duckdb.connect(":memory:")
 
 con.install_extension("tpcds")
 con.load_extension("tpcds")

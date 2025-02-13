@@ -259,6 +259,10 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                 .to_str()
                 .unwrap()
                 .to_string();
+
+            if !file_name.ends_with(".test") {
+                continue;
+            }
             if let Some(ref specific_file) = args.file {
                 if !specific_file.split(',').any(|f| f.eq(&file_name)) {
                     continue;
