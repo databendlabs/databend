@@ -35,6 +35,8 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0a
 pWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==
 -----END PUBLIC KEY-----"#;
 
+pub const LICENSE_URL: &str = "https://docs.databend.com/guides/overview/editions/dee/";
+
 pub struct RealLicenseManager {
     tenant: String,
     public_keys: Vec<String>,
@@ -76,8 +78,8 @@ impl LicenseManager for RealLicenseManager {
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
         if license_key.is_empty() {
             return feature.verify_default(format!(
-                "The use of this feature requires a Databend Enterprise Edition license. No license key found for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/",
-                self.tenant
+                "The use of this feature requires a Databend Enterprise Edition license. No license key found for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at {}",
+                self.tenant, LICENSE_URL
             ));
         }
 
