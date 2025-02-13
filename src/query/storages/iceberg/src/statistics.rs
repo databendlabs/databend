@@ -166,16 +166,14 @@ impl IcebergStatistics {
 
         let mut computed_statistics = HashMap::new();
         for field in IcebergTable::get_schema(table)?.fields() {
-            let column_stats: Option<BasicColumnStatistics> = get_column_stats(
+            let column_stats = get_column_stats(
                 field,
                 &column_sizes,
                 &lower_bounds,
                 &upper_bounds,
                 &null_value_counts,
             );
-            if let Some(stats) = column_stats {
-                computed_statistics.insert(field.column_id, stats);
-            }
+            computed_statistics.insert(field.column_id, column_stats);
         }
 
         statistics.computed_statistics = computed_statistics;
@@ -196,26 +194,27 @@ impl ColumnStatisticsProvider for IcebergStatistics {
 /// Try get [`ColumnStatistics`] for one column.
 fn get_column_stats(
     field: &TableField,
-    column_size: &HashMap<i32, u64>,
+    _column_size: &HashMap<i32, u64>,
     lower: &HashMap<i32, Datum>,
     upper: &HashMap<i32, Datum>,
     null_counts: &HashMap<i32, u64>,
-) -> Option<BasicColumnStatistics> {
+) -> BasicColumnStatistics {
     // The column id in iceberg is 1-based while the column id in Databend is 0-based.
     let iceberg_col_id = field.column_id as i32 + 1;
-    match (
-        column_size.get(&iceberg_col_id),
-        lower.get(&iceberg_col_id),
-        upper.get(&iceberg_col_id),
-        null_counts.get(&iceberg_col_id),
-    ) {
-        (Some(_size), Some(lo), Some(up), Some(nc)) => Some(BasicColumnStatistics {
-            min: parse_datum(lo).and_then(DatabendDatum::from_scalar),
-            max: parse_datum(up).and_then(DatabendDatum::from_scalar),
-            ndv: None,
-            null_count: *nc,
-        }),
-        _ => None,
+    BasicColumnStatistics {
+        min: lower
+            .get(&iceberg_col_id)
+            .and_then(parse_datum)
+            .and_then(DatabendDatum::from_scalar),
+        max: upper
+            .get(&iceberg_col_id)
+            .and_then(parse_datum)
+            .and_then(DatabendDatum::from_scalar),
+        ndv: None,
+        null_count: null_counts
+            .get(&iceberg_col_id)
+            .copied()
+            .unwrap_or_default(),
     }
 }
 
