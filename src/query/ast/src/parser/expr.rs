@@ -964,12 +964,23 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ~ #subexpr(0) ~ ("," ~ #subexpr(0))?
             ~ ^")"
         },
-        |(_, _, expr, trim_str, _)| {
+        |(name, _, expr, trim_str, _)| {
             if let Some(trim_str) = trim_str {
                 let trim_str = trim_str.1;
-                ExprElement::Trim {
-                    expr: Box::new(expr),
-                    trim_where: Some((TrimWhere::Both, Box::new(trim_str))),
+                ExprElement::FunctionCall {
+                    func: FunctionCall {
+                        distinct: false,
+                        name: Identifier {
+                            span: Some(name.span),
+                            name: name.text().to_owned(),
+                            quote: None,
+                            ident_type: IdentifierType::None,
+                        },
+                        args: vec![expr, trim_str],
+                        params: vec![],
+                        window: None,
+                        lambda: None,
+                    },
                 }
             } else {
                 ExprElement::Trim {
@@ -1088,7 +1099,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             #function_name
             ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
             ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-            ~ #window_function
+            ~ #window_function?
         },
         |(name, _, params, _, _, opt_distinct, opt_args, _, window)| ExprElement::FunctionCall {
             func: FunctionCall {
@@ -1096,24 +1107,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name,
                 args: opt_args.unwrap_or_default(),
                 params,
-                window: Some(window),
-                lambda: None,
-            },
-        },
-    );
-    let function_call_with_params = map(
-        rule! {
-            #function_name
-            ~ "(" ~ #comma_separated_list1(subexpr(0)) ~ ")"
-            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
-        },
-        |(name, _, params, _, _, opt_distinct, opt_args, _)| ExprElement::FunctionCall {
-            func: FunctionCall {
-                distinct: opt_distinct.is_some(),
-                name,
-                args: opt_args.unwrap_or_default(),
-                params,
-                window: None,
+                window,
                 lambda: None,
             },
         },
@@ -1406,7 +1400,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #function_call_with_lambda : "`function(..., x -> ...)`"
                 | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
                 | #function_call_with_params_window : "`function(...)(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
-                | #function_call_with_params : "`function(...)(...)`"
                 | #function_call : "`function(...)`"
             ),
             rule!(
@@ -1839,56 +1832,94 @@ pub fn weekday(i: Input) -> IResult<Weekday> {
 }
 
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
+    let year = value(IntervalKind::Year, rule! { YEAR });
+    let quarter = value(IntervalKind::Quarter, rule! { QUARTER });
+    let month = value(IntervalKind::Month, rule! { MONTH });
+    let day = value(IntervalKind::Day, rule! { DAY });
+    let hour = value(IntervalKind::Hour, rule! { HOUR });
+    let minute = value(IntervalKind::Minute, rule! { MINUTE });
+    let second = value(IntervalKind::Second, rule! { SECOND });
+    let doy = value(IntervalKind::Doy, rule! { DOY });
+    let dow = value(IntervalKind::Dow, rule! { DOW });
+    let week = value(IntervalKind::Week, rule! { WEEK });
+    let epoch = value(IntervalKind::Epoch, rule! { EPOCH });
+    let microsecond = value(IntervalKind::MicroSecond, rule! { MICROSECOND });
+    let year_str = value(
+        IntervalKind::Year,
+        rule! { #literal_string_eq_ignore_case("YEAR")  },
+    );
+    let quarter_str = value(
+        IntervalKind::Quarter,
+        rule! { #literal_string_eq_ignore_case("QUARTER") },
+    );
+    let month_str = value(
+        IntervalKind::Month,
+        rule! { #literal_string_eq_ignore_case("MONTH")  },
+    );
+    let day_str = value(
+        IntervalKind::Day,
+        rule! { #literal_string_eq_ignore_case("DAY")  },
+    );
+    let hour_str = value(
+        IntervalKind::Hour,
+        rule! { #literal_string_eq_ignore_case("HOUR")  },
+    );
+    let minute_str = value(
+        IntervalKind::Minute,
+        rule! { #literal_string_eq_ignore_case("MINUTE")  },
+    );
+    let second_str = value(
+        IntervalKind::Second,
+        rule! { #literal_string_eq_ignore_case("SECOND")  },
+    );
+    let doy_str = value(
+        IntervalKind::Doy,
+        rule! { #literal_string_eq_ignore_case("DOY")  },
+    );
+    let dow_str = value(
+        IntervalKind::Dow,
+        rule! { #literal_string_eq_ignore_case("DOW")  },
+    );
+    let week_str = value(
+        IntervalKind::Week,
+        rule! { #literal_string_eq_ignore_case("WEEK")  },
+    );
+    let epoch_str = value(
+        IntervalKind::Epoch,
+        rule! { #literal_string_eq_ignore_case("EPOCH")  },
+    );
+    let microsecond_str = value(
+        IntervalKind::MicroSecond,
+        rule! { #literal_string_eq_ignore_case("MICROSECOND")  },
+    );
     alt((
-        value(IntervalKind::Year, rule! { YEAR }),
-        value(IntervalKind::Quarter, rule! { QUARTER }),
-        value(IntervalKind::Month, rule! { MONTH }),
-        value(IntervalKind::Day, rule! { DAY }),
-        value(IntervalKind::Hour, rule! { HOUR }),
-        value(IntervalKind::Minute, rule! { MINUTE }),
-        value(IntervalKind::Second, rule! { SECOND }),
-        value(IntervalKind::Doy, rule! { DOY }),
-        value(IntervalKind::Dow, rule! { DOW }),
-        value(IntervalKind::Week, rule! { WEEK }),
-        value(
-            IntervalKind::Year,
-            rule! { #literal_string_eq_ignore_case("YEAR")  },
+        rule!(
+            #year
+            | #quarter
+            | #month
+            | #day
+            | #hour
+            | #minute
+            | #second
+            | #doy
+            | #dow
+            | #week
+            | #epoch
+            | #microsecond
         ),
-        value(
-            IntervalKind::Quarter,
-            rule! { #literal_string_eq_ignore_case("QUARTER") },
-        ),
-        value(
-            IntervalKind::Month,
-            rule! { #literal_string_eq_ignore_case("MONTH")  },
-        ),
-        value(
-            IntervalKind::Day,
-            rule! { #literal_string_eq_ignore_case("DAY")  },
-        ),
-        value(
-            IntervalKind::Hour,
-            rule! { #literal_string_eq_ignore_case("HOUR")  },
-        ),
-        value(
-            IntervalKind::Minute,
-            rule! { #literal_string_eq_ignore_case("MINUTE")  },
-        ),
-        value(
-            IntervalKind::Second,
-            rule! { #literal_string_eq_ignore_case("SECOND")  },
-        ),
-        value(
-            IntervalKind::Doy,
-            rule! { #literal_string_eq_ignore_case("DOY")  },
-        ),
-        value(
-            IntervalKind::Dow,
-            rule! { #literal_string_eq_ignore_case("DOW")  },
-        ),
-        value(
-            IntervalKind::Week,
-            rule! { #literal_string_eq_ignore_case("WEEK")  },
+        rule!(
+            #year_str
+            | #quarter_str
+            | #month_str
+            | #day_str
+            | #hour_str
+            | #minute_str
+            | #second_str
+            | #doy_str
+            | #dow_str
+            | #week_str
+            | #epoch_str
+            | #microsecond_str
         ),
     ))(i)
 }
@@ -1953,7 +1984,9 @@ pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
         },
         None => 0,
     };
-    if i_part.len() as i32 + exp > 76 {
+
+    let p = i_part.len() as i32 + exp - f_part.len() as i32;
+    if !(-76..=76).contains(&p) {
         Ok(Literal::Float64(fast_float2::parse(text)?))
     } else {
         let mut digits = String::with_capacity(76);

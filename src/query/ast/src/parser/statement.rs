@@ -1413,7 +1413,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ ( OR ~ ^REPLACE )?
             ~ VIRTUAL ~ COLUMN
             ~ ( IF ~ ^NOT ~ ^EXISTS )?
-            ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")"
+            ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")"
             ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(
@@ -1442,7 +1442,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let alter_virtual_column = map(
         rule! {
-            ALTER ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
+            ALTER ~ VIRTUAL ~ COLUMN ~ ( IF ~ ^EXISTS )? ~ ^"(" ~ ^#comma_separated_list1(virtual_column) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(_, _, _, opt_if_exists, _, virtual_columns, _, _, (catalog, database, table))| {
             Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
@@ -2392,8 +2392,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         |(_, _, name, args)| {
             // TODO: modify to ProcedureIdentify
             Statement::DescProcedure(DescProcedureStmt {
-                name: name.to_string(),
-                args,
+                name: ProcedureIdentity {
+                    name: name.to_string(),
+                    args_type: if args.is_empty() {
+                        "".to_string()
+                    } else {
+                        args.iter()
+                            .map(|arg| arg.to_string())
+                            .collect::<Vec<String>>()
+                            .join(",")
+                    },
+                },
             })
         },
     );
@@ -4838,5 +4847,17 @@ pub fn alter_notification_options(i: Input) -> IResult<AlterNotificationOptions>
             | #comment
         },
         |opts| opts,
+    )(i)
+}
+
+pub fn virtual_column(i: Input) -> IResult<VirtualColumn> {
+    map(
+        rule! {
+            #expr ~ #alias_name?
+        },
+        |(expr, alias)| VirtualColumn {
+            expr: Box::new(expr),
+            alias,
+        },
     )(i)
 }

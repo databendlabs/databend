@@ -428,20 +428,20 @@ query T
 EXPLAIN SELECT a.cluster_node, b.query_node FROM (SELECT name as cluster_node FROM system.clusters) AS a LEFT JOIN (SELECT DISTINCT node_id as query_node FROM system.query_log) AS b ON a.cluster_node = b.query_node
 ----
 Exchange
-├── output columns: [clusters.name (#0), query_node (#62)]
+├── output columns: [clusters.name (#0), query_node (#63)]
 ├── exchange type: Merge
 └── HashJoin
-    ├── output columns: [clusters.name (#0), query_node (#62)]
+    ├── output columns: [clusters.name (#0), query_node (#63)]
     ├── join type: LEFT OUTER
-    ├── build keys: [b.query_node (#62)]
+    ├── build keys: [b.query_node (#63)]
     ├── probe keys: [CAST(a.cluster_node (#0) AS String NULL)]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── Exchange(Build)
-    │   ├── output columns: [query_node (#62)]
+    │   ├── output columns: [query_node (#63)]
     │   ├── exchange type: Broadcast
     │   └── EvalScalar
-    │       ├── output columns: [query_node (#62)]
+    │       ├── output columns: [query_node (#63)]
     │       ├── expressions: [CAST(b.query_node (#10) AS String NULL)]
     │       ├── estimated rows: 0.00
     │       └── AggregateFinal

@@ -128,7 +128,12 @@ pub trait PhysicalPlanReplacer {
     }
 
     fn replace_hilbert_serialize(&mut self, plan: &HilbertSerialize) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::HilbertSerialize(Box::new(plan.clone())))
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::HilbertSerialize(Box::new(HilbertSerialize {
+            plan_id: plan.plan_id,
+            input: Box::new(input),
+            table_info: plan.table_info.clone(),
+        })))
     }
 
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {

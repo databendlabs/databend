@@ -63,6 +63,7 @@ impl TransformFinalAggregate {
                             let payload = payload.convert_to_partitioned_payload(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
+                                self.params.num_states(),
                                 0,
                                 Arc::new(Bump::new()),
                             )?;
@@ -73,6 +74,7 @@ impl TransformFinalAggregate {
                             agg_hashtable = Some(payload.convert_to_aggregate_table(
                                 self.params.group_data_types.clone(),
                                 self.params.aggregate_functions.clone(),
+                                self.params.num_states(),
                                 0,
                                 Arc::new(Bump::new()),
                                 true,

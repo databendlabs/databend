@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod authenticator;
+mod jwk;

@@ -712,12 +712,11 @@ impl<T: Number> TransformWindow<T> {
                     cur = if advance {
                         let advance_cur = self.advance_row(cur);
                         if advance_cur.block != cur.block {
-                            block_entry = self
-                                .blocks
-                                .get(advance_cur.block - self.first_block)
-                                .unwrap()
-                                .block
-                                .get_by_offset(arg_index);
+                            if let Some(b) = self.blocks.get(advance_cur.block - self.first_block) {
+                                block_entry = b.block.get_by_offset(arg_index);
+                            } else {
+                                return Scalar::Null;
+                            }
                         }
                         advance_cur
                     } else if cur == self.frame_start {

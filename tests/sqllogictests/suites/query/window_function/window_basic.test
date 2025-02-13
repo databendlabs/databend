@@ -1,6 +1,13 @@
 statement ok
 CREATE DATABASE IF NOT EXISTS test_window_basic
 
+
+statement error 1065
+SELECT last_value(number)  OVER (ORDER BY number ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED PRECEDING) FROM numbers(1);
+
+statement error 1065
+SELECT last_value(number)  OVER (ORDER BY number RANGE BETWEEN UNBOUNDED FOLLOWING AND UNBOUNDED FOLLOWING) FROM numbers(1);
+
 statement ok
 USE test_window_basic
 

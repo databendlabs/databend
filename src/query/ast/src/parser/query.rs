@@ -37,6 +37,7 @@ use crate::parser::statement::set_table_option;
 use crate::parser::statement::top_n;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
+use crate::Range;
 
 pub fn query(i: Input) -> IResult<Query> {
     context(
@@ -103,6 +104,34 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             }
         },
     );
+    let from_stmt = map_res(
+        rule! {
+            FROM ~ ^#comma_separated_list1(table_reference)
+        },
+        |(_from, from_block)| {
+            if from_block.len() != 1 {
+                return Err(nom::Err::Failure(ErrorKind::Other(
+                    "FROM query only support query one table",
+                )));
+            }
+            Ok(SetOperationElement::SelectStmt {
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: vec![SelectTarget::StarColumns {
+                    qualified: vec![Indirection::Star(Some(Range { start: 0, end: 0 }))],
+                    column_filter: None,
+                }],
+                from: from_block,
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            })
+        },
+    );
+
     let select_stmt = map_res(
         rule! {
             ( FROM ~ ^#comma_separated_list1(table_reference) )?
@@ -195,6 +224,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             | #with
             | #set_operator
             | #select_stmt
+            | #from_stmt
             | #values
             | #order_by
             | #limit

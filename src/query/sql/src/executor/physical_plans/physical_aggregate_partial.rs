@@ -47,27 +47,20 @@ impl AggregatePartial {
         let input_schema = self.input.output_schema()?;
 
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
-        for agg in self.agg_funcs.iter() {
-            fields.push(DataField::new(
-                &agg.output_column.to_string(),
-                DataType::Binary,
-            ));
+
+        fields.extend(self.agg_funcs.iter().map(|func| {
+            let name = func.output_column.to_string();
+            DataField::new(&name, DataType::Binary)
+        }));
+
+        for (idx, field) in self.group_by.iter().zip(
+            self.group_by
+                .iter()
+                .map(|index| input_schema.field_with_name(&index.to_string())),
+        ) {
+            fields.push(DataField::new(&idx.to_string(), field?.data_type().clone()));
         }
 
-        let group_types = self
-            .group_by
-            .iter()
-            .map(|index| {
-                Ok(input_schema
-                    .field_with_name(&index.to_string())?
-                    .data_type()
-                    .clone())
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        for (idx, data_type) in self.group_by.iter().zip(group_types.iter()) {
-            fields.push(DataField::new(&idx.to_string(), data_type.clone()));
-        }
         Ok(DataSchemaRefExt::create(fields))
     }
 }

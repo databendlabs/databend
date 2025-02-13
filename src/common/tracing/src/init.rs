@@ -21,11 +21,8 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
 use fastrace::prelude::*;
 use log::LevelFilter;
-use log::Metadata;
 use logforth::filter::env::EnvFilterBuilder;
-use logforth::filter::CustomFilter;
 use logforth::filter::EnvFilter;
-use logforth::filter::FilterResult;
 use logforth::Dispatch;
 use logforth::Logger;
 use opentelemetry_otlp::WithExportConfig;
@@ -70,6 +67,16 @@ pub fn inject_span_to_tonic_request<T>(msg: impl tonic::IntoRequest<T>) -> tonic
         request.metadata_mut().insert(key, val);
     }
     request
+}
+
+fn env_filter(level: &str) -> EnvFilter {
+    EnvFilter::new(
+        EnvFilterBuilder::new()
+            .filter(Some("databend::log::query"), LevelFilter::Off)
+            .filter(Some("databend::log::profile"), LevelFilter::Off)
+            .filter(Some("databend::log::structlog"), LevelFilter::Off)
+            .parse(level),
+    )
 }
 
 pub fn init_logging(
@@ -180,14 +187,7 @@ pub fn init_logging(
         _drop_guards.push(flush_guard);
 
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                EnvFilterBuilder::new()
-                    .filter(Some("databend::log::query"), LevelFilter::Off)
-                    .filter(Some("databend::log::profile"), LevelFilter::Off)
-                    .filter(Some("databend::log::structlog"), LevelFilter::Off)
-                    .parse(&cfg.file.level),
-            ))
-            .filter(make_log_filter(&cfg.file.prefix_filter))
+            .filter(env_filter(&cfg.file.level))
             .append(normal_log_file.with_layout(get_layout(&cfg.file.format)));
         logger = logger.dispatch(dispatch);
     }
@@ -195,13 +195,7 @@ pub fn init_logging(
     // console logger
     if cfg.stderr.on {
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                EnvFilterBuilder::new()
-                    .filter(Some("databend::log::query"), LevelFilter::Off)
-                    .filter(Some("databend::log::profile"), LevelFilter::Off)
-                    .filter(Some("databend::log::structlog"), LevelFilter::Off)
-                    .parse(&cfg.stderr.level),
-            ))
+            .filter(env_filter(&cfg.stderr.level))
             .append(
                 logforth::append::Stderr::default().with_layout(get_layout(&cfg.stderr.format)),
             );
@@ -227,33 +221,15 @@ pub fn init_logging(
             .build()
             .expect("initialize opentelemetry logger");
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                EnvFilterBuilder::new()
-                    .filter(Some("databend::log::query"), LevelFilter::Off)
-                    .filter(Some("databend::log::profile"), LevelFilter::Off)
-                    .filter(Some("databend::log::structlog"), LevelFilter::Off)
-                    .parse(&cfg.otlp.level),
-            ))
+            .filter(env_filter(&cfg.otlp.level))
             .append(otel);
         logger = logger.dispatch(dispatch);
     }
 
     // log to fastrace
     if cfg.tracing.on || cfg.structlog.on {
-        let level = cfg
-            .tracing
-            .capture_log_level
-            .parse()
-            .ok()
-            .unwrap_or(LevelFilter::Info);
         let dispatch = Dispatch::new()
-            .filter(EnvFilter::new(
-                EnvFilterBuilder::new()
-                    .filter(Some("databend::log::query"), LevelFilter::Off)
-                    .filter(Some("databend::log::profile"), LevelFilter::Off)
-                    .filter(Some("databend::log::structlog"), LevelFilter::Off),
-            ))
-            .filter(level)
+            .filter(env_filter(&cfg.tracing.capture_log_level))
             .append(logforth::append::FastraceEvent::default());
         logger = logger.dispatch(dispatch);
     }
@@ -364,36 +340,4 @@ pub fn init_logging(
     }
 
     _drop_guards
-}
-
-/// Creates a log filter that matches log entries based on specified target prefixes or severity.
-fn make_log_filter(prefix_filter: &str) -> CustomFilter {
-    let prefixes = prefix_filter
-        .split(',')
-        .map(|x| x.to_string())
-        .collect::<Vec<_>>();
-
-    CustomFilter::new(move |meta| match_prefix(meta, &prefixes))
-}
-
-fn match_prefix(meta: &Metadata, prefixes: &[String]) -> FilterResult {
-    if is_severe(meta) {
-        return FilterResult::Neutral;
-    }
-
-    for p in prefixes {
-        if meta.target().starts_with(p) {
-            return FilterResult::Accept;
-        }
-    }
-
-    FilterResult::Reject
-}
-
-/// Return true if the log level is considered severe.
-///
-/// Severe logs ignores the prefix filter.
-fn is_severe(meta: &Metadata) -> bool {
-    // For other component, output logs with level <= WARN
-    meta.level() <= LevelFilter::Warn
 }

@@ -62,6 +62,7 @@ pub struct TableMetaLocationGenerator {
     bloom_index_location_prefix: String,
     snapshot_location_prefix: String,
     agg_index_location_prefix: String,
+    inverted_index_location_prefix: String,
 }
 
 impl TableMetaLocationGenerator {
@@ -72,6 +73,8 @@ impl TableMetaLocationGenerator {
         let segment_info_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_PREFIX);
         let snapshot_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SNAPSHOT_PREFIX);
         let agg_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_AGG_INDEX_PREFIX);
+        let inverted_index_location_prefix =
+            format!("{}/{}/", &prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
         Self {
             prefix,
             block_location_prefix,
@@ -79,6 +82,7 @@ impl TableMetaLocationGenerator {
             bloom_index_location_prefix,
             snapshot_location_prefix,
             agg_index_location_prefix,
+            inverted_index_location_prefix,
         }
     }
 
@@ -203,6 +207,24 @@ impl TableMetaLocationGenerator {
 
     pub fn agg_index_location_prefix(&self) -> &str {
         &self.agg_index_location_prefix
+    }
+
+    pub fn inverted_index_location_prefix(&self) -> &str {
+        &self.inverted_index_location_prefix
+    }
+
+    pub fn gen_specific_inverted_index_prefix(
+        &self,
+        index_name: &str,
+        index_version: &str,
+    ) -> String {
+        let short_ver: String = index_version.chars().take(7).collect();
+        format!(
+            "{}/{}/{}",
+            self.inverted_index_location_prefix(),
+            index_name,
+            short_ver,
+        )
     }
 
     pub fn gen_inverted_index_location_from_block_location(

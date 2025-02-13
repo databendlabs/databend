@@ -111,9 +111,11 @@ echo "CREATE TABLE IF NOT EXISTS lineitem
 ) CLUSTER BY(l_shipdate, l_orderkey) ${options}" | $BENDSQL_CLIENT_CONNECT
 
 # insert data to tables
+# note: export STORAGE_ALLOW_INSECURE=true to start databend-query
 for t in customer lineitem nation orders partsupp part region supplier
 do
     echo "$t"
-    insert_sql="insert into ${MYSQL_DATABASE}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "database: tpch" -H "insert_sql: ${insert_sql}" -F 'upload=@"./data/'$t'.tbl"'
+    fp="`pwd`/data/$t.tbl"
+    echo "copy into ${MYSQL_DATABASE}.$t from 'fs://${fp}' file_format = (type = CSV skip_header = 1 field_delimiter = '|' record_delimiter = '\n')" | $BENDSQL_CLIENT_CONNECT
+    echo "analyze table ${MYSQL_DATABASE}.$t" | $BENDSQL_CLIENT_CONNECT
 done

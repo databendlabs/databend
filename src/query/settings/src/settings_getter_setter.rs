@@ -327,6 +327,10 @@ impl Settings {
         Ok(self.unchecked_try_get_u64("disable_join_reorder")? != 0)
     }
 
+    pub fn get_max_push_down_limit(&self) -> Result<usize> {
+        Ok(self.try_get_u64("max_push_down_limit")? as usize)
+    }
+
     pub fn get_join_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
@@ -414,6 +418,10 @@ impl Settings {
 
     pub fn get_sandbox_tenant(&self) -> Result<String> {
         self.try_get_string("sandbox_tenant")
+    }
+
+    pub fn get_query_tag(&self) -> Result<String> {
+        self.try_get_string("query_tag")
     }
 
     pub fn get_hide_options_in_show_create_table(&self) -> Result<bool> {
@@ -835,6 +843,10 @@ impl Settings {
 
     pub fn get_enable_prune_pipeline(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_prune_pipeline")? == 1)
+    }
+
+    pub fn get_enable_prune_cache(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_prune_cache")? == 1)
     }
 
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {

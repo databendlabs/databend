@@ -270,6 +270,11 @@ select CAST(116214450.599999999999999 AS DECIMAL(38, 14)) *
 
 ## div
 
+query B
+SELECT 1e100/1e-100 = 1e200, 1e-100/1e-100 = 1, 1e-100/1e100 > 0;
+----
+1 1 1
+
 query I
 SELECT CAST(4.56 AS DECIMAL(6, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS result;
 ----
@@ -522,7 +527,7 @@ select count(*) from t_decimal_4_2;
 ----
 0
 
-statement error 1303
+statement error 1005
 insert into t_decimal_4_2 values (.);
 
 statement ok
@@ -533,7 +538,7 @@ select count(*) from t_decimal_4_2;
 ----
 0
 
-statement error 1303
+statement error 1005
 insert into t_decimal_4_2 values (+);
 
 statement ok
@@ -544,7 +549,7 @@ select count(*) from t_decimal_4_2;
 ----
 0
 
-statement error 1303
+statement error 1005
 insert into t_decimal_4_2 values (-);
 
 statement ok
@@ -708,13 +713,13 @@ create table t_decimal_76_2(a Decimal(76,2) not null);
 statement error 1065
 insert into t_decimal_76_2 values (1.1.1);
 
-statement error 1303
+statement error 1005
 insert into t_decimal_76_2 values (.);
 
-statement error 1303
+statement error 1005
 insert into t_decimal_76_2 values (+);
 
-statement error 1303
+statement error 1005
 insert into t_decimal_76_2 values (-);
 
 statement error 1303

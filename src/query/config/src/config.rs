@@ -53,6 +53,7 @@ use databend_common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig as InnerStructLogConfig;
 use databend_common_tracing::TracingConfig as InnerTracingConfig;
+use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_with::with_prefix;
@@ -1190,6 +1191,21 @@ pub struct WebhdfsStorageConfig {
     #[clap(long = "storage-webhdfs-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub webhdfs_root: String,
+    /// Disable list batch if hdfs doesn't support yet.
+    #[clap(
+        long = "storage-webhdfs-disable-list-batch",
+        value_name = "VALUE",
+        default_value_t
+    )]
+    #[serde(rename = "disable_list_batch")]
+    pub webhdfs_disable_list_batch: bool,
+    #[clap(
+        long = "storage-webhdfs-user-name",
+        value_name = "VALUE",
+        default_value_t
+    )]
+    #[serde(rename = "user_name")]
+    pub webhdfs_user_name: String,
 }
 
 impl Default for WebhdfsStorageConfig {
@@ -1202,7 +1218,8 @@ impl Debug for WebhdfsStorageConfig {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("WebhdfsStorageConfig")
             .field("endpoint_url", &self.webhdfs_endpoint_url)
-            .field("webhdfs_root", &self.webhdfs_root)
+            .field("root", &self.webhdfs_root)
+            .field("user_name", &self.webhdfs_user_name)
             .field("delegation", &mask_string(&self.webhdfs_delegation, 3))
             .finish()
     }
@@ -1214,6 +1231,8 @@ impl From<InnerStorageWebhdfsConfig> for WebhdfsStorageConfig {
             webhdfs_delegation: v.delegation,
             webhdfs_endpoint_url: v.endpoint_url,
             webhdfs_root: v.root,
+            webhdfs_disable_list_batch: v.disable_list_batch,
+            webhdfs_user_name: v.user_name,
         }
     }
 }
@@ -1226,6 +1245,8 @@ impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
             delegation: value.webhdfs_delegation,
             endpoint_url: value.webhdfs_endpoint_url,
             root: value.webhdfs_root,
+            disable_list_batch: value.webhdfs_disable_list_batch,
+            user_name: value.webhdfs_user_name,
         })
     }
 }
@@ -1908,7 +1929,7 @@ impl From<InnerQueryConfig> for QueryConfig {
 #[serde(default)]
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-level", value_name = "VALUE", default_value = "INFO")]
+    #[clap(long = "log-level", value_name = "VALUE", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     pub level: String,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -1989,7 +2010,7 @@ impl TryInto<InnerLogConfig> for LogConfig {
         }
 
         let mut file: InnerFileLogConfig = self.file.try_into()?;
-        if self.level != "INFO" {
+        if self.level != CONFIG_DEFAULT_LOG_LEVEL {
             file.level = self.level.to_string();
         }
         if self.dir != "./.databend/logs" {
@@ -2082,7 +2103,7 @@ pub struct FileLogConfig {
     pub file_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-file-level", value_name = "VALUE", default_value = "INFO")]
+    #[clap(long = "log-file-level", value_name = "VALUE", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub file_level: String,
 
@@ -2105,16 +2126,10 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
-    /// Log prefix filter, separated by comma.
-    /// For example, `"databend_,openraft"` enables logging for `databend_*` crates and `openraft` crate.
-    /// This filter does not affect `WARNING` and `ERROR` log.
-    #[clap(
-        long = "log-file-prefix-filter",
-        value_name = "VALUE",
-        default_value = "databend_,openraft"
-    )]
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
     #[serde(rename = "prefix_filter")]
-    pub file_prefix_filter: String,
+    pub file_prefix_filter: Option<String>,
 }
 
 impl Default for FileLogConfig {
@@ -2127,13 +2142,18 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerFileLogConfig> {
+        if self.file_prefix_filter.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`prefix_filter` is deprecated, use `level` with the syntax of env_logger instead."
+                    .to_string(),
+            ));
+        }
         Ok(InnerFileLogConfig {
             on: self.file_on,
             level: self.file_level,
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
-            prefix_filter: self.file_prefix_filter,
         })
     }
 }
@@ -2146,7 +2166,9 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
-            file_prefix_filter: inner.prefix_filter,
+
+            // Deprecated Fields
+            file_prefix_filter: None,
         }
     }
 }
@@ -2164,7 +2186,7 @@ pub struct StderrLogConfig {
     #[clap(
         long = "log-stderr-level",
         value_name = "VALUE",
-        default_value = "INFO"
+        default_value = CONFIG_DEFAULT_LOG_LEVEL
     )]
     #[serde(rename = "level")]
     pub stderr_level: String,
@@ -2216,7 +2238,7 @@ pub struct OTLPLogConfig {
     pub otlp_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-otlp-level", value_name = "VALUE", default_value = "INFO")]
+    #[clap(long = "log-otlp-level", value_name = "VALUE", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub otlp_level: String,
 
@@ -2404,7 +2426,7 @@ pub struct TracingConfig {
     #[clap(
         long = "log-tracing-level",
         value_name = "VALUE",
-        default_value = "INFO"
+        default_value = CONFIG_DEFAULT_LOG_LEVEL
     )]
     #[serde(rename = "capture_log_level")]
     pub tracing_capture_log_level: String,
@@ -2727,6 +2749,15 @@ pub struct CacheConfig {
         default_value = "0"
     )]
     pub block_meta_count: u64,
+
+    /// Max number of **segment** which all of its block meta will be cached.
+    /// Note that a segment may contain multiple block metadata entries.
+    #[clap(
+        long = "cache-segment-block-metas-count",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
+    pub segment_block_metas_count: u64,
 
     /// Max number of cached table statistic meta
     #[clap(
@@ -3088,6 +3119,7 @@ mod cache_config_converters {
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
                 table_meta_segment_bytes: value.table_meta_segment_bytes,
                 block_meta_count: value.block_meta_count,
+                segment_block_metas_count: value.segment_block_metas_count,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -3132,6 +3164,7 @@ mod cache_config_converters {
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
                 table_data_deserialized_memory_ratio: value.table_data_deserialized_memory_ratio,
                 table_meta_segment_count: None,
+                segment_block_metas_count: value.segment_block_metas_count,
             }
         }
     }

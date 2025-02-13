@@ -66,7 +66,7 @@ struct Config {
     #[clap(long, default_value = "10000")]
     pub number: u64,
 
-    #[clap(long, default_value = "INFO")]
+    #[clap(long, default_value = "warn,databend_=info")]
     pub log_level: String,
 
     #[clap(long, env = "METASRV_GRPC_API_ADDRESS", default_value = "")]
@@ -84,7 +84,6 @@ async fn main() -> Result<()> {
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
-            prefix_filter: "databend_".to_string(),
         },
         stderr: StderrConfig {
             on: true,
@@ -94,7 +93,8 @@ async fn main() -> Result<()> {
         ..Default::default()
     };
 
-    let _guards = init_logging("databend-metaverifier", &log_config, BTreeMap::new());
+    let guards = init_logging("databend-metaverifier", &log_config, BTreeMap::new());
+    Box::new(guards).leak();
 
     println!("config: {:?}", config);
     if config.grpc_api_address.is_empty() {

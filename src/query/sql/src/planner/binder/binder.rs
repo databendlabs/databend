@@ -1059,10 +1059,12 @@ pub async fn execute_commit_statement(ctx: Arc<dyn TableContext>) -> Result<()> 
             }
             Err(e) => {
                 let err_msg = format!(
-                    "COMMIT: Table versions mismatched in multi statement transaction, conflict tables: {:?}",
-                    e.iter()
-                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
-                        .collect::<Vec<_>>()
+                    "Due to concurrent transactions, explicit transaction commit failed. Conflicting table IDs: {:?}",
+                    e.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
+                );
+                info!(
+                    "Due to concurrent transactions, explicit transaction commit failed. Conflicting table IDs: {:?}",
+                    e
                 );
                 return Err(ErrorCode::TableVersionMismatched(err_msg));
             }

@@ -25,6 +25,8 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -42,6 +44,8 @@ use super::borsh_serialize_state;
 use super::AggregateFunctionRef;
 use super::StateAddr;
 use crate::aggregates::assert_binary_arguments;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::with_compare_mapped_type;
 use crate::with_simple_no_number_mapped_type;
@@ -216,17 +220,17 @@ where
         Ok(self.return_data_type.clone())
     }
 
-    fn init_state(&self, place: StateAddr) {
-        place.write(|| State::new());
+    fn init_state(&self, place: AggrState) {
+        place.write(State::new);
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<State>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<State>()));
     }
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -240,7 +244,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -250,10 +254,9 @@ where
 
         val_col_iter
             .enumerate()
-            .zip(places.iter())
-            .for_each(|((row, val), place)| {
-                let addr = place.next(offset);
-                let state = addr.get::<State>();
+            .zip(places.iter().cloned())
+            .for_each(|((row, val), addr)| {
+                let state = AggrState::new(addr, loc).get::<State>();
                 if state.change(&val) {
                     state.update(val, A::index_column(&arg_col, row).unwrap())
                 }
@@ -261,7 +264,7 @@ where
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let arg_col = A::try_downcast_column(&columns[0]).unwrap();
         let val_col = V::try_downcast_column(&columns[1]).unwrap();
         let state = place.get::<State>();
@@ -273,24 +276,24 @@ where
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
         let rhs: State = borsh_deserialize_state(reader)?;
         state.merge_from(rhs)
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<State>();
         let other = rhs.get::<State>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
         state.merge_result(builder)
     }
@@ -299,7 +302,7 @@ where
         true
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<State>();
         std::ptr::drop_in_place(state);
     }

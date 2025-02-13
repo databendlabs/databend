@@ -368,6 +368,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'query_parameterized_hash'        | 'system'             | 'query_log'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_queued_duration_ms'        | 'system'             | 'query_log'              | 'Int64'               | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
 | 'query_start_time'                | 'system'             | 'query_log'              | 'Timestamp'           | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'query_tag'                       | 'system'             | 'query_log'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_text'                      | 'system'             | 'query_log'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'range'                           | 'system'             | 'settings'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'referenced_column_name'          | 'information_schema' | 'key_column_usage'       | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |

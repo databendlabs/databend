@@ -71,6 +71,7 @@ fn create_sort_spill_pipeline(
                 sort_desc.clone(),
                 block_size,
                 enable_loser_tree,
+                None,
             ),
         )
     })?;

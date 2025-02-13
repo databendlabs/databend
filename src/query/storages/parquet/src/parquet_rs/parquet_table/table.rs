@@ -34,6 +34,7 @@ use databend_common_catalog::table::DummyColumnStatisticsProvider;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
@@ -49,6 +50,7 @@ use databend_common_storage::parquet_rs::read_metadata_async;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::table::ChangeType;
+use log::info;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
@@ -140,10 +142,17 @@ impl ParquetRSTable {
 
         // If the query is `COPY`, we don't need to collect column statistics.
         // It's because the only transform could be contained in `COPY` command is projection.
-        let need_stats_provider = !matches!(
-            query_kind,
-            QueryKind::CopyIntoTable | QueryKind::CopyIntoLocation
-        );
+        let need_stats_provider = match query_kind {
+            QueryKind::CopyIntoTable | QueryKind::CopyIntoLocation => true,
+            QueryKind::Unknown => {
+                // add this branch to ensure query_kind is set
+                return Err(ErrorCode::Internal(
+                    "Unexpected QueryKind::Unknown: query_kind was not properly set before calling ParquetRSTable::create.",
+                ));
+            }
+            _ => false,
+        };
+
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
 
@@ -174,7 +183,9 @@ impl ParquetRSTable {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let size = operator.stat(path).await?.content_length();
+        let stat = operator.stat(path).await?;
+        let size = stat.content_length();
+        info!("infer schema from file {}, with stat {:?}", path, stat);
         let first_meta = read_metadata_async(path, &operator, Some(size)).await?;
         let arrow_schema = infer_schema_with_extension(first_meta.file_metadata())?;
         let compression_ratio = get_compression_ratio(&first_meta);

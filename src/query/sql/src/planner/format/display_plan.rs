@@ -197,6 +197,7 @@ impl Plan {
             Plan::ExecuteImmediate(_) => Ok("ExecuteImmediate".to_string()),
             Plan::CreateProcedure(_) => Ok("CreateProcedure".to_string()),
             Plan::DropProcedure(_) => Ok("DropProcedure".to_string()),
+            Plan::DescProcedure(_) => Ok("DescProcedure".to_string()),
             Plan::CallProcedure(_) => Ok("CallProcedure".to_string()),
             // Plan::ShowCreateProcedure(_) => Ok("ShowCreateProcedure".to_string()),
             // Plan::RenameProcedure(_) => Ok("ProcedureDatabase".to_string()),

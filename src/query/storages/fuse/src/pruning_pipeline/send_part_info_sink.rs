@@ -125,6 +125,7 @@ pub struct SendPartInfoSink {
     partitions: Partitions,
     statistics: PartStatistics,
     send_part_state: Arc<SendPartState>,
+    enable_cache: bool,
 }
 
 impl SendPartInfoSink {
@@ -135,6 +136,7 @@ impl SendPartInfoSink {
         top_k: Option<(TopK, Scalar)>,
         schema: TableSchemaRef,
         send_part_state: Arc<SendPartState>,
+        enable_cache: bool,
     ) -> Result<ProcessorPtr> {
         let partitions = Partitions::default();
         let statistics = PartStatistics::default();
@@ -148,6 +150,7 @@ impl SendPartInfoSink {
                 partitions,
                 statistics,
                 send_part_state,
+                enable_cache,
             },
         )))
     }
@@ -184,8 +187,9 @@ impl AsyncSink for SendPartInfoSink {
                         ),
                     },
                 };
-
-                self.partitions.partitions.extend(info_ptr.clone());
+                if self.enable_cache {
+                    self.partitions.partitions.extend(info_ptr.clone());
+                }
 
                 for info in info_ptr {
                     if let Some(sender) = &self.sender {

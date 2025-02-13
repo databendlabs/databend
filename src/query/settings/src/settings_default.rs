@@ -303,6 +303,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
+                ("query_tag", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_owned()),
+                    desc: "Sets the query tag for this session.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: None,
+                }),
                 ("enable_dphyp", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables dphyp join order algorithm.",
@@ -330,6 +337,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("max_push_down_limit", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10000),
+                    desc: "Sets the maximum number of rows limit that can be pushed down to the leaf operator.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
@@ -1179,6 +1193,14 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("enable_prune_cache", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable to cache the pruning result",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+
             ]);
 
             Ok(Arc::new(DefaultSettings {

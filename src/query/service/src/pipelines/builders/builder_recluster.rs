@@ -154,7 +154,6 @@ impl PipelineBuilder {
                 let sort_block_size =
                     block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
 
-                self.ctx.set_enable_sort_spill(false);
                 let sort_pipeline_builder =
                     SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))?
                         .with_block_size_hit(sort_block_size)

@@ -33,6 +33,7 @@ use sqllogictest::Runner;
 use sqllogictest::TestError;
 use testcontainers::ContainerAsync;
 use testcontainers::GenericImage;
+use testcontainers::Image;
 
 use crate::arg::SqlLogicTestArgs;
 use crate::client::Client;
@@ -67,7 +68,14 @@ static HYBRID_CONFIGS: LazyLock<Vec<(Box<ClientType>, usize)>> = LazyLock::new(|
                 "datafuselabs/ttc-rust:latest".to_string(),
                 TTC_PORT_START,
             )),
-            7,
+            5,
+        ),
+        (
+            Box::new(ClientType::Ttc(
+                "ghcr.io/databendlabs/ttc-go:latest".to_string(),
+                TTC_PORT_START + 1,
+            )),
+            5,
         ),
     ]
 });
@@ -151,22 +159,30 @@ async fn run_hybrid_client(
 ) -> Result<()> {
     println!("Hybird client starts to run with: {:?}", args);
 
-    // preparse docker envs
-    let mut port_start = TTC_PORT_START;
-
     let docker = Docker::connect_with_local_defaults().unwrap();
     for (c, _) in HYBRID_CONFIGS.iter() {
         match c.as_ref() {
             ClientType::MySQL | ClientType::Http => {}
-            ClientType::Ttc(image, _) => {
-                run_ttc_container(&docker, image, port_start, cs).await?;
-                port_start += 1;
+            ClientType::Ttc(image, port) => {
+                run_ttc_container(&docker, image, *port, args.port, cs).await?;
             }
             ClientType::Hybird => panic!("Can't run hybrid client in hybrid client"),
         }
     }
 
-    run_suits(args, ClientType::Hybird).await?;
+    if let Err(e) = run_suits(args, ClientType::Hybird).await {
+        for c in cs {
+            println!("{}", c.id());
+            println!("{}", c.image().name());
+            if let Ok(log) = c.stderr_to_vec().await {
+                println!("stderr: {}", String::from_utf8_lossy(&log));
+            }
+            if let Ok(log) = c.stdout_to_vec().await {
+                println!("stdout: {}", String::from_utf8_lossy(&log));
+            }
+        }
+        Err(e)?
+    }
     Ok(())
 }
 
@@ -184,7 +200,7 @@ async fn create_databend(client_type: &ClientType, filename: &str) -> Result<Dat
             client = Client::MySQL(mysql_client);
         }
         ClientType::Http => {
-            client = Client::Http(HttpClient::create().await?);
+            client = Client::Http(HttpClient::create(args.port).await?);
         }
 
         ClientType::Ttc(image, port) => {
@@ -262,8 +278,10 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
         }
     }
 
-    // lazy load test datas
-    lazy_prepare_data(&lazy_dirs)?;
+    if !args.bench {
+        // lazy load test datas
+        lazy_prepare_data(&lazy_dirs)?;
+    }
     // lazy run dictionaries containers
     let _dict_container = lazy_run_dictionary_containers(&lazy_dirs).await?;
 
@@ -298,7 +316,9 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
         let mut tasks = Vec::with_capacity(files.len());
         for file in files {
             let client_type = client_type.clone();
-            tasks.push(async move { run_file_async(&client_type, file.unwrap().path()).await });
+            tasks.push(async move {
+                run_file_async(&client_type, args.bench, file.unwrap().path()).await
+            });
         }
         // Run all tasks parallel
         run_parallel_async(tasks, num_of_tests).await?;
@@ -326,7 +346,7 @@ async fn run_parallel_async(
             .filter_map(|result| async { result.err() })
             .collect()
             .await;
-        handle_error_records(errors, no_fail_fast, num_of_tests)?;
+        handle_error_records(errors, no_fail_fast, num_of_tests)
     } else {
         let errors: Vec<Vec<TestError>> = tasks
             .filter_map(|result| async { result.ok() })
@@ -336,13 +356,13 @@ async fn run_parallel_async(
             errors.into_iter().flatten().collect(),
             no_fail_fast,
             num_of_tests,
-        )?;
+        )
     }
-    Ok(())
 }
 
 async fn run_file_async(
     client_type: &ClientType,
+    bench: bool,
     filename: impl AsRef<Path>,
 ) -> std::result::Result<Vec<TestError>, TestError> {
     let start = Instant::now();
@@ -359,6 +379,16 @@ async fn run_file_async(
         }
         // Capture error record and continue to run next records
         if let Err(e) = runner.run_async(record).await {
+            // Skip query result error in bench
+            if bench
+                && matches!(
+                    e.kind(),
+                    sqllogictest::TestErrorKind::QueryResultMismatch { .. }
+                )
+            {
+                continue;
+            }
+
             if no_fail_fast {
                 error_records.push(e);
             } else {

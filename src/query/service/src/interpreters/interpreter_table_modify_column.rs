@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
@@ -19,17 +20,21 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license::Feature::DataMask;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
@@ -48,6 +53,7 @@ use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
@@ -141,22 +147,40 @@ impl ModifyTableColumnInterpreter {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
-
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
-            let column = &field.name.to_string();
-            let data_type = &field.data_type;
-            if let Some((i, _)) = schema.column_with_name(column) {
+            if let Some((i, old_field)) = schema.column_with_name(&field.name) {
+                // if the field has different leaf column numbers, we need drop the old column
+                // and add a new one to generate new column id. otherwise, leaf column ids will conflict.
+                if old_field.data_type.num_leaf_columns() != field.data_type.num_leaf_columns() {
+                    let _ = new_schema.drop_column(&field.name);
+                    let _ = new_schema.add_column(field, i);
+                } else {
+                    // new field don't have `column_id`, assign field directly will cause `column_id` lost.
+                    new_schema.fields[i].data_type = field.data_type.clone();
+                    // TODO: support set computed field.
+                    new_schema.fields[i].computed_expr = field.computed_expr.clone();
+                }
                 if let Some(default_expr) = &field.default_expr {
                     let default_expr = default_expr.to_string();
-                    new_schema.fields[i].data_type = data_type.clone();
                     new_schema.fields[i].default_expr = Some(default_expr);
                     let _ = field_default_value(self.ctx.clone(), &new_schema.fields[i])?;
+                } else {
+                    new_schema.fields[i].default_expr = None;
+                }
+                if old_field.data_type != field.data_type {
+                    // Check if this column is referenced by computed columns.
+                    let data_schema = DataSchema::from(&new_schema);
+                    check_referenced_computed_columns(
+                        self.ctx.clone(),
+                        Arc::new(data_schema),
+                        &field.name,
+                    )?;
                 }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Cannot find column {}",
-                    column
+                    field.name
                 )));
             }
         }
@@ -181,27 +205,16 @@ impl ModifyTableColumnInterpreter {
         table_info.meta.fill_field_comments();
         let mut modify_comment = false;
         for (field, comment) in field_and_comments {
-            let column = &field.name.to_string();
-            let data_type = &field.data_type;
-            if let Some((i, old_field)) = schema.column_with_name(column) {
-                if data_type != &new_schema.fields[i].data_type {
-                    // Check if this column is referenced by computed columns.
-                    let mut data_schema: DataSchema = table_info.schema().into();
-                    data_schema.set_field_type(i, data_type.into());
-                    check_referenced_computed_columns(
-                        self.ctx.clone(),
-                        Arc::new(data_schema),
-                        column,
-                    )?;
-
+            if let Some((i, old_field)) = schema.column_with_name(&field.name) {
+                if old_field.data_type != field.data_type {
                     // If the column is defined in bloom index columns,
                     // check whether the data type is supported for bloom index.
-                    if bloom_index_cols.iter().any(|v| v.as_str() == column)
-                        && !BloomIndex::supported_type(data_type)
+                    if bloom_index_cols.iter().any(|v| v.as_str() == field.name)
+                        && !BloomIndex::supported_type(&field.data_type)
                     {
                         return Err(ErrorCode::TableOptionInvalid(format!(
                             "Unsupported data type '{}' for bloom index",
-                            data_type
+                            field.data_type
                         )));
                     }
                     // If the column is inverted index column, the type can't be changed.
@@ -213,12 +226,11 @@ impl ModifyTableColumnInterpreter {
                             {
                                 return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
                                     "column `{}` is referenced by inverted index, drop inverted index `{}` first",
-                                    column, index_name,
+                                    field.name, index_name,
                                 )));
                             }
                         }
                     }
-                    new_schema.fields[i].data_type = data_type.clone();
                 }
                 if table_info.meta.field_comments[i] != *comment {
                     table_info.meta.field_comments[i] = comment.to_string();
@@ -227,7 +239,7 @@ impl ModifyTableColumnInterpreter {
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Cannot find column {}",
-                    column
+                    field.name
                 )));
             }
         }
@@ -237,8 +249,33 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // if schema is same and only modify comment, don't need to modify schema
-        if schema == new_schema && modify_comment {
+        let mut modified_field_indices = HashSet::new();
+        let new_schema_without_computed_fields = new_schema.remove_computed_fields();
+        if schema != new_schema {
+            for (field, _) in field_and_comments {
+                let field_index = new_schema_without_computed_fields.index_of(&field.name)?;
+                let old_field = schema.field_with_name(&field.name)?;
+                let is_alter_column_string_to_binary =
+                    is_string_to_binary(&old_field.data_type, &field.data_type);
+                // If two conditions are met, we don't need rebuild the table,
+                // as rebuild table can be a time-consuming job.
+                // 1. alter column from string to binary in parquet or data type not changed.
+                // 2. default expr and computed expr not changed. Otherwise, we need fill value for
+                //    new added column.
+                if ((table.storage_format_as_parquet() && is_alter_column_string_to_binary)
+                    || old_field.data_type.remove_nullable() == field.data_type.remove_nullable())
+                    && old_field.default_expr == field.default_expr
+                    && old_field.computed_expr == field.computed_expr
+                {
+                    continue;
+                }
+                modified_field_indices.insert(field_index);
+            }
+            table_info.meta.schema = new_schema.clone().into();
+        }
+
+        // if don't need rebuild table, only update table meta.
+        if modified_field_indices.is_empty() {
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;
 
@@ -255,160 +292,158 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // if alter column from string to binary in parquet, we don't need to rebuild table
-        let is_alter_column_string_to_binary = table.storage_format_as_parquet()
-            && schema
-                .fields()
-                .iter()
-                .zip(new_schema.fields())
-                .all(|(old_field, new_field)| {
-                    fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
-                        match (old_ty, new_ty) {
-                            (TableDataType::String, TableDataType::Binary) => true,
-                            (TableDataType::Nullable(old_ty), TableDataType::Nullable(new_ty)) => {
-                                is_string_to_binary(old_ty, new_ty)
-                            }
-                            (TableDataType::Map(old_ty), TableDataType::Map(new_ty)) => {
-                                is_string_to_binary(old_ty, new_ty)
-                            }
-                            (TableDataType::Array(old_ty), TableDataType::Array(new_ty)) => {
-                                is_string_to_binary(old_ty, new_ty)
-                            }
-                            (
-                                TableDataType::Tuple {
-                                    fields_type: old_tys,
-                                    ..
-                                },
-                                TableDataType::Tuple {
-                                    fields_type: new_tys,
-                                    ..
-                                },
-                            ) => {
-                                old_tys.len() == new_tys.len()
-                                    && old_tys
-                                        .iter()
-                                        .zip(new_tys)
-                                        .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
-                            }
-                            _ => false,
-                        }
-                    }
-
-                    let TableField {
-                        name: old_name,
-                        default_expr: old_default_expr,
-                        data_type: old_data_type,
-                        column_id: old_column_id,
-                        computed_expr: old_computed_expr,
-                    } = old_field;
-                    let TableField {
-                        name: new_name,
-                        default_expr: new_default_expr,
-                        data_type: new_data_type,
-                        column_id: new_column_id,
-                        computed_expr: new_computed_expr,
-                    } = new_field;
-                    old_name == new_name
-                        && old_default_expr == new_default_expr
-                        && old_column_id == new_column_id
-                        && old_computed_expr == new_computed_expr
-                        && (old_data_type == new_data_type
-                            || is_string_to_binary(&old_field.data_type, &new_field.data_type))
-                });
-
-        if is_alter_column_string_to_binary {
-            table_info.meta.schema = new_schema.into();
-
-            let table_id = table_info.ident.table_id;
-            let table_version = table_info.ident.seq;
-
-            let req = UpdateTableMetaReq {
-                table_id,
-                seq: MatchSeq::Exact(table_version),
-                new_table_meta: table_info.meta,
-            };
-
-            let _resp = catalog
-                .update_single_table_meta(req, table.get_table_info())
-                .await?;
-
-            return Ok(PipelineBuildResult::create());
-        }
-
-        // 1. construct sql for selecting data from old table
-        let mut sql = "select".to_string();
-        schema
+        // construct sql for selecting data from old table.
+        // computed columns are ignored, as it is build from other columns.
+        let query_fields = new_schema_without_computed_fields
             .fields()
             .iter()
             .enumerate()
-            .for_each(|(index, field)| {
-                if index != schema.fields().len() - 1 {
-                    sql = format!("{} `{}`,", sql, field.name.clone());
+            .map(|(index, field)| {
+                if modified_field_indices.contains(&index) {
+                    let old_field = schema.field_with_name(&field.name).unwrap();
+                    // If the column type is Tuple or Array(Tuple), the difference in the number of leaf columns may cause
+                    // the auto cast to fail.
+                    // We read the leaf column data, and then use build function to construct a new Tuple or Array(Tuple).
+                    // Note: other nested types auto cast can still fail, we need a more general handling
+                    // to solve this problem in the future.
+                    match (
+                        old_field.data_type.remove_nullable(),
+                        field.data_type.remove_nullable(),
+                    ) {
+                        (
+                            TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            },
+                            TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            },
+                        ) => {
+                            let transform_funcs = new_fields_name
+                                .iter()
+                                .zip(new_fields_type.iter())
+                                .map(|(new_field_name, new_field_type)| {
+                                    match old_fields_name.iter().position(|n| n == new_field_name) {
+                                        Some(idx) => {
+                                            format!("`{}`.{}", field.name, idx + 1)
+                                        }
+                                        None => {
+                                            let new_data_type = DataType::from(new_field_type);
+                                            let default_value =
+                                                Scalar::default_value(&new_data_type);
+                                            format!("{default_value}")
+                                        }
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+
+                            format!(
+                                "if(is_not_null(`{}`), tuple({}), NULL) AS {}",
+                                field.name, transform_funcs, field.name
+                            )
+                        }
+                        (
+                            TableDataType::Array(box TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            }),
+                            TableDataType::Array(box TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            }),
+                        )
+                        | (
+                            TableDataType::Array(box TableDataType::Nullable(
+                                box TableDataType::Tuple {
+                                    fields_name: old_fields_name,
+                                    ..
+                                },
+                            )),
+                            TableDataType::Array(box TableDataType::Tuple {
+                                fields_name: new_fields_name,
+                                fields_type: new_fields_type,
+                            }),
+                        )
+                        | (
+                            TableDataType::Array(box TableDataType::Tuple {
+                                fields_name: old_fields_name,
+                                ..
+                            }),
+                            TableDataType::Array(box TableDataType::Nullable(
+                                box TableDataType::Tuple {
+                                    fields_name: new_fields_name,
+                                    fields_type: new_fields_type,
+                                },
+                            )),
+                        )
+                        | (
+                            TableDataType::Array(box TableDataType::Nullable(
+                                box TableDataType::Tuple {
+                                    fields_name: old_fields_name,
+                                    ..
+                                },
+                            )),
+                            TableDataType::Array(box TableDataType::Nullable(
+                                box TableDataType::Tuple {
+                                    fields_name: new_fields_name,
+                                    fields_type: new_fields_type,
+                                },
+                            )),
+                        ) => {
+                            let transform_funcs = new_fields_name
+                                .iter()
+                                .zip(new_fields_type.iter())
+                                .map(|(new_field_name, new_field_type)| {
+                                    match old_fields_name.iter().position(|n| n == new_field_name) {
+                                        Some(idx) => {
+                                            format!(
+                                                "array_transform(`{}`, v -> v.{})",
+                                                field.name,
+                                                idx + 1
+                                            )
+                                        }
+                                        None => {
+                                            let new_data_type = DataType::from(new_field_type);
+                                            let default_value =
+                                                Scalar::default_value(&new_data_type);
+                                            format!("{default_value}")
+                                        }
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+
+                            format!(
+                                "if(is_not_null(`{}`), arrays_zip({}), NULL) AS {}",
+                                field.name, transform_funcs, field.name
+                            )
+                        }
+                        (_, _) => {
+                            format!("`{}`", field.name)
+                        }
+                    }
                 } else {
-                    sql = format!(
-                        "{} `{}` from `{}`.`{}`",
-                        sql,
-                        field.name.clone(),
-                        self.plan.database,
-                        self.plan.table
-                    );
+                    format!("`{}`", field.name)
                 }
-            });
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
 
-        // 2. build plan by sql
-        let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _extras) = planner.plan_sql(&sql).await?;
+        let sql = format!(
+            "SELECT {} FROM `{}`.`{}`",
+            query_fields, self.plan.database, self.plan.table
+        );
 
-        // 3. build physical plan by plan
-        let (select_plan, select_column_bindings) = match plan {
-            Plan::Query {
-                s_expr,
-                metadata,
-                bind_context,
-                ..
-            } => {
-                let mut builder1 =
-                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                (
-                    builder1.build(&s_expr, bind_context.column_set()).await?,
-                    bind_context.columns.clone(),
-                )
-            }
-            _ => unreachable!(),
-        };
-
-        // 4. define select schema and insert schema of DistributedInsertSelect plan
-        table_info.meta.schema = new_schema.clone().into();
-        let new_table = FuseTable::try_create(table_info)?;
-
-        // 5. build DistributedInsertSelect plan
-        let insert_plan =
-            PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
-                plan_id: select_plan.get_id(),
-                input: Box::new(select_plan),
-                table_info: new_table.get_table_info().clone(),
-                select_schema: Arc::new(Arc::new(schema).into()),
-                select_column_bindings,
-                insert_schema: Arc::new(Arc::new(new_schema).into()),
-                cast_needed: true,
-                table_meta_timestamps,
-            }));
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &insert_plan).await?;
-
-        // 6. commit new meta schema and snapshots
-        new_table.commit_insertion(
+        build_select_insert_plan(
             self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            None,
-            vec![],
-            true,
-            base_snapshot.as_ref().map(|b| b.snapshot_id),
-            None,
-            table_meta_timestamps,
-        )?;
-
-        Ok(build_res)
+            sql,
+            table_info,
+            new_schema_without_computed_fields.into(),
+            prev_snapshot_id,
+        )
+        .await
     }
 
     // unset data mask policy to a column is a ee feature.
@@ -567,4 +602,94 @@ impl Interpreter for ModifyTableColumnInterpreter {
             .add_lock_guard(self.plan.lock_guard.clone());
         Ok(build_res)
     }
+}
+
+fn is_string_to_binary(old_ty: &TableDataType, new_ty: &TableDataType) -> bool {
+    match (old_ty, new_ty) {
+        (TableDataType::String, TableDataType::Binary) => true,
+        (TableDataType::Nullable(old_ty), TableDataType::Nullable(new_ty)) => {
+            is_string_to_binary(old_ty, new_ty)
+        }
+        (TableDataType::Map(old_ty), TableDataType::Map(new_ty)) => {
+            is_string_to_binary(old_ty, new_ty)
+        }
+        (TableDataType::Array(old_ty), TableDataType::Array(new_ty)) => {
+            is_string_to_binary(old_ty, new_ty)
+        }
+        (
+            TableDataType::Tuple {
+                fields_type: old_tys,
+                ..
+            },
+            TableDataType::Tuple {
+                fields_type: new_tys,
+                ..
+            },
+        ) => {
+            old_tys.len() == new_tys.len()
+                && old_tys
+                    .iter()
+                    .zip(new_tys)
+                    .all(|(old_ty, new_ty)| is_string_to_binary(old_ty, new_ty))
+        }
+        _ => false,
+    }
+}
+
+pub(crate) async fn build_select_insert_plan(
+    ctx: Arc<QueryContext>,
+    sql: String,
+    table_info: TableInfo,
+    new_schema: TableSchemaRef,
+    prev_snapshot_id: Option<SnapshotId>,
+) -> Result<PipelineBuildResult> {
+    // 1. build plan by sql
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _extras) = planner.plan_sql(&sql).await?;
+    let select_schema = plan.schema();
+
+    // 2. build physical plan by plan
+    let (select_plan, select_column_bindings) = match plan {
+        Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } => {
+            let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone(), false);
+            (
+                builder.build(&s_expr, bind_context.column_set()).await?,
+                bind_context.columns.clone(),
+            )
+        }
+        _ => unreachable!(),
+    };
+
+    // 3. define select schema and insert schema of DistributedInsertSelect plan
+    let new_table = FuseTable::try_create(table_info)?;
+
+    // 4. build DistributedInsertSelect plan
+    let insert_plan = PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+        plan_id: select_plan.get_id(),
+        input: Box::new(select_plan),
+        table_info: new_table.get_table_info().clone(),
+        select_schema,
+        select_column_bindings,
+        insert_schema: Arc::new(new_schema.into()),
+        cast_needed: true,
+    }));
+    let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &insert_plan).await?;
+
+    // 5. commit new meta schema and snapshots
+    new_table.commit_insertion(
+        ctx.clone(),
+        &mut build_res.main_pipeline,
+        None,
+        vec![],
+        true,
+        prev_snapshot_id,
+        None,
+    )?;
+
+    Ok(build_res)
 }
