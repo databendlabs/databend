@@ -96,31 +96,31 @@ impl ResourcesManagement for DummyResourcesManagement {
     }
 
     async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<WarehouseInfo> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn drop_warehouse(&self, _: String) -> Result<WarehouseInfo> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn resume_warehouse(&self, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn suspend_warehouse(&self, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn rename_warehouse(&self, _: String, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn inspect_warehouse(&self, _: String) -> Result<Vec<NodeInfo>> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn add_warehouse_cluster(
@@ -129,15 +129,15 @@ impl ResourcesManagement for DummyResourcesManagement {
         _: String,
         _: Vec<SelectedNode>,
     ) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn rename_warehouse_cluster(&self, _: String, _: String, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn drop_warehouse_cluster(&self, _: String, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn assign_warehouse_nodes(
@@ -145,7 +145,7 @@ impl ResourcesManagement for DummyResourcesManagement {
         _: String,
         _: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn unassign_warehouse_nodes(
@@ -153,11 +153,11 @@ impl ResourcesManagement for DummyResourcesManagement {
         _: String,
         _: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 
     async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/"))
     }
 }
 

@@ -76,7 +76,7 @@ impl LicenseManager for RealLicenseManager {
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
         if license_key.is_empty() {
             return feature.verify_default(format!(
-                "The use of this feature requires a Databend Enterprise Edition license. No license key found for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                "The use of this feature requires a Databend Enterprise Edition license. No license key found for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/",
                 self.tenant
             ));
         }
@@ -199,7 +199,7 @@ impl RealLicenseManager {
     fn verify_if_expired(&self, feature: Feature) -> Result<()> {
         feature.verify_default("").map_err(|_|
             ErrorCode::LicenseKeyExpired(format!(
-                "The use of this feature requires a Databend Enterprise Edition license. License key has expired for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/",
+                "The use of this feature requires a Databend Enterprise Edition license. License key has expired for tenant: {}. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/products/dee/",
                 self.tenant
             ))
         )
