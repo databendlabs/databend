@@ -4,7 +4,7 @@ import databend_driver
 import decimal
 from rich import print
 
-databend_port = os.getenv('QUERY_HTTP_HANDLER_PORT', '8000')
+databend_port = os.getenv("QUERY_HTTP_HANDLER_PORT", "8000")
 sf = 1
 # Initialize a DuckDB instance
 duckdb_location = "/tmp/tpch.duck"
@@ -74,7 +74,9 @@ def compare_results(result, expected_result, num):
 
 from databend_driver import BlockingDatabendClient
 
-client = BlockingDatabendClient(f"databend://root:@localhost:{databend_port}/tpcds?sslmode=disable")
+client = BlockingDatabendClient(
+    f"databend://root:@localhost:{databend_port}/tpcds?sslmode=disable"
+)
 databend_con = client.get_conn()
 
 for i in range(1, 23):

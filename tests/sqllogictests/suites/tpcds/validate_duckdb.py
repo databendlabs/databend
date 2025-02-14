@@ -5,7 +5,7 @@ import decimal
 import databend_driver
 from rich import print
 
-databend_port = os.getenv('QUERY_HTTP_HANDLER_PORT', '8000')
+databend_port = os.getenv("QUERY_HTTP_HANDLER_PORT", "8000")
 
 ## now we can't run Q69
 sf = 1
@@ -79,7 +79,9 @@ def compare_results(result, expected_result, num):
 
 from databend_driver import BlockingDatabendClient
 
-client = BlockingDatabendClient(f"databend://root:@localhost:{databend_port}/tpcds?sslmode=disable")
+client = BlockingDatabendClient(
+    f"databend://root:@localhost:{databend_port}/tpcds?sslmode=disable"
+)
 databend_con = client.get_conn()
 
 for i in range(1, 100):
