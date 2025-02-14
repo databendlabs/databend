@@ -93,7 +93,6 @@ impl ExchangeInjector for DefaultExchangeInjector {
                     .iter()
                     .position(|x| x == local_id)
                     .unwrap();
-                println!("local_pos {}", local_pos);
                 HashFlightScatter::try_create(
                     ctx.get_function_context()?,
                     exchange.shuffle_keys.clone(),

@@ -133,7 +133,6 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             table_info: plan.table_info.clone(),
-            range_id: plan.range_id,
             num_partitions: plan.num_partitions,
             rows_per_block: plan.rows_per_block,
         })))

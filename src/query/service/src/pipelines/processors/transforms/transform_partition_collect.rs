@@ -60,19 +60,24 @@ impl Exchange for HilbertPartitionExchange {
             .unwrap()
             .as_u_int64()
             .unwrap();
+        data_block.pop_columns(1);
 
         // Scatter the data block to different partitions.
         let indices = range_ids
             .iter()
             .map(|&id| (id % self.num_partitions as u64) as u16)
             .collect::<Vec<_>>();
-        data_block.pop_columns(1);
-        let scatter_blocks = DataBlock::scatter(&data_block, &indices, self.num_partitions)?;
-
+        let scatter_indices =
+            DataBlock::divide_indices_by_scatter_size(&indices, self.num_partitions);
         // Partition the data blocks to different processors.
         let mut output_data_blocks = vec![vec![]; n];
-        for (partition_id, data_block) in scatter_blocks.into_iter().enumerate() {
-            output_data_blocks[partition_id % n].push((partition_id, data_block));
+        for (partition_id, indices) in scatter_indices.iter().take(self.num_partitions).enumerate()
+        {
+            if indices.is_empty() {
+                continue;
+            }
+            let block = data_block.take_with_optimize_size(indices)?;
+            output_data_blocks[partition_id % n].push((partition_id, block));
         }
 
         // Union data blocks for each processor.

@@ -16,7 +16,6 @@ use databend_common_catalog::plan::ReclusterTask;
 use databend_common_meta_app::schema::TableInfo;
 
 use crate::executor::PhysicalPlan;
-use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Recluster {
@@ -30,7 +29,6 @@ pub struct HilbertPartition {
     pub plan_id: u32,
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
-    pub range_id: IndexType,
     pub num_partitions: usize,
     pub rows_per_block: usize,
 }

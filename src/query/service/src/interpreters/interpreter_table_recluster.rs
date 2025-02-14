@@ -267,11 +267,11 @@ impl ReclusterTableInterpreter {
                         acc
                     },
                 );
-                
+
                 let query_str = self.ctx.get_query_str();
                 let write_progress = self.ctx.get_write_progress();
                 let write_progress_value = write_progress.as_ref().get_values();
-                
+
                 let subquery_executor = Arc::new(ServiceQueryExecutor::new(
                     QueryContext::create_from(self.ctx.as_ref()),
                 ));
@@ -408,7 +408,6 @@ impl ReclusterTableInterpreter {
                     plan_id: 0,
                     input: plan,
                     table_info: table_info.clone(),
-                    range_id: bind_context.columns.last().unwrap().index,
                     num_partitions: total_partitions,
                     rows_per_block,
                 }));
