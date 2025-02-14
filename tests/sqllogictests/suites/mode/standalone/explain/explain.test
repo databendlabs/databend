@@ -1330,31 +1330,35 @@ HashJoin
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── estimated rows: 0.00
 ├── Sort(Build)
-│   ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
+│   ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
 │   ├── sort keys: [count(a) ASC NULLS LAST]
 │   ├── estimated rows: 0.00
-│   └── AggregateFinal
-│       ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
-│       ├── group by: [c, a]
-│       ├── aggregate functions: [count(a)]
+│   └── EvalScalar
+│       ├── output columns: [t1.c (#5), t1.a (#3), count(a) (#7)]
+│       ├── expressions: [count(a) (#6)]
 │       ├── estimated rows: 0.00
-│       └── AggregatePartial
+│       └── AggregateFinal
+│           ├── output columns: [count(a) (#6), t1.c (#5), t1.a (#3)]
 │           ├── group by: [c, a]
 │           ├── aggregate functions: [count(a)]
 │           ├── estimated rows: 0.00
-│           └── Filter
-│               ├── output columns: [t1.a (#3), t1.c (#5)]
-│               ├── filters: [is_true(t1.a (#3) = t1.a (#3))]
+│           └── AggregatePartial
+│               ├── group by: [c, a]
+│               ├── aggregate functions: [count(a)]
 │               ├── estimated rows: 0.00
-│               └── TableScan
-│                   ├── table: default.default.t1
-│                   ├── output columns: [a (#3), c (#5)]
-│                   ├── read rows: 0
-│                   ├── read size: 0
-│                   ├── partitions total: 0
-│                   ├── partitions scanned: 0
-│                   ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
-│                   └── estimated rows: 0.00
+│               └── Filter
+│                   ├── output columns: [t1.a (#3), t1.c (#5)]
+│                   ├── filters: [is_true(t1.a (#3) = t1.a (#3))]
+│                   ├── estimated rows: 0.00
+│                   └── TableScan
+│                       ├── table: default.default.t1
+│                       ├── output columns: [a (#3), c (#5)]
+│                       ├── read rows: 0
+│                       ├── read size: 0
+│                       ├── partitions total: 0
+│                       ├── partitions scanned: 0
+│                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
+│                       └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t2
     ├── output columns: [a (#0), b (#1), c (#2)]
@@ -1376,31 +1380,35 @@ HashJoin
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── estimated rows: 0.00
 ├── Sort(Build)
-│   ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
+│   ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
 │   ├── sort keys: [COUNT(*) ASC NULLS LAST]
 │   ├── estimated rows: 0.00
-│   └── AggregateFinal
-│       ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
-│       ├── group by: [c, a]
-│       ├── aggregate functions: [count()]
+│   └── EvalScalar
+│       ├── output columns: [t1.c (#5), t1.a (#3), COUNT(*) (#7)]
+│       ├── expressions: [COUNT(*) (#6)]
 │       ├── estimated rows: 0.00
-│       └── AggregatePartial
+│       └── AggregateFinal
+│           ├── output columns: [COUNT(*) (#6), t1.c (#5), t1.a (#3)]
 │           ├── group by: [c, a]
 │           ├── aggregate functions: [count()]
 │           ├── estimated rows: 0.00
-│           └── Filter
-│               ├── output columns: [t1.a (#3), t1.c (#5)]
-│               ├── filters: [is_true(a (#3) = a (#3))]
+│           └── AggregatePartial
+│               ├── group by: [c, a]
+│               ├── aggregate functions: [count()]
 │               ├── estimated rows: 0.00
-│               └── TableScan
-│                   ├── table: default.default.t1
-│                   ├── output columns: [a (#3), c (#5)]
-│                   ├── read rows: 0
-│                   ├── read size: 0
-│                   ├── partitions total: 0
-│                   ├── partitions scanned: 0
-│                   ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
-│                   └── estimated rows: 0.00
+│               └── Filter
+│                   ├── output columns: [t1.a (#3), t1.c (#5)]
+│                   ├── filters: [is_true(a (#3) = a (#3))]
+│                   ├── estimated rows: 0.00
+│                   └── TableScan
+│                       ├── table: default.default.t1
+│                       ├── output columns: [a (#3), c (#5)]
+│                       ├── read rows: 0
+│                       ├── read size: 0
+│                       ├── partitions total: 0
+│                       ├── partitions scanned: 0
+│                       ├── push downs: [filters: [is_true(t1.a (#3) = t1.a (#3))], limit: NONE]
+│                       └── estimated rows: 0.00
 └── TableScan(Probe)
     ├── table: default.default.t2
     ├── output columns: [a (#0), b (#1), c (#2)]

@@ -122,7 +122,7 @@ explain select * from t where s = '12';
 Filter
 ├── output columns: [t.c (#0), t.s (#1)]
 ├── filters: [is_true(t.s (#1) = '12')]
-├── estimated rows: 2.67
+├── estimated rows: 2.00
 └── TableScan
     ├── table: default.test_auto_rebuild_missing.t
     ├── output columns: [c (#0), s (#1)]
