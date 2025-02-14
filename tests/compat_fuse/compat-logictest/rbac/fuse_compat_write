@@ -19,8 +19,5 @@ create role 'role2';
 statement ok
 GRANT OWNERSHIP on udf a to role 'role1';
 
-#statement ok
-#create warehouse w1 with warehouse_size=1;
-#
-#statement ok
-#GRANT OWNERSHIP on warehouse w1 to role 'role1';
+statement ok
+GRANT create warehouse on *.* to role 'role1';
