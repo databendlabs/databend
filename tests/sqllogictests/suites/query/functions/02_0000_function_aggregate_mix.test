@@ -419,6 +419,11 @@ select stddev_samp(a) from d;
 ----
 7.055988000745655
 
+query F
+select stddev_samp(a), var_samp(a) from d where b = 'abc';
+----
+null null
+
 query TTTTT
 select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d
 ----
