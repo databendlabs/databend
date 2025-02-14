@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::btree_map;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
@@ -147,8 +147,8 @@ pub struct BindContext {
 
     pub columns: Vec<ColumnBinding>,
 
-    // map internal column id to (table_index, column_index)
-    pub bound_internal_columns: BTreeMap<ColumnId, (IndexType, IndexType)>,
+    // map internal column: (table_index, column_id) -> column_index
+    pub bound_internal_columns: BTreeMap<(IndexType, ColumnId), IndexType>,
 
     pub aggregate_info: AggregateInfo,
 
@@ -578,35 +578,49 @@ impl BindContext {
     }
 
     fn get_internal_column_table_index(
+        &self,
         column_binding: &InternalColumnBinding,
-        metadata: MetadataRef,
     ) -> Result<IndexType> {
-        let metadata = metadata.read();
-
         if let Some(table_name) = &column_binding.table_name {
-            metadata
-                .get_table_index(column_binding.database_name.as_deref(), table_name)
-                .ok_or_else(|| {
-                    ErrorCode::TableInfoError(format!(
-                        "Table `{table_name}` is not found in the metadata"
-                    ))
-                })
+            for column in &self.columns {
+                if column_binding.database_name.is_some()
+                    && column.database_name != column_binding.database_name
+                {
+                    continue;
+                }
+                if column.table_name != column_binding.table_name {
+                    continue;
+                }
+                if let Some(table_index) = column.table_index {
+                    return Ok(table_index);
+                }
+            }
+            Err(ErrorCode::SemanticError(format!(
+                "Table `{table_name}` is not found in the bind context"
+            )))
         } else {
-            let tables = metadata
-                .tables()
-                .iter()
-                .filter(|t| !t.is_source_of_index())
-                .collect::<Vec<_>>();
-            debug_assert!(!tables.is_empty());
-
-            if tables.len() > 1 {
+            let mut table_indices = BTreeSet::new();
+            for column in &self.columns {
+                if column.table_name.is_none() {
+                    continue;
+                }
+                if let Some(table_index) = column.table_index {
+                    table_indices.insert(table_index);
+                }
+            }
+            if table_indices.is_empty() {
+                return Err(ErrorCode::SemanticError(format!(
+                    "The table of the internal column `{}` is not found",
+                    column_binding.internal_column.column_name()
+                )));
+            }
+            if table_indices.len() > 1 {
                 return Err(ErrorCode::SemanticError(format!(
                     "The table of the internal column `{}` is ambiguous",
                     column_binding.internal_column.column_name()
                 )));
             }
-
-            Ok(tables[0].index())
+            Ok(*table_indices.first().unwrap())
         }
     }
 
@@ -618,20 +632,24 @@ impl BindContext {
         visible: bool,
     ) -> Result<ColumnBinding> {
         let column_id = column_binding.internal_column.column_id();
-        let (table_index, column_index, new) = match self.bound_internal_columns.entry(column_id) {
-            btree_map::Entry::Vacant(e) => {
-                let table_index =
-                    BindContext::get_internal_column_table_index(column_binding, metadata.clone())?;
-                let mut metadata = metadata.write();
-                let column_index = metadata
-                    .add_internal_column(table_index, column_binding.internal_column.clone());
-                e.insert((table_index, column_index));
-                (table_index, column_index, true)
-            }
-            btree_map::Entry::Occupied(e) => {
-                let (table_index, column_index) = e.get();
-                (*table_index, *column_index, false)
-            }
+        let table_index = self.get_internal_column_table_index(column_binding)?;
+
+        let is_new = !self
+            .bound_internal_columns
+            .contains_key(&(table_index, column_id));
+        let column_index = if is_new {
+            let mut metadata = metadata.write();
+            let column_index =
+                metadata.add_internal_column(table_index, column_binding.internal_column.clone());
+            self.bound_internal_columns
+                .insert((table_index, column_id), column_index);
+            column_index
+        } else {
+            let column_index = self
+                .bound_internal_columns
+                .get(&(table_index, column_id))
+                .unwrap();
+            *column_index
         };
 
         let metadata = metadata.read();
@@ -660,7 +678,7 @@ impl BindContext {
         .table_index(Some(table_index))
         .build();
 
-        if new {
+        if is_new {
             debug_assert!(!self.columns.iter().any(|c| c == &column_binding));
             self.columns.push(column_binding.clone());
         }
