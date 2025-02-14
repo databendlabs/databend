@@ -60,13 +60,13 @@ impl Exchange for HilbertPartitionExchange {
             .unwrap()
             .as_u_int64()
             .unwrap();
-        data_block.pop_columns(1);
 
         // Scatter the data block to different partitions.
         let indices = range_ids
             .iter()
             .map(|&id| (id % self.num_partitions as u64) as u16)
             .collect::<Vec<_>>();
+        data_block.pop_columns(1);
         let scatter_indices =
             DataBlock::divide_indices_by_scatter_size(&indices, self.num_partitions);
         // Partition the data blocks to different processors.
