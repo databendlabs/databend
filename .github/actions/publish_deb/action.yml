@@ -52,5 +52,5 @@ runs:
       shell: bash
       working-directory: scripts/distribution/deb
       run: |
-        aws s3 sync --delete --no-progress dists s3://repo/deb/dists
-        aws s3 sync --delete --no-progress pool s3://repo/deb/pool
+        aws s3 sync dists s3://repo/deb/dists --delete --no-progress --checksum-algorithm=CRC32
+        aws s3 sync pool s3://repo/deb/pool --delete --no-progress --checksum-algorithm=CRC32
