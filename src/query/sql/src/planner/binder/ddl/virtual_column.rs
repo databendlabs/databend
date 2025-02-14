@@ -385,7 +385,7 @@ impl Binder {
             }
         };
 
-        let mut select_builder = SelectBuilder::from("system.virtual_columns");
+        let mut select_builder = SelectBuilder::from("default.system.virtual_columns");
         select_builder
             .with_column("database")
             .with_column("table")

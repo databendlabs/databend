@@ -20,6 +20,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
+databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
 fastrace = { workspace = true }
@@ -28,9 +29,11 @@ iceberg = { workspace = true }
 iceberg-catalog-glue = { workspace = true }
 iceberg-catalog-hms = { workspace = true }
 iceberg-catalog-rest = { workspace = true }
+log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 typetag = { workspace = true }
+uuid = { workspace = true }
 
 [lints]
 workspace = true
