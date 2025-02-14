@@ -20,7 +20,7 @@ use std::ptr::slice_from_raw_parts_mut;
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-
+use log::info;
 use crate::runtime::GlobalStatBuffer;
 use crate::runtime::MemStat;
 use crate::runtime::MemStatBuffer;
@@ -174,7 +174,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
 
         let address = ptr
-            .add(old_adjusted_layout.size())
+            .add(old_layout.size())
             .cast::<usize>()
             .read_unaligned();
 
@@ -196,7 +196,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
             base_ptr
                 .add(new_layout.size())
                 .cast::<usize>()
-                .write_unaligned(0);
+                .write_unaligned(address);
 
             return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
                 base_ptr.as_mut(),
