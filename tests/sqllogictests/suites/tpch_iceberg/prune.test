@@ -134,8 +134,8 @@ EvalScalar
         ├── table: ctl.tpch.lineitem
         ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
         ├── read rows: 600572
-        ├── read size: 14.54 MiB
-        ├── partitions total: 18
-        ├── partitions scanned: 18
+        ├── read size: 14.27 MiB
+        ├── partitions total: 4
+        ├── partitions scanned: 4
         ├── push downs: [filters: [(NOT is_not_null(lineitem.l_orderkey (#0)) OR is_not_null(lineitem.l_commitdate (#11)))], limit: NONE]
         └── estimated rows: 600572.00

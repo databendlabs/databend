@@ -316,11 +316,11 @@ HashJoin
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
 ├── filters: []
-├── estimated rows: 2.37
+├── estimated rows: 2.67
 ├── Filter(Build)
 │   ├── output columns: [b.x (#1), b.y (#2)]
 │   ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
-│   ├── estimated rows: 2.67
+│   ├── estimated rows: 2.00
 │   └── TableScan
 │       ├── table: default.default.twocolumn
 │       ├── output columns: [x (#1), y (#2)]

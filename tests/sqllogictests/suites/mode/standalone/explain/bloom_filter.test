@@ -150,11 +150,11 @@ explain select 1 from bloom_test_t where c3=12345;
 EvalScalar
 ├── output columns: [1 (#3)]
 ├── expressions: [1]
-├── estimated rows: 1.00
+├── estimated rows: 4.00
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(bloom_test_t.c3 (#2) = 12345)]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 4.00
     └── TableScan
         ├── table: default.default.bloom_test_t
         ├── output columns: [c3 (#2)]
