@@ -131,7 +131,7 @@ impl GrantPrivilegeInterpreter {
         }
 
         let mut log_msg = format!(
-            "{}: grant ownership on {:?}  to {}",
+            "{}: grant ownership on {:?} to {}",
             ctx.get_id(),
             owner_object,
             new_role

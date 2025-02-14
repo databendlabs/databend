@@ -774,6 +774,7 @@ fn test_statement() {
         r#"GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON WAREHOUSE w1 TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';"#,
         r#"attach table t 's3://a' connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));"#,

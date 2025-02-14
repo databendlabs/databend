@@ -1753,6 +1753,7 @@ impl TokenKind {
             // | TokenKind::RETURNING
             | TokenKind::STAGE
             | TokenKind::UDF
+            | TokenKind::WAREHOUSE
             | TokenKind::SHARE
             | TokenKind::SHARES
             | TokenKind::TO
