@@ -18,12 +18,15 @@ use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
@@ -36,6 +39,7 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::Filter;
@@ -714,10 +718,11 @@ impl SubqueryRewriter {
                         if values.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()? {
                             return Ok(None);
                         }
-                        // If the number of values more than `max_inlist_to_or`, need convert to contains function.
+                        // If the number of values more than `max_inlist_to_or`, use contains function instead of or.
                         if values.len() > self.ctx.get_settings().get_max_inlist_to_or()? as usize {
-                            let ty = values.first().unwrap().as_ref().infer_data_type();
-                            let mut builder = ColumnBuilder::with_capacity(&ty, values.len());
+                            let value_type = values.first().unwrap().as_ref().infer_data_type();
+                            let mut builder =
+                                ColumnBuilder::with_capacity(&value_type, values.len());
                             for value in values.into_iter() {
                                 builder.push(value.as_ref());
                             }
@@ -725,11 +730,48 @@ impl SubqueryRewriter {
                                 span: subquery.span,
                                 value: Scalar::Array(builder.build()),
                             });
+
+                            let expr_type = child_expr.data_type()?;
+                            let common_type = common_super_type(
+                                value_type.clone(),
+                                expr_type.clone(),
+                                &BUILTIN_FUNCTIONS.default_cast_rules,
+                            )
+                            .ok_or_else(|| {
+                                ErrorCode::IllegalDataType(format!(
+                                    "Cannot find common type for inlist subquery value {:?} and expr {:?}",
+                                    &array_value, &child_expr
+                                ))
+                            })?;
+
+                            let mut arguments = Vec::with_capacity(2);
+                            if value_type != common_type {
+                                arguments.push(ScalarExpr::CastExpr(CastExpr {
+                                    span: subquery.span,
+                                    is_try: false,
+                                    argument: Box::new(array_value),
+                                    target_type: Box::new(DataType::Array(Box::new(
+                                        common_type.clone(),
+                                    ))),
+                                }));
+                            } else {
+                                arguments.push(array_value);
+                            }
+                            if expr_type != common_type {
+                                arguments.push(ScalarExpr::CastExpr(CastExpr {
+                                    span: subquery.span,
+                                    is_try: false,
+                                    argument: Box::new(*child_expr.clone()),
+                                    target_type: Box::new(common_type.clone()),
+                                }));
+                            } else {
+                                arguments.push(*child_expr.clone());
+                            }
                             let func = ScalarExpr::FunctionCall(FunctionCall {
                                 span: subquery.span,
                                 func_name: "contains".to_string(),
                                 params: vec![],
-                                arguments: vec![array_value, *child_expr.clone()],
+                                arguments,
                             });
                             return Ok(Some(func));
                         }

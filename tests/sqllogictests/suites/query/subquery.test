@@ -711,6 +711,20 @@ SELECT * FROM t3 WHERE a IN (SELECT * FROM unnest([1,2,null]));
 ----
 1 2
 
+query II
+SELECT * FROM t3 WHERE a IN (SELECT * FROM unnest([1,2,3,4,5,6]));
+----
+1 2
+3 4
+6 5
+
+query II
+SELECT * FROM t3 WHERE a IN (SELECT * FROM unnest(split('1,2,3,4,5,6', ',')));
+----
+1 2
+3 4
+6 5
+
 # https://github.com/datafuselabs/databend/issues/16099
 statement ok
 drop table if exists t4

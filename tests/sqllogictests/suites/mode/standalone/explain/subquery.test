@@ -658,6 +658,23 @@ Filter
     └── estimated rows: 10.00
 
 query T
+explain select t.number from numbers(10) as t where t.number in (select * from unnest([1,2,3,4,5]));
+----
+Filter
+├── output columns: [t.number (#0)]
+├── filters: [contains([1, 2, 3, 4, 5], t.number (#0))]
+├── estimated rows: 2.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
+    ├── read rows: 10
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [contains([1, 2, 3, 4, 5], numbers.number (#0))], limit: NONE]
+    └── estimated rows: 10.00
+
+query T
 explain select t.number from numbers(10) as t where t.number in (select * from unnest([]));
 ----
 EmptyResultScan
