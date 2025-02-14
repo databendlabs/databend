@@ -21,8 +21,6 @@ use std::ptr::NonNull;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use log::info;
-
 use crate::runtime::GlobalStatBuffer;
 use crate::runtime::MemStat;
 use crate::runtime::MemStatBuffer;
