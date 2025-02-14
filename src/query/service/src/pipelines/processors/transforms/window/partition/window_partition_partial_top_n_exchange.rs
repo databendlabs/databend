@@ -68,6 +68,10 @@ impl WindowPartitionTopNExchange {
 impl Exchange for WindowPartitionTopNExchange {
     const NAME: &'static str = "WindowTopN";
     fn partition(&self, block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
+        if block.is_empty() {
+            return Ok(vec![]);
+        }
+
         let partition_permutation = self.partition_permutation(&block);
 
         // Partition the data blocks to different processors.
