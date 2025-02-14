@@ -65,10 +65,11 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         let mut base_ptr = allocated_ptr.as_non_null_ptr();
 
         unsafe {
+            let address = Arc::into_raw(stat.clone()) as usize;
             base_ptr
                 .add(layout.size())
                 .cast::<usize>()
-                .write_unaligned(Arc::into_raw(stat.clone()) as usize);
+                .write_unaligned(address);
 
             Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
                 base_ptr.as_mut(),
@@ -98,10 +99,11 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         let mut base_ptr = allocated_ptr.as_non_null_ptr();
 
         unsafe {
+            let address = Arc::into_raw(stat.clone()) as usize;
             base_ptr
                 .add(layout.size())
                 .cast::<usize>()
-                .write_unaligned(Arc::into_raw(stat.clone()) as usize);
+                .write_unaligned(address);
 
             Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
                 base_ptr.as_mut(),
@@ -151,10 +153,11 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         let mut base_ptr = grow_ptr.as_non_null_ptr();
 
         unsafe {
+            let address = Arc::into_raw(stat.clone()) as usize;
             base_ptr
                 .add(new_layout.size())
                 .cast::<usize>()
-                .write_unaligned(Arc::into_raw(stat.clone()) as usize);
+                .write_unaligned(address);
 
             Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
                 base_ptr.as_mut(),
@@ -253,10 +256,11 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         let mut base_ptr = grow_ptr.as_non_null_ptr();
 
         unsafe {
+            let address = Arc::into_raw(stat.clone()) as usize;
             base_ptr
                 .add(new_layout.size())
                 .cast::<usize>()
-                .write_unaligned(Arc::into_raw(stat.clone()) as usize);
+                .write_unaligned(address);
 
             Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
                 base_ptr.as_mut(),
@@ -275,10 +279,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         let old_adjusted_layout = old_layout.extend_packed(meta_layout).unwrap();
         let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
 
-        let address = ptr
-            .add(old_adjusted_layout.size())
-            .cast::<usize>()
-            .read_unaligned();
+        let address = ptr.add(old_layout.size()).cast::<usize>().read_unaligned();
 
         if address == 0 {
             let diff = new_adjusted_layout.size() - old_adjusted_layout.size();
@@ -394,7 +395,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
             base_ptr
                 .add(new_layout.size())
                 .cast::<usize>()
-                .write_unaligned(0);
+                .write_unaligned(address);
 
             return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
                 base_ptr.as_mut(),
@@ -484,7 +485,7 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
                 .alloc(adjusted_layout.size() as i64)
                 .map_err(|_| AllocError)?;
 
-            let Ok(allocated_ptr) = self.inner.allocate(adjusted_layout) else {
+            let Ok(allocated_ptr) = self.inner.allocate_zeroed(adjusted_layout) else {
                 GlobalStatBuffer::current().dealloc(adjusted_layout.size() as i64);
                 return Err(AllocError);
             };
