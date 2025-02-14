@@ -5,9 +5,9 @@ import decimal
 import databend_driver
 from rich import print
 
-
-## now we can't run Q38 Q39 Q69
 databend_port = os.getenv('QUERY_HTTP_HANDLER_PORT', '8000')
+
+## now we can't run Q69
 sf = 1
 # Initialize a DuckDB instance
 duckdb_location = "/tmp/tpcds.duck"
