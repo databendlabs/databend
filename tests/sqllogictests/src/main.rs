@@ -259,6 +259,10 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                 .to_str()
                 .unwrap()
                 .to_string();
+
+            if !file_name.ends_with(".test") {
+                continue;
+            }
             if let Some(ref specific_file) = args.file {
                 if !specific_file.split(',').any(|f| f.eq(&file_name)) {
                     continue;
@@ -280,7 +284,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
 
     if !args.bench {
         // lazy load test datas
-        lazy_prepare_data(&lazy_dirs)?;
+        lazy_prepare_data(&lazy_dirs, args.force_load)?;
     }
     // lazy run dictionaries containers
     let _dict_container = lazy_run_dictionary_containers(&lazy_dirs).await?;
