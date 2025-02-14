@@ -70,6 +70,8 @@ echo "attach table attach_tbl (c2, c4) 's3://testbucket/admin/data/$base_storage
 
 query "select * from attach_tbl"
 
+query "show create table attach_tbl"
+
 stmt "drop table if exists attach_tbl"
 
 # include non-exist column should fail

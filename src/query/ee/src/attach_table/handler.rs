@@ -142,7 +142,7 @@ impl RealAttachTableHandler {
                 )));
             }
 
-            let new_table_schema = if !field_ids_to_include.is_empty() {
+            let new_table_schema_metadata = if !field_ids_to_include.is_empty() {
                 // If columns to include are specified explicitly, their ids should
                 // be kept in the metadata of TableSchema.
                 let ids = field_ids_to_include
@@ -159,7 +159,7 @@ impl RealAttachTableHandler {
 
             TableSchema {
                 fields: fields_to_attach,
-                metadata: new_table_schema,
+                metadata: new_table_schema_metadata,
                 next_column_id: base_table_schema.next_column_id,
             }
         } else {

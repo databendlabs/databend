@@ -584,18 +584,18 @@ impl FuseTable {
             None => {
                 table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
             }
-            Some((location, schema)) => {
+            Some((location, base_table_schema)) => {
                 table_info
                     .options_mut()
                     .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
 
-                if let Some(ids) = table_info
+                if let Some(ids_string) = table_info
                     .schema()
                     .metadata
                     .get(FUSE_OPT_KEY_ATTACH_COLUMN_IDS)
                 {
                     // extract ids of column to include
-                    let ids: Vec<ColumnId> = ids
+                    let ids: Vec<ColumnId> = ids_string
                         .as_str()
                         .split(",")
                         .map(|s| s.parse::<u32>())
@@ -604,7 +604,7 @@ impl FuseTable {
                     // retain the columns that are still there
                     let fields: Vec<TableField> = ids
                         .iter()
-                        .filter_map(|id| schema.field_of_column_id(*id).ok().cloned())
+                        .filter_map(|id| base_table_schema.field_of_column_id(*id).ok().cloned())
                         .collect();
 
                     if fields.is_empty() {
@@ -615,12 +615,16 @@ impl FuseTable {
                     }
 
                     let mut new_schema = table_info.meta.schema.as_ref().clone();
-                    new_schema.metadata = schema.metadata.clone();
-                    new_schema.next_column_id = schema.next_column_id();
+                    new_schema.metadata = base_table_schema.metadata.clone();
+                    new_schema.metadata.insert(
+                        FUSE_OPT_KEY_ATTACH_COLUMN_IDS.to_owned(),
+                        ids_string.clone(),
+                    );
+                    new_schema.next_column_id = base_table_schema.next_column_id();
                     new_schema.fields = fields;
                     table_info.meta.schema = Arc::new(new_schema);
                 } else {
-                    table_info.meta.schema = Arc::new(schema);
+                    table_info.meta.schema = Arc::new(base_table_schema);
                 }
             }
         }
