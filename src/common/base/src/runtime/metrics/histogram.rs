@@ -30,13 +30,14 @@ use crate::runtime::metrics::sample::MetricSample;
 use crate::runtime::metrics::sample::MetricValue;
 use crate::runtime::metrics::ScopedRegistry;
 
-pub static BUCKET_SECONDS: [f64; 15] = [
-    0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0, 30.0, 60.0, 300.0, 600.0, 1800.0,
+pub static BUCKET_SECONDS: [f64; 16] = [
+    0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 300.0, 600.0, 1800.0, 3600.0, 7200.0,
+    28800.0,
 ];
 
-pub static BUCKET_MILLISECONDS: [f64; 15] = [
-    10.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0, 20000.0, 30000.0, 60000.0,
-    300000.0, 600000.0, 1800000.0,
+pub static BUCKET_MILLISECONDS: [f64; 16] = [
+    50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0, 10000.0, 30000.0, 60000.0, 300000.0,
+    600000.0, 1800000.0, 3600000.0, 7200000.0, 28800000.0,
 ];
 
 pub static BUCKET_ROWS: [f64; 14] = [
