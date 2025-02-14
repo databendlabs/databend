@@ -75,7 +75,7 @@ impl AttachTableHandler for RealAttachTableHandler {
             number_of_blocks: Some(snapshot.summary.block_count),
         };
 
-        let attach_table_schema = Self::extract_schema(&plan, &snapshot)?;
+        let attach_table_schema = Self::gen_schema(&plan, &snapshot)?;
 
         let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
         let table_meta = TableMeta {
@@ -112,11 +112,7 @@ impl RealAttachTableHandler {
         Ok(())
     }
 
-    // `attach_table_schema` is the initial table schema, which is
-    // - A cloned schema of the table being attached to
-    // - Or a sub-schema of the table being attached to
-    //    if columns to include are explicitly specified in the "ATTACH TABLE" statement.
-    fn extract_schema(
+    fn gen_schema(
         plan: &&CreateTablePlan,
         base_table_snapshot: &Arc<TableSnapshot>,
     ) -> Result<TableSchema> {
@@ -167,6 +163,8 @@ impl RealAttachTableHandler {
                 next_column_id: base_table_schema.next_column_id,
             }
         } else {
+            // If columns are not specified, use all the fields of table being attached to,
+            // in this case, no schema meta of key FUSE_OPT_KEY_ATTACH_COLUMN_IDS will be kept.
             base_table_snapshot.schema.clone()
         };
 
