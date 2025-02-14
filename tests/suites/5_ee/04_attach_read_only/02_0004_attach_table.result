@@ -57,7 +57,7 @@ c2	c4
 <<<<
 >>>> drop table if exists attach_tbl
 attaching non-exists column
-Error: APIError: QueryFailed: [2004]Attached columns do not exist: c_not_exist
+Error: APIError: QueryFailed: [2004]Columns [c_not_exist] do not exist in the table being attached to
 #############################
 ## access renamed columns ###
 #############################
