@@ -17,13 +17,14 @@ for i in `seq 1 10`;do
     echo "insert into test_table (id,name,age) values(1,'2',3), (4, '5', 6);" | $BENDSQL_CLIENT_CONNECT
 done
 
-
-echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $BENDSQL_CLIENT_CONNECT
-echo "copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $BENDSQL_CLIENT_CONNECT
+# The last column `output_bytes` is excluded to avoid flakiness
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
+echo "copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
 echo "list @s2;" | $BENDSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
 
 
-echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV) MAX_FILE_SIZE = 10;" | $BENDSQL_CLIENT_CONNECT
+# The last column `output_bytes` is excluded to avoid flakiness
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV) MAX_FILE_SIZE = 10;" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
 
 lines=`echo "list @s2;" | $BENDSQL_CLIENT_CONNECT | wc -l`
 

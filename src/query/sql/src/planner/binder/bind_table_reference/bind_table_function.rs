@@ -324,7 +324,7 @@ impl Binder {
                 alias,
                 ..
             } => {
-                let mut bind_context = BindContext::with_parent(Box::new(parent_context.clone()));
+                let mut bind_context = BindContext::with_parent(parent_context.clone())?;
                 let func_name = normalize_identifier(name, &self.name_resolution_ctx);
 
                 if BUILTIN_FUNCTIONS

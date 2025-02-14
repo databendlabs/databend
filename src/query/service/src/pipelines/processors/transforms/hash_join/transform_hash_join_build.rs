@@ -168,6 +168,13 @@ impl TransformHashJoinBuild {
     }
 
     fn collect(&mut self) -> Result<Event> {
+        if self.input_port.has_data() {
+            self.add_data_block(self.input_port.pull_data().unwrap()?);
+            if self.need_spill() {
+                return self.next_step(Step::Async(AsyncStep::Spill));
+            }
+        }
+
         if self.input_port.is_finished() {
             if self.need_check_spill_happen() {
                 self.next_step(Step::Async(AsyncStep::CheckSpillHappen))
@@ -175,14 +182,6 @@ impl TransformHashJoinBuild {
                 self.next_step(Step::Sync(SyncStep::Collect))
             } else {
                 self.next_step(Step::Async(AsyncStep::WaitCollect))
-            }
-        } else if self.input_port.has_data() {
-            self.add_data_block(self.input_port.pull_data().unwrap()?);
-            if self.need_spill() {
-                self.next_step(Step::Async(AsyncStep::Spill))
-            } else {
-                self.input_port.set_need_data();
-                Ok(Event::NeedData)
             }
         } else {
             self.input_port.set_need_data();

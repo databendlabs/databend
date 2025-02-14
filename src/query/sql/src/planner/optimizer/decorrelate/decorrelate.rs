@@ -271,12 +271,12 @@ impl SubqueryRewriter {
                 let mut join_type = JoinType::LeftSingle;
                 if subquery.contain_agg.unwrap() {
                     let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                    let has_precise_cardinality = rel_expr
+                    let card = rel_expr
                         .derive_cardinality()?
                         .statistics
-                        .precise_cardinality
-                        .is_some();
-                    if has_precise_cardinality {
+                        .precise_cardinality;
+
+                    if card.is_some() {
                         join_type = JoinType::Left;
                     }
                 }

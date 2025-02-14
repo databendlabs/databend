@@ -6,19 +6,19 @@ statement ok
 use tpcds;
 
 statement ok
-set join_spilling_memory_ratio = 1;
+set join_spilling_memory_ratio = 5;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 1;
+set join_spilling_bytes_threshold_per_proc = 1024;
 
 statement ok
-set join_spilling_buffer_threshold_per_proc_mb = 1;
+set join_spilling_buffer_threshold_per_proc_mb = 5;
 
 statement ok
-set sort_spilling_memory_ratio = 1;
+set sort_spilling_memory_ratio = 5;
 
 statement ok
-set sort_spilling_bytes_threshold_per_proc = 1;
+set sort_spilling_bytes_threshold_per_proc = 1024;
 
 statement ok
 set window_partition_spilling_memory_ratio = 1;

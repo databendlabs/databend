@@ -22,8 +22,6 @@ async-backtrace = { workspace = true }
 base64 = { workspace = true }
 borsh = { workspace = true, features = ["derive"] }
 bumpalo = { workspace = true }
-chrono = { workspace = true }
-chrono-tz = { workspace = true }
 comfy-table = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
@@ -53,6 +51,7 @@ micromarshal = { workspace = true }
 num-bigint = { workspace = true }
 num-traits = { workspace = true }
 rand = { workspace = true }
+rand_distr = { workspace = true }
 recursive = { workspace = true }
 roaring = { workspace = true, features = ["serde"] }
 rust_decimal = { workspace = true }

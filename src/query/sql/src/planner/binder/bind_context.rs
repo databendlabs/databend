@@ -123,6 +123,21 @@ pub struct VirtualColumnContext {
     /// The is used to generate virtual column id for virtual columns.
     /// Not a real column id, only used to identify a virtual column.
     pub next_column_ids: HashMap<IndexType, u32>,
+    /// virtual column alias names
+    pub virtual_columns: Vec<ColumnBinding>,
+}
+
+impl VirtualColumnContext {
+    fn with_parent(parent: &VirtualColumnContext) -> VirtualColumnContext {
+        VirtualColumnContext {
+            allow_pushdown: parent.allow_pushdown,
+            table_indices: HashSet::new(),
+            virtual_column_indices: HashMap::new(),
+            virtual_column_names: HashMap::new(),
+            next_column_ids: HashMap::new(),
+            virtual_columns: Vec::new(),
+        }
+    }
 }
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
@@ -201,6 +216,12 @@ impl CteContext {
     pub fn set_cte_context(&mut self, cte_context: CteContext) {
         self.cte_map = cte_context.cte_map;
     }
+
+    // Set cte context to current `BindContext`.
+    pub fn set_cte_context_and_name(&mut self, cte_context: CteContext) {
+        self.cte_map = cte_context.cte_map;
+        self.cte_name = cte_context.cte_name;
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -237,9 +258,31 @@ impl BindContext {
         }
     }
 
-    pub fn with_parent(parent: Box<BindContext>) -> Self {
-        BindContext {
-            parent: Some(parent.clone()),
+    pub fn depth(&self) -> usize {
+        if let Some(ref p) = self.parent {
+            return p.depth() + 1;
+        }
+        1
+    }
+
+    pub fn with_opt_parent(parent: Option<&BindContext>) -> Result<Self> {
+        if let Some(p) = parent {
+            Self::with_parent(p.clone())
+        } else {
+            Self::with_parent(Self::new())
+        }
+    }
+
+    pub fn with_parent(parent: BindContext) -> Result<Self> {
+        const MAX_DEPTH: usize = 4096;
+        if parent.depth() >= MAX_DEPTH {
+            return Err(ErrorCode::Internal(
+                "Query binder exceeds the maximum iterations",
+            ));
+        }
+
+        Ok(BindContext {
+            parent: Some(Box::new(parent.clone())),
             columns: vec![],
             bound_internal_columns: BTreeMap::new(),
             aggregate_info: Default::default(),
@@ -252,11 +295,13 @@ impl BindContext {
             have_udf_script: false,
             have_udf_server: false,
             inverted_index_map: Box::default(),
-            virtual_column_context: Default::default(),
+            virtual_column_context: VirtualColumnContext::with_parent(
+                &parent.virtual_column_context,
+            ),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
-        }
+        })
     }
 
     /// Create a new BindContext with self's parent as its parent
@@ -422,6 +467,17 @@ impl BindContext {
                     internal_column,
                 };
                 result.push(NameResolutionResult::InternalColumn(column_binding));
+            }
+
+            if !result.is_empty() {
+                return;
+            }
+
+            // look up virtual column alias names
+            for column_binding in bind_context.virtual_column_context.virtual_columns.iter() {
+                if Self::match_column_binding(database, table, column, column_binding) {
+                    result.push(NameResolutionResult::Column(column_binding.clone()));
+                }
             }
 
             if !result.is_empty() {

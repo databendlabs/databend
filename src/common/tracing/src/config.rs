@@ -16,6 +16,11 @@ use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+// use the uncommon usage of Pascal Case level name
+// to partially avoid the feature of serfig that can not override with the default value.
+// see https://github.com/Xuanwo/serfig/issues/23 for detail.
+pub const CONFIG_DEFAULT_LOG_LEVEL: &str = "Warn,databend_=Info,openraft=Info";
+
 /// Config for logging.
 #[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize)]
 pub struct Config {
@@ -34,11 +39,10 @@ impl Config {
         Self {
             file: FileConfig {
                 on: true,
-                level: "DEBUG".to_string(),
+                level: "WARN,databend=DEBUG,openraft=DEBUG".to_string(),
                 dir: "./.databend/logs".to_string(),
                 format: "text".to_string(),
                 limit: 48,
-                prefix_filter: "databend_,openraft".to_string(),
             },
             stderr: StderrConfig {
                 on: true,
@@ -57,15 +61,14 @@ pub struct FileConfig {
     pub dir: String,
     pub format: String,
     pub limit: usize,
-    pub prefix_filter: String,
 }
 
 impl Display for FileConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, level={}, dir={}, format={}, limit={}, prefix_filter={}",
-            self.on, self.level, self.dir, self.format, self.limit, self.prefix_filter
+            "enabled={}, level='{}', dir={}, format={}, limit={}",
+            self.on, self.level, self.dir, self.format, self.limit,
         )
     }
 }
@@ -74,11 +77,10 @@ impl Default for FileConfig {
     fn default() -> Self {
         Self {
             on: true,
-            level: "INFO".to_string(),
+            level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
             dir: "./.databend/logs".to_string(),
             format: "json".to_string(),
             limit: 48,
-            prefix_filter: "databend_,openraft".to_string(),
         }
     }
 }
@@ -111,7 +113,7 @@ impl Default for StderrConfig {
     fn default() -> Self {
         Self {
             on: false,
-            level: "INFO".to_string(),
+            level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
             format: "text".to_string(),
         }
     }
@@ -138,7 +140,7 @@ impl Default for OTLPConfig {
     fn default() -> Self {
         Self {
             on: false,
-            level: "INFO".to_string(),
+            level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
             endpoint: OTLPEndpointConfig::default(),
         }
     }
@@ -240,7 +242,7 @@ impl Default for TracingConfig {
     fn default() -> Self {
         Self {
             on: false,
-            capture_log_level: "INFO".to_string(),
+            capture_log_level: CONFIG_DEFAULT_LOG_LEVEL.to_string(),
             otlp: OTLPEndpointConfig::default(),
         }
     }

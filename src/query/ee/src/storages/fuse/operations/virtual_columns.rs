@@ -37,6 +37,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_meta_app::schema::VirtualField;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_nums;
@@ -83,7 +84,7 @@ use opendal::Operator;
 pub async fn do_refresh_virtual_column(
     ctx: Arc<dyn TableContext>,
     fuse_table: &FuseTable,
-    virtual_columns: Vec<(String, TableDataType)>,
+    virtual_columns: Vec<VirtualField>,
     segment_locs: Option<Vec<Location>>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
@@ -107,7 +108,7 @@ pub async fn do_refresh_virtual_column(
         if f.data_type().remove_nullable() != TableDataType::Variant {
             continue;
         }
-        let is_src_field = virtual_columns.iter().any(|v| v.0.starts_with(f.name()));
+        let is_src_field = virtual_columns.iter().any(|v| v.expr.starts_with(f.name()));
         if is_src_field {
             field_indices.push(i);
         }
@@ -175,7 +176,7 @@ pub async fn do_refresh_virtual_column(
                     virtual_table_schema
                         .fields
                         .iter()
-                        .any(|f| *f.name() == v.0 && *f.data_type() == v.1)
+                        .any(|f| *f.name() == v.expr && *f.data_type() == v.data_type)
                 })
             } else {
                 false
@@ -208,20 +209,23 @@ pub async fn do_refresh_virtual_column(
 
     let mut virtual_fields = Vec::with_capacity(virtual_columns.len());
     let mut virtual_exprs = Vec::with_capacity(virtual_columns.len());
-    for (virtual_column, virtual_type) in virtual_columns {
-        let mut virtual_expr =
-            parse_computed_expr(ctx.clone(), source_schema.clone(), &virtual_column)?;
+    for virtual_column_field in virtual_columns {
+        let mut virtual_expr = parse_computed_expr(
+            ctx.clone(),
+            source_schema.clone(),
+            &virtual_column_field.expr,
+        )?;
 
-        if virtual_type.remove_nullable() != TableDataType::Variant {
+        if virtual_column_field.data_type.remove_nullable() != TableDataType::Variant {
             virtual_expr = Expr::Cast {
                 span: None,
                 is_try: true,
                 expr: Box::new(virtual_expr),
-                dest_type: (&virtual_type).into(),
+                dest_type: (&virtual_column_field.data_type).into(),
             }
         }
         let virtual_field = TableField::new(
-            &virtual_column,
+            &virtual_column_field.expr,
             infer_schema_type(virtual_expr.data_type())?,
         );
         virtual_exprs.push(virtual_expr);

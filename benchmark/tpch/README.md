@@ -3,6 +3,7 @@
 
 ## Preparing the Table and Data
 
+We use [DuckDB](https://duckdb.org/docs/installation/) to generate TPCH data.
 To prepare the table and data for the TPC-H Benchmark, run the following command in your shell:
 
 ```shell
@@ -28,7 +29,7 @@ To run the TPC-H Benchmark, first build `databend-sqllogictests` binary.
 Then, execute the following command in your shell:
 
 ```shell
-databend-sqllogictests --handlers mysql --database tpch --run_dir tpch --bench
+databend-sqllogictests --handlers mysql --database tpch --run_dir tpch --bench --run_file queries.test
 ```
 
 ## More

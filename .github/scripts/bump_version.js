@@ -7,6 +7,12 @@ module.exports = async ({ github, context, core }) => {
 
   const { TYPE, TAG } = process.env;
 
+  if (!TYPE) {
+    core.setOutput("type", "nightly");
+  } else {
+    core.setOutput("type", TYPE);
+  }
+
   const RE_TAG_STABLE = /^v(\d+)\.(\d+)\.(\d+)$/;
   const RE_TAG_NIGHTLY = /^v(\d+)\.(\d+)\.(\d+)-nightly$/;
   const RE_TAG_PATCH = /^v(\d+)\.(\d+)\.(\d+)-p(\d+)$/;

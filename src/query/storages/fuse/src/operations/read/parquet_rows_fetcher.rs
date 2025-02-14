@@ -66,6 +66,10 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
         Ok(())
     }
 
+    fn clear_cache(&mut self) {
+        self.part_map.clear();
+    }
+
     #[async_backtrace::framed]
     async fn fetch(&mut self, row_ids: &[u64]) -> Result<DataBlock> {
         self.prepare_part_map(row_ids).await?;
