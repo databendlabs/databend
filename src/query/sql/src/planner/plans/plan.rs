@@ -76,6 +76,7 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
+use crate::plans::DescProcedurePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
@@ -393,6 +394,7 @@ pub enum Plan {
     ExecuteImmediate(Box<ExecuteImmediatePlan>),
     // ShowCreateProcedure(Box<ShowCreateProcedurePlan>),
     DropProcedure(Box<DropProcedurePlan>),
+    DescProcedure(Box<DescProcedurePlan>),
     CreateProcedure(Box<CreateProcedurePlan>),
     CallProcedure(Box<CallProcedurePlan>),
     // RenameProcedure(Box<RenameProcedurePlan>),
@@ -539,7 +541,7 @@ impl Plan {
                 DataField::new("cluster", DataType::String),
                 DataField::new("version", DataType::String),
             ]),
-
+            Plan::DescProcedure(plan) => plan.schema(),
             _ => Arc::new(DataSchema::empty()),
         }
     }

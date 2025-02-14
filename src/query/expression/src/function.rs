@@ -19,7 +19,6 @@ use std::ops::BitOr;
 use std::ops::Not;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use databend_common_ast::Span;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
@@ -96,8 +95,7 @@ pub enum FunctionEval {
 
 #[derive(Clone)]
 pub struct FunctionContext {
-    pub tz: Tz,
-    pub jiff_tz: TimeZone,
+    pub tz: TimeZone,
     pub now: Zoned,
     pub rounding_mode: bool,
     pub disable_variant_check: bool,
@@ -118,8 +116,7 @@ pub struct FunctionContext {
 impl Default for FunctionContext {
     fn default() -> Self {
         FunctionContext {
-            tz: Tz::UTC,
-            jiff_tz: TimeZone::UTC,
+            tz: TimeZone::UTC,
             now: Default::default(),
             rounding_mode: false,
             disable_variant_check: false,

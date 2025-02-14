@@ -43,6 +43,9 @@ use databend_common_metrics::storage::*;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_common_sql::StreamContext;
+use databend_storages_common_cache::BlockMetaCache;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_index::filters::Filter;
 use databend_storages_common_index::filters::Xor8Filter;
@@ -72,7 +75,7 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::read_block;
 use crate::operations::replace_into::meta::DeletionByColumn;
-use crate::operations::replace_into::meta::MergeIntoOperation;
+use crate::operations::replace_into::meta::ReplaceIntoOperation;
 use crate::operations::replace_into::meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::row_hash_of_columns;
 use crate::operations::replace_into::mutator::DeletionAccumulator;
@@ -100,15 +103,17 @@ struct AggregationContext {
     io_request_semaphore: Arc<Semaphore>,
     // generate stream columns if necessary
     stream_ctx: Option<StreamContext>,
+
+    block_meta_cache: Option<BlockMetaCache>,
 }
 
 // Apply MergeIntoOperations to segments
-pub struct MergeIntoOperationAggregator {
+pub struct ReplaceIntoOperationAggregator {
     deletion_accumulator: DeletionAccumulator,
     aggregation_ctx: Arc<AggregationContext>,
 }
 
-impl MergeIntoOperationAggregator {
+impl ReplaceIntoOperationAggregator {
     #[allow(clippy::too_many_arguments)] // TODO fix this
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
@@ -209,21 +214,22 @@ impl MergeIntoOperationAggregator {
                 block_builder,
                 io_request_semaphore,
                 stream_ctx,
+                block_meta_cache: CacheManager::instance().get_block_meta_cache(),
             }),
         })
     }
 }
 
 // aggregate mutations (currently, deletion only)
-impl MergeIntoOperationAggregator {
+impl ReplaceIntoOperationAggregator {
     #[async_backtrace::framed]
-    pub async fn accumulate(&mut self, merge_into_operation: MergeIntoOperation) -> Result<()> {
+    pub async fn accumulate(&mut self, replace_into_operation: ReplaceIntoOperation) -> Result<()> {
         let aggregation_ctx = &self.aggregation_ctx;
         metrics_inc_replace_number_accumulated_merge_action();
 
         let start = Instant::now();
-        match merge_into_operation {
-            MergeIntoOperation::Delete(partitions) => {
+        match replace_into_operation {
+            ReplaceIntoOperation::Delete(partitions) => {
                 for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
                     // segment level
                     let load_param = LoadParams {
@@ -279,7 +285,7 @@ impl MergeIntoOperationAggregator {
                     }
                 }
             }
-            MergeIntoOperation::None => {}
+            ReplaceIntoOperation::None => {}
         }
 
         metrics_inc_replace_accumulated_merge_action_time_ms(start.elapsed().as_millis() as u64);
@@ -288,9 +294,11 @@ impl MergeIntoOperationAggregator {
 }
 
 // apply the mutations and generate mutation log
-impl MergeIntoOperationAggregator {
+impl ReplaceIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
+        let block_meta_cache = &self.aggregation_ctx.block_meta_cache;
+
         metrics_inc_replace_number_apply_deletion();
 
         // track number of segments and blocks after pruning (per merge action application)
@@ -317,7 +325,7 @@ impl MergeIntoOperationAggregator {
         let mut mutation_log_handlers = Vec::new();
         let mut num_rows_mutated = 0;
         for (segment_idx, block_deletion) in self.deletion_accumulator.deletions.drain() {
-            let (path, ver) = self
+            let (segment_path, ver) = self
                 .aggregation_ctx
                 .segment_locations
                 .get(&segment_idx)
@@ -329,19 +337,41 @@ impl MergeIntoOperationAggregator {
                 })?;
 
             let load_param = LoadParams {
-                location: path.clone(),
+                location: segment_path.clone(),
                 len_hint: None,
                 ver: *ver,
                 put_cache: true,
             };
 
-            let compact_segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
-            let segment_info: SegmentInfo = compact_segment_info.try_into()?;
+            // Retain SegmentInfo to avoid repeatedly extracting it from CompactSegmentInfo later.
+            let mut opt_segment_info: Option<SegmentInfo> = None;
 
             for (block_index, keys) in block_deletion {
+                let block_cache_key = format!("{segment_path}-{block_index}");
+                let block_meta = match block_meta_cache.get(&block_cache_key) {
+                    Some(block_meta) => block_meta,
+                    None => {
+                        let block_meta = if let Some(segment_info) = &opt_segment_info {
+                            segment_info.blocks[block_index].clone()
+                        } else {
+                            let compact_segment_info =
+                                aggregation_ctx.segment_reader.read(&load_param).await?;
+                            let segment_info: SegmentInfo = compact_segment_info.try_into()?;
+                            let block_meta = segment_info.blocks[block_index].clone();
+                            opt_segment_info = Some(segment_info);
+                            block_meta
+                        };
+                        // A query node typically processes only a subset of the BlockMeta in a given segment.
+                        // Therefore, even though all BlockMeta of a segment are available here, not all are populated into the cache.
+                        block_meta_cache.insert(block_cache_key, block_meta.as_ref().clone());
+                        block_meta
+                    }
+                };
+
                 let permit =
                     acquire_task_permit(aggregation_ctx.io_request_semaphore.clone()).await?;
-                let block_meta = segment_info.blocks[block_index].clone();
+
+                // let block_meta = segment_info.blocks[block_index].clone();
                 let aggregation_ctx = aggregation_ctx.clone();
                 num_rows_mutated += block_meta.row_count;
                 // self.aggregation_ctx.
@@ -604,7 +634,7 @@ impl AggregationContext {
         if let Some(stats) = column_stats {
             let max = stats.max();
             let min = stats.min();
-            std::cmp::min(key_max, max) >= std::cmp::max(key_min,min)
+            std::cmp::min(key_max, max) >= std::cmp::max(key_min, min)
                 || // coincide overlap
                 (max == key_max && min == key_min)
         } else {
@@ -630,22 +660,22 @@ impl AggregationContext {
         let reader = reader.clone();
         GlobalIORuntime::instance()
             .spawn(async move {
-                            let column_chunks = merged_io_read_result.columns_chunks()?;
-                            reader.deserialize_chunks(
-                                block_meta_ptr.location.0.as_str(),
-                                block_meta_ptr.row_count as usize,
-                                &block_meta_ptr.compression,
-                                &block_meta_ptr.col_metas,
-                                column_chunks,
-                                &storage_format,
-                            )
-                        })
+                let column_chunks = merged_io_read_result.columns_chunks()?;
+                reader.deserialize_chunks(
+                    block_meta_ptr.location.0.as_str(),
+                    block_meta_ptr.row_count as usize,
+                    &block_meta_ptr.compression,
+                    &block_meta_ptr.col_metas,
+                    column_chunks,
+                    &storage_format,
+                )
+            })
             .await
             .map_err(|e| {
                 ErrorCode::Internal(
                     "unexpected, failed to join aggregation context read block tasks for replace into.",
                 )
-                .add_message_back(e.to_string())
+                    .add_message_back(e.to_string())
             })?
     }
 

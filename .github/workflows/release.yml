@@ -40,6 +40,7 @@ jobs:
     outputs:
       version: ${{ steps.bump.outputs.tag }}
       sha: ${{ steps.bump.outputs.sha }}
+      type: ${{ steps.bump.outputs.type }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,7 +62,7 @@ jobs:
           # which is not possible for github actions token
           GH_TOKEN: ${{ secrets.DATABEND_BOT_TOKEN }}
         run: |
-          case "${{ inputs.type }}" in
+          case "${{ steps.bump.outputs.type }}" in
             nightly)
               gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --prerelease --draft
               ;;
@@ -71,12 +72,15 @@ jobs:
             patch)
               gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --prerelease --draft
               ;;
+            *)
+              echo "Invalid release type: ${{ steps.bump.outputs.type }}"
+              exit 1
           esac
 
   changelog:
     runs-on: ubuntu-latest
-    if: inputs.type == 'stable'
     needs: create_release
+    if: needs.create_release.outputs.type == 'stable'
     steps:
       - name: Checkout Docs
         uses: actions/checkout@v4
@@ -287,7 +291,7 @@ jobs:
           REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
-          TYPE: ${{ inputs.type }}
+          TYPE: ${{ needs.create_release.outputs.type }}
         with:
           script: |
             const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR } = process.env;
@@ -367,7 +371,7 @@ jobs:
           REPO_DOCKERHUB: ${{ steps.login.outputs.dockerhub_repo }}
           REPO_ECR: ${{ steps.login.outputs.ecr_repo }}
           VERSION: ${{ needs.create_release.outputs.version }}
-          TYPE: ${{ inputs.type }}
+          TYPE: ${{ needs.create_release.outputs.type }}
         with:
           script: |
             const { VERSION, TYPE, REPO_DOCKERHUB, REPO_ECR } = process.env;
@@ -414,7 +418,7 @@ jobs:
           packager: ${{ matrix.packager }}
 
   # bindings_python:
-  #   if: inputs.type == 'stable'
+  #   if: needs.create_release.outputs.type == 'stable'
   #   needs: create_release
   #   uses: ./.github/workflows/bindings.python.yml
   #   secrets: inherit
@@ -454,8 +458,8 @@ jobs:
 
   deb:
     runs-on: ubuntu-latest
-    if: inputs.type == 'stable'
     needs: [create_release, distribution]
+    if: needs.create_release.outputs.type == 'stable'
     steps:
       - uses: actions/checkout@v4
         with:

@@ -158,22 +158,12 @@ impl Display for DropProcedureStmt {
 }
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct DescProcedureStmt {
-    pub name: String,
-    pub args: Vec<TypeName>,
+    pub name: ProcedureIdentity,
 }
 
 impl Display for DescProcedureStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DESCRIBE PROCEDURE {}", self.name)?;
-
-        if self.args.is_empty() {
-            write!(f, "()")?;
-        } else {
-            write!(f, "(")?;
-            write_comma_separated_list(f, self.args.clone())?;
-            write!(f, ")")?;
-        }
-
         Ok(())
     }
 }

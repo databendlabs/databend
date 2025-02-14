@@ -46,14 +46,14 @@ use databend_storages_common_table_meta::meta::ColumnStatistics;
 use log::info;
 
 use crate::operations::replace_into::meta::DeletionByColumn;
-use crate::operations::replace_into::meta::MergeIntoOperation;
+use crate::operations::replace_into::meta::ReplaceIntoOperation;
 use crate::operations::replace_into::meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::column_hash::RowScalarValue;
 
 // Replace is somehow a simplified merge_into, which
 // - do insertion for "matched" branch
-// - update for "not-matched" branch (by sending MergeIntoOperation to downstream)
+// - update for "not-matched" branch (by sending ReplaceIntoOperation to downstream)
 pub struct ReplaceIntoMutator {
     on_conflict_fields: Vec<OnConflictField>,
     table_range_index: HashMap<ColumnId, ColumnStatistics>,
@@ -100,7 +100,7 @@ enum ColumnHash {
 }
 
 impl ReplaceIntoMutator {
-    pub fn process_input_block(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
+    pub fn process_input_block(&mut self, data_block: &DataBlock) -> Result<ReplaceIntoOperation> {
         // pruning rows by using table level range index
         // rows that definitely have no conflict will be removed
         metrics_inc_replace_original_row_number(data_block.num_rows() as u64);
@@ -111,10 +111,10 @@ impl ReplaceIntoMutator {
 
         if row_number_after_pruning == 0 {
             info!("(replace-into) all rows are append-only");
-            return Ok(MergeIntoOperation::None);
+            return Ok(ReplaceIntoOperation::None);
         }
 
-        let merge_into_operation = if let Some(partitioner) = &self.partitioner {
+        let replace_into_operation = if let Some(partitioner) = &self.partitioner {
             // if table has cluster keys; we partition the input data block by left most column of cluster keys
             let partitions = partitioner.partition(data_block)?;
             metrics_inc_replace_partition_number(partitions.len() as u64);
@@ -137,12 +137,12 @@ impl ReplaceIntoMutator {
                     }
                 })
                 .collect();
-            MergeIntoOperation::Delete(vs)
+            ReplaceIntoOperation::Delete(vs)
         } else {
             // otherwise, we just build a single delete action
-            self.build_merge_into_operation(&data_block_may_have_conflicts)?
+            self.build_replace_into_operation(&data_block_may_have_conflicts)?
         };
-        Ok(merge_into_operation)
+        Ok(replace_into_operation)
     }
 
     // filter out rows that definitely have no conflict, by using table level range index
@@ -171,7 +171,10 @@ impl ReplaceIntoMutator {
         data_block.clone().filter_with_bitmap(&bitmap)
     }
 
-    fn build_merge_into_operation(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
+    fn build_replace_into_operation(
+        &mut self,
+        data_block: &DataBlock,
+    ) -> Result<ReplaceIntoOperation> {
         let num_rows = data_block.num_rows();
         let column_values = on_conflict_key_column_values(&self.on_conflict_fields, data_block);
 
@@ -183,7 +186,7 @@ impl ReplaceIntoMutator {
                     key_hashes,
                     bloom_hashes: vec![],
                 };
-                Ok(MergeIntoOperation::Delete(vec![delete_action]))
+                Ok(ReplaceIntoOperation::Delete(vec![delete_action]))
             }
             ColumnHash::Conflict(conflict_row_idx) => {
                 let conflict_description = {

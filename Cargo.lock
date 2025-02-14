@@ -2931,7 +2931,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "limits-rs",
  "log",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "serde",
  "serde_json",
  "serfig",
@@ -3209,7 +3209,7 @@ dependencies = [
  "libc",
  "object",
  "once_cell",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "parquet",
  "paste",
  "prost",
@@ -3241,8 +3241,6 @@ dependencies = [
  "base64 0.22.1",
  "borsh",
  "bumpalo",
- "chrono",
- "chrono-tz 0.8.6",
  "comfy-table",
  "criterion",
  "databend-common-ast",
@@ -3276,6 +3274,7 @@ dependencies = [
  "pretty_assertions",
  "proptest",
  "rand",
+ "rand_distr",
  "recursive",
  "roaring",
  "rust_decimal",
@@ -3332,7 +3331,6 @@ dependencies = [
  "borsh",
  "bstr",
  "bumpalo",
- "chrono",
  "comfy-table",
  "crc32fast",
  "criterion",
@@ -3560,7 +3558,7 @@ dependencies = [
  "maplit",
  "num-derive",
  "num-traits",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "paste",
  "prost",
  "serde",
@@ -3798,7 +3796,7 @@ dependencies = [
  "lz4",
  "match-template",
  "num",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "rand",
  "ringbuffer",
  "roaring",
@@ -4009,7 +4007,7 @@ dependencies = [
  "log",
  "num-derive",
  "num-traits",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "parking_lot 0.12.3",
  "prqlc",
  "rand",
@@ -4045,7 +4043,7 @@ dependencies = [
  "futures",
  "http 1.1.0",
  "log",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "parquet",
  "prometheus-client",
  "regex",
@@ -4154,7 +4152,7 @@ dependencies = [
  "itertools 0.13.0",
  "jsonb",
  "log",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "parking_lot 0.12.3",
  "parquet",
  "rand",
@@ -4201,7 +4199,7 @@ dependencies = [
  "futures",
  "hive_metastore",
  "log",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "parquet",
  "recursive",
  "serde",
@@ -4311,7 +4309,7 @@ dependencies = [
  "databend-storages-common-table-meta",
  "futures-util",
  "log",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "orc-rust",
  "serde",
  "serde_json",
@@ -4347,7 +4345,7 @@ dependencies = [
  "ethnum",
  "futures",
  "log",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "parquet",
  "rand",
  "serde",
@@ -4392,7 +4390,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "parquet",
  "serde",
  "serde_json",
@@ -4433,7 +4431,7 @@ dependencies = [
  "enum-as-inner",
  "futures",
  "log",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "parquet",
  "serde",
  "serde_json",
@@ -4498,7 +4496,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "parking_lot 0.12.3",
  "regex",
  "serde",
@@ -4735,7 +4733,7 @@ dependencies = [
  "jsonb",
  "jwt-simple",
  "log",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "tantivy",
  "tempfile",
 ]
@@ -4806,7 +4804,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-expression",
  "databend-common-meta-app",
  "databend-common-pipeline-core",
  "databend-common-storages-fuse",
@@ -4829,7 +4826,6 @@ dependencies = [
 name = "databend-functions-scalar-datetime"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "databend-common-column",
  "databend-common-exception",
  "databend-common-expression",
@@ -5113,7 +5109,7 @@ dependencies = [
  "mysql_async",
  "naive-cityhash",
  "num_cpus",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "opensrv-mysql",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -5297,7 +5293,7 @@ dependencies = [
  "fastrace",
  "futures",
  "log",
- "opendal 0.51.1",
+ "opendal 0.51.2",
 ]
 
 [[package]]
@@ -8871,27 +8867,30 @@ dependencies = [
 
 [[package]]
 name = "jiff"
-version = "0.1.14"
+version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9d9d414fc817d3e3d62b2598616733f76c4cc74fbac96069674739b881295c8"
+checksum = "c607c728e28764fecde611a2764a3a5db19ae21dcec46f292244f5cc5c085a81"
 dependencies = [
  "jiff-tzdb",
  "jiff-tzdb-platform",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
  "serde",
  "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "jiff-tzdb"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91335e575850c5c4c673b9bd467b0e025f164ca59d0564f69d0c2ee0ffad4653"
+checksum = "cf2cec2f5d266af45a071ece48b1fb89f3b00b2421ac3a5fe10285a6caaa60d3"
 
 [[package]]
 name = "jiff-tzdb-platform"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9835f0060a626fe59f160437bc725491a6af23133ea906500027d1bd2f8f4329"
+checksum = "a63c62e404e7b92979d2792352d885a7f8f83fd1d0d31eea582d77b2ceca697e"
 dependencies = [
  "jiff-tzdb",
 ]
@@ -10226,8 +10225,9 @@ dependencies = [
 
 [[package]]
 name = "object_store_opendal"
-version = "0.49.0"
-source = "git+https://github.com/apache/opendal?rev=b8a3b7a#b8a3b7aa093d8695d89d579e146907850bb6565c"
+version = "0.49.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b18eb960885330175ec89daa991b0bc9050dc7f259b31a887fbfbb297312f83"
 dependencies = [
  "async-trait",
  "bytes",
@@ -10235,7 +10235,7 @@ dependencies = [
  "futures",
  "futures-util",
  "object_store",
- "opendal 0.51.1",
+ "opendal 0.51.2",
  "pin-project",
  "tokio",
 ]
@@ -10307,8 +10307,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.51.1"
-source = "git+https://github.com/apache/opendal?rev=b8a3b7a#b8a3b7aa093d8695d89d579e146907850bb6565c"
+version = "0.51.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b1063ea459fa9e94584115743b06330f437902dd1d9f692b863ef1875a20548"
 dependencies = [
  "anyhow",
  "async-backtrace",
@@ -11080,9 +11081,18 @@ dependencies = [
 
 [[package]]
 name = "portable-atomic"
-version = "1.7.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
+checksum = "280dc24453071f1b63954171985a0b0d30058d287960968b9b2aca264c8d4ee6"
+
+[[package]]
+name = "portable-atomic-util"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8a2f0d8d040d7848a709caf78912debcc3f33ee4b3cac47d73d1e1069e83507"
+dependencies = [
+ "portable-atomic",
+]
 
 [[package]]
 name = "postcard"

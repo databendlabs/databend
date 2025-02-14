@@ -20,6 +20,7 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -32,6 +33,9 @@ use log::info;
 
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;
 use crate::interpreters::common::metrics_inc_compact_hook_main_operation_time_ms;
+use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
+use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
+use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::OptimizeCompactBlockInterpreter;
 use crate::interpreters::ReclusterTableInterpreter;
@@ -176,6 +180,16 @@ async fn compact_table(
         let mut build_res = compact_interpreter.execute2().await?;
         // execute the compact pipeline
         if build_res.main_pipeline.is_complete_pipeline()? {
+            let query_ctx = ctx.clone();
+            build_res.main_pipeline.set_on_finished(always_callback(
+                move |_info: &ExecutionInfo| {
+                    hook_clear_m_cte_temp_table(&query_ctx)?;
+                    hook_vacuum_temp_files(&query_ctx)?;
+                    hook_disk_temp_dir(&query_ctx)?;
+                    Ok(())
+                },
+            ));
+
             build_res.set_max_threads(settings.get_max_threads()? as usize);
             let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
 

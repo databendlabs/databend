@@ -15,7 +15,6 @@ blake3 = { workspace = true }
 borsh = { workspace = true, features = ["derive"] }
 bstr = { workspace = true }
 bumpalo = { workspace = true }
-chrono = { workspace = true }
 crc32fast = { workspace = true }
 ctor = { workspace = true }
 databend-common-base = { workspace = true }

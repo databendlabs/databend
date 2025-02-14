@@ -164,7 +164,8 @@ pub struct QueryLogElement {
     // Server.
     pub server_version: String,
 
-    // Session settings
+    // Session
+    pub query_tag: String,
     #[serde(skip_serializing)]
     pub session_settings: String,
 
@@ -311,7 +312,8 @@ impl SystemLogElement for QueryLogElement {
             TableField::new("stack_trace", TableDataType::String),
             // Server.
             TableField::new("server_version", TableDataType::String),
-            // Session settings
+            // Session
+            TableField::new("query_tag", TableDataType::String),
             TableField::new("session_settings", TableDataType::String),
             // Extra.
             TableField::new("extra", TableDataType::String),
@@ -548,7 +550,11 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::String(self.server_version.clone()).as_ref());
-        // Session settings
+        // Session
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::String(self.query_tag.clone()).as_ref());
         columns
             .next()
             .unwrap()

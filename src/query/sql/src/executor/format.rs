@@ -1262,6 +1262,10 @@ fn window_partition_to_format_tree(
         FormatTreeNode::new(format!("hash keys: [{partition_by}]")),
     ];
 
+    if let Some(top_n) = &plan.top_n {
+        children.push(FormatTreeNode::new(format!("top: {}", top_n.top)));
+    }
+
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
         children.extend(items);

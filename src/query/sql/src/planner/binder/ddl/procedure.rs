@@ -35,6 +35,7 @@ use databend_common_users::UserApiProvider;
 use crate::binder::show::get_show_options;
 use crate::plans::CallProcedurePlan;
 use crate::plans::CreateProcedurePlan;
+use crate::plans::DescProcedurePlan;
 use crate::plans::DropProcedurePlan;
 use crate::plans::ExecuteImmediatePlan;
 use crate::plans::Plan;
@@ -97,8 +98,14 @@ impl Binder {
         })))
     }
 
-    pub async fn bind_desc_procedure(&mut self, _stmt: &DescProcedureStmt) -> Result<Plan> {
-        todo!()
+    pub async fn bind_desc_procedure(&mut self, stmt: &DescProcedureStmt) -> Result<Plan> {
+        let DescProcedureStmt { name } = stmt;
+
+        let tenant = self.ctx.get_tenant();
+        Ok(Plan::DescProcedure(Box::new(DescProcedurePlan {
+            tenant: tenant.to_owned(),
+            name: ProcedureNameIdent::new(tenant, ProcedureIdentity::from(name.clone())),
+        })))
     }
 
     pub async fn bind_show_procedures(

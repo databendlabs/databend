@@ -18,7 +18,6 @@ async-trait = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
-databend-common-expression = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
 databend-common-storages-fuse = { workspace = true }

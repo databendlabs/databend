@@ -16,10 +16,13 @@ use std::env;
 use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use anyhow::anyhow;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::metrics::register_counter_family;
+use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::ErrorCode;
@@ -57,6 +60,9 @@ use crate::metrics_layer::METRICS_LAYER;
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
 use crate::StorageHttpClient;
+
+static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
+    LazyLock::new(|| register_counter_family("opendal_retries_count"));
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -397,6 +403,8 @@ pub struct DatabendRetryInterceptor;
 
 impl RetryInterceptor for DatabendRetryInterceptor {
     fn intercept(&self, err: &opendal::Error, dur: Duration) {
+        let labels = vec![("err", err.kind().to_string())];
+        METRIC_OPENDAL_RETRIES_COUNT.get_or_create(&labels).inc();
         warn!(
             target: "opendal::layers::retry",
             "will retry after {:.2}s because: {:?}",
