@@ -2937,9 +2937,9 @@ UseDatabase {
 
 
 ---------- Input ----------
-create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
+create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary' warehouse='default');
 ---------- Output ---------
-CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>' )
+CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>', warehouse = 'default' )
 ---------- AST ------------
 CreateCatalog(
     CreateCatalogStmt {
@@ -2949,6 +2949,7 @@ CreateCatalog(
         catalog_options: {
             "thrift_protocol": "binary",
             "url": "<hive-meta-store>",
+            "warehouse": "default",
         },
     },
 )

@@ -1754,7 +1754,6 @@ impl TokenKind {
             // | TokenKind::RETURNING
             | TokenKind::STAGE
             | TokenKind::UDF
-            | TokenKind::WAREHOUSE
             | TokenKind::SHARE
             | TokenKind::SHARES
             | TokenKind::TO
@@ -1771,6 +1770,13 @@ impl TokenKind {
             | TokenKind::NOTIFICATION
             if !after_as => true,
             _ => false
+        }
+    }
+
+    pub(crate) fn is_grant_reserved_ident(&self, after_as: bool, in_grant: bool) -> bool {
+        match self {
+            TokenKind::WAREHOUSE if in_grant => true,
+            _ => self.is_reserved_ident(after_as),
         }
     }
 }

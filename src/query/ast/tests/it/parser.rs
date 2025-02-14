@@ -137,7 +137,7 @@ fn test_statement() {
         r#"drop table a;"#,
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
-        r#"create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');"#,
+        r#"create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary' warehouse='default');"#,
         r#"select current_catalog();"#,
         r#"use catalog ctl;"#,
         r#"create database if not exists a;"#,

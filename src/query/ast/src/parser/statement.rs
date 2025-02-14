@@ -3452,7 +3452,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     // "*": as current db or "table" with current db
     let db = map(
         rule! {
-            ( #ident ~ "." )? ~ "*"
+            ( #grant_ident ~ "." )? ~ "*"
         },
         |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
     );
@@ -3460,7 +3460,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
     let table = map(
         rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
+            ( #grant_ident ~ "." )? ~ #parameter_to_grant_string
         },
         |(database, table)| {
             AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
@@ -3481,7 +3481,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
 
     // Object object_name
     let object = map(
-        rule! { #object ~ #ident},
+        rule! { #object ~ #grant_ident },
         |(object, object_name)| match object {
             Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
             Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
