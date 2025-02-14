@@ -169,9 +169,8 @@ impl TransformHilbertPartitionCollect {
             .and_then(WindowPartitionMeta::downcast_from)
         {
             for (partition_id, data_block) in meta.partitioned_data.into_iter() {
-                let new_id = self.partition_id[partition_id];
-                log::warn!("collect partition id {}, new_id {}", partition_id, new_id);
-                self.buffer.add_data_block(new_id, data_block);
+                let partition_id = self.partition_id[partition_id];
+                self.buffer.add_data_block(partition_id, data_block);
             }
         }
         Ok(())
