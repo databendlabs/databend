@@ -957,39 +957,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         value(TrimWhere::Leading, rule! { LEADING }),
         value(TrimWhere::Trailing, rule! { TRAILING }),
     ));
-    let trim = map(
-        rule! {
-            TRIM
-            ~ "("
-            ~ #subexpr(0) ~ ("," ~ #subexpr(0))?
-            ~ ^")"
-        },
-        |(name, _, expr, trim_str, _)| {
-            if let Some(trim_str) = trim_str {
-                let trim_str = trim_str.1;
-                ExprElement::FunctionCall {
-                    func: FunctionCall {
-                        distinct: false,
-                        name: Identifier {
-                            span: Some(name.span),
-                            name: name.text().to_owned(),
-                            quote: None,
-                            ident_type: IdentifierType::None,
-                        },
-                        args: vec![expr, trim_str],
-                        params: vec![],
-                        window: None,
-                        lambda: None,
-                    },
-                }
-            } else {
-                ExprElement::Trim {
-                    expr: Box::new(expr),
-                    trim_where: None,
-                }
-            }
-        },
-    );
     let trim_from = map(
         rule! {
             TRIM
@@ -1391,7 +1358,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             ),
             rule!(
                 #substring : "`SUBSTRING(... [FROM ...] [FOR ...])`"
-                | #trim : "`TRIM(...)`"
                 | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
                 | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
                 | #chain_function_call : "x.function(...)"
