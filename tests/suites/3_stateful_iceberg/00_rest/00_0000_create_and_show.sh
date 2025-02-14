@@ -12,7 +12,7 @@ TYPE=ICEBERG
 CONNECTION=(
     TYPE='rest'
     ADDRESS='http://127.0.0.1:8181'
-    `WAREHOUSE`='s3://icebergdata/demo'
+    WAREHOUSE='s3://icebergdata/demo'
 );
 EOF
 
