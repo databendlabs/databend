@@ -115,7 +115,15 @@ impl JwtAuthenticator {
     ) -> Result<JWTClaims<CustomClaims>> {
         let metadata = Token::decode_metadata(token);
         let key_id = metadata.map_or(None, |e| e.key_id().map(|s| s.to_string()));
-        let pub_key = key_store.get_key(key_id).await?;
+        let pub_key = match key_store.get_key(&key_id).await? {
+            None => {
+                return Err(ErrorCode::AuthenticateFailure(format!(
+                    "key id {} not found in jwk store",
+                    key_id.unwrap_or_default()
+                )));
+            }
+            Some(pk) => pk,
+        };
         let r = match &pub_key {
             PubKey::RSA256(pk) => pk.verify_token::<CustomClaims>(token, None),
             PubKey::ES256(pk) => pk.verify_token::<CustomClaims>(token, None),
@@ -128,6 +136,7 @@ impl JwtAuthenticator {
             Some(_) => Ok(c),
         }
     }
+
     #[async_backtrace::framed]
     pub async fn parse_jwt_claims(&self, token: &str) -> Result<JWTClaims<CustomClaims>> {
         let mut combined_code = ErrorCode::AuthenticateFailure(

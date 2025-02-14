@@ -345,6 +345,18 @@ impl Value<AnyType> {
         }
     }
 
+    // returns result without nullable and has_null flag
+    pub fn remove_nullable(self) -> (Self, bool) {
+        match self {
+            Value::Scalar(Scalar::Null) => (Value::Scalar(Scalar::Null), true),
+            Value::Column(Column::Nullable(box nullable_column)) => (
+                Value::Column(nullable_column.column),
+                nullable_column.validity.null_count() > 0,
+            ),
+            other => (other, false),
+        }
+    }
+
     pub fn domain(&self, data_type: &DataType) -> Domain {
         match self {
             Value::Scalar(scalar) => scalar.as_ref().domain(data_type),

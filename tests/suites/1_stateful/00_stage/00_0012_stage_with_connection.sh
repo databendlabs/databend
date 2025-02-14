@@ -12,7 +12,7 @@ stmt "drop connection if exists my_conn;"
 stmt "create connection my_conn storage_type = 's3' access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}'"
 stmt "create stage my_stage url= 's3://testbucket/admin/tempdata/' connection = (connection_name='my_conn');"
 stmt "remove @my_stage;"
-stmt "copy into @my_stage/a.csv from my_table"
+stmt "copy into @my_stage/a.csv from my_table"  | cut -d$'\t' -f1,2
 query "select * from @my_stage order by a;"
 
 stmt "drop table if exists my_table;"

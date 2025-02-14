@@ -65,7 +65,7 @@ pub fn set(byte: u8, i: usize, value: bool) -> u8 {
 
 /// Sets bit at position `i` in `data`
 /// # Panics
-/// panics if `i >= data.len() / 8`
+/// This function will panic iff `i / 8 >= data.len()`
 #[inline]
 pub fn set_bit(data: &mut [u8], i: usize, value: bool) {
     data[i / 8] = set(data[i / 8], i % 8, value);
@@ -73,7 +73,7 @@ pub fn set_bit(data: &mut [u8], i: usize, value: bool) {
 
 /// Sets bit at position `i` in `data` without doing bound checks
 /// # Safety
-/// caller must ensure that `i < data.len() / 8`
+/// caller must ensure that `i / 8 < data.len()`
 #[inline]
 pub unsafe fn set_bit_unchecked(data: &mut [u8], i: usize, value: bool) {
     let byte = data.get_unchecked_mut(i / 8);
@@ -81,8 +81,8 @@ pub unsafe fn set_bit_unchecked(data: &mut [u8], i: usize, value: bool) {
 }
 
 /// Returns whether bit at position `i` in `data` is set
-/// # Panic
-/// This function panics iff `i / 8 >= bytes.len()`
+/// # Panics
+/// This function will panic iff `i / 8 >= bytes.len()`
 #[inline]
 pub fn get_bit(bytes: &[u8], i: usize) -> bool {
     is_set(bytes[i / 8], i % 8)
@@ -91,7 +91,7 @@ pub fn get_bit(bytes: &[u8], i: usize) -> bool {
 /// Returns whether bit at position `i` in `data` is set or not.
 ///
 /// # Safety
-/// `i >= data.len() * 8` results in undefined behavior
+/// `i / 8 >= data.len()` results in undefined behavior
 #[inline]
 pub unsafe fn get_bit_unchecked(data: &[u8], i: usize) -> bool {
     (*data.as_ptr().add(i >> 3) & BIT_MASK[i & 7]) != 0
@@ -105,7 +105,7 @@ pub fn bytes_for(bits: usize) -> usize {
 
 /// Returns the number of zero bits in the slice offsetted by `offset` and a length of `length`.
 /// # Panics
-/// This function panics iff `(offset + len).saturating_add(7) / 8 >= slice.len()`
+/// This function panics iff `(offset + len + 7) / 8 > slice.len()`
 /// because it corresponds to the situation where `len` is beyond bounds.
 pub fn count_zeros(slice: &[u8], offset: usize, len: usize) -> usize {
     if len == 0 {
