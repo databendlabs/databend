@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
@@ -74,53 +75,7 @@ impl AttachTableHandler for RealAttachTableHandler {
             number_of_blocks: Some(snapshot.summary.block_count),
         };
 
-        // `attach_table_schema` is the initial table schema, which is
-        // - A cloned schema of the table being attached to
-        // - Or a sub-schema of the table being attached to
-        //    if columns to include are explicitly specified in the "ATTACH TABLE" statement.
-        let attach_table_schema = if let Some(attached_columns) = &plan.attached_columns {
-            // Columns to include are specified, let's check them
-            let schema = &snapshot.schema;
-            let mut fields_to_attach = Vec::with_capacity(attached_columns.len());
-            let mut field_ids_to_include = Vec::with_capacity(attached_columns.len());
-            let mut invalid_cols = vec![];
-            for field in attached_columns {
-                match schema.field_with_name(&field.name) {
-                    Ok(f) => {
-                        field_ids_to_include.push(f.column_id);
-                        fields_to_attach.push(f.clone())
-                    }
-                    Err(_) => invalid_cols.push(field.name.as_str()),
-                }
-            }
-            if !invalid_cols.is_empty() {
-                return Err(ErrorCode::InvalidArgument(format!(
-                    "Attached columns do not exist: {}",
-                    invalid_cols.join(",")
-                )));
-            }
-
-            let new_metadata = if !field_ids_to_include.is_empty() {
-                let ids = field_ids_to_include
-                    .iter()
-                    .map(|id| format!("{id}"))
-                    .collect::<Vec<_>>()
-                    .join(",");
-                let mut v = schema.metadata.clone();
-                v.insert(FUSE_OPT_KEY_ATTACH_COLUMN_IDS.to_owned(), ids);
-                v
-            } else {
-                schema.metadata.clone()
-            };
-
-            TableSchema {
-                fields: fields_to_attach,
-                metadata: new_metadata,
-                next_column_id: schema.next_column_id,
-            }
-        } else {
-            snapshot.schema.clone()
-        };
+        let attach_table_schema = Self::extract_schema(&plan, &snapshot)?;
 
         let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
         let table_meta = TableMeta {
@@ -155,5 +110,66 @@ impl RealAttachTableHandler {
         let wrapper = AttachTableHandlerWrapper::new(Box::new(rm));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
+    }
+
+    // `attach_table_schema` is the initial table schema, which is
+    // - A cloned schema of the table being attached to
+    // - Or a sub-schema of the table being attached to
+    //    if columns to include are explicitly specified in the "ATTACH TABLE" statement.
+    fn extract_schema(
+        plan: &&CreateTablePlan,
+        base_table_snapshot: &Arc<TableSnapshot>,
+    ) -> Result<TableSchema> {
+        let schema = if let Some(attached_columns) = &plan.attached_columns {
+            // Columns to include are specified, let's check them
+            let base_table_schema = &base_table_snapshot.schema;
+            let mut fields_to_attach = Vec::with_capacity(attached_columns.len());
+
+            // The ids of columns being included
+            let mut field_ids_to_include = Vec::with_capacity(attached_columns.len());
+
+            // Columns that do not exist in the table being attached to, if any
+            let mut invalid_cols = vec![];
+            for field in attached_columns {
+                match base_table_schema.field_with_name(&field.name) {
+                    Ok(f) => {
+                        field_ids_to_include.push(f.column_id);
+                        fields_to_attach.push(f.clone())
+                    }
+                    Err(_) => invalid_cols.push(field.name.as_str()),
+                }
+            }
+            if !invalid_cols.is_empty() {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Columns [{}] do not exist in the table being attached to",
+                    invalid_cols.join(",")
+                )));
+            }
+
+            let new_table_schema = if !field_ids_to_include.is_empty() {
+                // If columns to include are specified explicitly, their ids should
+                // be kept in the metadata of TableSchema.
+                let ids = field_ids_to_include
+                    .iter()
+                    .map(|id| format!("{id}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let mut v = base_table_schema.metadata.clone();
+                v.insert(FUSE_OPT_KEY_ATTACH_COLUMN_IDS.to_owned(), ids);
+                v
+            } else {
+                base_table_schema.metadata.clone()
+            };
+
+            TableSchema {
+                fields: fields_to_attach,
+                metadata: new_table_schema,
+                next_column_id: base_table_schema.next_column_id,
+            }
+        } else {
+            base_table_snapshot.schema.clone()
+        };
+
+        Ok(schema)
     }
 }
