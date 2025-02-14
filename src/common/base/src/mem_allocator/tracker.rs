@@ -377,10 +377,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         let old_adjusted_layout = old_layout.extend_packed(meta_layout).unwrap();
         let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
 
-        let address = ptr
-            .add(old_adjusted_layout.size())
-            .cast::<usize>()
-            .read_unaligned();
+        let address = ptr.add(old_layout.size()).cast::<usize>().read_unaligned();
 
         if address == 0 {
             let diff = old_adjusted_layout.size() - new_adjusted_layout.size();
