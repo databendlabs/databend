@@ -14,10 +14,13 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_management::WarehouseInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_users::UserApiProvider;
+use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::sessions::QueryContext;
 
@@ -93,9 +96,26 @@ pub async fn validate_grant_object_exists(
                 )));
             }
         }
-        GrantObject::Warehouse(_w) => {
-            // TODO
-            return Ok(());
+        GrantObject::Warehouse(w) => {
+            let warehouse_mgr = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+            // Only check support_forward_warehouse_request
+            if !warehouse_mgr.support_forward_warehouse_request() {
+                return Ok(());
+            }
+            let ws = warehouse_mgr.list_warehouses().await?;
+            return if ws.iter().any(|warehouse| {
+                if let WarehouseInfo::SystemManaged(sw) = warehouse {
+                    &sw.id == w
+                } else {
+                    false
+                }
+            }) {
+                Ok(())
+            } else {
+                Err(databend_common_exception::ErrorCode::UnknownWarehouse(
+                    format!("warehouse {w} not exists"),
+                ))
+            };
         }
         GrantObject::Global => (),
     }

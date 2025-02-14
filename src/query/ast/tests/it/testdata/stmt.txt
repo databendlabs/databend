@@ -23660,6 +23660,28 @@ Grant(
 
 
 ---------- Input ----------
+GRANT OWNERSHIP ON WAREHOUSE w1 TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON  WAREHOUSE w1 TO ROLE 'd20_0015_owner'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Warehouse(
+                "w1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
 GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
 GRANT OWNERSHIP ON  UDF f1 TO ROLE 'd20_0015_owner'

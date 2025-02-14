@@ -1361,13 +1361,24 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
             }
             Plan::CreateWarehouse(_) => {
+                let warehouse_mgr = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+                // Only check support_forward_warehouse_request privileges
+                if !warehouse_mgr.support_forward_warehouse_request() {
+                    return Ok(());
+                }
                 // only current role has global level create warehouse privilege, it will pass
                 self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateWarehouse, true, false)
                     .await?;
             }
-            Plan::AddWarehouseCluster(_) => {}
-            Plan::AssignWarehouseNodes(_) => {}
-            Plan::UnassignWarehouseNodes(_) => {}
+            Plan::AddWarehouseCluster(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::AssignWarehouseNodes(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::UnassignWarehouseNodes(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
         }
 
         Ok(())

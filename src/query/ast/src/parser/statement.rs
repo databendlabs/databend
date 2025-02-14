@@ -3476,7 +3476,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     let object = alt((
         value(Object::Udf, rule! { UDF }),
         value(Object::Stage, rule! { STAGE }),
-        value(Object::Warehouse, rule! { STAGE }),
+        value(Object::Warehouse, rule! { WAREHOUSE }),
     ));
 
     // Object object_name
