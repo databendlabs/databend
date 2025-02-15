@@ -724,6 +724,7 @@ impl Binder {
             cluster_key,
             as_select: as_query_plan,
             inverted_indexes,
+            attached_columns: None,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
     }
@@ -789,6 +790,7 @@ impl Binder {
             cluster_key: None,
             as_select: None,
             inverted_indexes: None,
+            attached_columns: stmt.columns_opt.clone(),
         })))
     }
 
