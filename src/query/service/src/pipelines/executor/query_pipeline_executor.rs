@@ -21,7 +21,6 @@ use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::error_info::NodeErrorType;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadJoinHandle;

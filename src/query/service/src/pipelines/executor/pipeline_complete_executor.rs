@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
