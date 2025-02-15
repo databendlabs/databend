@@ -70,7 +70,9 @@ echo "attach table attach_tbl (c2, c4) 's3://testbucket/admin/data/$base_storage
 
 query "select * from attach_tbl"
 
-query "show create table attach_tbl"
+
+# the components after columns, i.e. "'ss://... ' connection = ...." will be cut off
+query "show create table attach_tbl" | cut -d "'" -f 1
 
 stmt "drop table if exists attach_tbl"
 

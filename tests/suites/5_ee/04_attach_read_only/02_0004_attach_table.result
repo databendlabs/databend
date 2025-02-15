@@ -56,7 +56,7 @@ attaching base table
 c2	c4
 <<<<
 >>>> show create table attach_tbl
-attach_tbl	ATTACH TABLE (c2,c4) `default`.`attach_tbl` 's3://testbucket/admin/data/1/6208/' CONNECTION = ( connection_name = '******onn' )
+attach_tbl	ATTACH TABLE (c2,c4) `default`.`attach_tbl` 
 <<<<
 >>>> drop table if exists attach_tbl
 attaching non-exists column
