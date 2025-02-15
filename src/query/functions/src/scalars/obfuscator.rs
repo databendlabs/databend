@@ -233,36 +233,32 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 }
 
-/// Mask the least significant `num_bits` of `x`.
-fn mask_bits(x: u64, num_bits: usize) -> u64 {
-    x & ((1u64 << num_bits) - 1)
+fn mask(num_bits: u32) -> u64 {
+    (1u64 << num_bits) - 1
 }
 
-/// Apply Feistel network round to the least significant `num_bits` part of `x`.
-fn feistel_round(x: u64, num_bits: usize, seed: u64, round: usize) -> u64 {
-    let num_bits_left_half = num_bits / 2;
-    let num_bits_right_half = num_bits - num_bits_left_half;
-
-    let left_half = mask_bits(x >> num_bits_right_half, num_bits_left_half);
-    let right_half = mask_bits(x, num_bits_right_half);
-
-    let new_left_half = right_half;
-
-    let mut state = std::hash::DefaultHasher::new();
-    state.write_u64(right_half);
-    state.write_u64(seed);
-    state.write_usize(round);
-    let new_right_half = left_half ^ mask_bits(state.finish(), num_bits_left_half);
-
-    (new_left_half << num_bits_left_half) ^ new_right_half
+/// Mask the least significant `num_bits` of `x`.
+fn mask_bits(x: u64, num_bits: u32) -> u64 {
+    x & mask(num_bits)
 }
 
 /// Apply Feistel network with `num_rounds` to the least significant `num_bits` part of `x`.
-fn feistel_network(x: u64, num_bits: usize, seed: u64, num_rounds: usize) -> u64 {
-    let bits = (0..num_rounds).fold(mask_bits(x, num_bits), |bits, i| {
-        feistel_round(bits, num_bits, seed, i)
-    });
-    (x & !((1u64 << num_bits) - 1)) ^ bits
+fn feistel_network(x: u64, num_bits: u32, seed: u64, num_rounds: usize) -> u64 {
+    (0..num_rounds).fold(mask_bits(x, num_bits), |bits, round| {
+        let num_bits_left_half = num_bits / 2;
+        let num_bits_right_half = num_bits - num_bits_left_half;
+
+        let left_half = mask_bits(bits >> num_bits_right_half, num_bits_left_half);
+        let right_half = mask_bits(bits, num_bits_right_half);
+
+        let mut state = std::hash::DefaultHasher::new();
+        state.write_u64(right_half);
+        state.write_u64(seed);
+        state.write_usize(round);
+
+        (right_half << num_bits_left_half)
+            ^ (left_half ^ mask_bits(state.finish(), num_bits_left_half))
+    }) ^ (x & !mask(num_bits))
 }
 
 macro_rules! impl_transform {
@@ -279,17 +275,13 @@ macro_rules! impl_transform {
                     -3..=-2 => -(-x ^ (seed as Self & 1)),
                     4.. => {
                         let num_bits = Self::BITS - 1 - x.leading_zeros();
-                        feistel_network(x as u64, num_bits as usize, seed, 4) as Self
+                        feistel_network(x as u64, num_bits, seed, 4) as Self
                     }
-                    Self::MIN => {
-                        let num_bits = Self::BITS - 1 - x.leading_zeros();
-                        let v = feistel_network(Self::MAX as u64 + 1, num_bits as usize, seed, 4);
-                        -(mask_bits(v, num_bits as usize) as Self)
-                    }
+                    Self::MIN => x,
                     Self::MIN..=-4 => {
                         let x = -x as u64;
                         let num_bits = 64 - 1 - x.leading_zeros();
-                        -(feistel_network(x, num_bits as usize, seed, 4) as Self)
+                        -(feistel_network(x, num_bits, seed, 4) as Self)
                     }
                 }
             }
@@ -316,7 +308,7 @@ impl Transform for u64 {
             // Pseudorandom permutation of two elements.
             2 | 3 => x ^ (seed & 1),
             _ => {
-                let num_bits = 64 - 1 - x.leading_zeros() as usize;
+                let num_bits = 64 - 1 - x.leading_zeros();
                 feistel_network(x, num_bits, seed, 4)
             }
         }
@@ -352,7 +344,7 @@ pub fn register_feistel(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<Float32Type, UInt64Type, Float32Type>(
             |x, seed, output, _| {
-                const MANTISSA_NUM_BITS: usize = 23;
+                const MANTISSA_NUM_BITS: u32 = 23;
                 let v =
                     f32::from_bits(
                         feistel_network(x.0.to_bits() as u64, MANTISSA_NUM_BITS, seed, 4) as u32,
@@ -368,7 +360,7 @@ pub fn register_feistel(registry: &mut FunctionRegistry) {
         |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<Float64Type, UInt64Type, Float64Type>(
             |x, seed, output, _| {
-                const MANTISSA_NUM_BITS: usize = 52;
+                const MANTISSA_NUM_BITS: u32 = 52;
                 let v = f64::from_bits(feistel_network(x.0.to_bits(), MANTISSA_NUM_BITS, seed, 4))
                     .into();
                 output.push(v);
@@ -413,9 +405,9 @@ mod tests {
                 let got = Transform::transform(x, seed);
                 prop_assert_eq!(x > 0, got > 0, "i64 sign not match x:{} seed:{}", x, seed);
                 prop_assert_eq!(
-                    x.leading_zeros(),
-                    got.leading_zeros(),
-                    "i64 log2 not match x:{} seed:{}",
+                    (x as f64).abs().log2() as u32,
+                    (got as f64).abs().log2() as u32,
+                    "i8 log2 not match x:{} seed:{}",
                     x,
                     seed
                 );
@@ -429,9 +421,9 @@ mod tests {
                 let got = Transform::transform(x, seed);
                 prop_assert_eq!(x > 0, got > 0, "i32 sign not match x:{} seed:{}", x, seed);
                 prop_assert_eq!(
-                    x.leading_zeros(),
-                    got.leading_zeros(),
-                    "i32 log2 not match x:{} seed:{}",
+                    (x as f64).abs().log2() as u32,
+                    (got as f64).abs().log2() as u32,
+                    "i8 log2 not match x:{} seed:{}",
                     x,
                     seed
                 );
@@ -445,9 +437,9 @@ mod tests {
                 let got = Transform::transform(x, seed);
                 prop_assert_eq!(x > 0, got > 0, "i16 sign not match x:{} seed:{}", x, seed);
                 prop_assert_eq!(
-                    x.leading_zeros(),
-                    got.leading_zeros(),
-                    "i16 log2 not match x:{} seed:{}",
+                    (x as f64).abs().log2() as u32,
+                    (got as f64).abs().log2() as u32,
+                    "i8 log2 not match x:{} seed:{}",
                     x,
                     seed
                 );
@@ -461,8 +453,8 @@ mod tests {
                 let got = Transform::transform(x, seed);
                 prop_assert_eq!(x > 0, got > 0, "i8 sign not match x:{} seed:{}", x, seed);
                 prop_assert_eq!(
-                    x.leading_zeros(),
-                    got.leading_zeros(),
+                    (x as f64).abs().log2() as u32,
+                    (got as f64).abs().log2() as u32,
                     "i8 log2 not match x:{} seed:{}",
                     x,
                     seed
