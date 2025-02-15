@@ -279,8 +279,7 @@ impl ReclusterTableInterpreter {
                         "range_bound({partitions}, {sample_size})({cluster_key_str}) AS bound_{index}"
                     ));
                     hilbert_keys.push(format!(
-                        "hilbert_key(cast(ifnull(range_partition_id({table}.{cluster_key_str}, \
-                        _keys_bound.bound_{index}), {partitions}) as uint16))"
+                        "hilbert_key(cast(range_partition_id({table}.{cluster_key_str}, _keys_bound.bound_{index}) as uint16))"
                     ));
                 }
                 let keys_bounds_str = keys_bounds.join(", ");
