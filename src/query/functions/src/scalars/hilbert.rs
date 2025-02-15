@@ -114,7 +114,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_2_arg::<NullableType<GenericType<0>>, NullableType<ArrayType<GenericType<0>>>, NumberType<u64>>(|val, arr, builder, _| {
             let id = match (val, arr) {
                 (Some(val), Some(arr)) => calc_range_partition_id(val, arr),
-                (None, Some(arr)) => arr.len() as u64 + 1,
+                (None, Some(arr)) => arr.len() as u64,
                 _ => 0,
             };
             builder.push(id);
