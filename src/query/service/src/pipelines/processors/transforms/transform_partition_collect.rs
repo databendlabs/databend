@@ -54,12 +54,8 @@ impl Exchange for HilbertPartitionExchange {
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         // Extract the columns used for hash computation.
         let mut data_block = data_block.consume_convert_to_full();
-        let range_ids = data_block
-            .get_last_column()
-            .as_number()
-            .unwrap()
-            .as_u_int64()
-            .unwrap();
+        let last = data_block.get_last_column().as_nullable().unwrap();
+        let range_ids = last.column.as_number().unwrap().as_u_int64().unwrap();
 
         // Scatter the data block to different partitions.
         let indices = range_ids
