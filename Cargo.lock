@@ -5124,6 +5124,7 @@ dependencies = [
  "pin-project-lite",
  "poem",
  "pretty_assertions",
+ "prometheus-client",
  "prost",
  "rand",
  "recursive",
