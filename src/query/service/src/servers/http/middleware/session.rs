@@ -23,6 +23,7 @@ use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::headers::HEADER_WAREHOUSE;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_config::DATABEND_SEMVER;
@@ -601,6 +602,8 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", query_id)));
+
         let _guard = ThreadTracker::tracking(tracking_payload);
 
         ThreadTracker::tracking_future(async move {

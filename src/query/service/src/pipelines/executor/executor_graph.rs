@@ -122,16 +122,6 @@ impl Node {
                 scope.as_ref().map(|x| x.metrics_registry.clone()),
             )));
 
-            // Node mem stat
-            tracking_payload.mem_stat = Some(MemStat::create_child(
-                unsafe { processor.name() },
-                tracking_payload
-                    .mem_stat
-                    .as_ref()
-                    .map(|x| vec![x.clone()])
-                    .unwrap_or_default(),
-            ));
-
             // Node tracking metrics
             tracking_payload.metrics = scope.as_ref().map(|x| x.metrics_registry.clone());
 
@@ -739,18 +729,6 @@ impl RunningGraph {
             .node_weights()
             .map(|x| {
                 let new_profile = x.tracking_payload.profile.as_deref().cloned();
-
-                // inject memory usage
-                if let Some((profile, mem_stat)) = new_profile
-                    .as_ref()
-                    .zip(x.tracking_payload.mem_stat.as_ref())
-                {
-                    profile.statistics[ProfileStatisticsName::MemoryUsage as usize].fetch_add(
-                        std::cmp::max(0, mem_stat.get_memory_usage()) as usize,
-                        Ordering::Relaxed,
-                    );
-                }
-
                 Arc::new(new_profile.unwrap())
             })
             .collect::<Vec<_>>()

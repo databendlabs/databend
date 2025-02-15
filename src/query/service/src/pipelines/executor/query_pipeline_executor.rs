@@ -195,14 +195,7 @@ impl QueryPipelineExecutor {
         let mut on_finished_chain = self.on_finished_chain.lock();
 
         // untracking for on finished
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        if let Some(mem_stat) = &tracking_payload.mem_stat {
-            tracking_payload.mem_stat = Some(MemStat::create_child(
-                String::from("Pipeline-on-finished"),
-                mem_stat.get_parent_memory_stat(),
-            ));
-        }
-
+        let tracking_payload = ThreadTracker::new_tracking_payload();
         let _guard = ThreadTracker::tracking(tracking_payload);
         on_finished_chain.apply(info)
     }
@@ -281,14 +274,7 @@ impl QueryPipelineExecutor {
                     drop(guard);
 
                     // untracking for on finished
-                    let mut tracking_payload = ThreadTracker::new_tracking_payload();
-                    if let Some(mem_stat) = &tracking_payload.mem_stat {
-                        tracking_payload.mem_stat = Some(MemStat::create_child(
-                            String::from("Pipeline-on-finished"),
-                            mem_stat.get_parent_memory_stat(),
-                        ));
-                    }
-
+                    let tracking_payload = ThreadTracker::new_tracking_payload();
                     if let Err(cause) = Result::flatten(catch_unwind(move || {
                         let _guard = ThreadTracker::tracking(tracking_payload);
 
@@ -472,14 +458,7 @@ impl Drop for QueryPipelineExecutor {
             let mut on_finished_chain = self.on_finished_chain.lock();
 
             // untracking for on finished
-            let mut tracking_payload = ThreadTracker::new_tracking_payload();
-            if let Some(mem_stat) = &tracking_payload.mem_stat {
-                tracking_payload.mem_stat = Some(MemStat::create_child(
-                    String::from("Pipeline-on-finished"),
-                    mem_stat.get_parent_memory_stat(),
-                ));
-            }
-
+            let tracking_payload = ThreadTracker::new_tracking_payload();
             let _guard = ThreadTracker::tracking(tracking_payload);
             let profiling = self.fetch_plans_profile(true);
             let info = ExecutionInfo::create(Err(cause), profiling);

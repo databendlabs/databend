@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
 use log::debug;
@@ -23,6 +24,7 @@ pub static START_PREPARED_QUERY: &str = "/actions/start_prepared_query";
 pub async fn start_prepared_query(id: String) -> Result<()> {
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
+    tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", id)));
     let _guard = ThreadTracker::tracking(tracking_payload);
 
     debug!("start prepared query {}", id);

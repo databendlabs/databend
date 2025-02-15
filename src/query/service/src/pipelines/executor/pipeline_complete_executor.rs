@@ -35,13 +35,8 @@ pub struct PipelineCompleteExecutor {
 
 // Use this executor when the pipeline is complete pipeline (has source and sink)
 impl PipelineCompleteExecutor {
-    fn execution_tracking_payload(query_id: &str) -> TrackingPayload {
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        tracking_payload.mem_stat = Some(MemStat::create(format!(
-            "QueryExecutionMemStat-{}",
-            query_id
-        )));
-        tracking_payload
+    fn execution_tracking_payload(_query_id: &str) -> TrackingPayload {
+        ThreadTracker::new_tracking_payload()
     }
 
     pub fn try_create(

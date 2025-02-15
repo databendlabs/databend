@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
@@ -25,6 +26,7 @@ pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
 pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(env.query_id.clone());
+    tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", env.query_id)));
     let _guard = ThreadTracker::tracking(tracking_payload);
 
     ThreadTracker::tracking_future(async move {
