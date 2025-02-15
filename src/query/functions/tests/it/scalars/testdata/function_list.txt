@@ -3227,7 +3227,7 @@ Functions overloads:
 0 range(UInt64, UInt64) :: Array(UInt64)
 1 range(UInt64 NULL, UInt64 NULL) :: Array(UInt64) NULL
 0 range_partition_id(T0, Array(T0)) :: UInt64
-1 range_partition_id(T0 NULL, Array(T0) NULL) :: UInt64 NULL
+1 range_partition_id(T0 NULL, Array(T0) NULL) :: UInt64
 0 regexp(String, String) :: Boolean
 1 regexp(String NULL, String NULL) :: Boolean NULL
 0 regexp_instr FACTORY
