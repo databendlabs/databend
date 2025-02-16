@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::btree_map;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -634,23 +635,20 @@ impl BindContext {
         let column_id = column_binding.internal_column.column_id();
         let table_index = self.get_internal_column_table_index(column_binding)?;
 
-        let is_new = !self
-            .bound_internal_columns
-            .contains_key(&(table_index, column_id));
-        let column_index = if is_new {
-            let mut metadata = metadata.write();
-            let column_index =
-                metadata.add_internal_column(table_index, column_binding.internal_column.clone());
-            self.bound_internal_columns
-                .insert((table_index, column_id), column_index);
-            column_index
-        } else {
-            let column_index = self
-                .bound_internal_columns
-                .get(&(table_index, column_id))
-                .unwrap();
-            *column_index
-        };
+        let (column_index, is_new) =
+            match self.bound_internal_columns.entry((table_index, column_id)) {
+                btree_map::Entry::Vacant(e) => {
+                    let mut metadata = metadata.write();
+                    let column_index = metadata
+                        .add_internal_column(table_index, column_binding.internal_column.clone());
+                    e.insert(column_index);
+                    (column_index, true)
+                }
+                btree_map::Entry::Occupied(e) => {
+                    let column_index = e.get();
+                    (*column_index, false)
+                }
+            };
 
         let metadata = metadata.read();
         let table = metadata.table(table_index);
