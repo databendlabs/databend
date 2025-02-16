@@ -15,6 +15,7 @@
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -72,6 +73,7 @@ impl PipelineBuilder {
         let window_spill_settings = WindowSpillSettings::new(&settings, num_processors)?;
 
         let processor_id = AtomicUsize::new(0);
+        let thresholds = table.get_block_thresholds();
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(Box::new(
                 TransformWindowPartitionCollect::new(
@@ -84,7 +86,7 @@ impl PipelineBuilder {
                     partition.num_partitions,
                     window_spill_settings.clone(),
                     disk_spill.clone(),
-                    CompactStrategy,
+                    CompactStrategy::new(thresholds),
                 )?,
             )))
         })?;
