@@ -884,13 +884,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ ("(" ~ #comma_separated_list1(ident) ~ ")")? ~ #uri_location
         },
-        |(_, _, (catalog, database, table), uri_location)| {
+        |(_, _, (catalog, database, table), columns_opt, uri_location)| {
+            let columns_opt = columns_opt.map(|(_, v, _)| v);
             Statement::AttachTable(AttachTableStmt {
                 catalog,
                 database,
                 table,
+                columns_opt,
                 uri_location,
             })
         },

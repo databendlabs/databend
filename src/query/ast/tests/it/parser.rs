@@ -1214,6 +1214,8 @@ fn test_expr() {
         r#"TRY_CAST(col1 AS BIGINT UNSIGNED)"#,
         r#"TRY_CAST(col1 AS TUPLE(BIGINT UNSIGNED NULL, BOOLEAN))"#,
         r#"trim(leading 'abc' from 'def')"#,
+        r#"trim('aa','bb')"#,
+        r#"timestamp()"#, // issue #16628
         r#"extract(year from d)"#,
         r#"date_part(year, d)"#,
         r#"position('a' in str)"#,

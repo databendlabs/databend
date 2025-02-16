@@ -3514,7 +3514,7 @@ Functions overloads:
 1 to_bitmap(String NULL) :: Bitmap NULL
 2 to_bitmap(UInt64) :: Bitmap
 3 to_bitmap(UInt64 NULL) :: Bitmap NULL
-0 to_boolean(Variant) :: Boolean
+0 to_boolean(Variant) :: Boolean NULL
 1 to_boolean(Variant NULL) :: Boolean NULL
 2 to_boolean(String) :: Boolean
 3 to_boolean(String NULL) :: Boolean NULL
@@ -3546,7 +3546,7 @@ Functions overloads:
 3 to_char(Float32 NULL, String NULL) :: String NULL
 4 to_char(Float64, String) :: String
 5 to_char(Float64 NULL, String NULL) :: String NULL
-0 to_date(Variant) :: Date
+0 to_date(Variant) :: Date NULL
 1 to_date(Variant NULL) :: Date NULL
 2 to_date(String, String) :: Date NULL
 3 to_date(String NULL, String NULL) :: Date NULL
@@ -3576,7 +3576,7 @@ Functions overloads:
 1 to_decades(Int64 NULL) :: Interval NULL
 0 to_decimal FACTORY
 1 to_decimal FACTORY
-0 to_float32(Variant) :: Float32
+0 to_float32(Variant) :: Float32 NULL
 1 to_float32(Variant NULL) :: Float32 NULL
 2 to_float32(String) :: Float32
 3 to_float32(String NULL) :: Float32 NULL
@@ -3602,7 +3602,7 @@ Functions overloads:
 23 to_float32(Float64 NULL) :: Float32 NULL
 24 to_float32(Boolean) :: Float32
 25 to_float32(Boolean NULL) :: Float32 NULL
-0 to_float64(Variant) :: Float64
+0 to_float64(Variant) :: Float64 NULL
 1 to_float64(Variant NULL) :: Float64 NULL
 2 to_float64(String) :: Float64
 3 to_float64(String NULL) :: Float64 NULL
@@ -3652,7 +3652,7 @@ Functions overloads:
 3 to_hour(Interval NULL) :: Int64 NULL
 0 to_hours(Int64) :: Interval
 1 to_hours(Int64 NULL) :: Interval NULL
-0 to_int16(Variant) :: Int16
+0 to_int16(Variant) :: Int16 NULL
 1 to_int16(Variant NULL) :: Int16 NULL
 2 to_int16(String) :: Int16
 3 to_int16(String NULL) :: Int16 NULL
@@ -3678,7 +3678,7 @@ Functions overloads:
 23 to_int16(Float64 NULL) :: Int16 NULL
 24 to_int16(Boolean) :: Int16
 25 to_int16(Boolean NULL) :: Int16 NULL
-0 to_int32(Variant) :: Int32
+0 to_int32(Variant) :: Int32 NULL
 1 to_int32(Variant NULL) :: Int32 NULL
 2 to_int32(String) :: Int32
 3 to_int32(String NULL) :: Int32 NULL
@@ -3704,7 +3704,7 @@ Functions overloads:
 23 to_int32(Float64 NULL) :: Int32 NULL
 24 to_int32(Boolean) :: Int32
 25 to_int32(Boolean NULL) :: Int32 NULL
-0 to_int64(Variant) :: Int64
+0 to_int64(Variant) :: Int64 NULL
 1 to_int64(Variant NULL) :: Int64 NULL
 2 to_int64(String) :: Int64
 3 to_int64(String NULL) :: Int64 NULL
@@ -3734,7 +3734,7 @@ Functions overloads:
 27 to_int64(Date NULL) :: Int64 NULL
 28 to_int64(Timestamp) :: Int64
 29 to_int64(Timestamp NULL) :: Int64 NULL
-0 to_int8(Variant) :: Int8
+0 to_int8(Variant) :: Int8 NULL
 1 to_int8(Variant NULL) :: Int8 NULL
 2 to_int8(String) :: Int8
 3 to_int8(String NULL) :: Int8 NULL
@@ -3910,7 +3910,7 @@ Functions overloads:
 1 to_start_of_year(Date NULL) :: Date NULL
 2 to_start_of_year(Timestamp) :: Date
 3 to_start_of_year(Timestamp NULL) :: Date NULL
-0 to_string(Variant) :: String
+0 to_string(Variant) :: String NULL
 1 to_string(Variant NULL) :: String NULL
 2 to_string(UInt8) :: String
 3 to_string(UInt8 NULL) :: String NULL
@@ -3949,7 +3949,7 @@ Functions overloads:
 36 to_string(Geometry NULL) :: String NULL
 37 to_string(Interval) :: String
 38 to_string(Interval NULL) :: String NULL
-0 to_timestamp(Variant) :: Timestamp
+0 to_timestamp(Variant) :: Timestamp NULL
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
 3 to_timestamp(String NULL) :: Timestamp NULL
@@ -3961,7 +3961,7 @@ Functions overloads:
 9 to_timestamp(Int64 NULL) :: Timestamp NULL
 10 to_timestamp(Int64, UInt64) :: Timestamp
 11 to_timestamp(Int64 NULL, UInt64 NULL) :: Timestamp NULL
-0 to_uint16(Variant) :: UInt16
+0 to_uint16(Variant) :: UInt16 NULL
 1 to_uint16(Variant NULL) :: UInt16 NULL
 2 to_uint16(String) :: UInt16
 3 to_uint16(String NULL) :: UInt16 NULL
@@ -3987,7 +3987,7 @@ Functions overloads:
 23 to_uint16(Float64 NULL) :: UInt16 NULL
 24 to_uint16(Boolean) :: UInt16
 25 to_uint16(Boolean NULL) :: UInt16 NULL
-0 to_uint32(Variant) :: UInt32
+0 to_uint32(Variant) :: UInt32 NULL
 1 to_uint32(Variant NULL) :: UInt32 NULL
 2 to_uint32(String) :: UInt32
 3 to_uint32(String NULL) :: UInt32 NULL
@@ -4013,7 +4013,7 @@ Functions overloads:
 23 to_uint32(Float64 NULL) :: UInt32 NULL
 24 to_uint32(Boolean) :: UInt32
 25 to_uint32(Boolean NULL) :: UInt32 NULL
-0 to_uint64(Variant) :: UInt64
+0 to_uint64(Variant) :: UInt64 NULL
 1 to_uint64(Variant NULL) :: UInt64 NULL
 2 to_uint64(String) :: UInt64
 3 to_uint64(String NULL) :: UInt64 NULL
@@ -4039,7 +4039,7 @@ Functions overloads:
 23 to_uint64(Float64 NULL) :: UInt64 NULL
 24 to_uint64(Boolean) :: UInt64
 25 to_uint64(Boolean NULL) :: UInt64 NULL
-0 to_uint8(Variant) :: UInt8
+0 to_uint8(Variant) :: UInt8 NULL
 1 to_uint8(Variant NULL) :: UInt8 NULL
 2 to_uint8(String) :: UInt8
 3 to_uint8(String NULL) :: UInt8 NULL
@@ -4092,14 +4092,10 @@ Functions overloads:
 1 to_yyyymmdd(Date NULL) :: UInt32 NULL
 2 to_yyyymmdd(Timestamp) :: UInt32
 3 to_yyyymmdd(Timestamp NULL) :: UInt32 NULL
-0 to_yyyymmddhh(Date) :: UInt64
-1 to_yyyymmddhh(Date NULL) :: UInt64 NULL
-2 to_yyyymmddhh(Timestamp) :: UInt64
-3 to_yyyymmddhh(Timestamp NULL) :: UInt64 NULL
-0 to_yyyymmddhhmmss(Date) :: UInt64
-1 to_yyyymmddhhmmss(Date NULL) :: UInt64 NULL
-2 to_yyyymmddhhmmss(Timestamp) :: UInt64
-3 to_yyyymmddhhmmss(Timestamp NULL) :: UInt64 NULL
+0 to_yyyymmddhh(Timestamp) :: UInt64
+1 to_yyyymmddhh(Timestamp NULL) :: UInt64 NULL
+0 to_yyyymmddhhmmss(Timestamp) :: UInt64
+1 to_yyyymmddhhmmss(Timestamp NULL) :: UInt64 NULL
 0 today() :: Date
 0 tomorrow() :: Date
 0 translate(String, String, String) :: String

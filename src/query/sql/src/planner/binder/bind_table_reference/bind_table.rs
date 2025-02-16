@@ -200,7 +200,7 @@ impl Binder {
                 self.ctx
                     .add_streams_ref(&catalog, &database, &table_name, consume);
             }
-            let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+            let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
             let tokens = tokenize_sql(query.as_str())?;
             let (stmt, _) = parse_sql(&tokens, self.dialect)?;
             let Statement::Query(query) = &stmt else {
@@ -246,7 +246,7 @@ impl Binder {
                 let tokens = tokenize_sql(query.as_str())?;
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                 // For view, we need use a new context to bind it.
-                let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+                let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
                 new_bind_context.view_info = Some((database.clone(), table_name));
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(

@@ -225,6 +225,7 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
                     let mut s_expr = s_expr;
                     if s_expr.contain_subquery() {
                         s_expr = Box::new(decorrelate_subquery(
+                            opt_ctx.table_ctx.clone(),
                             opt_ctx.metadata.clone(),
                             *s_expr.clone(),
                         )?);
@@ -393,7 +394,11 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
@@ -487,7 +492,11 @@ async fn get_optimized_memo(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())

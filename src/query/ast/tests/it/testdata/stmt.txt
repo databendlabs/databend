@@ -23705,6 +23705,7 @@ AttachTable(
             quote: None,
             ident_type: None,
         },
+        columns_opt: None,
         uri_location: UriLocation {
             protocol: "s3",
             name: "a",

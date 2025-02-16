@@ -383,7 +383,7 @@ fn register_grouping(registry: &mut FunctionRegistry) {
                             .collect::<Vec<_>>();
                         Value::Column(Column::Number(NumberColumn::UInt32(output.into())))
                     }
-                    _ => unreachable!(),
+                    v => unreachable!("unexpected value type for grouping function: {:?}", v),
                 }),
             },
         }))

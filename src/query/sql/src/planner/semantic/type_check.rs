@@ -596,8 +596,13 @@ impl<'a> TypeChecker<'a> {
                 if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
                     return Ok(constant);
                 }
+
+                // cast variant to other type should nest wrap nullable,
+                // as we cast JSON null to SQL NULL.
+                let target_type = if data_type.remove_nullable() == DataType::Variant {
+                    checked_expr.data_type().nest_wrap_nullable()
                 // if the source type is nullable, cast target type should also be nullable.
-                let target_type = if data_type.is_nullable_or_null() {
+                } else if data_type.is_nullable_or_null() {
                     checked_expr.data_type().wrap_nullable()
                 } else {
                     checked_expr.data_type().clone()
@@ -640,15 +645,22 @@ impl<'a> TypeChecker<'a> {
                     return Ok(constant);
                 }
 
+                // cast variant to other type should nest wrap nullable,
+                // as we cast JSON null to SQL NULL.
+                let target_type = if data_type.remove_nullable() == DataType::Variant {
+                    checked_expr.data_type().nest_wrap_nullable()
+                } else {
+                    checked_expr.data_type().clone()
+                };
                 Box::new((
                     CastExpr {
                         span: expr.span(),
                         is_try: true,
                         argument: Box::new(scalar),
-                        target_type: Box::new(checked_expr.data_type().clone()),
+                        target_type: Box::new(target_type.clone()),
                     }
                     .into(),
-                    checked_expr.data_type().clone(),
+                    target_type,
                 ))
             }
 
@@ -1845,43 +1857,6 @@ impl<'a> TypeChecker<'a> {
         args: &[&Expr],
         lambda: &Lambda,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if func_name.starts_with("json_") && !args.is_empty() {
-            let target_type = if func_name.starts_with("json_array") {
-                TypeName::Array(Box::new(TypeName::Variant))
-            } else {
-                TypeName::Map {
-                    key_type: Box::new(TypeName::String),
-                    val_type: Box::new(TypeName::Variant),
-                }
-            };
-            let func_name = &func_name[5..];
-            let mut new_args: Vec<Expr> = args.iter().map(|v| (*v).to_owned()).collect();
-            new_args[0] = Expr::Cast {
-                span: new_args[0].span(),
-                expr: Box::new(new_args[0].clone()),
-                target_type,
-                pg_style: false,
-            };
-
-            let args: Vec<&Expr> = new_args.iter().collect();
-            let result = self.resolve_lambda_function(span, func_name, &args, lambda)?;
-
-            let target_type = if result.1.is_nullable() {
-                DataType::Variant.wrap_nullable()
-            } else {
-                DataType::Variant
-            };
-
-            let result_expr = ScalarExpr::CastExpr(CastExpr {
-                span: new_args[0].span(),
-                is_try: false,
-                argument: Box::new(result.0.clone()),
-                target_type: Box::new(target_type.clone()),
-            });
-
-            return Ok(Box::new((result_expr, target_type)));
-        }
-
         if matches!(
             self.bind_context.expr_context,
             ExprContext::InLambdaFunction
@@ -1891,13 +1866,6 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span));
         }
-        let params = lambda
-            .params
-            .iter()
-            .map(|param| param.name.to_lowercase())
-            .collect::<Vec<_>>();
-
-        self.check_lambda_param_count(func_name, params.len(), span)?;
 
         if args.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
@@ -1907,7 +1875,46 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(span));
         }
-        let box (mut arg, arg_type) = self.resolve(args[0])?;
+        let box (mut arg, mut arg_type) = self.resolve(args[0])?;
+
+        let mut func_name = func_name;
+        let mut is_cast_variant = false;
+        if arg_type.remove_nullable() == DataType::Variant {
+            if func_name.starts_with("json_") {
+                func_name = &func_name[5..];
+            }
+            // Try auto cast the Variant type to Array(Variant) or Map(String, Variant),
+            // so that the lambda functions support variant type as argument.
+            let mut target_type = if func_name.starts_with("array") {
+                DataType::Array(Box::new(DataType::Nullable(Box::new(DataType::Variant))))
+            } else {
+                DataType::Map(Box::new(DataType::Tuple(vec![
+                    DataType::String,
+                    DataType::Nullable(Box::new(DataType::Variant)),
+                ])))
+            };
+            if arg_type.is_nullable() {
+                target_type = target_type.wrap_nullable();
+            }
+
+            arg = ScalarExpr::CastExpr(CastExpr {
+                span: None,
+                is_try: false,
+                argument: Box::new(arg.clone()),
+                target_type: Box::new(target_type.clone()),
+            });
+            arg_type = target_type;
+
+            is_cast_variant = true;
+        }
+
+        let params = lambda
+            .params
+            .iter()
+            .map(|param| param.name.to_lowercase())
+            .collect::<Vec<_>>();
+
+        self.check_lambda_param_count(func_name, params.len(), span)?;
 
         let inner_ty = match arg_type.remove_nullable() {
             DataType::Array(box inner_ty) => inner_ty.clone(),
@@ -2122,7 +2129,22 @@ impl<'a> TypeChecker<'a> {
             }
         };
 
-        Ok(Box::new((lambda_func, data_type)))
+        if is_cast_variant {
+            let result_target_type = if data_type.is_nullable() {
+                DataType::Nullable(Box::new(DataType::Variant))
+            } else {
+                DataType::Variant
+            };
+            let result_target_scalar = ScalarExpr::CastExpr(CastExpr {
+                span: None,
+                is_try: false,
+                argument: Box::new(lambda_func),
+                target_type: Box::new(result_target_type.clone()),
+            });
+            Ok(Box::new((result_target_scalar, result_target_type)))
+        } else {
+            Ok(Box::new((lambda_func, data_type)))
+        }
     }
 
     fn check_lambda_param_count(
@@ -2756,6 +2778,12 @@ impl<'a> TypeChecker<'a> {
             )));
         }
 
+        if let Some(rewritten_func_func) =
+            self.try_rewrite_array_function(span, func_name, &params, &mut args, &mut arg_types)
+        {
+            return rewritten_func_func;
+        }
+
         self.resolve_scalar_function_call(span, func_name, params, args)
     }
 
@@ -3122,11 +3150,11 @@ impl<'a> TypeChecker<'a> {
         );
 
         // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
-        let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
+        let mut bind_context = BindContext::with_parent(self.bind_context.clone())?;
         let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
         self.bind_context
             .cte_context
-            .set_cte_context(output_context.cte_context);
+            .set_cte_context_and_name(output_context.cte_context);
 
         if (typ == SubqueryType::Scalar || typ == SubqueryType::Any)
             && output_context.columns.len() > 1
@@ -3141,10 +3169,10 @@ impl<'a> TypeChecker<'a> {
         if let SetExpr::Select(select_stmt) = &subquery.body {
             if typ == SubqueryType::Scalar {
                 let select = &select_stmt.select_list[0];
-                if let SelectTarget::AliasedExpr { expr, .. } = select {
+                if matches!(select, SelectTarget::AliasedExpr { .. }) {
                     // Check if contain aggregation function
                     #[derive(Visitor)]
-                    #[visitor(ASTFunctionCall(enter))]
+                    #[visitor(Expr(enter), ASTFunctionCall(enter))]
                     struct AggFuncVisitor {
                         contain_agg: bool,
                     }
@@ -3154,9 +3182,13 @@ impl<'a> TypeChecker<'a> {
                                 || AggregateFunctionFactory::instance()
                                     .contains(func.name.to_string());
                         }
+                        fn enter_expr(&mut self, expr: &Expr) {
+                            self.contain_agg = self.contain_agg
+                                || matches!(expr, Expr::CountAll { window: None, .. });
+                        }
                     }
                     let mut visitor = AggFuncVisitor { contain_agg: false };
-                    expr.drive(&mut visitor);
+                    select.drive(&mut visitor);
                     contain_agg = Some(visitor.contain_agg);
                 }
             }
@@ -3626,6 +3658,91 @@ impl<'a> TypeChecker<'a> {
                 )))
             }
             _ => None,
+        }
+    }
+
+    fn array_functions() -> &'static [Ascii<&'static str>] {
+        static ARRAY_FUNCTIONS: &[Ascii<&'static str>] = &[
+            Ascii::new("array_count"),
+            Ascii::new("array_max"),
+            Ascii::new("array_min"),
+            Ascii::new("array_any"),
+            Ascii::new("array_approx_count_distinct"),
+            Ascii::new("array_unique"),
+            Ascii::new("array_sort_asc_null_first"),
+            Ascii::new("array_sort_desc_null_first"),
+            Ascii::new("array_sort_asc_null_last"),
+            Ascii::new("array_sort_desc_null_last"),
+            Ascii::new("array_remove_first"),
+            Ascii::new("array_remove_last"),
+            Ascii::new("array_distinct"),
+        ];
+        ARRAY_FUNCTIONS
+    }
+
+    fn try_rewrite_array_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        params: &[Scalar],
+        args: &mut [ScalarExpr],
+        arg_types: &mut [DataType],
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
+        // Try auto cast the Variant type to Array(Variant),
+        // so that the array functions support Variant type as argument.
+        let uni_case_func_name = Ascii::new(func_name);
+        if Self::array_functions().contains(&uni_case_func_name)
+            && !arg_types.is_empty()
+            && arg_types[0].remove_nullable() == DataType::Variant
+        {
+            let target_type = if arg_types[0].is_nullable() {
+                DataType::Nullable(Box::new(DataType::Array(Box::new(DataType::Nullable(
+                    Box::new(DataType::Variant),
+                )))))
+            } else {
+                DataType::Array(Box::new(DataType::Nullable(Box::new(DataType::Variant))))
+            };
+            let arg = args[0].clone();
+            args[0] = ScalarExpr::CastExpr(CastExpr {
+                span: None,
+                is_try: false,
+                argument: Box::new(arg),
+                target_type: Box::new(target_type.clone()),
+            });
+            arg_types[0] = target_type;
+
+            let result =
+                self.resolve_scalar_function_call(span, func_name, params.to_vec(), args.to_vec());
+            if func_name == "array_remove_first"
+                || func_name == "array_remove_last"
+                || func_name == "array_distinct"
+                || func_name == "array_sort_asc_null_first"
+                || func_name == "array_sort_desc_null_first"
+                || func_name == "array_sort_asc_null_last"
+                || func_name == "array_sort_desc_null_last"
+            {
+                if result.is_err() {
+                    return Some(result);
+                }
+                let box (result_scalar, result_type) = result.unwrap();
+
+                let result_target_type = if result_type.is_nullable() {
+                    DataType::Nullable(Box::new(DataType::Variant))
+                } else {
+                    DataType::Variant
+                };
+                let result_target_scalar = ScalarExpr::CastExpr(CastExpr {
+                    span: None,
+                    is_try: false,
+                    argument: Box::new(result_scalar),
+                    target_type: Box::new(result_target_type.clone()),
+                });
+                Some(Ok(Box::new((result_target_scalar, result_target_type))))
+            } else {
+                Some(result)
+            }
+        } else {
+            None
         }
     }
 
@@ -4632,7 +4749,7 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr,
         list: &[Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut bind_context = BindContext::with_parent(Box::new(self.bind_context.clone()));
+        let mut bind_context = BindContext::with_parent(self.bind_context.clone())?;
         let mut values = Vec::with_capacity(list.len());
         for val in list.iter() {
             values.push(vec![val.clone()])

@@ -24,6 +24,7 @@ use std::time::Duration;
 use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
+use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_catalog::table_context::ProcessInfoState;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -38,6 +39,7 @@ use log::info;
 use parking_lot::RwLock;
 
 use crate::sessions::session::Session;
+use crate::sessions::session_mgr_metrics::SessionManagerMetricsCollector;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
@@ -47,6 +49,7 @@ pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Weak<Session>>>>,
     pub status: Arc<RwLock<SessionManagerStatus>>,
+    pub metrics_collector: SessionManagerMetricsCollector,
 
     // When typ is MySQL, insert into this map, key is id, val is MySQL connection id.
     pub(crate) mysql_conn_map: Arc<RwLock<HashMap<Option<u32>, String>>>,
@@ -55,20 +58,26 @@ pub struct SessionManager {
 
 impl SessionManager {
     pub fn init(conf: &InnerConfig) -> Result<()> {
-        GlobalInstance::set(Self::create(conf));
+        let global_instance = Self::create(conf);
+        GlobalInstance::set(global_instance.clone());
+        GLOBAL_METRICS_REGISTRY
+            .register_collector(Box::new(global_instance.metrics_collector.clone()));
 
         Ok(())
     }
 
     pub fn create(conf: &InnerConfig) -> Arc<SessionManager> {
         let max_sessions = conf.query.max_active_sessions as usize;
-        Arc::new(SessionManager {
+        let mgr = Arc::new(SessionManager {
             max_sessions,
             mysql_basic_conn_id: AtomicU32::new(9_u32.to_le()),
             status: Arc::new(RwLock::new(SessionManagerStatus::default())),
             mysql_conn_map: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
             active_sessions: Arc::new(RwLock::new(HashMap::with_capacity(max_sessions))),
-        })
+            metrics_collector: SessionManagerMetricsCollector::new(),
+        });
+        mgr.metrics_collector.attach_session_manager(mgr.clone());
+        mgr
     }
 
     pub fn instance() -> Arc<SessionManager> {

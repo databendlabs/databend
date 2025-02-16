@@ -37,6 +37,7 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_types::MatchSeq;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
@@ -63,6 +64,9 @@ use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
+use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
+use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
+use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -242,6 +246,15 @@ impl CreateTableInterpreter {
         let db_name = self.plan.database.clone();
         let table_name = self.plan.table.clone();
 
+        let query_ctx = self.ctx.clone();
+        pipeline
+            .main_pipeline
+            .set_on_finished(always_callback(move |_: &ExecutionInfo| {
+                hook_clear_m_cte_temp_table(&query_ctx)?;
+                hook_vacuum_temp_files(&query_ctx)?;
+                hook_disk_temp_dir(&query_ctx)?;
+                Ok(())
+            }));
         // Add a callback to restore table visibility upon successful insert pipeline completion.
         // As there might be previous on_finish callbacks(e.g. refresh/compact/re-cluster hooks) which
         // depend on the table being visible, this callback is added at the beginning of the on_finish

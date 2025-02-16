@@ -332,7 +332,8 @@ impl MutationExpression {
                         Arc::new(s_expr),
                     );
 
-                    let mut rewriter = SubqueryRewriter::new(binder.metadata.clone(), None);
+                    let mut rewriter =
+                        SubqueryRewriter::new(binder.ctx.clone(), binder.metadata.clone(), None);
                     let s_expr = rewriter.rewrite(&s_expr)?;
 
                     Ok(MutationExpressionBindResult {

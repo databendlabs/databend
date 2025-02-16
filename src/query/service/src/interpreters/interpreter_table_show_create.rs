@@ -27,6 +27,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_sql::plans::ShowCreateTablePlan;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
@@ -37,6 +38,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use itertools::Itertools;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -321,15 +323,35 @@ impl ShowCreateTableInterpreter {
     }
 
     fn show_attach_table_query(table: &dyn Table, database: &str) -> String {
-        // TODO table that attached before this PR, could not show location properly
+        // Note: Tables that attached before this PR #13403, could not show location properly
         let location_not_available = "N/A".to_string();
         let table_data_location = table
             .options()
             .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
             .unwrap_or(&location_not_available);
 
+        let table_info = table.get_table_info();
+
+        let mut include_cols = "".to_string();
+        if table_info
+            .meta
+            .schema
+            .metadata
+            .contains_key(FUSE_OPT_KEY_ATTACH_COLUMN_IDS)
+        {
+            let cols = table_info
+                .meta
+                .schema
+                .fields
+                .iter()
+                .map(|f| &f.name)
+                .join(",");
+            include_cols = format!("({cols}) ");
+        }
+
         format!(
-            "ATTACH TABLE `{}`.`{}` {}",
+            "ATTACH TABLE {}`{}`.`{}` {}",
+            include_cols,
             database,
             table.name(),
             table_data_location,

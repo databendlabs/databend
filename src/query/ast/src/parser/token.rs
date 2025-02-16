@@ -1573,10 +1573,10 @@ impl TokenKind {
             | TokenKind::TABLE
             | TokenKind::THEN
             // | TokenKind::TIME
-            | TokenKind::TIMESTAMP
+            // | TokenKind::TIMESTAMP
             | TokenKind::TRAILING
             // | TokenKind::TREAT
-            | TokenKind::TRIM
+            // | TokenKind::TRIM
             | TokenKind::TRUE
             | TokenKind::TRY_CAST
             // | TokenKind::UNIQUE

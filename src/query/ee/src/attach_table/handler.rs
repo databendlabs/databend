@@ -15,6 +15,9 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableNameIdent;
@@ -23,6 +26,7 @@ use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use databend_enterprise_attach_table::AttachTableHandler;
 use databend_enterprise_attach_table::AttachTableHandlerWrapper;
@@ -71,9 +75,11 @@ impl AttachTableHandler for RealAttachTableHandler {
             number_of_blocks: Some(snapshot.summary.block_count),
         };
 
+        let attach_table_schema = Self::gen_schema(&plan, &snapshot)?;
+
         let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
         let table_meta = TableMeta {
-            schema: Arc::new(snapshot.schema.clone()),
+            schema: Arc::new(attach_table_schema),
             engine: plan.engine.to_string(),
             storage_params: plan.storage_params.clone(),
             options,
@@ -104,5 +110,64 @@ impl RealAttachTableHandler {
         let wrapper = AttachTableHandlerWrapper::new(Box::new(rm));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
+    }
+
+    fn gen_schema(
+        plan: &&CreateTablePlan,
+        base_table_snapshot: &Arc<TableSnapshot>,
+    ) -> Result<TableSchema> {
+        let schema = if let Some(attached_columns) = &plan.attached_columns {
+            // Columns to include are specified, let's check them
+            let base_table_schema = &base_table_snapshot.schema;
+            let mut fields_to_attach = Vec::with_capacity(attached_columns.len());
+
+            // The ids of columns being included
+            let mut field_ids_to_include = Vec::with_capacity(attached_columns.len());
+
+            // Columns that do not exist in the table being attached to, if any
+            let mut invalid_cols = vec![];
+            for field in attached_columns {
+                match base_table_schema.field_with_name(&field.name) {
+                    Ok(f) => {
+                        field_ids_to_include.push(f.column_id);
+                        fields_to_attach.push(f.clone())
+                    }
+                    Err(_) => invalid_cols.push(field.name.as_str()),
+                }
+            }
+            if !invalid_cols.is_empty() {
+                return Err(ErrorCode::InvalidArgument(format!(
+                    "Columns [{}] do not exist in the table being attached to",
+                    invalid_cols.join(",")
+                )));
+            }
+
+            let new_table_schema_metadata = if !field_ids_to_include.is_empty() {
+                // If columns to include are specified explicitly, their ids should
+                // be kept in the metadata of TableSchema.
+                let ids = field_ids_to_include
+                    .iter()
+                    .map(|id| format!("{id}"))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let mut v = base_table_schema.metadata.clone();
+                v.insert(FUSE_OPT_KEY_ATTACH_COLUMN_IDS.to_owned(), ids);
+                v
+            } else {
+                base_table_schema.metadata.clone()
+            };
+
+            TableSchema {
+                fields: fields_to_attach,
+                metadata: new_table_schema_metadata,
+                next_column_id: base_table_schema.next_column_id,
+            }
+        } else {
+            // If columns are not specified, use all the fields of table being attached to,
+            // in this case, no schema meta of key FUSE_OPT_KEY_ATTACH_COLUMN_IDS will be kept.
+            base_table_snapshot.schema.clone()
+        };
+
+        Ok(schema)
     }
 }

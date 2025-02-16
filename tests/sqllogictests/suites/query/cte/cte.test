@@ -484,6 +484,9 @@ CREATE OR REPLACE TABLE sales (
 ) row_per_block=51113;
 
 query error
+WITH t4(x) AS (select x + 3 from (select * from t4) where x < 10) SELECT * FROM t4;
+
+query error
 WITH InitialSales AS (
     SELECT
         c.customer_id,

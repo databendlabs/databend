@@ -96,7 +96,7 @@ impl Binder {
                 }
             }
         }
-        let bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let bind_context = BindContext::with_parent(bind_context.clone())?;
         Ok((
             SExpr::create_leaf(Arc::new(DummyTableScan.into())),
             bind_context,
@@ -162,15 +162,14 @@ impl Binder {
         cte_info: &CteInfo,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(cte_name) = &bind_context.cte_context.cte_name {
-            // `cte_name` exists, which means the current cte is a nested cte
-            // If the `cte_name` is the same as the current cte's name, it means the cte is recursive
             if cte_name == table_name {
-                return Err(ErrorCode::SemanticError(
-                    "The cte is not recursive, but it references itself.".to_string(),
-                )
+                return Err(ErrorCode::SemanticError(format!(
+                    "The cte {table_name} is not recursive, but it references itself.",
+                ))
                 .set_span(span));
             }
         }
+
         let mut new_bind_context = BindContext {
             parent: Some(Box::new(bind_context.clone())),
             bound_internal_columns: BTreeMap::new(),
@@ -236,7 +235,7 @@ impl Binder {
         cte_name: &str,
         alias: &Option<TableAlias>,
     ) -> Result<(SExpr, BindContext)> {
-        let mut new_bind_ctx = BindContext::with_parent(Box::new(bind_context.clone()));
+        let mut new_bind_ctx = BindContext::with_parent(bind_context.clone())?;
         let mut metadata = self.metadata.write();
         let mut columns = cte_info.columns.clone();
         for (index, column_name) in cte_info.columns_alias.iter().enumerate() {
@@ -357,7 +356,7 @@ impl Binder {
         change_type: Option<ChangeType>,
         sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
-        let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
+        let mut bind_context = BindContext::with_parent(bind_context.clone())?;
 
         let table = self.metadata.read().table(table_index).clone();
         let table_name = table.name();
