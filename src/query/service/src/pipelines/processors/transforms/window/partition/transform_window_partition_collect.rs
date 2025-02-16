@@ -215,6 +215,7 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
     }
 
     fn event(&mut self) -> Result<Event> {
+        // (collect <--> spill) -> (process <--> restore) -> finish
         match self.step {
             Step::Sync(sync_step) => match sync_step {
                 SyncStep::Collect => self.collect(),
@@ -227,6 +228,7 @@ impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> 
                         self.output()
                     }
                     false => {
+                        // collect data again.
                         self.step = Step::Sync(SyncStep::Collect);
                         self.collect()
                     }
