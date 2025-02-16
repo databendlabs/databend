@@ -39,6 +39,8 @@ use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
 use crate::plans::BoundColumnRef;
 use crate::plans::Filter;
+use crate::plans::Join;
+use crate::plans::JoinType;
 use crate::plans::MutationSource;
 use crate::plans::RelOperator;
 use crate::plans::SubqueryExpr;
@@ -62,10 +64,12 @@ pub enum MutationExpression {
     },
     Update {
         target: TableReference,
+        from: Option<TableReference>,
         filter: Option<Expr>,
     },
     Delete {
         target: TableReference,
+        from: Option<TableReference>,
         filter: Option<Expr>,
     },
 }
@@ -181,11 +185,34 @@ impl MutationExpression {
                     direct_filter: None,
                 })
             }
-            MutationExpression::Update { target, filter }
-            | MutationExpression::Delete { target, filter } => {
+            MutationExpression::Update {
+                target,
+                from,
+                filter,
+            }
+            | MutationExpression::Delete {
+                target,
+                from,
+                filter,
+            } => {
                 // Bind target table reference.
                 let (mut s_expr, mut bind_context) =
                     binder.bind_table_reference(bind_context, target)?;
+
+                let from_s_expr = if let Some(from) = from {
+                    let (from_s_expr, mut from_context) =
+                        binder.bind_table_reference(&mut bind_context, from)?;
+                    from_context
+                        .columns
+                        .retain(|v| v.visibility == Visibility::Visible);
+                    for column in from_context.columns.iter() {
+                        required_columns.insert(column.index);
+                        bind_context.add_column_binding(column.clone());
+                    }
+                    Some(from_s_expr)
+                } else {
+                    None
+                };
 
                 // Get target table index.
                 let target_table_index = binder
@@ -198,8 +225,12 @@ impl MutationExpression {
                     .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
 
                 // If the filter is a simple expression, change the mutation strategy to MutationStrategy::Direct.
-                let (mutation_strategy, filter) =
+                let (mut mutation_strategy, filter) =
                     binder.process_filter(&mut bind_context, filter)?;
+
+                if from_s_expr.is_some() {
+                    mutation_strategy = MutationStrategy::MatchedOnly;
+                }
 
                 // Build bind result according to mutation strategy.
                 if mutation_strategy == MutationStrategy::Direct {
@@ -276,6 +307,26 @@ impl MutationExpression {
                     required_columns.insert(target_table_row_id_index);
 
                     let predicates = Binder::flatten_and_scalar_expr(filter.as_ref().unwrap());
+
+                    if let Some(from_s_expr) = from_s_expr {
+                        let join_plan = Join {
+                            equi_conditions: vec![],
+                            non_equi_conditions: vec![],
+                            join_type: JoinType::Cross,
+                            marker_index: None,
+                            from_correlated_subquery: true,
+                            need_hold_hash_table: false,
+                            is_lateral: false,
+                            single_to_inner: None,
+                            build_side_cache_info: None,
+                        };
+                        s_expr = SExpr::create_binary(
+                            Arc::new(join_plan.into()),
+                            Arc::new(s_expr.clone()),
+                            Arc::new(from_s_expr),
+                        );
+                    }
+
                     s_expr = SExpr::create_unary(
                         Arc::new(Filter { predicates }.into()),
                         Arc::new(s_expr),
