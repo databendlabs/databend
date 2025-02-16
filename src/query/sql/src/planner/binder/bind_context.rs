@@ -630,10 +630,15 @@ impl BindContext {
         &mut self,
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
+        table_index: Option<IndexType>,
         visible: bool,
     ) -> Result<ColumnBinding> {
         let column_id = column_binding.internal_column.column_id();
-        let table_index = self.get_internal_column_table_index(column_binding)?;
+        let table_index = if let Some(table_index) = table_index {
+            table_index
+        } else {
+            self.get_internal_column_table_index(column_binding)?
+        };
 
         let (column_index, is_new) =
             match self.bound_internal_columns.entry((table_index, column_id)) {
