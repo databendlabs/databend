@@ -27,8 +27,9 @@ use databend_storages_common_cache::TempDirManager;
 use opendal::services::Fs;
 use opendal::Operator;
 
+use crate::pipelines::processors::transforms::CompactStrategy;
 use crate::pipelines::processors::transforms::HilbertPartitionExchange;
-use crate::pipelines::processors::transforms::TransformHilbertPartitionCollect;
+use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::PipelineBuilder;
 use crate::spillers::SpillerDiskConfig;
@@ -73,7 +74,7 @@ impl PipelineBuilder {
         let processor_id = AtomicUsize::new(0);
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(Box::new(
-                TransformHilbertPartitionCollect::new(
+                TransformWindowPartitionCollect::new(
                     self.ctx.clone(),
                     input,
                     output,
@@ -83,7 +84,7 @@ impl PipelineBuilder {
                     partition.num_partitions,
                     window_spill_settings.clone(),
                     disk_spill.clone(),
-                    partition.rows_per_block,
+                    CompactStrategy,
                 )?,
             )))
         })?;
