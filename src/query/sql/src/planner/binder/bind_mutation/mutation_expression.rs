@@ -417,6 +417,7 @@ impl Binder {
         let column_binding = match bind_context.add_internal_column_binding(
             &row_id_column_binding,
             self.metadata.clone(),
+            Some(table_index),
             true,
         ) {
             Ok(column_binding) => column_binding,
