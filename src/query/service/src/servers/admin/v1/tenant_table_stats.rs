@@ -63,6 +63,7 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
 
     let databases = catalog.list_databases(tenant).await?;
 
+    let database_count = databases.len() as u64;
     let mut internal_stats: BTreeMap<String, TenantTableStatsInfo> = BTreeMap::new();
     let mut external_stats: BTreeMap<String, TenantTableStatsInfo> = BTreeMap::new();
     let mut warnings: Vec<String> = vec![];
@@ -97,7 +98,7 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
     }
 
     Ok(TenantTablesStatsResponse {
-        databases: databases.len() as u64,
+        databases: database_count,
         internal: internal_stats,
         external: external_stats,
         warnings,
