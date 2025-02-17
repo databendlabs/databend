@@ -119,6 +119,7 @@ pub fn new_serialize_segment_processor(
     table: &FuseTable,
     thresholds: BlockThresholds,
 ) -> Result<ProcessorPtr> {
+    let block_per_seg = table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
     match table.segment_format {
         FuseSegmentFormat::Row => {
             let processor = TransformSerializeSegment::new(
@@ -136,7 +137,7 @@ pub fn new_serialize_segment_processor(
                 output,
                 table,
                 thresholds,
-                ColumnOrientedSegmentBuilder::new(table.schema()),
+                ColumnOrientedSegmentBuilder::new(table.schema(), block_per_seg),
             );
             Ok(ProcessorPtr::create(Box::new(processor)))
         }
@@ -149,6 +150,7 @@ pub fn new_serialize_segment_pipe_item(
     table: &FuseTable,
     thresholds: BlockThresholds,
 ) -> Result<PipeItem> {
+    let block_per_seg = table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
     match table.segment_format {
         FuseSegmentFormat::Row => {
             let processor = TransformSerializeSegment::new(
@@ -166,7 +168,7 @@ pub fn new_serialize_segment_pipe_item(
                 output,
                 table,
                 thresholds,
-                ColumnOrientedSegmentBuilder::new(table.schema()),
+                ColumnOrientedSegmentBuilder::new(table.schema(), block_per_seg),
             );
             Ok(processor.into_pipe_item())
         }

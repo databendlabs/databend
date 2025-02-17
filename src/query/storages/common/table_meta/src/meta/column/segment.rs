@@ -14,9 +14,12 @@
 
 use std::sync::Arc;
 
-use arrow::array::RecordBatch;
+use arrow::datatypes::Schema;
 use bytes::Bytes;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchema;
+use databend_common_expression::TableSchema;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::ArrowWriter;
 use parquet::file::properties::WriterProperties;
@@ -62,8 +65,9 @@ impl AbstractSegment for SegmentInfo {
 }
 
 pub struct ColumnOrientedSegment {
-    pub block_metas: RecordBatch,
+    pub block_metas: DataBlock,
     pub summary: Statistics,
+    pub segment_schema: TableSchema,
 }
 
 impl AbstractSegment for ColumnOrientedSegment {
@@ -87,9 +91,14 @@ impl AbstractSegment for ColumnOrientedSegment {
                     .set_max_row_group_size(usize::MAX)
                     .build(),
             );
-            let mut writer =
-                ArrowWriter::try_new(&mut write_buffer, self.block_metas.schema(), props)?;
-            writer.write(&self.block_metas)?;
+            let arrow_schema = Arc::new(Schema::from(&self.segment_schema));
+            let mut writer = ArrowWriter::try_new(&mut write_buffer, arrow_schema, props)?;
+            writer.write(
+                &self
+                    .block_metas
+                    .clone()
+                    .to_record_batch(&self.segment_schema)?,
+            )?;
             let _ = writer.close()?;
         }
         let blocks_size = write_buffer.len() as u64;
@@ -117,7 +126,9 @@ impl AbstractSegment for ColumnOrientedSegment {
 
         let block_metas = data.slice(0..blocks_size);
         let mut record_reader = ParquetRecordBatchReader::try_new(block_metas, usize::MAX)?;
-        let block_metas = record_reader.next().unwrap()?;
+        let batch = record_reader.next().unwrap()?;
+        let data_schema = DataSchema::try_from(&(*batch.schema()))?;
+        let (block_metas, _) = DataBlock::from_record_batch(&data_schema, &batch)?;
         assert!(record_reader.next().is_none());
 
         // TODO(Sky): Avoid extra copy.
@@ -127,17 +138,18 @@ impl AbstractSegment for ColumnOrientedSegment {
         Ok(Arc::new(ColumnOrientedSegment {
             block_metas,
             summary,
+            segment_schema: TableSchema::try_from(&(*batch.schema()))?,
         }))
     }
 }
 
 pub struct BlockMetaIter {
-    blocks: RecordBatch,
+    blocks: DataBlock,
     index: usize,
 }
 
 impl BlockMetaIter {
-    pub fn new(blocks: RecordBatch) -> Self {
+    pub fn new(blocks: DataBlock) -> Self {
         Self { blocks, index: 0 }
     }
 }

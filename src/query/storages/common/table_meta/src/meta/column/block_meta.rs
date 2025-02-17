@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 
-use arrow::array::RecordBatch;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_expression::ColumnId;
+use databend_common_expression::DataBlock;
 
 use super::AbstractClusterStatistics;
 use crate::meta::BlockMeta;
@@ -93,12 +93,12 @@ impl AbstractBlockMeta for BlockMeta {
 }
 
 pub struct ColumnOrientedBlockMeta {
-    blocks: RecordBatch,
+    blocks: DataBlock,
     index: usize,
 }
 
 impl ColumnOrientedBlockMeta {
-    pub fn new(blocks: RecordBatch, index: usize) -> Self {
+    pub fn new(blocks: DataBlock, index: usize) -> Self {
         Self { blocks, index }
     }
 }
