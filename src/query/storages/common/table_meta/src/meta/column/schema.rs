@@ -30,20 +30,24 @@ pub fn location_fields() -> Fields {
     ])
 }
 
-pub fn location_type() -> DataType {
-    DataType::Struct(location_fields())
-}
-
-pub fn col_stats_type(col_type: &TableDataType) -> DataType {
+pub fn col_stats_fields(col_type: &TableDataType) -> Fields {
     let d_type = DType::from(col_type);
     let arrow_type = DataType::from(&d_type);
-    DataType::Struct(Fields::from(vec![
+    Fields::from(vec![
         Field::new("min", arrow_type.clone(), false),
         Field::new("max", arrow_type, false),
         Field::new("null_count", DataType::UInt64, false),
         Field::new("in_memory_size", DataType::UInt64, false),
         Field::new("distinct_of_values", DataType::UInt64, true),
-    ]))
+    ])
+}
+
+pub fn location_type() -> DataType {
+    DataType::Struct(location_fields())
+}
+
+pub fn col_stats_type(col_type: &TableDataType) -> DataType {
+    DataType::Struct(col_stats_fields(col_type))
 }
 
 pub fn col_meta_type() -> DataType {
@@ -65,7 +69,7 @@ pub fn segment_schema(table_schema: Arc<TableSchema>) -> SchemaRef {
         Field::new("inverted_index_size", DataType::UInt64, true),
         Field::new("compression", DataType::UInt8, false),
         Field::new("create_on", DataType::Int64, false),
-        Field::new("cluster_stats", DataType::Utf8, true),
+        Field::new("cluster_stats", DataType::Binary, true),
     ];
 
     for field in table_schema.leaf_fields() {

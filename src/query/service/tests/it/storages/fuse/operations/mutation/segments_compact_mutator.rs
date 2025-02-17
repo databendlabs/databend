@@ -57,6 +57,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -778,10 +779,9 @@ impl CompactSegmentTestFixture {
                     );
 
                     collected_blocks.push(block_meta.clone());
-                    stats_acc.add_with_block_meta(block_meta);
+                    stats_acc.add_block(block_meta).unwrap();
                 }
-                let summary = stats_acc.summary(thresholds, cluster_key_id);
-                let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
+                let segment_info = stats_acc.build(thresholds, cluster_key_id)?;
                 let path = location_gen.gen_segment_info_location();
                 segment_info.write_meta(&data_accessor, &path).await?;
                 Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))

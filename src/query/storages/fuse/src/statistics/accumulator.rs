@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
-use databend_storages_common_table_meta::meta::AbstractSegment;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -27,22 +26,24 @@ pub struct RowOrientedSegmentBuilder {
 }
 
 impl SegmentBuilder for RowOrientedSegmentBuilder {
+    type Segment = SegmentInfo;
     fn block_count(&self) -> usize {
         self.blocks_metas.len()
     }
 
-    fn add_block(&mut self, block_meta: BlockMeta) {
+    fn add_block(&mut self, block_meta: BlockMeta) -> Result<()> {
         self.blocks_metas.push(Arc::new(block_meta));
+        Ok(())
     }
 
     fn build(
         &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
-    ) -> Result<Arc<dyn AbstractSegment>> {
+    ) -> Result<Self::Segment> {
         let builder = std::mem::take(self);
         let stat =
             super::reduce_block_metas(&builder.blocks_metas, thresholds, default_cluster_key_id);
-        Ok(Arc::new(SegmentInfo::new(builder.blocks_metas, stat)))
+        Ok(SegmentInfo::new(builder.blocks_metas, stat))
     }
 }

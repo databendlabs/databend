@@ -46,17 +46,17 @@ use crate::FuseTable;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
-enum State {
+enum State<B: SegmentBuilder> {
     None,
     GenerateSegment,
     SerializedSegment {
         data: Vec<u8>,
         location: String,
-        segment: Arc<dyn AbstractSegment>,
+        segment: B::Segment,
     },
     PreCommitSegment {
         location: String,
-        segment: Arc<dyn AbstractSegment>,
+        segment: B::Segment,
     },
     Finished,
 }
@@ -65,7 +65,7 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     data_accessor: Operator,
     meta_locations: TableMetaLocationGenerator,
     segment_builder: B,
-    state: State,
+    state: State<B>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
@@ -230,7 +230,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?
                 .clone();
 
-            self.segment_builder.add_block(block_meta);
+            self.segment_builder.add_block(block_meta)?;
             if self.segment_builder.block_count() >= self.block_per_seg as usize {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
@@ -249,7 +249,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     .build(self.thresholds, self.default_cluster_key_id)?;
 
                 self.state = State::SerializedSegment {
-                    data: segment_info.as_ref().serialize()?,
+                    data: segment_info.serialize()?,
                     location: self.meta_locations.gen_segment_info_location(),
                     segment: segment_info,
                 }

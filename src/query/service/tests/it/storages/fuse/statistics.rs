@@ -53,6 +53,7 @@ use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
+use databend_storages_common_table_meta::meta::SegmentBuilder;
 use databend_storages_common_table_meta::meta::Statistics;
 use opendal::Operator;
 use rand::Rng;
@@ -325,11 +326,11 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
         let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
-        stats_acc.add_with_block_meta(block_meta);
+        stats_acc.add_block(block_meta);
     }
 
     assert_eq!(10, stats_acc.blocks_metas.len());
-    assert!(stats_acc.row_count > 0);
+    assert!(stats_acc.block_count() > 0);
     Ok(())
 }
 
