@@ -15,6 +15,7 @@ doctest = false
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 derive-visitor = { workspace = true }
+educe = { workspace = true }
 enum-as-inner = { workspace = true }
 ethnum = { workspace = true }
 fast-float2 = { workspace = true }
@@ -37,7 +38,6 @@ strum = { workspace = true }
 strum_macros = { workspace = true }
 unindent = { workspace = true }
 url = { workspace = true }
-educe = { workspace = true }
 
 [dev-dependencies]
 criterion = { workspace = true }

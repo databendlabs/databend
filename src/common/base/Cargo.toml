@@ -31,6 +31,7 @@ bytes = { workspace = true }
 bytesize = { workspace = true }
 chrono = { workspace = true }
 ctrlc = { workspace = true }
+derive-visitor = { workspace = true }
 enquote = { workspace = true }
 fastrace = { workspace = true }
 futures = { workspace = true }
@@ -47,6 +48,7 @@ pprof = { workspace = true }
 prometheus-client = { workspace = true }
 prometheus-parse = { workspace = true }
 rand = { workspace = true, features = ["serde1"] }
+recursive = { workspace = true }
 regex = { workspace = true }
 replace_with = { workspace = true }
 reqwest = { workspace = true }
@@ -61,8 +63,6 @@ tikv-jemalloc-sys = { workspace = true, optional = true }
 tokio = { workspace = true }
 unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
-recursive = { workspace = true }
-derive-visitor = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = { workspace = true }
