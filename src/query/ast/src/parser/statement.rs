@@ -227,7 +227,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             MERGE ~ #hint?
             ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias?
-            ~ USING ~ #merge_source
+            ~ USING ~ #mutation_source
             ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
@@ -271,15 +271,30 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let update = map(
         rule! {
-            #with? ~ UPDATE ~ #hint? ~ #table_reference_only
-            ~ SET ~ ^#comma_separated_list1(update_expr)
+            #with? ~ UPDATE ~ #hint? ~ #dot_separated_idents_1_to_3 ~ #table_alias?
+            ~ SET ~ ^#comma_separated_list1(mutation_update_expr)
+            ~ ( FROM ~ #mutation_source )?
             ~ ( WHERE ~ ^#expr )?
         },
-        |(with, _, hints, table, _, update_list, opt_selection)| {
+        |(
+            with,
+            _,
+            hints,
+            (catalog, database, table),
+            table_alias,
+            _,
+            update_list,
+            from,
+            opt_selection,
+        )| {
             Statement::Update(UpdateStmt {
                 hints,
+                catalog,
+                database,
                 table,
+                table_alias,
                 update_list,
+                from: from.map(|(_, table)| table),
                 selection: opt_selection.map(|(_, selection)| selection),
                 with,
             })
@@ -869,13 +884,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ ("(" ~ #comma_separated_list1(ident) ~ ")")? ~ #uri_location
         },
-        |(_, _, (catalog, database, table), uri_location)| {
+        |(_, _, (catalog, database, table), columns_opt, uri_location)| {
+            let columns_opt = columns_opt.map(|(_, v, _)| v);
             Statement::AttachTable(AttachTableStmt {
                 catalog,
                 database,
                 table,
+                columns_opt,
                 uri_location,
             })
         },
@@ -2897,12 +2914,12 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
-pub fn merge_source(i: Input) -> IResult<MergeSource> {
+pub fn mutation_source(i: Input) -> IResult<MutationSource> {
     let streaming_v2 = map(
         rule! {
            #file_format_clause  ~ (ON_ERROR ~ ^"=" ~ ^#ident)? ~  #rest_str
         },
-        |(options, on_error_opt, (_, start))| MergeSource::StreamingV2 {
+        |(options, on_error_opt, (_, start))| MutationSource::StreamingV2 {
             settings: options,
             on_error_mode: on_error_opt.map(|v| v.2.to_string()),
             start,
@@ -2910,7 +2927,7 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
     );
 
     let query = map(rule! {#query ~ #table_alias}, |(query, source_alias)| {
-        MergeSource::Select {
+        MutationSource::Select {
             query: Box::new(query),
             source_alias,
         }
@@ -2918,7 +2935,7 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
 
     let source_table = map(
         rule!(#dot_separated_idents_1_to_3 ~ #with_options? ~ #table_alias?),
-        |((catalog, database, table), with_options, alias)| MergeSource::Table {
+        |((catalog, database, table), with_options, alias)| MutationSource::Table {
             catalog,
             database,
             table,
@@ -3811,7 +3828,7 @@ fn match_operation(i: Input) -> IResult<MatchOperation> {
         value(MatchOperation::Delete, rule! { DELETE }),
         map(
             rule! {
-                UPDATE ~ SET ~ ^#comma_separated_list1(merge_update_expr)
+                UPDATE ~ SET ~ ^#comma_separated_list1(mutation_update_expr)
             },
             |(_, _, update_list)| MatchOperation::Update {
                 update_list,
@@ -4638,10 +4655,10 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     )(i)
 }
 
-pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
+pub fn mutation_update_expr(i: Input) -> IResult<MutationUpdateExpr> {
     map(
         rule! { #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr },
-        |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
+        |((table, name), _, expr)| MutationUpdateExpr { table, name, expr },
     )(i)
 }
 

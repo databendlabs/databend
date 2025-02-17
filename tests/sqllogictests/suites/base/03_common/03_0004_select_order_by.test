@@ -60,6 +60,16 @@ select * from t1 order by id desc limit 3,3
 4
 
 statement ok
+insert into t1 select number as id from numbers(10)
+
+query I
+select * from t1 order by id::string desc limit 3
+----
+9
+9
+8
+
+statement ok
 drop table t1
 
 query IT

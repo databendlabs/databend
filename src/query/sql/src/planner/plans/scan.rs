@@ -234,10 +234,15 @@ impl Operator for Scan {
                 continue;
             }
             if let Some(col_stat) = v.clone() {
-                // Safe to unwrap: min, max and ndv are all `Some(_)`.
+                // Safe to unwrap: min, max are all `Some(_)`.
                 let min = col_stat.min.unwrap();
                 let max = col_stat.max.unwrap();
-                let ndv = col_stat.ndv.unwrap();
+                // ndv could be `None`, we will use `num_rows - null_count` as ndv instead.
+                //
+                // NOTE: don't touch the original num_rows, since it will be used in other places.
+                let ndv = col_stat
+                    .ndv
+                    .unwrap_or_else(|| num_rows.saturating_sub(col_stat.null_count));
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
                 {

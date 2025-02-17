@@ -92,6 +92,8 @@ pub struct ProcessInfo {
     /// storage metrics for persisted data reading.
     pub data_metrics: Option<StorageMetrics>,
     pub scan_progress_value: Option<ProgressValues>,
+    pub write_progress_value: Option<ProgressValues>,
+    pub spill_progress_value: Option<ProgressValues>,
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
     pub status_info: Option<String>,

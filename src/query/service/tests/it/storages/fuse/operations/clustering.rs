@@ -53,6 +53,7 @@ async fn test_fuse_alter_table_cluster_key() -> databend_common_exception::Resul
         as_select: None,
         cluster_key: None,
         inverted_indexes: None,
+        attached_columns: None,
     };
 
     // create test table
