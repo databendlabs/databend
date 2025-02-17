@@ -29,6 +29,7 @@ use serde::Serialize;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct TenantTablesStatsResponse {
+    pub databases: u64,
     pub internal: BTreeMap<String, TenantTableStatsInfo>,
     pub external: BTreeMap<String, TenantTableStatsInfo>,
     pub warnings: Vec<String>,
@@ -36,7 +37,6 @@ pub struct TenantTablesStatsResponse {
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct TenantTableStatsInfo {
-    pub databases: u64,
     pub tables: u64,
     pub rows: u64,
     pub data_bytes: u64,
@@ -48,7 +48,6 @@ pub struct TenantTableStatsInfo {
 
 impl TenantTableStatsInfo {
     pub fn merge(&mut self, other: &TableStatistics) {
-        self.databases += 1;
         self.tables += 1;
         self.rows += other.number_of_rows;
         self.data_bytes += other.data_bytes;
@@ -64,11 +63,13 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
 
     let databases = catalog.list_databases(tenant).await?;
 
+    let mut database_count: u64 = 0;
     let mut internal_stats: BTreeMap<String, TenantTableStatsInfo> = BTreeMap::new();
     let mut external_stats: BTreeMap<String, TenantTableStatsInfo> = BTreeMap::new();
     let mut warnings: Vec<String> = vec![];
 
     for database in databases {
+        database_count += 1;
         let tables = match catalog.list_tables(tenant, database.name()).await {
             Ok(v) => v,
             Err(err) => {
@@ -98,6 +99,7 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
     }
 
     Ok(TenantTablesStatsResponse {
+        databases: database_count,
         internal: internal_stats,
         external: external_stats,
         warnings,
