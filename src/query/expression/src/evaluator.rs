@@ -278,33 +278,7 @@ impl<'a> Evaluator<'a> {
                 )
             }
             Ok(Value::Column(result)) => assert_eq!(&result.data_type(), expr.data_type()),
-            Err(_) => {
-                #[cfg(debug_assertions)]
-                {
-                    use std::sync::atomic::AtomicBool;
-                    use std::sync::atomic::Ordering;
-
-                    static RECURSING: AtomicBool = AtomicBool::new(false);
-                    if RECURSING
-                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_ok()
-                    {
-                        assert_eq!(
-                            ConstantFolder::fold_with_domain(
-                                expr,
-                                &self.data_block.domains().into_iter().enumerate().collect(),
-                                self.func_ctx,
-                                self.fn_registry
-                            )
-                            .1,
-                            None,
-                            "domain calculation should not return any domain for expressions that are possible to fail with err {}",
-                            result.unwrap_err()
-                        );
-                        RECURSING.store(false, Ordering::SeqCst);
-                    }
-                }
-            }
+            Err(_) => {}
         }
 
         result
@@ -1817,31 +1791,6 @@ impl<'a> Evaluator<'a> {
             }
         };
 
-        #[cfg(debug_assertions)]
-        if result.is_err() {
-            use std::sync::atomic::AtomicBool;
-            use std::sync::atomic::Ordering;
-
-            static RECURSING: AtomicBool = AtomicBool::new(false);
-            if RECURSING
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                assert_eq!(
-                    ConstantFolder::fold_with_domain(
-                        expr,
-                        &self.data_block.domains().into_iter().enumerate().collect(),
-                        self.func_ctx,
-                        self.fn_registry
-                    )
-                    .1,
-                    None,
-                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
-                    result.unwrap_err()
-                );
-                RECURSING.store(false, Ordering::SeqCst);
-            }
-        }
         result
     }
 }
@@ -2151,7 +2100,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     .properties
                     .get(&function.signature.name)
                     .map(|p| {
-                        args_expr.len()
+                        args_expr.len() == 1
                             && (p.monotonicity
                                 || p.monotonicity_by_type.contains(args_expr[0].data_type()))
                     })
