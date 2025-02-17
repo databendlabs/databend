@@ -22,6 +22,7 @@ use crate::config::ObsStorageConfig;
 use crate::config::OssStorageConfig;
 use crate::config::QueryConfig;
 use crate::config::S3StorageConfig;
+use crate::config::SpillConfig;
 use crate::config::WebhdfsStorageConfig;
 use crate::Config;
 use crate::StorageConfig;
@@ -51,7 +52,7 @@ impl Config {
             storage: self.storage.mask_display(),
             catalog: self.catalog,
             cache: self.cache,
-            spill: self.spill,
+            spill: self.spill.mask_display(),
             background: self.background,
             catalogs: self.catalogs,
         }
@@ -208,6 +209,24 @@ impl StorageConfig {
                 ..self.clone()
             },
             _ => self.clone(),
+        }
+    }
+}
+
+impl SpillConfig {
+    fn mask_display(&self) -> Self {
+        let Self {
+            ref spill_local_disk_path,
+            spill_local_disk_reserved_space_percentage,
+            spill_local_disk_max_bytes,
+            ref storage,
+        } = *self;
+
+        Self {
+            spill_local_disk_path: spill_local_disk_path.clone(),
+            spill_local_disk_reserved_space_percentage,
+            spill_local_disk_max_bytes,
+            storage: storage.as_ref().map(|storage| storage.mask_display()),
         }
     }
 }
