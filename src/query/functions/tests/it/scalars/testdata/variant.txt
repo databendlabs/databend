@@ -900,6 +900,15 @@ output domain  : {"{\"b\":2}"..="{\"b\":2}"}
 output         : '{"b":2}'
 
 
+ast            : json_extract_path_text('{"a":null}', 'a')
+raw expr       : json_extract_path_text('{"a":null}', 'a')
+checked expr   : json_extract_path_text<String, String>("{\"a\":null}", "a")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : json_extract_path_text(s, k)
 raw expr       : json_extract_path_text(s::String, k::String)
 checked expr   : json_extract_path_text<String, String>(s, k)
@@ -3277,6 +3286,15 @@ output         : 'v'
 ast            : parse_json('{"k":"v"}')->>'x'
 raw expr       : get_string(parse_json('{"k":"v"}'), 'x')
 checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "x")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('{"k":null}')->>'k'
+raw expr       : get_string(parse_json('{"k":null}'), 'k')
+checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":null}"), "k")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}
