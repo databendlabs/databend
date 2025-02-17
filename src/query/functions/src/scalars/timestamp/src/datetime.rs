@@ -38,6 +38,7 @@ use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
@@ -1277,6 +1278,26 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.properties.insert(
         "tomorrow".to_string(),
         FunctionProperty::default().non_deterministic(),
+    );
+
+    for name in &["to_timestamp", "to_date", "to_yyyymm", "to_yyyymmdd"] {
+        registry
+            .properties
+            .insert(name.to_string(), FunctionProperty::default().monotonicity());
+    }
+
+    registry.properties.insert(
+        "to_string".to_string(),
+        FunctionProperty::default()
+            .monotonicity_type(DataType::Timestamp)
+            .monotonicity_type(DataType::Timestamp.wrap_nullable()),
+    );
+
+    registry.properties.insert(
+        "to_string".to_string(),
+        FunctionProperty::default()
+            .monotonicity_type(DataType::Date)
+            .monotonicity_type(DataType::Date.wrap_nullable()),
     );
 
     registry.register_0_arg_core::<TimestampType, _, _>(
