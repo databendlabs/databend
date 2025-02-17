@@ -30,5 +30,4 @@ pub struct HilbertPartition {
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
     pub num_partitions: usize,
-    pub rows_per_block: usize,
 }

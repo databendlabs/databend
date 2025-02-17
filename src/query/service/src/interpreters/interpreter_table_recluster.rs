@@ -183,6 +183,7 @@ impl Interpreter for ReclusterTableInterpreter {
 impl ReclusterTableInterpreter {
     async fn execute_recluster(&self, push_downs: &mut Option<PushDownInfo>) -> Result<bool> {
         let start = SystemTime::now();
+        let settings = self.ctx.get_settings();
 
         let ReclusterPlan {
             catalog,
@@ -213,8 +214,7 @@ impl ReclusterTableInterpreter {
         if push_downs.is_none() {
             if let Some(expr) = &selection {
                 let (mut bind_context, metadata) = bind_table(tbl.clone())?;
-                let name_resolution_ctx =
-                    NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
+                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let mut type_checker = TypeChecker::try_create(
                     &mut bind_context,
                     self.ctx.clone(),
@@ -249,14 +249,13 @@ impl ReclusterTableInterpreter {
                 let block_thresholds = tbl.get_block_thresholds();
                 let total_bytes = recluster_info.removed_statistics.uncompressed_byte_size as usize;
                 let total_rows = recluster_info.removed_statistics.row_count as usize;
-                let rows_per_block = block_thresholds
-                    .calc_rows_per_block(total_bytes, total_rows)
-                    .max(65536);
+                let rows_per_block = block_thresholds.calc_rows_per_block(total_bytes, total_rows);
+                let block_size = settings.get_max_block_size()?;
+                settings.set_max_block_size(std::cmp::min(rows_per_block as u64, block_size))?;
                 let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
 
                 let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
                 let cluster_keys_len = ast_exprs.len();
-                let settings = self.ctx.get_settings();
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let cluster_key_strs = ast_exprs.into_iter().fold(
                     Vec::with_capacity(cluster_keys_len),
@@ -277,7 +276,10 @@ impl ReclusterTableInterpreter {
                 let subquery_executor = Arc::new(ServiceQueryExecutor::new(
                     QueryContext::create_from(self.ctx.as_ref()),
                 ));
-                let partitions = settings.get_hilbert_num_range_ids()?;
+                let partitions = std::cmp::max(
+                    total_partitions,
+                    settings.get_hilbert_num_range_ids()? as usize,
+                );
                 let sample_size = settings.get_hilbert_sample_size_per_block()?;
                 let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
                 for (index, cluster_key_str) in cluster_key_strs.iter().enumerate() {
@@ -348,11 +350,7 @@ impl ReclusterTableInterpreter {
                     FROM {database}.{table}"
                 );
                 let tokens = tokenize_sql(query.as_str())?;
-                let sql_dialect = self
-                    .ctx
-                    .get_settings()
-                    .get_sql_dialect()
-                    .unwrap_or_default();
+                let sql_dialect = settings.get_sql_dialect().unwrap_or_default();
                 let (stmt, _) = parse_sql(&tokens, sql_dialect)?;
 
                 let mut planner = Planner::new(self.ctx.clone());
@@ -410,7 +408,6 @@ impl ReclusterTableInterpreter {
                     input: plan,
                     table_info: table_info.clone(),
                     num_partitions: total_partitions,
-                    rows_per_block,
                 }));
 
                 if is_distributed {
@@ -527,7 +524,7 @@ impl ReclusterTableInterpreter {
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
         debug_assert!(build_res.main_pipeline.is_complete_pipeline()?);
 
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = settings.get_max_threads()? as usize;
         build_res.set_max_threads(max_threads);
 
         let executor_settings = ExecutorSettings::try_create(self.ctx.clone())?;
