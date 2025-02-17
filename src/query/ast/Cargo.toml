@@ -12,7 +12,6 @@ repository = "https://github.com/datafuselabs/databend/tree/main/src/query/ast"
 doctest = false
 
 [dependencies]
-databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 derive-visitor = { workspace = true }
 educe = { workspace = true }
@@ -30,7 +29,6 @@ percent-encoding = { workspace = true }
 pratt = { workspace = true }
 pretty_assertions = { workspace = true }
 recursive = { workspace = true }
-rspack-codespan-reporting = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strsim = { workspace = true }
