@@ -16,13 +16,15 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_exception::merge_span;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use pratt::Affix;
 use pratt::Associativity;
-use databend_common_exception::merge_span;
+
 use super::ColumnFilter;
 use super::ColumnRef;
 use super::GroupBy;
@@ -44,7 +46,12 @@ use crate::ParseError;
 use crate::Result;
 use crate::Span;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Educe, Drive, DriveMut)]
+#[educe(
+    PartialEq(attrs = "#[recursive::recursive]"),
+    Clone(attrs = "#[recursive::recursive]"),
+    Debug(attrs = "#[recursive::recursive]")
+)]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {

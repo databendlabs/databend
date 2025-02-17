@@ -22,8 +22,9 @@ use std::marker::PhantomData;
 use thiserror::Error;
 
 use crate::exception_backtrace::capture;
-use crate::{ErrorFrame, Span};
 use crate::span::pretty_print_error;
+use crate::ErrorFrame;
+use crate::Span;
 use crate::StackTrace;
 
 #[derive(Error)]

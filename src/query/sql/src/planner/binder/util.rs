@@ -17,7 +17,8 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::parser::Dialect;
-use databend_common_exception::{merge_span, ErrorCode};
+use databend_common_exception::merge_span;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 

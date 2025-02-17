@@ -38,7 +38,13 @@ use crate::ScalarExpr;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
 #[derive(Educe)]
-#[educe(PartialEq(bound = false, attrs = "#[recursive::recursive]"), Eq, Hash(bound = false, attrs = "#[recursive::recursive]"), Clone(bound = false, attrs = "#[recursive::recursive]"), Debug(bound = false, attrs = "#[recursive::recursive]"))]
+#[educe(
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Eq,
+    Hash(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub struct SExpr {
     pub(crate) plan: Arc<RelOperator>,
     pub(crate) children: Vec<Arc<SExpr>>,

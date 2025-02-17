@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use educe::Educe;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_string_map;
@@ -126,7 +127,12 @@ impl Display for CTE {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Educe, Drive, DriveMut)]
+#[educe(
+    PartialEq(attrs = "#[recursive::recursive]"),
+    Clone(attrs = "#[recursive::recursive]"),
+    Debug(attrs = "#[recursive::recursive]")
+)]
 pub struct SetOperation {
     pub span: Span,
     pub op: SetOperator,
@@ -281,7 +287,12 @@ impl Display for GroupBy {
 }
 
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Educe, Drive, DriveMut)]
+#[educe(
+    PartialEq(attrs = "#[recursive::recursive]"),
+    Clone(attrs = "#[recursive::recursive]"),
+    Debug(attrs = "#[recursive::recursive]")
+)]
 pub enum SetExpr {
     Select(Box<SelectStmt>),
     Query(Box<Query>),
