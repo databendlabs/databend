@@ -62,6 +62,12 @@ CommitSink
 └── Mutation Source
 
 query T
+explain analyze update t1 set a = a + 1 where a > 2;
+----
+CommitSink
+└── Mutation Source
+
+query T
 explain update t1 set a = a + 1 where a in (select a from t2) and b > 2;
 ----
 CommitSink
@@ -99,6 +105,24 @@ CommitSink
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
                 ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
                 └── estimated rows: 4.00
+
+query T
+explain analyze partial update t1 set a = a + 1 where a in (select a from t2) and b > 2;
+----
+HashJoin: LEFT SEMI
+├── estimated rows: 2.00
+├── TableScan
+│   ├── table: default.default.t2
+│   ├── estimated rows: 2.00
+│   └── output rows: 2
+└── Filter
+    ├── filters: [is_true(t1.b (#1) > 2)]
+    ├── estimated rows: 3.00
+    ├── output rows: 3
+    └── TableScan
+        ├── table: default.default.t1
+        ├── estimated rows: 4.00
+        └── output rows: 4
 
 statement ok
 CREATE OR REPLACE TABLE t1 (
