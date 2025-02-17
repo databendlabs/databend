@@ -90,15 +90,9 @@ async fn load_tenant_tables_stats(tenant: &Tenant) -> Result<TenantTablesStatsRe
             let stats = &table.get_table_info().meta.statistics;
             let is_external = table.get_table_info().meta.storage_params.is_some();
             if is_external {
-                external_stats
-                    .entry(engine)
-                    .or_insert_with(TenantTableStatsInfo::default)
-                    .merge(stats);
+                external_stats.entry(engine).or_default().merge(stats);
             } else {
-                internal_stats
-                    .entry(engine)
-                    .or_insert_with(TenantTableStatsInfo::default)
-                    .merge(stats);
+                internal_stats.entry(engine).or_default().merge(stats);
             }
         }
     }
