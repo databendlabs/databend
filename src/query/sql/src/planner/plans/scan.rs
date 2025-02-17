@@ -24,6 +24,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -240,9 +241,17 @@ impl Operator for Scan {
                 // ndv could be `None`, we will use `num_rows - null_count` as ndv instead.
                 //
                 // NOTE: don't touch the original num_rows, since it will be used in other places.
-                let ndv = col_stat
+                let mut ndv = col_stat
                     .ndv
                     .unwrap_or_else(|| num_rows.saturating_sub(col_stat.null_count));
+
+                // Alter ndv based on min and max if the datum is uint or int.
+                match (&max, &min) {
+                    (Datum::UInt(m), Datum::UInt(n)) => ndv = ndv.min(m - n),
+                    (Datum::Int(m), Datum::Int(n)) => ndv = ndv.min((m - n) as u64),
+                    _ => {}
+                };
+
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
                 {
