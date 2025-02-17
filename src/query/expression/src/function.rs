@@ -583,8 +583,8 @@ impl EvalContext<'_> {
             return false;
         }
         match &self.errors {
-            Some((b, _)) => !b.get(index),
-            None => false,
+            Some((b, _)) if index < b.len() => !b.get(index),
+            _ => false,
         }
     }
 

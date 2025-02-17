@@ -2151,9 +2151,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     .properties
                     .get(&function.signature.name)
                     .map(|p| {
-                        p.monotonicity
-                            || (args_expr.len() == 1
-                                && p.monotonicity_by_type.contains(args_expr[0].data_type()))
+                        args_expr.len()
+                            && (p.monotonicity
+                                || p.monotonicity_by_type.contains(args_expr[0].data_type()))
                     })
                     .unwrap_or_default();
 
