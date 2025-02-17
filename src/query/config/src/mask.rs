@@ -373,4 +373,32 @@ mod tests {
         assert_eq!(masked_config.cos_secret_id, "**********_id");
         assert_eq!(masked_config.cos_secret_key, "***********key");
     }
+
+    #[test]
+    fn test_spill_config() {
+        let config = SpillConfig {
+            spill_local_disk_path: "".to_string(),
+            spill_local_disk_reserved_space_percentage: 30.0.into(),
+            spill_local_disk_max_bytes: 10,
+            storage: Some(StorageConfig {
+                typ: "s3".to_string(),
+                s3: S3StorageConfig {
+                    secret_access_key: "secret_access_key".to_string(),
+                    security_token: "security_token".to_string(),
+                    ..S3StorageConfig::default()
+                },
+                ..StorageConfig::default()
+            }),
+        };
+
+        let masked_config = config.mask_display();
+        assert_eq!(
+            masked_config.storage.as_ref().unwrap().s3.secret_access_key,
+            "*************_key"
+        );
+        assert_eq!(
+            masked_config.storage.as_ref().unwrap().s3.security_token,
+            "***********ken"
+        );
+    }
 }
