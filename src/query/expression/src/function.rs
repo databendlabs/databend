@@ -578,6 +578,16 @@ impl EvalContext<'_> {
         }
     }
 
+    pub fn has_error(&self, index: usize) -> bool {
+        if self.suppress_error {
+            return false;
+        }
+        match &self.errors {
+            Some((b, _)) => !b.get(index),
+            None => false,
+        }
+    }
+
     pub fn render_error(
         &self,
         span: Span,

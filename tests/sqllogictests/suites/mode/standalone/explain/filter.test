@@ -48,3 +48,57 @@ Filter
     ├── partitions scanned: 0
     ├── push downs: [filters: [is_true((t1.b (#1) > 2 OR t1.b (#1) < 100))], limit: NONE]
     └── estimated rows: 0.00
+
+statement ok
+create or replace table t1(d timestamp null, a varchar null);
+
+statement ok
+create or replace table t2(d timestamp not null, a varchar not null);
+
+statement ok
+insert into t1 select to_timestamp('2007-01-01'),  concat( '2006-01-0' ,(number % 6)::string)   from numbers(100);
+
+statement ok
+insert into t1 select to_timestamp('2007-01-01'),  concat( '2006-01-0' ,(number % 6 + 1)::string)   from numbers(100);
+
+statement ok
+insert into t2 select to_timestamp('2007-01-01'),  concat( '2006-01-0' ,(number % 6)::string)   from numbers(100);
+
+statement ok
+insert into t2 select to_timestamp('2007-01-01'),  concat( '2006-01-0' ,(number % 6 + 1)::string)   from numbers(100);
+
+query T
+explain select * from  t1 where d < a;
+----
+Filter
+├── output columns: [t1.d (#0), t1.a (#1)]
+├── filters: [is_true(t1.d (#0) < CAST(t1.a (#1) AS Timestamp NULL))]
+├── estimated rows: 40.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [d (#0), a (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 2
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 2 to 0>]
+    ├── push downs: [filters: [is_true(t1.d (#0) < CAST(t1.a (#1) AS Timestamp NULL))], limit: NONE]
+    └── estimated rows: 200.00
+
+query T
+explain select * from  t2 where d < a;
+----
+Filter
+├── output columns: [t2.d (#0), t2.a (#1)]
+├── filters: [t2.d (#0) < to_timestamp(t2.a (#1))]
+├── estimated rows: 40.00
+└── TableScan
+    ├── table: default.default.t2
+    ├── output columns: [d (#0), a (#1)]
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 2
+    ├── partitions scanned: 0
+    ├── pruning stats: [segments: <range pruning: 2 to 0>]
+    ├── push downs: [filters: [t2.d (#0) < to_timestamp(t2.a (#1))], limit: NONE]
+    └── estimated rows: 200.00
