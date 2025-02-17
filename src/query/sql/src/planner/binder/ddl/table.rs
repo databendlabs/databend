@@ -174,9 +174,9 @@ impl Binder {
         let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if stmt.with_history {
-            SelectBuilder::from("system.tables_with_history")
+            SelectBuilder::from("default.system.tables_with_history")
         } else {
-            SelectBuilder::from("system.tables")
+            SelectBuilder::from("default.system.tables")
         };
 
         if *full {
@@ -318,21 +318,21 @@ impl Binder {
         // Use `system.tables` AS the "base" table to construct the result-set of `SHOW TABLE STATUS ..`
         //
         // To constraint the schema of the final result-set,
-        //  `(select ${select_cols} from system.tables where ..)`
+        //  `(select ${select_cols} from default.system.tables where ..)`
         // is used AS a derived table.
         // (unlike mysql, alias of derived table is not required in databend).
         let query = match limit {
             None => format!(
-                "SELECT {} FROM system.tables WHERE database = '{}' ORDER BY Name",
+                "SELECT {} FROM default.system.tables WHERE database = '{}' ORDER BY Name",
                 select_cols, database
             ),
             Some(ShowLimit::Like { pattern }) => format!(
-                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                "SELECT * from (SELECT {} FROM default.system.tables WHERE database = '{}') \
             WHERE Name LIKE '{}' ORDER BY Name",
                 select_cols, database, pattern
             ),
             Some(ShowLimit::Where { selection }) => format!(
-                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                "SELECT * from (SELECT {} FROM default.system.tables WHERE database = '{}') \
             WHERE ({}) ORDER BY Name",
                 select_cols, database, selection
             ),
@@ -353,7 +353,7 @@ impl Binder {
 
         let database = self.check_database_exist(&None, database).await?;
 
-        let mut select_builder = SelectBuilder::from("system.tables_with_history");
+        let mut select_builder = SelectBuilder::from("default.system.tables_with_history");
 
         select_builder
             .with_column("name AS Tables")
@@ -724,6 +724,7 @@ impl Binder {
             cluster_key,
             as_select: as_query_plan,
             inverted_indexes,
+            attached_columns: None,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
     }
@@ -789,6 +790,7 @@ impl Binder {
             cluster_key: None,
             as_select: None,
             inverted_indexes: None,
+            attached_columns: stmt.columns_opt.clone(),
         })))
     }
 

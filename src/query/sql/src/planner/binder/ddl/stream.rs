@@ -127,9 +127,9 @@ impl Binder {
         let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if *full {
-            SelectBuilder::from("system.streams")
+            SelectBuilder::from("default.system.streams")
         } else {
-            SelectBuilder::from("system.streams_terse")
+            SelectBuilder::from("default.system.streams_terse")
         };
 
         if *full {
@@ -200,7 +200,7 @@ impl Binder {
         let (catalog, database, stream) =
             self.normalize_object_identifier_triple(catalog, database, stream);
 
-        let mut select_builder = SelectBuilder::from("system.streams");
+        let mut select_builder = SelectBuilder::from("default.system.streams");
         select_builder
             .with_column("created_on")
             .with_column("name")

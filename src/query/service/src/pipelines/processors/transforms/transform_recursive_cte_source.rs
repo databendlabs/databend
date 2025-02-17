@@ -306,6 +306,7 @@ async fn create_memory_table_for_cte_scan(
                 cluster_key: None,
                 as_select: None,
                 inverted_indexes: None,
+                attached_columns: None,
             };
             let create_table_interpreter =
                 CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
