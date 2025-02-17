@@ -1180,7 +1180,7 @@ impl DefaultSettings {
                     range: None,
                 }),
                 ("hilbert_num_range_ids", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1024),
+                    value: UserSettingValue::UInt64(1000),
                     desc: "Specifies the domain of range IDs in Hilbert clustering. A larger value provides finer granularity, but may incur a performance cost.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
