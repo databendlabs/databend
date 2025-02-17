@@ -129,9 +129,9 @@ impl Display for CTE {
 
 #[derive(Educe, Drive, DriveMut)]
 #[educe(
-    PartialEq(attrs = "#[recursive::recursive]"),
-    Clone(attrs = "#[recursive::recursive]"),
-    Debug(attrs = "#[recursive::recursive]")
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
 )]
 pub struct SetOperation {
     pub span: Span,
@@ -289,9 +289,9 @@ impl Display for GroupBy {
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
 #[derive(Educe, Drive, DriveMut)]
 #[educe(
-    PartialEq(attrs = "#[recursive::recursive]"),
-    Clone(attrs = "#[recursive::recursive]"),
-    Debug(attrs = "#[recursive::recursive]")
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
 )]
 pub enum SetExpr {
     Select(Box<SelectStmt>),

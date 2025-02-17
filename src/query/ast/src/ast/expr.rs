@@ -48,9 +48,9 @@ use crate::Span;
 
 #[derive(Educe, Drive, DriveMut)]
 #[educe(
-    PartialEq(attrs = "#[recursive::recursive]"),
-    Clone(attrs = "#[recursive::recursive]"),
-    Debug(attrs = "#[recursive::recursive]")
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
 )]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
