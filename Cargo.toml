@@ -288,7 +288,7 @@ derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
 dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "30e28ca" }
 dyn-clone = "1.0.9"
-educe = "0.4" # FIXME: failed to upgrade to educe 0.6
+educe = { version = "0.6", features = ["default", "full"] } # FIXME: failed to upgrade to educe 0.6
 either = "1.9"
 enquote = "1.1.0"
 enum-as-inner = "0.6"
@@ -634,3 +634,4 @@ tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" 
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }
+educe = { git = "https://github.com/zhang2014/educe.git", rev = "ab34a19" }

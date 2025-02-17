@@ -12,6 +12,8 @@ repository = "https://github.com/datafuselabs/databend/tree/main/src/query/ast"
 doctest = false
 
 [dependencies]
+databend-common-base = { workspace = true }
+databend-common-exception = { workspace = true }
 derive-visitor = { workspace = true }
 enum-as-inner = { workspace = true }
 ethnum = { workspace = true }

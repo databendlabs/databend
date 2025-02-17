@@ -20,11 +20,10 @@ use std::num::ParseIntError;
 
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
-
+use databend_common_exception::pretty_print_error;
 use crate::parser::common::transform_span;
 use crate::parser::input::Input;
 use crate::parser::token::*;
-use crate::span::pretty_print_error;
 use crate::Range;
 
 const MAX_DISPLAY_ERROR_COUNT: usize = 60;

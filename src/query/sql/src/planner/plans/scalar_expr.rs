@@ -562,7 +562,7 @@ impl TryFrom<ScalarExpr> for AsyncFunctionCall {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct BoundColumnRef {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub column: ColumnBinding,
 }
@@ -570,7 +570,7 @@ pub struct BoundColumnRef {
 #[derive(Clone, Debug, Educe, Ord, PartialOrd)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct ConstantExpr {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub value: Scalar,
 }
@@ -646,7 +646,7 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct AggregateFunction {
-    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    #[educe(PartialEq(ignore), Hash(ignore))]
     pub span: Span,
     pub func_name: String,
     pub distinct: bool,
@@ -689,7 +689,7 @@ pub struct NtileFunction {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct WindowFunc {
-    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    #[educe(PartialEq(ignore), Hash(ignore))]
     pub span: Span,
     pub display_name: String,
     pub partition_by: Vec<ScalarExpr>,
@@ -710,7 +710,7 @@ pub struct WindowOrderBy {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct LambdaFunc {
-    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    #[educe(PartialEq(ignore), Hash(ignore))]
     pub span: Span,
     pub func_name: String,
     pub args: Vec<ScalarExpr>,
@@ -722,7 +722,7 @@ pub struct LambdaFunc {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct FunctionCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub func_name: String,
     pub params: Vec<Scalar>,
@@ -732,7 +732,7 @@ pub struct FunctionCall {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct CastExpr {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub is_try: bool,
     pub argument: Box<ScalarExpr>,
@@ -751,7 +751,7 @@ pub enum SubqueryType {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct SubqueryExpr {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub typ: SubqueryType,
     pub subquery: Box<SExpr>,
@@ -789,7 +789,7 @@ fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDFCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     // name in meta
     pub name: String,
@@ -805,7 +805,7 @@ pub struct UDFCall {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDAFCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub name: String, // name in meta
     pub display_name: String,
@@ -880,7 +880,7 @@ impl UDFType {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDFLambdaCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub func_name: String,
     pub scalar: Box<ScalarExpr>,
@@ -952,9 +952,9 @@ pub struct DictGetFunctionArgument {
 
 // Asynchronous functions are functions that need to call remote interfaces.
 #[derive(Clone, Debug, Educe)]
-#[educe(PartialEq, Eq, Hash)]
+#[educe(PartialEq(bound(false)), Eq, Hash(bound(false)))]
 pub struct AsyncFunctionCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub func_name: String,
     pub display_name: String,

@@ -61,6 +61,8 @@ tikv-jemalloc-sys = { workspace = true, optional = true }
 tokio = { workspace = true }
 unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
+recursive = { workspace = true }
+derive-visitor = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = { workspace = true }

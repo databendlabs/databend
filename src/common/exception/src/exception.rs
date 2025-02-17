@@ -19,12 +19,11 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::marker::PhantomData;
 
-use databend_common_ast::span::pretty_print_error;
-use databend_common_ast::Span;
 use thiserror::Error;
 
 use crate::exception_backtrace::capture;
-use crate::ErrorFrame;
+use crate::{ErrorFrame, Span};
+use crate::span::pretty_print_error;
 use crate::StackTrace;
 
 #[derive(Error)]

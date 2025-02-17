@@ -11,8 +11,9 @@ doctest = false
 test = true
 
 [dependencies]
-databend-common-ast = { workspace = true }
 
+derive-visitor = { workspace = true }
+rspack-codespan-reporting = { workspace = true }
 anyhow = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-schema = { workspace = true }

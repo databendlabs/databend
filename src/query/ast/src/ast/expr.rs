@@ -22,7 +22,7 @@ use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use pratt::Affix;
 use pratt::Associativity;
-
+use databend_common_exception::merge_span;
 use super::ColumnFilter;
 use super::ColumnRef;
 use super::GroupBy;
@@ -40,7 +40,6 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SetExpr;
-use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;
 use crate::Span;

@@ -24,6 +24,8 @@ mod exception_backtrace;
 mod exception_code;
 mod exception_flight;
 mod exception_into;
+mod parser_error;
+mod span;
 
 pub use context::display_error_stack;
 pub use context::ErrorFrame;
@@ -35,3 +37,9 @@ pub use exception_backtrace::set_backtrace;
 pub use exception_backtrace::StackTrace;
 pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
 pub use exception_into::SerializedError;
+pub use span::Span;
+pub use parser_error::ParseError;
+pub use span::Range;
+pub use span::merge_span;
+pub use span::offset_span;
+pub use span::pretty_print_error;
