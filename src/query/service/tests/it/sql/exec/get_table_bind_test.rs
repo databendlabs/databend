@@ -840,6 +840,7 @@ impl TableContext for CtxDelegation {
         _database_name: &str,
         _table_name: &str,
         _files: &[StageFileInfo],
+        _path_prefix: Option<String>,
         _max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         todo!()

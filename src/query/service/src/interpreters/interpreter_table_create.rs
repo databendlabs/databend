@@ -16,6 +16,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -50,6 +51,7 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
+use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -383,6 +385,17 @@ impl CreateTableInterpreter {
         };
         let schema = TableSchemaRefExt::create(fields);
         let mut options = self.plan.options.clone();
+
+        if self.plan.engine == Engine::Fuse {
+            let settings = self.ctx.get_settings();
+            // change default to 1 when all query server is ready to processing it.
+            if settings.get_copy_dedup_full_path_by_default()? {
+                options.insert(
+                    OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH.to_string(),
+                    "1".to_string(),
+                );
+            };
+        }
         if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
             FuseStorageFormat::from_str(storage_format)?;
         }
@@ -416,10 +429,12 @@ impl CreateTableInterpreter {
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
             if !is_valid_create_opt(&key, &self.plan.engine) {
-                error!("invalid opt for fuse table in create table statement");
-                return Err(ErrorCode::TableOptionInvalid(format!(
-                    "table option {key} is invalid for create table statement",
-                )));
+                let msg = format!(
+                    "table option {key} is invalid for create table statement with engine {}",
+                    self.plan.engine
+                );
+                error!("{msg}");
+                return Err(ErrorCode::TableOptionInvalid(msg));
             }
         }
 
