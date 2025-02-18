@@ -193,7 +193,6 @@ impl Binder {
             all_source_columns,
             truncate_table,
             predicate_column_index,
-            direct_filter,
         } = bind_result;
 
         let target_table_name = if let Some(table_name_alias) = &table_name_alias {
@@ -308,7 +307,7 @@ impl Binder {
             lock_guard,
             truncate_table,
             predicate_column_index,
-            direct_filter,
+            direct_filter: vec![],
         };
 
         if mutation_strategy == MutationStrategy::NotMatchedOnly && !insert_only(&mutation) {

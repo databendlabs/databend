@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
@@ -282,10 +283,16 @@ impl MutationInterpreter {
     ) -> Result<Option<PipelineBuildResult>> {
         // Check if the filter is a constant.
         let mut truncate_table = mutation.truncate_table;
-        if let Some(filter) = &mutation.direct_filter
-            && filter.used_columns().is_empty()
-        {
-            let filters = create_push_down_filters(filter)?;
+        let is_const = !mutation.direct_filter.is_empty()
+            && mutation
+                .direct_filter
+                .iter()
+                .all(|v| v.used_columns().is_empty());
+        if is_const {
+            let filters = create_push_down_filters(
+                &self.ctx.get_function_context()?,
+                &mutation.direct_filter,
+            )?;
             let filter_result = fuse_table.try_eval_const(
                 self.ctx.clone(),
                 &fuse_table.schema(),
@@ -358,11 +365,19 @@ impl MutationInterpreter {
             let Some(table_snapshot) = table_snapshot else {
                 return Ok(Default::default());
             };
-            let (filters, filter_used_columns) = if let Some(filter) = &mutation.direct_filter {
-                (
-                    Some(create_push_down_filters(filter)?),
-                    filter.used_columns().into_iter().collect(),
-                )
+            let (filters, filter_used_columns) = if !mutation.direct_filter.is_empty() {
+                let filters = create_push_down_filters(
+                    &self.ctx.get_function_context()?,
+                    &mutation.direct_filter,
+                )?;
+                let filter_used_columns = mutation
+                    .direct_filter
+                    .iter()
+                    .flat_map(|expr| expr.used_columns())
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect();
+                (Some(filters), filter_used_columns)
             } else {
                 (None, vec![])
             };
