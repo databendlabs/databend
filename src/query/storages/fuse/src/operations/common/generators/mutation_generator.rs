@@ -20,10 +20,10 @@ use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_metrics::storage::*;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use log::info;
-use uuid::Uuid;
 
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;
@@ -62,6 +62,7 @@ impl SnapshotGenerator for MutationGenerator {
         cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        table_meta_timestamps: TableMetaTimestamps,
         _table_name: &str,
     ) -> Result<TableSnapshot> {
         match &self.conflict_resolve_ctx {
@@ -88,16 +89,15 @@ impl SnapshotGenerator for MutationGenerator {
                         cluster_key_id,
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
-                    let new_snapshot = TableSnapshot::new(
-                        Uuid::new_v4(),
+                    let new_snapshot = TableSnapshot::try_new(
                         prev_table_seq,
-                        &previous.timestamp(),
-                        previous.snapshot_id(),
+                        previous.clone(),
                         schema,
                         new_summary,
                         new_segments,
                         previous.table_statistics_location(),
-                    );
+                        table_meta_timestamps,
+                    )?;
 
                     if matches!(
                         self.mutation_kind,

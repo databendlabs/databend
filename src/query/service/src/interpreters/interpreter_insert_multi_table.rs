@@ -48,6 +48,7 @@ use databend_common_sql::plans::Into;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
+use databend_common_storages_fuse::FuseTable;
 
 use super::HookOperator;
 use crate::interpreters::common::dml_build_update_stream_req;
@@ -380,9 +381,14 @@ impl InsertIntoBranches {
         for table in &self.tables {
             let table_info = table.get_table_info();
             let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
+            let snapshot = FuseTable::try_from_table(table.as_ref())?
+                .read_table_snapshot()
+                .await?;
+            let table_meta_timestamps = ctx.get_table_meta_timestamps(table.get_id(), snapshot)?;
             serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),
+                table_meta_timestamps,
             });
         }
         Ok(serializable_tables)
@@ -402,9 +408,14 @@ impl InsertIntoBranches {
             }
             last_table_id = Some(table_id);
             let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
+            let snapshot = FuseTable::try_from_table(table.as_ref())?
+                .read_table_snapshot()
+                .await?;
+            let table_meta_timestamps = ctx.get_table_meta_timestamps(table.get_id(), snapshot)?;
             serializable_tables.push(SerializableTable {
                 target_catalog_info: catalog_info,
                 target_table_info: table_info.clone(),
+                table_meta_timestamps,
             });
         }
         Ok(serializable_tables)

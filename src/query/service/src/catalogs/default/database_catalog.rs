@@ -27,6 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -70,6 +71,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
@@ -883,6 +885,14 @@ impl Catalog for DatabaseCatalog {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         self.mutable_catalog.list_dictionaries(req).await
+    }
+
+    async fn set_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime> {
+        self.mutable_catalog.set_table_lvt(name_ident, value).await
     }
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {

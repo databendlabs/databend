@@ -4285,6 +4285,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
+ "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -4739,6 +4740,7 @@ dependencies = [
  "opendal 0.51.2",
  "tantivy",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]

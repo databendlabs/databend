@@ -113,6 +113,8 @@ use databend_storages_common_session::drop_table_by_id;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use jiff::tz::TimeZone;
 use jiff::Zoned;
@@ -1442,6 +1444,29 @@ impl TableContext for QueryContext {
 
     fn session_state(&self) -> SessionState {
         self.shared.session.session_ctx.session_state()
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        table_id: u64,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        let cache = self.shared.get_table_meta_timestamps();
+        let cached_item = cache.lock().get(&table_id).copied();
+        match cached_item {
+            Some(ts) => Ok(ts),
+            None => {
+                let ts = self.txn_mgr().lock().get_table_meta_timestamps(
+                    table_id,
+                    previous_snapshot,
+                    self.get_settings()
+                        .get_max_retryable_transaction_duration_in_hours()?
+                        as i64,
+                );
+                cache.lock().insert(table_id, ts);
+                Ok(ts)
+            }
+        }
     }
 
     fn get_read_block_thresholds(&self) -> BlockThresholds {
