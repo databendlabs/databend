@@ -236,7 +236,7 @@ echo "grant insert, delete on default.t to b" | $BENDSQL_CLIENT_CONNECT
 echo "grant select on system.* to b" | $BENDSQL_CLIENT_CONNECT
 
 echo "create stage s3;" | $BENDSQL_CLIENT_CONNECT
-echo "copy into '@s3/a b' from (select 2);" | $BENDSQL_CLIENT_CONNECT | $RM_UUID
+echo "copy into '@s3/a b' from (select 2);" | $BENDSQL_CLIENT_CONNECT | $RM_UUID | cut -d$'\t' -f1,2
 
 # need err
 echo "insert into t select * from t1" | $USER_B_CONNECT

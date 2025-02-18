@@ -20,6 +20,7 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
@@ -75,7 +76,11 @@ use crate::executor::physical_plans::UnionAll;
 use crate::executor::physical_plans::Window;
 use crate::executor::physical_plans::WindowPartition;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, EnumAsInner)]
+#[derive(serde::Serialize, serde::Deserialize, Educe, EnumAsInner)]
+#[educe(
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub enum PhysicalPlan {
     /// Query
     TableScan(TableScan),
@@ -703,6 +708,7 @@ impl PhysicalPlan {
         }
     }
 
+    #[recursive::recursive]
     pub fn is_distributed_plan(&self) -> bool {
         self.children().any(|child| child.is_distributed_plan())
             || matches!(
@@ -711,6 +717,7 @@ impl PhysicalPlan {
             )
     }
 
+    #[recursive::recursive]
     pub fn is_warehouse_distributed_plan(&self) -> bool {
         self.children()
             .any(|child| child.is_warehouse_distributed_plan())
@@ -985,6 +992,7 @@ impl PhysicalPlan {
         Ok(labels)
     }
 
+    #[recursive::recursive]
     pub fn try_find_mutation_source(&self) -> Option<MutationSource> {
         match self {
             PhysicalPlan::MutationSource(mutation_source) => Some(mutation_source.clone()),

@@ -46,11 +46,11 @@ runs:
       shell: bash
       if: inputs.category == 'default'
       run: |
-        aws s3 cp ${{ steps.name.outputs.name }}.tar.gz s3://repo/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}.tar.gz --no-progress
+        aws s3 cp ${{ steps.name.outputs.name }}.tar.gz s3://repo/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}.tar.gz --no-progress --checksum-algorithm=CRC32
         if [ -f ${{ steps.name.outputs.name }}-dbg.tar.gz ]; then
-          aws s3 cp ${{ steps.name.outputs.name }}-dbg.tar.gz s3://repo/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}-dbg.tar.gz --no-progress
+          aws s3 cp ${{ steps.name.outputs.name }}-dbg.tar.gz s3://repo/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}-dbg.tar.gz --no-progress --checksum-algorithm=CRC32
         fi
         gh api /repos/databendlabs/databend/tags > tags.json
-        aws s3 cp ./tags.json s3://repo/databend/tags.json
+        aws s3 cp ./tags.json s3://repo/databend/tags.json --no-progress --checksum-algorithm=CRC32
         gh api /repos/databendlabs/databend/releases > releases.json
-        aws s3 cp ./releases.json s3://repo/databend/releases.json
+        aws s3 cp ./releases.json s3://repo/databend/releases.json --no-progress --checksum-algorithm=CRC32

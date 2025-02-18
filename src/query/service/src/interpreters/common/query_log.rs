@@ -143,6 +143,11 @@ impl InterpreterQueryLog {
                 .expect("write to string must succeed");
         }
 
+        let query_tag = if let Ok(tag) = current_session.get_settings().get_query_tag() {
+            tag
+        } else {
+            "".to_string()
+        };
         session_settings.push_str("scope: SESSION");
 
         // Error
@@ -213,6 +218,7 @@ impl InterpreterQueryLog {
             exception_text,
             stack_trace,
             server_version: DATABEND_COMMIT_VERSION.to_string(),
+            query_tag,
             session_settings,
             extra: "".to_string(),
             has_profiles: false,
@@ -309,6 +315,12 @@ impl InterpreterQueryLog {
                 .expect("write to string must succeed");
         }
 
+        // Session
+        let query_tag = if let Ok(tag) = current_session.get_settings().get_query_tag() {
+            tag
+        } else {
+            "".to_string()
+        };
         session_settings.push_str("scope: SESSION");
 
         // Error
@@ -380,6 +392,7 @@ impl InterpreterQueryLog {
             exception_text,
             stack_trace,
             server_version: DATABEND_COMMIT_VERSION.to_string(),
+            query_tag,
             session_settings,
             extra: "".to_string(),
             has_profiles,

@@ -16,8 +16,10 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_exception::merge_span;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use pratt::Affix;
@@ -40,12 +42,16 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SetExpr;
-use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;
 use crate::Span;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Educe, Drive, DriveMut)]
+#[educe(
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
@@ -828,6 +834,8 @@ pub enum IntervalKind {
     Doy,
     Week,
     Dow,
+    Epoch,
+    MicroSecond,
 }
 
 impl Display for IntervalKind {
@@ -843,6 +851,8 @@ impl Display for IntervalKind {
             IntervalKind::Doy => "DOY",
             IntervalKind::Dow => "DOW",
             IntervalKind::Week => "WEEK",
+            IntervalKind::Epoch => "EPOCH",
+            IntervalKind::MicroSecond => "MICROSECOND",
         })
     }
 }

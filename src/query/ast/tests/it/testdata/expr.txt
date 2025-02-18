@@ -1656,6 +1656,77 @@ Trim {
 
 
 ---------- Input ----------
+trim('aa','bb')
+---------- Output ---------
+trim('aa', 'bb')
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..15,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..4,
+            ),
+            name: "trim",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    5..9,
+                ),
+                value: String(
+                    "aa",
+                ),
+            },
+            Literal {
+                span: Some(
+                    10..14,
+                ),
+                value: String(
+                    "bb",
+                ),
+            },
+        ],
+        params: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+timestamp()
+---------- Output ---------
+timestamp()
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..11,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..9,
+            ),
+            name: "timestamp",
+            quote: None,
+            ident_type: None,
+        },
+        args: [],
+        params: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
 extract(year from d)
 ---------- Output ---------
 EXTRACT(YEAR FROM d)

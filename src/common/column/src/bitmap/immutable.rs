@@ -195,8 +195,8 @@ impl Bitmap {
     }
 
     /// Slices `self`, offsetting by `offset` and truncating up to `length` bits.
-    /// # Panic
-    /// Panics iff `offset + length > self.length`, i.e. if the offset and `length`
+    /// # Panics
+    /// Panic iff `offset + length > self.length`, i.e. if the offset and `length`
     /// exceeds the allocated capacity of `self`.
     #[inline]
     pub fn slice(&mut self, offset: usize, length: usize) {
@@ -233,8 +233,8 @@ impl Bitmap {
     }
 
     /// Slices `self`, offsetting by `offset` and truncating up to `length` bits.
-    /// # Panic
-    /// Panics iff `offset + length > self.length`, i.e. if the offset and `length`
+    /// # Panics
+    /// Panic iff `offset + length > self.length`, i.e. if the offset and `length`
     /// exceeds the allocated capacity of `self`.
     #[inline]
     #[must_use]
@@ -358,8 +358,8 @@ impl Bitmap {
     }
 
     /// Creates a new [`Bitmap`] from a slice and length.
-    /// # Panic
-    /// Panics iff `length <= bytes.len() * 8`
+    /// # Panics
+    /// Panic iff `length > slice.as_ref().len() * 8`
     #[inline]
     pub fn from_u8_slice<T: AsRef<[u8]>>(slice: T, length: usize) -> Self {
         Bitmap::try_new(slice.as_ref().to_vec(), length).unwrap()
@@ -367,8 +367,8 @@ impl Bitmap {
 
     /// Alias for `Bitmap::try_new().unwrap()`
     /// This function is `O(1)`
-    /// # Panic
-    /// This function panics iff `length <= bytes.len() * 8`
+    /// # Panics
+    /// This function panics iff `length > vec.len() * 8`
     #[inline]
     pub fn from_u8_vec(vec: Vec<u8>, length: usize) -> Self {
         Bitmap::try_new(vec, length).unwrap()

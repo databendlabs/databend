@@ -583,6 +583,8 @@ pub enum TokenKind {
     ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
+    #[token("MICROSECOND", ignore(ascii_case))]
+    MICROSECOND,
     #[token("ERROR_ON_COLUMN_COUNT_MISMATCH", ignore(ascii_case))]
     ERROR_ON_COLUMN_COUNT_MISMATCH,
     #[token("ESCAPE", ignore(ascii_case))]
@@ -1571,10 +1573,10 @@ impl TokenKind {
             | TokenKind::TABLE
             | TokenKind::THEN
             // | TokenKind::TIME
-            | TokenKind::TIMESTAMP
+            // | TokenKind::TIMESTAMP
             | TokenKind::TRAILING
             // | TokenKind::TREAT
-            | TokenKind::TRIM
+            // | TokenKind::TRIM
             | TokenKind::TRUE
             | TokenKind::TRY_CAST
             // | TokenKind::UNIQUE
@@ -1709,6 +1711,7 @@ impl TokenKind {
             // | TokenKind::SIMILAR
             | TokenKind::SOME
             | TokenKind::SEMI
+            | TokenKind::SET
             | TokenKind::SAMPLE
             // | TokenKind::SYMMETRIC
             // | TokenKind::TABLESAMPLE

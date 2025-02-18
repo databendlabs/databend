@@ -37,6 +37,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_CONNECTION_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
@@ -74,6 +75,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert("transient");
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_SEGMENT_FORMAT);
+    r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r
 });
 
@@ -111,6 +113,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
+    r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r
 });
 

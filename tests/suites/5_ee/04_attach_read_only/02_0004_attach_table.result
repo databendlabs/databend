@@ -44,6 +44,76 @@ Error: APIError: QueryFailed: [3905]Modification not permitted: Table 'table_to'
 1
 2
 <<<<
+##############################
+# implicitly include columns #
+##############################
+>>>> create or replace table base(c1 string, c2 string, c3 string, c4 string) 's3://testbucket/admin/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900');
+>>>> insert into base values('c1', 'c2', 'c3', 'c4')
+1
+>>>> drop table if exists attach_tbl
+attaching base table
+>>>> select * from attach_tbl
+c2	c4
+<<<<
+>>>> show create table attach_tbl
+attach_tbl	ATTACH TABLE (c2,c4) `default`.`attach_tbl` 
+<<<<
+>>>> drop table if exists attach_tbl
+attaching non-exists column
+Error: APIError: QueryFailed: [2004]Columns [c_not_exist] do not exist in the table being attached to
+#############################
+## access renamed columns ###
+#############################
+>>>> drop table if exists attach_tbl
+>>>> alter table base RENAME COLUMN c2 to c2_new
+>>>> insert into base values('c1', 'c2_new', 'c3', 'c4')
+1
+select all should work
+>>>> select * from attach_tbl order by c2_new
+c2	c4
+c2_new	c4
+<<<<
+select c2_new should work
+>>>> select c2_new from attach_tbl order by c2_new
+c2
+c2_new
+<<<<
+##################################
+## drop column from base table ###
+##################################
+>>>> alter table base DROP COLUMN c1
+>>>> delete from base
+2
+>>>> insert into base values('c2_new', 'c3', 'c4')
+1
+select all should work
+>>>> select * from attach_tbl
+c2_new	c4
+<<<<
+select c2_new should work
+>>>> select c2_new from attach_tbl order by c2_new
+c2_new
+<<<<
+>>>> alter table base DROP COLUMN c4
+select the dropped column will fail
+>>>> select c4 from attach_tbl
+Error: APIError: QueryFailed: [1065]error: 
+  --> SQL:1:8
+  |
+1 | select c4 from attach_tbl
+  |        ^^ column c4 doesn't exist
+
+
+<<<<
+>>>> select * from attach_tbl order by c2_new
+c2_new
+<<<<
+>>>> alter table base DROP COLUMN c2_new
+but if all the include columns are dropped, select ALL should fail as well
+>>>> select * from attach_tbl
+Error: APIError: QueryFailed: [4000]no effective columns found in ATTACH table 'default'.'attach_tbl'
+<<<<
+>>>> drop table if exists attach_tbl;
 >>>> drop connection my_conn;
 >>>> drop table if exists table_from;
 >>>> drop table if exists table_from2;

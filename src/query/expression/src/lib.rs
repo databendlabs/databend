@@ -22,6 +22,7 @@
 #![allow(incomplete_features)]
 #![feature(fmt_internals)]
 #![feature(const_try)]
+#![feature(trivial_bounds)]
 #![feature(iterator_try_reduce)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]

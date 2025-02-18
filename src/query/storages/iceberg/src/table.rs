@@ -28,6 +28,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
@@ -47,6 +48,8 @@ use iceberg::io::FileIOBuilder;
 
 use crate::partition::IcebergPartInfo;
 use crate::predicate::PredicateBuilder;
+use crate::statistics;
+use crate::statistics::IcebergStatistics;
 use crate::table_source::IcebergTableSource;
 use crate::IcebergCatalog;
 
@@ -58,13 +61,18 @@ pub struct IcebergTable {
     info: TableInfo,
 
     pub table: iceberg::table::Table,
+    statistics: IcebergStatistics,
 }
 
 impl IcebergTable {
     /// create a new table on the table directory
     pub fn try_create(info: TableInfo) -> Result<Box<dyn Table>> {
-        let table = Self::parse_engine_options(&info.meta.engine_options)?;
-        Ok(Box::new(Self { info, table }))
+        let (table, statistics) = Self::parse_engine_options(&info.meta.engine_options)?;
+        Ok(Box::new(Self {
+            info,
+            table,
+            statistics,
+        }))
     }
 
     pub fn description() -> StorageDescription {
@@ -106,8 +114,11 @@ impl IcebergTable {
     ///
     /// We will never persist the `engine_options` to storage, so it's safe to change the implementation.
     /// As long as you make sure both [`build_engine_options`] and [`parse_engine_options`] been updated.
-    pub fn build_engine_options(table: &iceberg::table::Table) -> Result<BTreeMap<String, String>> {
-        let (file_io_scheme, file_io_props) = table.file_io().clone().into_props();
+    pub fn build_engine_options(
+        table: &iceberg::table::Table,
+        statistics: &statistics::IcebergStatistics,
+    ) -> Result<BTreeMap<String, String>> {
+        let (file_io_scheme, file_io_props) = table.file_io().clone().into_builder().into_parts();
         let file_io_props = serde_json::to_string(&file_io_props)?;
         let metadata_location = table
             .metadata_location()
@@ -115,6 +126,7 @@ impl IcebergTable {
             .unwrap_or_default();
         let metadata = serde_json::to_string(table.metadata())?;
         let identifier = serde_json::to_string(table.identifier())?;
+        let statistics = serde_json::to_string(statistics)?;
 
         Ok(BTreeMap::from_iter([
             ("iceberg.file_io.scheme".to_string(), file_io_scheme),
@@ -122,6 +134,7 @@ impl IcebergTable {
             ("iceberg.metadata_location".to_string(), metadata_location),
             ("iceberg.metadata".to_string(), metadata),
             ("iceberg.identifier".to_string(), identifier),
+            ("iceberg.statistics".to_string(), statistics),
         ]))
     }
 
@@ -130,7 +143,7 @@ impl IcebergTable {
     /// See [`build_engine_options`] for more information.
     pub fn parse_engine_options(
         options: &BTreeMap<String, String>,
-    ) -> Result<iceberg::table::Table> {
+    ) -> Result<(iceberg::table::Table, statistics::IcebergStatistics)> {
         let file_io_scheme = options.get("iceberg.file_io.scheme").ok_or_else(|| {
             ErrorCode::ReadTableDataError(
                 "Rebuild iceberg table failed: Missing iceberg.file_io.scheme",
@@ -163,6 +176,13 @@ impl IcebergTable {
                 )
             })?)?;
 
+        let statistics: statistics::IcebergStatistics =
+            serde_json::from_str(options.get("iceberg.statistics").ok_or_else(|| {
+                ErrorCode::ReadTableDataError(
+                    "Rebuild iceberg table failed: Missing iceberg.statistics",
+                )
+            })?)?;
+
         let file_io = FileIOBuilder::new(file_io_scheme)
             .with_props(file_io_props)
             .build()
@@ -172,7 +192,7 @@ impl IcebergTable {
                 ))
             })?;
 
-        iceberg::table::Table::builder()
+        let table = iceberg::table::Table::builder()
             .identifier(identifier)
             .metadata(metadata)
             .metadata_location(metadata_location)
@@ -180,7 +200,9 @@ impl IcebergTable {
             .build()
             .map_err(|err| {
                 ErrorCode::ReadTableDataError(format!("Rebuild iceberg table failed: {err:?}"))
-            })
+            })?;
+
+        Ok((table, statistics))
     }
 
     /// create a new table on the table directory
@@ -192,8 +214,9 @@ impl IcebergTable {
     ) -> Result<IcebergTable> {
         let table = Self::load_iceberg_table(&ctl, database_name, table_name).await?;
         let table_schema = Self::get_schema(&table)?;
+        let statistics = statistics::IcebergStatistics::parse(&table).await?;
 
-        let engine_options = Self::build_engine_options(&table)?;
+        let engine_options = Self::build_engine_options(&table, &statistics)?;
 
         // construct table info
         let info = TableInfo {
@@ -211,7 +234,11 @@ impl IcebergTable {
             ..Default::default()
         };
 
-        Ok(Self { info, table })
+        Ok(Self {
+            info,
+            table,
+            statistics,
+        })
     }
 
     pub fn do_read_data(
@@ -253,7 +280,7 @@ impl IcebergTable {
                 );
             }
             if let Some(filter) = &push_downs.filters {
-                let predicate = PredicateBuilder::default().build(&filter.filter);
+                let (_, predicate) = PredicateBuilder::build(&filter.filter);
                 scan = scan.with_filter(predicate)
             }
         }
@@ -281,7 +308,7 @@ impl IcebergTable {
             .collect();
 
         Ok((
-            PartStatistics::new_estimated(None, read_rows, read_bytes, parts.len(), total_files),
+            PartStatistics::new_exact(read_rows, read_bytes, parts.len(), total_files),
             Partitions::create(PartitionsShuffleKind::Mod, parts),
         ))
     }
@@ -305,14 +332,32 @@ impl Table for IcebergTable {
         &self.get_table_info().name
     }
 
-    // TODO load summary
     async fn table_statistics(
         &self,
         _ctx: Arc<dyn TableContext>,
         _require_fresh: bool,
         _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        Ok(None)
+        let table = self.table.clone();
+        if table.metadata().current_snapshot().is_none() {
+            return Ok(None);
+        };
+
+        let mut statistics = TableStatistics::default();
+        statistics.num_rows = Some(self.statistics.record_count);
+        statistics.data_size_compressed = Some(self.statistics.file_size_in_bytes);
+        statistics.number_of_segments = Some(self.statistics.number_of_manifest_files);
+        statistics.number_of_blocks = Some(self.statistics.number_of_data_files);
+
+        Ok(Some(statistics))
+    }
+
+    #[async_backtrace::framed]
+    async fn column_statistics_provider(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+    ) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        Ok(Box::new(self.statistics.clone()))
     }
 
     #[async_backtrace::framed]
@@ -346,5 +391,9 @@ impl Table for IcebergTable {
 
     fn support_prewhere(&self) -> bool {
         false
+    }
+
+    fn has_exact_total_row_count(&self) -> bool {
+        true
     }
 }

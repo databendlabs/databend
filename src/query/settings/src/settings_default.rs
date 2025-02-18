@@ -296,6 +296,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec!["PostgreSQL".into(), "MySQL".into(), "Experimental".into(), "Hive".into(), "Prql".into()])),
                 }),
+                ("query_tag", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_owned()),
+                    desc: "Sets the query tag for this session.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: None,
+                }),
                 ("enable_dphyp", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables dphyp join order algorithm.",
@@ -1182,6 +1189,13 @@ impl DefaultSettings {
                 ("enable_prune_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable to cache the pruning result",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("copy_dedup_full_path_by_default", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The default value if table option `copy_dedup_full_path` is not set when creating table.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

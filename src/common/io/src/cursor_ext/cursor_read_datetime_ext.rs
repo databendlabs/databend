@@ -41,8 +41,8 @@ pub enum DateTimeResType {
 }
 
 pub trait BufferReadDateTimeExt {
-    fn read_date_text(&mut self, jiff_tz: &TimeZone) -> Result<Date>;
-    fn read_timestamp_text(&mut self, jiff_tz: &TimeZone) -> Result<DateTimeResType>;
+    fn read_date_text(&mut self, tz: &TimeZone) -> Result<Date>;
+    fn read_timestamp_text(&mut self, tz: &TimeZone) -> Result<DateTimeResType>;
     fn parse_time_offset(
         &mut self,
         tz: &TimeZone,
@@ -51,18 +51,15 @@ pub trait BufferReadDateTimeExt {
         west_tz: bool,
         calc_offset: impl Fn(i64, i64, &Zoned) -> Result<Zoned>,
     ) -> Result<Zoned>;
-    fn read_text_to_datetime(
-        &mut self,
-        jiff_tz: &TimeZone,
-        need_date: bool,
-    ) -> Result<DateTimeResType>;
+    fn read_text_to_datetime(&mut self, tz: &TimeZone, need_date: bool) -> Result<DateTimeResType>;
 }
 
 const DATE_LEN: usize = 10;
 
 fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
     if size > 0 && size < 3 {
-        Ok(lexical_core::FromLexical::from_lexical(buf).unwrap())
+        Ok(lexical_core::FromLexical::from_lexical(buf)
+            .map_err_to_code(ErrorCode::BadBytes, || "time part parse error".to_string())?)
     } else {
         let msg = format!(
             "err with parse time part. Format like this:[03:00:00], got {} digits",
@@ -75,17 +72,16 @@ fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
 impl<T> BufferReadDateTimeExt for Cursor<T>
 where T: AsRef<[u8]>
 {
-    fn read_date_text(&mut self, jiff_tz: &TimeZone) -> Result<Date> {
+    fn read_date_text(&mut self, tz: &TimeZone) -> Result<Date> {
         // TODO support YYYYMMDD format
-        self.read_text_to_datetime(jiff_tz, true)
-            .map(|dt| match dt {
-                DateTimeResType::Date(nd) => nd,
-                DateTimeResType::Datetime(dt) => dt.date(),
-            })
+        self.read_text_to_datetime(tz, true).map(|dt| match dt {
+            DateTimeResType::Date(nd) => nd,
+            DateTimeResType::Datetime(dt) => dt.date(),
+        })
     }
 
-    fn read_timestamp_text(&mut self, jiff_tz: &TimeZone) -> Result<DateTimeResType> {
-        self.read_text_to_datetime(jiff_tz, false)
+    fn read_timestamp_text(&mut self, tz: &TimeZone) -> Result<DateTimeResType> {
+        self.read_text_to_datetime(tz, false)
     }
 
     // Only support HH:mm format
@@ -137,7 +133,7 @@ where T: AsRef<[u8]>
         match n {
             2 => {
                 let hour_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+                    lexical_core::FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || "hour offset parse error".to_string())?;
                 if (0..15).contains(&hour_offset) {
                     buf.clear();
                     if self.ignore_byte(b':') {
@@ -148,7 +144,7 @@ where T: AsRef<[u8]>
                             ));
                         }
                         let minute_offset: i32 =
-                            lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+                            lexical_core::FromLexical::from_lexical(buf.as_slice()).map_err_to_code(ErrorCode::BadBytes, || "minute offset parse error".to_string())?;
                         // max utc: 14:00, min utc: 00:00
                         get_hour_minute_offset(
                             tz,
@@ -171,10 +167,10 @@ where T: AsRef<[u8]>
             4 => {
                 let hour_offset = &buf.as_slice()[..2];
                 let hour_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(hour_offset).unwrap();
+                    lexical_core::FromLexical::from_lexical(hour_offset).map_err_to_code(ErrorCode::BadBytes, || "hour offset parse error".to_string())?;
                 let minute_offset = &buf.as_slice()[2..];
                 let minute_offset: i32 =
-                    lexical_core::FromLexical::from_lexical(minute_offset).unwrap();
+                    lexical_core::FromLexical::from_lexical(minute_offset).map_err_to_code(ErrorCode::BadBytes, || "minute offset parse error".to_string())?;
                 buf.clear();
                 // max utc: 14:00, min utc: 00:00
                 if (0..15).contains(&hour_offset) {
@@ -199,11 +195,7 @@ where T: AsRef<[u8]>
         }
     }
 
-    fn read_text_to_datetime(
-        &mut self,
-        jiff_tz: &TimeZone,
-        need_date: bool,
-    ) -> Result<DateTimeResType> {
+    fn read_text_to_datetime(&mut self, tz: &TimeZone, need_date: bool) -> Result<DateTimeResType> {
         // Date Part YYYY-MM-DD
         let mut buf = vec![0; DATE_LEN];
         self.read_exact(buf.as_mut_slice())?;
@@ -251,11 +243,11 @@ where T: AsRef<[u8]>
             // Examples: '2022-02-02T', '2022-02-02 ', '2022-02-02T02', '2022-02-02T3:', '2022-02-03T03:13', '2022-02-03T03:13:'
             if times.len() < 3 {
                 times.resize(3, 0);
-                let dt = get_local_time(jiff_tz, &d, &mut times)?;
+                let dt = get_local_time(tz, &d, &mut times)?;
                 return Ok(DateTimeResType::Datetime(dt));
             }
 
-            let dt = get_local_time(jiff_tz, &d, &mut times)?;
+            let dt = get_local_time(tz, &d, &mut times)?;
 
             // ms .microseconds
             let dt = if self.ignore_byte(b'.') {
@@ -266,8 +258,10 @@ where T: AsRef<[u8]>
                         "Microsecond Parsing Error: Expecting a format like [.123456] for microseconds part",
                     ));
                 }
-                let mut scales: u64 =
-                    lexical_core::FromLexical::from_lexical(buf.as_slice()).unwrap();
+                let mut scales: u64 = lexical_core::FromLexical::from_lexical(buf.as_slice())
+                    .map_err_to_code(ErrorCode::BadBytes, || {
+                        "datetime scales parse error".to_string()
+                    })?;
                 if size <= 9 {
                     scales *= 10_u64.pow(9 - size as u32)
                 } else {
@@ -296,7 +290,7 @@ where T: AsRef<[u8]>
                     .map_err_to_code(ErrorCode::BadBytes, || {
                         format!("Datetime {} add offset {} with error", dt, offset)
                     })?
-                    .to_zoned(jiff_tz.clone()))
+                    .to_zoned(tz.clone()))
             };
             if self.ignore(|b| b == b'z' || b == b'Z') {
                 // ISO 8601 The Z on the end means UTC (that is, an offset-from-UTC of zero hours-minutes-seconds).
@@ -308,7 +302,7 @@ where T: AsRef<[u8]>
                 )?))
             } else if self.ignore_byte(b'+') {
                 Ok(DateTimeResType::Datetime(self.parse_time_offset(
-                    jiff_tz,
+                    tz,
                     &mut buf,
                     &dt,
                     false,
@@ -316,7 +310,7 @@ where T: AsRef<[u8]>
                 )?))
             } else if self.ignore_byte(b'-') {
                 Ok(DateTimeResType::Datetime(self.parse_time_offset(
-                    jiff_tz,
+                    tz,
                     &mut buf,
                     &dt,
                     true,
@@ -332,7 +326,7 @@ where T: AsRef<[u8]>
                 Ok(DateTimeResType::Date(d))
             } else {
                 Ok(DateTimeResType::Datetime(
-                    d.to_zoned(jiff_tz.clone())
+                    d.to_zoned(tz.clone())
                         .map_err_to_code(ErrorCode::BadBytes, || {
                             format!("Failed to parse date {} as timestamp.", d)
                         })?,

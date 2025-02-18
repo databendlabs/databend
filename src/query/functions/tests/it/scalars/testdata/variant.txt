@@ -900,6 +900,15 @@ output domain  : {"{\"b\":2}"..="{\"b\":2}"}
 output         : '{"b":2}'
 
 
+ast            : json_extract_path_text('{"a":null}', 'a')
+raw expr       : json_extract_path_text('{"a":null}', 'a')
+checked expr   : json_extract_path_text<String, String>("{\"a\":null}", "a")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : json_extract_path_text(s, k)
 raw expr       : json_extract_path_text(s::String, k::String)
 checked expr   : json_extract_path_text<String, String>(s, k)
@@ -1519,11 +1528,20 @@ evaluation (internal):
 +--------+----------------------------------------------------------------+
 
 
+ast            : to_boolean(parse_json('null'))
+raw expr       : to_boolean(parse_json('null'))
+checked expr   : to_boolean<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : to_boolean(parse_json('true'))
 raw expr       : to_boolean(parse_json('true'))
 checked expr   : to_boolean<Variant>(parse_json<String>("true"))
 optimized expr : true
-output type    : Boolean
+output type    : Boolean NULL
 output domain  : {TRUE}
 output         : true
 
@@ -1544,11 +1562,20 @@ error:
 
 
 
+ast            : to_uint64(parse_json('null'))
+raw expr       : to_uint64(parse_json('null'))
+checked expr   : to_uint64<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : to_uint64(parse_json('123'))
 raw expr       : to_uint64(parse_json('123'))
 checked expr   : to_uint64<Variant>(parse_json<String>("123"))
 optimized expr : 123_u64
-output type    : UInt64
+output type    : UInt64 NULL
 output domain  : {123..=123}
 output         : 123
 
@@ -1573,7 +1600,7 @@ ast            : to_int64(parse_json('123'))
 raw expr       : to_int64(parse_json('123'))
 checked expr   : to_int64<Variant>(parse_json<String>("123"))
 optimized expr : 123_i64
-output type    : Int64
+output type    : Int64 NULL
 output domain  : {123..=123}
 output         : 123
 
@@ -1582,7 +1609,7 @@ ast            : to_int64(parse_json('-123'))
 raw expr       : to_int64(parse_json('-123'))
 checked expr   : to_int64<Variant>(parse_json<String>("-123"))
 optimized expr : -123_i64
-output type    : Int64
+output type    : Int64 NULL
 output domain  : {-123..=-123}
 output         : -123
 
@@ -1599,7 +1626,7 @@ ast            : to_float64(parse_json('12.34'))
 raw expr       : to_float64(parse_json('12.34'))
 checked expr   : to_float64<Variant>(parse_json<String>("12.34"))
 optimized expr : 12.34_f64
-output type    : Float64
+output type    : Float64 NULL
 output domain  : {12.34..=12.34}
 output         : 12.34
 
@@ -1612,11 +1639,20 @@ error:
 
 
 
+ast            : to_date(parse_json('null'))
+raw expr       : to_date(parse_json('null'))
+checked expr   : to_date<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Date NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : to_date(parse_json('"2023-01-01"'))
 raw expr       : to_date(parse_json('"2023-01-01"'))
 checked expr   : to_date<Variant>(parse_json<String>("\"2023-01-01\""))
 optimized expr : 19358
-output type    : Date
+output type    : Date NULL
 output domain  : {19358..=19358}
 output         : '2023-01-01'
 
@@ -1625,15 +1661,24 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
 
+
+
+ast            : to_timestamp(parse_json('null'))
+raw expr       : to_timestamp(parse_json('null'))
+checked expr   : to_timestamp<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Timestamp NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 raw expr       : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 checked expr   : to_timestamp<Variant>(parse_json<String>("\"2023-01-01 00:00:00\""))
 optimized expr : 1672531200000000
-output type    : Timestamp
+output type    : Timestamp NULL
 output domain  : {1672531200000000..=1672531200000000}
 output         : '2023-01-01 00:00:00.000000'
 
@@ -1642,15 +1687,24 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
 
+
+
+ast            : to_string(parse_json('null'))
+raw expr       : to_string(parse_json('null'))
+checked expr   : to_string<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : to_string(parse_json('12.34'))
 raw expr       : to_string(parse_json('12.34'))
 checked expr   : to_string<Variant>(parse_json<String>("12.34"))
 optimized expr : "12.34"
-output type    : String
+output type    : String NULL
 output domain  : {"12.34"..="12.34"}
 output         : '12.34'
 
@@ -1659,7 +1713,7 @@ ast            : to_string(parse_json('"abc"'))
 raw expr       : to_string(parse_json('"abc"'))
 checked expr   : to_string<Variant>(parse_json<String>("\"abc\""))
 optimized expr : "abc"
-output type    : String
+output type    : String NULL
 output domain  : {"abc"..="abc"}
 output         : 'abc'
 
@@ -1818,6 +1872,15 @@ evaluation (internal):
 +--------+-------------------------------------------------------------------------------+
 
 
+ast            : try_to_boolean(parse_json('null'))
+raw expr       : try_to_boolean(parse_json('null'))
+checked expr   : try_to_boolean<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : try_to_boolean(parse_json('true'))
 raw expr       : try_to_boolean(parse_json('true'))
 checked expr   : try_to_boolean<Variant>(parse_json<String>("true"))
@@ -1841,6 +1904,15 @@ raw expr       : try_to_boolean(parse_json('"abc"'))
 checked expr   : try_to_boolean<Variant>(parse_json<String>("\"abc\""))
 optimized expr : NULL
 output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_uint64(parse_json('null'))
+raw expr       : try_to_uint64(parse_json('null'))
+checked expr   : try_to_uint64<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : UInt64 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1917,6 +1989,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : try_to_date(parse_json('null'))
+raw expr       : try_to_date(parse_json('null'))
+checked expr   : try_to_date<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Date NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : try_to_date(parse_json('"2023-01-01"'))
 raw expr       : try_to_date(parse_json('"2023-01-01"'))
 checked expr   : try_to_date<Variant>(parse_json<String>("\"2023-01-01\""))
@@ -1935,6 +2016,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : try_to_timestamp(parse_json('null'))
+raw expr       : try_to_timestamp(parse_json('null'))
+checked expr   : try_to_timestamp<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Timestamp NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : try_to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 raw expr       : try_to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 checked expr   : try_to_timestamp<Variant>(parse_json<String>("\"2023-01-01 00:00:00\""))
@@ -1949,6 +2039,15 @@ raw expr       : try_to_timestamp(parse_json('"abc"'))
 checked expr   : try_to_timestamp<Variant>(parse_json<String>("\"abc\""))
 optimized expr : NULL
 output type    : Timestamp NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_string(parse_json('null'))
+raw expr       : try_to_string(parse_json('null'))
+checked expr   : try_to_string<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -2634,7 +2733,7 @@ ast            : json_to_string(parse_json('true'))
 raw expr       : json_to_string(parse_json('true'))
 checked expr   : to_string<Variant>(parse_json<String>("true"))
 optimized expr : "true"
-output type    : String
+output type    : String NULL
 output domain  : {"true"..="true"}
 output         : 'true'
 
@@ -2643,7 +2742,7 @@ ast            : json_to_string(parse_json('123456'))
 raw expr       : json_to_string(parse_json('123456'))
 checked expr   : to_string<Variant>(parse_json<String>("123456"))
 optimized expr : "123456"
-output type    : String
+output type    : String NULL
 output domain  : {"123456"..="123456"}
 output         : '123456'
 
@@ -2652,7 +2751,7 @@ ast            : json_to_string(parse_json('"abcd"'))
 raw expr       : json_to_string(parse_json('"abcd"'))
 checked expr   : to_string<Variant>(parse_json<String>("\"abcd\""))
 optimized expr : "abcd"
-output type    : String
+output type    : String NULL
 output domain  : {"abcd"..="abcd"}
 output         : 'abcd'
 
@@ -2661,7 +2760,7 @@ ast            : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
 raw expr       : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
 checked expr   : to_string<Variant>(parse_json<String>("[1, 2, 3, 4, 5, 6]"))
 optimized expr : "[1,2,3,4,5,6]"
-output type    : String
+output type    : String NULL
 output domain  : {"[1,2,3,4,5,6]"..="[1,2,3,4,5,6]"}
 output         : '[1,2,3,4,5,6]'
 
@@ -2670,7 +2769,7 @@ ast            : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
 raw expr       : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
 checked expr   : to_string<Variant>(parse_json<String>("{\"k1\":123, \"k2\":\"abc\"}"))
 optimized expr : "{\"k1\":123,\"k2\":\"abc\"}"
-output type    : String
+output type    : String NULL
 output domain  : {"{\"k1\":123,\"k2\":\"abc\"}"..="{\"k1\":123,\"k2\":\"abc\"}"}
 output         : '{"k1":123,"k2":"abc"}'
 
@@ -3187,6 +3286,15 @@ output         : 'v'
 ast            : parse_json('{"k":"v"}')->>'x'
 raw expr       : get_string(parse_json('{"k":"v"}'), 'x')
 checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":\"v\"}"), "x")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : parse_json('{"k":null}')->>'k'
+raw expr       : get_string(parse_json('{"k":null}'), 'k')
+checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":null}"), "k")
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}

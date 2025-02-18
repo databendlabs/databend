@@ -26,13 +26,30 @@ use crate::ast::Identifier;
 use crate::ast::ShowLimit;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct VirtualColumn {
+    pub expr: Box<Expr>,
+    pub alias: Option<Identifier>,
+}
+
+impl Display for VirtualColumn {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if let Some(alias) = &self.alias {
+            write!(f, "{} AS {}", self.expr, alias)?;
+        } else {
+            write!(f, "{}", self.expr)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateVirtualColumnStmt {
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
 
-    pub virtual_columns: Vec<Expr>,
+    pub virtual_columns: Vec<VirtualColumn>,
 }
 
 impl Display for CreateVirtualColumnStmt {
@@ -66,7 +83,7 @@ pub struct AlterVirtualColumnStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
 
-    pub virtual_columns: Vec<Expr>,
+    pub virtual_columns: Vec<VirtualColumn>,
 }
 
 impl Display for AlterVirtualColumnStmt {

@@ -326,6 +326,7 @@ fn test_get_string_arrow_op(file: &mut impl Write) {
     run_ast(file, "parse_json('[1,2,3,4]')->>(2+3)", &[]);
     run_ast(file, "parse_json('{\"k\":\"v\"}')->>'k'", &[]);
     run_ast(file, "parse_json('{\"k\":\"v\"}')->>'x'", &[]);
+    run_ast(file, "parse_json('{\"k\":null}')->>'k'", &[]);
     run_ast(file, "CAST(('a', 'b') AS VARIANT)->>'2'", &[]);
 
     run_ast(file, "parse_json(s)->>i", &[
@@ -471,6 +472,7 @@ fn test_json_extract_path_text(file: &mut impl Write) {
     );
     run_ast(file, "json_extract_path_text('{\"a\":{\"b\":2}}', 'a')", &[
     ]);
+    run_ast(file, "json_extract_path_text('{\"a\":null}', 'a')", &[]);
 
     run_ast(file, "json_extract_path_text(s, k)", &[
         (
@@ -566,9 +568,11 @@ fn test_is_type(file: &mut impl Write) {
 }
 
 fn test_to_type(file: &mut impl Write) {
+    run_ast(file, "to_boolean(parse_json('null'))", &[]);
     run_ast(file, "to_boolean(parse_json('true'))", &[]);
     run_ast(file, "to_boolean(parse_json('123'))", &[]);
     run_ast(file, "to_boolean(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "to_uint64(parse_json('null'))", &[]);
     run_ast(file, "to_uint64(parse_json('123'))", &[]);
     run_ast(file, "to_uint64(parse_json('-123'))", &[]);
     run_ast(file, "to_uint64(parse_json('\"abc\"'))", &[]);
@@ -577,14 +581,17 @@ fn test_to_type(file: &mut impl Write) {
     run_ast(file, "to_int64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "to_float64(parse_json('12.34'))", &[]);
     run_ast(file, "to_float64(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "to_date(parse_json('null'))", &[]);
     run_ast(file, "to_date(parse_json('\"2023-01-01\"'))", &[]);
     run_ast(file, "to_date(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "to_timestamp(parse_json('null'))", &[]);
     run_ast(
         file,
         "to_timestamp(parse_json('\"2023-01-01 00:00:00\"'))",
         &[],
     );
     run_ast(file, "to_timestamp(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "to_string(parse_json('null'))", &[]);
     run_ast(file, "to_string(parse_json('12.34'))", &[]);
     run_ast(file, "to_string(parse_json('\"abc\"'))", &[]);
 
@@ -624,9 +631,11 @@ fn test_to_type(file: &mut impl Write) {
 }
 
 fn test_try_to_type(file: &mut impl Write) {
+    run_ast(file, "try_to_boolean(parse_json('null'))", &[]);
     run_ast(file, "try_to_boolean(parse_json('true'))", &[]);
     run_ast(file, "try_to_boolean(parse_json('123'))", &[]);
     run_ast(file, "try_to_boolean(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "try_to_uint64(parse_json('null'))", &[]);
     run_ast(file, "try_to_uint64(parse_json('123'))", &[]);
     run_ast(file, "try_to_uint64(parse_json('-123'))", &[]);
     run_ast(file, "try_to_uint64(parse_json('\"abc\"'))", &[]);
@@ -635,14 +644,17 @@ fn test_try_to_type(file: &mut impl Write) {
     run_ast(file, "try_to_int64(parse_json('\"abc\"'))", &[]);
     run_ast(file, "try_to_float64(parse_json('12.34'))", &[]);
     run_ast(file, "try_to_float64(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "try_to_date(parse_json('null'))", &[]);
     run_ast(file, "try_to_date(parse_json('\"2023-01-01\"'))", &[]);
     run_ast(file, "try_to_date(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "try_to_timestamp(parse_json('null'))", &[]);
     run_ast(
         file,
         "try_to_timestamp(parse_json('\"2023-01-01 00:00:00\"'))",
         &[],
     );
     run_ast(file, "try_to_timestamp(parse_json('\"abc\"'))", &[]);
+    run_ast(file, "try_to_string(parse_json('null'))", &[]);
     run_ast(file, "try_to_string(parse_json('12.34'))", &[]);
     run_ast(file, "try_to_string(parse_json('\"abc\"'))", &[]);
 

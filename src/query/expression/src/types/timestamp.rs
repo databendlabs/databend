@@ -274,10 +274,10 @@ pub fn microseconds_to_days(micros: i64) -> i32 {
 #[inline]
 pub fn string_to_timestamp(
     ts_str: impl AsRef<[u8]>,
-    jiff_tz: &TimeZone,
+    tz: &TimeZone,
 ) -> databend_common_exception::Result<Zoned> {
     let mut reader = Cursor::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
-    match reader.read_timestamp_text(jiff_tz) {
+    match reader.read_timestamp_text(tz) {
         Ok(dt) => match dt {
             DateTimeResType::Datetime(dt) => match reader.must_eof() {
                 Ok(..) => Ok(dt),

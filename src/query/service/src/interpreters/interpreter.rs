@@ -27,7 +27,6 @@ use databend_common_base::base::short_sql;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -50,6 +49,7 @@ use log::info;
 use md5::Digest;
 use md5::Md5;
 
+use super::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use super::hook::vacuum_hook::hook_disk_temp_dir;
 use super::hook::vacuum_hook::hook_vacuum_temp_files;
 use super::InterpreterMetrics;
@@ -187,6 +187,16 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>, has_profiles
     let typ = session.get_type();
     if typ.is_user_session() {
         SessionManager::instance().status.write().query_finish(now);
+        SessionManager::instance()
+            .metrics_collector
+            .track_finished_query(
+                ctx.get_scan_progress_value(),
+                ctx.get_write_progress_value(),
+                ctx.get_join_spill_progress_value(),
+                ctx.get_aggregate_spill_progress_value(),
+                ctx.get_group_by_spill_progress_value(),
+                ctx.get_window_partition_spill_progress_value(),
+            );
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error, has_profiles) {
@@ -359,12 +369,4 @@ fn need_acquire_lock(ctx: Arc<QueryContext>, stmt: &Statement) -> bool {
         ),
         _ => false,
     }
-}
-
-fn hook_clear_m_cte_temp_table(query_ctx: &Arc<QueryContext>) -> Result<()> {
-    let _ = GlobalIORuntime::instance().block_on(async move {
-        query_ctx.drop_m_cte_temp_table().await?;
-        Ok(())
-    });
-    Ok(())
 }

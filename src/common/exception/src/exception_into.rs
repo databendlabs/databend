@@ -17,12 +17,13 @@ use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_ast::Span;
 use geozero::error::GeozeroError;
 
 use crate::exception_backtrace::capture;
 use crate::ErrorCode;
 use crate::ErrorFrame;
+use crate::ParseError;
+use crate::Span;
 use crate::StackTrace;
 
 #[derive(thiserror::Error)]
@@ -221,8 +222,8 @@ impl From<std::string::FromUtf8Error> for ErrorCode {
     }
 }
 
-impl From<databend_common_ast::ParseError> for ErrorCode {
-    fn from(error: databend_common_ast::ParseError) -> Self {
+impl From<ParseError> for ErrorCode {
+    fn from(error: ParseError) -> Self {
         ErrorCode::SyntaxException(error.1).set_span(error.0)
     }
 }

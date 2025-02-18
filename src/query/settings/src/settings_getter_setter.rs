@@ -412,6 +412,10 @@ impl Settings {
         self.try_get_string("sandbox_tenant")
     }
 
+    pub fn get_query_tag(&self) -> Result<String> {
+        self.try_get_string("query_tag")
+    }
+
     pub fn get_hide_options_in_show_create_table(&self) -> Result<bool> {
         Ok(self.try_get_u64("hide_options_in_show_create_table")? != 0)
     }
@@ -873,5 +877,9 @@ impl Settings {
 
     pub fn get_hilbert_sample_size_per_block(&self) -> Result<u64> {
         self.try_get_u64("hilbert_sample_size_per_block")
+    }
+
+    pub fn get_copy_dedup_full_path_by_default(&self) -> Result<bool> {
+        Ok(self.try_get_u64("copy_dedup_full_path_by_default")? == 1)
     }
 }

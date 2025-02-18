@@ -67,13 +67,28 @@ EvalScalar
     └── estimated rows: 0.20
 
 statement ok
-create virtual column (v['a'][0], v['b']) for t1
+create virtual column (v['a'][0] as v1, v['b'] as v2) for t1
 
 statement ok
 refresh virtual column for t1
 
 query T
 explain select a, v['a'][0], v['b'] from t1
+----
+TableScan
+├── table: default.test_virtual_db.t1
+├── output columns: [a (#0), v['a'][0] (#2), v['b'] (#3)]
+├── read rows: 1
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['a'][0], v['b']]
+└── estimated rows: 1.00
+
+query T
+explain select a, v1, v2 from t1
 ----
 TableScan
 ├── table: default.test_virtual_db.t1
@@ -130,7 +145,6 @@ create table t2 (a int null, v json null) storage_format = 'parquet'
 statement ok
 insert into t2 values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'))
 
-
 query T
 explain select a, v['a'][0], v['b'] from t2
 ----
@@ -172,13 +186,28 @@ EvalScalar
         └── estimated rows: 1.00
 
 statement ok
-create virtual column (v['a'][0], v['b']) for t2
+create virtual column (v['a'][0] as v1, v['b'] as v2) for t2
 
 statement ok
 refresh virtual column for t2
 
 query T
 explain select a, v['a'][0], v['b'] from t2
+----
+TableScan
+├── table: default.test_virtual_db.t2
+├── output columns: [a (#0), v['a'][0] (#2), v['b'] (#3)]
+├── read rows: 1
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+├── push downs: [filters: [], limit: NONE]
+├── virtual columns: [v['a'][0], v['b']]
+└── estimated rows: 1.00
+
+query T
+explain select a, v1, v2 from t2
 ----
 TableScan
 ├── table: default.test_virtual_db.t2

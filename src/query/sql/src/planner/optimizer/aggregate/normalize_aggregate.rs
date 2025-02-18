@@ -33,6 +33,7 @@ impl RuleNormalizeAggregateOptimizer {
         RuleNormalizeAggregateOptimizer {}
     }
 
+    #[recursive::recursive]
     pub fn run(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut children = Vec::with_capacity(s_expr.arity());
         for child in s_expr.children() {
@@ -145,7 +146,7 @@ impl RuleNormalizeAggregateOptimizer {
                                 database_name: None,
                                 column_position: None,
                                 index: work_index,
-                                virtual_computed_expr: None,
+                                virtual_expr: None,
                                 data_type: work_c.return_type.clone(),
                                 visibility: Visibility::Visible,
                                 column_name: work_c.display_name.clone(),
