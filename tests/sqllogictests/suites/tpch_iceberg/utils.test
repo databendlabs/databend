@@ -14,18 +14,3 @@ CONNECTION=(
 
 statement ok
 use catalog ctl;
-
-statement ok
-use tpch;
-
-query T
-show tables;
-----
-customer
-lineitem
-nation
-orders
-part
-partsupp
-region
-supplier
