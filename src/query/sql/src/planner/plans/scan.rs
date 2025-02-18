@@ -251,7 +251,11 @@ impl Operator for Scan {
                     (Datum::Int(m), Datum::Int(n)) if m >= n => {
                         ndv = ndv.min(m.saturating_add(1).saturating_sub(*n) as u64)
                     }
-                    _ => {}
+                    _ => {
+                        if max == min {
+                            ndv = 1
+                        }
+                    }
                 };
 
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)

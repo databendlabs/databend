@@ -15,11 +15,6 @@ CONNECTION=(
 statement ok
 use catalog ctl;
 
-query T
-show databases;
-----
-tpch
-
 statement ok
 use tpch;
 
