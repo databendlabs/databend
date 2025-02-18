@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Borrow;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
@@ -29,9 +31,11 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_functions::aggregates::eval_aggr;
 
 use super::schema::segment_schema;
 use super::segment::ColumnOrientedSegment;
@@ -39,6 +43,8 @@ use crate::meta::format::encode;
 use crate::meta::supported_stat_type;
 use crate::meta::AbstractSegment;
 use crate::meta::BlockMeta;
+use crate::meta::ClusterStatistics;
+use crate::meta::ColumnStatistics;
 use crate::meta::MetaEncoding;
 use crate::meta::Statistics;
 
@@ -57,7 +63,7 @@ pub struct ColumnOrientedSegmentBuilder {
     row_count: Vec<u64>,
     block_size: Vec<u64>,
     file_size: Vec<u64>,
-    cluster_stats: Vec<Option<Vec<u8>>>,
+    cluster_stats: Vec<Option<ClusterStatistics>>,
     location: (Vec<String>, Vec<u64>),
     bloom_filter_index_location: (Vec<String>, Vec<u64>, MutableBitmap),
     bloom_filter_index_size: Vec<u64>,
@@ -67,7 +73,6 @@ pub struct ColumnOrientedSegmentBuilder {
     column_stats: HashMap<ColumnId, ColStatBuilder>,
     column_meta: HashMap<ColumnId, ColMetaBuilder>,
 
-    summary: Statistics,
     segment_schema: TableSchema,
     table_schema: TableSchemaRef,
 }
@@ -136,7 +141,6 @@ impl ColumnOrientedSegmentBuilder {
             create_on: Vec::with_capacity(block_per_segment),
             column_stats,
             column_meta,
-            summary: Default::default(),
             segment_schema,
             table_schema,
         }
@@ -150,15 +154,10 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
     }
 
     fn add_block(&mut self, block_meta: BlockMeta) -> Result<()> {
-        let cluster_stats = block_meta
-            .cluster_stats
-            .as_ref()
-            .map(|stats| encode(&MetaEncoding::MessagePack, stats))
-            .transpose()?;
         self.row_count.push(block_meta.row_count);
         self.block_size.push(block_meta.block_size);
         self.file_size.push(block_meta.file_size);
-        self.cluster_stats.push(cluster_stats);
+        self.cluster_stats.push(block_meta.cluster_stats);
         self.location.0.push(block_meta.location.0);
         self.location.1.push(block_meta.location.1);
         self.bloom_filter_index_location.0.push(
@@ -207,11 +206,21 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
     ) -> Result<Self::Segment> {
+        let summary = self.build_summary(thresholds, default_cluster_key_id)?;
+        let cluster_stats = std::mem::take(&mut self.cluster_stats);
+        let mut cluster_stats_binary = Vec::with_capacity(cluster_stats.len());
+        for stats in cluster_stats {
+            if let Some(stats) = stats {
+                cluster_stats_binary.push(Some(encode(&MetaEncoding::MessagePack, &stats)?));
+            } else {
+                cluster_stats_binary.push(None);
+            }
+        }
         let mut columns = vec![
             UInt64Type::from_data(std::mem::take(&mut self.row_count)),
             UInt64Type::from_data(std::mem::take(&mut self.block_size)),
             UInt64Type::from_data(std::mem::take(&mut self.file_size)),
-            BinaryType::from_opt_data(std::mem::take(&mut self.cluster_stats)),
+            BinaryType::from_opt_data(cluster_stats_binary),
             Column::Tuple(vec![
                 StringType::from_data(std::mem::take(&mut self.location.0)),
                 UInt64Type::from_data(std::mem::take(&mut self.location.1)),
@@ -252,7 +261,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         }
         let segment = ColumnOrientedSegment {
             block_metas: DataBlock::new_from_columns(columns),
-            summary: std::mem::take(&mut self.summary),
+            summary,
             segment_schema: self.segment_schema.clone(),
         };
         Ok(segment)
@@ -260,7 +269,11 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
 }
 
 impl ColumnOrientedSegmentBuilder {
-    pub fn build_summary(&self, thresholds: BlockThresholds) -> Statistics {
+    pub fn build_summary(
+        &mut self,
+        thresholds: BlockThresholds,
+        default_cluster_key_id: Option<u32>,
+    ) -> Result<Statistics> {
         let row_count = self.row_count.iter().sum();
         let block_count = self.row_count.len() as u64;
 
@@ -268,8 +281,10 @@ impl ColumnOrientedSegmentBuilder {
             .row_count
             .iter()
             .zip(self.block_size.iter())
-            .filter(|(row_count, block_size)| {
+            .zip(self.cluster_stats.iter())
+            .filter(|((row_count, block_size), cluster_stats)| {
                 thresholds.check_large_enough(**row_count as usize, **block_size as usize)
+                    || cluster_stats.as_ref().is_some_and(|v| v.level != 0)
             })
             .count() as u64;
 
@@ -282,15 +297,104 @@ impl ColumnOrientedSegmentBuilder {
                 .iter()
                 .map(|v| v.unwrap_or_default())
                 .sum::<u64>();
-        Statistics {
+
+        let mut col_stats = HashMap::new();
+        let mut self_column_stats = HashMap::new();
+
+        for (col_id, mut col_stat) in std::mem::take(&mut self.column_stats).into_iter() {
+            let mins = col_stat.min.build();
+            let maxs = col_stat.max.build();
+            let (mins_of_mins, _) =
+                eval_aggr("min", vec![], &[mins.clone()], block_count as usize)?;
+            let min = mins_of_mins
+                .index(0)
+                .map(|x| x.to_owned())
+                .unwrap_or(Scalar::Null);
+            let (maxs_of_maxs, _) =
+                eval_aggr("max", vec![], &[maxs.clone()], block_count as usize)?;
+            let max = maxs_of_maxs
+                .index(0)
+                .map(|x| x.to_owned())
+                .unwrap_or(Scalar::Null);
+            let null_count = col_stat.null_count.iter().sum();
+            let in_memory_size = col_stat.in_memory_size.iter().sum();
+            col_stats.insert(
+                col_id,
+                ColumnStatistics::new(min, max, null_count, in_memory_size, None),
+            );
+            col_stat.min = ColumnBuilder::from_column(mins);
+            col_stat.max = ColumnBuilder::from_column(maxs);
+            self_column_stats.insert(col_id, col_stat);
+        }
+        self.column_stats = self_column_stats;
+
+        let cluster_stats = reduce_cluster_statistics(&self.cluster_stats, default_cluster_key_id);
+
+        Ok(Statistics {
             row_count,
             block_count,
             perfect_block_count,
             uncompressed_byte_size,
             compressed_byte_size,
             index_size,
-            col_stats: todo!(),
-            cluster_stats: todo!(),
+            col_stats,
+            cluster_stats,
+        })
+    }
+}
+
+fn reduce_cluster_statistics<T: Borrow<Option<ClusterStatistics>>>(
+    blocks_cluster_stats: &[T],
+    default_cluster_key_id: Option<u32>,
+) -> Option<ClusterStatistics> {
+    if blocks_cluster_stats.is_empty() || default_cluster_key_id.is_none() {
+        return None;
+    }
+
+    let cluster_key_id = default_cluster_key_id.unwrap();
+    let len = blocks_cluster_stats.len();
+    let mut min_stats = Vec::with_capacity(len);
+    let mut max_stats = Vec::with_capacity(len);
+    let mut levels = Vec::with_capacity(len);
+
+    for cluster_stats in blocks_cluster_stats.iter() {
+        if let Some(stat) = cluster_stats.borrow() {
+            if stat.cluster_key_id != cluster_key_id {
+                return None;
+            }
+
+            min_stats.push(stat.min());
+            max_stats.push(stat.max());
+            levels.push(stat.level);
+        } else {
+            return None;
         }
+    }
+
+    let min = min_stats
+        .into_iter()
+        .min_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
+        .unwrap();
+    let max = max_stats
+        .into_iter()
+        .max_by(|x, y| x.iter().cmp_by(y.iter(), cmp_with_null))
+        .unwrap();
+    let level = levels.into_iter().max().unwrap_or(0);
+
+    Some(ClusterStatistics::new(
+        cluster_key_id,
+        min.clone(),
+        max.clone(),
+        level,
+        None,
+    ))
+}
+
+fn cmp_with_null(v1: &Scalar, v2: &Scalar) -> Ordering {
+    match (v1.is_null(), v2.is_null()) {
+        (true, true) => Ordering::Equal,
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        (false, false) => v1.cmp(v2),
     }
 }

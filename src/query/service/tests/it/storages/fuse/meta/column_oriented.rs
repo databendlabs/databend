@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use bytes::Bytes;
-use chrono::DateTime;
 use databend_common_exception::Result;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::NumberDataType;
@@ -27,14 +25,11 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRef;
-use databend_common_expression::TableSchemaRefExt;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
-use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
+use databend_common_storages_fuse::statistics::reduce_block_metas;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_query::test_kits::BlockWriter;
-use databend_query::test_kits::TestFixture;
 use databend_storages_common_table_meta::meta::decode;
 use databend_storages_common_table_meta::meta::meta_name;
 use databend_storages_common_table_meta::meta::stat_name;
@@ -111,7 +106,7 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
         for block_meta in block_metas.iter() {
             segment_builder.add_block(block_meta.clone()).unwrap();
         }
-        segment_builder.build(Default::default(), None).unwrap()
+        segment_builder.build(Default::default(), Some(0)).unwrap()
     };
 
     assert_eq!(
@@ -230,9 +225,6 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
             let stat = columns[index].to_column(column_oriented_segment.block_metas.num_rows());
             let stat = stat.as_tuple().unwrap();
             let min = stat[0].index(i).unwrap();
-            if min.is_null() {
-                println!("min is null");
-            }
             let max = stat[1].index(i).unwrap();
             let null_count = stat[2].index(i).unwrap();
             let null_count = null_count.as_number().unwrap().as_u_int64().unwrap();
@@ -275,5 +267,33 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
         }
     }
 
+    // check summary
+    let summary = reduce_block_metas(&block_metas, Default::default(), Some(0));
+    assert_eq!(summary.row_count, column_oriented_segment.summary.row_count);
+    assert_eq!(
+        summary.block_count,
+        column_oriented_segment.summary.block_count
+    );
+    assert_eq!(
+        summary.perfect_block_count,
+        column_oriented_segment.summary.perfect_block_count
+    );
+    assert_eq!(
+        summary.uncompressed_byte_size,
+        column_oriented_segment.summary.uncompressed_byte_size
+    );
+    assert_eq!(
+        summary.compressed_byte_size,
+        column_oriented_segment.summary.compressed_byte_size
+    );
+    assert_eq!(
+        summary.index_size,
+        column_oriented_segment.summary.index_size
+    );
+    assert_eq!(summary.col_stats, column_oriented_segment.summary.col_stats);
+    assert_eq!(
+        summary.cluster_stats,
+        column_oriented_segment.summary.cluster_stats
+    );
     Ok(())
 }
