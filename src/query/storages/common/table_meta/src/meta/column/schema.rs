@@ -55,9 +55,10 @@ fn col_stats_type(col_type: &TableDataType) -> TableDataType {
             "in_memory_size".to_string(),
             "distinct_of_values".to_string(),
         ],
+
         fields_type: vec![
-            col_type.clone(),
-            col_type.clone(),
+            col_type.wrap_nullable(),
+            col_type.wrap_nullable(),
             TableDataType::Number(NumberDataType::UInt64),
             TableDataType::Number(NumberDataType::UInt64),
             TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),

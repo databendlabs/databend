@@ -68,7 +68,7 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     for i in 0..100 {
         data_blocks.push(DataBlock::new_from_columns(vec![
             UInt64Type::from_data(vec![i as u64, i as u64 * 2]),
-            UInt64Type::from_opt_data(vec![Some(i as u64), None]),
+            UInt64Type::from_opt_data(vec![None, None]),
             BinaryType::from_data(vec![vec![i as u8], vec![i as u8 + 1]]),
             Column::Tuple(vec![
                 UInt64Type::from_data(vec![i as u64, i as u64 * 3]),
@@ -230,6 +230,9 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
             let stat = columns[index].to_column(column_oriented_segment.block_metas.num_rows());
             let stat = stat.as_tuple().unwrap();
             let min = stat[0].index(i).unwrap();
+            if min.is_null() {
+                println!("min is null");
+            }
             let max = stat[1].index(i).unwrap();
             let null_count = stat[2].index(i).unwrap();
             let null_count = null_count.as_number().unwrap().as_u_int64().unwrap();
