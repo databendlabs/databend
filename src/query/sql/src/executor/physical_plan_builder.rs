@@ -125,7 +125,7 @@ impl PhysicalPlanBuilder {
                 self.build_mutation(s_expr, mutation, required).await
             }
             RelOperator::MutationSource(mutation_source) => {
-                self.build_mutation_source(mutation_source, stat_info).await
+                self.build_mutation_source(mutation_source).await
             }
             RelOperator::Recluster(recluster) => {
                 self.build_recluster(s_expr, recluster, required).await

@@ -20,21 +20,23 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
+use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_expression::FunctionContext;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::binder::MutationType;
 use crate::executor::cast_expr_to_non_null_boolean;
-use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
+use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSource {
@@ -50,8 +52,6 @@ pub struct MutationSource {
 
     pub partitions: Partitions,
     pub statistics: PartStatistics,
-    // Only used for explain
-    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl MutationSource {
@@ -64,10 +64,12 @@ impl PhysicalPlanBuilder {
     pub(crate) async fn build_mutation_source(
         &mut self,
         mutation_source: &crate::plans::MutationSource,
-        stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        let filters = if let Some(filter) = &mutation_source.filter {
-            Some(create_push_down_filters(filter)?)
+        let filters = if !mutation_source.predicates.is_empty() {
+            Some(create_push_down_filters(
+                &self.ctx.get_function_context()?,
+                &mutation_source.predicates,
+            )?)
         } else {
             None
         };
@@ -112,19 +114,31 @@ impl PhysicalPlanBuilder {
             snapshot: mutation_info.table_snapshot.clone().unwrap(),
             partitions: mutation_info.partitions.clone(),
             statistics: mutation_info.statistics.clone(),
-            stat_info: Some(stat_info),
         }))
     }
 }
 
 /// create push down filters
-pub fn create_push_down_filters(scalar: &ScalarExpr) -> Result<Filters> {
-    let filter = cast_expr_to_non_null_boolean(
-        scalar
-            .as_expr()?
-            .project_column_ref(|col| col.column_name.clone()),
-    )?;
+pub fn create_push_down_filters(
+    func_ctx: &FunctionContext,
+    predicates: &[ScalarExpr],
+) -> Result<Filters> {
+    let predicates = predicates
+        .iter()
+        .map(|p| {
+            Ok(p.as_expr()?
+                .project_column_ref(|col| col.column_name.clone()))
+        })
+        .collect::<Result<Vec<_>>>()?;
 
+    let expr = predicates
+        .into_iter()
+        .try_reduce(|lhs, rhs| {
+            check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+        })?
+        .unwrap();
+    let expr = cast_expr_to_non_null_boolean(expr)?;
+    let (filter, _) = ConstantFolder::fold(&expr, func_ctx, &BUILTIN_FUNCTIONS);
     let remote_filter = filter.as_remote_expr();
 
     // prepare the inverse filter expression

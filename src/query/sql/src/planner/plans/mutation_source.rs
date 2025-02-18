@@ -40,7 +40,7 @@ pub struct MutationSource {
     pub columns: ColumnSet,
     pub table_index: IndexType,
     pub mutation_type: MutationType,
-    pub filter: Option<ScalarExpr>,
+    pub predicates: Vec<ScalarExpr>,
     pub predicate_column_index: Option<usize>,
     pub read_partition_columns: ColumnSet,
     pub update_stream_columns: bool,

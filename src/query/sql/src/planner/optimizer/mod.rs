@@ -34,6 +34,7 @@ mod statistics;
 mod util;
 
 mod dynamic_sample;
+mod mutation;
 
 pub use cascades::CascadesOptimizer;
 pub use decorrelate::FlattenInfo;

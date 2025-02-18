@@ -33,6 +33,7 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::executor::format_partial_tree;
+use databend_common_sql::executor::physical_plans::CommitSink;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
@@ -40,6 +41,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_storages_result_cache::gen_result_cache_key;
 use databend_common_storages_result_cache::ResultCacheReader;
 use databend_common_users::UserApiProvider;
+use log::info;
 use serde::Serialize;
 use serde_json;
 
@@ -197,7 +199,10 @@ impl Interpreter for ExplainInterpreter {
                         schema.clone(),
                         metadata.clone(),
                     )?;
-                    let plan = interpreter.build_physical_plan(&mutation, None).await?;
+                    let mut plan = interpreter.build_physical_plan(&mutation, None).await?;
+                    if let PhysicalPlan::CommitSink(commit) = &plan {
+                        plan = commit.input.as_ref().clone();
+                    }
                     self.explain_analyze(plan, metadata, true).await?
                 }
                 _ => Err(ErrorCode::Unimplemented(
