@@ -16489,38 +16489,29 @@ UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
 Update(
     UpdateStmt {
         hints: None,
-        table: Table {
-            span: Some(
-                7..14,
-            ),
-            catalog: None,
-            database: Some(
-                Identifier {
-                    span: Some(
-                        7..10,
-                    ),
-                    name: "db1",
-                    quote: None,
-                    ident_type: None,
-                },
-            ),
-            table: Identifier {
+        catalog: None,
+        database: Some(
+            Identifier {
                 span: Some(
-                    11..14,
+                    7..10,
                 ),
-                name: "tb1",
+                name: "db1",
                 quote: None,
                 ident_type: None,
             },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
+        ),
+        table: Identifier {
+            span: Some(
+                11..14,
+            ),
+            name: "tb1",
+            quote: None,
+            ident_type: None,
         },
+        table_alias: None,
         update_list: [
-            UpdateExpr {
+            MutationUpdateExpr {
+                table: None,
                 name: Identifier {
                     span: Some(
                         19..20,
@@ -16563,7 +16554,8 @@ Update(
                     },
                 },
             },
-            UpdateExpr {
+            MutationUpdateExpr {
+                table: None,
                 name: Identifier {
                     span: Some(
                         30..31,
@@ -16582,6 +16574,7 @@ Update(
                 },
             },
         ],
+        from: None,
         selection: Some(
             BinaryOp {
                 span: Some(
