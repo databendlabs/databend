@@ -258,3 +258,39 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         Ok(segment)
     }
 }
+
+impl ColumnOrientedSegmentBuilder {
+    pub fn build_summary(&self, thresholds: BlockThresholds) -> Statistics {
+        let row_count = self.row_count.iter().sum();
+        let block_count = self.row_count.len() as u64;
+
+        let perfect_block_count = self
+            .row_count
+            .iter()
+            .zip(self.block_size.iter())
+            .filter(|(row_count, block_size)| {
+                thresholds.check_large_enough(**row_count as usize, **block_size as usize)
+            })
+            .count() as u64;
+
+        let uncompressed_byte_size = self.block_size.iter().sum();
+        let compressed_byte_size = self.file_size.iter().sum();
+
+        let index_size = self.bloom_filter_index_size.iter().sum::<u64>()
+            + self
+                .inverted_index_size
+                .iter()
+                .map(|v| v.unwrap_or_default())
+                .sum::<u64>();
+        Statistics {
+            row_count,
+            block_count,
+            perfect_block_count,
+            uncompressed_byte_size,
+            compressed_byte_size,
+            index_size,
+            col_stats: todo!(),
+            cluster_stats: todo!(),
+        }
+    }
+}
