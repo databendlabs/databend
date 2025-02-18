@@ -249,9 +249,10 @@ impl ReclusterTableInterpreter {
                 let block_thresholds = tbl.get_block_thresholds();
                 let total_bytes = recluster_info.removed_statistics.uncompressed_byte_size as usize;
                 let total_rows = recluster_info.removed_statistics.row_count as usize;
-                let rows_per_block = block_thresholds.calc_rows_per_block(total_bytes, total_rows);
                 let block_size = settings.get_max_block_size()?;
-                settings.set_max_block_size(std::cmp::min(rows_per_block as u64, block_size))?;
+                let rows_per_block = block_thresholds
+                    .calc_rows_per_block(total_bytes, total_rows)
+                    .max(block_size as usize);
                 let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
 
                 let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
