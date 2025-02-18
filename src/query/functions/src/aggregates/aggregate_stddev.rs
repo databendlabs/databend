@@ -22,11 +22,12 @@ use databend_common_exception::Result;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::Decimal128Type;
 use databend_common_expression::types::decimal::Decimal256Type;
+use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
-use databend_common_expression::types::number::F64;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DecimalDataType;
 use databend_common_expression::types::Float64Type;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ValueType;
@@ -69,9 +70,6 @@ impl<const TYPE: u8> StddevState<TYPE> {
     }
 
     fn state_merge(&mut self, other: &Self) -> Result<()> {
-        if other.count == 0 {
-            return Ok(());
-        }
         if self.count == 0 {
             self.count = other.count;
             self.mean = other.mean;
@@ -79,34 +77,40 @@ impl<const TYPE: u8> StddevState<TYPE> {
             return Ok(());
         }
 
-        let count = self.count + other.count;
-        let mean = (self.count as f64 * self.mean + other.count as f64 * other.mean) / count as f64;
-        let delta = other.mean - self.mean;
+        if other.count > 0 {
+            let count = self.count + other.count;
+            let mean =
+                (self.count as f64 * self.mean + other.count as f64 * other.mean) / count as f64;
+            let delta = other.mean - self.mean;
 
-        self.count = count;
-        self.mean = mean;
-        self.dsquared = other.dsquared
-            + self.dsquared
-            + delta * delta * other.count as f64 * self.count as f64 / count as f64;
+            self.dsquared = other.dsquared
+                + self.dsquared
+                + delta * delta * other.count as f64 * self.count as f64 / count as f64;
+
+            self.mean = mean;
+            self.count = count;
+        }
 
         Ok(())
     }
 
-    fn state_merge_result(&mut self, builder: &mut Vec<F64>) -> Result<()> {
-        let result = if self.count <= 1 {
-            0f64
+    fn state_merge_result(
+        &mut self,
+        builder: &mut NullableColumnBuilder<Float64Type>,
+    ) -> Result<()> {
+        // For single-record inputs, VAR_SAMP and STDDEV_SAMP should return NULL
+        if self.count <= 1 && (TYPE == VAR_SAMP || TYPE == STD_SAMP) {
+            builder.push_null();
         } else {
-            match TYPE {
+            let value = match TYPE {
                 STD_POP => (self.dsquared / self.count as f64).sqrt(),
                 STD_SAMP => (self.dsquared / (self.count - 1) as f64).sqrt(),
                 VAR_POP => self.dsquared / self.count as f64,
                 VAR_SAMP => self.dsquared / (self.count - 1) as f64,
                 _ => unreachable!(),
-            }
+            };
+            builder.push(value.into());
         };
-
-        builder.push(result.into());
-
         Ok(())
     }
 }
@@ -116,7 +120,8 @@ struct NumberAggregateStddevState<const TYPE: u8> {
     state: StddevState<TYPE>,
 }
 
-impl<T, const TYPE: u8> UnaryState<T, Float64Type> for NumberAggregateStddevState<TYPE>
+impl<T, const TYPE: u8> UnaryState<T, NullableType<Float64Type>>
+    for NumberAggregateStddevState<TYPE>
 where
     T: ValueType,
     T::Scalar: Number + AsPrimitive<f64>,
@@ -136,7 +141,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut Vec<F64>,
+        builder: &mut NullableColumnBuilder<Float64Type>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         self.state.state_merge_result(builder)
@@ -158,7 +163,8 @@ struct DecimalNumberAggregateStddevState<const TYPE: u8> {
     state: StddevState<TYPE>,
 }
 
-impl<T, const TYPE: u8> UnaryState<T, Float64Type> for DecimalNumberAggregateStddevState<TYPE>
+impl<T, const TYPE: u8> UnaryState<T, NullableType<Float64Type>>
+    for DecimalNumberAggregateStddevState<TYPE>
 where
     T: ValueType,
     T::Scalar: Decimal + BorshSerialize + BorshDeserialize,
@@ -184,7 +190,7 @@ where
 
     fn merge_result(
         &mut self,
-        builder: &mut Vec<F64>,
+        builder: &mut NullableColumnBuilder<Float64Type>,
         _function_data: Option<&dyn FunctionData>,
     ) -> Result<()> {
         self.state.state_merge_result(builder)
@@ -197,21 +203,21 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
     arguments: Vec<DataType>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, arguments.len())?;
+
+    let return_type = DataType::Number(NumberDataType::Float64).wrap_nullable();
     with_number_mapped_type!(|NUM_TYPE| match &arguments[0] {
         DataType::Number(NumberDataType::NUM_TYPE) => {
-            let return_type = DataType::Number(NumberDataType::Float64);
             AggregateUnaryFunction::<
                 NumberAggregateStddevState<TYPE>,
                 NumberType<NUM_TYPE>,
-                Float64Type,
+                NullableType<Float64Type>,
             >::try_create_unary(display_name, return_type, params, arguments[0].clone())
         }
         DataType::Decimal(DecimalDataType::Decimal128(s)) => {
-            let return_type = DataType::Number(NumberDataType::Float64);
             let func = AggregateUnaryFunction::<
                 DecimalNumberAggregateStddevState<TYPE>,
                 Decimal128Type,
-                Float64Type,
+                NullableType<Float64Type>,
             >::try_create(
                 display_name, return_type, params, arguments[0].clone()
             )
@@ -219,11 +225,10 @@ pub fn try_create_aggregate_stddev_pop_function<const TYPE: u8>(
             Ok(Arc::new(func))
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
-            let return_type = DataType::Number(NumberDataType::Float64);
             let func = AggregateUnaryFunction::<
                 DecimalNumberAggregateStddevState<TYPE>,
                 Decimal256Type,
-                Float64Type,
+                NullableType<Float64Type>,
             >::try_create(
                 display_name, return_type, params, arguments[0].clone()
             )

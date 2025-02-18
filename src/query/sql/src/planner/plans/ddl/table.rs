@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
+use databend_common_ast::ast::Identifier;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
@@ -55,6 +56,8 @@ pub struct CreateTablePlan {
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
     pub inverted_indexes: Option<BTreeMap<String, TableIndex>>,
+
+    pub attached_columns: Option<Vec<Identifier>>,
 }
 
 impl CreateTablePlan {

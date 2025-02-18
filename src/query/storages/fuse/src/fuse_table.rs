@@ -50,6 +50,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
@@ -92,6 +93,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use futures_util::TryStreamExt;
+use itertools::Itertools;
 use log::info;
 use log::warn;
 use opendal::Operator;
@@ -115,6 +117,7 @@ use crate::TableStatistics;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::DEFAULT_ROW_PER_PAGE;
 use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
+use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
@@ -562,6 +565,8 @@ impl FuseTable {
             // If table_info options contains key OPT_KEY_SNAPSHOT_LOCATION_FIXED_FLAG,
             // it means that this table info has been tweaked according to the rules of
             // resolving snapshot location from the hint file, it should not be tweaked again.
+            // Otherwise, inconsistent table snapshots may be used while table is being processed in
+            // a distributed manner.
             return Ok(());
         }
 
@@ -579,12 +584,48 @@ impl FuseTable {
             None => {
                 table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
             }
-            Some((location, schema)) => {
+            Some((location, base_table_schema)) => {
                 table_info
                     .options_mut()
                     .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
 
-                table_info.meta.schema = Arc::new(schema);
+                if let Some(ids_string) = table_info
+                    .schema()
+                    .metadata
+                    .get(FUSE_OPT_KEY_ATTACH_COLUMN_IDS)
+                {
+                    // extract ids of column to include
+                    let ids: Vec<ColumnId> = ids_string
+                        .as_str()
+                        .split(",")
+                        .map(|s| s.parse::<u32>())
+                        .try_collect()?;
+
+                    // retain the columns that are still there
+                    let fields: Vec<TableField> = ids
+                        .iter()
+                        .filter_map(|id| base_table_schema.field_of_column_id(*id).ok().cloned())
+                        .collect();
+
+                    if fields.is_empty() {
+                        return Err(ErrorCode::StorageOther(format!(
+                            "no effective columns found in ATTACH table {}",
+                            table_info.desc
+                        )));
+                    }
+
+                    let mut new_schema = table_info.meta.schema.as_ref().clone();
+                    new_schema.metadata = base_table_schema.metadata.clone();
+                    new_schema.metadata.insert(
+                        FUSE_OPT_KEY_ATTACH_COLUMN_IDS.to_owned(),
+                        ids_string.clone(),
+                    );
+                    new_schema.next_column_id = base_table_schema.next_column_id();
+                    new_schema.fields = fields;
+                    table_info.meta.schema = Arc::new(new_schema);
+                } else {
+                    table_info.meta.schema = Arc::new(base_table_schema);
+                }
             }
         }
 

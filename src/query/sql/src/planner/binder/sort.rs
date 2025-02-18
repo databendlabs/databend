@@ -129,7 +129,7 @@ impl Binder {
                                 .to_string(),
                         ));
                     } else {
-                        let rewrite_scalar = self
+                        let mut rewrite_scalar = self
                             .rewrite_scalar_with_replacement(
                                 bind_context,
                                 &bound_expr,
@@ -147,6 +147,10 @@ impl Binder {
                                 },
                             )
                             .map_err(|e| ErrorCode::SemanticError(e.message()))?;
+
+                        let mut rewriter =
+                            AggregateRewriter::new(bind_context, self.metadata.clone());
+                        rewriter.visit(&mut rewrite_scalar)?;
 
                         if let ScalarExpr::ConstantExpr(..) = rewrite_scalar {
                             continue;
