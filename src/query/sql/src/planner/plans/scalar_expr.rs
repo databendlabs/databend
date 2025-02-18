@@ -1050,6 +1050,7 @@ pub trait Visitor<'a>: Sized {
     }
 }
 
+#[recursive::recursive]
 pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> Result<()> {
     match expr {
         ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
@@ -1067,6 +1068,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
     }
 }
 
+#[recursive::recursive]
 pub fn walk_window<'a, V: Visitor<'a>>(visitor: &mut V, window: &'a WindowFunc) -> Result<()> {
     for expr in &window.partition_by {
         visitor.visit(expr)?;
@@ -1160,6 +1162,7 @@ pub trait VisitorMut<'a>: Sized {
     }
 }
 
+#[recursive::recursive]
 pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
     visitor: &mut V,
     expr: &'a mut ScalarExpr,
@@ -1180,6 +1183,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
     }
 }
 
+#[recursive::recursive]
 pub fn walk_window_mut<'a, V: VisitorMut<'a>>(
     visitor: &mut V,
     window: &'a mut WindowFunc,
