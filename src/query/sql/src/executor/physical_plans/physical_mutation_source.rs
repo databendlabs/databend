@@ -36,7 +36,6 @@ use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
-use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSource {
