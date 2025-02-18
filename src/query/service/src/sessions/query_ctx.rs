@@ -1206,7 +1206,6 @@ impl TableContext for QueryContext {
                     }
                 })
                 .collect::<Vec<_>>();
-            println!("filter req {}", files[0]);
             let req = GetTableCopiedFileReq {
                 table_id,
                 files: files.clone(),
@@ -1216,7 +1215,6 @@ impl TableContext for QueryContext {
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
-            println!("copied files {:?}", &copied_files);
 
             metrics_inc_copy_filter_out_copied_files_request_milliseconds(
                 Instant::now().duration_since(start_request).as_millis() as u64,

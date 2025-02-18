@@ -211,7 +211,6 @@ impl PipelineBuilder {
             } else {
                 file.path.clone()
             };
-            println!("commit {path}");
             copied_file_tree.insert(path, TableCopiedFileInfo {
                 etag: short_etag,
                 content_length: file.size,
