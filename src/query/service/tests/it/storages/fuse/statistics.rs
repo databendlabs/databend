@@ -326,7 +326,7 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
         let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
-        stats_acc.add_block(block_meta);
+        stats_acc.add_block(block_meta).unwrap();
     }
 
     assert_eq!(10, stats_acc.blocks_metas.len());

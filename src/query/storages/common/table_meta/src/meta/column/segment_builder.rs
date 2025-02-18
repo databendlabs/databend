@@ -36,6 +36,7 @@ use databend_common_expression::TableSchemaRef;
 use super::schema::segment_schema;
 use super::segment::ColumnOrientedSegment;
 use crate::meta::format::encode;
+use crate::meta::supported_stat_type;
 use crate::meta::AbstractSegment;
 use crate::meta::BlockMeta;
 use crate::meta::MetaEncoding;
@@ -106,10 +107,12 @@ impl ColumnOrientedSegmentBuilder {
         let mut column_meta = HashMap::new();
 
         for field in table_schema.leaf_fields() {
-            column_stats.insert(
-                field.column_id(),
-                ColStatBuilder::new(&field.data_type(), block_per_segment),
-            );
+            if supported_stat_type(&field.data_type().into()) {
+                column_stats.insert(
+                    field.column_id(),
+                    ColStatBuilder::new(&field.data_type(), block_per_segment),
+                );
+            }
             column_meta.insert(field.column_id(), ColMetaBuilder::default());
         }
 
@@ -229,15 +232,18 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         let mut column_meta = std::mem::take(&mut self.column_meta);
         for field in self.table_schema.leaf_fields() {
             let col_id = field.column_id();
-            let col_stat = column_stats.remove(&col_id).unwrap();
+            if supported_stat_type(&field.data_type().into()) {
+                let col_stat = column_stats.remove(&col_id).unwrap();
+                columns.push(Column::Tuple(vec![
+                    col_stat.min.build(),
+                    col_stat.max.build(),
+                    UInt64Type::from_data(col_stat.null_count),
+                    UInt64Type::from_data(col_stat.in_memory_size),
+                    UInt64Type::from_opt_data(col_stat.distinct_of_values),
+                ]));
+            }
+
             let col_meta = column_meta.remove(&col_id).unwrap();
-            columns.push(Column::Tuple(vec![
-                col_stat.min.build(),
-                col_stat.max.build(),
-                UInt64Type::from_data(col_stat.null_count),
-                UInt64Type::from_data(col_stat.in_memory_size),
-                UInt64Type::from_opt_data(col_stat.distinct_of_values),
-            ]));
             columns.push(Column::Tuple(vec![
                 UInt64Type::from_data(col_meta.offset),
                 UInt64Type::from_data(col_meta.length),

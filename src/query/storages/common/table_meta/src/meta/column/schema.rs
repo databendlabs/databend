@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+
+use crate::meta::supported_stat_type;
 
 fn location_parts() -> (Vec<String>, Vec<TableDataType>) {
     (
@@ -98,14 +101,24 @@ pub fn segment_schema(table_schema: &TableSchema) -> TableSchema {
     ];
 
     for field in table_schema.leaf_fields() {
+        if supported_stat_type(&field.data_type().into()) {
+            fields.push(TableField::new(
+                &stat_name(field.column_id()),
+                col_stats_type(&field.data_type()),
+            ));
+        }
         fields.push(TableField::new(
-            &format!("stat_{}", field.column_id()),
-            col_stats_type(&field.data_type()),
-        ));
-        fields.push(TableField::new(
-            &format!("meta_{}", field.column_id()),
+            &meta_name(field.column_id()),
             col_meta_type(),
         ));
     }
     TableSchema::new(fields)
+}
+
+pub fn stat_name(col_id: ColumnId) -> String {
+    format!("stat_{}", col_id)
+}
+
+pub fn meta_name(col_id: ColumnId) -> String {
+    format!("meta_{}", col_id)
 }
