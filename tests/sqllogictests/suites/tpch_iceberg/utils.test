@@ -12,5 +12,7 @@ CONNECTION=(
     "s3.endpoint"='http://127.0.0.1:9000'
 );
 
-statement ok
-use catalog ctl;
+query T
+show databases from ctl;
+----
+tpch
