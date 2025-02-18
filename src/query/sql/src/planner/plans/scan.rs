@@ -247,8 +247,8 @@ impl Operator for Scan {
 
                 // Alter ndv based on min and max if the datum is uint or int.
                 match (&max, &min) {
-                    (Datum::UInt(m), Datum::UInt(n)) if m > n => ndv = ndv.min(m - n),
-                    (Datum::Int(m), Datum::Int(n)) if m > n => ndv = ndv.min((m - n) as u64),
+                    (Datum::UInt(m), Datum::UInt(n)) if m >= n => ndv = ndv.min(m - n + 1),
+                    (Datum::Int(m), Datum::Int(n)) if m >= n => ndv = ndv.min((m - n + 1) as u64),
                     _ => {}
                 };
 
