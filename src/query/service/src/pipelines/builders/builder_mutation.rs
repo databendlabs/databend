@@ -64,7 +64,7 @@ impl PipelineBuilder {
         let serialize_segment_transform = new_serialize_segment_pipe_item(
             InputPort::create(),
             OutputPort::create(),
-            &table,
+            table,
             block_thresholds,
         )?;
 

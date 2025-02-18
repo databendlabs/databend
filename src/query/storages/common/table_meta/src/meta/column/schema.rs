@@ -105,7 +105,7 @@ pub fn segment_schema(table_schema: &TableSchema) -> TableSchema {
         if supported_stat_type(&field.data_type().into()) {
             fields.push(TableField::new(
                 &stat_name(field.column_id()),
-                col_stats_type(&field.data_type()),
+                col_stats_type(field.data_type()),
             ));
         }
         fields.push(TableField::new(

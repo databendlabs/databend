@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_meta;
+// mod block_meta;
 mod cluster_statistics;
 mod schema;
 mod segment;
 mod segment_builder;
 
-pub use block_meta::AbstractBlockMeta;
+// pub use block_meta::AbstractBlockMeta;
 pub use cluster_statistics::AbstractClusterStatistics;
 pub use schema::meta_name;
 pub use schema::stat_name;

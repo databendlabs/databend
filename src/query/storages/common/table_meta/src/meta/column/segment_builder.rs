@@ -115,7 +115,7 @@ impl ColumnOrientedSegmentBuilder {
             if supported_stat_type(&field.data_type().into()) {
                 column_stats.insert(
                     field.column_id(),
-                    ColStatBuilder::new(&field.data_type(), block_per_segment),
+                    ColStatBuilder::new(field.data_type(), block_per_segment),
                 );
             }
             column_meta.insert(field.column_id(), ColMetaBuilder::default());

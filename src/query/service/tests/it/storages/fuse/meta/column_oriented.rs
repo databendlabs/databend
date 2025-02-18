@@ -34,8 +34,6 @@ use databend_storages_common_table_meta::meta::decode;
 use databend_storages_common_table_meta::meta::meta_name;
 use databend_storages_common_table_meta::meta::stat_name;
 use databend_storages_common_table_meta::meta::testing::MetaEncoding;
-use databend_storages_common_table_meta::meta::AbstractSegment;
-use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::Compression;
@@ -197,7 +195,7 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     for (inverted_index_size, block_meta) in inverted_index_size.iter().zip(block_metas.iter()) {
         let is_null = inverted_index_size.is_null();
         assert_eq!(is_null, block_meta.inverted_index_size.is_none());
-        assert_eq!(is_null, true);
+        assert!(is_null);
     }
 
     // check compression
