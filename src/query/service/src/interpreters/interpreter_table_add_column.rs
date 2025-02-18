@@ -14,14 +14,17 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
+use databend_common_expression::TableSchema;
 use databend_common_license::license::Feature::ComputedColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::DatabaseType;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
@@ -146,18 +149,15 @@ impl Interpreter for AddTableColumnInterpreter {
             .await;
         }
 
-        let mut new_table_meta = table_info.meta.clone();
-        let _ = generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
-
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
+        let new_table_meta = table_info.meta.clone();
+        commit_table_meta(
+            &self.ctx,
+            tbl.as_ref(),
+            &table_info,
             new_table_meta,
-        };
-
-        let _resp = catalog.update_single_table_meta(req, &table_info).await?;
+            catalog,
+        )
+        .await?;
 
         // If the column is not deterministic, update to refresh the value with default expr.
         if !self.plan.is_deterministic {
@@ -188,49 +188,75 @@ impl Interpreter for AddTableColumnInterpreter {
     }
 }
 
-pub(crate) async fn generate_new_snapshot(
+pub(crate) async fn commit_table_meta(
     ctx: &QueryContext,
-    table: &dyn Table,
-    new_table_meta: &mut TableMeta,
+    tbl: &dyn Table,
+    table_info: &TableInfo,
+    mut new_table_meta: TableMeta,
+    catalog: Arc<dyn Catalog>,
 ) -> Result<()> {
-    if let Ok(fuse_table) = FuseTable::try_from_table(table) {
-        if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
-            let mut new_snapshot = TableSnapshot::from_previous(
-                snapshot.as_ref(),
-                Some(fuse_table.get_table_info().ident.seq),
+    if let Ok(fuse_tbl) = FuseTable::try_from_table(tbl) {
+        let table_id = table_info.ident.table_id;
+        let table_version = table_info.ident.seq;
+
+        let new_snapshot_location = generate_new_snapshot(fuse_tbl, &new_table_meta.schema).await?;
+
+        if let Some(new_snapshot_location) = &new_snapshot_location {
+            new_table_meta.options.insert(
+                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+                new_snapshot_location.clone(),
             );
+        };
 
-            // replace schema
-            new_snapshot.schema = new_table_meta.schema.as_ref().clone();
+        let req = UpdateTableMetaReq {
+            table_id,
+            seq: MatchSeq::Exact(table_version),
+            new_table_meta: new_table_meta.clone(),
+        };
 
-            // write down new snapshot
-            let new_snapshot_location = fuse_table
-                .meta_location_generator()
-                .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+        catalog.update_single_table_meta(req, table_info).await?;
 
-            let data = new_snapshot.to_bytes()?;
-            fuse_table
-                .get_operator_ref()
-                .write(&new_snapshot_location, data)
-                .await?;
-
-            // write down hint
+        if let Some(new_snapshot_location) = new_snapshot_location {
             FuseTable::write_last_snapshot_hint(
                 ctx,
-                fuse_table.get_operator_ref(),
-                fuse_table.meta_location_generator(),
+                fuse_tbl.get_operator_ref(),
+                fuse_tbl.meta_location_generator(),
                 &new_snapshot_location,
+                &new_table_meta,
             )
             .await;
-
-            new_table_meta
-                .options
-                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_location);
-        } else {
-            info!("Snapshot not found, no need to generate new snapshot");
         }
-    } else {
-        info!("Not a fuse table, no need to generate new snapshot");
     }
     Ok(())
+}
+
+pub(crate) async fn generate_new_snapshot(
+    fuse_table: &FuseTable,
+    new_table_schema: &TableSchema,
+) -> Result<Option<String>> {
+    if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
+        let mut new_snapshot = TableSnapshot::from_previous(
+            snapshot.as_ref(),
+            Some(fuse_table.get_table_info().ident.seq),
+        );
+
+        // replace schema
+        new_snapshot.schema = new_table_schema.clone();
+
+        // write down new snapshot
+        let new_snapshot_location = fuse_table
+            .meta_location_generator()
+            .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+
+        let data = new_snapshot.to_bytes()?;
+        fuse_table
+            .get_operator_ref()
+            .write(&new_snapshot_location, data)
+            .await?;
+
+        Ok(Some(new_snapshot_location))
+    } else {
+        info!("Snapshot not found, no need to generate new snapshot");
+        Ok(None)
+    }
 }
