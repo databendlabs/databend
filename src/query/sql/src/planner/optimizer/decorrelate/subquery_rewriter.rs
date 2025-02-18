@@ -86,6 +86,7 @@ impl SubqueryRewriter {
         }
     }
 
+    #[recursive::recursive]
     pub fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan().clone() {
             RelOperator::EvalScalar(mut plan) => {

@@ -14,13 +14,12 @@
 
 // TODO(xuanwo): Add crate level documents here.
 
+#![feature(trivial_bounds)]
 #[allow(clippy::collapsible_match)]
 pub mod ast;
-mod error;
 pub mod parser;
-pub mod span;
 
-pub use error::ParseError;
-pub use error::Result;
-pub use span::Range;
-pub use span::Span;
+pub use databend_common_exception::ParseError;
+pub type Result<T> = std::result::Result<T, ParseError>;
+pub use databend_common_exception::Range;
+pub use databend_common_exception::Span;

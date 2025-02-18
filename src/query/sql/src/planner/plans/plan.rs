@@ -24,6 +24,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use educe::Educe;
 
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
@@ -166,7 +167,11 @@ use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::MetadataRef;
 
-#[derive(Clone, Debug)]
+#[derive(Educe)]
+#[educe(
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub enum Plan {
     // `SELECT` statement
     Query {
