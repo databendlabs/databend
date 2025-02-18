@@ -82,11 +82,11 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey > 1 and l_commitdate =
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 1.00
+├── estimated rows: 243.54
 └── Filter
     ├── output columns: []
     ├── filters: [is_true(lineitem.l_orderkey (#0) > 1), is_true(lineitem.l_commitdate (#11) = '1992-01-22')]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 243.54
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── output columns: [l_orderkey (#0), l_commitdate (#11)]
