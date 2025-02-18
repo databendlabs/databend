@@ -98,6 +98,7 @@ pub struct With {
 }
 
 impl Display for With {
+    #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.recursive {
             write!(f, "RECURSIVE ")?;
@@ -117,6 +118,7 @@ pub struct CTE {
 }
 
 impl Display for CTE {
+    #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} AS ", self.alias)?;
         if self.materialized {
@@ -303,6 +305,7 @@ pub enum SetExpr {
 }
 
 impl Display for SetExpr {
+    #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SetExpr::Select(select_stmt) => {
@@ -888,6 +891,7 @@ impl TableReference {
 }
 
 impl Display for TableReference {
+    #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TableReference::Table {
