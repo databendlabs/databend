@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::Filters;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
@@ -28,22 +29,29 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::binder::MutationType;
 use crate::executor::cast_expr_to_non_null_boolean;
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::ColumnSet;
+use crate::IndexType;
 use crate::ScalarExpr;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MutationSource {
     // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-    pub partitions: Partitions,
+    pub table_index: IndexType,
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
     pub output_schema: DataSchemaRef,
     pub input_type: MutationType,
     pub read_partition_columns: ColumnSet,
     pub snapshot: Arc<TableSnapshot>,
+
+    pub partitions: Partitions,
+    pub statistics: PartStatistics,
+    // Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
 }
 
 impl MutationSource {
@@ -56,6 +64,7 @@ impl PhysicalPlanBuilder {
     pub(crate) async fn build_mutation_source(
         &mut self,
         mutation_source: &crate::plans::MutationSource,
+        stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let filters = if let Some(filter) = &mutation_source.filter {
             Some(create_push_down_filters(filter)?)
@@ -94,13 +103,16 @@ impl PhysicalPlanBuilder {
         let output_schema = DataSchemaRefExt::create(fields);
         Ok(PhysicalPlan::MutationSource(MutationSource {
             plan_id: 0,
-            partitions: mutation_info.partitions.clone().unwrap(),
+            table_index: mutation_source.table_index,
             output_schema,
             table_info: mutation_info.table_info.clone(),
             filters,
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
             snapshot: mutation_info.table_snapshot.clone().unwrap(),
+            partitions: mutation_info.partitions.clone(),
+            statistics: mutation_info.statistics.clone(),
+            stat_info: Some(stat_info),
         }))
     }
 }

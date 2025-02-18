@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoPtr;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
@@ -54,11 +55,6 @@ use crate::pruning::FusePruner;
 use crate::FuseLazyPartInfo;
 use crate::FuseTable;
 use crate::SegmentLocation;
-
-pub struct MutationTaskInfo {
-    pub total_tasks: usize,
-    pub num_whole_block_mutation: usize,
-}
 
 impl FuseTable {
     pub fn try_eval_const(
@@ -181,31 +177,32 @@ impl FuseTable {
         filters: Option<Filters>,
         is_lazy: bool,
         is_delete: bool,
-    ) -> Result<Partitions> {
-        let partitions = if is_lazy {
+    ) -> Result<(PartStatistics, Partitions)> {
+        if is_lazy {
+            let segment_len = snapshot.segments.len();
             let mut segments = Vec::with_capacity(snapshot.segments.len());
             for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                 segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
             }
-            Partitions::create(PartitionsShuffleKind::Mod, segments)
+            Ok((
+                PartStatistics::new_estimated(
+                    None,
+                    snapshot.summary.row_count as usize,
+                    snapshot.summary.compressed_byte_size as usize,
+                    segment_len,
+                    segment_len,
+                ),
+                Partitions::create(PartitionsShuffleKind::Mod, segments),
+            ))
         } else {
             let projection = Projection::Columns(col_indices.clone());
             let prune_ctx = MutationBlockPruningContext {
                 segment_locations: create_segment_location_vector(snapshot.segments.clone(), None),
                 block_count: Some(snapshot.summary.block_count as usize),
             };
-            let (partitions, info) = self
-                .do_mutation_block_pruning(ctx, filters, projection, prune_ctx, true, is_delete)
-                .await?;
-            if is_delete {
-                log::info!(
-                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
-                    info.num_whole_block_mutation
-                );
-            }
-            partitions
-        };
-        Ok(partitions)
+            self.do_mutation_block_pruning(ctx, filters, projection, prune_ctx, true, is_delete)
+                .await
+        }
     }
 
     #[async_backtrace::framed]
@@ -218,7 +215,7 @@ impl FuseTable {
         prune_ctx: MutationBlockPruningContext,
         with_origin: bool,
         is_delete: bool,
-    ) -> Result<(Partitions, MutationTaskInfo)> {
+    ) -> Result<(PartStatistics, Partitions)> {
         let MutationBlockPruningContext {
             segment_locations,
             block_count,
@@ -243,7 +240,7 @@ impl FuseTable {
             // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
             //
             // let's try pruning the blocks further to get the blocks that need to be deleted completely, so that
-            // later during mutation, we need not to load the data of these blocks:
+            // later during mutation, we need not load the data of these blocks:
             //
             // 1. invert the filter expression
             // 2. apply the inverse filter expression to the block metas, utilizing range index
@@ -287,7 +284,7 @@ impl FuseTable {
             .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
-        let (_, inner_parts) = self.read_partitions_with_metas(
+        let (statistics, inner_parts) = self.read_partitions_with_metas(
             ctx.clone(),
             self.schema_with_stream(),
             None,
@@ -325,6 +322,7 @@ impl FuseTable {
         let mut num_whole_block_mutation = whole_block_deletions.len();
         let segment_num = pruner.deleted_segments.len();
         // now try to add deleted_segment
+        // todo check
         for deleted_segment in pruner.deleted_segments {
             part_num += deleted_segment.summary.block_count as usize;
             num_whole_block_mutation += deleted_segment.summary.block_count as usize;
@@ -340,10 +338,13 @@ impl FuseTable {
         }
         metrics_inc_deletion_block_range_pruned_whole_block_nums(num_whole_block_mutation as u64);
         metrics_inc_deletion_segment_range_purned_whole_segment_nums(segment_num as u64);
-        Ok((parts, MutationTaskInfo {
-            total_tasks: part_num,
-            num_whole_block_mutation,
-        }))
+        if is_delete {
+            log::info!(
+                "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                num_whole_block_mutation
+            );
+        }
+        Ok((statistics, parts))
     }
 }
 

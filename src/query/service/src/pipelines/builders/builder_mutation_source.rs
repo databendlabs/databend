@@ -70,7 +70,7 @@ impl PipelineBuilder {
             };
             Runtime::with_worker_threads(2, Some("do_mutation_block_pruning".to_string()))?
                 .block_on(async move {
-                    let (partitions, _) = table_clone
+                    let (_, partitions) = table_clone
                         .do_mutation_block_pruning(
                             ctx_clone,
                             filters_clone,

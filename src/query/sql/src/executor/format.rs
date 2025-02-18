@@ -300,6 +300,21 @@ pub fn format_partial_tree(
                 children,
             ))
         }
+        PhysicalPlan::MutationSource(plan) => {
+            let metadata = metadata.read().clone();
+            let table = metadata.table(plan.table_index).clone();
+            let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+            let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+            if let Some(info) = &plan.stat_info {
+                let items = plan_stats_info_to_format_tree(info);
+                children.extend(items);
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+            Ok(FormatTreeNode::with_children(
+                "Mutation Source".to_string(),
+                children,
+            ))
+        }
         other => {
             let children = other
                 .children()
@@ -519,7 +534,7 @@ fn format_mutation_source(
     _profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::with_children(
-        format!("Mutation Source"),
+        "Mutation Source".to_string(),
         vec![],
     ))
 }

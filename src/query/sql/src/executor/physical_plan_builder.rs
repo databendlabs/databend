@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -124,7 +125,7 @@ impl PhysicalPlanBuilder {
                 self.build_mutation(s_expr, mutation, required).await
             }
             RelOperator::MutationSource(mutation_source) => {
-                self.build_mutation_source(mutation_source).await
+                self.build_mutation_source(mutation_source, stat_info).await
             }
             RelOperator::Recluster(recluster) => {
                 self.build_recluster(s_expr, recluster, required).await
@@ -147,5 +148,6 @@ pub struct MutationBuildInfo {
     pub table_info: TableInfo,
     pub table_snapshot: Option<Arc<TableSnapshot>>,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
-    pub partitions: Option<Partitions>,
+    pub partitions: Partitions,
+    pub statistics: PartStatistics,
 }
