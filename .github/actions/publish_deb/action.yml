@@ -1,9 +1,6 @@
 name: Publish Deb
 description: Publish repository for debian/ubuntu
 inputs:
-  version:
-    description: "Release version"
-    required: true
   gpg_signing_key:
     description: "GPG signing key"
     required: true
@@ -25,11 +22,11 @@ runs:
         echo -n "$GPG_SIGNING_KEY" | gpg --import
         gpg -k
 
-    - name: Add Packages
+    - name: Add Databend Packages
       shell: bash
       working-directory: scripts/distribution/deb
       run: |
-        version=${{ inputs.version }}
+        version=$(gh release view --repo databendlabs/databend --json name | jq -r '.name')
         deb_version=${version/-/.}
         deb_version=${deb_version/v/}
         wget -q https://github.com/databendlabs/databend/releases/download/${version}/databend_${deb_version}_amd64.deb
@@ -37,7 +34,7 @@ runs:
         reprepro includedeb stable databend_${deb_version}_amd64.deb
         reprepro includedeb stable databend_${deb_version}_arm64.deb
 
-    - name: Add BendSQL
+    - name: Add BendSQL Packages
       shell: bash
       working-directory: scripts/distribution/deb
       run: |
