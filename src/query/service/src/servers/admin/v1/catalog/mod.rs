@@ -12,16 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod background_tasks;
-pub mod catalog;
-pub mod cluster;
-pub mod config;
-pub mod instance_status;
-pub mod processes;
-pub mod query_profiling;
-pub mod settings;
-pub mod stream_status;
-pub mod system;
-pub mod tenant_table_stats;
-pub mod tenant_tables;
-pub mod user_functions;
+pub mod get_database_table;
+pub mod list_database_table_fields;
+pub mod list_database_tables;
+pub mod list_databases;
+pub mod search_tables;
