@@ -37,6 +37,7 @@ use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_metrics::storage::*;
 use databend_common_storage::init_stage_operator;
 use log::info;
+use opendal::Operator;
 
 use crate::plans::Plan;
 
@@ -139,6 +140,19 @@ pub struct CopyIntoTablePlan {
     pub enable_distributed: bool,
 
     pub files_collected: bool,
+
+    pub dedup_full_path: bool,
+    pub path_prefix: Option<String>,
+}
+
+fn get_path_prefix(op: &Operator) -> String {
+    let info = op.info();
+    let p = format!("{}://{}{}", info.scheme(), info.name(), info.root());
+    if p.ends_with('/') {
+        p
+    } else {
+        format!("{}/", p)
+    }
 }
 
 impl CopyIntoTablePlan {
@@ -207,6 +221,10 @@ impl CopyIntoTablePlan {
             ctx.set_status_info("begin filtering out copied files");
 
             let filter_start = Instant::now();
+            if self.dedup_full_path {
+                let prefix = get_path_prefix(&operator);
+                self.path_prefix = Some(prefix.clone());
+            };
             let FilteredCopyFiles {
                 files_to_copy,
                 duplicated_files,
@@ -216,6 +234,7 @@ impl CopyIntoTablePlan {
                     &self.database_name,
                     &self.table_name,
                     &all_source_file_infos,
+                    self.path_prefix.clone(),
                     max_files,
                 )
                 .await?;

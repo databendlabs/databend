@@ -7,7 +7,7 @@
   <a href="https://docs.databend.com/guides/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://docs.databend.com/">Documentation</a>  |
   <a href="https://benchmark.clickhouse.com/">Benchmarking</a>  |
-  <a href="https://github.com/datafuselabs/databend/issues/11868">Roadmap (v1.3)</a>
+  <a href="https://github.com/databendlabs/databend/issues/11868">Roadmap (v1.3)</a>
 
 </h4>
 
@@ -22,7 +22,7 @@
 
 <br>
 
-<a href="https://github.com/datafuselabs/databend/actions/workflows/release.yml">
+<a href="https://github.com/databendlabs/databend/actions/workflows/release.yml">
 <img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/release.yml?branch=main" alt="CI Status" />
 </a>
 
@@ -35,11 +35,11 @@
 </div>
 </div>
 
-<img src="https://github.com/datafuselabs/databend/assets/172204/9997d8bc-6462-4dbd-90e3-527cf50a709c" alt="databend" />
+<img src="https://github.com/databendlabs/databend/assets/172204/9997d8bc-6462-4dbd-90e3-527cf50a709c" alt="databend" />
 
 ## 🐋 Introduction
 
-**Databend**, built in Rust, is an open-source cloud data warehouse that serves as a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). With its focus on fast query execution and data ingestion, it's designed for complex analysis of the world's largest datasets.
+**Databend**, built in Rust, is an open-source cloud data warehouse that serves as a cost-effective [alternative to Snowflake](https://github.com/databendlabs/databend/issues/13059). With its focus on fast query execution and data ingestion, it's designed for complex analysis of the world's largest datasets.
 
 **Production-Proven Scale:**
 - 🤝 **Enterprise Adoption**: Trusted by over **50 organizations** processing more than **100 million queries daily**
@@ -53,7 +53,7 @@
 
 </div>
 
-![Databend vs. Snowflake](https://github.com/datafuselabs/wizard/assets/172204/d796acf0-0a66-4b1d-8754-cd2cd1de04c7)
+![Databend vs. Snowflake](https://github.com/databendlabs/wizard/assets/172204/d796acf0-0a66-4b1d-8754-cd2cd1de04c7)
 
 <div align="center">
 
@@ -61,36 +61,36 @@
 
 </div>
 
-![Databend vs. Snowflake](https://github.com/datafuselabs/databend/assets/172204/c61d7a40-f6fe-4fb9-83e8-06ea9599aeb4)
+![Databend vs. Snowflake](https://github.com/databendlabs/databend/assets/172204/c61d7a40-f6fe-4fb9-83e8-06ea9599aeb4)
 
 
 ## 🚀 Why Databend
 
 - **Full Control**: Deploy on **cloud** or **on-prem** to suit your needs.
-  
+
 - **Blazing-Fast Performance**: Built with **Rust** for high-speed query execution. 👉 [ClickBench](https://databend.com/blog/clickbench-databend-top)
-  
+
 - **Cost-Effective**: Scalable architecture that boosts **performance** and reduces **costs**. 👉 [TPC-H](https://docs.databend.com/guides/benchmark/tpch)
-  
+
 - **AI-Enhanced Analytics**: Leverage built-in **[AI Functions](https://docs.databend.com/guides/ai-functions/)** for smarter data insights.
-  
+
 - **Simplified ETL**: Direct **data ingestion** without the need for external ETL tools. 👉 [Data Loading](https://docs.databend.com/guides/load-data/)
-  
+
 - **Real-Time Data Updates**: Keep your analytics **up-to-date** with real-time incremental data updates. 👉 [Stream](https://docs.databend.com/guides/load-data/continuous-data-pipelines/stream)
-  
+
 - **Advanced Indexing**: Boost query performance with **[Virtual Column](https://docs.databend.com/guides/performance/virtual-column)**, **[Aggregating Index](https://docs.databend.com/guides/performance/aggregating-index)**, and **[Full-Text Index](https://docs.databend.com/guides/performance/fulltext-index)**.
-  
+
 - **ACID Compliance + Version Control**: Ensure reliable **transactions** with full ACID compliance and Git-like versioning.
-  
+
 - **Schema Flexibility**: Effortlessly handle **semi-structured data** with the flexible **[VARIANT](https://docs.databend.com/sql/sql-reference/data-types/variant)** data type.
-  
-- **Community-Driven Growth**: **Open-source** and continuously evolving with contributions from a global community.  
+
+- **Community-Driven Growth**: **Open-source** and continuously evolving with contributions from a global community.
 
 
 
 ## 📐 Architecture
 
-![Databend Architecture](https://github.com/datafuselabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
+![Databend Architecture](https://github.com/databendlabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
 
 ## 🚀 Try Databend
 
@@ -280,7 +280,7 @@ Here are some resources to help you get started:
 For guidance on using Databend, we recommend starting with the official documentation. If you need further assistance, explore the following community channels:
 
 - [Slack](https://link.databend.com/join-slack) (For live discussion with the Community)
-- [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
+- [GitHub](https://github.com/databendlabs/databend) (Feature/Bug reports, Contributions)
 - [Twitter](https://twitter.com/DatabendLabs/) (Get the news fast)
 - [I'm feeling lucky](https://link.databend.com/i-m-feeling-lucky) (Pick up a good first issue now!)
 
@@ -288,7 +288,7 @@ For guidance on using Databend, we recommend starting with the official document
 
 Stay updated with Databend's development journey. Here are our roadmap milestones:
 
-- [Roadmap 2025](https://github.com/datafuselabs/databend/issues/14167)
+- [Roadmap 2025](https://github.com/databendlabs/databend/issues/14167)
 
 ## 📜 License
 
@@ -296,7 +296,7 @@ Databend is released under a combination of two licenses: the [Apache License 2.
 
 When contributing to Databend, you can find the relevant license header in each file.
 
-For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://docs.databend.com/guides/overview/editions/dee/license).
+For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://docs.databend.com/guides/products/dee/license).
 
 ## 🙏 Acknowledgement
 

@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::Datelike;
-use chrono::Days;
-use chrono::TimeZone as ChronoTimeZone;
-use chrono::Utc;
 use databend_common_exception::Result;
 use jiff::civil::date;
 use jiff::civil::datetime;
@@ -225,32 +221,26 @@ impl EvalMonthsImpl {
     }
 
     pub fn months_between(date_a: i32, date_b: i32) -> f64 {
-        let date_a = Utc
-            .timestamp_opt((date_a as i64) * 86400, 0)
+        let date_a = Date::new(1970, 1, 1)
             .unwrap()
-            .date_naive(); // Assuming date_a is in days
-        let date_b = Utc
-            .timestamp_opt((date_b as i64) * 86400, 0)
+            .checked_add(SignedDuration::from_hours(date_a as i64 * 24))
+            .unwrap();
+        let date_b = Date::new(1970, 1, 1)
             .unwrap()
-            .date_naive(); // Assuming date_b is in days
+            .checked_add(SignedDuration::from_hours(date_b as i64 * 24))
+            .unwrap();
 
-        let year_diff = date_a.year() - date_b.year();
-        let month_diff = date_a.month() as i32 - date_b.month() as i32;
+        let year_diff = (date_a.year() - date_b.year()) as i64;
+        let month_diff = date_a.month() as i64 - date_b.month() as i64;
 
         // Calculate total months difference
         let total_months_diff = year_diff * 12 + month_diff;
 
         // Determine if special case for fractional part applies
         let is_same_day_of_month = date_a.day() == date_b.day();
-        let are_both_end_of_month = date_a
-            .checked_add_days(Days::new(1))
-            .map(|d| d.month() != date_a.month())
-            .unwrap_or(false)
-            && date_b
-                .checked_add_days(Days::new(1))
-                .map(|d| d.month() != date_b.month())
-                .unwrap_or(false);
 
+        let are_both_end_of_month =
+            date_a.last_of_month() == date_a && date_b.last_of_month() == date_b;
         let day_fraction = if is_same_day_of_month || are_both_end_of_month {
             0.0
         } else {
@@ -385,7 +375,7 @@ impl ToNumber<u32> for ToYYYYMM {
 
 impl ToNumber<u32> for ToWeekOfYear {
     fn to_number(dt: &Zoned) -> u32 {
-        dt.date().to_iso_week_date().week() as u32
+        dt.date().iso_week_date().week() as u32
     }
 }
 
@@ -575,7 +565,7 @@ impl DateRounder {
     }
 }
 
-/// Convert `chrono::DateTime` to `i32` in `Scalar::Date(i32)` for `DateType`.
+/// Convert `jiff::Zoned` to `i32` in `Scalar::Date(i32)` for `DateType`.
 ///
 /// It's the days since 1970-01-01.
 #[inline]
@@ -650,13 +640,13 @@ impl ToNumber<i32> for ToStartOfYear {
 
 impl ToNumber<i32> for ToStartOfISOYear {
     fn to_number(dt: &Zoned) -> i32 {
-        let iso_year = dt.date().to_iso_week_date().year();
+        let iso_year = dt.date().iso_week_date().year();
         for i in 1..=7 {
             let new_dt = date(iso_year, 1, i)
                 .at(0, 0, 0, 0)
                 .to_zoned(dt.time_zone().clone())
                 .unwrap();
-            if new_dt.date().to_iso_week_date().weekday() == Weekday::Monday {
+            if new_dt.date().iso_week_date().weekday() == Weekday::Monday {
                 return datetime_to_date_inner_number(&new_dt);
             }
         }

@@ -166,8 +166,7 @@ impl Binder {
                     for (index_id, _, index_meta) in indexes {
                         let tokens = tokenize_sql(&index_meta.query)?;
                         let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                        let mut new_bind_context =
-                            BindContext::with_parent(Box::new(bind_context.clone()));
+                        let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
                         new_bind_context.planning_agg_index = true;
                         if let Statement::Query(query) = &stmt {
                             let (s_expr, _) = self.bind_query(&mut new_bind_context, query)?;

@@ -174,9 +174,9 @@ impl Binder {
         let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if stmt.with_history {
-            SelectBuilder::from("system.tables_with_history")
+            SelectBuilder::from("default.system.tables_with_history")
         } else {
-            SelectBuilder::from("system.tables")
+            SelectBuilder::from("default.system.tables")
         };
 
         if *full {
@@ -318,21 +318,21 @@ impl Binder {
         // Use `system.tables` AS the "base" table to construct the result-set of `SHOW TABLE STATUS ..`
         //
         // To constraint the schema of the final result-set,
-        //  `(select ${select_cols} from system.tables where ..)`
+        //  `(select ${select_cols} from default.system.tables where ..)`
         // is used AS a derived table.
         // (unlike mysql, alias of derived table is not required in databend).
         let query = match limit {
             None => format!(
-                "SELECT {} FROM system.tables WHERE database = '{}' ORDER BY Name",
+                "SELECT {} FROM default.system.tables WHERE database = '{}' ORDER BY Name",
                 select_cols, database
             ),
             Some(ShowLimit::Like { pattern }) => format!(
-                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                "SELECT * from (SELECT {} FROM default.system.tables WHERE database = '{}') \
             WHERE Name LIKE '{}' ORDER BY Name",
                 select_cols, database, pattern
             ),
             Some(ShowLimit::Where { selection }) => format!(
-                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
+                "SELECT * from (SELECT {} FROM default.system.tables WHERE database = '{}') \
             WHERE ({}) ORDER BY Name",
                 select_cols, database, selection
             ),
@@ -353,7 +353,7 @@ impl Binder {
 
         let database = self.check_database_exist(&None, database).await?;
 
-        let mut select_builder = SelectBuilder::from("system.tables_with_history");
+        let mut select_builder = SelectBuilder::from("default.system.tables_with_history");
 
         select_builder
             .with_column("name AS Tables")
@@ -724,6 +724,7 @@ impl Binder {
             cluster_key,
             as_select: as_query_plan,
             inverted_indexes,
+            attached_columns: None,
         };
         Ok(Plan::CreateTable(Box::new(plan)))
     }
@@ -789,6 +790,7 @@ impl Binder {
             cluster_key: None,
             as_select: None,
             inverted_indexes: None,
+            attached_columns: stmt.columns_opt.clone(),
         })))
     }
 
@@ -1141,22 +1143,19 @@ impl Binder {
 
             let partitions = settings.get_hilbert_num_range_ids()?;
             let sample_size = settings.get_hilbert_sample_size_per_block()?;
-            let keys_bounds_str = cluster_key_strs
-                .iter()
-                .map(|s| format!("range_bound({partitions}, {sample_size})({s}) AS {s}_bound"))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            let hilbert_keys_str = cluster_key_strs
-                .iter()
-                .map(|s| {
-                    format!(
-                        "hilbert_key(cast(ifnull(range_partition_id({table}.{s}, _keys_bound.{s}_bound), {}) as uint16))",
-                        partitions
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
+            let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
+            let mut hilbert_keys = Vec::with_capacity(cluster_key_strs.len());
+            for (index, cluster_key_str) in cluster_key_strs.into_iter().enumerate() {
+                keys_bounds.push(format!(
+                    "range_bound({partitions}, {sample_size})({cluster_key_str}) AS bound_{index}"
+                ));
+                hilbert_keys.push(format!(
+                    "hilbert_key(cast(ifnull(range_partition_id({table}.{cluster_key_str}, \
+                    _keys_bound.bound_{index}), {partitions}) as uint16))"
+                ));
+            }
+            let keys_bounds_str = keys_bounds.join(", ");
+            let hilbert_keys_str = hilbert_keys.join(", ");
 
             let quote = settings.get_sql_dialect()?.default_ident_quote();
             let schema = tbl.schema_with_stream();
@@ -1174,20 +1173,20 @@ impl Binder {
 
             let query = format!(
                 "WITH _keys_bound AS ( \
-                        SELECT \
-                            {keys_bounds_str} \
-                        FROM {database}.{table} \
-                    ), \
-                    _source_data AS ( \
-                        SELECT \
-                            {output_with_table_str}, \
-                            hilbert_index([{hilbert_keys_str}], 2) AS _hilbert_index \
-                        FROM {database}.{table}, _keys_bound \
-                    ) \
                     SELECT \
-                        {output_str} \
-                    FROM _source_data \
-                    ORDER BY _hilbert_index"
+                        {keys_bounds_str} \
+                    FROM {database}.{table} \
+                ), \
+                _source_data AS ( \
+                    SELECT \
+                        {output_with_table_str}, \
+                        hilbert_index([{hilbert_keys_str}], 2) AS _hilbert_index \
+                    FROM {database}.{table}, _keys_bound \
+                ) \
+                SELECT \
+                    {output_str} \
+                FROM _source_data \
+                ORDER BY _hilbert_index"
             );
             let tokens = tokenize_sql(query.as_str())?;
             let (stmt, _) = parse_sql(&tokens, self.dialect)?;
@@ -1536,11 +1535,15 @@ impl Binder {
                     )?;
                     field = field.with_computed_expr(Some(ComputedExpr::Virtual(expr)));
                 }
-                ColumnExpr::Stored(_) => {
-                    // TODO: support add stored computed expression column.
-                    return Err(ErrorCode::SemanticError(
-                        "can't add a stored computed column".to_string(),
-                    ));
+                ColumnExpr::Stored(stored_expr) => {
+                    let expr = parse_computed_expr_to_string(
+                        self.ctx.clone(),
+                        table_schema.clone(),
+                        &field,
+                        stored_expr,
+                    )?;
+                    field = field.with_computed_expr(Some(ComputedExpr::Stored(expr)));
+                    is_deterministic = false;
                 }
             }
         }

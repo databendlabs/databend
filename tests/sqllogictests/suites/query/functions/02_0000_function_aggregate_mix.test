@@ -345,7 +345,7 @@ select group_array_moving_avg(k), group_array_moving_avg(2)(v) from aggr;
 ----
 [0.09090909090909091,0.2727272727272727,0.45454545454545453,0.6363636363636364,0.8181818181818182,1.0,1.1818181818181819,1.3636363636363635,1.5454545454545454,1.7272727272727273,1.9090909090909092] [5.0,10.0,10.0,10.0,15.0,20.0,22.5,27.5,30.0,30.0,30.0]
 
-statement error Need constant number
+statement error 2004
 SELECT group_array_moving_sum('x')(-1130932975.87767);
 
 query TTT
@@ -418,6 +418,11 @@ query F
 select stddev_samp(a) from d;
 ----
 7.055988000745655
+
+query F
+select stddev_samp(a) from d where b = 'abc';
+----
+NULL
 
 query TTTTT
 select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d

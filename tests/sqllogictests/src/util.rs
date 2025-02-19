@@ -153,7 +153,6 @@ pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
 static PREPARE_TPCH: std::sync::Once = std::sync::Once::new();
 static PREPARE_TPCDS: std::sync::Once = std::sync::Once::new();
 static PREPARE_STAGE: std::sync::Once = std::sync::Once::new();
-static PREPARE_SPILL: std::sync::Once = std::sync::Once::new();
 static PREPARE_WASM: std::sync::Once = std::sync::Once::new();
 
 #[derive(Eq, Hash, PartialEq)]
@@ -162,13 +161,12 @@ pub enum LazyDir {
     Tpcds,
     Stage,
     UdfNative,
-    Spill,
     Dictionaries,
 }
 
 pub fn collect_lazy_dir(file_path: &Path, lazy_dirs: &mut HashSet<LazyDir>) -> Result<()> {
     let file_path = file_path.to_str().unwrap_or_default();
-    if file_path.contains("tpch/") {
+    if file_path.contains("tpch/") || file_path.contains("tpch_spill/") {
         if !lazy_dirs.contains(&LazyDir::Tpch) {
             lazy_dirs.insert(LazyDir::Tpch);
         }
@@ -184,44 +182,37 @@ pub fn collect_lazy_dir(file_path: &Path, lazy_dirs: &mut HashSet<LazyDir>) -> R
         if !lazy_dirs.contains(&LazyDir::UdfNative) {
             lazy_dirs.insert(LazyDir::UdfNative);
         }
-    } else if file_path.contains("spill/") {
-        if !lazy_dirs.contains(&LazyDir::Spill) {
-            lazy_dirs.insert(LazyDir::Spill);
-        }
     } else if file_path.contains("dictionaries/") && !lazy_dirs.contains(&LazyDir::Dictionaries) {
         lazy_dirs.insert(LazyDir::Dictionaries);
     }
     Ok(())
 }
 
-pub fn lazy_prepare_data(lazy_dirs: &HashSet<LazyDir>) -> Result<()> {
+pub fn lazy_prepare_data(lazy_dirs: &HashSet<LazyDir>, force_load: bool) -> Result<()> {
+    let force_load_flag = if force_load { "1" } else { "0" };
     for lazy_dir in lazy_dirs {
         match lazy_dir {
             LazyDir::Tpch => {
                 PREPARE_TPCH.call_once(|| {
                     println!("Calling the script prepare_tpch_data.sh ...");
-                    run_script("prepare_tpch_data.sh").unwrap();
+                    run_script("prepare_tpch_data.sh", &["tpch_test", force_load_flag]).unwrap();
                 });
             }
             LazyDir::Tpcds => {
                 PREPARE_TPCDS.call_once(|| {
                     println!("Calling the script prepare_tpcds_data.sh ...");
-                    run_script("prepare_tpcds_data.sh").unwrap();
+                    run_script("prepare_tpcds_data.sh", &["tpcds", force_load_flag]).unwrap();
                 });
             }
             LazyDir::Stage => {
                 PREPARE_STAGE.call_once(|| {
                     println!("Calling the script prepare_stage.sh ...");
-                    run_script("prepare_stage.sh").unwrap();
+                    run_script("prepare_stage.sh", &[]).unwrap();
                 });
             }
             LazyDir::UdfNative => {
                 println!("wasm context Calling the script prepare_stage.sh ...");
-                PREPARE_WASM.call_once(|| run_script("prepare_stage.sh").unwrap())
-            }
-            LazyDir::Spill => {
-                println!("Calling the script prepare_spill_data.sh ...");
-                PREPARE_SPILL.call_once(|| run_script("prepare_spill_data.sh").unwrap())
+                PREPARE_WASM.call_once(|| run_script("prepare_stage.sh", &[]).unwrap())
             }
             _ => {}
         }
@@ -229,10 +220,13 @@ pub fn lazy_prepare_data(lazy_dirs: &HashSet<LazyDir>) -> Result<()> {
     Ok(())
 }
 
-fn run_script(name: &str) -> Result<()> {
+fn run_script(name: &str, args: &[&str]) -> Result<()> {
     let path = format!("tests/sqllogictests/scripts/{}", name);
+    let mut new_args = vec![path.as_str()];
+    new_args.extend_from_slice(args);
+
     let output = std::process::Command::new("bash")
-        .arg(path)
+        .args(new_args)
         .output()
         .expect("failed to execute process");
     if !output.status.success() {
@@ -249,13 +243,22 @@ pub async fn run_ttc_container(
     docker: &Docker,
     image: &str,
     port: u16,
+    http_server_port: u16,
     cs: &mut Vec<ContainerAsync<GenericImage>>,
 ) -> Result<()> {
     let mut images = image.split(":");
     let image = images.next().unwrap();
     let tag = images.next().unwrap_or("latest");
-    let container_name = format!("databend-ttc-{}", port);
 
+    use rand::distributions::Alphanumeric;
+    use rand::Rng;
+    let rng = rand::thread_rng();
+    let x: String = rng
+        .sample_iter(&Alphanumeric)
+        .take(5)
+        .map(char::from)
+        .collect();
+    let container_name = format!("databend-ttc-{}-{}", port, x);
     let start = Instant::now();
     println!("Start container {container_name}");
 
@@ -269,7 +272,10 @@ pub async fn run_ttc_container(
             .with_network("host")
             .with_env_var(
                 "DATABEND_DSN",
-                "databend://root:@127.0.0.1:8000?sslmode=disable",
+                format!(
+                    "databend://root:@127.0.0.1:{}?sslmode=disable",
+                    http_server_port
+                ),
             )
             .with_env_var("TTC_PORT", format!("{port}"))
             .with_container_name(&container_name)
@@ -291,8 +297,7 @@ pub async fn run_ttc_container(
                     "Start container {} using {} secs failed: {}",
                     container_name, duration, err
                 );
-                if let TestcontainersError::WaitContainer(WaitContainerError::StartupTimeout) = err
-                {
+                if err.to_string().contains("timeout") {
                     stop_container(docker, &container_name).await;
                 }
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {

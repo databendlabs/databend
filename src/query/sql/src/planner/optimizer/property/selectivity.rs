@@ -442,6 +442,10 @@ impl<'a> SelectivityEstimator<'a> {
             let lower_bound = bucket.lower_bound();
             let upper_bound = bucket.upper_bound();
 
+            if !const_datum.can_compare(lower_bound) {
+                return Ok(DEFAULT_SELECTIVITY);
+            }
+
             let const_gte_upper_bound = matches!(
                 const_datum.compare(upper_bound)?,
                 Ordering::Greater | Ordering::Equal

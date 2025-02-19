@@ -240,7 +240,7 @@ impl Metadata {
         path_indices: Option<Vec<IndexType>>,
         column_id: Option<u32>,
         column_position: Option<usize>,
-        virtual_computed_expr: Option<String>,
+        virtual_expr: Option<String>,
     ) -> IndexType {
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -251,7 +251,7 @@ impl Metadata {
             table_index,
             path_indices,
             column_id,
-            virtual_computed_expr,
+            virtual_expr,
         });
         self.columns.push(column_entry);
         column_index
@@ -613,7 +613,7 @@ pub struct BaseTableColumn {
     /// The column id in table schema.
     pub column_id: Option<u32>,
     /// Virtual computed expression, generated in query.
-    pub virtual_computed_expr: Option<String>,
+    pub virtual_expr: Option<String>,
 }
 
 #[derive(Clone, Debug)]

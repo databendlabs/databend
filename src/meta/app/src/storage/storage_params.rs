@@ -24,6 +24,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 const DEFAULT_DETECT_REGION_TIMEOUT_SEC: u64 = 10;
+
 /// Storage params which contains the detailed storage info.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -142,7 +143,10 @@ impl StorageParams {
                 )
                 .await
                 .map_err(|e| {
-                    ErrorCode::StorageOther(format!("detect region timeout, time used {}", e))
+                    ErrorCode::StorageOther(format!(
+                        "detect region timeout: {}s, endpoint: {}, elapsed: {}",
+                        DEFAULT_DETECT_REGION_TIMEOUT_SEC, endpoint, e
+                    ))
                 })?
                 .unwrap_or_default();
 
@@ -260,6 +264,7 @@ impl Default for StorageFsConfig {
 }
 
 pub const STORAGE_FTP_DEFAULT_ENDPOINT: &str = "ftps://127.0.0.1";
+
 /// Config for FTP and FTPS data source
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageFtpConfig {
@@ -419,6 +424,7 @@ pub struct StorageHttpConfig {
 }
 
 pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
+
 /// Config for IPFS storage backend
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageIpfsConfig {
@@ -522,6 +528,8 @@ pub struct StorageWebhdfsConfig {
     pub endpoint_url: String,
     pub root: String,
     pub delegation: String,
+    pub disable_list_batch: bool,
+    pub user_name: String,
 }
 
 impl Debug for StorageWebhdfsConfig {
@@ -529,7 +537,9 @@ impl Debug for StorageWebhdfsConfig {
         let mut ds = f.debug_struct("StorageWebhdfsConfig");
 
         ds.field("endpoint_url", &self.endpoint_url)
-            .field("root", &self.root);
+            .field("root", &self.root)
+            .field("disable_list_batch", &self.disable_list_batch)
+            .field("user_name", &self.user_name);
 
         ds.field("delegation", &mask_string(&self.delegation, 3));
 

@@ -27,6 +27,7 @@ use databend_common_storages_fuse::table_functions::FuseEncodingFunc;
 use databend_common_storages_fuse::table_functions::FuseStatisticsFunc;
 use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
+use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
 use databend_common_storages_fuse::table_functions::HilbertClusteringInfoFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
@@ -328,6 +329,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseVacuumDropAggregatingIndex>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_vacuum_drop_inverted_index".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseVacuumDropInvertedIndex>::create),
             ),
         );
 

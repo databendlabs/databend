@@ -43,7 +43,7 @@ use crate::processors::sort::Merger;
 pub struct TransformSortMerge<R: Rows> {
     schema: DataSchemaRef,
     enable_loser_tree: bool,
-
+    limit: Option<usize>,
     block_size: usize,
     buffer: Vec<Option<(DataBlock, Column)>>,
 
@@ -62,10 +62,12 @@ impl<R: Rows> TransformSortMerge<R> {
         _sort_desc: Arc<Vec<SortColumnDescription>>,
         block_size: usize,
         enable_loser_tree: bool,
+        limit: Option<usize>,
     ) -> Self {
         TransformSortMerge {
             schema,
             enable_loser_tree,
+            limit,
             block_size,
             buffer: vec![],
             aborting: Arc::new(AtomicBool::new(false)),
@@ -171,7 +173,8 @@ impl<R: Rows> TransformSortMerge<R> {
         let streams = self.buffer.drain(..).collect::<Vec<BlockStream>>();
         let mut result = Vec::with_capacity(size_hint);
 
-        let mut merger = Merger::<A, _>::create(self.schema.clone(), streams, batch_size, None);
+        let mut merger =
+            Merger::<A, _>::create(self.schema.clone(), streams, batch_size, self.limit);
 
         while let Some(block) = merger.next_block()? {
             if unlikely(self.aborting.load(Ordering::Relaxed)) {
@@ -218,7 +221,7 @@ pub fn sort_merge(
         0,
         0,
         sort_spilling_batch_bytes,
-        MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree),
+        MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree, None),
     )?;
     for block in data_blocks {
         processor.transform(block)?;

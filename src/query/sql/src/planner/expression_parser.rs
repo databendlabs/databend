@@ -79,7 +79,7 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
                 column_name,
                 data_type,
                 path_indices,
-                virtual_computed_expr,
+                virtual_expr,
                 ..
             }) => {
                 let visibility = if path_indices.is_some() {
@@ -96,7 +96,7 @@ pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRe
                 .database_name(Some("default".to_string()))
                 .table_name(Some(table.name().to_string()))
                 .table_index(Some(table.index()))
-                .virtual_computed_expr(virtual_computed_expr.clone())
+                .virtual_expr(virtual_expr.clone())
                 .build()
             }
             _ => {
@@ -356,20 +356,29 @@ pub fn parse_computed_expr_to_string(
 
 pub fn parse_lambda_expr(
     ctx: Arc<dyn TableContext>,
-    mut bind_context: BindContext,
-    columns: &[(String, DataType)],
+    lambda_context: &mut BindContext,
+    lambda_columns: &[(String, DataType)],
     ast: &AExpr,
 ) -> Result<Box<(ScalarExpr, DataType)>> {
     let metadata = Metadata::default();
-    bind_context.set_expr_context(ExprContext::InLambdaFunction);
+    lambda_context.set_expr_context(ExprContext::InLambdaFunction);
 
-    let column_len = bind_context.all_column_bindings().len();
-    for (idx, column) in columns.iter().enumerate() {
-        bind_context.add_column_binding(
+    // The column index may not be consecutive, and the length of columns
+    // cannot be used to calculate the column index of the lambda argument.
+    // We need to start from the current largest column index.
+    let mut column_index = lambda_context
+        .all_column_bindings()
+        .iter()
+        .map(|c| c.index)
+        .max()
+        .unwrap_or_default();
+    for (lambda_column, lambda_column_type) in lambda_columns.iter() {
+        column_index += 1;
+        lambda_context.add_column_binding(
             ColumnBindingBuilder::new(
-                column.0.clone(),
-                column_len + idx,
-                Box::new(column.1.clone()),
+                lambda_column.clone(),
+                column_index,
+                Box::new(lambda_column_type.clone()),
                 Visibility::Visible,
             )
             .build(),
@@ -379,7 +388,7 @@ pub fn parse_lambda_expr(
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(
-        &mut bind_context,
+        lambda_context,
         ctx.clone(),
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),

@@ -24,6 +24,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use educe::Educe;
 
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
@@ -76,6 +77,7 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
+use crate::plans::DescProcedurePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
@@ -165,7 +167,11 @@ use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::MetadataRef;
 
-#[derive(Clone, Debug)]
+#[derive(Educe)]
+#[educe(
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub enum Plan {
     // `SELECT` statement
     Query {
@@ -393,6 +399,7 @@ pub enum Plan {
     ExecuteImmediate(Box<ExecuteImmediatePlan>),
     // ShowCreateProcedure(Box<ShowCreateProcedurePlan>),
     DropProcedure(Box<DropProcedurePlan>),
+    DescProcedure(Box<DescProcedurePlan>),
     CreateProcedure(Box<CreateProcedurePlan>),
     CallProcedure(Box<CallProcedurePlan>),
     // RenameProcedure(Box<RenameProcedurePlan>),
@@ -539,7 +546,7 @@ impl Plan {
                 DataField::new("cluster", DataType::String),
                 DataField::new("version", DataType::String),
             ]),
-
+            Plan::DescProcedure(plan) => plan.schema(),
             _ => Arc::new(DataSchema::empty()),
         }
     }

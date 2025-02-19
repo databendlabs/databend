@@ -23,6 +23,7 @@ use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
 use databend_common_meta_types::MetaId;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::plans::Plan;
@@ -37,6 +38,9 @@ use databend_storages_common_table_meta::meta::Location;
 use log::info;
 use parking_lot::RwLock;
 
+use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
+use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
+use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::RefreshIndexInterpreter;
 use crate::interpreters::RefreshTableIndexInterpreter;
@@ -130,6 +134,16 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                     let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
 
                     if build_res.main_pipeline.is_complete_pipeline()? {
+                        let query_ctx = ctx_cloned.clone();
+                        build_res.main_pipeline.set_on_finished(always_callback(
+                            move |_: &ExecutionInfo| {
+                                hook_clear_m_cte_temp_table(&query_ctx)?;
+                                hook_vacuum_temp_files(&query_ctx)?;
+                                hook_disk_temp_dir(&query_ctx)?;
+                                Ok(())
+                            },
+                        ));
+
                         let mut pipelines = build_res.sources_pipelines;
                         pipelines.push(build_res.main_pipeline);
 
@@ -157,6 +171,16 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                     let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
 
                     if build_res.main_pipeline.is_complete_pipeline()? {
+                        let query_ctx = ctx_cloned.clone();
+                        build_res.main_pipeline.set_on_finished(always_callback(
+                            move |_info: &ExecutionInfo| {
+                                hook_clear_m_cte_temp_table(&query_ctx)?;
+                                hook_vacuum_temp_files(&query_ctx)?;
+                                hook_disk_temp_dir(&query_ctx)?;
+                                Ok(())
+                            },
+                        ));
+
                         let mut pipelines = build_res.sources_pipelines;
                         pipelines.push(build_res.main_pipeline);
 
@@ -184,6 +208,16 @@ async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
                     let settings = ExecutorSettings::try_create(ctx_cloned.clone())?;
 
                     if build_res.main_pipeline.is_complete_pipeline()? {
+                        let query_ctx = ctx_cloned.clone();
+                        build_res.main_pipeline.set_on_finished(always_callback(
+                            move |_: &ExecutionInfo| {
+                                hook_clear_m_cte_temp_table(&query_ctx)?;
+                                hook_vacuum_temp_files(&query_ctx)?;
+                                hook_disk_temp_dir(&query_ctx)?;
+                                Ok(())
+                            },
+                        ));
+
                         let mut pipelines = build_res.sources_pipelines;
                         pipelines.push(build_res.main_pipeline);
 

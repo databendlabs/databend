@@ -85,7 +85,6 @@ join_spilling_memory_ratio = 60
 level = "DEBUG"
 format = "text"
 dir = "./.databend/logs_1"
-prefix_filter = ""
 
 [log.query]
 on = true
@@ -106,6 +105,7 @@ auto_sync_interval = 60
 [storage]
 # fs | s3 | azblob | obs | oss
 type = "fs"
+# allow_insecure = true
 
 # Set a local folder to store your data.
 # Comment out this block if you're NOT using local file system as storage.

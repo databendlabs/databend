@@ -60,6 +60,7 @@ use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -145,6 +146,10 @@ impl Catalog for SessionCatalog {
         self.inner.info()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Ok(self)
+    }
+
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         self.inner.get_database(tenant, db_name).await
@@ -191,13 +196,23 @@ impl Catalog for SessionCatalog {
         self.inner.get_index(req).await
     }
 
-    async fn get_marked_deleted_indexes(
+    async fn list_marked_deleted_indexes(
         &self,
         tenant: &Tenant,
         table_id: Option<u64>,
     ) -> Result<GetMarkedDeletedIndexesReply> {
         self.inner
-            .get_marked_deleted_indexes(tenant, table_id)
+            .list_marked_deleted_indexes(tenant, table_id)
+            .await
+    }
+
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        self.inner
+            .list_marked_deleted_table_indexes(tenant, table_id)
             .await
     }
 
@@ -210,6 +225,18 @@ impl Catalog for SessionCatalog {
     ) -> Result<()> {
         self.inner
             .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<()> {
+        self.inner
+            .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
             .await
     }
 
@@ -658,7 +685,7 @@ impl Catalog for SessionCatalog {
                     } else {
                         self.get_table_by_info(&stream.source)
                     }
-                    })
+                })
                 .transpose()
         } else {
             Ok(None)

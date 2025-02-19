@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::vec;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -69,20 +70,23 @@ pub struct FlattenInfo {
 
 /// Rewrite subquery into `Apply` operator
 pub struct SubqueryRewriter {
+    pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) metadata: MetadataRef,
     pub(crate) derived_columns: HashMap<IndexType, IndexType>,
     pub(crate) binder: Option<Binder>,
 }
 
 impl SubqueryRewriter {
-    pub fn new(metadata: MetadataRef, binder: Option<Binder>) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef, binder: Option<Binder>) -> Self {
         Self {
+            ctx,
             metadata,
             derived_columns: Default::default(),
             binder,
         }
     }
 
+    #[recursive::recursive]
     pub fn rewrite(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan().clone() {
             RelOperator::EvalScalar(mut plan) => {
@@ -253,6 +257,10 @@ impl SubqueryRewriter {
                 // Rewrite subquery recursively
                 let mut subquery = subquery.clone();
                 subquery.subquery = Box::new(self.rewrite(&subquery.subquery)?);
+
+                if let Some(constant_subquery) = self.try_fold_constant_subquery(&subquery)? {
+                    return Ok((constant_subquery, s_expr.clone()));
+                }
 
                 // Check if the subquery is a correlated subquery.
                 // If it is, we'll try to flatten it and rewrite to join.

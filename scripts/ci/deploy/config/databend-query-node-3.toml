@@ -58,7 +58,6 @@ definition = "CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLE
 level = "INFO"
 format = "text"
 dir = "./.databend/logs_3"
-prefix_filter = ""
 
 [log.structlog]
 on = true

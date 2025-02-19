@@ -21,13 +21,16 @@ use std::time::Duration;
 
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
+use databend_common_ast::ast::CreateViewStmt;
 use databend_common_ast::ast::DropTableStmt;
+use databend_common_ast::ast::DropViewStmt;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
 use databend_common_exception::Result;
+use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableField;
@@ -166,7 +169,7 @@ impl Runner {
                 }
             }
         }
-        generator.tables = new_tables;
+        generator.tables = new_tables.clone();
 
         let enable_merge = "set enable_experimental_merge_into = 1".to_string();
         let _ = self.run_sql(enable_merge, None).await;
@@ -175,6 +178,10 @@ impl Runner {
             let dml_sql = dml_stmt.to_string();
             let _ = self.run_sql(dml_sql, None).await;
         }
+
+        let view_stmts = generator.gen_view(&self.db).await?;
+        let mut views = self.create_view(view_stmts).await?;
+        generator.tables.append(&mut views);
 
         // generate query
         let mut conn_error_cnt = 0;
@@ -324,6 +331,35 @@ impl Runner {
             tables.push(table);
         }
         Ok(tables)
+    }
+
+    async fn create_view(
+        &mut self,
+        view_stmts: Vec<(DropViewStmt, CreateViewStmt, Vec<DataType>)>,
+    ) -> Result<Vec<Table>> {
+        let mut views = Vec::with_capacity(view_stmts.len());
+        for (drop_view_stmt, create_view_stmt, col_types) in view_stmts {
+            let drop_view_sql = drop_view_stmt.to_string();
+            let _ = self.run_sql(drop_view_sql, None).await;
+            let create_view_sql = create_view_stmt.to_string();
+            if let Ok(responses) = self.client.query(&create_view_sql).await {
+                if !responses.is_empty() && responses[0].error.is_none() {
+                    let db_name = create_view_stmt.database.clone();
+                    let view_name = create_view_stmt.view.clone();
+
+                    let mut fields = Vec::new();
+                    for (c_name, c_type) in create_view_stmt.columns.iter().zip(col_types) {
+                        let table_dt = infer_schema_type(&c_type)?;
+                        let field = TableField::new(&c_name.to_string(), table_dt);
+                        fields.push(field);
+                    }
+                    let schema = TableSchemaRefExt::create(fields);
+                    let table = Table::new(db_name, view_name, schema);
+                    views.push(table);
+                }
+            }
+        }
+        Ok(views)
     }
 
     async fn get_settings(&mut self) -> Result<Vec<(String, DataType)>> {

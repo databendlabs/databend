@@ -71,6 +71,7 @@ pub struct OptimizerContext {
     pub(crate) enable_distributed_optimization: bool,
     enable_join_reorder: bool,
     enable_dphyp: bool,
+    pub(crate) max_push_down_limit: usize,
     planning_agg_index: bool,
     #[educe(Debug(ignore))]
     pub(crate) sample_executor: Option<Arc<dyn QueryExecutor>>,
@@ -85,6 +86,7 @@ impl OptimizerContext {
             enable_distributed_optimization: false,
             enable_join_reorder: true,
             enable_dphyp: true,
+            max_push_down_limit: 10000,
             sample_executor: None,
             planning_agg_index: false,
         }
@@ -112,6 +114,11 @@ impl OptimizerContext {
 
     pub fn with_planning_agg_index(mut self) -> Self {
         self.planning_agg_index = true;
+        self
+    }
+
+    pub fn with_max_push_down_limit(mut self, max_push_down_limit: usize) -> Self {
+        self.max_push_down_limit = max_push_down_limit;
         self
     }
 }
@@ -218,6 +225,7 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
                     let mut s_expr = s_expr;
                     if s_expr.contain_subquery() {
                         s_expr = Box::new(decorrelate_subquery(
+                            opt_ctx.table_ctx.clone(),
                             opt_ctx.metadata.clone(),
                             *s_expr.clone(),
                         )?);
@@ -386,7 +394,11 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
@@ -480,7 +492,11 @@ async fn get_optimized_memo(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())

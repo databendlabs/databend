@@ -719,6 +719,9 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::DescProcedure(p) => {
+                Ok(Arc::new(DescProcedureInterpreter::try_create(*p.clone())?))
+            }
             Plan::CallProcedure(p) => Ok(Arc::new(CallProcedureInterpreter::try_create(
                 ctx,
                 *p.clone(),

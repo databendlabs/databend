@@ -157,7 +157,8 @@ impl TransformUdfServer {
         let mut client = UDFFlightClient::connect(endpoint, connect_timeout, 65536)
             .await?
             .with_tenant(ctx.get_tenant().tenant_name())?
-            .with_func_name(&func.func_name)?
+            .with_func_name(&func.name)?
+            .with_handler_name(&func.func_name)?
             .with_query_id(&ctx.get_id())?;
 
         let connect_duration = instant.elapsed();
