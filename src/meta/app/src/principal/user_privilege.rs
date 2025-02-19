@@ -207,7 +207,9 @@ impl UserPrivilegeSet {
         let stage_privs_without_ownership = Self::available_privileges_on_stage(false);
         let udf_privs_without_ownership = Self::available_privileges_on_udf(false);
         let wh_privs_without_ownership = Self::available_privileges_on_warehouse(false);
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask | CreateWarehouse });
+        // TODO : The warehouse functionality is not yet fully integrated. Therefore, the CreateWarehouse permission must be granted separately
+        // If self-created user or configured user wants to create warehouse in system-manage cluster must execute: grant create warehouse on *.* to <user_name>;
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | CreateDatabase | Grant | CreateDataMask });
         (database_privs.privileges
             | privs
             | stage_privs_without_ownership.privileges

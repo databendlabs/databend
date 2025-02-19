@@ -200,7 +200,7 @@ impl GrantObjectVisibilityChecker {
                 OwnershipObject::UDF { name } => {
                     granted_udfs.insert(name.to_string());
                 }
-                OwnershipObject::Warehouse { uid } => {
+                OwnershipObject::Warehouse { id: uid } => {
                     granted_ws.insert(uid.to_string());
                 }
             }

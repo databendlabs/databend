@@ -155,7 +155,7 @@ impl PrivilegeAccess {
                 name: name.to_string(),
             },
             GrantObject::Warehouse(uid) => OwnershipObject::Warehouse {
-                uid: uid.to_string(),
+                id: uid.to_string(),
             },
             GrantObject::Global => return Ok(None),
         };

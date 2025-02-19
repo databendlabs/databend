@@ -516,7 +516,7 @@ async fn show_account_grants(
                         privileges.push("OWNERSHIP".to_string());
                         grant_list.push(format!("GRANT OWNERSHIP ON UDF {} TO {}", name, identity));
                     }
-                    OwnershipObject::Warehouse { uid } => {
+                    OwnershipObject::Warehouse { id: uid } => {
                         if let Some(sw) = warehouses
                             .iter()
                             .filter_map(|w| {
@@ -739,27 +739,25 @@ async fn show_object_grant(
                 return Err(ErrorCode::InvalidArgument("The 'SHOW GRANTS ON <warehouse_name>' only supported for warehouses managed by the system. Please verify that you are using a system-managed warehouse".to_string()));
             }
             let warehouses = warehouse_mgr.list_warehouses().await?;
-            let mut uid = String::new();
+            let mut id = String::new();
             for w in warehouses {
                 if let WarehouseInfo::SystemManaged(rw) = w {
                     if rw.id == name {
-                        uid = rw.role_id.to_string();
+                        id = rw.role_id.to_string();
                         break;
                     }
                 }
             }
-            if !visibility_checker.check_warehouse_visibility(&uid) {
+            if !visibility_checker.check_warehouse_visibility(&id) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: No privilege on warehouse {} for user {}.",
                     name, current_user
                 )));
             }
             (
-                GrantObject::Warehouse(uid.to_string()),
-                OwnershipObject::Warehouse {
-                    uid: uid.to_string(),
-                },
-                Some(uid),
+                GrantObject::Warehouse(id.to_string()),
+                OwnershipObject::Warehouse { id: id.to_string() },
+                Some(id),
                 name,
             )
         }

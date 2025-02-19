@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
@@ -25,6 +26,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::GrantPrivilegePlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_enterprise_resources_management::ResourcesManagement;
 use log::debug;
 use log::error;
 use log::info;
@@ -102,7 +104,7 @@ impl GrantPrivilegeInterpreter {
                 name: name.to_string(),
             }),
             GrantObject::Warehouse(uid) => Ok(OwnershipObject::Warehouse {
-                uid: uid.to_string(),
+                id: uid.to_string(),
             }),
             GrantObject::Global => Err(ErrorCode::IllegalGrant(
                 "Illegal GRANT/REVOKE command; please consult the manual to see which privileges can be used",
@@ -203,6 +205,17 @@ impl Interpreter for GrantPrivilegeInterpreter {
                         .convert_to_ownerobject(&tenant, &plan.on, plan.on.catalog())
                         .await?;
                     if self.ctx.get_current_role().is_some() {
+                        if let OwnershipObject::Warehouse { .. } = owner_object {
+                            let warehouse_mgr =
+                                GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+
+                            // Only support grant ownership when support_forward_warehouse_request is true
+                            if !warehouse_mgr.support_forward_warehouse_request() {
+                                return Err(ErrorCode::IllegalGrant(
+                                    "Illegal GRANT/REVOKE command; only supported for warehouses managed by the system",
+                                ));
+                            }
+                        }
                         self.grant_ownership(&self.ctx, &tenant, &owner_object, &role)
                             .await?;
                     } else {

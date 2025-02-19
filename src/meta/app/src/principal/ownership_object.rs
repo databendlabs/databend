@@ -54,7 +54,7 @@ pub enum OwnershipObject {
     },
 
     Warehouse {
-        uid: String,
+        id: String,
     },
 }
 
@@ -84,7 +84,7 @@ impl fmt::Display for OwnershipObject {
             }
             OwnershipObject::UDF { name } => write!(f, "UDF {name}"),
             OwnershipObject::Stage { name } => write!(f, "STAGE {name}"),
-            OwnershipObject::Warehouse { uid } => write!(f, "Warehouse {uid}"),
+            OwnershipObject::Warehouse { id: uid } => write!(f, "Warehouse {uid}"),
         }
     }
 }
@@ -124,7 +124,7 @@ impl KeyCodec for OwnershipObject {
             }
             OwnershipObject::Stage { name } => b.push_raw("stage-by-name").push_str(name),
             OwnershipObject::UDF { name } => b.push_raw("udf-by-name").push_str(name),
-            OwnershipObject::Warehouse { uid } => b.push_raw("warehouse-by-uid").push_str(uid),
+            OwnershipObject::Warehouse { id: uid } => b.push_raw("warehouse-by-uid").push_str(uid),
         }
     }
 
@@ -173,7 +173,7 @@ impl KeyCodec for OwnershipObject {
             }
             "warehouse-by-uid" => {
                 let uid = p.next_str()?;
-                Ok(OwnershipObject::Warehouse { uid })
+                Ok(OwnershipObject::Warehouse { id: uid })
             }
             _ => Err(kvapi::KeyError::InvalidSegment {
                 i: p.index(),

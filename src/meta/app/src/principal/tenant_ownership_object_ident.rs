@@ -260,7 +260,7 @@ mod tests {
             let role_grantee = TenantOwnershipObjectIdent::new_unchecked(
                 Tenant::new_literal("test"),
                 OwnershipObject::Warehouse {
-                    uid: "n87s".to_string(),
+                    id: "n87s".to_string(),
                 },
             );
 

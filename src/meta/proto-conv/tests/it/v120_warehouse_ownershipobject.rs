@@ -106,7 +106,7 @@ fn test_decode_v120_ownership() -> anyhow::Result<()> {
     let want = || mt::principal::OwnershipInfo {
         role: "r1".to_string(),
         object: OwnershipObject::Warehouse {
-            uid: "auniqueid".to_string(),
+            id: "auniqueid".to_string(),
         },
     };
     common::test_pb_from_to(func_name!(), want())?;

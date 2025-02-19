@@ -264,3 +264,6 @@ drop role if exists role1;
 
 statement ok
 drop role if exists role2;
+
+statement error 1061
+GRANT ownership on warehouse w1 to role 'role1';

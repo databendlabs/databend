@@ -76,7 +76,7 @@ impl Interpreter for DropWarehouseInterpreter {
             if let Some(current_role) = self.ctx.get_current_role() {
                 role_api
                     .grant_ownership(
-                        &OwnershipObject::Warehouse { uid: sw.role_id },
+                        &OwnershipObject::Warehouse { id: sw.role_id },
                         &current_role.name,
                     )
                     .await?;
