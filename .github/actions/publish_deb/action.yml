@@ -28,7 +28,8 @@ runs:
       run: |
         version=$(gh release view --repo databendlabs/databend --json name | jq -r '.name')
         echo "version: $version"
-        assets=$(gh release view --repo databendlabs/databend --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url')
+        # FIXME: tmp disable dbg package
+        assets=$(gh release view --repo databendlabs/databend --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url' | grep -v 'dbg')
         for asset in $assets; do
           wget -q $asset
           asset_name=$(basename $asset)

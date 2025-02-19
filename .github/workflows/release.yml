@@ -403,19 +403,16 @@ jobs:
         arch:
           - x86_64
           - aarch64
-        packager:
-          - deb
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.create_release.outputs.sha }}
-      - name: Pack distribution
-        uses: ./.github/actions/pack_distribution
+      - name: Pack deb
+        uses: ./.github/actions/pack_deb
         with:
           version: ${{ needs.create_release.outputs.version }}
           arch: ${{ matrix.arch }}
-          packager: ${{ matrix.packager }}
 
   # bindings_python:
   #   if: needs.create_release.outputs.type == 'stable'
