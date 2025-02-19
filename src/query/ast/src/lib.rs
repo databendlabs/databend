@@ -20,8 +20,10 @@ pub mod ast;
 pub mod parser;
 mod parser_error;
 pub mod span;
+mod visitor;
 
 pub use parser_error::ParseError;
+pub use visitor::StatementReplacer;
 pub type Result<T> = std::result::Result<T, ParseError>;
 
 pub use span::Range;
