@@ -38,6 +38,10 @@ impl PushDownFilterMutationOptimizer {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut mutation: MutationSource = s_expr.child(0)?.plan().clone().try_into()?;
         debug_assert!(mutation.predicates.is_empty());
+        debug_assert!(mutation.read_partition_columns.is_empty());
+        mutation
+            .read_partition_columns
+            .extend(filter.predicates.iter().flat_map(|v| v.used_columns()));
         mutation.predicates = filter.predicates;
 
         Ok(SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
