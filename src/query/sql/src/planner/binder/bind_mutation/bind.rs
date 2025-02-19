@@ -191,8 +191,6 @@ impl Binder {
             target_table_row_id_index,
             mut required_columns,
             all_source_columns,
-            truncate_table,
-            predicate_column_index,
         } = bind_result;
 
         let target_table_name = if let Some(table_name_alias) = &table_name_alias {
@@ -305,8 +303,7 @@ impl Binder {
             row_id_index: target_table_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lock_guard,
-            truncate_table,
-            predicate_column_index,
+            predicate_column_index: None,
             direct_filter: vec![],
         };
 
