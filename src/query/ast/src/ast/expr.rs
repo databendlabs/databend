@@ -265,6 +265,9 @@ pub enum Expr {
         span: Span,
         name: String,
     },
+    Placeholder {
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -304,7 +307,8 @@ impl Expr {
             | Expr::LastDay { span, .. }
             | Expr::PreviousDay { span, .. }
             | Expr::NextDay { span, .. }
-            | Expr::Hole { span, .. } => *span,
+            | Expr::Hole { span, .. }
+            | Expr::Placeholder { span } => *span,
         }
     }
 
@@ -450,6 +454,7 @@ impl Expr {
             Expr::PreviousDay { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::NextDay { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::Hole { span, .. } => *span,
+            Expr::Placeholder { span } => *span,
         }
     }
 
@@ -783,6 +788,9 @@ impl Display for Expr {
                 }
                 Expr::Hole { name, .. } => {
                     write!(f, ":{name}")?;
+                }
+                Expr::Placeholder { .. } => {
+                    write!(f, "?")?;
                 }
             }
 
@@ -1540,8 +1548,9 @@ pub enum JsonOperator {
     HashArrow,
     /// #>> Extracts JSON sub-object at the specified path as text
     HashLongArrow,
+    /// Deprecated cause we need ? as placeholder
     /// ? Checks whether text key exist as top-level key or array element.
-    Question,
+    // Question,
     /// ?| Checks whether any of the text keys exist as top-level keys or array elements.
     QuestionOr,
     /// ?& Checks whether all of the text keys exist as top-level keys or array elements.
@@ -1565,7 +1574,7 @@ impl JsonOperator {
             JsonOperator::LongArrow => "get_string".to_string(),
             JsonOperator::HashArrow => "get_by_keypath".to_string(),
             JsonOperator::HashLongArrow => "get_by_keypath_string".to_string(),
-            JsonOperator::Question => "json_exists_key".to_string(),
+            // JsonOperator::Question => "json_exists_key".to_string(),
             JsonOperator::QuestionOr => "json_exists_any_keys".to_string(),
             JsonOperator::QuestionAnd => "json_exists_all_keys".to_string(),
             JsonOperator::AtArrow => "json_contains_in_left".to_string(),
@@ -1592,9 +1601,9 @@ impl Display for JsonOperator {
             JsonOperator::HashLongArrow => {
                 write!(f, "#>>")
             }
-            JsonOperator::Question => {
-                write!(f, "?")
-            }
+            // JsonOperator::Question => {
+            //     write!(f, "?")
+            // }
             JsonOperator::QuestionOr => {
                 write!(f, "?|")
             }
@@ -2129,7 +2138,7 @@ impl ExprReplacer {
             Expr::NextDay { date, .. } => {
                 self.replace_expr(date);
             }
-            Expr::Literal { .. } | Expr::Hole { .. } => (),
+            Expr::Literal { .. } | Expr::Hole { .. } | Expr::Placeholder { .. } => (),
         }
     }
 }

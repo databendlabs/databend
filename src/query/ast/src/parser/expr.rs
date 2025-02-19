@@ -40,12 +40,8 @@ pub fn expr(i: Input) -> IResult<Expr> {
     context("expression", subexpr(0))(i)
 }
 
-fn expr_or_placeholder(i: Input) -> IResult<Option<Expr>> {
-    alt((map(rule! { "?" }, |_| None), map(subexpr(0), Some)))(i)
-}
-
-pub fn values_with_placeholder(i: Input) -> IResult<Vec<Option<Expr>>> {
-    let values = comma_separated_list0(expr_or_placeholder);
+pub fn values(i: Input) -> IResult<Vec<Expr>> {
+    let values = comma_separated_list0(expr);
     map(rule! { ( "(" ~ #values ~ ")" ) }, |(_, v, _)| v)(i)
 }
 
@@ -325,6 +321,7 @@ pub enum ExprElement {
     Hole {
         name: String,
     },
+    Placeholder,
 }
 
 pub const BETWEEN_PREC: u32 = 20;
@@ -432,6 +429,7 @@ impl ExprElement {
             ExprElement::PreviousDay { .. } => Affix::Nilfix,
             ExprElement::NextDay { .. } => Affix::Nilfix,
             ExprElement::Hole { .. } => Affix::Nilfix,
+            ExprElement::Placeholder { .. } => Affix::Nilfix,
             ExprElement::VariableAccess { .. } => Affix::Nilfix,
         }
     }
@@ -478,6 +476,7 @@ impl Expr {
             Expr::PreviousDay { .. } => Affix::Nilfix,
             Expr::NextDay { .. } => Affix::Nilfix,
             Expr::Hole { .. } => Affix::Nilfix,
+            Expr::Placeholder { .. } => Affix::Nilfix,
         }
     }
 }
@@ -694,6 +693,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.tokens),
                 name,
             },
+            ExprElement::Placeholder => Expr::Placeholder {
+                span: transform_span(elem.span.tokens),
+            },
             ExprElement::VariableAccess(name) => {
                 let span = transform_span(elem.span.tokens);
                 make_func_get_variable(span, name)
@@ -839,6 +841,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             column,
         },
     });
+    let place_holder = map(
+        rule! {
+            Placeholder
+        },
+        |_| ExprElement::Placeholder,
+    );
     let is_null = map(
         rule! {
             IS ~ NOT? ~ NULL
@@ -1373,6 +1381,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #tuple : "`(<expr> [, ...])`"
                 | #subquery : "`(SELECT ...)`"
                 | #column_ref : "<column>"
+                | #place_holder : "?"
                 | #dot_access : "<dot_access>"
                 | #map_access : "[<key>] | .<key> | :<key>"
                 | #literal : "<literal>"
@@ -1443,7 +1452,7 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
         value(JsonOperator::LongArrow, rule! { "->>" }),
         value(JsonOperator::HashArrow, rule! { "#>" }),
         value(JsonOperator::HashLongArrow, rule! { "#>>" }),
-        value(JsonOperator::Question, rule! { "?" }),
+        // value(JsonOperator::Question, rule! { "?" }),
         value(JsonOperator::QuestionOr, rule! { "?|" }),
         value(JsonOperator::QuestionAnd, rule! { "?&" }),
         value(JsonOperator::AtArrow, rule! { "@>" }),
