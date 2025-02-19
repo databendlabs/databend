@@ -53,20 +53,20 @@ runs:
         esac
 
         deb_version=${version/-/.}
-        pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}.${{ inputs.packager }}"
         mkdir -p distro/{bin,configs,systemd,scripts}
         cp ./scripts/distribution/systemd/databend-* distro/systemd/
         cp ./scripts/distribution/configs/databend-* distro/configs/
         cp ./scripts/distribution/release-readme.txt distro/readme.txt
         cp -r ./scripts/distribution/local-scripts/* distro/scripts/
         cp -r ./scripts/distribution/package-scripts/* distro/scripts/
+        pkg_name="databend_${deb_version/v/}_${arch}.${{ inputs.packager }}"
         nfpm pkg --packager ${{ inputs.packager }} -t "$pkg_name" -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm.yaml)
         echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: Build dbg Packages
       shell: bash
       id: build_dbg_packages
       run: |
-        export name="databend_dbg"
+        export name="databend-dbg"
         export version="${{ inputs.version }}"
         export path="distro"
         case "${{ inputs.arch }}" in
@@ -79,7 +79,7 @@ runs:
         esac
 
         deb_version=${version/-/.}
-        pkg_name="databend_${deb_version/v/}_${{ inputs.arch }}_dbg.${{ inputs.packager }}"
+        pkg_name="databend-dbg_${deb_version/v/}_${arch}.${{ inputs.packager }}"
         nfpm pkg --packager ${{ inputs.packager }} -t "$pkg_name" -f <(envsubst '${name} ${version} ${path} ${arch}' < scripts/distribution/nfpm-dbg.yaml)
         echo "pkg_name=$pkg_name" >> $GITHUB_OUTPUT
     - name: Update release to github
