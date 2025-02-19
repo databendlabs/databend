@@ -2951,7 +2951,6 @@ name = "databend-common-ast"
 version = "0.2.0"
 dependencies = [
  "criterion",
- "databend-common-exception",
  "derive-visitor",
  "educe",
  "enum-as-inner",
@@ -2969,6 +2968,7 @@ dependencies = [
  "pratt",
  "pretty_assertions",
  "recursive",
+ "rspack-codespan-reporting",
  "serde",
  "serde_json",
  "strsim 0.10.0",
@@ -3202,6 +3202,7 @@ dependencies = [
  "backtrace",
  "bincode 2.0.0-rc.3",
  "cidr",
+ "databend-common-ast",
  "derive-visitor",
  "geozero",
  "gimli 0.31.1",
@@ -3216,7 +3217,6 @@ dependencies = [
  "prost",
  "redis",
  "reqwest",
- "rspack-codespan-reporting",
  "rustc-demangle",
  "serde",
  "serde_json",

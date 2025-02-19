@@ -12,6 +12,8 @@ test = true
 
 [dependencies]
 
+databend-common-ast = { workspace = true }
+
 anyhow = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-schema = { workspace = true }
@@ -32,7 +34,6 @@ paste = { workspace = true }
 prost = { workspace = true }
 redis = { workspace = true }
 reqwest = { workspace = true }
-rspack-codespan-reporting = { workspace = true }
 rustc-demangle = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::merge_span;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use educe::Educe;
@@ -42,6 +41,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SetExpr;
+use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;
 use crate::Span;
