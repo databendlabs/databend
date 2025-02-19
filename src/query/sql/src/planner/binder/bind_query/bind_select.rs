@@ -458,7 +458,10 @@ impl<'a> SelectRewriter<'a> {
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             let mut exclude_columns: Vec<_> = aggregate_columns
                 .iter()
-                .map(|c| Identifier::from_name(stmt.span, c.column.name()))
+                .map(|c| match &c.column {
+                    ColumnID::Name(name) => name.clone(),
+                    ColumnID::Position(pos) => Identifier::from_name(pos.span, pos.name),
+                })
                 .collect();
             exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);

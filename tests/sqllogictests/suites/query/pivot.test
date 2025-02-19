@@ -105,4 +105,18 @@ SELECT empid,jan,feb,mar,apr FROM (
 );
 
 statement ok
-drop table if exists monthly_sales;
+CREATE OR REPLACE TABLE test_table ("DATA_TIME" timestamp, "METRIC_CODE" string, "VALUE" decimal(16,4));
+
+statement ok
+insert into test_table values ('2024-09-30 14:09:36.000', '0101', 3.5128);
+
+query TR
+SELECT * FROM test_table PIVOT(avg("VALUE") FOR "METRIC_CODE" IN ('0101'));
+----
+2024-09-30 14:09:36.000000	3.5128
+
+statement ok
+drop table monthly_sales;
+
+statement ok
+drop table test_table;

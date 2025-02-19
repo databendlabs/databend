@@ -24,7 +24,7 @@ use derive_visitor::VisitorMut;
 #[visitor(Expr(exit), Pivot(enter))]
 pub struct AggregateRewriter {
     // aggr_expr_ptr is used for skipping the rewrite of Pivot.aggregate.
-    // It only skips the aggregate itself, while the arguments of the aggregate will still be rewritten. 
+    // It only skips the aggregate itself, while the arguments of the aggregate will still be rewritten.
     // Here, it is assumed that the arguments of the aggregate do not contain nested Pivot.
     aggr_expr_ptr: *const Expr,
 }
