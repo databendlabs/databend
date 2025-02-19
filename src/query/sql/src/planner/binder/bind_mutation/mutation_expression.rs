@@ -25,7 +25,6 @@ use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::ROW_ID_COL_NAME;
 
@@ -181,8 +180,6 @@ impl MutationExpression {
                     all_source_columns,
                     target_table_index,
                     target_table_row_id_index,
-                    truncate_table: false,
-                    predicate_column_index: None,
                 })
             }
             MutationExpression::Update {
@@ -234,24 +231,6 @@ impl MutationExpression {
 
                 // Build bind result according to mutation strategy.
                 if mutation_strategy == MutationStrategy::Direct {
-                    let mut truncate_table = false;
-                    let mut predicate_column_index = None;
-                    if !predicates.is_empty() {
-                        if mutation_type == MutationType::Update {
-                            let column_index = binder.metadata.write().add_derived_column(
-                                "_predicate".to_string(),
-                                DataType::Boolean,
-                                None,
-                            );
-                            required_columns.insert(column_index);
-                            predicate_column_index = Some(column_index);
-                        }
-                    } else if mutation_type == MutationType::Delete {
-                        // There is no filter and the mutation type is delete,
-                        // we can truncate the table directly.
-                        truncate_table = true;
-                    }
-
                     let table_schema = target_table
                         .schema_with_stream()
                         .remove_virtual_computed_fields();
@@ -261,7 +240,7 @@ impl MutationExpression {
                         table_index: target_table_index,
                         mutation_type: mutation_type.clone(),
                         predicates: vec![],
-                        predicate_column_index,
+                        predicate_column_index: None,
                         read_partition_columns: HashSet::new(),
                         update_stream_columns,
                     };
@@ -289,8 +268,6 @@ impl MutationExpression {
                         all_source_columns: None,
                         target_table_index,
                         target_table_row_id_index: DUMMY_COLUMN_INDEX,
-                        truncate_table,
-                        predicate_column_index,
                     })
                 } else {
                     let is_lazy_table = mutation_type != MutationType::Delete;
@@ -346,8 +323,6 @@ impl MutationExpression {
                         all_source_columns: None,
                         target_table_index,
                         target_table_row_id_index,
-                        truncate_table: false,
-                        predicate_column_index: None,
                     })
                 }
             }
@@ -574,10 +549,6 @@ pub struct MutationExpressionBindResult {
     pub target_table_row_id_index: usize,
     pub required_columns: ColumnSet,
     pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
-
-    // MutationStrategy::Direct related variables.
-    pub truncate_table: bool,
-    pub predicate_column_index: Option<usize>,
 }
 
 pub fn target_probe(s_expr: &SExpr, target_table_index: usize) -> Result<bool> {

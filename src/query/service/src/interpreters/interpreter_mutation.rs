@@ -281,32 +281,6 @@ impl MutationInterpreter {
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
-        // Check if the filter is a constant.
-        let mut truncate_table = mutation.truncate_table;
-        let is_const = !mutation.direct_filter.is_empty()
-            && mutation
-                .direct_filter
-                .iter()
-                .all(|v| v.used_columns().is_empty());
-        if is_const {
-            let filters = create_push_down_filters(
-                &self.ctx.get_function_context()?,
-                &mutation.direct_filter,
-            )?;
-            let filter_result = fuse_table.try_eval_const(
-                self.ctx.clone(),
-                &fuse_table.schema(),
-                &filters.filter,
-            )?;
-            if mutation.mutation_type == MutationType::Delete && filter_result {
-                // The delete condition is always true, truncate the table.
-                truncate_table = true;
-            } else if !filter_result {
-                // The update/delete condition is always false, do nothing.
-                return self.no_effect_mutation();
-            }
-        }
-
         if mutation.mutation_type == MutationType::Merge {
             return Ok(None);
         }
@@ -321,26 +295,24 @@ impl MutationInterpreter {
             return self.no_effect_mutation();
         }
 
-        if mutation.mutation_type == MutationType::Delete {
-            if truncate_table {
-                let mut build_res = PipelineBuildResult::create();
-                self.ctx.add_mutation_status(MutationStatus {
-                    insert_rows: 0,
-                    deleted_rows: snapshot.summary.row_count,
-                    update_rows: 0,
-                });
-                // deleting the whole table... just a truncate
-                fuse_table
-                    .do_truncate(
-                        self.ctx.clone(),
-                        &mut build_res.main_pipeline,
-                        TruncateMode::Delete,
-                    )
-                    .await?;
-                Ok(Some(build_res))
-            } else {
-                Ok(None)
-            }
+        if mutation.mutation_type == MutationType::Delete && mutation.direct_filter.is_empty() {
+            // There is no filter and the mutation type is delete,
+            // we can truncate the table directly.
+            let mut build_res = PipelineBuildResult::create();
+            self.ctx.add_mutation_status(MutationStatus {
+                insert_rows: 0,
+                deleted_rows: snapshot.summary.row_count,
+                update_rows: 0,
+            });
+            // deleting the whole table... just a truncate
+            fuse_table
+                .do_truncate(
+                    self.ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    TruncateMode::Delete,
+                )
+                .await?;
+            Ok(Some(build_res))
         } else {
             Ok(None)
         }
