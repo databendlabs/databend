@@ -2951,8 +2951,8 @@ name = "databend-common-ast"
 version = "0.2.0"
 dependencies = [
  "criterion",
+ "databend_educe",
  "derive-visitor",
- "educe",
  "enum-as-inner",
  "ethnum",
  "fast-float2",
@@ -3252,7 +3252,7 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-hashtable",
  "databend-common-io",
- "educe",
+ "databend_educe",
  "either",
  "enum-as-inner",
  "ethnum",
@@ -3997,8 +3997,8 @@ dependencies = [
  "databend-storages-common-io",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
+ "databend_educe",
  "derive-visitor",
- "educe",
  "enum-as-inner",
  "fastrace",
  "globiter",
@@ -5369,6 +5369,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend_educe"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f51ab98d2a6fa98f75221037606717e4f41dba478beb790ce679850d9362139f"
+dependencies = [
+ "enum-ordinalize",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.95",
+]
+
+[[package]]
 name = "deadpool"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5814,7 +5826,8 @@ dependencies = [
 [[package]]
 name = "educe"
 version = "0.6.0"
-source = "git+https://github.com/zhang2014/educe.git?rev=ab34a19#ab34a199e853493e8b5c38c8849b078b398e97a5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d7bc049e1bd8cdeb31b68bbd586a9464ecf9f3944af3958a7a9d0f8b9799417"
 dependencies = [
  "enum-ordinalize",
  "proc-macro2",
