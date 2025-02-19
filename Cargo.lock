@@ -3203,7 +3203,6 @@ dependencies = [
  "bincode 2.0.0-rc.3",
  "cidr",
  "databend-common-ast",
- "derive-visitor",
  "geozero",
  "gimli 0.31.1",
  "http 1.1.0",

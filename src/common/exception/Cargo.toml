@@ -20,7 +20,6 @@ arrow-schema = { workspace = true }
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 bincode = { workspace = true }
 cidr = { workspace = true }
-derive-visitor = { workspace = true }
 geozero = { workspace = true }
 gimli = { workspace = true }
 http = { workspace = true }
