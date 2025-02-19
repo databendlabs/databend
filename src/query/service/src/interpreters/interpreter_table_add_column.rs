@@ -147,7 +147,9 @@ impl Interpreter for AddTableColumnInterpreter {
         }
 
         let mut new_table_meta = table_info.meta.clone();
-        let _ = generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
+
+        // TODO seem buggy... should only update hint file if snapshot committed successfully?
+        generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
@@ -220,6 +222,7 @@ pub(crate) async fn generate_new_snapshot(
                 fuse_table.get_operator_ref(),
                 fuse_table.meta_location_generator(),
                 &new_snapshot_location,
+                &new_table_meta,
             )
             .await;
 

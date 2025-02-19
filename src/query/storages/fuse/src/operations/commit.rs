@@ -52,7 +52,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::debug;
 use log::info;
-use log::warn;
 use opendal::Operator;
 
 use crate::io::MetaWriter;
@@ -64,6 +63,7 @@ use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeSegment;
 use crate::operations::set_backoff;
+use crate::operations::SnapshotHintWriter;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
 
@@ -234,7 +234,7 @@ impl FuseTable {
         if new_table_meta.options.contains_key(OPT_KEY_TEMP_PREFIX) {
             let req = UpdateTempTableReq {
                 table_id,
-                new_table_meta,
+                new_table_meta: new_table_meta.clone(),
                 copied_files: copied_files
                     .as_ref()
                     .map(|c| c.file_info.clone())
@@ -246,7 +246,7 @@ impl FuseTable {
             let req = UpdateTableMetaReq {
                 table_id,
                 seq: MatchSeq::Exact(table_version),
-                new_table_meta,
+                new_table_meta: new_table_meta.clone(),
             };
             update_table_metas.push((req, table_info.clone()));
             copied_files_req = copied_files.iter().map(|c| (table_id, c.clone())).collect();
@@ -265,7 +265,14 @@ impl FuseTable {
 
         // update_table_meta succeed, populate the snapshot cache item and try keeping a hit file of last snapshot
         TableSnapshot::cache().insert(snapshot_location.clone(), snapshot);
-        Self::write_last_snapshot_hint(ctx, operator, location_generator, &snapshot_location).await;
+        Self::write_last_snapshot_hint(
+            ctx,
+            operator,
+            location_generator,
+            &snapshot_location,
+            &new_table_meta,
+        )
+        .await;
 
         Ok(())
     }
@@ -277,37 +284,11 @@ impl FuseTable {
         operator: &Operator,
         location_generator: &TableMetaLocationGenerator,
         last_snapshot_path: &str,
+        new_table_meta: &TableMeta,
     ) {
-        if let Ok(false) = ctx.get_settings().get_enable_last_snapshot_location_hint() {
-            info!(
-                "Write last_snapshot_location_hint disabled. Snapshot {}",
-                last_snapshot_path
-            );
-            return;
-        }
-
-        // Just try our best to write down the hint file of last snapshot
-        // - will retry in the case of temporary failure
-        // but
-        // - errors are ignored if writing is eventually failed
-        // - errors (if any) will not be propagated to caller
-        // - "data race" ignored
-        //   if multiple different versions of hints are written concurrently
-        //   it is NOT guaranteed that the latest version will be kept
-
-        let hint_path = location_generator.gen_last_snapshot_hint_location();
-        let last_snapshot_path = {
-            let operator_meta_data = operator.info();
-            let storage_prefix = operator_meta_data.root();
-            format!("{}{}", storage_prefix, last_snapshot_path)
-        };
-
-        operator
-            .write(&hint_path, last_snapshot_path)
+        SnapshotHintWriter::new(ctx, operator)
+            .write_last_snapshot_hint(location_generator, last_snapshot_path, new_table_meta)
             .await
-            .unwrap_or_else(|e| {
-                warn!("write last snapshot hint failure. {}", e);
-            });
     }
 
     // TODO refactor, it is called by segment compaction

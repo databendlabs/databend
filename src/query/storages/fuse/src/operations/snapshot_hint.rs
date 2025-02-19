@@ -18,7 +18,6 @@ use std::time::Instant;
 
 use bytes::Buf;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableMeta;
 use log::info;
@@ -37,17 +36,26 @@ pub struct SnapshotHintWriter<'a> {
     dal: &'a Operator,
 }
 
+impl<'a> SnapshotHintWriter<'a> {
+    pub fn new(ctx: &'a dyn TableContext, dal: &'a Operator) -> Self {
+        SnapshotHintWriter { ctx, dal }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SnapshotHint {
     pub snapshot_location: String,
-    pub entity_comment: EntityComments,
+    pub entity_comments: EntityComments,
 }
 
 impl SnapshotHint {
     fn marshall<W: Write>(&self, writer: W) -> Result<()> {
-        todo!()
+        serde_json::to_writer(writer, self)?;
+        Ok(())
     }
     fn unmarshall<R: Read>(reader: R) -> Result<Self> {
-        todo!()
+        let v = serde_json::from_reader(reader)?;
+        Ok(v)
     }
 }
 
@@ -70,10 +78,12 @@ pub async fn load_last_snapshot_hint(
     storage_prefix: &str,
     operator: &Operator,
 ) -> Result<Option<SnapshotHint>> {
+    // First, try to load the v2 format hint file
     let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT_V2);
     match operator.read(&hint_file_path).await {
         Err(e) => {
             if e.kind() == ErrorKind::NotFound {
+                // if there is no V2 hint file, fallback to read the legacy hint file
                 try_read_legacy_hint(storage_prefix, operator).await
             } else {
                 return Err(e.into());
@@ -88,7 +98,34 @@ async fn try_read_legacy_hint(
     storage_prefix: &str,
     operator: &Operator,
 ) -> Result<Option<SnapshotHint>> {
-    todo!()
+    let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+    let begin_load_hint = Instant::now();
+    let maybe_hint_content = operator.read(&hint_file_path).await;
+    info!(
+        "loaded last snapshot hint file [{}], time used {:?}",
+        hint_file_path,
+        begin_load_hint.elapsed()
+    );
+    match maybe_hint_content {
+        Ok(buf) => {
+            let hint_content = buf.to_vec();
+            let snapshot_full_path = String::from_utf8(hint_content)?;
+            let operator_info = operator.info();
+
+            // TODO check this, shall we substring here?
+            let loc = snapshot_full_path[operator_info.root().len()..].to_string();
+
+            Ok(Some(SnapshotHint {
+                snapshot_location: loc,
+                entity_comments: EntityComments {
+                    table_comment: "".to_string(),
+                    field_comments: vec![],
+                },
+            }))
+        }
+        Err(e) if e.kind() == opendal::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.into()),
+    }
 }
 
 impl<'a> SnapshotHintWriter<'a> {
@@ -128,7 +165,7 @@ impl<'a> SnapshotHintWriter<'a> {
 
         let hint = SnapshotHint {
             snapshot_location: last_snapshot_path,
-            entity_comment: EntityComments::from(table_meta),
+            entity_comments: EntityComments::from(table_meta),
         };
 
         let mut bytes = vec![];

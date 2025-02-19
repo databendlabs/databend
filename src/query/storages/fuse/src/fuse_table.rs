@@ -125,7 +125,6 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
-use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -659,10 +658,9 @@ impl FuseTable {
                 }
 
                 // tweak table/field comments
-                let mut comments = hint.entity_comment;
+                let comments = hint.entity_comments;
 
                 table_info.meta.comment = comments.table_comment;
-
                 // TODO assert about field comments
                 table_info.meta.field_comments = comments.field_comments;
             }
