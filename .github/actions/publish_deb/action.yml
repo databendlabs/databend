@@ -27,23 +27,26 @@ runs:
       working-directory: scripts/distribution/deb
       run: |
         version=$(gh release view --repo databendlabs/databend --json name | jq -r '.name')
-        deb_version=${version/-/.}
-        deb_version=${deb_version/v/}
-        wget -q https://github.com/databendlabs/databend/releases/download/${version}/databend_${deb_version}_amd64.deb
-        wget -q https://github.com/databendlabs/databend/releases/download/${version}/databend_${deb_version}_arm64.deb
-        reprepro includedeb stable databend_${deb_version}_amd64.deb
-        reprepro includedeb stable databend_${deb_version}_arm64.deb
+        echo "version: $version"
+        assets=$(gh release view --repo databendlabs/databend --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url')
+        for asset in $assets; do
+          wget -q $asset
+          asset_name=$(basename $asset)
+          reprepro includedeb stable ${asset_name}
+        done
 
     - name: Add BendSQL Packages
       shell: bash
       working-directory: scripts/distribution/deb
       run: |
         version=$(gh release view --repo databendlabs/bendsql --json name | jq -r '.name')
-        deb_version=${version/v/}
-        wget -q https://github.com/databendlabs/bendsql/releases/download/${version}/bendsql_${deb_version}_amd64.deb
-        wget -q https://github.com/databendlabs/bendsql/releases/download/${version}/bendsql_${deb_version}_arm64.deb
-        reprepro includedeb stable bendsql_${deb_version}_amd64.deb
-        reprepro includedeb stable bendsql_${deb_version}_arm64.deb
+        echo "version: $version"
+        assets=$(gh release view --repo databendlabs/bendsql --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url')
+        for asset in $assets; do
+          wget -q $asset
+          asset_name=$(basename $asset)
+          reprepro includedeb stable ${asset_name}
+        done
 
     - name: Publish to S3
       shell: bash
