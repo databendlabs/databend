@@ -37,3 +37,4 @@ pub use exception_backtrace::set_backtrace;
 pub use exception_backtrace::StackTrace;
 pub use exception_backtrace::USER_SET_ENABLE_BACKTRACE;
 pub use exception_into::SerializedError;
+pub use span::merge_span;

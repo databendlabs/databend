@@ -115,6 +115,12 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                             value: literal(span)?.1,
                         };
                     }
+                    // replace json operator `?` to placeholder.
+                    ExprElement::JsonOp { op } => {
+                        if *op == JsonOperator::Question {
+                            *elem = ExprElement::Placeholder;
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -841,12 +847,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             column,
         },
     });
-    let place_holder = map(
-        rule! {
-            Placeholder
-        },
-        |_| ExprElement::Placeholder,
-    );
     let is_null = map(
         rule! {
             IS ~ NOT? ~ NULL
@@ -1381,7 +1381,6 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #tuple : "`(<expr> [, ...])`"
                 | #subquery : "`(SELECT ...)`"
                 | #column_ref : "<column>"
-                | #place_holder : "?"
                 | #dot_access : "<dot_access>"
                 | #map_access : "[<key>] | .<key> | :<key>"
                 | #literal : "<literal>"
@@ -1452,7 +1451,7 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
         value(JsonOperator::LongArrow, rule! { "->>" }),
         value(JsonOperator::HashArrow, rule! { "#>" }),
         value(JsonOperator::HashLongArrow, rule! { "#>>" }),
-        // value(JsonOperator::Question, rule! { "?" }),
+        value(JsonOperator::Question, rule! { "?" }),
         value(JsonOperator::QuestionOr, rule! { "?|" }),
         value(JsonOperator::QuestionAnd, rule! { "?&" }),
         value(JsonOperator::AtArrow, rule! { "@>" }),
