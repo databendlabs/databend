@@ -69,6 +69,37 @@ impl<R: Rng> SqlGenerator<'_, R> {
         }
     }
 
+    pub(crate) fn gen_view_query(&mut self) -> (Query, Vec<SelectTarget>, Vec<DataType>) {
+        self.cte_tables.clear();
+        self.bound_tables.clear();
+        self.bound_columns.clear();
+        self.is_join = false;
+
+        let with = None;
+        let (group_by, group_by_items_type) = self.gen_group_by();
+        self.group_by = group_by.clone();
+        let (select_list, types) = self.gen_view_select_list(&group_by, group_by_items_type);
+        let select = self.gen_view_select(select_list.clone(), group_by);
+        let body = SetExpr::Select(Box::new(select));
+        let limit = self.gen_limit();
+        let offset = self.gen_offset(limit.len());
+        let order_by = self.gen_order_by(self.group_by.clone());
+
+        (
+            Query {
+                span: None,
+                with,
+                body,
+                order_by,
+                limit,
+                offset,
+                ignore_result: false,
+            },
+            select_list,
+            types,
+        )
+    }
+
     // Scalar, IN / NOT IN, ANY / SOME / ALL Subquery must return only one column
     // EXISTS / NOT EXISTS Subquery can return any columns
     pub(crate) fn gen_subquery(&mut self, one_column: bool) -> (Query, TableSchemaRef) {
@@ -294,7 +325,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
     fn gen_select(&mut self) -> SelectStmt {
         self.windows_name.clear();
         let from = self.gen_from();
-        let group_by = self.gen_group_by();
+        let (group_by, _) = self.gen_group_by();
         self.group_by = group_by.clone();
         let window_list = self.gen_window_list();
         if let Some(window_list) = window_list {
@@ -314,6 +345,42 @@ impl<R: Rng> SqlGenerator<'_, R> {
             // TODO
             hints: None,
             distinct: self.rng.gen_bool(0.7),
+            top_n: None,
+            select_list,
+            from,
+            selection,
+            group_by,
+            having,
+            window_list,
+            qualify,
+        }
+    }
+
+    fn gen_view_select(
+        &mut self,
+        select_list: Vec<SelectTarget>,
+        group_by: Option<GroupBy>,
+    ) -> SelectStmt {
+        self.windows_name.clear();
+        let from = self.gen_from();
+        let window_list = self.gen_window_list();
+        if let Some(window_list) = window_list {
+            for window in window_list {
+                self.windows_name.push(window.name.name)
+            }
+        }
+
+        let selection = self.gen_selection();
+
+        let having = self.gen_selection();
+        let window_list = self.gen_window_list();
+        let qualify = self.gen_qualify();
+
+        SelectStmt {
+            span: None,
+            // TODO
+            hints: None,
+            distinct: false,
             top_n: None,
             select_list,
             from,
@@ -354,24 +421,32 @@ impl<R: Rng> SqlGenerator<'_, R> {
         }
     }
 
-    fn gen_group_by(&mut self) -> Option<GroupBy> {
+    fn gen_group_by(&mut self) -> (Option<GroupBy>, Option<Vec<DataType>>) {
         if self.rng.gen_bool(0.8) {
-            return None;
+            return (None, None);
         }
         let group_cap = self.rng.gen_range(1..=5);
         let mut groupby_items = Vec::with_capacity(group_cap);
+        let mut groupby_items_types = Vec::with_capacity(group_cap);
 
         for _ in 0..group_cap {
             let ty = self.gen_data_type();
             let groupby_item = self.gen_expr(&ty);
             let groupby_item = self.rewrite_position_expr(groupby_item);
             groupby_items.push(groupby_item);
+            groupby_items_types.push(ty);
         }
 
         match self.rng.gen_range(0..=2) {
-            0 => Some(GroupBy::Normal(groupby_items)),
-            1 => Some(GroupBy::All),
-            2 => Some(GroupBy::GroupingSets(vec![groupby_items])),
+            0 => (
+                Some(GroupBy::Normal(groupby_items)),
+                Some(groupby_items_types),
+            ),
+            1 => (Some(GroupBy::All), Some(groupby_items_types)),
+            2 => (
+                Some(GroupBy::GroupingSets(vec![groupby_items])),
+                Some(groupby_items_types),
+            ),
             _ => unreachable!(),
         }
     }
@@ -434,6 +509,77 @@ impl<R: Rng> SqlGenerator<'_, R> {
         }
 
         targets
+    }
+
+    fn gen_view_select_list(
+        &mut self,
+        group_by: &Option<GroupBy>,
+        group_by_items_type: Option<Vec<DataType>>,
+    ) -> (Vec<SelectTarget>, Vec<DataType>) {
+        let mut targets = Vec::with_capacity(5);
+        let mut col_type = Vec::with_capacity(5);
+
+        let generate_target = |expr: Expr| SelectTarget::AliasedExpr {
+            expr: Box::new(expr),
+            alias: None,
+        };
+
+        match (group_by, group_by_items_type) {
+            (Some(GroupBy::Normal(group_by)), Some(group_by_items_type)) => {
+                let ty = self.gen_data_type();
+                let agg_expr = self.gen_agg_func(&ty);
+                targets.push(SelectTarget::AliasedExpr {
+                    expr: Box::new(agg_expr),
+                    alias: None,
+                });
+                col_type.push(ty);
+                targets.extend(group_by.iter().map(|expr| SelectTarget::AliasedExpr {
+                    expr: Box::new(expr.clone()),
+                    alias: None,
+                }));
+                col_type.extend(group_by_items_type);
+            }
+            (Some(GroupBy::All), _) => {
+                let select_num = self.rng.gen_range(1..=5);
+                for _ in 0..select_num {
+                    let ty = self.gen_data_type();
+                    let expr = if self.rng.gen_bool(0.8) {
+                        self.gen_agg_func(&ty)
+                    } else {
+                        self.gen_expr(&ty)
+                    };
+                    let target = generate_target(expr);
+                    targets.push(target);
+                    col_type.push(ty);
+                }
+            }
+            (Some(GroupBy::GroupingSets(group_by)), Some(group_by_items_type)) => {
+                let ty = self.gen_data_type();
+                let agg_expr = self.gen_agg_func(&ty);
+                targets.push(SelectTarget::AliasedExpr {
+                    expr: Box::new(agg_expr),
+                    alias: None,
+                });
+                targets.extend(group_by[0].iter().map(|expr| SelectTarget::AliasedExpr {
+                    expr: Box::new(expr.clone()),
+                    alias: None,
+                }));
+                col_type.push(ty);
+                col_type.extend(group_by_items_type);
+            }
+            _ => {
+                let select_num = self.rng.gen_range(1..=7);
+                for _ in 0..select_num {
+                    let ty = self.gen_data_type();
+                    let expr = self.gen_expr(&ty);
+                    let target = generate_target(expr);
+                    targets.push(target);
+                    col_type.push(ty);
+                }
+            }
+        }
+
+        (targets, col_type)
     }
 
     fn gen_from(&mut self) -> Vec<TableReference> {
