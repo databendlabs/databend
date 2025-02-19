@@ -25,18 +25,8 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::types::BooleanType;
-use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
-use databend_common_expression::DataBlock;
-use databend_common_expression::DataField;
-use databend_common_expression::DataSchema;
-use databend_common_expression::Evaluator;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::RemoteExpr;
-use databend_common_expression::TableSchema;
-use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::Pipeline;
@@ -57,37 +47,6 @@ use crate::FuseTable;
 use crate::SegmentLocation;
 
 impl FuseTable {
-    pub fn try_eval_const(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        schema: &TableSchema,
-        filter: &RemoteExpr<String>,
-    ) -> Result<bool> {
-        let dummy_field = DataField::new("dummy", DataType::Null);
-        let _dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
-        let dummy_value = Value::Column(Column::Null { len: 1 });
-        let dummy_block = DataBlock::new(vec![BlockEntry::new(DataType::Null, dummy_value)], 1);
-
-        let filter = filter
-            .as_expr(&BUILTIN_FUNCTIONS)
-            .project_column_ref(|name| schema.index_of(name).unwrap());
-
-        assert_eq!(filter.data_type(), &DataType::Boolean);
-
-        let func_ctx = ctx.get_function_context()?;
-        let evaluator = Evaluator::new(&dummy_block, &func_ctx, &BUILTIN_FUNCTIONS);
-        let predicates = evaluator
-            .run(&filter)
-            .map_err(|e| e.add_message("eval try eval const failed:"))?
-            .try_downcast::<BooleanType>()
-            .unwrap();
-
-        Ok(match &predicates {
-            Value::Scalar(v) => *v,
-            Value::Column(bitmap) => bitmap.null_count() == 0,
-        })
-    }
-
     #[async_backtrace::framed]
     pub fn add_mutation_source(
         &self,

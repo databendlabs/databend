@@ -281,6 +281,10 @@ impl MutationInterpreter {
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
+        if mutation.predicate_always_false {
+            return self.no_effect_mutation();
+        }
+
         if mutation.mutation_type == MutationType::Merge {
             return Ok(None);
         }

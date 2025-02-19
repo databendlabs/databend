@@ -558,6 +558,12 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     if !mutation.matched_evaluators.is_empty() {
         match inner_rel_op {
             RelOp::ConstantTableScan => {
+                if matches!(
+                    mutation.strategy,
+                    MutationStrategy::Direct | MutationStrategy::MatchedOnly
+                ) {
+                    mutation.predicate_always_false = true;
+                }
                 mutation.matched_evaluators = vec![MatchedEvaluator {
                     condition: None,
                     update: None,
