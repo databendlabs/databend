@@ -23,6 +23,7 @@ use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_sql::plans::DropTableColumnPlan;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
@@ -129,15 +130,30 @@ impl Interpreter for DropTableColumnInterpreter {
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
-        generate_new_snapshot(self.ctx.as_ref(), table.as_ref(), &mut new_table_meta).await?;
+        let new_snapshot_location =
+            generate_new_snapshot(table.as_ref(), &mut new_table_meta).await?;
 
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
-            new_table_meta,
+            new_table_meta: new_table_meta.clone(),
         };
 
-        let _resp = catalog.update_single_table_meta(req, table_info).await?;
+        catalog.update_single_table_meta(req, table_info).await?;
+
+        if let Some(new_snapshot_location) = new_snapshot_location {
+            if let Ok(fuse_tbl) = FuseTable::try_from_table(table.as_ref()) {
+                // write down hint
+                FuseTable::write_last_snapshot_hint(
+                    self.ctx.as_ref(),
+                    fuse_tbl.get_operator_ref(),
+                    fuse_tbl.meta_location_generator(),
+                    &new_snapshot_location,
+                    &new_table_meta,
+                )
+                .await;
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }

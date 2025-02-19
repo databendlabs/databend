@@ -148,18 +148,32 @@ impl Interpreter for AddTableColumnInterpreter {
 
         let mut new_table_meta = table_info.meta.clone();
 
-        // TODO seem buggy... should only update hint file if snapshot committed successfully?
-        generate_new_snapshot(self.ctx.as_ref(), tbl.as_ref(), &mut new_table_meta).await?;
+        let new_snapshot_location =
+            generate_new_snapshot(tbl.as_ref(), &mut new_table_meta).await?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
 
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(table_version),
-            new_table_meta,
+            new_table_meta: new_table_meta.clone(),
         };
 
-        let _resp = catalog.update_single_table_meta(req, &table_info).await?;
+        catalog.update_single_table_meta(req, &table_info).await?;
+
+        if let Some(new_snapshot_location) = new_snapshot_location {
+            if let Ok(fuse_tbl) = FuseTable::try_from_table(tbl.as_ref()) {
+                // write down hint
+                FuseTable::write_last_snapshot_hint(
+                    self.ctx.as_ref(),
+                    fuse_tbl.get_operator_ref(),
+                    fuse_tbl.meta_location_generator(),
+                    &new_snapshot_location,
+                    &new_table_meta,
+                )
+                .await;
+            }
+        }
 
         // If the column is not deterministic, update to refresh the value with default expr.
         if !self.plan.is_deterministic {
@@ -191,10 +205,9 @@ impl Interpreter for AddTableColumnInterpreter {
 }
 
 pub(crate) async fn generate_new_snapshot(
-    ctx: &QueryContext,
     table: &dyn Table,
     new_table_meta: &mut TableMeta,
-) -> Result<()> {
+) -> Result<Option<String>> {
     if let Ok(fuse_table) = FuseTable::try_from_table(table) {
         if let Some(snapshot) = fuse_table.read_table_snapshot().await? {
             let mut new_snapshot = TableSnapshot::from_previous(
@@ -216,24 +229,16 @@ pub(crate) async fn generate_new_snapshot(
                 .write(&new_snapshot_location, data)
                 .await?;
 
-            // write down hint
-            FuseTable::write_last_snapshot_hint(
-                ctx,
-                fuse_table.get_operator_ref(),
-                fuse_table.meta_location_generator(),
-                &new_snapshot_location,
-                &new_table_meta,
-            )
-            .await;
-
-            new_table_meta
-                .options
-                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_owned(), new_snapshot_location);
+            new_table_meta.options.insert(
+                OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
+                new_snapshot_location.clone(),
+            );
+            return Ok(Some(new_snapshot_location));
         } else {
             info!("Snapshot not found, no need to generate new snapshot");
         }
     } else {
         info!("Not a fuse table, no need to generate new snapshot");
     }
-    Ok(())
+    Ok(None)
 }
