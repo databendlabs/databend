@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyhow::Result;
+use bendsave::backup;
 use clap::Parser;
 use clap::Subcommand;
+use logforth::append;
+use logforth::filter::EnvFilter;
+use logforth::Dispatch;
+use logforth::Logger;
 
 #[derive(Parser)]
 #[command(name = "bendsave")]
@@ -34,12 +40,7 @@ enum Commands {
         #[arg(short, long)]
         to: String,
     },
-    /// List all backups in the specified location
-    List {
-        /// Backup location
-        #[arg(short, long)]
-        location: String,
-    },
+
     /// Restore a Databend cluster from a backup
     Restore {
         /// Backup manifest file path
@@ -52,23 +53,33 @@ enum Commands {
         #[arg(short, long, default_value_t = false)]
         confirm: bool,
     },
-    /// Manage backup retention policies
-    Vacuum,
+    // /// List all backups in the specified location
+    // List {
+    //     /// Backup location
+    //     #[arg(short, long)]
+    //     location: String,
+    // },
+    // /// Manage backup retention policies
+    // Vacuum,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<()> {
+    Logger::new()
+        .dispatch(
+            Dispatch::new()
+                .filter(EnvFilter::from_default_env())
+                .append(append::Stderr::default()),
+        )
+        .apply()?;
+
     let cli = Cli::parse();
 
     match &cli.command {
         Commands::Backup { from, to } => {
             // Implement backup functionality here
             println!("Backing up from {} to {}", from, to);
-            // TODO: Add actual backup logic
-        }
-        Commands::List { location } => {
-            // Implement list functionality here
-            println!("Listing backups in {}", location);
-            // TODO: Add actual list logic
+            backup(from, to).await?;
         }
         Commands::Restore { from, to, confirm } => {
             // Implement restore functionality here
@@ -80,8 +91,7 @@ fn main() {
                 // TODO: Add dry-run restore logic
             }
         }
-        Commands::Vacuum => {
-            // TODO: Add actual vacuum logic based on provided parameters
-        }
     }
+
+    Ok(())
 }

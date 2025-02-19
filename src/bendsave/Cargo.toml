@@ -7,8 +7,25 @@ license = "Elastic-2.0"
 edition = "2021"
 
 [dependencies]
-clap.workspace = true
-opendal = { workspace = true }
+databend-common-base = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-meta-client = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-storage = { workspace = true }
+
+anyhow = { workspace = true }
+async-stream = { workspace = true }
+bytes = { workspace = true }
+clap = { workspace = true }
+epochfs = { workspace = true }
+form_urlencoded = { workspace = true }
+futures = { workspace = true }
+http = { workspace = true }
+opendal = { workspace = true, features = ["services-s3", "services-fs"] }
+tokio = { workspace = true }
+toml = { workspace = true, features = ["parse"] }
+log = { workspace = true }
+logforth = { workspace = true }
 
 [lints]
 workspace = true
