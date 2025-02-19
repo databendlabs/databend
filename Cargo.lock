@@ -5362,7 +5362,6 @@ dependencies = [
  "databend-common-storage",
  "enum-as-inner",
  "log",
- "once_cell",
  "parquet",
  "rmp-serde",
  "serde",
