@@ -24,6 +24,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 const DEFAULT_DETECT_REGION_TIMEOUT_SEC: u64 = 10;
+
 /// Storage params which contains the detailed storage info.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -142,7 +143,12 @@ impl StorageParams {
                 )
                 .await
                 .map_err(|e| {
-                    ErrorCode::StorageOther(format!("detect region timeout, time used {}", e))
+                    ErrorCode::StorageOther(format!(
+                        "detect region timeout: {}s, endpoint: {}, elapsed: {}",
+                        DEFAULT_DETECT_REGION_TIMEOUT_SEC,
+                        endpoint,
+                        e
+                    ))
                 })?
                 .unwrap_or_default();
 
@@ -260,6 +266,7 @@ impl Default for StorageFsConfig {
 }
 
 pub const STORAGE_FTP_DEFAULT_ENDPOINT: &str = "ftps://127.0.0.1";
+
 /// Config for FTP and FTPS data source
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageFtpConfig {
@@ -419,6 +426,7 @@ pub struct StorageHttpConfig {
 }
 
 pub const STORAGE_IPFS_DEFAULT_ENDPOINT: &str = "https://ipfs.io";
+
 /// Config for IPFS storage backend
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StorageIpfsConfig {
