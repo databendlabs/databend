@@ -287,7 +287,10 @@ impl MutationInterpreter {
             return self.no_effect_mutation();
         }
 
-        if mutation.mutation_type == MutationType::Merge {
+        if matches!(
+            mutation.strategy,
+            MutationStrategy::MixedMatched | MutationStrategy::NotMatchedOnly
+        ) {
             return Ok(None);
         }
 
