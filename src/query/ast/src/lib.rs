@@ -14,7 +14,6 @@
 
 // TODO(xuanwo): Add crate level documents here.
 
-#![feature(trivial_bounds)]
 #[allow(clippy::collapsible_match)]
 pub mod ast;
 pub mod parser;
