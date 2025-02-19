@@ -27,6 +27,7 @@ runs:
       working-directory: scripts/distribution/deb
       run: |
         version=$(gh release view --repo databendlabs/databend --json name | jq -r '.name')
+        echo "version: $version"
         assets=$(gh release view --repo databendlabs/databend --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url')
         for asset in $assets; do
           wget -q $asset
@@ -39,6 +40,7 @@ runs:
       working-directory: scripts/distribution/deb
       run: |
         version=$(gh release view --repo databendlabs/bendsql --json name | jq -r '.name')
+        echo "version: $version"
         assets=$(gh release view --repo databendlabs/bendsql --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url')
         for asset in $assets; do
           wget -q $asset
