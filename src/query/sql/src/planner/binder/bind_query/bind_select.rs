@@ -305,7 +305,10 @@ impl SelectRewriter<'_> {
                 func: FunctionCall { name, args, .. },
                 ..
             } => Ok((name, args)),
-            _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
+            _ => {
+                Err(ErrorCode::SyntaxException("Aggregate function is required")
+                    .set_span(expr.span()))
+            }
         }
     }
 
@@ -421,11 +424,13 @@ impl<'a> SelectRewriter<'a> {
         let aggregate_columns = aggregate_args
             .iter()
             .map(|expr| match expr {
-                Expr::ColumnRef { column, .. } => Some(column.clone()),
-                _ => None,
+                Expr::ColumnRef { column, .. } => Ok(column.clone()),
+                _ => Err(ErrorCode::SyntaxException(
+                    "The aggregate function of pivot only support column_name",
+                )
+                .set_span(expr.span())),
             })
-            .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))?;
+            .collect::<Result<Vec<_>>>()?;
         let aggregate_column_names = aggregate_columns
             .iter()
             .map(|col| col.column.name())
