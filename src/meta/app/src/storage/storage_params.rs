@@ -145,9 +145,7 @@ impl StorageParams {
                 .map_err(|e| {
                     ErrorCode::StorageOther(format!(
                         "detect region timeout: {}s, endpoint: {}, elapsed: {}",
-                        DEFAULT_DETECT_REGION_TIMEOUT_SEC,
-                        endpoint,
-                        e
+                        DEFAULT_DETECT_REGION_TIMEOUT_SEC, endpoint, e
                     ))
                 })?
                 .unwrap_or_default();
