@@ -40,6 +40,7 @@ local_block_meta_serde!(PrunedCompactSegmentMeta);
 #[typetag::serde(name = "pruned_segment_meta")]
 impl BlockMetaInfo for PrunedCompactSegmentMeta {}
 
+#[allow(dead_code)]
 pub struct PrunedColumnOrientedSegmentMeta {
     pub segments: (SegmentLocation, Arc<ColumnOrientedSegment>),
 }

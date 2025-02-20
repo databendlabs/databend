@@ -26,18 +26,18 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::meta_name;
+use databend_common_storages_fuse::stat_name;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reduce_block_metas;
+use databend_common_storages_fuse::ColumnOrientedSegmentBuilder;
 use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::SegmentBuilder;
 use databend_query::test_kits::BlockWriter;
 use databend_storages_common_table_meta::meta::decode;
-use databend_storages_common_table_meta::meta::meta_name;
-use databend_storages_common_table_meta::meta::stat_name;
 use databend_storages_common_table_meta::meta::testing::MetaEncoding;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
-use databend_storages_common_table_meta::meta::ColumnOrientedSegmentBuilder;
 use databend_storages_common_table_meta::meta::Compression;
-use databend_storages_common_table_meta::meta::SegmentBuilder;
 use opendal::Operator;
 
 #[tokio::test(flavor = "multi_thread")]

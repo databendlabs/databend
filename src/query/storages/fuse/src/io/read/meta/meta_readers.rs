@@ -255,7 +255,7 @@ impl Loader<InvertedIndexMeta> for LoaderWrapper<Operator> {
     }
 }
 
-async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
+pub async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Buffer> {
     let reader = if let Some(len) = len_hint {
         op.read_with(path).range(0..len).await?
     } else {

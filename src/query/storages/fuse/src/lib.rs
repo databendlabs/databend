@@ -38,6 +38,7 @@ mod pruning_pipeline;
 pub mod statistics;
 pub mod table_functions;
 
+pub use column_oriented_segment::*;
 pub use constants::*;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;

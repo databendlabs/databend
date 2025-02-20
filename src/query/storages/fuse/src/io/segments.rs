@@ -27,7 +27,6 @@ use fastrace::func_path;
 use fastrace::prelude::*;
 use opendal::Operator;
 
-use crate::column_oriented_segment::AbstractSegment;
 use crate::io::MetaReaders;
 
 #[derive(Clone)]
@@ -72,16 +71,6 @@ impl SegmentsIO {
         };
 
         reader.read(&load_params).await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn read_abstract_compact_segment<S: AbstractSegment>(
-        dal: Operator,
-        segment_location: Location,
-        table_schema: TableSchemaRef,
-        put_cache: bool,
-    ) -> Result<Arc<S>> {
-        todo!()
     }
 
     // Read all segments information from s3 in concurrently.

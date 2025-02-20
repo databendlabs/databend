@@ -11,15 +11,12 @@ dev = ["snap"]
 
 [dependencies]
 
-arrow = { workspace = true }
 bincode_v1 = { workspace = true }
-bytes = { workspace = true }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-datavalues = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
-databend-common-functions = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-native = { workspace = true }
 databend-common-storage = { workspace = true }

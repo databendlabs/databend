@@ -14,6 +14,7 @@
 
 mod meta_readers;
 
+pub use meta_readers::bytes_reader;
 pub use meta_readers::ColumnOrientedSegmentReader;
 pub use meta_readers::CompactSegmentInfoReader;
 pub use meta_readers::MetaReaders;
