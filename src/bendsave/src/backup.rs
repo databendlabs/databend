@@ -23,8 +23,7 @@ use opendal::Operator;
 use crate::storage::load_databend_meta;
 use crate::storage::load_databend_storage;
 use crate::storage::load_epochfs_storage;
-
-static DATABEND_META_BACKUP_PATH: &'static str = "databend_meta.db";
+use crate::utils::DATABEND_META_BACKUP_PATH;
 
 pub async fn backup(from: &str, to: &str) -> Result<()> {
     let databend_storage = load_databend_storage(from)?;
