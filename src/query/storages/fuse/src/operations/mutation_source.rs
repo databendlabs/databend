@@ -281,7 +281,6 @@ impl FuseTable {
         let mut num_whole_block_mutation = whole_block_deletions.len();
         let segment_num = pruner.deleted_segments.len();
         // now try to add deleted_segment
-        // todo check
         for deleted_segment in pruner.deleted_segments {
             part_num += deleted_segment.summary.block_count as usize;
             num_whole_block_mutation += deleted_segment.summary.block_count as usize;
