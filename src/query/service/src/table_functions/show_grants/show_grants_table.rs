@@ -439,7 +439,7 @@ async fn show_account_grants(
                     privileges.push(get_priv_str(&grant_entry));
                     grant_list.push(format!("{} TO {}", grant_entry, identity));
                 }
-                GrantObject::Warehouse(uid) => {
+                GrantObject::Warehouse(id) => {
                     if let Some(sw) = warehouses
                         .iter()
                         .filter_map(|w| {
@@ -449,10 +449,10 @@ async fn show_account_grants(
                                 None
                             }
                         })
-                        .find(|sw| sw.role_id == *uid)
+                        .find(|sw| sw.role_id == *id)
                     {
                         object_name.push(sw.id.to_string());
-                        object_id.push(Some(uid.to_string()));
+                        object_id.push(Some(id.to_string()));
                         privileges.push(get_priv_str(&grant_entry));
                         grant_list.push(format!("{} TO {}", grant_entry, identity));
                     }
@@ -516,7 +516,7 @@ async fn show_account_grants(
                         privileges.push("OWNERSHIP".to_string());
                         grant_list.push(format!("GRANT OWNERSHIP ON UDF {} TO {}", name, identity));
                     }
-                    OwnershipObject::Warehouse { id: uid } => {
+                    OwnershipObject::Warehouse { id } => {
                         if let Some(sw) = warehouses
                             .iter()
                             .filter_map(|w| {
@@ -526,14 +526,14 @@ async fn show_account_grants(
                                     None
                                 }
                             })
-                            .find(|sw| sw.role_id == uid)
+                            .find(|sw| sw.role_id == id)
                         {
                             object_name.push(sw.id.to_string());
-                            object_id.push(Some(uid.to_string()));
+                            object_id.push(Some(id.to_string()));
                             privileges.push("OWNERSHIP".to_string());
                             grant_list.push(format!(
                                 "GRANT OWNERSHIP ON WAREHOUSE {} TO {}",
-                                uid, identity
+                                id, identity
                             ));
                         }
                     }

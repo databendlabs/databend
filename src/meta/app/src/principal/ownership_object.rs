@@ -84,7 +84,7 @@ impl fmt::Display for OwnershipObject {
             }
             OwnershipObject::UDF { name } => write!(f, "UDF {name}"),
             OwnershipObject::Stage { name } => write!(f, "STAGE {name}"),
-            OwnershipObject::Warehouse { id: uid } => write!(f, "Warehouse {uid}"),
+            OwnershipObject::Warehouse { id } => write!(f, "Warehouse {id}"),
         }
     }
 }
@@ -124,7 +124,7 @@ impl KeyCodec for OwnershipObject {
             }
             OwnershipObject::Stage { name } => b.push_raw("stage-by-name").push_str(name),
             OwnershipObject::UDF { name } => b.push_raw("udf-by-name").push_str(name),
-            OwnershipObject::Warehouse { id: uid } => b.push_raw("warehouse-by-uid").push_str(uid),
+            OwnershipObject::Warehouse { id } => b.push_raw("warehouse-by-id").push_str(id),
         }
     }
 
@@ -171,13 +171,13 @@ impl KeyCodec for OwnershipObject {
                 let name = p.next_str()?;
                 Ok(OwnershipObject::UDF { name })
             }
-            "warehouse-by-uid" => {
-                let uid = p.next_str()?;
-                Ok(OwnershipObject::Warehouse { id: uid })
+            "warehouse-by-id" => {
+                let id = p.next_str()?;
+                Ok(OwnershipObject::Warehouse { id })
             }
             _ => Err(kvapi::KeyError::InvalidSegment {
                 i: p.index(),
-                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-uid"
+                expect: "database-by-id|database-by-catalog-id|table-by-id|table-by-catalog-id|stage-by-name|udf-by-name|warehouse-by-id"
                     .to_string(),
                 got: q.to_string(),
             }),

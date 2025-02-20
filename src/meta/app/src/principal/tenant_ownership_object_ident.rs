@@ -265,7 +265,7 @@ mod tests {
             );
 
             let key = role_grantee.to_string_key();
-            assert_eq!("__fd_object_owners/test/warehouse-by-uid/n87s", key);
+            assert_eq!("__fd_object_owners/test/warehouse-by-id/n87s", key);
 
             let parsed = TenantOwnershipObjectIdent::from_str_key(&key).unwrap();
             assert_eq!(role_grantee, parsed);

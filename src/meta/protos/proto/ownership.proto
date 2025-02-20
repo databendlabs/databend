@@ -47,7 +47,7 @@ message OwnershipObject {
   }
 
   message OwnershipWarehouseObject {
-    string uid = 1;
+    string id = 1;
   }
 
   oneof object {

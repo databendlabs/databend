@@ -200,8 +200,8 @@ impl GrantObjectVisibilityChecker {
                 OwnershipObject::UDF { name } => {
                     granted_udfs.insert(name.to_string());
                 }
-                OwnershipObject::Warehouse { id: uid } => {
-                    granted_ws.insert(uid.to_string());
+                OwnershipObject::Warehouse { id } => {
+                    granted_ws.insert(id.to_string());
                 }
             }
         }
@@ -262,12 +262,12 @@ impl GrantObjectVisibilityChecker {
         false
     }
 
-    pub fn check_warehouse_visibility(&self, uid: &str) -> bool {
+    pub fn check_warehouse_visibility(&self, id: &str) -> bool {
         if self.granted_global_ws {
             return true;
         }
 
-        if self.granted_ws.contains(uid) {
+        if self.granted_ws.contains(id) {
             return true;
         }
         false

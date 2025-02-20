@@ -154,9 +154,7 @@ impl PrivilegeAccess {
             GrantObject::UDF(name) => OwnershipObject::UDF {
                 name: name.to_string(),
             },
-            GrantObject::Warehouse(uid) => OwnershipObject::Warehouse {
-                id: uid.to_string(),
-            },
+            GrantObject::Warehouse(id) => OwnershipObject::Warehouse { id: id.to_string() },
             GrantObject::Global => return Ok(None),
         };
 
@@ -409,8 +407,8 @@ impl PrivilegeAccess {
                     })
                     .find(|sw| sw.id == warehouse.clone())
                 {
-                    let uid = sw.role_id.to_string();
-                    let grant_object = GrantObject::Warehouse(uid);
+                    let id = sw.role_id.to_string();
+                    let grant_object = GrantObject::Warehouse(id);
                     match self
                         .has_ownership(&session, &grant_object, false, false)
                         .await
