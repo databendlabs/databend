@@ -30,7 +30,7 @@ Fragment 0:
     ExchangeSink
     ├── output columns: []
     ├── destination fragment: [1]
-    └── Mutation Source
+    └── MutationSource
 (empty)
 (empty)
 Fragment 1:
@@ -54,7 +54,7 @@ Fragment 0:
     ExchangeSink
     ├── output columns: []
     ├── destination fragment: [1]
-    └── Mutation Source
+    └── MutationSource
 (empty)
 (empty)
 Fragment 1:

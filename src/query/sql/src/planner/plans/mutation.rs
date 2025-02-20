@@ -87,7 +87,7 @@ pub struct Mutation {
 
 impl std::fmt::Debug for Mutation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("Merge Into")
+        f.debug_struct("Mutation")
             .field("catalog", &self.catalog_name)
             .field("database", &self.database_name)
             .field("table", &self.table_name)
