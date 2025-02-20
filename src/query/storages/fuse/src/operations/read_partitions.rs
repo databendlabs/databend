@@ -66,6 +66,7 @@ use crate::pruning::SegmentPruner;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
+use crate::pruning_pipeline::PrunedCompactSegmentMeta;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
@@ -368,7 +369,7 @@ impl FuseTable {
             SegmentPruner::create(pruner.pruning_ctx.clone(), pruner.table_schema.clone())?;
 
         prune_pipeline.add_transform(|input, output| {
-            SegmentPruneTransform::create(
+            SegmentPruneTransform::<PrunedCompactSegmentMeta>::create(
                 input,
                 output,
                 segment_pruner.clone(),

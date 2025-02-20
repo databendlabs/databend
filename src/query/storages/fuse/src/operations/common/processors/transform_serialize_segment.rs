@@ -269,7 +269,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                     entries: vec![MutationLogEntry::AppendSegment {
                         segment_location: location,
                         format_version,
-                        summary: segment.summary(),
+                        summary: segment.summary().clone(),
                     }],
                 };
 

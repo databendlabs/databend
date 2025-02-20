@@ -29,6 +29,7 @@ use crate::meta::format::compress;
 use crate::meta::format::decode;
 use crate::meta::format::decompress;
 use crate::meta::format::encode;
+use crate::meta::CompactSegmentInfo;
 // use crate::meta::AbstractBlockMeta;
 use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;
@@ -37,7 +38,7 @@ use crate::meta::Statistics;
 
 pub trait AbstractSegment: Send + Sync + 'static {
     // fn blocks(&self) -> Box<dyn Iterator<Item = Arc<dyn AbstractBlockMeta>> + '_>;
-    fn summary(&self) -> Statistics;
+    fn summary(&self) -> &Statistics;
     fn serialize(&self) -> Result<Vec<u8>>;
     fn deserialize(&self, data: Bytes) -> Result<Arc<dyn AbstractSegment>>;
 }
@@ -55,12 +56,26 @@ impl AbstractSegment for SegmentInfo {
         self.to_bytes()
     }
 
-    fn summary(&self) -> Statistics {
-        self.summary.clone()
+    fn summary(&self) -> &Statistics {
+        &self.summary
     }
 
     fn deserialize(&self, data: Bytes) -> Result<Arc<dyn AbstractSegment>> {
         Ok(Arc::new(Self::from_slice(&data)?))
+    }
+}
+
+impl AbstractSegment for CompactSegmentInfo {
+    fn summary(&self) -> &Statistics {
+        &self.summary
+    }
+
+    fn serialize(&self) -> Result<Vec<u8>> {
+        unimplemented!()
+    }
+
+    fn deserialize(&self, _data: Bytes) -> Result<Arc<dyn AbstractSegment>> {
+        unimplemented!()
     }
 }
 
@@ -75,8 +90,8 @@ impl AbstractSegment for ColumnOrientedSegment {
     //     Box::new(BlockMetaIter::new(self.block_metas.clone()))
     // }
 
-    fn summary(&self) -> Statistics {
-        self.summary.clone()
+    fn summary(&self) -> &Statistics {
+        &self.summary
     }
 
     fn serialize(&self) -> Result<Vec<u8>> {
