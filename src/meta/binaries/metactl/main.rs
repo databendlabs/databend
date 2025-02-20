@@ -14,204 +14,29 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-mod export_from_grpc;
-
-pub mod admin;
-pub mod export_from_disk;
-pub mod import;
-pub mod import_v004;
-pub(crate) mod reading;
-pub mod upgrade;
-
 use std::collections::BTreeMap;
 
-use admin::MetaAdminClient;
-use clap::Args;
 use clap::CommandFactory;
 use clap::Parser;
 use clap::Subcommand;
 use databend_common_base::base::tokio;
 use databend_common_meta_client::MetaGrpcClient;
+use databend_common_meta_control::admin::MetaAdminClient;
+use databend_common_meta_control::args::BenchArgs;
+use databend_common_meta_control::args::ExportArgs;
+use databend_common_meta_control::args::GlobalArgs;
+use databend_common_meta_control::args::ImportArgs;
+use databend_common_meta_control::args::StatusArgs;
+use databend_common_meta_control::args::TransferLeaderArgs;
+use databend_common_meta_control::export_from_disk;
+use databend_common_meta_control::export_from_grpc;
+use databend_common_meta_control::import;
 use databend_common_meta_kvapi::kvapi::KVApi;
-use databend_common_meta_raft_store::config::RaftConfig;
 use databend_common_tracing::init_logging;
 use databend_common_tracing::Config as LogConfig;
 use databend_common_tracing::FileConfig;
-use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
-
-#[derive(Debug, Clone, Deserialize, Args)]
-pub struct GlobalArgs {
-    #[clap(long, default_value = CONFIG_DEFAULT_LOG_LEVEL)]
-    pub log_level: String,
-
-    /// DEPRECATE: use subcommand instead.
-    #[clap(
-        long,
-        env = "METASRV_GRPC_API_ADDRESS",
-        default_value = "127.0.0.1:9191"
-    )]
-    pub grpc_api_address: String,
-
-    /// DEPRECATE: use subcommand instead.
-    #[clap(long)]
-    pub import: bool,
-
-    /// DEPRECATE: use subcommand instead.
-    #[clap(long)]
-    pub export: bool,
-
-    /// DEPRECATE: use subcommand instead.
-    ///
-    /// The dir to store persisted meta state, including raft logs, state machine etc.
-    #[clap(long)]
-    #[serde(alias = "kvsrv_raft_dir")]
-    pub raft_dir: Option<String>,
-
-    /// DEPRECATE: use subcommand instead.
-    ///
-    /// The N.O. json strings in a export stream item.
-    ///
-    /// Set this to a smaller value if you get gRPC message body too large error.
-    /// This requires meta-service >= 1.2.315; For older version, this argument is ignored.
-    ///
-    /// By default it is 32.
-    #[clap(long)]
-    pub export_chunk_size: Option<u64>,
-
-    /// DEPRECATE: use subcommand instead.
-    ///
-    /// When export raft data, this is the name of the save db file.
-    /// If `db` is empty, output the exported data as json to stdout instead.
-    /// When import raft data, this is the name of the restored db file.
-    /// If `db` is empty, the restored data is from stdin instead.
-    #[clap(long, default_value = "")]
-    pub db: String,
-
-    /// DEPRECATE: use subcommand instead.
-    ///
-    /// initial_cluster format: node_id=endpoint,grpc_api_addr
-    #[clap(long)]
-    pub initial_cluster: Vec<String>,
-
-    /// DEPRECATE: use subcommand instead.
-    ///
-    /// The node id. Used in these cases:
-    ///
-    /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
-    /// 2. --initial_cluster with new cluster node id.
-    ///
-    /// Otherwise this argument is ignored.
-    #[clap(long, default_value = "0")]
-    #[serde(alias = "kvsrv_id")]
-    pub id: u64,
-}
-
-#[derive(Debug, Clone, Deserialize, Args)]
-pub struct StatusArgs {
-    #[clap(long, default_value = "127.0.0.1:9191")]
-    pub grpc_api_address: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Args)]
-pub struct ExportArgs {
-    #[clap(long, default_value = "127.0.0.1:9191")]
-    pub grpc_api_address: String,
-
-    /// The dir to store persisted meta state, including raft logs, state machine etc.
-    #[clap(long)]
-    #[serde(alias = "kvsrv_raft_dir")]
-    pub raft_dir: Option<String>,
-
-    /// The N.O. json strings in a export stream item.
-    ///
-    /// Set this to a smaller value if you get gRPC message body too large error.
-    /// This requires meta-service >= 1.2.315; For older version, this argument is ignored.
-    ///
-    /// By default it is 32.
-    #[clap(long)]
-    pub chunk_size: Option<u64>,
-
-    /// The name of the save db file.
-    /// If `db` is empty, output the exported data as json to stdout instead.
-    #[clap(long, default_value = "")]
-    pub db: String,
-
-    /// The node id. Used in these cases:
-    ///
-    /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
-    /// 2. --initial_cluster with new cluster node id.
-    ///
-    /// Otherwise this argument is ignored.
-    #[clap(long, default_value = "0")]
-    #[serde(alias = "kvsrv_id")]
-    pub id: u64,
-}
-
-impl From<ExportArgs> for RaftConfig {
-    #[allow(clippy::field_reassign_with_default)]
-    fn from(value: ExportArgs) -> Self {
-        let mut c = Self::default();
-
-        c.raft_dir = value.raft_dir.unwrap_or_default();
-        c.id = value.id;
-        c
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Args)]
-pub struct ImportArgs {
-    /// The dir to store persisted meta state, including raft logs, state machine etc.
-    #[clap(long)]
-    #[serde(alias = "kvsrv_raft_dir")]
-    pub raft_dir: Option<String>,
-
-    /// The name of the restored db file.
-    /// If `db` is empty, the restored data is from stdin instead.
-    #[clap(long, default_value = "")]
-    pub db: String,
-
-    /// initial_cluster format: node_id=endpoint,grpc_api_addr
-    #[clap(long)]
-    pub initial_cluster: Vec<String>,
-
-    /// The node id. Used in these cases:
-    ///
-    /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
-    /// 2. --initial_cluster with new cluster node id.
-    ///
-    /// Otherwise this argument is ignored.
-    #[clap(long, default_value = "0")]
-    #[serde(alias = "kvsrv_id")]
-    pub id: u64,
-}
-
-impl From<ImportArgs> for RaftConfig {
-    #[allow(clippy::field_reassign_with_default)]
-    fn from(value: ImportArgs) -> Self {
-        let mut c = Self::default();
-
-        c.raft_dir = value.raft_dir.unwrap_or_default();
-        c.id = value.id;
-        c
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Args)]
-pub struct TransferLeaderArgs {
-    #[clap(long)]
-    pub to: Option<u64>,
-
-    #[clap(long, default_value = "127.0.0.1:28002")]
-    pub admin_api_address: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Args)]
-pub struct BenchArgs {
-    #[clap(long, default_value = "127.0.0.1:9191")]
-    pub grpc_api_address: String,
-}
 
 #[derive(Debug, Deserialize, Parser)]
 #[clap(name = "databend-metactl", about, version = &**METASRV_COMMIT_VERSION, author)]

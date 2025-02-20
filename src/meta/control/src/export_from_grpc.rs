@@ -25,7 +25,7 @@ use databend_common_meta_types::protobuf;
 use tokio::net::TcpSocket;
 use tokio_stream::StreamExt;
 
-use crate::ExportArgs;
+use crate::args::ExportArgs;
 
 /// Dump metasrv data, raft-log, state machine etc in json to stdout.
 pub async fn export_from_running_node(args: &ExportArgs) -> Result<(), anyhow::Error> {

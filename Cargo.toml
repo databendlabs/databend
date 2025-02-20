@@ -93,6 +93,7 @@ members = [
     "src/meta/app",
     "src/meta/binaries",
     "src/meta/client",
+    "src/meta/control",
     "src/meta/embedded",
     "src/meta/kvapi",
     "src/meta/process",
@@ -138,6 +139,7 @@ databend-common-management = { path = "src/query/management" }
 databend-common-meta-api = { path = "src/meta/api" }
 databend-common-meta-app = { path = "src/meta/app" }
 databend-common-meta-client = { path = "src/meta/client" }
+databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-embedded = { path = "src/meta/embedded" }
 databend-common-meta-kvapi = { path = "src/meta/kvapi" }
 databend-common-meta-process = { path = "src/meta/process" }
