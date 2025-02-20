@@ -14,19 +14,17 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
 use poem::web::Path;
-use poem::IntoResponse;
-use serde::Deserialize;
-use serde::Serialize;
 
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
+#[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct GetDatabaseTableResponse {
     pub table: TableDetails,
     pub warnings: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
+#[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct TableDetails {
     pub name: String,
     pub table_type: String,
