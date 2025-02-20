@@ -439,10 +439,10 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let plan = if let PhysicalPlan::CommitSink(commit) = &plan {
-            commit.input.as_ref()
-        } else {
-            &plan
+        let plan = match &plan {
+            // avoid commit.
+            PhysicalPlan::CommitSink(commit) => commit.input.as_ref(),
+            other => other,
         };
         let build_res = build_query_pipeline(&self.ctx, &[], plan, ignore_result).await?;
 
