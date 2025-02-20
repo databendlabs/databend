@@ -127,22 +127,22 @@ impl Interpreter for DropTableColumnInterpreter {
             }
         }
 
-        let table_id = table_info.ident.table_id;
-        let table_version = table_info.ident.seq;
+        if let Ok(fuse_tbl) = FuseTable::try_from_table(table.as_ref()) {
+            let table_id = table_info.ident.table_id;
+            let table_version = table_info.ident.seq;
 
-        let new_snapshot_location =
-            generate_new_snapshot(table.as_ref(), &mut new_table_meta).await?;
+            let new_snapshot_location =
+                generate_new_snapshot(fuse_tbl, &mut new_table_meta).await?;
 
-        let req = UpdateTableMetaReq {
-            table_id,
-            seq: MatchSeq::Exact(table_version),
-            new_table_meta: new_table_meta.clone(),
-        };
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Exact(table_version),
+                new_table_meta: new_table_meta.clone(),
+            };
 
-        catalog.update_single_table_meta(req, table_info).await?;
+            catalog.update_single_table_meta(req, table_info).await?;
 
-        if let Some(new_snapshot_location) = new_snapshot_location {
-            if let Ok(fuse_tbl) = FuseTable::try_from_table(table.as_ref()) {
+            if let Some(new_snapshot_location) = new_snapshot_location {
                 // write down hint
                 FuseTable::write_last_snapshot_hint(
                     self.ctx.as_ref(),
@@ -152,8 +152,8 @@ impl Interpreter for DropTableColumnInterpreter {
                     &new_table_meta,
                 )
                 .await;
-            }
-        }
+            };
+        };
 
         Ok(PipelineBuildResult::create())
     }
