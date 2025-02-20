@@ -12,13 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod bind;
-mod bind_join;
-mod bind_location;
-mod bind_obfuscate;
-mod bind_subquery;
-mod bind_table;
-mod bind_table_function;
-
-pub use bind_join::JoinConditions;
-pub use bind_table_function::parse_result_scan_args;
+fn main() {
+    databend_common_building::setup();
+}

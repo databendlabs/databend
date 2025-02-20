@@ -25,6 +25,18 @@ ColumnRef {
 
 
 ---------- Input ----------
+?
+---------- Output ---------
+?
+---------- AST ------------
+Placeholder {
+    span: Some(
+        0..1,
+    ),
+}
+
+
+---------- Input ----------
 'I''m who I\'m.'
 ---------- Output ---------
 'I\'m who I\'m.'
@@ -5238,6 +5250,30 @@ Cast {
     },
     target_type: Interval,
     pg_style: false,
+}
+
+
+---------- Input ----------
+(?, ?)
+---------- Output ---------
+(?, ?)
+---------- AST ------------
+Tuple {
+    span: Some(
+        0..6,
+    ),
+    exprs: [
+        Placeholder {
+            span: Some(
+                1..2,
+            ),
+        },
+        Placeholder {
+            span: Some(
+                4..5,
+            ),
+        },
+    ],
 }
 
 

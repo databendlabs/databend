@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use educe::Educe;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -3583,7 +3584,8 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
 }
 
 pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
-    #[derive(Clone)]
+    #[derive(Educe)]
+    #[educe(Clone(bound = false, attrs = "#[recursive::recursive]"))]
     enum ColumnConstraint {
         Nullable(bool),
         DefaultExpr(Box<Expr>),

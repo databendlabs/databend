@@ -1440,8 +1440,11 @@ select date_format('2022-02-04T03:58:59', '%x'), strftime('2022-02-04T03:58:59',
 ----
 2022-02-04 03:58:59 2022-02-04 03:58:59
 
-statement error 1006
+statement error (?s)1006.*%i
 select date_format('2022-2-04T03:58:59', '%i');
+
+statement error (?s)1006.*%Y
+select date_format(now(), '%Y-%m-%d %H.%i.%s');
 
 statement error 1006
 select date_format('', '');

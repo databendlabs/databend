@@ -115,6 +115,10 @@ impl Binder {
             );
         }
 
+        if func_name.name.eq_ignore_ascii_case("obfuscate") {
+            return self.bind_obfuscate(bind_context, params, named_params);
+        }
+
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
