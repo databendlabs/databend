@@ -29,7 +29,6 @@ use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::CacheValue;
 use crate::caches::ColumnArrayCache;
-use crate::caches::ColumnOrientedSegmentCache;
 use crate::caches::CompactSegmentInfoCache;
 use crate::caches::InvertedIndexFileCache;
 use crate::caches::InvertedIndexMetaCache;
@@ -72,7 +71,6 @@ pub struct CacheManager {
     table_snapshot_cache: CacheSlot<TableSnapshotCache>,
     table_statistic_cache: CacheSlot<TableSnapshotStatisticCache>,
     compact_segment_info_cache: CacheSlot<CompactSegmentInfoCache>,
-    column_oriented_segment_cache: CacheSlot<ColumnOrientedSegmentCache>,
     bloom_index_filter_cache: CacheSlot<BloomIndexFilterCache>,
     bloom_index_meta_cache: CacheSlot<BloomIndexMetaCache>,
     inverted_index_meta_cache: CacheSlot<InvertedIndexMetaCache>,
@@ -146,7 +144,6 @@ impl CacheManager {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache: CacheSlot::new(None),
                 compact_segment_info_cache: CacheSlot::new(None),
-                column_oriented_segment_cache: CacheSlot::new(None),
                 bloom_index_filter_cache: CacheSlot::new(None),
                 bloom_index_meta_cache: CacheSlot::new(None),
                 inverted_index_meta_cache: CacheSlot::new(None),
@@ -171,11 +168,6 @@ impl CacheManager {
             let compact_segment_info_cache = Self::new_bytes_cache_slot(
                 MEMORY_CACHE_COMPACT_SEGMENT_INFO,
                 config.table_meta_segment_bytes as usize,
-            );
-
-            let column_oriented_segment_cache = Self::new_bytes_cache_slot(
-                MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT,
-                config.table_meta_column_oriented_segment_bytes as usize,
             );
 
             let bloom_index_filter_cache = Self::new_bytes_cache_slot(
@@ -227,7 +219,6 @@ impl CacheManager {
             GlobalInstance::set(Arc::new(Self {
                 table_snapshot_cache,
                 compact_segment_info_cache,
-                column_oriented_segment_cache,
                 bloom_index_filter_cache,
                 bloom_index_meta_cache,
                 inverted_index_meta_cache,
@@ -451,7 +442,6 @@ const MEMORY_CACHE_INVERTED_INDEX_FILE_META_DATA: &str =
 const MEMORY_CACHE_BLOOM_INDEX_FILE_META_DATA: &str = "memory_cache_bloom_index_file_meta_data";
 const MEMORY_CACHE_BLOOM_INDEX_FILTER: &str = "memory_cache_bloom_index_filter";
 const MEMORY_CACHE_COMPACT_SEGMENT_INFO: &str = "memory_cache_compact_segment_info";
-const MEMORY_CACHE_COLUMN_ORIENTED_SEGMENT: &str = "memory_cache_column_oriented_segment";
 const MEMORY_CACHE_TABLE_STATISTICS: &str = "memory_cache_table_statistics";
 const MEMORY_CACHE_TABLE_SNAPSHOT: &str = "memory_cache_table_snapshot";
 const MEMORY_CACHE_SEGMENT_BLOCK_METAS: &str = "memory_cache_segment_block_metas";

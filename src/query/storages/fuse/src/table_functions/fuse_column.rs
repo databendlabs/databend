@@ -100,7 +100,7 @@ impl TableMetaFunc for FuseColumn {
 
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments_old::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, true)
                 .await?;
             for segment in segments {
                 let segment = segment?;

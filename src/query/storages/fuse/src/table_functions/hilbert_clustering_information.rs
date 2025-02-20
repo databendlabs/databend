@@ -161,7 +161,7 @@ impl<'a> HilbertClusteringInfoImpl<'a> {
             );
             for chunk in snapshot.segments.chunks(chunk_size) {
                 let segments = segments_io
-                    .read_segments_old::<Arc<CompactSegmentInfo>>(chunk, true)
+                    .read_segments::<Arc<CompactSegmentInfo>>(chunk, true)
                     .await?;
                 for segment in segments {
                     let segment = segment?;

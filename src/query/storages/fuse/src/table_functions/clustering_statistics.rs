@@ -186,7 +186,7 @@ impl<'a> ClusteringStatisticsImpl<'a> {
         };
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments_old::<SegmentInfo>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, true)
                 .await?;
             for (i, segment) in segments.into_iter().enumerate() {
                 let segment = segment?;

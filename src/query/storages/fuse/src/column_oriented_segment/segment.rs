@@ -25,16 +25,16 @@ use parquet::arrow::ArrowWriter;
 use parquet::file::properties::WriterProperties;
 
 // use super::block_meta::ColumnOrientedBlockMeta;
-use crate::meta::format::compress;
-use crate::meta::format::decode;
-use crate::meta::format::decompress;
-use crate::meta::format::encode;
-use crate::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::format::compress;
+use databend_storages_common_table_meta::meta::format::decode;
+use databend_storages_common_table_meta::meta::format::decompress;
+use databend_storages_common_table_meta::meta::format::encode;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 // use crate::meta::AbstractBlockMeta;
-use crate::meta::MetaCompression;
-use crate::meta::MetaEncoding;
-use crate::meta::SegmentInfo;
-use crate::meta::Statistics;
+use databend_storages_common_table_meta::meta::MetaCompression;
+use databend_storages_common_table_meta::meta::MetaEncoding;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Statistics;
 
 pub trait AbstractSegment: Send + Sync + 'static {
     // fn blocks(&self) -> Box<dyn Iterator<Item = Arc<dyn AbstractBlockMeta>> + '_>;

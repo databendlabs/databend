@@ -28,15 +28,15 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
-use databend_storages_common_table_meta::meta::AbstractSegment;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ColumnOrientedSegmentBuilder;
-use databend_storages_common_table_meta::meta::SegmentBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
 
+use crate::column_oriented_segment::AbstractSegment;
+use crate::column_oriented_segment::ColumnOrientedSegmentBuilder;
+use crate::column_oriented_segment::SegmentBuilder;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;

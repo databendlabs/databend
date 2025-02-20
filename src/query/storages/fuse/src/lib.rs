@@ -24,6 +24,7 @@
 #![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]
 
+mod column_oriented_segment;
 mod constants;
 mod fuse_column;
 mod fuse_part;

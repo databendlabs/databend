@@ -36,17 +36,17 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::aggregates::eval_aggr;
+use databend_storages_common_table_meta::meta::format::encode;
+use databend_storages_common_table_meta::meta::supported_stat_type;
+use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
+use databend_storages_common_table_meta::meta::MetaEncoding;
+use databend_storages_common_table_meta::meta::Statistics;
 
 use super::schema::segment_schema;
 use super::segment::ColumnOrientedSegment;
-use crate::meta::format::encode;
-use crate::meta::supported_stat_type;
-use crate::meta::AbstractSegment;
-use crate::meta::BlockMeta;
-use crate::meta::ClusterStatistics;
-use crate::meta::ColumnStatistics;
-use crate::meta::MetaEncoding;
-use crate::meta::Statistics;
+use super::AbstractSegment;
 
 pub trait SegmentBuilder: Send + Sync + 'static {
     type Segment: AbstractSegment;

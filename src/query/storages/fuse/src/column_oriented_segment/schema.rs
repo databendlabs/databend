@@ -17,8 +17,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-
-use crate::meta::supported_stat_type;
+use databend_storages_common_table_meta::meta::supported_stat_type;
 
 fn location_parts() -> (Vec<String>, Vec<TableDataType>) {
     (

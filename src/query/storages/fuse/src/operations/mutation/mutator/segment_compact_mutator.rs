@@ -215,7 +215,7 @@ impl<'a> SegmentCompactor<'a> {
         let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
             let mut segment_infos = segments_io
-                .read_segments_old::<SegmentInfo>(chunk, false)
+                .read_segments::<SegmentInfo>(chunk, false)
                 .await?
                 .into_iter()
                 .zip(chunk.iter())

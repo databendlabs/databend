@@ -713,7 +713,7 @@ impl FuseTable {
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in segment_locations.chunks(chunk_size) {
             let results = fuse_segments
-                .read_segments_old::<LocationTuple>(chunk, put_cache)
+                .read_segments::<LocationTuple>(chunk, put_cache)
                 .await?;
             for (idx, location_tuple) in results.into_iter().enumerate() {
                 let location_tuple = match location_tuple {

@@ -23,7 +23,6 @@ use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ColumnOrientedSegment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -37,11 +36,6 @@ use crate::InMemoryLruCache;
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
 
-/// In memory object cache of ColumnOrientedSegment
-pub type ColumnOrientedSegmentCache = InMemoryLruCache<ColumnOrientedSegment>;
-
-/// In-memory cache for all the block metadata of individual segments.
-///
 /// Note that this cache may be memory-intensive, as each item of this cache
 /// contains ALL the BlockMeta of a segment, for well-compacted segment, the
 /// number of BlockMeta might be 1000 ~ 2000.
@@ -181,15 +175,6 @@ impl From<CompactSegmentInfo> for CacheValue<CompactSegmentInfo> {
     }
 }
 
-impl From<ColumnOrientedSegment> for CacheValue<ColumnOrientedSegment> {
-    fn from(value: ColumnOrientedSegment) -> Self {
-        CacheValue {
-            mem_bytes: value.block_metas.memory_size()
-                + std::mem::size_of::<ColumnOrientedSegment>(),
-            inner: Arc::new(value),
-        }
-    }
-}
 impl From<Vec<Arc<BlockMeta>>> for CacheValue<Vec<Arc<BlockMeta>>> {
     fn from(value: Vec<Arc<BlockMeta>>) -> Self {
         CacheValue {

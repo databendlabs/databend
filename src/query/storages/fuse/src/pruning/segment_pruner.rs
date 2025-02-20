@@ -17,9 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
-use databend_storages_common_table_meta::meta::AbstractSegment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
+use crate::column_oriented_segment::AbstractSegment;
 use crate::io::SegmentsIO;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentLocation;

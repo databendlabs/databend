@@ -17,8 +17,9 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::SegmentBuilder;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+
+use crate::column_oriented_segment::SegmentBuilder;
 
 #[derive(Default)]
 pub struct RowOrientedSegmentBuilder {

@@ -933,7 +933,7 @@ impl Table for FuseTable {
 
         for (idx, chunk) in segment_locations.chunks(chunk_size).enumerate() {
             let segments = segments_io
-                .read_segments_old::<Arc<CompactSegmentInfo>>(chunk, false)
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, false)
                 .await?;
             let mut partial_col_stats = Vec::with_capacity(chunk_size);
             // 1. Carry the previously reduced ranges

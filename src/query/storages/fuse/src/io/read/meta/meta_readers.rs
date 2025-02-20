@@ -26,7 +26,6 @@ use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
 use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexMeta;
-use databend_storages_common_table_meta::meta::AbstractSegment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfoVersion;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;

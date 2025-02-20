@@ -463,7 +463,7 @@ impl FuseTable {
 
             let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
             let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments_old::<SegmentInfo>(concurrently_appended_segment_locations, true)
+                .read_segments::<SegmentInfo>(concurrently_appended_segment_locations, true)
                 .await?;
 
             let mut new_statistics = base_summary.clone();

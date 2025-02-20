@@ -13,8 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::Scalar;
-
-use crate::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 
 pub trait AbstractClusterStatistics {
     fn cluster_key_id(&self) -> u32;

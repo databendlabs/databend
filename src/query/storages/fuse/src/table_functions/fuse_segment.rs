@@ -85,7 +85,7 @@ impl TableMetaFunc for FuseSegment {
             std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         for chunk in segment_locations.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments_old::<Arc<CompactSegmentInfo>>(chunk, true)
+                .read_segments::<Arc<CompactSegmentInfo>>(chunk, true)
                 .await?;
 
             for (idx, segment) in segments.into_iter().enumerate() {
