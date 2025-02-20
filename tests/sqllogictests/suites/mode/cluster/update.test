@@ -61,7 +61,7 @@ Fragment 0:
     ExchangeSink
     ├── output columns: []
     ├── destination fragment: [1]
-    └── MutationSource
+    └── EmptyResultScan
 (empty)
 (empty)
 Fragment 1:
