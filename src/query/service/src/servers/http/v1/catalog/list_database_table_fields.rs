@@ -15,6 +15,7 @@
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
 use poem::web::Path;
+use poem::IntoResponse;
 
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct ListDatabaseTableFieldsResponse {
@@ -35,6 +36,6 @@ pub struct FieldInfo {
 #[async_backtrace::framed]
 pub async fn list_database_table_fields_handler(
     Path((database, table)): Path<(String, String)>,
-) -> PoemResult<ListDatabaseTableFieldsResponse> {
+) -> PoemResult<impl IntoResponse> {
     todo!()
 }

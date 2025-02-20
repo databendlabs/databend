@@ -14,7 +14,7 @@
 
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
-
+use poem::IntoResponse;
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct ListDatabasesResponse {
     pub databases: Vec<DatabaseInfo>,
@@ -28,6 +28,6 @@ pub struct DatabaseInfo {
 
 #[poem::handler]
 #[async_backtrace::framed]
-pub async fn list_databases_handler() -> PoemResult<ListDatabasesResponse> {
+pub async fn list_databases_handler() -> PoemResult<impl IntoResponse> {
     todo!()
 }

@@ -16,6 +16,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
+use poem::IntoResponse;
 
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct SearchTablesResponse {
@@ -52,6 +53,6 @@ pub struct TableInfo {
 
 #[poem::handler]
 #[async_backtrace::framed]
-pub async fn search_tables_handler() -> PoemResult<SearchTablesResponse> {
+pub async fn search_tables_handler() -> PoemResult<impl IntoResponse> {
     todo!()
 }

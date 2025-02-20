@@ -17,6 +17,7 @@ use chrono::Utc;
 use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
 use poem::web::Path;
+use poem::IntoResponse;
 
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct GetDatabaseTableResponse {
@@ -45,6 +46,6 @@ pub struct TableDetails {
 #[async_backtrace::framed]
 pub async fn get_database_table_handler(
     Path((database, table)): Path<(String, String)>,
-) -> PoemResult<GetDatabaseTableResponse> {
+) -> PoemResult<impl IntoResponse> {
     todo!()
 }
