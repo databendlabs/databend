@@ -17,6 +17,8 @@ use poem::web::Json;
 use poem::IntoResponse;
 use serde::Serialize;
 
+use crate::servers::http::v1::HttpQueryContext;
+
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct ListDatabasesResponse {
     pub databases: Vec<DatabaseInfo>,
@@ -30,7 +32,7 @@ pub struct DatabaseInfo {
 
 #[poem::handler]
 #[async_backtrace::framed]
-pub async fn list_databases_handler() -> PoemResult<impl IntoResponse> {
+pub async fn list_databases_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
     // TODO:
     let databases = vec![];
     let warnings = vec![];

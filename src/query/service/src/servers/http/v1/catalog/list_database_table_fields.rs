@@ -18,6 +18,8 @@ use poem::web::Path;
 use poem::IntoResponse;
 use serde::Serialize;
 
+use crate::servers::http::v1::HttpQueryContext;
+
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct ListDatabaseTableFieldsResponse {
     pub fields: Vec<FieldInfo>,
@@ -36,6 +38,7 @@ pub struct FieldInfo {
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn list_database_table_fields_handler(
+    ctx: &HttpQueryContext,
     Path((database, table)): Path<(String, String)>,
 ) -> PoemResult<impl IntoResponse> {
     // TODO:

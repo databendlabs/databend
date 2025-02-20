@@ -20,6 +20,8 @@ use poem::web::Path;
 use poem::IntoResponse;
 use serde::Serialize;
 
+use crate::servers::http::v1::HttpQueryContext;
+
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct GetDatabaseTableResponse {
     pub table: TableDetails,
@@ -46,6 +48,7 @@ pub struct TableDetails {
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn get_database_table_handler(
+    ctx: &HttpQueryContext,
     Path((database, table)): Path<(String, String)>,
 ) -> PoemResult<impl IntoResponse> {
     // TODO:
