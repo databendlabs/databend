@@ -14,8 +14,9 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_exception::Result;
+use poem::error::Result as PoemResult;
 use poem::web::Path;
+use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -46,14 +47,6 @@ pub struct TableDetails {
 #[async_backtrace::framed]
 pub async fn get_database_table_handler(
     Path((database, table)): Path<(String, String)>,
-) -> Result<GetDatabaseTableResponse> {
-    todo!()
-}
-
-#[poem::handler]
-#[async_backtrace::framed]
-pub async fn get_tenant_database_table_handler(
-    Path((tenant, database, table)): Path<(String, String, String)>,
-) -> Result<GetDatabaseTableResponse> {
+) -> PoemResult<GetDatabaseTableResponse> {
     todo!()
 }

@@ -489,7 +489,16 @@ pub fn query_route() -> Route {
                 .with(CookieJarManager::new()),
         );
     }
-    route = route.nest("/catalog", catalog_route());
+    route = route.nest(
+        "/catalog",
+        catalog_route()
+            .with(MetricsMiddleware::new("/catalog"))
+            .with(HTTPSessionMiddleware::create(
+                HttpHandlerKind::Query,
+                EndpointKind::Catalog,
+            ))
+            .with(CookieJarManager::new()),
+    );
     route
 }
 

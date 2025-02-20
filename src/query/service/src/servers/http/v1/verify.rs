@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use jwt_simple::prelude::Serialize;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
+use serde::Serialize;
 
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::v1::HttpQueryContext;

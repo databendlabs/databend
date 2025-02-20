@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_exception::Result;
+use poem::error::Result as PoemResult;
 use poem::web::Path;
+use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -36,14 +37,6 @@ pub struct FieldInfo {
 #[async_backtrace::framed]
 pub async fn list_database_table_fields_handler(
     Path((database, table)): Path<(String, String)>,
-) -> Result<ListDatabaseTableFieldsResponse> {
-    todo!()
-}
-
-#[poem::handler]
-#[async_backtrace::framed]
-pub async fn list_tenant_database_table_fields_handler(
-    Path((tenant, database, table)): Path<(String, String, String)>,
-) -> Result<ListDatabaseTableFieldsResponse> {
+) -> PoemResult<ListDatabaseTableFieldsResponse> {
     todo!()
 }
