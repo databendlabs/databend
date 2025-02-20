@@ -551,6 +551,9 @@ pub struct CacheConfig {
     /// Max size(in bytes) of cached table segment
     pub table_meta_segment_bytes: u64,
 
+    /// Max size(in bytes) of cached column oriented segment
+    pub table_meta_column_oriented_segment_bytes: u64,
+
     /// Max number of cached table block meta
     pub block_meta_count: u64,
 
@@ -704,6 +707,7 @@ impl Default for CacheConfig {
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
             table_meta_segment_bytes: 1073741824,
+            table_meta_column_oriented_segment_bytes: 1073741824,
             block_meta_count: 0,
             segment_block_metas_count: 0,
             table_meta_statistic_count: 256,
