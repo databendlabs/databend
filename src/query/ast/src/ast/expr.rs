@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_common_exception::merge_span;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use educe::Educe;
@@ -42,6 +41,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SetExpr;
+use crate::span::merge_span;
 use crate::ParseError;
 use crate::Result;
 use crate::Span;
@@ -265,6 +265,9 @@ pub enum Expr {
         span: Span,
         name: String,
     },
+    Placeholder {
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -304,7 +307,8 @@ impl Expr {
             | Expr::LastDay { span, .. }
             | Expr::PreviousDay { span, .. }
             | Expr::NextDay { span, .. }
-            | Expr::Hole { span, .. } => *span,
+            | Expr::Hole { span, .. }
+            | Expr::Placeholder { span } => *span,
         }
     }
 
@@ -450,6 +454,7 @@ impl Expr {
             Expr::PreviousDay { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::NextDay { span, date, .. } => merge_span(*span, date.whole_span()),
             Expr::Hole { span, .. } => *span,
+            Expr::Placeholder { span } => *span,
         }
     }
 
@@ -783,6 +788,9 @@ impl Display for Expr {
                 }
                 Expr::Hole { name, .. } => {
                     write!(f, ":{name}")?;
+                }
+                Expr::Placeholder { .. } => {
+                    write!(f, "?")?;
                 }
             }
 
@@ -2129,7 +2137,7 @@ impl ExprReplacer {
             Expr::NextDay { date, .. } => {
                 self.replace_expr(date);
             }
-            Expr::Literal { .. } | Expr::Hole { .. } => (),
+            Expr::Literal { .. } | Expr::Hole { .. } | Expr::Placeholder { .. } => (),
         }
     }
 }

@@ -32,6 +32,7 @@ mod aggregate_histogram;
 mod aggregate_json_array_agg;
 mod aggregate_json_object_agg;
 mod aggregate_kurtosis;
+mod aggregate_markov_tarin;
 mod aggregate_min_max_any;
 mod aggregate_min_max_any_decimal;
 mod aggregate_mode;

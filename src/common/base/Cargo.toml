@@ -30,6 +30,7 @@ bytemuck = { workspace = true }
 bytes = { workspace = true }
 bytesize = { workspace = true }
 chrono = { workspace = true }
+crc32fast = { workspace = true }
 ctrlc = { workspace = true }
 enquote = { workspace = true }
 fastrace = { workspace = true }
