@@ -197,10 +197,7 @@ impl Interpreter for ExplainInterpreter {
                         schema.clone(),
                         metadata.clone(),
                     )?;
-                    let mut plan = interpreter.build_physical_plan(&mutation, None).await?;
-                    if let PhysicalPlan::CommitSink(commit) = &plan {
-                        plan = commit.input.as_ref().clone();
-                    }
+                    let plan = interpreter.build_physical_plan(&mutation, None).await?;
                     self.explain_analyze(plan, metadata, true).await?
                 }
                 _ => Err(ErrorCode::Unimplemented(
@@ -442,13 +439,18 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
+        let plan = if let PhysicalPlan::CommitSink(commit) = &plan {
+            commit.input.as_ref()
+        } else {
+            &plan
+        };
+        let build_res = build_query_pipeline(&self.ctx, &[], plan, ignore_result).await?;
 
         // Drain the data
         let query_profiles = self.execute_and_get_profiles(build_res)?;
 
         let result = if self.partial {
-            format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
+            format_partial_tree(plan, metadata, &query_profiles)?.format_pretty()?
         } else {
             plan.format(metadata.clone(), query_profiles.clone())?
                 .format_pretty()?
