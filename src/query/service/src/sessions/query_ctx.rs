@@ -401,6 +401,7 @@ impl QueryContext {
     pub fn get_spill_file_stats(&self, node_id: Option<String>) -> SpillProgress {
         let r = self.shared.cluster_spill_progress.read();
         let node_id = node_id.unwrap_or(self.get_cluster().local_id());
+
         r.get(&node_id).cloned().unwrap_or(SpillProgress::default())
     }
 

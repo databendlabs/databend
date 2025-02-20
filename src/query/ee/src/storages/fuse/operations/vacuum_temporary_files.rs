@@ -173,8 +173,10 @@ async fn vacuum_by_duration(
     Ok(removed_total)
 }
 
+// Vacuum temporary files by query hook
+// If query was killed, we still need to clean up the temporary files
 async fn vacuum_query_hook(
-    abort_checker: AbortChecker,
+    _abort_checker: AbortChecker,
     temporary_dir: &str,
     nodes: &[usize],
     query_id: &str,
@@ -198,7 +200,6 @@ async fn vacuum_query_hook(
         .filter_map(|x| x.is_ok().then(|| x.unwrap()));
 
     for (meta_file_path, buffer) in metas {
-        abort_checker.try_check_aborting()?;
         let removed = vacuum_by_meta_buffer(
             &meta_file_path,
             temporary_dir,
