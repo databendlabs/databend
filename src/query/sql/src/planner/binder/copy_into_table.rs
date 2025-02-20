@@ -34,7 +34,7 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
-use databend_common_ast::parser::parse_values_with_placeholder;
+use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
 use databend_common_catalog::plan::list_stage_files;
@@ -531,7 +531,7 @@ impl Binder {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
-        let expr_or_placeholders = parse_values_with_placeholder(&tokens, sql_dialect)?;
+        let expr_or_placeholders = parse_values(&tokens, sql_dialect)?;
 
         if source_schema.num_fields() != expr_or_placeholders.len() {
             return Err(ErrorCode::SemanticError(format!(
@@ -546,11 +546,13 @@ impl Binder {
         let mut exprs = vec![];
         for (i, eo) in expr_or_placeholders.into_iter().enumerate() {
             match eo {
-                Some(e) => {
+                Expr::Placeholder { .. } => {
+                    attachment_fields.push(source_schema.fields()[i].clone());
+                }
+                e => {
                     exprs.push(e);
                     const_fields.push(source_schema.fields()[i].clone());
                 }
-                None => attachment_fields.push(source_schema.fields()[i].clone()),
             }
         }
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;

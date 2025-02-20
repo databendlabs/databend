@@ -88,8 +88,16 @@ impl<K: ValueType, V: ValueType> ValueType for KvPair<K, V> {
         None
     }
 
-    fn try_downcast_owned_builder<'a>(_builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
-        None
+    fn try_downcast_owned_builder<'a>(builder: ColumnBuilder) -> Option<Self::ColumnBuilder> {
+        let ColumnBuilder::Tuple(mut kv) = builder else {
+            return None;
+        };
+        if kv.len() != 2 {
+            return None;
+        }
+        let values = V::try_downcast_owned_builder(kv.pop()?)?;
+        let keys = K::try_downcast_owned_builder(kv.pop()?)?;
+        Some(KvColumnBuilder { keys, values })
     }
 
     fn try_upcast_column_builder(

@@ -315,7 +315,7 @@ impl Planner {
         variable_normalizer.render_error()?;
 
         stmt.drive_mut(&mut DistinctToGroupBy::default());
-        stmt.drive_mut(&mut AggregateRewriter);
+        stmt.drive_mut(&mut AggregateRewriter::default());
         let mut set_ops_counter = CountSetOps::default();
         stmt.drive_mut(&mut set_ops_counter);
         let max_set_ops = self.ctx.get_settings().get_max_set_operator_count()?;
