@@ -13,7 +13,6 @@
 // limitations under the License.
 
 pub mod background_tasks;
-pub mod catalog;
 pub mod cluster;
 pub mod config;
 pub mod instance_status;

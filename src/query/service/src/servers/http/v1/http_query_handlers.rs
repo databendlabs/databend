@@ -50,6 +50,7 @@ use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
+use crate::servers::http::v1::catalog::catalog_route;
 use crate::servers::http::v1::discovery_nodes;
 use crate::servers::http::v1::list_suggestions;
 use crate::servers::http::v1::login_handler;
@@ -488,6 +489,7 @@ pub fn query_route() -> Route {
                 .with(CookieJarManager::new()),
         );
     }
+    route = route.nest("/catalog", catalog_route());
     route
 }
 

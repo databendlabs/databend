@@ -64,26 +64,6 @@ impl AdminService {
                 get(super::v1::processes::processlist_handler),
             )
             .at(
-                "/v1/databases",
-                get(super::v1::catalog::list_databases::list_databases_handler),
-            )
-            .at(
-                "/v1/databases/:database/tables",
-                get(super::v1::catalog::list_database_tables::list_database_tables_handler),
-            )
-            .at(
-                "/v1/databases/:database/tables/:table",
-                get(super::v1::catalog::get_database_table::get_database_table_handler),
-            )
-            .at(
-                "/v1/databases/:database/tables/:table/fields",
-                get(super::v1::catalog::list_database_table_fields::list_database_table_fields_handler),
-            )
-            .at(
-                "/v1/tables/search",
-                get(super::v1::catalog::search_tables::search_tables_handler),
-            )
-            .at(
                 "/v1/tables",
                 get(super::v1::tenant_tables::list_tables_handler),
             )
@@ -106,26 +86,6 @@ impl AdminService {
         // Multiple tenants admin api
         if self.config.query.management_mode {
             route = route
-                .at(
-                    "/v1/tenants/:tenant/databases",
-                    get(super::v1::catalog::list_databases::list_databases_handler),
-                )
-                .at(
-                    "/v1/tenants/:tenant/databases/:database/tables",
-                    get(super::v1::catalog::list_database_tables::list_tenant_database_tables_handler),
-                )
-                .at(
-                    "/v1/tenants/:tenant/databases/:database/tables/:table",
-                    get(super::v1::catalog::get_database_table::get_tenant_database_table_handler),
-                )
-                .at(
-                    "/v1/tenants/:tenant/databases/:database/tables/:table/fields",
-                    get(super::v1::catalog::list_database_table_fields::list_tenant_database_table_fields_handler),
-                )
-                .at(
-                    "/v1/tenants/:tenant/tables/search",
-                    get(super::v1::catalog::search_tables::search_tenant_tables_handler),
-                )
                 .at(
                     "/v1/tenants/:tenant/tables",
                     get(super::v1::tenant_tables::list_tenant_tables_handler),
