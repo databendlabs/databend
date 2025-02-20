@@ -34,6 +34,7 @@ use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use rand::Rng;
 
 use crate::sql_gen::Column;
@@ -613,7 +614,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
         let window = if self.rng.gen_bool(0.8) {
             None
         } else {
-            self.gen_window(false)
+            self.gen_window(&name)
         };
 
         self.gen_func(name, params, args_type, window, None)
@@ -632,14 +633,14 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 } else {
                     vec![]
                 };
-                let window = self.gen_window(false);
+                let window = self.gen_window(name);
                 self.gen_func(name.to_string(), vec![], args_type, window, None)
             }
             DataType::Number(NumberDataType::Float64) if by_ty => {
                 let names = ["percent_rank", "cume_dist"];
                 let idx = self.rng.gen_range(0..names.len());
                 let name = names[idx];
-                let window = self.gen_window(false);
+                let window = self.gen_window(name);
                 self.gen_func(name.to_string(), vec![], vec![], window, None)
             }
             _ => {
@@ -661,15 +662,14 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 } else {
                     vec![ty]
                 };
-                let is_ignore_nulls = idx > 1;
-                let window = self.gen_window(is_ignore_nulls);
+                let window = self.gen_window(name);
                 self.gen_func(name.to_string(), vec![], args_type, window, None)
             }
         }
     }
 
-    fn gen_window(&mut self, is_ignore_nulls: bool) -> Option<WindowDesc> {
-        let ignore_nulls = if is_ignore_nulls {
+    fn gen_window(&mut self, func_name: &str) -> Option<WindowDesc> {
+        let ignore_nulls = if RANK_WINDOW_FUNCTIONS.contains(&func_name) {
             Some(self.rng.gen_bool(0.2))
         } else {
             None
