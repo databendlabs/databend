@@ -28,12 +28,12 @@ databend-common-grpc = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-client = { workspace = true }
+databend-common-meta-control = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
-databend-common-meta-control = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
 
