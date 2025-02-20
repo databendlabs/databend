@@ -3605,6 +3605,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-meta-control"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "databend-common-building",
+ "databend-common-meta-client",
+ "databend-common-meta-raft-store",
+ "databend-common-meta-sled-store",
+ "databend-common-meta-types",
+ "databend-common-tracing",
+ "databend-meta",
+ "futures",
+ "raft-log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "url",
+]
+
+[[package]]
 name = "databend-common-meta-embedded"
 version = "0.1.0"
 dependencies = [
@@ -4971,6 +4994,7 @@ dependencies = [
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-meta-client",
+ "databend-common-meta-control",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
  "databend-common-meta-sled-store",
@@ -4979,16 +5003,11 @@ dependencies = [
  "databend-common-tracing",
  "databend-meta",
  "fastrace",
- "futures",
  "log",
- "raft-log",
  "rand",
- "reqwest",
  "serde",
  "serde_json",
  "tokio",
- "tokio-stream",
- "url",
 ]
 
 [[package]]
