@@ -257,6 +257,9 @@ statement error 2218
 grant usage on warehouse a to u1;
 
 statement ok
+GRANT create warehouse on *.* to role 'role1';
+
+statement ok
 drop user if exists u1;
 
 statement ok
