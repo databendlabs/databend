@@ -280,6 +280,7 @@ pub trait TableContext: Send + Sync {
         database_name: &str,
         table_name: &str,
         files: &[StageFileInfo],
+        path_prefix: Option<String>,
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles>;
 

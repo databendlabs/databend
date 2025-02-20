@@ -2948,9 +2948,10 @@ dependencies = [
 
 [[package]]
 name = "databend-common-ast"
-version = "0.1.3"
+version = "0.2.1"
 dependencies = [
  "criterion",
+ "databend_educe",
  "derive-visitor",
  "enum-as-inner",
  "ethnum",
@@ -3001,6 +3002,7 @@ dependencies = [
  "bytes",
  "bytesize",
  "chrono",
+ "crc32fast",
  "ctrlc",
  "databend-common-building",
  "databend-common-exception",
@@ -3251,7 +3253,7 @@ dependencies = [
  "databend-common-grpc",
  "databend-common-hashtable",
  "databend-common-io",
- "educe 0.4.23",
+ "databend_educe",
  "either",
  "enum-as-inner",
  "ethnum",
@@ -3373,6 +3375,7 @@ dependencies = [
  "num-traits",
  "once_cell",
  "proj4rs",
+ "proptest",
  "rand",
  "regex",
  "roaring",
@@ -3996,8 +3999,8 @@ dependencies = [
  "databend-storages-common-io",
  "databend-storages-common-session",
  "databend-storages-common-table-meta",
+ "databend_educe",
  "derive-visitor",
- "educe 0.4.23",
  "enum-as-inner",
  "fastrace",
  "globiter",
@@ -5368,6 +5371,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend_educe"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f51ab98d2a6fa98f75221037606717e4f41dba478beb790ce679850d9362139f"
+dependencies = [
+ "enum-ordinalize",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.95",
+]
+
+[[package]]
 name = "deadpool"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5812,23 +5827,11 @@ dependencies = [
 
 [[package]]
 name = "educe"
-version = "0.4.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f0042ff8246a363dbe77d2ceedb073339e85a804b9a47636c6e016a9a32c05f"
-dependencies = [
- "enum-ordinalize 3.1.15",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
-name = "educe"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d7bc049e1bd8cdeb31b68bbd586a9464ecf9f3944af3958a7a9d0f8b9799417"
 dependencies = [
- "enum-ordinalize 4.3.0",
+ "enum-ordinalize",
  "proc-macro2",
  "quote",
  "syn 2.0.95",
@@ -5913,19 +5916,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5ffccbb6966c05b32ef8fbac435df276c4ae4d3dc55a8cd0eb9745e6c12f546a"
 dependencies = [
  "heck 0.4.1",
- "proc-macro2",
- "quote",
- "syn 2.0.95",
-]
-
-[[package]]
-name = "enum-ordinalize"
-version = "3.1.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bf1fa3f06bbff1ea5b1a9c7b14aa992a39657db60a2759457328d7e058f49ee"
-dependencies = [
- "num-bigint",
- "num-traits",
  "proc-macro2",
  "quote",
  "syn 2.0.95",
@@ -13356,7 +13346,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1106ff933150aa8b8af71ee57631cd3ac2feeccd230d122ad833e7f0cd5e8fe1"
 dependencies = [
  "async-trait",
- "educe 0.6.0",
+ "educe",
  "fs-err",
  "futures",
  "glob",

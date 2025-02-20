@@ -288,7 +288,7 @@ derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
 dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "30e28ca" }
 dyn-clone = "1.0.9"
-educe = "0.4" # FIXME: failed to upgrade to educe 0.6
+educe = { version = "1.0.0", features = ["default", "full"], package = "databend_educe" }
 either = "1.9"
 enquote = "1.1.0"
 enum-as-inner = "0.6"

@@ -197,6 +197,7 @@ impl PipelineBuilder {
         to_table: &dyn Table,
         copied_files: &[StageFileInfo],
         options: &CopyIntoTableOptions,
+        path_prefix: Option<String>,
     ) -> Result<Option<UpsertTableCopiedFileReq>> {
         let mut copied_file_tree = BTreeMap::new();
         for file in copied_files {
@@ -205,7 +206,12 @@ impl PipelineBuilder {
                 v.truncate(7);
                 v
             });
-            copied_file_tree.insert(file.path.clone(), TableCopiedFileInfo {
+            let path = if let Some(p) = &path_prefix {
+                format!("{}{}", p, file.path)
+            } else {
+                file.path.clone()
+            };
+            copied_file_tree.insert(path, TableCopiedFileInfo {
                 etag: short_etag,
                 content_length: file.size,
                 last_modified: Some(file.last_modified),

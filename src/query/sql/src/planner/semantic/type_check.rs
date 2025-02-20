@@ -1117,9 +1117,9 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs)?,
 
-            Expr::Hole { span, .. } => {
+            Expr::Hole { span, .. } | Expr::Placeholder { span } => {
                 return Err(ErrorCode::SemanticError(
-                    "Hole expression is impossible in trivial query".to_string(),
+                    "Hole or Placeholder expression is impossible in trivial query".to_string(),
                 )
                 .set_span(*span))
             }

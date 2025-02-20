@@ -34,7 +34,7 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
-use databend_common_ast::parser::parse_values_with_placeholder;
+use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
 use databend_common_catalog::plan::list_stage_files;
@@ -59,6 +59,7 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use derive_visitor::Drive;
 use log::debug;
 use log::warn;
@@ -151,6 +152,12 @@ impl Binder {
             .ctx
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
+        let dedup_full_path = table
+            .get_table_info()
+            .meta
+            .options
+            .get(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH)
+            == Some(&"1".to_string());
 
         let validation_mode = ValidationMode::from_str(stmt.options.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
@@ -204,6 +211,8 @@ impl Binder {
             table_name,
             validation_mode,
             is_transform,
+            dedup_full_path,
+            path_prefix: None,
             no_file_to_copy: false,
             from_attachment: false,
             stage_table_info: StageTableInfo {
@@ -383,6 +392,8 @@ impl Binder {
             from_attachment: true,
             required_source_schema: data_schema.clone(),
             required_values_schema,
+            dedup_full_path: false,
+            path_prefix: None,
             values_consts: const_columns,
             stage_table_info: StageTableInfo {
                 schema: stage_schema,
@@ -520,7 +531,7 @@ impl Binder {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
-        let expr_or_placeholders = parse_values_with_placeholder(&tokens, sql_dialect)?;
+        let expr_or_placeholders = parse_values(&tokens, sql_dialect)?;
 
         if source_schema.num_fields() != expr_or_placeholders.len() {
             return Err(ErrorCode::SemanticError(format!(
@@ -535,11 +546,13 @@ impl Binder {
         let mut exprs = vec![];
         for (i, eo) in expr_or_placeholders.into_iter().enumerate() {
             match eo {
-                Some(e) => {
+                Expr::Placeholder { .. } => {
+                    attachment_fields.push(source_schema.fields()[i].clone());
+                }
+                e => {
                     exprs.push(e);
                     const_fields.push(source_schema.fields()[i].clone());
                 }
-                None => attachment_fields.push(source_schema.fields()[i].clone()),
             }
         }
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;

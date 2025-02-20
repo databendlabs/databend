@@ -16,9 +16,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::span::pretty_print_error;
-use crate::Span;
-
-pub type Result<T> = std::result::Result<T, ParseError>;
+use crate::span::Span;
 
 #[derive(Debug)]
 pub struct ParseError(pub Span, pub String);

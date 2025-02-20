@@ -26,6 +26,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::UDFCall;
 
 impl SubqueryRewriter {
+    #[recursive::recursive]
     pub(crate) fn flatten_scalar(
         &mut self,
         scalar: &ScalarExpr,

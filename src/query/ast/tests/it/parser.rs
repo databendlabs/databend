@@ -1069,6 +1069,7 @@ fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
+        r#"select ?"#,
         r#"select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
         r#"select columns('abc'), columns(a -> length(a) = 3) from t"#,
         r#"select * from customer at(offset => -10 * 30)"#,
@@ -1173,6 +1174,7 @@ fn test_expr() {
 
     let cases = &[
         r#"a"#,
+        r#"?"#,
         r#"'I''m who I\'m.'"#,
         r#"'\776 \n \t \u0053 \xaa'"#,
         r#"char(0xD0, 0xBF, 0xD1)"#,
@@ -1264,6 +1266,7 @@ fn test_expr() {
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
         r#"INTERVAL '1 YEAR'"#,
+        r#"(?, ?)"#,
     ];
 
     for case in cases {

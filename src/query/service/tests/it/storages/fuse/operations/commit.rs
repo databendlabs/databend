@@ -715,6 +715,7 @@ impl TableContext for CtxDelegation {
         _database_name: &str,
         _table_name: &str,
         _files: &[StageFileInfo],
+        _path_prefix: Option<String>,
         _max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         todo!()
@@ -905,6 +906,10 @@ impl Catalog for FakedCatalog {
 
     fn info(&self) -> Arc<CatalogInfo> {
         self.cat.info()
+    }
+
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        todo!()
     }
 
     async fn get_database(&self, _tenant: &Tenant, _db_name: &str) -> Result<Arc<dyn Database>> {

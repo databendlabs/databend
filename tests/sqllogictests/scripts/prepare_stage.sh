@@ -20,3 +20,14 @@ fi
 
 echo "drop table if exists ontime" | $BENDSQL_CLIENT_CONNECT
 cat tests/data/ddl/ontime.sql | $BENDSQL_CLIENT_CONNECT
+
+if [ "$TEST_STAGE_DEDUP" = "full_path" ]; then
+    FULL_PATH=1
+elif [ "$TEST_STAGE_DEDUP" = "sub_path" ]; then
+    FULL_PATH=0
+else
+    echo "TEST_STAGE_DEDUP must be 'full_path' or 'sub_path'" >&2
+    exit 1
+fi
+
+echo "set global copy_dedup_full_path_by_default = ${FULL_PATH}" | $BENDSQL_CLIENT_CONNECT

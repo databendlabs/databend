@@ -37,8 +37,14 @@ use crate::IndexType;
 use crate::ScalarExpr;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
-#[derive(Clone, Debug, Educe)]
-#[educe(PartialEq, Eq, Hash)]
+#[derive(Educe)]
+#[educe(
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Eq,
+    Hash(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub struct SExpr {
     pub(crate) plan: Arc<RelOperator>,
     pub(crate) children: Vec<Arc<SExpr>>,
@@ -51,10 +57,10 @@ pub struct SExpr {
     ///
     /// Since `SExpr` is `Send + Sync`, we use `Mutex` to protect
     /// the cache.
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub(crate) rel_prop: Arc<Mutex<Option<Arc<RelationalProperty>>>>,
 
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub(crate) stat_info: Arc<Mutex<Option<Arc<StatInfo>>>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
