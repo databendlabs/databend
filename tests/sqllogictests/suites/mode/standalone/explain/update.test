@@ -120,6 +120,7 @@ explain analyze partial update t1 set a = a + 1 where a in (select a from t2) an
 ----
 HashJoin: LEFT SEMI
 ├── estimated rows: 2.00
+├── output rows: 2
 ├── TableScan
 │   ├── table: default.default.t2
 │   ├── estimated rows: 2.00

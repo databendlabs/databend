@@ -20,7 +20,7 @@ query T
 explain delete from t1
 ----
 CommitSink
-└── Mutation Source
+└── MutationSource
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── filters: []
