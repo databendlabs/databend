@@ -15,6 +15,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 use poem::error::Result as PoemResult;
+use poem::web::Json;
 use poem::IntoResponse;
 use serde::Serialize;
 
@@ -54,5 +55,8 @@ pub struct TableInfo {
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn search_tables_handler() -> PoemResult<impl IntoResponse> {
-    todo!()
+    // TODO:
+    let tables = vec![];
+    let warnings = vec![];
+    Ok(Json(SearchTablesResponse { tables, warnings }))
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use poem::error::Result as PoemResult;
+use poem::web::Json;
 use poem::IntoResponse;
 use serde::Serialize;
 
@@ -30,5 +31,11 @@ pub struct DatabaseInfo {
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn list_databases_handler() -> PoemResult<impl IntoResponse> {
-    todo!()
+    // TODO:
+    let databases = vec![];
+    let warnings = vec![];
+    Ok(Json(ListDatabasesResponse {
+        databases,
+        warnings,
+    }))
 }

@@ -15,6 +15,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 use poem::error::Result as PoemResult;
+use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
 use serde::Serialize;
@@ -46,5 +47,8 @@ pub struct TableInfo {
 pub async fn list_database_tables_handler(
     Path(database): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    todo!()
+    // TODO:
+    let tables = vec![];
+    let warnings = vec![];
+    Ok(Json(ListDatabaseTablesResponse { tables, warnings }))
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use poem::error::Result as PoemResult;
+use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
 use serde::Serialize;
@@ -37,5 +38,8 @@ pub struct FieldInfo {
 pub async fn list_database_table_fields_handler(
     Path((database, table)): Path<(String, String)>,
 ) -> PoemResult<impl IntoResponse> {
-    todo!()
+    // TODO:
+    let fields = vec![];
+    let warnings = vec![];
+    Ok(Json(ListDatabaseTableFieldsResponse { fields, warnings }))
 }

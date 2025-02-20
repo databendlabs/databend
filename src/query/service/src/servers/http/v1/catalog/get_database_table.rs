@@ -15,6 +15,7 @@
 use chrono::DateTime;
 use chrono::Utc;
 use poem::error::Result as PoemResult;
+use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
 use serde::Serialize;
@@ -47,5 +48,22 @@ pub struct TableDetails {
 pub async fn get_database_table_handler(
     Path((database, table)): Path<(String, String)>,
 ) -> PoemResult<impl IntoResponse> {
-    todo!()
+    // TODO:
+    let table = TableDetails {
+        name: table,
+        table_type: "table".to_string(),
+        database: database,
+        catalog: "default".to_string(),
+        owner: "default".to_string(),
+        engine: "default".to_string(),
+        cluster_by: "default".to_string(),
+        create_time: Utc::now(),
+        num_rows: 0,
+        data_size: 0,
+        data_compressed_size: 0,
+        index_size: 0,
+        create_query: "".to_string(),
+    };
+    let warnings = vec![];
+    Ok(Json(GetDatabaseTableResponse { table, warnings }))
 }
