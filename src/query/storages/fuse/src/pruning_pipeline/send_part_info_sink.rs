@@ -115,6 +115,16 @@ impl SendPartState {
         self.data_metrics
             .inc_partitions_scanned(send_part_cache.statistics.partitions_scanned as u64);
     }
+
+    pub fn set_pruning_stats(&self, stat: PartStatistics) {
+        let mut send_part_cache = self.cache.lock();
+        send_part_cache.statistics = stat;
+    }
+
+    pub fn get_pruning_stats(&self) -> PartStatistics {
+        let send_part_cache = self.cache.lock();
+        send_part_cache.statistics.clone()
+    }
 }
 
 pub struct SendPartInfoSink {
@@ -125,6 +135,7 @@ pub struct SendPartInfoSink {
     partitions: Partitions,
     statistics: PartStatistics,
     send_part_state: Arc<SendPartState>,
+    dry_run: bool,
     enable_cache: bool,
 }
 
@@ -136,6 +147,7 @@ impl SendPartInfoSink {
         top_k: Option<(TopK, Scalar)>,
         schema: TableSchemaRef,
         send_part_state: Arc<SendPartState>,
+        dry_run: bool,
         enable_cache: bool,
     ) -> Result<ProcessorPtr> {
         let partitions = Partitions::default();
@@ -150,6 +162,7 @@ impl SendPartInfoSink {
                 partitions,
                 statistics,
                 send_part_state,
+                dry_run,
                 enable_cache,
             },
         )))
@@ -187,6 +200,12 @@ impl AsyncSink for SendPartInfoSink {
                         ),
                     },
                 };
+                // if dry_run, we don't send the data to the next pipeline
+                // we only want to get the pruning statistics
+                if self.dry_run {
+                    return Ok(false);
+                }
+
                 if self.enable_cache {
                     self.partitions.partitions.extend(info_ptr.clone());
                 }

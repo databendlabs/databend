@@ -57,7 +57,6 @@ use sha2::Sha256;
 
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BloomIndexBuilder;
-use crate::pruning::create_segment_location_vector;
 use crate::pruning::table_sample;
 use crate::pruning::BlockPruner;
 use crate::pruning::FusePruner;
@@ -82,9 +81,8 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        dry_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
             let change_type = push_downs.as_ref().map_or(ChangeType::Insert, |v| {
@@ -121,55 +119,33 @@ impl FuseTable {
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
 
-                let mut nodes_num = 1;
-                let cluster = ctx.get_cluster();
-
-                if !cluster.is_empty() {
-                    nodes_num = cluster.nodes.len();
+                let mut segments = Vec::with_capacity(segment_locs.len());
+                for (idx, segment_location) in segment_locs.into_iter().enumerate() {
+                    segments.push(FuseLazyPartInfo::create(idx, segment_location))
                 }
 
-                if !dry_run && segment_len > nodes_num && distributed_pruning {
-                    let mut segments = Vec::with_capacity(segment_locs.len());
-                    for (idx, segment_location) in segment_locs.into_iter().enumerate() {
-                        segments.push(FuseLazyPartInfo::create(idx, segment_location))
-                    }
-
-                    return Ok((
-                        PartStatistics::new_estimated(
-                            Some(snapshot_loc),
-                            snapshot.summary.row_count as usize,
-                            snapshot.summary.compressed_byte_size as usize,
-                            segment_len,
-                            segment_len,
-                        ),
-                        Partitions::create(PartitionsShuffleKind::Mod, segments),
-                    ));
-                }
-
-                let snapshot_loc = Some(snapshot_loc);
-                let table_schema = self.schema_with_stream();
-                let summary = snapshot.summary.block_count as usize;
-                let segments_location = create_segment_location_vector(segment_locs, snapshot_loc);
-
-                self.prune_snapshot_blocks(
-                    ctx.clone(),
-                    push_downs.clone(),
-                    table_schema,
-                    segments_location,
-                    summary,
-                )
-                .await
+                Ok((
+                    PartStatistics::new_estimated(
+                        Some(snapshot_loc),
+                        snapshot.summary.row_count as usize,
+                        snapshot.summary.compressed_byte_size as usize,
+                        segment_len,
+                        segment_len,
+                    ),
+                    Partitions::create(PartitionsShuffleKind::Mod, segments),
+                ))
             }
             None => Ok((PartStatistics::default(), Partitions::default())),
         }
     }
 
-    pub(crate) fn do_build_prune_pipeline(
+    pub fn do_build_prune_pipeline(
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
-    ) -> Result<Option<Pipeline>> {
+        dry_run: bool,
+    ) -> Result<(Option<Pipeline>, Option<Arc<SendPartState>>)> {
         let segments_location = plan.statistics.snapshot.clone();
         let table_schema = self.schema_with_stream();
         let dal = self.operator.clone();
@@ -186,7 +162,7 @@ impl FuseTable {
         }
         // If there is no lazy part, we don't need to prune
         if lazy_init_segments.is_empty() {
-            return Ok(None);
+            return Ok((None, None));
         }
         let push_downs = plan.push_downs.clone();
         let max_io_requests = self.adjust_io_request(&ctx)?;
@@ -205,9 +181,24 @@ impl FuseTable {
                         Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
                     )
                 });
+        let limit = push_downs
+            .as_ref()
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
+            .and_then(|p| p.limit);
+
+        let pruner =
+            Arc::new(self.build_fuse_pruner(ctx.clone(), push_downs, table_schema, dal)?);
+
+        let send_part_state = Arc::new(SendPartState::create(
+            derterministic_cache_key.clone(),
+            limit,
+            pruner.clone(),
+            self.data_metrics.clone(),
+        ));
 
         if ctx.get_settings().get_enable_prune_cache()? {
-            if let Some((_stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+            if let Some((stat, part)) = Self::check_prune_cache(&derterministic_cache_key) {
+                send_part_state.set_pruning_stats(stat);
                 let sender = part_info_tx.clone();
                 info!("prune pipeline: get prune result from cache");
                 source_pipeline.set_on_init(move || {
@@ -235,14 +226,11 @@ impl FuseTable {
 
                     Ok(())
                 });
-                return Ok(None);
+                return Ok((None, Some(send_part_state.clone())));
             }
         }
 
         let mut prune_pipeline = Pipeline::create();
-        let pruner =
-            Arc::new(self.build_fuse_pruner(ctx.clone(), push_downs, table_schema, dal)?);
-
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
         self.prune_segments_with_pipeline(
@@ -251,7 +239,8 @@ impl FuseTable {
             ctx.clone(),
             segment_rx,
             part_info_tx,
-            derterministic_cache_key.clone(),
+            send_part_state.clone(),
+            dry_run,
         )?;
         prune_pipeline.set_on_init(move || {
             // We cannot use the runtime associated with the query to avoid increasing its lifetime.
@@ -276,7 +265,7 @@ impl FuseTable {
             Ok(())
         });
 
-        Ok(Some(prune_pipeline))
+        Ok((Some(prune_pipeline), Some(send_part_state.clone())))
     }
 
     #[fastrace::trace]
@@ -357,7 +346,8 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
-        derterministic_cache_key: Option<String>,
+        send_part_state: Arc<SendPartState>,
+        dry_run: bool,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         prune_pipeline.add_source(
@@ -425,17 +415,7 @@ impl FuseTable {
             .map(|topk| field_default_value(ctx.clone(), &topk.field).map(|d| (topk, d)))
             .transpose()?;
 
-        let limit = push_down
-            .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
-            .and_then(|p| p.limit);
         let enable_prune_cache = ctx.get_settings().get_enable_prune_cache()?;
-        let send_part_state = Arc::new(SendPartState::create(
-            derterministic_cache_key,
-            limit,
-            pruner.clone(),
-            self.data_metrics.clone(),
-        ));
         prune_pipeline.add_sink(|input| {
             SendPartInfoSink::create(
                 input,
@@ -444,6 +424,7 @@ impl FuseTable {
                 top_k.clone(),
                 pruner.table_schema.clone(),
                 send_part_state.clone(),
+                dry_run,
                 enable_prune_cache,
             )
         })?;
