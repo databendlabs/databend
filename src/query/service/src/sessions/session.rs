@@ -136,7 +136,7 @@ impl Session {
         self.kill(/* shutdown io stream */);
     }
 
-    pub fn force_kill_query<C>(&self, cause: ErrorCode<C>) {
+    pub fn force_kill_query(&self, cause: ErrorCode) {
         if let Some(context_shared) = self.session_ctx.get_query_context_shared() {
             context_shared.kill(cause);
         }

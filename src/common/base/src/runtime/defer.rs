@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::runtime::LimitMemGuard;
+
 pub fn defer<F: FnOnce() -> R, R>(f: F) -> impl Drop {
+    let _guard = LimitMemGuard::enter_unlimited();
+
     struct Defer<F: FnOnce() -> R, R>(Option<F>);
 
     impl<F: FnOnce() -> R, R> Drop for Defer<F, R> {

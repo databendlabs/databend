@@ -66,6 +66,8 @@ pub struct QueryPipelineExecutor {
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
     lock_guards: Vec<Arc<LockGuard>>,
+
+    initialized: Mutex<bool>,
 }
 
 impl QueryPipelineExecutor {
@@ -188,6 +190,7 @@ impl QueryPipelineExecutor {
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(WatchNotify::new()),
             lock_guards,
+            initialized: Mutex::new(false),
         }))
     }
 
@@ -230,10 +233,6 @@ impl QueryPipelineExecutor {
 
     #[fastrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
-        self.init(self.graph.clone())?;
-
-        self.start_executor_daemon()?;
-
         let mut thread_join_handles = self.execute_threads(self.threads_num);
 
         while let Some(join_handle) = thread_join_handles.pop() {
@@ -271,63 +270,70 @@ impl QueryPipelineExecutor {
         Ok(())
     }
 
-    fn init(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
-        unsafe {
-            // TODO: the on init callback cannot be killed.
-            {
-                let instant = Instant::now();
-                let mut guard = self.on_init_callback.lock();
-                if let Some(callback) = guard.take() {
-                    drop(guard);
+    unsafe fn init_schedule(self: &Arc<Self>, graph: Arc<RunningGraph>) -> Result<()> {
+        let mut initialized_guard = self.initialized.lock();
 
-                    // untracking for on finished
-                    let mut tracking_payload = ThreadTracker::new_tracking_payload();
-                    if let Some(mem_stat) = &tracking_payload.mem_stat {
-                        tracking_payload.mem_stat = Some(MemStat::create_child(
-                            String::from("Pipeline-on-finished"),
-                            mem_stat.get_parent_memory_stat(),
-                        ));
-                    }
-
-                    if let Err(cause) = Result::flatten(catch_unwind(move || {
-                        let _guard = ThreadTracker::tracking(tracking_payload);
-
-                        callback()
-                    })) {
-                        return Err(cause.add_message_back("(while in query pipeline init)"));
-                    }
-                }
-
-                info!(
-                    "Init pipeline successfully, query_id: {:?}, elapsed: {:?}",
-                    self.settings.query_id,
-                    instant.elapsed()
-                );
-            }
-
-            let mut init_schedule_queue = graph.init_schedule_queue(self.threads_num)?;
-
-            let mut wakeup_worker_id = 0;
-            while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
-                ScheduleQueue::schedule_async_task(
-                    proc.clone(),
-                    self.settings.query_id.clone(),
-                    self,
-                    wakeup_worker_id,
-                    self.workers_condvar.clone(),
-                    self.global_tasks_queue.clone(),
-                );
-                wakeup_worker_id += 1;
-
-                if wakeup_worker_id == self.threads_num {
-                    wakeup_worker_id = 0;
-                }
-            }
-
-            let sync_queue = std::mem::take(&mut init_schedule_queue.sync_queue);
-            self.global_tasks_queue.init_sync_tasks(sync_queue);
-            Ok(())
+        if *initialized_guard {
+            return Ok(());
         }
+
+        *initialized_guard = true;
+
+        // TODO: the on init callback cannot be killed.
+        {
+            let instant = Instant::now();
+            let mut guard = self.on_init_callback.lock();
+            if let Some(callback) = guard.take() {
+                drop(guard);
+
+                // untracking for on finished
+                let mut tracking_payload = ThreadTracker::new_tracking_payload();
+                if let Some(mem_stat) = &tracking_payload.mem_stat {
+                    tracking_payload.mem_stat = Some(MemStat::create_child(
+                        String::from("Pipeline-on-finished"),
+                        mem_stat.get_parent_memory_stat(),
+                    ));
+                }
+
+                if let Err(cause) = Result::flatten(catch_unwind(move || {
+                    let _guard = ThreadTracker::tracking(tracking_payload);
+
+                    callback()
+                })) {
+                    return Err(cause.add_message_back("(while in query pipeline init)"));
+                }
+            }
+
+            info!(
+                "Init pipeline successfully, query_id: {:?}, elapsed: {:?}",
+                self.settings.query_id,
+                instant.elapsed()
+            );
+        }
+
+        let mut init_schedule_queue = unsafe { graph.init_schedule_queue(self.threads_num)? };
+
+        let mut wakeup_worker_id = 0;
+        while let Some(proc) = init_schedule_queue.async_queue.pop_front() {
+            ScheduleQueue::schedule_async_task(
+                proc.clone(),
+                self.settings.query_id.clone(),
+                &self.async_runtime,
+                wakeup_worker_id,
+                self.workers_condvar.clone(),
+                self.global_tasks_queue.clone(),
+            );
+            wakeup_worker_id += 1;
+
+            if wakeup_worker_id == self.threads_num {
+                wakeup_worker_id = 0;
+            }
+        }
+
+        let sync_queue = std::mem::take(&mut init_schedule_queue.sync_queue);
+        self.global_tasks_queue.init_sync_tasks(sync_queue);
+
+        self.start_executor_daemon()
     }
 
     fn start_executor_daemon(self: &Arc<Self>) -> Result<()> {
@@ -392,6 +398,8 @@ impl QueryPipelineExecutor {
     ///
     /// Method is thread unsafe and require thread safe call
     pub unsafe fn execute_single_thread(self: &Arc<Self>, thread_num: usize) -> Result<()> {
+        self.init_schedule(self.graph.clone())?;
+
         let workers_condvar = self.workers_condvar.clone();
         let mut context = ExecutorWorkerContext::create(thread_num, workers_condvar);
 
@@ -415,7 +423,7 @@ impl QueryPipelineExecutor {
                                     schedule_queue.schedule(
                                         &self.global_tasks_queue,
                                         &mut context,
-                                        self,
+                                        &self.async_runtime,
                                     );
                                 }
                                 Err(cause) => {

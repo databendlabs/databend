@@ -141,10 +141,10 @@ impl QueryExecutor for ServiceQueryExecutor {
     ) -> Result<Vec<DataBlock>> {
         let build_res = build_query_pipeline_without_render_result_set(&self.ctx, plan).await?;
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
-        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
-        self.ctx.set_executor(pulling_executor.get_inner())?;
+        let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+        self.ctx.set_query_handle(executor.start().await?)?;
 
-        PullingExecutorStream::create(pulling_executor)?
+        PullingExecutorStream::create(executor)?
             .try_collect::<Vec<DataBlock>>()
             .await
     }
