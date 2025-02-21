@@ -73,6 +73,7 @@ use crate::background_config::BackgroundConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
+use crate::toml::TomlIgnored;
 use crate::DATABEND_COMMIT_VERSION;
 
 const CATALOG_HIVE: &str = "hive";
@@ -217,7 +218,10 @@ impl Config {
             };
 
             if !config_file.is_empty() {
-                builder = builder.collect(from_file(Toml, &config_file));
+                let toml = TomlIgnored::new(Box::new(|path| {
+                    log::warn!("unknown field in config: {}", &path);
+                }));
+                builder = builder.collect(from_file(toml, &config_file));
             }
         }
 
