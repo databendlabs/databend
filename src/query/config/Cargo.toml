@@ -32,6 +32,8 @@ serde = { workspace = true }
 serde_with = { workspace = true }
 serfig = { workspace = true }
 serde_ignored = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

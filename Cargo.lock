@@ -3167,6 +3167,7 @@ dependencies = [
 name = "databend-common-config"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono-tz 0.8.6",
  "clap",
  "databend-common-base",
@@ -3182,6 +3183,7 @@ dependencies = [
  "serde_ignored",
  "serde_with",
  "serfig",
+ "toml 0.8.19",
 ]
 
 [[package]]
