@@ -49,11 +49,18 @@ impl AttachTableHandler for RealAttachTableHandler {
         let operator = init_operator(sp)?;
         check_operator(&operator, sp).await?;
 
-        let hint = load_last_snapshot_hint(storage_prefix, &operator).await?;
-
-        let hint = hint.unwrap();
+        let hint = load_last_snapshot_hint(storage_prefix, &operator)
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::StorageOther(format!(
+                    "hint file of table {}.{} does not exist",
+                    &plan.database, &plan.table
+                ))
+            })?;
 
         let reader = MetaReaders::table_snapshot_reader(operator.clone());
+
+        // TODO duplicated code
         let snapshot_full_path = hint.snapshot_full_path;
         let info = operator.info();
         let root = info.root();
