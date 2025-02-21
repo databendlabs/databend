@@ -91,7 +91,7 @@ pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
     let option_type = map(
         rule! {
-            TYPE ~ "=" ~ ( TSV | CSV | NDJSON | PARQUET | JSON | ORC)
+            TYPE ~ "=" ~ ( TSV | CSV | NDJSON | PARQUET | JSON | ORC | AVRO)
         },
         |(_, _, v)| {
             (
