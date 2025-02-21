@@ -12,6 +12,8 @@ databend-common-config = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-meta-control = { workspace = true }
+databend-meta = { workspace = true }
 
 anyhow = { workspace = true }
 async-stream = { workspace = true }

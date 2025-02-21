@@ -14,6 +14,7 @@
 
 use anyhow::Result;
 use bendsave::backup;
+use bendsave::restore;
 use clap::Parser;
 use clap::Subcommand;
 use logforth::append;
@@ -34,23 +35,29 @@ enum Commands {
     /// Create backups of cluster data and metadata
     Backup {
         /// Configuration file path
-        #[arg(short, long)]
+        #[arg(long)]
         from: String,
         /// Backup destination
-        #[arg(short, long)]
+        #[arg(long)]
         to: String,
     },
 
     /// Restore a Databend cluster from a backup
     Restore {
         /// Backup manifest file path
-        #[arg(short, long)]
+        #[arg(long)]
         from: String,
-        /// Target configuration file path
-        #[arg(short, long)]
-        to: String,
+        /// The target checkpoint to restore
+        #[arg(long)]
+        checkpoint: String,
+        /// Target configuration file path of databend query
+        #[arg(long)]
+        to_query: String,
+        /// Target configuration file path of databend meta
+        #[arg(long)]
+        to_meta: String,
         /// Confirm restoration and perform it immediately
-        #[arg(short, long, default_value_t = false)]
+        #[arg(long, default_value_t = false)]
         confirm: bool,
     },
     // /// List all backups in the specified location
@@ -77,18 +84,27 @@ async fn main() -> Result<()> {
 
     match &cli.command {
         Commands::Backup { from, to } => {
-            // Implement backup functionality here
             println!("Backing up from {} to {}", from, to);
             backup(from, to).await?;
         }
-        Commands::Restore { from, to, confirm } => {
-            // Implement restore functionality here
+        Commands::Restore {
+            from,
+            checkpoint,
+            to_query,
+            to_meta,
+            confirm,
+        } => {
             if *confirm {
-                println!("Restoring from {} to {} with confirmation", from, to);
-                // TODO: Add actual restore logic with confirmation
+                println!(
+                    "Restoring from {} at checkpoint {} to query {} and meta {} with confirmation",
+                    from, checkpoint, to_query, to_meta
+                );
+                restore(from, checkpoint, to_query, to_meta).await?;
             } else {
-                println!("Dry-run restore from {} to {}", from, to);
-                // TODO: Add dry-run restore logic
+                println!(
+                    "Dry-run restore from {} at checkout {}  query {} and meta {}",
+                    from, checkpoint, to_query, to_meta
+                );
             }
         }
     }

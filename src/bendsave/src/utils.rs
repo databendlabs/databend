@@ -13,4 +13,4 @@
 // limitations under the License.
 
 /// The backup path for databend meta.
-pub static DATABEND_META_BACKUP_PATH: &'static str = "databend_meta.db";
+pub static DATABEND_META_BACKUP_PATH: &str = "databend_meta.db";

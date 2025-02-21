@@ -18,3 +18,4 @@ pub mod utils;
 mod backup;
 pub use backup::backup;
 mod restore;
+pub use restore::restore;

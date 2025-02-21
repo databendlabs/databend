@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use anyhow::Result;
@@ -25,6 +26,7 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::Config;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_types::protobuf::ExportRequest;
 use databend_common_storage::init_operator;
@@ -38,7 +40,7 @@ use opendal::Operator;
 /// Load the configuration file and return the operator for databend.
 ///
 /// The given input is the path to databend's configuration file.
-pub fn load_databend_storage(path: &str) -> Result<Operator> {
+pub fn load_query_storage(path: &str) -> Result<Operator> {
     GlobalInstance::init_production();
 
     let content = std::fs::read_to_string(path)?;
@@ -54,6 +56,18 @@ pub fn load_databend_storage(path: &str) -> Result<Operator> {
     Ok(op)
 }
 
+/// Load the configuration file of databend meta.
+///
+/// The given input is the path to databend meta's configuration file.
+pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
+    let content = std::fs::read_to_string(path)?;
+    let outer_config: databend_meta::configs::outer_v0::Config = toml::from_str(&content)?;
+    let inner_config: databend_meta::configs::Config = outer_config.into();
+
+    debug!("databend meta storage loaded: {:?}", inner_config);
+    Ok(inner_config)
+}
+
 /// Load the databend meta service client
 ///
 /// This will load databend meta as a stream of bytes.
@@ -64,9 +78,15 @@ pub fn load_databend_storage(path: &str) -> Result<Operator> {
 /// {"xx": "yy"}\n
 /// {"xx": "bb"}\n
 /// ```
-pub async fn load_databend_meta() -> Result<impl TryStream<Ok = Bytes, Error = anyhow::Error>> {
+pub async fn load_databend_meta() -> Result<(
+    Arc<ClientHandle>,
+    impl TryStream<Ok = Bytes, Error = anyhow::Error>,
+)> {
     let cfg = GlobalConfig::instance();
-    let meta_client = MetaGrpcClient::try_new(&cfg.meta.to_meta_grpc_client_conf())?;
+    let grpc_client_conf = cfg.meta.to_meta_grpc_client_conf();
+    debug!("connect meta services on {:?}", grpc_client_conf.endpoints);
+
+    let meta_client = MetaGrpcClient::try_new(&grpc_client_conf)?;
     let mut established_client = meta_client.make_established_client().await?;
 
     // Convert stream from meta chunks to bytes.
@@ -75,18 +95,18 @@ pub async fn load_databend_meta() -> Result<impl TryStream<Ok = Bytes, Error = a
         .await?
         .into_inner()
         .map_ok(|v| {
+            debug!("load databend meta data with {} entries", v.data.len());
             let mut bs = BytesMut::with_capacity(
                 v.data.len() + v.data.iter().map(|v| v.len()).sum::<usize>(),
             );
             v.data.into_iter().for_each(|b| {
                 bs.extend_from_slice(b.as_bytes());
-                bs.put_u8('\n' as u8);
+                bs.put_u8(b'\n');
             });
             bs.freeze()
         })
         .map_err(|err| anyhow!("bandsave load databend meta data failed: {err:?}"));
-
-    Ok(stream)
+    Ok((meta_client, stream))
 }
 
 /// Load epochfs storage from uri.
@@ -141,13 +161,24 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_load_databend_storage() -> Result<()> {
+    async fn test_load_query_storage() -> Result<()> {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let file_path = Path::new(manifest_dir).join("tests/fixtures/databend_query_config.toml");
-        let op = load_databend_storage(&file_path.to_string_lossy())?;
+        let op = load_query_storage(&file_path.to_string_lossy())?;
 
         assert_eq!(op.info().scheme(), Scheme::Fs);
         assert_eq!(op.info().root(), "/tmp/bendsave");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_load_meta_config() -> Result<()> {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let file_path = Path::new(manifest_dir).join("tests/fixtures/databend_meta_config.toml");
+        let cfg = load_meta_config(&file_path.to_string_lossy())?;
+
+        assert_eq!(cfg.raft_config.raft_dir, "./.databend/meta1");
+        assert_eq!(cfg.raft_config.id, 1);
         Ok(())
     }
 

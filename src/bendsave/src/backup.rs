@@ -21,24 +21,29 @@ use opendal::Buffer;
 use opendal::Operator;
 
 use crate::storage::load_databend_meta;
-use crate::storage::load_databend_storage;
 use crate::storage::load_epochfs_storage;
+use crate::storage::load_query_storage;
 use crate::utils::DATABEND_META_BACKUP_PATH;
 
 pub async fn backup(from: &str, to: &str) -> Result<()> {
-    let databend_storage = load_databend_storage(from)?;
+    let databend_storage = load_query_storage(from)?;
     let epochfs_op = load_epochfs_storage(to).await?;
     let epochfs_storage = epochfs::Fs::new(epochfs_op).await?;
 
     // backup metadata first.
     backup_meta(&epochfs_storage).await?;
     backup_query(databend_storage, &epochfs_storage).await?;
+
+    let checkpoint = epochfs_storage.commit().await?;
+    info!("backup to checkpoint: {checkpoint}");
     Ok(())
 }
 
 /// Backup the entire databend meta to epochfs.
 pub async fn backup_meta(efs: &epochfs::Fs) -> Result<()> {
-    let stream = load_databend_meta().await?.map_ok(Buffer::from);
+    let (_client_handle, stream) = load_databend_meta().await?;
+    let stream = stream.map_ok(Buffer::from);
+
     let mut file = efs.create_file(DATABEND_META_BACKUP_PATH).await?;
     file.sink(stream).await?;
     file.commit().await?;
