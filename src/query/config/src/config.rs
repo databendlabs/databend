@@ -1398,7 +1398,7 @@ impl serde::de::Visitor<'_> for SettingVisitor {
 
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     #[clap(long, value_name = "VALUE", default_value = "admin")]
@@ -2514,10 +2514,9 @@ impl From<InnerOTLPEndpointConfig> for OTLPEndpointConfig {
 }
 
 /// Meta config group.
-/// deny_unknown_fields to check unknown field, like the deprecated `address`.
 /// TODO(xuanwo): All meta_xxx should be rename to xxx.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     #[clap(long = "meta-embedded-dir", value_name = "VALUE", default_value_t)]
@@ -2723,7 +2722,7 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
@@ -2961,7 +2960,7 @@ impl Default for DiskCacheKeyReloadPolicy {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
     #[clap(
@@ -2999,7 +2998,7 @@ impl Default for DiskCacheConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
     #[clap(long, value_name = "VALUE", default_value = "")]
@@ -3025,7 +3024,7 @@ impl Default for SpillConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct ResourcesManagementConfig {
     #[clap(long = "type", value_name = "VALUE", default_value = "self_managed")]
     #[serde(rename = "type")]
