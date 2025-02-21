@@ -143,7 +143,7 @@ impl AccumulatingTransform for BlockCompactBuilder {
     }
 }
 
-pub(crate) fn memory_size(data_block: &DataBlock) -> usize {
+pub fn memory_size(data_block: &DataBlock) -> usize {
     data_block
         .columns()
         .iter()

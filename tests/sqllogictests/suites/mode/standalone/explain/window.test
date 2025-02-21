@@ -56,7 +56,7 @@ CompoundBlockOperator(Project) × 1
       SortPartialTransform × 4
         Merge to Resize × 4
           Transform Window × 1
-            TransformWindowPartitionCollect × 1
+            TransformWindowPartitionCollect(Sort) × 1
               ShuffleMergePartition(Window) × 1
                 ShufflePartition(Window) × 1
                   DeserializeDataTransform × 1
@@ -78,7 +78,7 @@ CompoundBlockOperator(Project) × 1
         SortPartialTransform × 4
           Merge to Resize × 4
             Transform Window × 1
-              TransformWindowPartitionCollect × 1
+              TransformWindowPartitionCollect(Sort) × 1
                 ShuffleMergePartition(Window) × 1
                   ShufflePartition(Window) × 1
                     DeserializeDataTransform × 1
@@ -368,7 +368,7 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      TransformWindowPartitionCollect × 1
+      TransformWindowPartitionCollect(Sort) × 1
         ShuffleMergePartition(Window) × 1
           ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
@@ -386,7 +386,7 @@ explain pipeline select a, sum(a) over (partition by a order by a desc) from t l
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      TransformWindowPartitionCollect × 1
+      TransformWindowPartitionCollect(Sort) × 1
         ShuffleMergePartition(Window) × 1
           ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
@@ -405,7 +405,7 @@ explain pipeline select a, dense_rank() over (partition by a order by a desc) fr
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      TransformWindowPartitionCollect × 1
+      TransformWindowPartitionCollect(Sort) × 1
         ShuffleMergePartition(Window) × 1
           ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
@@ -419,7 +419,7 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      TransformWindowPartitionCollect × 1
+      TransformWindowPartitionCollect(Sort) × 1
         ShuffleMergePartition(Window) × 1
           ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
@@ -433,7 +433,7 @@ explain pipeline select a, sum(a) over (partition by a order by a desc rows betw
 CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     Transform Window × 1
-      TransformWindowPartitionCollect × 1
+      TransformWindowPartitionCollect(Sort) × 1
         ShuffleMergePartition(Window) × 1
           ShufflePartition(Window) × 1
             DeserializeDataTransform × 1
@@ -453,7 +453,7 @@ CompoundBlockOperator(Project) × 1
           SortPartialTransform × 4
             Merge to Resize × 4
               Transform Window × 1
-                TransformWindowPartitionCollect × 1
+                TransformWindowPartitionCollect(Sort) × 1
                   ShuffleMergePartition(Window) × 1
                     ShufflePartition(Window) × 1
                       DeserializeDataTransform × 1
@@ -472,7 +472,7 @@ CompoundBlockOperator(Project) × 1
           SortPartialTransform × 4
             Merge to Resize × 4
               Transform Window × 1
-                TransformWindowPartitionCollect × 1
+                TransformWindowPartitionCollect(Sort) × 1
                   ShuffleMergePartition(Window) × 1
                     ShufflePartition(Window) × 1
                       TransformFilter × 1
@@ -536,7 +536,7 @@ CompoundBlockOperator(Project) × 1
   LimitTransform × 1
     TransformFilter × 1
       Transform Window × 1
-        TransformWindowPartitionCollect × 1
+        TransformWindowPartitionCollect(Sort) × 1
           ShuffleMergePartition(WindowTopN) × 1
             ShufflePartition(WindowTopN) × 1
               DeserializeDataTransform × 1
@@ -574,7 +574,7 @@ explain pipeline select number, lead(number,1, 0) over (partition by number % 3 
 CompoundBlockOperator(Project) × 1
   Transform Window × 1
     Transform Window × 1
-      TransformWindowPartitionCollect × 1
+      TransformWindowPartitionCollect(Sort) × 1
         ShuffleMergePartition(Window) × 1
           ShufflePartition(Window) × 1
             CompoundBlockOperator(Map) × 1

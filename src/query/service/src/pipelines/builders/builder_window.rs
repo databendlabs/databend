@@ -30,6 +30,7 @@ use opendal::services::Fs;
 use opendal::Operator;
 
 use crate::pipelines::processors::transforms::FrameBound;
+use crate::pipelines::processors::transforms::SortStrategy;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowFunctionInfo;
@@ -215,6 +216,12 @@ impl PipelineBuilder {
 
         let processor_id = AtomicUsize::new(0);
         self.main_pipeline.add_transform(|input, output| {
+            let strategy = SortStrategy::try_create(
+                &settings,
+                sort_desc.clone(),
+                plan_schema.clone(),
+                have_order_col,
+            )?;
             Ok(ProcessorPtr::create(Box::new(
                 TransformWindowPartitionCollect::new(
                     self.ctx.clone(),
@@ -226,9 +233,7 @@ impl PipelineBuilder {
                     num_partitions,
                     window_spill_settings.clone(),
                     disk_spill.clone(),
-                    sort_desc.clone(),
-                    plan_schema.clone(),
-                    have_order_col,
+                    strategy,
                 )?,
             )))
         })

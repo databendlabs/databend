@@ -73,7 +73,6 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::AsyncFunction(_) => "AsyncFunction".to_string(),
         RelOperator::Mutation(_) => "MergeInto".to_string(),
         RelOperator::MutationSource(_) => "MutationSource".to_string(),
-        RelOperator::Recluster(_) => "Recluster".to_string(),
         RelOperator::CompactBlock(_) => "CompactBlock".to_string(),
     }
 }
