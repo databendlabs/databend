@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::ffi::OsString;
+use std::io::Write;
 
 use clap::Parser;
 use databend_common_config::Config;
@@ -31,4 +32,21 @@ fn test_config_default() {
         setting_default, config_default,
         "default setting is different from default config, please check again"
     )
+}
+
+#[test]
+fn test_load_config() {
+    let conf = "
+[query]
+max_active_sessions = 256
+shutdown_wait_timeout_ms = 5000
+unknown_field = \"123\"
+    ";
+    let mut temp_file = tempfile::NamedTempFile::new().unwrap();
+    temp_file.write_all(conf.as_bytes()).unwrap();
+    let temp_path = temp_file.path().to_str().unwrap().to_string();
+
+    let config = Config::load(Some(temp_path), false).unwrap();
+    assert_eq!(config.query.max_active_sessions, 256);
+    assert_eq!(config.query.shutdown_wait_timeout_ms, 5000);
 }
