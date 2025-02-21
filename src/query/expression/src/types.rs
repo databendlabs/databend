@@ -39,6 +39,7 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ops::Range;
 
+pub use databend_common_base::base::OrderedFloat;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -73,6 +74,10 @@ pub use self::string::StringType;
 pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::property::Domain;
+use crate::types::date::DATE_MAX;
+use crate::types::date::DATE_MIN;
+use crate::types::timestamp::TIMESTAMP_MAX;
+use crate::types::timestamp::TIMESTAMP_MIN;
 use crate::values::Column;
 use crate::values::Scalar;
 use crate::ColumnBuilder;
@@ -209,6 +214,63 @@ impl DataType {
             DataType::Array(ty) => ty.has_nested_nullable(),
             DataType::Map(ty) => ty.has_nested_nullable(),
             DataType::Tuple(tys) => tys.iter().any(|ty| ty.has_nested_nullable()),
+        }
+    }
+
+    pub fn infinity(&self) -> Result<Scalar, String> {
+        match &self {
+            DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MAX)),
+            DataType::Date => Ok(Scalar::Date(DATE_MAX)),
+            DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
+                OrderedFloat(f32::INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int32) => {
+                Ok(Scalar::Number(NumberScalar::Int32(i32::MAX)))
+            }
+            DataType::Number(NumberDataType::Int16) => {
+                Ok(Scalar::Number(NumberScalar::Int16(i16::MAX)))
+            }
+            DataType::Number(NumberDataType::Int8) => {
+                Ok(Scalar::Number(NumberScalar::Int8(i8::MAX)))
+            }
+            DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
+                OrderedFloat(f64::INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int64) => {
+                Ok(Scalar::Number(NumberScalar::Int64(i64::MAX)))
+            }
+            _ => Result::Err(format!(
+                "only support numeric types and time types, but got {:?}",
+                self
+            )),
+        }
+    }
+    pub fn ninfinity(&self) -> Result<Scalar, String> {
+        match &self {
+            DataType::Timestamp => Ok(Scalar::Timestamp(TIMESTAMP_MIN)),
+            DataType::Date => Ok(Scalar::Date(DATE_MIN)),
+            DataType::Number(NumberDataType::Float32) => Ok(Scalar::Number(NumberScalar::Float32(
+                OrderedFloat(f32::NEG_INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int32) => {
+                Ok(Scalar::Number(NumberScalar::Int32(i32::MIN)))
+            }
+            DataType::Number(NumberDataType::Int16) => {
+                Ok(Scalar::Number(NumberScalar::Int16(i16::MIN)))
+            }
+            DataType::Number(NumberDataType::Int8) => {
+                Ok(Scalar::Number(NumberScalar::Int8(i8::MIN)))
+            }
+            DataType::Number(NumberDataType::Float64) => Ok(Scalar::Number(NumberScalar::Float64(
+                OrderedFloat(f64::NEG_INFINITY),
+            ))),
+            DataType::Number(NumberDataType::Int64) => {
+                Ok(Scalar::Number(NumberScalar::Int64(i64::MIN)))
+            }
+            _ => Result::Err(format!(
+                "only support numeric types and time types, but got {:?}",
+                self
+            )),
         }
     }
 

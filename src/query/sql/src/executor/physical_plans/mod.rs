@@ -101,6 +101,8 @@ pub use physical_sort::Sort;
 pub use physical_table_scan::TableScan;
 pub use physical_udf::Udf;
 pub use physical_udf::UdfFunctionDesc;
+mod physical_asof_join;
+pub use physical_asof_join::*;
 pub use physical_union_all::UnionAll;
 pub use physical_window::*;
 pub use physical_window_partition::*;
