@@ -30,7 +30,14 @@ Fragment 0:
     ExchangeSink
     ├── output columns: []
     ├── destination fragment: [1]
-    └── Mutation Source
+    └── MutationSource
+        ├── table: default.db1.t1
+        ├── output columns: [a (#0), b (#1), _predicate (#2)]
+        ├── filters: [is_true(t1.b (#1) > '2022-12-31')]
+        ├── read rows: 1
+        ├── read size: < 1 KiB
+        ├── partitions total: 2
+        └── partitions scanned: 1
 (empty)
 (empty)
 Fragment 1:
@@ -54,7 +61,7 @@ Fragment 0:
     ExchangeSink
     ├── output columns: []
     ├── destination fragment: [1]
-    └── Mutation Source
+    └── EmptyResultScan
 (empty)
 (empty)
 Fragment 1:

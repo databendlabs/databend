@@ -180,23 +180,25 @@ impl Interpreter for ExplainInterpreter {
                     ignore_result,
                     ..
                 } => {
-                    self.explain_analyze(
-                        s_expr,
-                        metadata,
-                        bind_context.column_set(),
-                        *ignore_result,
-                    )
-                    .await?
+                    let mut builder =
+                        PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
+                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
+                    self.explain_analyze(plan, metadata, *ignore_result).await?
                 }
-                Plan::DataMutation { s_expr, .. } => {
-                    let plan: Mutation = s_expr.plan().clone().try_into()?;
-                    self.explain_analyze(
-                        s_expr.child(0)?,
-                        &plan.metadata,
-                        *plan.required_columns.clone(),
-                        true,
-                    )
-                    .await?
+                Plan::DataMutation {
+                    s_expr,
+                    schema,
+                    metadata,
+                } => {
+                    let mutation: Mutation = s_expr.plan().clone().try_into()?;
+                    let interpreter = MutationInterpreter::try_create(
+                        self.ctx.clone(),
+                        *s_expr.clone(),
+                        schema.clone(),
+                        metadata.clone(),
+                    )?;
+                    let plan = interpreter.build_physical_plan(&mutation, None).await?;
+                    self.explain_analyze(plan, metadata, true).await?
                 }
                 _ => Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN ANALYZE statement",
@@ -433,20 +435,22 @@ impl ExplainInterpreter {
     #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
-        s_expr: &SExpr,
+        plan: PhysicalPlan,
         metadata: &MetadataRef,
-        required: ColumnSet,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
-        let plan = builder.build(s_expr, required).await?;
-        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
+        let plan = match &plan {
+            // avoid commit.
+            PhysicalPlan::CommitSink(commit) => commit.input.as_ref(),
+            other => other,
+        };
+        let build_res = build_query_pipeline(&self.ctx, &[], plan, ignore_result).await?;
 
         // Drain the data
         let query_profiles = self.execute_and_get_profiles(build_res)?;
 
         let result = if self.partial {
-            format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
+            format_partial_tree(plan, metadata, &query_profiles)?.format_pretty()?
         } else {
             plan.format(metadata.clone(), query_profiles.clone())?
                 .format_pretty()?

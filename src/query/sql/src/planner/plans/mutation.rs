@@ -81,13 +81,13 @@ pub struct Mutation {
 
     // MutationStrategy::Direct related variables.
     pub predicate_column_index: Option<usize>,
-    pub truncate_table: bool,
-    pub direct_filter: Option<ScalarExpr>,
+    pub direct_filter: Vec<ScalarExpr>,
+    pub predicate_always_false: bool,
 }
 
 impl std::fmt::Debug for Mutation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("Merge Into")
+        f.debug_struct("Mutation")
             .field("catalog", &self.catalog_name)
             .field("database", &self.database_name)
             .field("table", &self.table_name)

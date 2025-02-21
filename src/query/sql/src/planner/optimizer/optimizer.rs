@@ -38,6 +38,7 @@ use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::join::SingleToInnerOptimizer;
+use crate::optimizer::mutation::PushDownFilterMutationOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
@@ -52,6 +53,7 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
+use crate::plans::MutationSource;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
@@ -556,6 +558,12 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     if !mutation.matched_evaluators.is_empty() {
         match inner_rel_op {
             RelOp::ConstantTableScan => {
+                if matches!(
+                    mutation.strategy,
+                    MutationStrategy::Direct | MutationStrategy::MatchedOnly
+                ) {
+                    mutation.predicate_always_false = true;
+                }
                 mutation.matched_evaluators = vec![MatchedEvaluator {
                     condition: None,
                     update: None,
@@ -609,7 +617,22 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
                 input_s_expr
             }
         }
-        MutationType::Update | MutationType::Delete => input_s_expr,
+        MutationType::Update | MutationType::Delete => {
+            if mutation.strategy == MutationStrategy::Direct {
+                let push_down_filter =
+                    PushDownFilterMutationOptimizer::new(opt_ctx.metadata.clone());
+                if push_down_filter.matcher.matches(&input_s_expr) {
+                    input_s_expr = push_down_filter.optimize(&input_s_expr)?;
+                    let mutation_source: MutationSource = input_s_expr.plan().clone().try_into()?;
+                    mutation.direct_filter = mutation_source.predicates;
+                    if let Some(index) = mutation_source.predicate_column_index {
+                        mutation.required_columns.insert(index);
+                        mutation.predicate_column_index = Some(index);
+                    }
+                }
+            }
+            input_s_expr
+        }
     };
 
     Ok(Plan::DataMutation {

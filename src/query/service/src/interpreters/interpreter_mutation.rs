@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -202,7 +203,7 @@ impl MutationInterpreter {
     ) -> Result<MutationBuildInfo> {
         let table_info = fuse_table.get_table_info().clone();
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
-        let partitions = self
+        let (statistics, partitions) = self
             .mutation_source_partitions(mutation, fuse_table, table_snapshot.clone())
             .await?;
         Ok(MutationBuildInfo {
@@ -210,6 +211,7 @@ impl MutationInterpreter {
             table_snapshot,
             update_stream_meta,
             partitions,
+            statistics,
         })
     }
 
@@ -279,27 +281,16 @@ impl MutationInterpreter {
         fuse_table: &FuseTable,
         snapshot: &Option<Arc<TableSnapshot>>,
     ) -> Result<Option<PipelineBuildResult>> {
-        // Check if the filter is a constant.
-        let mut truncate_table = mutation.truncate_table;
-        if let Some(filter) = &mutation.direct_filter
-            && filter.used_columns().is_empty()
-        {
-            let filters = create_push_down_filters(filter)?;
-            let filter_result = fuse_table.try_eval_const(
-                self.ctx.clone(),
-                &fuse_table.schema(),
-                &filters.filter,
-            )?;
-            if mutation.mutation_type == MutationType::Delete && filter_result {
-                // The delete condition is always true, truncate the table.
-                truncate_table = true;
-            } else if !filter_result {
-                // The update/delete condition is always false, do nothing.
-                return self.no_effect_mutation();
-            }
+        if mutation.predicate_always_false {
+            // When the condition is always false, do nothing.
+            // This only applies to update/delete/merge into match only.
+            return self.no_effect_mutation();
         }
 
-        if mutation.mutation_type == MutationType::Merge {
+        if matches!(
+            mutation.strategy,
+            MutationStrategy::MixedMatched | MutationStrategy::NotMatchedOnly
+        ) {
             return Ok(None);
         }
 
@@ -313,29 +304,30 @@ impl MutationInterpreter {
             return self.no_effect_mutation();
         }
 
-        if mutation.mutation_type == MutationType::Delete {
-            if truncate_table {
-                let mut build_res = PipelineBuildResult::create();
-                self.ctx.add_mutation_status(MutationStatus {
-                    insert_rows: 0,
-                    deleted_rows: snapshot.summary.row_count,
-                    update_rows: 0,
-                });
-                // deleting the whole table... just a truncate
-                fuse_table
-                    .do_truncate(
-                        self.ctx.clone(),
-                        &mut build_res.main_pipeline,
-                        TruncateMode::Delete,
-                    )
-                    .await?;
-                Ok(Some(build_res))
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
+        if mutation.mutation_type != MutationType::Delete
+            || mutation.strategy != MutationStrategy::Direct
+            || !mutation.direct_filter.is_empty()
+        {
+            return Ok(None);
         }
+
+        // There is no filter and the mutation type is delete,
+        // we can truncate the table directly.
+        let mut build_res = PipelineBuildResult::create();
+        self.ctx.add_mutation_status(MutationStatus {
+            insert_rows: 0,
+            deleted_rows: snapshot.summary.row_count,
+            update_rows: 0,
+        });
+        // deleting the whole table... just a truncate
+        fuse_table
+            .do_truncate(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                TruncateMode::Delete,
+            )
+            .await?;
+        Ok(Some(build_res))
     }
 
     fn no_effect_mutation(&self) -> Result<Option<PipelineBuildResult>> {
@@ -352,16 +344,24 @@ impl MutationInterpreter {
         mutation: &Mutation,
         fuse_table: &FuseTable,
         table_snapshot: Option<Arc<TableSnapshot>>,
-    ) -> Result<Option<Partitions>> {
+    ) -> Result<(PartStatistics, Partitions)> {
         if mutation.strategy == MutationStrategy::Direct {
             let Some(table_snapshot) = table_snapshot else {
-                return Ok(Some(Partitions::create(PartitionsShuffleKind::Mod, vec![])));
+                return Ok(Default::default());
             };
-            let (filters, filter_used_columns) = if let Some(filter) = &mutation.direct_filter {
-                (
-                    Some(create_push_down_filters(filter)?),
-                    filter.used_columns().into_iter().collect(),
-                )
+            let (filters, filter_used_columns) = if !mutation.direct_filter.is_empty() {
+                let filters = create_push_down_filters(
+                    &self.ctx.get_function_context()?,
+                    &mutation.direct_filter,
+                )?;
+                let filter_used_columns = mutation
+                    .direct_filter
+                    .iter()
+                    .flat_map(|expr| expr.used_columns())
+                    .collect::<HashSet<_>>()
+                    .into_iter()
+                    .collect();
+                (Some(filters), filter_used_columns)
             } else {
                 (None, vec![])
             };
@@ -373,20 +373,18 @@ impl MutationInterpreter {
             } else {
                 (false, false)
             };
-            Ok(Some(
-                fuse_table
-                    .mutation_read_partitions(
-                        self.ctx.clone(),
-                        table_snapshot,
-                        filter_used_columns,
-                        filters,
-                        is_lazy,
-                        is_delete,
-                    )
-                    .await?,
-            ))
+            fuse_table
+                .mutation_read_partitions(
+                    self.ctx.clone(),
+                    table_snapshot,
+                    filter_used_columns,
+                    filters,
+                    is_lazy,
+                    is_delete,
+                )
+                .await
         } else {
-            Ok(None)
+            Ok(Default::default())
         }
     }
 }
