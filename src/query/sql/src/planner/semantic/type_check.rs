@@ -4107,19 +4107,22 @@ impl<'a> TypeChecker<'a> {
             code: code_blob.into(),
         });
 
-        let mut arguments = Vec::with_capacity(arg_types.len());
-        for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
-            let box (arg, ty) = self.resolve(argument)?;
-            if ty != *dest_type {
-                arguments.push(wrap_cast(&arg, dest_type));
-            } else {
-                arguments.push(arg);
-            }
-        }
+        let arguments = args
+            .iter()
+            .zip(arg_types.iter())
+            .map(|(argument, dest_type)| {
+                let box (arg, ty) = self.resolve(argument)?;
+                Ok(if ty == *dest_type {
+                    arg
+                } else {
+                    wrap_cast(&arg, dest_type)
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let display_name = format!(
             "{name}({})",
-            arg_types.iter().map(|arg| format!("{arg}")).join(", ")
+            args.iter().map(|arg| format!("{:#}", arg)).join(", ")
         );
 
         self.bind_context.have_udf_script = true;
