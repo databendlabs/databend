@@ -33,6 +33,7 @@ use databend_common_storage::init_operator;
 use futures::TryStream;
 use futures::TryStreamExt;
 use log::debug;
+use log::warn;
 use opendal::layers::LoggingLayer;
 use opendal::layers::RetryLayer;
 use opendal::Operator;
@@ -63,6 +64,13 @@ pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
     let content = std::fs::read_to_string(path)?;
     let outer_config: databend_meta::configs::outer_v0::Config = toml::from_str(&content)?;
     let inner_config: databend_meta::configs::Config = outer_config.into();
+
+    if !inner_config.raft_config.raft_dir.starts_with("/") {
+        return Err(anyhow!(
+            "raft_dir of meta service must be an absolute path, but got: {:?}",
+            inner_config.raft_config.raft_dir
+        ));
+    }
 
     debug!("databend meta storage loaded: {:?}", inner_config);
     Ok(inner_config)
