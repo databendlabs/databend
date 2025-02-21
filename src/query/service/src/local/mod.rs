@@ -42,7 +42,7 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
     };
 
     env::set_var("META_EMBEDDED_DIR", path.join("_meta"));
-    let mut conf: InnerConfig = Config::load(true).unwrap().try_into().unwrap();
+    let mut conf: InnerConfig = Config::load(None, true).unwrap().try_into().unwrap();
     conf.storage.allow_insecure = true;
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         root: path.join("_data").to_str().unwrap().to_owned(),
