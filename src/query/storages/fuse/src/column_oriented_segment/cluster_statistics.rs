@@ -12,10 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_readers;
+use databend_common_expression::Scalar;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 
-pub use meta_readers::bytes_reader;
-pub use meta_readers::ColumnOrientedSegmentReader;
-pub use meta_readers::CompactSegmentInfoReader;
-pub use meta_readers::MetaReaders;
-pub use meta_readers::TableSnapshotReader;
+pub trait AbstractClusterStatistics {
+    fn cluster_key_id(&self) -> u32;
+    fn min(&self) -> &Vec<Scalar>;
+    fn max(&self) -> &Vec<Scalar>;
+}
+
+impl AbstractClusterStatistics for ClusterStatistics {
+    fn cluster_key_id(&self) -> u32 {
+        self.cluster_key_id
+    }
+
+    fn min(&self) -> &Vec<Scalar> {
+        &self.min
+    }
+
+    fn max(&self) -> &Vec<Scalar> {
+        &self.max
+    }
+}

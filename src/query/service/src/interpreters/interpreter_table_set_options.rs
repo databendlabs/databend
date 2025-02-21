@@ -27,6 +27,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use log::error;
@@ -81,6 +82,16 @@ impl Interpreter for SetOptionsInterpreter {
                 OPT_KEY_STORAGE_FORMAT
             )));
         }
+
+        // check segment_format
+        if self.plan.set_options.contains_key(OPT_KEY_SEGMENT_FORMAT) {
+            error!("{}", &error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_SEGMENT_FORMAT
+            )));
+        }
+
         if self.plan.set_options.contains_key(OPT_KEY_DATABASE_ID) {
             error!("{}", &error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(

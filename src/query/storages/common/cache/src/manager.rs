@@ -169,6 +169,7 @@ impl CacheManager {
                 MEMORY_CACHE_COMPACT_SEGMENT_INFO,
                 config.table_meta_segment_bytes as usize,
             );
+
             let bloom_index_filter_cache = Self::new_bytes_cache_slot(
                 MEMORY_CACHE_BLOOM_INDEX_FILTER,
                 config.table_bloom_index_filter_size as usize,

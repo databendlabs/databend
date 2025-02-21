@@ -19,9 +19,11 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
-use crate::io::SegmentsIO;
+use crate::column_oriented_segment::AbstractSegment;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentLocation;
+use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+use crate::pruning_pipeline::PrunedSegmentMeta;
 
 pub struct SegmentPruner {
     pub pruning_ctx: Arc<PruningContext>,
@@ -40,10 +42,10 @@ impl SegmentPruner {
     }
 
     #[async_backtrace::framed]
-    pub async fn pruning(
+    pub async fn pruning_generic<T: PrunedSegmentMeta>(
         &self,
         segment_locs: Vec<SegmentLocation>,
-    ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
+    ) -> Result<Vec<(SegmentLocation, Arc<T::Segment>)>> {
         if segment_locs.is_empty() {
             return Ok(vec![]);
         }
@@ -54,7 +56,7 @@ impl SegmentPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
 
         for segment_location in segment_locs {
-            let info = SegmentsIO::read_compact_segment(
+            let info = T::Segment::read_and_deserialize(
                 self.pruning_ctx.dal.clone(),
                 segment_location.location.clone(),
                 self.table_schema.clone(),
@@ -62,7 +64,7 @@ impl SegmentPruner {
             )
             .await?;
 
-            let total_bytes = info.summary.uncompressed_byte_size;
+            let total_bytes = info.summary().uncompressed_byte_size;
             // Perf.
             {
                 metrics_inc_segments_range_pruning_before(1);
@@ -71,7 +73,7 @@ impl SegmentPruner {
                 pruning_stats.set_segments_range_pruning_before(1);
             }
 
-            if range_pruner.should_keep(&info.summary.col_stats, None) {
+            if range_pruner.should_keep(&info.summary().col_stats, None) {
                 // Perf.
                 {
                     metrics_inc_segments_range_pruning_after(1);
@@ -84,5 +86,14 @@ impl SegmentPruner {
             }
         }
         Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    pub async fn pruning(
+        &self,
+        segment_locs: Vec<SegmentLocation>,
+    ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
+        self.pruning_generic::<PrunedCompactSegmentMeta>(segment_locs)
+            .await
     }
 }

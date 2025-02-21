@@ -46,9 +46,10 @@ use databend_common_storages_fuse::operations::SegmentCompactor;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
-use databend_common_storages_fuse::statistics::StatisticsAccumulator;
+use databend_common_storages_fuse::statistics::RowOrientedSegmentBuilder;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::SegmentBuilder;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
@@ -721,7 +722,7 @@ impl CompactSegmentTestFixture {
             tasks.push(async move {
                 let (schema, blocks) =
                     TestFixture::gen_sample_blocks_ex(num_blocks, rows_per_block, 1);
-                let mut stats_acc = StatisticsAccumulator::default();
+                let mut stats_acc = RowOrientedSegmentBuilder::default();
 
                 let mut collected_blocks = vec![];
                 for block in blocks {
@@ -778,10 +779,9 @@ impl CompactSegmentTestFixture {
                     );
 
                     collected_blocks.push(block_meta.clone());
-                    stats_acc.add_with_block_meta(block_meta);
+                    stats_acc.add_block(block_meta).unwrap();
                 }
-                let summary = stats_acc.summary(thresholds, cluster_key_id);
-                let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
+                let segment_info = stats_acc.build(thresholds, cluster_key_id)?;
                 let path = location_gen.gen_segment_info_location();
                 segment_info.write_meta(&data_accessor, &path).await?;
                 Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))

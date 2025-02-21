@@ -34,9 +34,9 @@ use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::ColumnSet;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::operations::new_serialize_segment_processor;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
-use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::meta::Statistics;
@@ -140,8 +140,7 @@ impl PipelineBuilder {
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            let proc = TransformSerializeSegment::new(input, output, fuse_table, block_thresholds);
-            proc.into_processor()
+            new_serialize_segment_processor(input, output, fuse_table, block_thresholds)
         })
     }
 

@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -27,42 +28,44 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::PipeItem;
-use databend_storages_common_cache::CacheAccessor;
-use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
 
+use crate::column_oriented_segment::AbstractSegment;
+use crate::column_oriented_segment::ColumnOrientedSegmentBuilder;
+use crate::column_oriented_segment::SegmentBuilder;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
-use crate::statistics::StatisticsAccumulator;
+use crate::statistics::RowOrientedSegmentBuilder;
+use crate::FuseSegmentFormat;
 use crate::FuseTable;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
-enum State {
+enum State<B: SegmentBuilder> {
     None,
     GenerateSegment,
     SerializedSegment {
         data: Vec<u8>,
         location: String,
-        segment: Arc<SegmentInfo>,
+        segment: B::Segment,
     },
     PreCommitSegment {
         location: String,
-        segment: Arc<SegmentInfo>,
+        segment: B::Segment,
     },
     Finished,
 }
 
-pub struct TransformSerializeSegment {
+pub struct TransformSerializeSegment<B: SegmentBuilder> {
     data_accessor: Operator,
     meta_locations: TableMetaLocationGenerator,
-    accumulator: StatisticsAccumulator,
-    state: State,
+    segment_builder: B,
+    state: State<B>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
@@ -72,14 +75,16 @@ pub struct TransformSerializeSegment {
     default_cluster_key_id: Option<u32>,
 }
 
-impl TransformSerializeSegment {
+impl<B: SegmentBuilder> TransformSerializeSegment<B> {
     pub fn new(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         table: &FuseTable,
         thresholds: BlockThresholds,
+        segment_builder: B,
     ) -> Self {
         let default_cluster_key_id = table.cluster_key_id();
+
         TransformSerializeSegment {
             input,
             output,
@@ -87,7 +92,7 @@ impl TransformSerializeSegment {
             data_accessor: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             state: State::None,
-            accumulator: Default::default(),
+            segment_builder,
             block_per_seg: table
                 .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT)
                 as u64,
@@ -108,8 +113,70 @@ impl TransformSerializeSegment {
     }
 }
 
+pub fn new_serialize_segment_processor(
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    table: &FuseTable,
+    thresholds: BlockThresholds,
+) -> Result<ProcessorPtr> {
+    let block_per_seg = table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+    match table.segment_format {
+        FuseSegmentFormat::Row => {
+            let processor = TransformSerializeSegment::new(
+                input,
+                output,
+                table,
+                thresholds,
+                RowOrientedSegmentBuilder::default(),
+            );
+            Ok(ProcessorPtr::create(Box::new(processor)))
+        }
+        FuseSegmentFormat::Column => {
+            let processor = TransformSerializeSegment::new(
+                input,
+                output,
+                table,
+                thresholds,
+                ColumnOrientedSegmentBuilder::new(table.schema(), block_per_seg),
+            );
+            Ok(ProcessorPtr::create(Box::new(processor)))
+        }
+    }
+}
+
+pub fn new_serialize_segment_pipe_item(
+    input: Arc<InputPort>,
+    output: Arc<OutputPort>,
+    table: &FuseTable,
+    thresholds: BlockThresholds,
+) -> Result<PipeItem> {
+    let block_per_seg = table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+    match table.segment_format {
+        FuseSegmentFormat::Row => {
+            let processor = TransformSerializeSegment::new(
+                input,
+                output,
+                table,
+                thresholds,
+                RowOrientedSegmentBuilder::default(),
+            );
+            Ok(processor.into_pipe_item())
+        }
+        FuseSegmentFormat::Column => {
+            let processor = TransformSerializeSegment::new(
+                input,
+                output,
+                table,
+                thresholds,
+                ColumnOrientedSegmentBuilder::new(table.schema(), block_per_seg),
+            );
+            Ok(processor.into_pipe_item())
+        }
+    }
+}
+
 #[async_trait]
-impl Processor for TransformSerializeSegment {
+impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
     fn name(&self) -> String {
         "TransformSerializeSegment".to_string()
     }
@@ -144,7 +211,7 @@ impl Processor for TransformSerializeSegment {
         }
 
         if self.input.is_finished() {
-            if self.accumulator.summary_row_count != 0 {
+            if self.segment_builder.block_count() != 0 {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
             }
@@ -165,8 +232,8 @@ impl Processor for TransformSerializeSegment {
                 .ok_or_else(|| ErrorCode::Internal("No commit meta. It's a bug"))?
                 .clone();
 
-            self.accumulator.add_with_block_meta(block_meta);
-            if self.accumulator.summary_block_count >= self.block_per_seg {
+            self.segment_builder.add_block(block_meta)?;
+            if self.segment_builder.block_count() >= self.block_per_seg as usize {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
             }
@@ -179,21 +246,20 @@ impl Processor for TransformSerializeSegment {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSegment => {
-                let acc = std::mem::take(&mut self.accumulator);
-                let summary = acc.summary(self.thresholds, self.default_cluster_key_id);
-
-                let segment_info = SegmentInfo::new(acc.blocks_metas, summary);
+                let segment_info = self
+                    .segment_builder
+                    .build(self.thresholds, self.default_cluster_key_id)?;
 
                 self.state = State::SerializedSegment {
-                    data: segment_info.to_bytes()?,
+                    data: segment_info.serialize()?,
                     location: self.meta_locations.gen_segment_info_location(),
-                    segment: Arc::new(segment_info),
+                    segment: segment_info,
                 }
             }
             State::PreCommitSegment { location, segment } => {
-                if let Some(segment_cache) = SegmentInfo::cache() {
-                    segment_cache.insert(location.clone(), segment.as_ref().try_into()?);
-                }
+                // if let Some(segment_cache) = SegmentInfo::cache() {
+                //     segment_cache.insert(location.clone(), segment.as_ref().try_into()?);
+                // }
 
                 let format_version = SegmentInfo::VERSION;
 
@@ -203,7 +269,7 @@ impl Processor for TransformSerializeSegment {
                     entries: vec![MutationLogEntry::AppendSegment {
                         segment_location: location,
                         format_version,
-                        summary: segment.summary.clone(),
+                        summary: segment.summary().clone(),
                     }],
                 };
 

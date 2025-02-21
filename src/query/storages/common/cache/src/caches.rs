@@ -36,8 +36,6 @@ use crate::InMemoryLruCache;
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
 
-/// In-memory cache for all the block metadata of individual segments.
-///
 /// Note that this cache may be memory-intensive, as each item of this cache
 /// contains ALL the BlockMeta of a segment, for well-compacted segment, the
 /// number of BlockMeta might be 1000 ~ 2000.

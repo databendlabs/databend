@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod meta_readers;
+// mod block_meta;
+// mod cluster_statistics;
+mod schema;
+mod segment;
+mod segment_builder;
 
-pub use meta_readers::bytes_reader;
-pub use meta_readers::ColumnOrientedSegmentReader;
-pub use meta_readers::CompactSegmentInfoReader;
-pub use meta_readers::MetaReaders;
-pub use meta_readers::TableSnapshotReader;
+// pub use block_meta::AbstractBlockMeta;
+pub use schema::meta_name;
+pub use schema::stat_name;
+pub use segment::AbstractSegment;
+pub use segment::ColumnOrientedSegment;
+pub use segment_builder::ColumnOrientedSegmentBuilder;
+pub use segment_builder::SegmentBuilder;

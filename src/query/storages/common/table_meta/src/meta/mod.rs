@@ -14,9 +14,9 @@
 
 #![allow(clippy::too_many_arguments)]
 
-mod compression;
+pub mod compression;
 mod current;
-mod format;
+pub mod format;
 mod statistics;
 mod utils;
 mod v0;
@@ -29,9 +29,10 @@ mod versions;
 pub use compression::Compression;
 // table meta types of current version
 pub use current::*;
+pub use format::decode;
 pub(crate) use format::load_json;
-pub(crate) use format::MetaCompression;
-pub(crate) use format::MetaEncoding;
+pub use format::MetaCompression;
+pub use format::MetaEncoding;
 pub use format::NUM_BLOCK_ID_BITS;
 pub use statistics::*;
 // export legacy versioned table meta types locally,

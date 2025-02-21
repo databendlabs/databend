@@ -14,29 +14,37 @@
 
 use std::sync::Arc;
 
+use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+
+use crate::column_oriented_segment::SegmentBuilder;
 
 #[derive(Default)]
-pub struct StatisticsAccumulator {
+pub struct RowOrientedSegmentBuilder {
     pub blocks_metas: Vec<Arc<BlockMeta>>,
-    pub summary_row_count: u64,
-    pub summary_block_count: u64,
 }
 
-impl StatisticsAccumulator {
-    pub fn add_with_block_meta(&mut self, block_meta: BlockMeta) {
-        self.summary_row_count += block_meta.row_count;
-        self.summary_block_count += 1;
-        self.blocks_metas.push(Arc::new(block_meta));
+impl SegmentBuilder for RowOrientedSegmentBuilder {
+    type Segment = SegmentInfo;
+    fn block_count(&self) -> usize {
+        self.blocks_metas.len()
     }
 
-    pub fn summary(
-        &self,
+    fn add_block(&mut self, block_meta: BlockMeta) -> Result<()> {
+        self.blocks_metas.push(Arc::new(block_meta));
+        Ok(())
+    }
+
+    fn build(
+        &mut self,
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
-    ) -> Statistics {
-        super::reduce_block_metas(&self.blocks_metas, thresholds, default_cluster_key_id)
+    ) -> Result<Self::Segment> {
+        let builder = std::mem::take(self);
+        let stat =
+            super::reduce_block_metas(&builder.blocks_metas, thresholds, default_cluster_key_id);
+        Ok(SegmentInfo::new(builder.blocks_metas, stat))
     }
 }

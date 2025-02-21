@@ -49,10 +49,10 @@ use databend_common_sql::BindContext;
 use databend_common_sql::Metadata;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
+use databend_common_storages_fuse::operations::new_serialize_segment_pipe_item;
 use databend_common_storages_fuse::operations::BroadcastProcessor;
 use databend_common_storages_fuse::operations::ReplaceIntoProcessor;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
-use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::operations::UnbranchedReplaceIntoProcessor;
 use databend_common_storages_fuse::FuseTable;
 use parking_lot::RwLock;
@@ -133,12 +133,12 @@ impl PipelineBuilder {
         let mut block_builder = serialize_block_transform.get_block_builder();
         block_builder.source_schema = table.schema_with_stream();
 
-        let serialize_segment_transform = TransformSerializeSegment::new(
+        let serialize_segment_transform = new_serialize_segment_pipe_item(
             InputPort::create(),
             OutputPort::create(),
             table,
             *block_thresholds,
-        );
+        )?;
         if !*need_insert {
             if segment_partition_num == 0 {
                 return Ok(());
@@ -205,7 +205,7 @@ impl PipelineBuilder {
         if segment_partition_num == 0 {
             let dummy_item = create_dummy_item();
             self.main_pipeline.add_pipe(Pipe::create(2, 2, vec![
-                serialize_segment_transform.into_pipe_item(),
+                serialize_segment_transform,
                 dummy_item,
             ]));
         } else {
@@ -228,7 +228,7 @@ impl PipelineBuilder {
             let item_size = segment_partition_num + 1;
             let mut pipe_items = Vec::with_capacity(item_size);
             // setup the dummy transform
-            pipe_items.push(serialize_segment_transform.into_pipe_item());
+            pipe_items.push(serialize_segment_transform);
 
             let max_threads = self.settings.get_max_threads()?;
             let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));

@@ -17,7 +17,7 @@ mod cluster_statistics;
 mod column_statistic;
 pub mod reducers;
 
-pub use accumulator::StatisticsAccumulator;
+pub use accumulator::RowOrientedSegmentBuilder;
 pub use cluster_statistics::sort_by_cluster_stats;
 pub use cluster_statistics::ClusterStatsGenerator;
 pub use column_statistic::calc_column_distinct_of_values;

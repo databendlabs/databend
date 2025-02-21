@@ -11,6 +11,8 @@ dev = ["snap"]
 
 [dependencies]
 
+bincode_v1 = { workspace = true }
+chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-datavalues = { workspace = true }
 databend-common-exception = { workspace = true }
@@ -18,9 +20,6 @@ databend-common-expression = { workspace = true }
 databend-common-io = { workspace = true }
 databend-common-native = { workspace = true }
 databend-common-storage = { workspace = true }
-
-bincode_v1 = { workspace = true }
-chrono = { workspace = true }
 enum-as-inner = { workspace = true }
 log = { workspace = true }
 parquet = { workspace = true }
