@@ -90,7 +90,12 @@ pub async fn load_last_snapshot_hint(
             }
         }
 
-        Ok(bytes) => Ok(Some(SnapshotHint::unmarshall(bytes.to_bytes().reader())?)),
+        Ok(bytes) => {
+            let mut hint = SnapshotHint::unmarshall(bytes.to_bytes().reader())?;
+            hint.snapshot_location =
+                hint.snapshot_location[operator.info().root().len()..].to_string();
+            Ok(Some(hint))
+        }
     }
 }
 
@@ -169,10 +174,12 @@ impl<'a> SnapshotHintWriter<'a> {
         };
 
         let mut bytes = vec![];
-        hint.marshall(&mut bytes).expect("TODO ");
-
-        dal.write(&hint_path, bytes).await.unwrap_or_else(|e| {
-            warn!("write last snapshot hint failure. {}", e);
-        });
+        if let Err(e) = hint.marshall(&mut bytes) {
+            warn!("marshaling last snapshot hint failed. {}", e);
+        } else {
+            dal.write(&hint_path, bytes).await.unwrap_or_else(|e| {
+                warn!("write last snapshot hint failure. {}", e);
+            });
+        }
     }
 }
