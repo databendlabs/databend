@@ -2937,9 +2937,9 @@ UseDatabase {
 
 
 ---------- Input ----------
-create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
+create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary' warehouse='default');
 ---------- Output ---------
-CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>' )
+CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>', warehouse = 'default' )
 ---------- AST ------------
 CreateCatalog(
     CreateCatalogStmt {
@@ -2949,6 +2949,7 @@ CreateCatalog(
         catalog_options: {
             "thrift_protocol": "binary",
             "url": "<hive-meta-store>",
+            "warehouse": "default",
         },
     },
 )
@@ -23650,6 +23651,28 @@ Grant(
             ],
             level: Stage(
                 "s1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
+GRANT OWNERSHIP ON WAREHOUSE w1 TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON  WAREHOUSE w1 TO ROLE 'd20_0015_owner'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Warehouse(
+                "w1",
             ),
         },
         principal: Role(

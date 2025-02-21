@@ -19,7 +19,12 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_management::RoleApi;
+use databend_common_management::WarehouseInfo;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropWarehousePlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::interpreters::util::AuditElement;
@@ -54,7 +59,8 @@ impl Interpreter for DropWarehouseInterpreter {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
-        GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+        let tenant = self.ctx.get_tenant();
+        let warehouse = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
             .drop_warehouse(self.plan.warehouse.clone())
             .await?;
 
@@ -64,6 +70,19 @@ impl Interpreter for DropWarehouseInterpreter {
             "{}",
             serde_json::to_string(&AuditElement::create(&user_info, "drop_warehouse", &self.plan))?
         );
+
+        if let WarehouseInfo::SystemManaged(sw) = warehouse {
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            if let Some(current_role) = self.ctx.get_current_role() {
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Warehouse { id: sw.role_id },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+        }
 
         Ok(PipelineBuildResult::create())
     }
