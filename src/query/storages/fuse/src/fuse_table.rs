@@ -497,10 +497,10 @@ impl FuseTable {
 
             match maybe_hint {
                 Some(hint) => {
-                    let snapshot_full_path = &hint.snapshot_location;
+                    let snapshot_full_path = &hint.snapshot_full_path;
                     let operator_info = operator.info();
 
-                    // TODO do we need some asserts here?
+                    assert!(snapshot_full_path.starts_with(operator_info.root()));
                     let loc = snapshot_full_path[operator_info.root().len()..].to_string();
 
                     // refresh table schema by loading the snapshot
@@ -520,10 +520,7 @@ impl FuseTable {
                         .schema
                         .clone();
 
-                    Ok::<_, ErrorCode>(Some((
-                        // snapshot_full_path[operator_info.root().len()..].to_string(),
-                        hint, schema,
-                    )))
+                    Ok::<_, ErrorCode>(Some((hint, schema)))
                 }
                 None => {
                     // Table be attached has not last snapshot hint file, treat it as empty table
@@ -568,39 +565,12 @@ impl FuseTable {
             return Ok(());
         }
 
-        // let fut_snapshot_hint = load_last_snapshot_hint(storage_prefix, operator);
-        // let table_description = &table_info.desc;
-
-        // let refresh_task_with_timeout = async {
-        //    tokio::time::timeout(DEFAULT_SCHEMA_REFRESHING_TIMEOUT, fut_snapshot_hint)
-        //        .await
-        //        .map_err(|_e| {
-        //            ErrorCode::RefreshTableInfoFailure(format!(
-        //                "failed to refresh table info {} in time",
-        //                table_description
-        //            ))
-        //        })
-        //        .map_err(|e| {
-        //            ErrorCode::RefreshTableInfoFailure(format!(
-        //                "failed to refresh table info {} : {}",
-        //                table_description, e
-        //            ))
-        //        })?
-        //};
-
-        // let snapshot_hint = GlobalIORuntime::instance().block_on(refresh_task_with_timeout)?;
-
         let snapshot_hint =
             Self::refresh_schema_from_hint(operator, storage_prefix, &table_info.desc)?;
-        //     info!(
-        //        "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
-        //        refreshed.as_ref().map(|(location, _)| location),
-        //        table_info.desc,
-        //        table_info.ident
-        //    );
+
         info!(
             "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
-            snapshot_hint.as_ref().map(|(hint, _)| &hint.snapshot_location),
+            snapshot_hint.as_ref().map(|(hint, _)| &hint.snapshot_full_path),
             table_info.desc,
             table_info.ident
         );
@@ -611,8 +581,12 @@ impl FuseTable {
                 table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
             }
             Some((hint, base_table_schema)) => {
-                // TODO, this is the full path?
-                let location = &hint.snapshot_location;
+                let full_location = &hint.snapshot_full_path;
+
+                let operator_info = operator.info();
+                assert!(full_location.starts_with(operator_info.root()));
+                let location = full_location[operator.info().root().len()..].to_string();
+
                 // update table meta options
                 table_info
                     .options_mut()

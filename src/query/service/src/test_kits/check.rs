@@ -168,7 +168,7 @@ pub async fn check_data_dir(
             load_last_snapshot_hint(storage_prefix.as_str(), fuse_table.get_operator_ref()).await?;
 
         if let Some(hint) = hint {
-            assert_eq!(snapshot_loc, hint.snapshot_location);
+            assert_eq!(snapshot_loc, hint.snapshot_full_path);
         } else {
             panic!("hint of the last snapshot is not there!");
         }

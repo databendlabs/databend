@@ -44,7 +44,7 @@ impl<'a> SnapshotHintWriter<'a> {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SnapshotHint {
-    pub snapshot_location: String,
+    pub snapshot_full_path: String,
     pub entity_comments: EntityComments,
 }
 
@@ -86,16 +86,11 @@ pub async fn load_last_snapshot_hint(
                 // if there is no V2 hint file, fallback to read the legacy hint file
                 try_read_legacy_hint(storage_prefix, operator).await
             } else {
-                return Err(e.into());
+                Err(e.into())
             }
         }
 
-        Ok(bytes) => {
-            let mut hint = SnapshotHint::unmarshall(bytes.to_bytes().reader())?;
-            hint.snapshot_location =
-                hint.snapshot_location[operator.info().root().len()..].to_string();
-            Ok(Some(hint))
-        }
+        Ok(buf) => Ok(Some(SnapshotHint::unmarshall(buf.to_bytes().reader())?)),
     }
 }
 
@@ -114,14 +109,10 @@ async fn try_read_legacy_hint(
     match maybe_hint_content {
         Ok(buf) => {
             let hint_content = buf.to_vec();
-            let snapshot_full_path = String::from_utf8(hint_content)?;
-            let operator_info = operator.info();
-
-            // TODO check this, shall we substring here?
-            let loc = snapshot_full_path[operator_info.root().len()..].to_string();
+            let snapshot_location = String::from_utf8(hint_content)?;
 
             Ok(Some(SnapshotHint {
-                snapshot_location: loc,
+                snapshot_full_path: snapshot_location,
                 entity_comments: EntityComments {
                     table_comment: "".to_string(),
                     field_comments: vec![],
@@ -169,7 +160,7 @@ impl<'a> SnapshotHintWriter<'a> {
         };
 
         let hint = SnapshotHint {
-            snapshot_location: last_snapshot_path,
+            snapshot_full_path: last_snapshot_path,
             entity_comments: EntityComments::from(table_meta),
         };
 
