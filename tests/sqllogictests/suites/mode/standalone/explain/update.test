@@ -76,6 +76,14 @@ MutationSource
 ├── filters: [is_true(t1.a (#0) > 2)]
 └── output rows: 4
 
+query II
+select * from t1 order by a;
+----
+1 2
+2 3
+3 4
+8 9
+
 query T
 explain update t1 set a = a + 1 where a in (select a from t2) and b > 2;
 ----
@@ -133,6 +141,16 @@ HashJoin: LEFT SEMI
         ├── table: default.default.t1
         ├── estimated rows: 4.00
         └── output rows: 4
+
+query II
+select * from t1 order by a;
+----
+1 2
+2 3
+3 4
+8 9
+
+
 
 statement ok
 CREATE OR REPLACE TABLE t1 (
