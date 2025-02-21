@@ -124,7 +124,7 @@ async fn try_read_legacy_hint(
     }
 }
 
-impl<'a> SnapshotHintWriter<'a> {
+impl SnapshotHintWriter<'_> {
     #[async_backtrace::framed]
     pub async fn write_last_snapshot_hint(
         &self,

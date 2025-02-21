@@ -168,15 +168,13 @@ pub async fn check_data_dir(
             load_last_snapshot_hint(storage_prefix.as_str(), fuse_table.get_operator_ref()).await?;
 
         if let Some(hint) = hint {
-            assert_eq!(snapshot_loc, hint.snapshot_full_path);
+            let operator_meta_data = fuse_table.get_operator_ref().info();
+            let storage_prefix = operator_meta_data.root();
+            let snapshot_full_path = format!("{}{}", storage_prefix, snapshot_loc);
+            assert_eq!(snapshot_full_path, hint.snapshot_full_path);
         } else {
             panic!("hint of the last snapshot is not there!");
         }
-
-        // assert_eq!(
-        //    last_snapshot_loc.find(&snapshot_loc),
-        //    Some(last_snapshot_loc.len() - snapshot_loc.len())
-        //);
     }
 
     if check_table_statistic_file.is_some() {
