@@ -53,9 +53,9 @@ use databend_meta::store::RaftStore;
 use raft_log::api::raft_log_writer::RaftLogWriter;
 use url::Url;
 
+use crate::args::ImportArgs;
 use crate::reading;
 use crate::upgrade;
-use crate::ImportArgs;
 
 pub async fn import_data(args: &ImportArgs) -> anyhow::Result<()> {
     let raft_dir = args.raft_dir.clone().unwrap_or_default();
