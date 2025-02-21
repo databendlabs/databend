@@ -52,11 +52,12 @@ use std::task::Poll;
 
 use pin_project_lite::pin_project;
 
+use crate::runtime::memory::GlobalStatBuffer;
 use crate::runtime::memory::MemStat;
 use crate::runtime::memory::OutOfLimit;
-use crate::runtime::memory::StatBuffer;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::Profile;
+use crate::runtime::MemStatBuffer;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
@@ -71,24 +72,24 @@ pub struct LimitMemGuard {
 impl LimitMemGuard {
     pub fn enter_unlimited() -> Self {
         Self {
-            saved: StatBuffer::current().set_unlimited_flag(true),
+            saved: GlobalStatBuffer::current().set_unlimited_flag(true),
         }
     }
 
     pub fn enter_limited() -> Self {
         Self {
-            saved: StatBuffer::current().set_unlimited_flag(false),
+            saved: GlobalStatBuffer::current().set_unlimited_flag(false),
         }
     }
 
     pub(crate) fn is_unlimited() -> bool {
-        StatBuffer::current().is_unlimited()
+        GlobalStatBuffer::current().is_unlimited()
     }
 }
 
 impl Drop for LimitMemGuard {
     fn drop(&mut self) {
-        StatBuffer::current().set_unlimited_flag(self.saved);
+        GlobalStatBuffer::current().set_unlimited_flag(self.saved);
     }
 }
 
@@ -112,7 +113,7 @@ pub struct TrackingGuard {
 
 impl Drop for TrackingGuard {
     fn drop(&mut self) {
-        let _ = StatBuffer::current().flush::<false>(0);
+        let _ = GlobalStatBuffer::current().flush::<false>(0);
 
         TRACKER.with(|x| {
             let mut thread_tracker = x.borrow_mut();
@@ -146,7 +147,8 @@ impl<T: Future> Future for TrackingFuture<T> {
 
 impl Drop for ThreadTracker {
     fn drop(&mut self) {
-        StatBuffer::current().mark_destroyed();
+        MemStatBuffer::current().mark_destroyed();
+        GlobalStatBuffer::current().mark_destroyed();
     }
 }
 
@@ -185,7 +187,7 @@ impl ThreadTracker {
         let mut guard = TrackingGuard {
             saved: tracking_payload,
         };
-        let _ = StatBuffer::current().flush::<false>(0);
+        let _ = GlobalStatBuffer::current().flush::<false>(0);
 
         TRACKER.with(move |x| {
             let mut thread_tracker = x.borrow_mut();
@@ -229,7 +231,7 @@ impl ThreadTracker {
     /// `size` is the positive number of allocated bytes.
     #[inline]
     pub fn alloc(size: i64) -> Result<(), AllocError> {
-        if let Err(out_of_limit) = StatBuffer::current().alloc(size) {
+        if let Err(out_of_limit) = GlobalStatBuffer::current().alloc(size) {
             // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
             if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
                 let _guard = LimitMemGuard::enter_unlimited();
@@ -246,25 +248,16 @@ impl ThreadTracker {
     /// `size` is positive number of bytes of the memory to deallocate.
     #[inline]
     pub fn dealloc(size: i64) {
-        StatBuffer::current().dealloc(size)
+        GlobalStatBuffer::current().dealloc(size)
     }
 
-    pub fn movein_memory(size: i64) {
-        TRACKER.with(|tracker| {
-            let thread_tracker = tracker.borrow();
-            if let Some(mem_stat) = &thread_tracker.payload.mem_stat {
-                mem_stat.movein_memory(size);
-            }
-        })
-    }
-
-    pub fn moveout_memory(size: i64) {
-        TRACKER.with(|tracker| {
-            let thread_tracker = tracker.borrow();
-            if let Some(mem_stat) = &thread_tracker.payload.mem_stat {
-                mem_stat.moveout_memory(size);
-            }
-        })
+    pub fn mem_stat() -> Option<&'static Arc<MemStat>> {
+        TRACKER
+            .try_with(|tracker| {
+                let tracker = tracker.borrow();
+                unsafe { std::mem::transmute(tracker.payload.mem_stat.as_ref()) }
+            })
+            .unwrap_or(None)
     }
 
     pub fn record_memory<const ROLLBACK: bool>(batch: i64, cur: i64) -> Result<(), OutOfLimit> {

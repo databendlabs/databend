@@ -21,7 +21,7 @@ use databend_common_base::mem_allocator::GlobalAllocator;
 use databend_meta::configs::Config;
 
 #[global_allocator]
-pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
+pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator::create();
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> anyhow::Result<()> {

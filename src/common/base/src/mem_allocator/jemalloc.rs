@@ -21,6 +21,10 @@
 pub struct JEAllocator;
 
 impl JEAllocator {
+    pub const fn create() -> JEAllocator {
+        JEAllocator
+    }
+
     pub fn name() -> String {
         "jemalloc".to_string()
     }

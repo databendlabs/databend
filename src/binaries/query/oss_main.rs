@@ -35,7 +35,7 @@ use crate::entry::run_cmd;
 use crate::entry::start_services;
 
 #[global_allocator]
-pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
+pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator::create();
 
 fn main() {
     let binary_version = (*databend_common_config::DATABEND_COMMIT_VERSION).clone();

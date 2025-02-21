@@ -111,24 +111,15 @@ impl PipelinePullingExecutor {
         tracking_payload
     }
 
-    fn wrap_pipeline(
-        pipeline: &mut Pipeline,
-        tx: SyncSender<DataBlock>,
-        mem_stat: Arc<MemStat>,
-    ) -> Result<()> {
+    fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<DataBlock>) -> Result<()> {
         if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::Internal(
                 "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
             ));
         }
 
-        pipeline.add_sink(|input| {
-            Ok(ProcessorPtr::create(PullingSink::create(
-                tx.clone(),
-                mem_stat.clone(),
-                input,
-            )))
-        })?;
+        pipeline
+            .add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))?;
 
         pipeline.set_on_finished(move |_info: &ExecutionInfo| {
             drop(tx);
@@ -147,11 +138,7 @@ impl PipelinePullingExecutor {
 
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
 
-        Self::wrap_pipeline(
-            &mut pipeline,
-            sender,
-            tracking_payload.mem_stat.clone().unwrap(),
-        )?;
+        Self::wrap_pipeline(&mut pipeline, sender)?;
         let executor = PipelineExecutor::create(pipeline, settings)?;
 
         Ok(PipelinePullingExecutor {
@@ -172,11 +159,7 @@ impl PipelinePullingExecutor {
         let mut main_pipeline = build_res.main_pipeline;
         let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
 
-        Self::wrap_pipeline(
-            &mut main_pipeline,
-            sender,
-            tracking_payload.mem_stat.clone().unwrap(),
-        )?;
+        Self::wrap_pipeline(&mut main_pipeline, sender)?;
 
         let mut pipelines = build_res.sources_pipelines;
         pipelines.push(main_pipeline);
@@ -286,19 +269,11 @@ impl Drop for PipelinePullingExecutor {
 
 struct PullingSink {
     sender: Option<SyncSender<DataBlock>>,
-    query_execution_mem_stat: Arc<MemStat>,
 }
 
 impl PullingSink {
-    pub fn create(
-        tx: SyncSender<DataBlock>,
-        mem_stat: Arc<MemStat>,
-        input: Arc<InputPort>,
-    ) -> Box<dyn Processor> {
-        Sinker::create(input, PullingSink {
-            sender: Some(tx),
-            query_execution_mem_stat: mem_stat,
-        })
+    pub fn create(tx: SyncSender<DataBlock>, input: Arc<InputPort>) -> Box<dyn Processor> {
+        Sinker::create(input, PullingSink { sender: Some(tx) })
     }
 }
 
@@ -311,12 +286,6 @@ impl Sink for PullingSink {
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        let memory_size = data_block.memory_size() as i64;
-        // TODO: need moveout memory for plan tracker
-        ThreadTracker::moveout_memory(memory_size);
-
-        self.query_execution_mem_stat.moveout_memory(memory_size);
-
         if let Some(sender) = &self.sender {
             if let Err(cause) = sender.send(data_block) {
                 return Err(ErrorCode::Internal(format!(

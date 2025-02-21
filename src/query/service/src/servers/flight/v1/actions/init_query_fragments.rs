@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
@@ -25,6 +26,7 @@ pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
 pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(fragments.query_id.clone());
+    tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", fragments.query_id)));
     let _guard = ThreadTracker::tracking(tracking_payload);
 
     debug!("init query fragments with {:?}", fragments);
