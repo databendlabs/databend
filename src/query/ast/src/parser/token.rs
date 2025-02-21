@@ -381,6 +381,8 @@ pub enum TokenKind {
     ASYNC,
     #[token("ATTACH", ignore(ascii_case))]
     ATTACH,
+    #[token("AVRO", ignore(ascii_case))]
+    AVRO,
     #[token("BEFORE", ignore(ascii_case))]
     BEFORE,
     #[token("BETWEEN", ignore(ascii_case))]
