@@ -21,11 +21,11 @@ use databend_common_formats::FieldJsonAstDecoder;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_storage::FileParseError;
 
+use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::ndjson::format::NdJsonInputFormat;
-use crate::read::row_based::processors::BlockBuilderState;
 use crate::read::row_based::utils::truncate_column_data;
 
 pub struct NdJsonDecoder {

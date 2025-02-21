@@ -1,0 +1,34 @@
+import avro.schema
+from avro.datafile import DataFileReader, DataFileWriter
+from avro.io import DatumReader, DatumWriter
+
+name = "nested_types"
+
+files = [
+    ("nested_record", [
+        {"id": 0, "info": {"name": "yang", "contact": {"email": "yang@m", "phone": "911"}} },
+        {"id": 1, "info": {"name": "wang", "contact": {"email": "wang@m"}} },
+    ]),
+    ("array", [
+        {"tags": ["tall", "rich", "handsome"]},
+        {"tags": []},
+    ]),
+    ("map", [
+        {"scores": {"math": 100}},
+        {"scores": {}},
+    ]),
+]
+
+if __name__ == '__main__':
+    for (name, rows) in files:
+        print(name)
+        schema = avro.schema.parse(open(f"{name}.avsc", "rb").read())
+        writer = DataFileWriter(open(f"{name}.avro", "wb"), DatumWriter(), schema)
+        for row in rows:
+            writer.append(row)
+        writer.close()
+
+        reader = DataFileReader(open(f"{name}.avro", "rb"), DatumReader())
+        for row in reader:
+            print(row)
+        reader.close()

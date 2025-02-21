@@ -1,0 +1,21 @@
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "user",
+  "fields": [
+    {"name":  "c_int", "type": "int"},
+    {"name":  "c_long", "type": "long"},
+    {"name":  "c_float", "type": "float"},
+    {"name":  "c_double", "type": "double"},
+    {"name":  "c_bool", "type": "boolean"},
+    {"name":  "c_enum", "type": {
+      "type": "enum",
+      "name": "level",
+      "symbols" : ["S", "A", "B", "C"]
+    }},
+    {"name":  "c_fixed", "type": {
+      "type": "fixed",
+      "size": "4",
+    }},
+  ]
+}

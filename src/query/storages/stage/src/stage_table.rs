@@ -42,6 +42,7 @@ use databend_common_storages_parquet::ParquetTableForCopy;
 use databend_storages_common_stage::SingleFilePartition;
 use opendal::Operator;
 
+use crate::read::avro::AvroReadPipelineBuilder;
 use crate::read::row_based::RowBasedReadPipelineBuilder;
 
 /// TODO: we need to track the data metrics in stage table.
@@ -162,9 +163,10 @@ impl Table for StageTable {
             FileFormatParams::Orc(_) => {
                 OrcTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
             }
-            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_) => {
-                self.read_partitions_simple(ctx, stage_table_info).await
-            }
+            FileFormatParams::Csv(_)
+            | FileFormatParams::NdJson(_)
+            | FileFormatParams::Tsv(_)
+            | FileFormatParams::Avro(_) => self.read_partitions_simple(ctx, stage_table_info).await,
             _ => unreachable!(
                 "unexpected format {} in StageTable::read_partition",
                 stage_table_info.stage_info.file_format_params
@@ -204,6 +206,14 @@ impl Table for StageTable {
             FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_) => {
                 let compact_threshold = ctx.get_read_block_thresholds();
                 RowBasedReadPipelineBuilder {
+                    stage_table_info,
+                    compact_threshold,
+                }
+                .read_data(ctx, plan, pipeline, internal_columns)
+            }
+            FileFormatParams::Avro(_) => {
+                let compact_threshold = ctx.get_read_block_thresholds();
+                AvroReadPipelineBuilder {
                     stage_table_info,
                     compact_threshold,
                 }
