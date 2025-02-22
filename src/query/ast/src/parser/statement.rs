@@ -823,13 +823,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_create_table = map(
         rule! {
-            SHOW ~ CREATE ~ TABLE ~ #dot_separated_idents_1_to_3
+            SHOW ~ CREATE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ ( WITH ~ ^QUOTED_IDENTIFIERS )?
         },
-        |(_, _, _, (catalog, database, table))| {
+        |(_, _, _, (catalog, database, table), comment_opt)| {
             Statement::ShowCreateTable(ShowCreateTableStmt {
                 catalog,
                 database,
                 table,
+                with_quoted_ident: comment_opt.is_some(),
             })
         },
     );
