@@ -49,7 +49,7 @@ impl AttachTableHandler for RealAttachTableHandler {
         let operator = init_operator(sp)?;
         check_operator(&operator, sp).await?;
 
-        let hint = load_last_snapshot_hint(storage_prefix, &operator)
+        let snapshot_hint = load_last_snapshot_hint(storage_prefix, &operator)
             .await?
             .ok_or_else(|| {
                 ErrorCode::StorageOther(format!(
@@ -61,7 +61,7 @@ impl AttachTableHandler for RealAttachTableHandler {
         let reader = MetaReaders::table_snapshot_reader(operator.clone());
 
         // TODO duplicated code
-        let snapshot_full_path = hint.snapshot_full_path;
+        let snapshot_full_path = snapshot_hint.snapshot_full_path;
         let info = operator.info();
         let root = info.root();
         let snapshot_loc = snapshot_full_path[root.len()..].to_string();
@@ -88,8 +88,8 @@ impl AttachTableHandler for RealAttachTableHandler {
         let attach_table_schema = Self::gen_schema(&plan, &snapshot)?;
 
         // let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
-        let field_comments = hint.entity_comments.field_comments;
-        let comment = hint.entity_comments.table_comment;
+        let field_comments = snapshot_hint.entity_comments.field_comments;
+        let comment = snapshot_hint.entity_comments.table_comment;
         let table_meta = TableMeta {
             schema: Arc::new(attach_table_schema),
             engine: plan.engine.to_string(),

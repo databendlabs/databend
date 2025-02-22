@@ -116,15 +116,6 @@ pub async fn check_data_dir(
             } else if path.starts_with(prefix_snapshot_statistics) {
                 ts_count += 1;
                 table_statistic_files.push(entry_path.to_string());
-                // } else if path.starts_with(prefix_last_snapshot_hint) && check_last_snapshot.is_some() {
-                //     let content = fixture
-                //         .default_ctx
-                //         .get_application_level_data_operator()?
-                //         .operator()
-                //         .read(entry_path)
-                //         .await?
-                //         .to_vec();
-                //     last_snapshot_loc = str::from_utf8(&content)?.to_string();
             }
         }
     }
