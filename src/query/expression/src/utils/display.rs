@@ -1077,5 +1077,5 @@ fn display_f64(num: f64) -> String {
 
 /// Display a tuple field name, if it contains uppercase letters or special characters, add quotes.
 pub fn display_tuple_field_name(field_name: &str) -> String {
-    display_ident(field_name, true, Dialect::PostgreSQL)
+    display_ident(field_name, false, true, Dialect::PostgreSQL)
 }

@@ -107,6 +107,7 @@ fn test_statement() {
         r#"show processlist like 't%' limit 2;"#,
         r#"show processlist where database='default' limit 2;"#,
         r#"show create table a.b;"#,
+        r#"show create table a.b with quoted_identifiers;"#,
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
         r#"replace into test on(c) select sum(c) as c from source group by v;"#,
         r#"explain pipeline select a from b;"#,

@@ -73,6 +73,7 @@ pub struct ShowCreateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub with_quoted_ident: bool,
 }
 
 impl Display for ShowCreateTableStmt {
@@ -84,7 +85,11 @@ impl Display for ShowCreateTableStmt {
                 .iter()
                 .chain(&self.database)
                 .chain(Some(&self.table)),
-        )
+        )?;
+        if self.with_quoted_ident {
+            write!(f, " WITH QUOTED_IDENTIFIERS")?
+        }
+        Ok(())
     }
 }
 
