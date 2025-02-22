@@ -43,7 +43,6 @@ pub struct MutationSource {
     pub predicates: Vec<ScalarExpr>,
     pub predicate_column_index: Option<usize>,
     pub read_partition_columns: ColumnSet,
-    pub update_stream_columns: bool,
 }
 
 impl PartialEq for MutationSource {

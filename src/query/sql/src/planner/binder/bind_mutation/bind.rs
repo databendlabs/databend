@@ -303,9 +303,9 @@ impl Binder {
             row_id_index: target_table_row_id_index,
             can_try_update_column_only: self.can_try_update_column_only(&matched_clauses),
             lock_guard,
+            no_effect: false,
             predicate_column_index: None,
             direct_filter: vec![],
-            predicate_always_false: false,
         };
 
         if mutation_strategy == MutationStrategy::NotMatchedOnly && !insert_only(&mutation) {

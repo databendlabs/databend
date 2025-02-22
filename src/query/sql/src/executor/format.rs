@@ -26,6 +26,7 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;
+use crate::binder::MutationType;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -549,12 +550,24 @@ fn format_mutation_source(
         FormatTreeNode::new(format!("filters: [{filters}]")),
     ];
 
+    let payload = match plan.input_type {
+        MutationType::Update => "Update",
+        MutationType::Delete => {
+            if plan.filters.is_none() {
+                "DeleteAll"
+            } else {
+                "Delete"
+            }
+        }
+        MutationType::Merge => "Merge",
+    };
+
     // Part stats.
     children.extend(part_stats_info_to_format_tree(&plan.statistics));
     append_profile_info(&mut children, profs, plan.plan_id);
 
     Ok(FormatTreeNode::with_children(
-        "MutationSource".to_string(),
+        format!("MutationSource({})", payload),
         children,
     ))
 }

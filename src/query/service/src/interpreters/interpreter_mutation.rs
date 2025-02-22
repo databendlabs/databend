@@ -28,7 +28,6 @@ use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::EmptySink;
-use databend_common_pipeline_sources::EmptySource;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::create_push_down_filters;
@@ -40,9 +39,7 @@ use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::planner::MetadataRef;
 use databend_common_sql::plans;
 use databend_common_sql::plans::Mutation;
-use databend_common_storage::MutationStatus;
 use databend_common_storages_factory::Table;
-use databend_common_storages_fuse::operations::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -98,42 +95,8 @@ impl Interpreter for MutationInterpreter {
 
         let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
 
-        let table = self
-            .ctx
-            .get_table(
-                &mutation.catalog_name,
-                &mutation.database_name,
-                &mutation.table_name,
-            )
-            .await?;
-        // Check if the table supports mutation.
-        table.check_mutable()?;
-        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::Unimplemented(format!(
-                "table {}, engine type {}, does not support {}",
-                table.name(),
-                table.get_table_info().engine(),
-                mutation.mutation_type,
-            ))
-        })?;
-
-        let table_snapshot = fuse_table.read_table_snapshot().await?;
-        if let Some(build_res) = self
-            .fast_mutation(&mutation, fuse_table, &table_snapshot)
-            .await?
-        {
-            return Ok(build_res);
-        }
-
-        // Prepare MutationBuildInfo for PhysicalPlanBuilder to build Mutation physical plan.
-        let mutation_build_info = self
-            .build_mutation_info(&mutation, fuse_table, table_snapshot)
-            .await?;
-
         // Build physical plan.
-        let physical_plan = self
-            .build_physical_plan(&mutation, Some(mutation_build_info))
-            .await?;
+        let physical_plan = self.build_physical_plan(&mutation).await?;
 
         let query_plan = physical_plan
             .format(self.metadata.clone(), Default::default())?
@@ -144,6 +107,11 @@ impl Interpreter for MutationInterpreter {
         // Build pipeline.
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        if mutation.no_effect {
+            build_res
+                .main_pipeline
+                .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+        }
 
         // Execute hook.
         self.execute_hook(&mutation, &mut build_res).await;
@@ -195,60 +163,40 @@ impl MutationInterpreter {
         };
     }
 
-    pub async fn build_mutation_info(
-        &self,
-        mutation: &Mutation,
-        fuse_table: &FuseTable,
-        table_snapshot: Option<Arc<TableSnapshot>>,
-    ) -> Result<MutationBuildInfo> {
+    pub async fn build_physical_plan(&self, mutation: &Mutation) -> Result<PhysicalPlan> {
+        let table = self
+            .ctx
+            .get_table(
+                &mutation.catalog_name,
+                &mutation.database_name,
+                &mutation.table_name,
+            )
+            .await?;
+        // Check if the table supports mutation.
+        table.check_mutable()?;
+        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+            ErrorCode::Unimplemented(format!(
+                "table {}, engine type {}, does not support {}",
+                table.name(),
+                table.get_table_info().engine(),
+                mutation.mutation_type,
+            ))
+        })?;
+
+        // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
+        let table_snapshot = fuse_table.read_table_snapshot().await?;
         let table_info = fuse_table.get_table_info().clone();
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
         let (statistics, partitions) = self
             .mutation_source_partitions(mutation, fuse_table, table_snapshot.clone())
             .await?;
-        Ok(MutationBuildInfo {
+        let mutation_build_info = MutationBuildInfo {
             table_info,
             table_snapshot,
             update_stream_meta,
             partitions,
             statistics,
-        })
-    }
-
-    pub async fn build_physical_plan(
-        &self,
-        mutation: &Mutation,
-        mutation_build_info: Option<MutationBuildInfo>,
-    ) -> Result<PhysicalPlan> {
-        let mutation_build_info = if let Some(mutation_build_info) = mutation_build_info {
-            mutation_build_info
-        } else {
-            let table = self
-                .ctx
-                .get_table(
-                    &mutation.catalog_name,
-                    &mutation.database_name,
-                    &mutation.table_name,
-                )
-                .await?;
-
-            // Check if the table supports DataMutation.
-            table.check_mutable()?;
-            let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-                ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support {}",
-                    table.name(),
-                    table.get_table_info().engine(),
-                    mutation.mutation_type,
-                ))
-            })?;
-
-            // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-            let table_snapshot = fuse_table.read_table_snapshot().await?;
-            self.build_mutation_info(mutation, fuse_table, table_snapshot)
-                .await?
         };
-
         // Build physical plan.
         let mut builder =
             PhysicalPlanBuilder::new(mutation.metadata.clone(), self.ctx.clone(), false);
@@ -275,116 +223,58 @@ impl MutationInterpreter {
         Ok(vec![DataBlock::new_from_columns(columns)])
     }
 
-    async fn fast_mutation(
-        &self,
-        mutation: &Mutation,
-        fuse_table: &FuseTable,
-        snapshot: &Option<Arc<TableSnapshot>>,
-    ) -> Result<Option<PipelineBuildResult>> {
-        if mutation.predicate_always_false {
-            // When the condition is always false, do nothing.
-            // This only applies to update/delete/merge into match only.
-            return self.no_effect_mutation();
-        }
-
-        if matches!(
-            mutation.strategy,
-            MutationStrategy::MixedMatched | MutationStrategy::NotMatchedOnly
-        ) {
-            return Ok(None);
-        }
-
-        // Check if table is empty.
-        let Some(snapshot) = snapshot else {
-            // No snapshot, no mutation.
-            return self.no_effect_mutation();
-        };
-        if snapshot.summary.row_count == 0 {
-            // Empty snapshot, no mutation.
-            return self.no_effect_mutation();
-        }
-
-        if mutation.mutation_type != MutationType::Delete
-            || mutation.strategy != MutationStrategy::Direct
-            || !mutation.direct_filter.is_empty()
-        {
-            return Ok(None);
-        }
-
-        // There is no filter and the mutation type is delete,
-        // we can truncate the table directly.
-        let mut build_res = PipelineBuildResult::create();
-        self.ctx.add_mutation_status(MutationStatus {
-            insert_rows: 0,
-            deleted_rows: snapshot.summary.row_count,
-            update_rows: 0,
-        });
-        // deleting the whole table... just a truncate
-        fuse_table
-            .do_truncate(
-                self.ctx.clone(),
-                &mut build_res.main_pipeline,
-                TruncateMode::Delete,
-            )
-            .await?;
-        Ok(Some(build_res))
-    }
-
-    fn no_effect_mutation(&self) -> Result<Option<PipelineBuildResult>> {
-        let mut build_res = PipelineBuildResult::create();
-        build_res.main_pipeline.add_source(EmptySource::create, 1)?;
-        build_res
-            .main_pipeline
-            .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
-        Ok(Some(build_res))
-    }
-
     async fn mutation_source_partitions(
         &self,
         mutation: &Mutation,
         fuse_table: &FuseTable,
         table_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<(PartStatistics, Partitions)> {
-        if mutation.strategy == MutationStrategy::Direct {
-            let Some(table_snapshot) = table_snapshot else {
-                return Ok(Default::default());
-            };
-            let (filters, filter_used_columns) = if !mutation.direct_filter.is_empty() {
-                let filters = create_push_down_filters(
-                    &self.ctx.get_function_context()?,
-                    &mutation.direct_filter,
-                )?;
-                let filter_used_columns = mutation
-                    .direct_filter
-                    .iter()
-                    .flat_map(|expr| expr.used_columns())
-                    .collect::<HashSet<_>>()
-                    .into_iter()
-                    .collect();
-                (Some(filters), filter_used_columns)
-            } else {
-                (None, vec![])
-            };
-            let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
-                let cluster = self.ctx.get_cluster();
-                let is_lazy =
-                    !cluster.is_empty() && table_snapshot.segments.len() >= cluster.nodes.len();
-                (is_lazy, true)
-            } else {
-                (false, false)
-            };
-            fuse_table
-                .mutation_read_partitions(
-                    self.ctx.clone(),
-                    table_snapshot,
-                    filter_used_columns,
-                    filters,
-                    is_lazy,
-                    is_delete,
-                )
-                .await
-        } else {
-            Ok(Default::default())
+        if mutation.no_effect || mutation.strategy != MutationStrategy::Direct {
+            return Ok(Default::default());
         }
+
+        let Some(table_snapshot) = table_snapshot else {
+            return Ok(Default::default());
+        };
+
+        let (filters, filter_used_columns) = if !mutation.direct_filter.is_empty() {
+            let filters = create_push_down_filters(
+                &self.ctx.get_function_context()?,
+                &mutation.direct_filter,
+            )?;
+            let filter_used_columns = mutation
+                .direct_filter
+                .iter()
+                .flat_map(|expr| expr.used_columns())
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+            (Some(filters), filter_used_columns)
+        } else {
+            if mutation.mutation_type == MutationType::Delete {
+                // do truncate.
+                return Ok(Default::default());
+            }
+            (None, vec![])
+        };
+
+        let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
+            let cluster = self.ctx.get_cluster();
+            let is_lazy =
+                !cluster.is_empty() && table_snapshot.segments.len() >= cluster.nodes.len();
+            (is_lazy, true)
+        } else {
+            (false, false)
+        };
+        fuse_table
+            .mutation_read_partitions(
+                self.ctx.clone(),
+                table_snapshot,
+                filter_used_columns,
+                filters,
+                is_lazy,
+                is_delete,
+            )
+            .await
     }
 }

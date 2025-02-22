@@ -23,6 +23,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 
 use crate::executor::physical_plans::CommitSink;
+use crate::executor::physical_plans::CommitType;
 use crate::executor::physical_plans::CompactSource;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
@@ -68,6 +69,10 @@ impl PhysicalPlanBuilder {
         });
         let table_info = tbl.get_table_info().clone();
         let is_hilbert = !s_expr.children.is_empty();
+        let commit_type = CommitType::Mutation {
+            kind: MutationKind::Recluster,
+            merge_meta: false,
+        };
         let mut plan = if is_hilbert {
             let handler = get_hilbert_clustering_handler();
             let Some((recluster_info, snapshot)) = handler
@@ -89,9 +94,8 @@ impl PhysicalPlanBuilder {
                 input: Box::new(plan),
                 table_info,
                 snapshot: Some(snapshot),
-                mutation_kind: MutationKind::Recluster,
+                commit_type,
                 update_stream_meta: vec![],
-                merge_meta: false,
                 deduplicated_label: None,
                 plan_id: u32::MAX,
                 recluster_info: Some(recluster_info),
@@ -138,9 +142,8 @@ impl PhysicalPlanBuilder {
                         input: Box::new(root),
                         table_info,
                         snapshot: Some(snapshot),
-                        mutation_kind: MutationKind::Recluster,
+                        commit_type,
                         update_stream_meta: vec![],
-                        merge_meta: false,
                         deduplicated_label: None,
                         plan_id: u32::MAX,
                         recluster_info: Some(ReclusterInfoSideCar {
@@ -174,9 +177,11 @@ impl PhysicalPlanBuilder {
                         input: Box::new(root),
                         table_info,
                         snapshot: Some(snapshot),
-                        mutation_kind: MutationKind::Compact,
+                        commit_type: CommitType::Mutation {
+                            kind: MutationKind::Compact,
+                            merge_meta,
+                        },
                         update_stream_meta: vec![],
-                        merge_meta,
                         deduplicated_label: None,
                         plan_id: u32::MAX,
                         recluster_info: None,

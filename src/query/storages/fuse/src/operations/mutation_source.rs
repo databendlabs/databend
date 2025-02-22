@@ -159,7 +159,7 @@ impl FuseTable {
                 segment_locations: create_segment_location_vector(snapshot.segments.clone(), None),
                 block_count: Some(snapshot.summary.block_count as usize),
             };
-            self.do_mutation_block_pruning(ctx, filters, projection, prune_ctx, true, is_delete)
+            self.do_mutation_block_pruning(ctx, filters, projection, prune_ctx, is_delete)
                 .await
         }
     }
@@ -172,7 +172,6 @@ impl FuseTable {
         filters: Option<Filters>,
         projection: Projection,
         prune_ctx: MutationBlockPruningContext,
-        with_origin: bool,
         is_delete: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let MutationBlockPruningContext {
@@ -258,11 +257,7 @@ impl FuseTable {
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
                 .map(|((index, block_meta), inner_part)| {
-                    let cluster_stats = if with_origin {
-                        block_meta.cluster_stats.clone()
-                    } else {
-                        None
-                    };
+                    let cluster_stats = block_meta.cluster_stats.clone();
                     let key = (index.segment_idx, index.block_idx);
                     let whole_block_mutation = whole_block_deletions.contains(&key);
                     let part_info_ptr: PartInfoPtr =

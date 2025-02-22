@@ -20,14 +20,14 @@ query T
 explain delete from t1
 ----
 CommitSink
-└── MutationSource
+└── MutationSource(DeleteAll)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── filters: []
-    ├── read rows: 4
-    ├── read size: < 1 KiB
-    ├── partitions total: 1
-    └── partitions scanned: 1
+    ├── read rows: 0
+    ├── read size: 0
+    ├── partitions total: 0
+    └── partitions scanned: 0
 
 query T
 explain delete from t1 where a in (select a from t2);
@@ -69,7 +69,7 @@ query T
 explain delete from t1 where a > 2;
 ----
 CommitSink
-└── MutationSource
+└── MutationSource(Delete)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1)]
     ├── filters: [is_true(t1.a (#0) > 2)]

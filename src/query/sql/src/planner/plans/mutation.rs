@@ -78,11 +78,12 @@ pub struct Mutation {
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
     pub lock_guard: Option<Arc<LockGuard>>,
+    // When the filter is always false, do nothing.
+    pub no_effect: bool,
 
     // MutationStrategy::Direct related variables.
     pub predicate_column_index: Option<usize>,
     pub direct_filter: Vec<ScalarExpr>,
-    pub predicate_always_false: bool,
 }
 
 impl std::fmt::Debug for Mutation {

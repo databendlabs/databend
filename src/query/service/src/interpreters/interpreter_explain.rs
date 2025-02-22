@@ -149,7 +149,7 @@ impl Interpreter for ExplainInterpreter {
                         schema.clone(),
                         metadata.clone(),
                     )?;
-                    let plan = interpreter.build_physical_plan(&mutation, None).await?;
+                    let plan = interpreter.build_physical_plan(&mutation).await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
                 _ => self.explain_plan(&self.plan)?,
@@ -197,7 +197,7 @@ impl Interpreter for ExplainInterpreter {
                         schema.clone(),
                         metadata.clone(),
                     )?;
-                    let plan = interpreter.build_physical_plan(&mutation, None).await?;
+                    let plan = interpreter.build_physical_plan(&mutation).await?;
                     self.explain_analyze(plan, metadata, true).await?
                 }
                 _ => Err(ErrorCode::Unimplemented(
@@ -540,7 +540,7 @@ impl ExplainInterpreter {
             schema,
             mutation.metadata.clone(),
         )?;
-        let plan = interpreter.build_physical_plan(&mutation, None).await?;
+        let plan = interpreter.build_physical_plan(&mutation).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());

@@ -55,11 +55,7 @@ CommitSink
 query T
 explain merge into salaries2 using employees2 on 1 != 1 when matched AND employees2.department = 'HR' THEN UPDATE SET salaries2.salary = salaries2.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries2.salary = salaries2.salary + 500.00
 ----
-CommitSink
-└── DataMutation
-    ├── target table: [catalog: default] [database: default] [table: salaries2]
-    ├── matched delete: [condition: None]
-    └── EmptyResultScan
+EmptyResultScan
 
 query T
 explain MERGE INTO salaries2 USING (SELECT * FROM employees2) as employees2 ON salaries2.employee_id = employees2.employee_id WHEN MATCHED AND employees2.department = 'HR' THEN UPDATE SET salaries2.salary = salaries2.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries2.salary = salaries2.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees2.employee_id, 55000.00);

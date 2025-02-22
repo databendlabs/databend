@@ -242,7 +242,6 @@ impl MutationExpression {
                         predicates: vec![],
                         predicate_column_index: None,
                         read_partition_columns: HashSet::new(),
-                        update_stream_columns,
                     };
 
                     s_expr =

@@ -59,7 +59,7 @@ query T
 explain update t1 set a = a + 1 where a > 2;
 ----
 CommitSink
-└── MutationSource
+└── MutationSource(Update)
     ├── table: default.default.t1
     ├── output columns: [a (#0), b (#1), _predicate (#2)]
     ├── filters: [is_true(t1.a (#0) > 2)]

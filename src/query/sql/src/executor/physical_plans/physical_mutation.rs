@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshot
 use itertools::Itertools;
 
 use super::ColumnMutation;
+use super::CommitType;
 use crate::binder::wrap_cast;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
@@ -63,6 +64,7 @@ use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
+use crate::plans::TruncateMode;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
@@ -117,11 +119,15 @@ impl PhysicalPlanBuilder {
             row_id_index,
             row_id_shuffle,
             can_try_update_column_only,
+            no_effect,
+            direct_filter,
             ..
         } = mutation;
 
         let mut plan = self.build(s_expr.child(0)?, required).await?;
-        let mutation_input_schema = plan.output_schema()?;
+        if *no_effect {
+            return Ok(plan);
+        }
 
         let table = self
             .ctx
@@ -129,9 +135,29 @@ impl PhysicalPlanBuilder {
             .await?;
         let table_info = table.get_table_info();
         let table_name = table_name.clone();
-        let mutation_build_info = self.mutation_build_info.clone().unwrap();
 
+        let mutation_build_info = self.mutation_build_info.clone().unwrap();
+        let mutation_input_schema = plan.output_schema()?;
         if *strategy == MutationStrategy::Direct {
+            if *mutation_type == MutationType::Delete && direct_filter.is_empty() {
+                // Do truncate.
+                plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+                    input: Box::new(plan),
+                    snapshot: mutation_build_info.table_snapshot,
+                    table_info: table_info.clone(),
+                    // let's use update first, we will do some optimizations and select exact strategy
+                    commit_type: CommitType::Truncate {
+                        mode: TruncateMode::Delete,
+                    },
+                    update_stream_meta: vec![],
+                    deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                    plan_id: u32::MAX,
+                    recluster_info: None,
+                }));
+                plan.adjust_plan_id(&mut 0);
+                return Ok(plan);
+            }
+
             // MutationStrategy::Direct: If the mutation filter is a simple expression,
             // we use MutationSource to execute the mutation directly.
             let mut field_id_to_schema_index = HashMap::new();
@@ -208,9 +234,11 @@ impl PhysicalPlanBuilder {
                 snapshot: mutation_build_info.table_snapshot,
                 table_info: table_info.clone(),
                 // let's use update first, we will do some optimizations and select exact strategy
-                mutation_kind,
+                commit_type: CommitType::Mutation {
+                    kind: mutation_kind,
+                    merge_meta: false,
+                },
                 update_stream_meta: vec![],
-                merge_meta: false,
                 deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 plan_id: u32::MAX,
                 recluster_info: None,
@@ -434,20 +462,17 @@ impl PhysicalPlanBuilder {
             MutationType::Delete => MutationKind::Delete,
         };
 
-        let update_stream_meta = match mutation_type {
-            MutationType::Merge => mutation_build_info.update_stream_meta,
-            MutationType::Update | MutationType::Delete => vec![],
-        };
-
         // build mutation_aggregate
         let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(commit_input),
             snapshot: mutation_build_info.table_snapshot,
             table_info: table_info.clone(),
             // let's use update first, we will do some optimizations and select exact strategy
-            mutation_kind,
-            update_stream_meta,
-            merge_meta: false,
+            commit_type: CommitType::Mutation {
+                kind: mutation_kind,
+                merge_meta: false,
+            },
+            update_stream_meta: mutation_build_info.update_stream_meta,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
             recluster_info: None,

@@ -18,10 +18,14 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_pipeline_sources::OneBlockSource;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::physical_plans::MutationSource;
 use databend_common_sql::StreamContext;
+use databend_common_storages_fuse::operations::CommitMeta;
+use databend_common_storages_fuse::operations::ConflictResolveContext;
 use databend_common_storages_fuse::operations::MutationAction;
 use databend_common_storages_fuse::operations::MutationBlockPruningContext;
 use databend_common_storages_fuse::FuseLazyPartInfo;
@@ -39,6 +43,24 @@ impl PipelineBuilder {
 
         let table = FuseTable::try_from_table(table.as_ref())?.clone();
         let is_delete = mutation_source.input_type == MutationType::Delete;
+        if is_delete && mutation_source.filters.is_none() {
+            // There is no filter and the mutation type is delete,
+            // we can truncate the table directly.
+            debug_assert!(mutation_source.partitions.is_empty());
+            return self.main_pipeline.add_source(
+                |output| {
+                    let meta = CommitMeta {
+                        conflict_resolve_context: ConflictResolveContext::None,
+                        new_segment_locs: vec![],
+                        table_id: table.get_id(),
+                    };
+                    let block = DataBlock::empty_with_meta(Box::new(meta));
+                    OneBlockSource::create(output, block)
+                },
+                1,
+            );
+        }
+
         let read_partition_columns: Vec<usize> = mutation_source
             .read_partition_columns
             .clone()
@@ -76,7 +98,6 @@ impl PipelineBuilder {
                             filters_clone,
                             projection,
                             prune_ctx,
-                            true,
                             true,
                         )
                         .await?;

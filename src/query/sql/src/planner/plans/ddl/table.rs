@@ -406,6 +406,16 @@ impl TruncateTablePlan {
     }
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum TruncateMode {
+    // Truncate and keep the historical data.
+    Normal,
+    // Delete the data, used for delete operation.
+    Delete,
+    // Truncate and purge the historical data.
+    Purge,
+}
+
 /// Undrop.
 #[derive(Clone, Debug)]
 pub struct UndropTablePlan {
