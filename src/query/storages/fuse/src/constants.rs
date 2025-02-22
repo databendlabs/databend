@@ -29,6 +29,7 @@ pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
 pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
 pub const FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX: &str = "_ts";
 pub const FUSE_TBL_LAST_SNAPSHOT_HINT: &str = "last_snapshot_location_hint";
+pub const FUSE_TBL_LAST_SNAPSHOT_HINT_V2: &str = "last_snapshot_location_hint_v2";
 pub const FUSE_TBL_VIRTUAL_BLOCK_PREFIX: &str = "_vb";
 pub const FUSE_TBL_AGG_INDEX_PREFIX: &str = "_i_a";
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX: &str = "_i_i";
