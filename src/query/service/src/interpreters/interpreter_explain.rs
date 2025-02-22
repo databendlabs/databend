@@ -33,6 +33,7 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::executor::format_partial_tree;
+use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
@@ -46,6 +47,7 @@ use serde_json;
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use crate::interpreters::interpreter::on_execution_finished;
+use crate::interpreters::interpreter_mutation::build_mutation_info;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -149,7 +151,7 @@ impl Interpreter for ExplainInterpreter {
                         schema.clone(),
                         metadata.clone(),
                     )?;
-                    let plan = interpreter.build_physical_plan(&mutation).await?;
+                    let plan = interpreter.build_physical_plan(&mutation, false).await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
                 _ => self.explain_plan(&self.plan)?,
@@ -180,25 +182,27 @@ impl Interpreter for ExplainInterpreter {
                     ignore_result,
                     ..
                 } => {
-                    let mut builder =
-                        PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
-                    let plan = builder.build(s_expr, bind_context.column_set()).await?;
-                    self.explain_analyze(plan, metadata, *ignore_result).await?
+                    self.explain_analyze(
+                        s_expr,
+                        metadata,
+                        bind_context.column_set(),
+                        None,
+                        *ignore_result,
+                    )
+                    .await?
                 }
-                Plan::DataMutation {
-                    s_expr,
-                    schema,
-                    metadata,
-                } => {
-                    let mutation: Mutation = s_expr.plan().clone().try_into()?;
-                    let interpreter = MutationInterpreter::try_create(
-                        self.ctx.clone(),
-                        *s_expr.clone(),
-                        schema.clone(),
-                        metadata.clone(),
-                    )?;
-                    let plan = interpreter.build_physical_plan(&mutation).await?;
-                    self.explain_analyze(plan, metadata, true).await?
+                Plan::DataMutation { s_expr, .. } => {
+                    let plan: Mutation = s_expr.plan().clone().try_into()?;
+                    let mutation_build_info =
+                        build_mutation_info(self.ctx.clone(), &plan, true).await?;
+                    self.explain_analyze(
+                        s_expr.child(0)?,
+                        &plan.metadata,
+                        *plan.required_columns.clone(),
+                        Some(mutation_build_info),
+                        true,
+                    )
+                    .await?
                 }
                 _ => Err(ErrorCode::Unimplemented(
                     "Unsupported EXPLAIN ANALYZE statement",
@@ -435,22 +439,24 @@ impl ExplainInterpreter {
     #[async_backtrace::framed]
     async fn explain_analyze(
         &self,
-        plan: PhysicalPlan,
+        s_expr: &SExpr,
         metadata: &MetadataRef,
+        required: ColumnSet,
+        mutation_build_info: Option<MutationBuildInfo>,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let plan = match &plan {
-            // avoid commit.
-            PhysicalPlan::CommitSink(commit) => commit.input.as_ref(),
-            other => other,
-        };
-        let build_res = build_query_pipeline(&self.ctx, &[], plan, ignore_result).await?;
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
+        if let Some(build_info) = mutation_build_info {
+            builder.set_mutation_build_info(build_info);
+        }
+        let plan = builder.build(s_expr, required).await?;
+        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         // Drain the data
         let query_profiles = self.execute_and_get_profiles(build_res)?;
 
         let result = if self.partial {
-            format_partial_tree(plan, metadata, &query_profiles)?.format_pretty()?
+            format_partial_tree(&plan, metadata, &query_profiles)?.format_pretty()?
         } else {
             plan.format(metadata.clone(), query_profiles.clone())?
                 .format_pretty()?
@@ -540,7 +546,7 @@ impl ExplainInterpreter {
             schema,
             mutation.metadata.clone(),
         )?;
-        let plan = interpreter.build_physical_plan(&mutation).await?;
+        let plan = interpreter.build_physical_plan(&mutation, true).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());

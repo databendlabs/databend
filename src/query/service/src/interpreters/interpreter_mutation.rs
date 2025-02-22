@@ -96,7 +96,7 @@ impl Interpreter for MutationInterpreter {
         let mutation: Mutation = self.s_expr.plan().clone().try_into()?;
 
         // Build physical plan.
-        let physical_plan = self.build_physical_plan(&mutation).await?;
+        let physical_plan = self.build_physical_plan(&mutation, false).await?;
 
         let query_plan = physical_plan
             .format(self.metadata.clone(), Default::default())?
@@ -163,43 +163,16 @@ impl MutationInterpreter {
         };
     }
 
-    pub async fn build_physical_plan(&self, mutation: &Mutation) -> Result<PhysicalPlan> {
-        let table = self
-            .ctx
-            .get_table(
-                &mutation.catalog_name,
-                &mutation.database_name,
-                &mutation.table_name,
-            )
-            .await?;
-        // Check if the table supports mutation.
-        table.check_mutable()?;
-        let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
-            ErrorCode::Unimplemented(format!(
-                "table {}, engine type {}, does not support {}",
-                table.name(),
-                table.get_table_info().engine(),
-                mutation.mutation_type,
-            ))
-        })?;
-
+    pub async fn build_physical_plan(
+        &self,
+        mutation: &Mutation,
+        dry_run: bool,
+    ) -> Result<PhysicalPlan> {
         // Prepare MutationBuildInfo for PhysicalPlanBuilder to build DataMutation physical plan.
-        let table_snapshot = fuse_table.read_table_snapshot().await?;
-        let table_info = fuse_table.get_table_info().clone();
-        let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
-        let (statistics, partitions) = self
-            .mutation_source_partitions(mutation, fuse_table, table_snapshot.clone())
-            .await?;
-        let mutation_build_info = MutationBuildInfo {
-            table_info,
-            table_snapshot,
-            update_stream_meta,
-            partitions,
-            statistics,
-        };
+        let mutation_build_info = build_mutation_info(self.ctx.clone(), mutation, dry_run).await?;
         // Build physical plan.
         let mut builder =
-            PhysicalPlanBuilder::new(mutation.metadata.clone(), self.ctx.clone(), false);
+            PhysicalPlanBuilder::new(mutation.metadata.clone(), self.ctx.clone(), dry_run);
         builder.set_mutation_build_info(mutation_build_info);
         builder
             .build(&self.s_expr, *mutation.required_columns.clone())
@@ -222,59 +195,96 @@ impl MutationInterpreter {
         }
         Ok(vec![DataBlock::new_from_columns(columns)])
     }
+}
 
-    async fn mutation_source_partitions(
-        &self,
-        mutation: &Mutation,
-        fuse_table: &FuseTable,
-        table_snapshot: Option<Arc<TableSnapshot>>,
-    ) -> Result<(PartStatistics, Partitions)> {
-        if mutation.no_effect || mutation.strategy != MutationStrategy::Direct {
+pub async fn build_mutation_info(
+    ctx: Arc<QueryContext>,
+    mutation: &Mutation,
+    dry_run: bool,
+) -> Result<MutationBuildInfo> {
+    let table = ctx
+        .get_table(
+            &mutation.catalog_name,
+            &mutation.database_name,
+            &mutation.table_name,
+        )
+        .await?;
+    // Check if the table supports mutation.
+    table.check_mutable()?;
+    let fuse_table = table.as_any().downcast_ref::<FuseTable>().ok_or_else(|| {
+        ErrorCode::Unimplemented(format!(
+            "table {}, engine type {}, does not support {}",
+            table.name(),
+            table.get_table_info().engine(),
+            mutation.mutation_type,
+        ))
+    })?;
+
+    let table_snapshot = fuse_table.read_table_snapshot().await?;
+    let table_info = fuse_table.get_table_info().clone();
+    let update_stream_meta = dml_build_update_stream_req(ctx.clone()).await?;
+    let (statistics, partitions) =
+        mutation_source_partitions(ctx, mutation, fuse_table, table_snapshot.clone(), dry_run)
+            .await?;
+    Ok(MutationBuildInfo {
+        table_info,
+        table_snapshot,
+        update_stream_meta,
+        partitions,
+        statistics,
+    })
+}
+
+async fn mutation_source_partitions(
+    ctx: Arc<QueryContext>,
+    mutation: &Mutation,
+    fuse_table: &FuseTable,
+    table_snapshot: Option<Arc<TableSnapshot>>,
+    dry_run: bool,
+) -> Result<(PartStatistics, Partitions)> {
+    if mutation.no_effect || mutation.strategy != MutationStrategy::Direct {
+        return Ok(Default::default());
+    }
+
+    let Some(table_snapshot) = table_snapshot else {
+        return Ok(Default::default());
+    };
+
+    let (filters, filter_used_columns) = if !mutation.direct_filter.is_empty() {
+        let filters =
+            create_push_down_filters(&ctx.get_function_context()?, &mutation.direct_filter)?;
+        let filter_used_columns = mutation
+            .direct_filter
+            .iter()
+            .flat_map(|expr| expr.used_columns())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        (Some(filters), filter_used_columns)
+    } else {
+        if mutation.mutation_type == MutationType::Delete {
+            // do truncate.
             return Ok(Default::default());
         }
+        (None, vec![])
+    };
 
-        let Some(table_snapshot) = table_snapshot else {
-            return Ok(Default::default());
-        };
-
-        let (filters, filter_used_columns) = if !mutation.direct_filter.is_empty() {
-            let filters = create_push_down_filters(
-                &self.ctx.get_function_context()?,
-                &mutation.direct_filter,
-            )?;
-            let filter_used_columns = mutation
-                .direct_filter
-                .iter()
-                .flat_map(|expr| expr.used_columns())
-                .collect::<HashSet<_>>()
-                .into_iter()
-                .collect();
-            (Some(filters), filter_used_columns)
-        } else {
-            if mutation.mutation_type == MutationType::Delete {
-                // do truncate.
-                return Ok(Default::default());
-            }
-            (None, vec![])
-        };
-
-        let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
-            let cluster = self.ctx.get_cluster();
-            let is_lazy =
-                !cluster.is_empty() && table_snapshot.segments.len() >= cluster.nodes.len();
-            (is_lazy, true)
-        } else {
-            (false, false)
-        };
-        fuse_table
-            .mutation_read_partitions(
-                self.ctx.clone(),
-                table_snapshot,
-                filter_used_columns,
-                filters,
-                is_lazy,
-                is_delete,
-            )
-            .await
-    }
+    let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
+        let cluster = ctx.get_cluster();
+        let is_lazy =
+            !dry_run && !cluster.is_empty() && table_snapshot.segments.len() >= cluster.nodes.len();
+        (is_lazy, true)
+    } else {
+        (false, false)
+    };
+    fuse_table
+        .mutation_read_partitions(
+            ctx,
+            table_snapshot,
+            filter_used_columns,
+            filters,
+            is_lazy,
+            is_delete,
+        )
+        .await
 }
