@@ -18,8 +18,6 @@ use std::alloc::Layout;
 use std::alloc::System;
 use std::ptr::NonNull;
 
-use crate::runtime::ThreadTracker;
-
 /// std system allocator.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StdAllocator;

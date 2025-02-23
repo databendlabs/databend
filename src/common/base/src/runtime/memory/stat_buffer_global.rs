@@ -14,6 +14,7 @@
 
 use std::ptr::addr_of_mut;
 use std::sync::atomic::Ordering;
+#[cfg(test)]
 use std::sync::Arc;
 
 use crate::runtime::memory::mem_stat::OutOfLimit;
@@ -34,7 +35,7 @@ pub struct GlobalStatBuffer {
     pub(crate) memory_usage: i64,
     // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
     unlimited_flag: bool,
-    global_mem_stat: &'static MemStat,
+    pub(crate) global_mem_stat: &'static MemStat,
     destroyed_thread_local_macro: bool,
 }
 
@@ -138,7 +139,7 @@ impl GlobalStatBuffer {
 
 #[cfg(test)]
 pub struct MockGuard {
-    mem_stat: Arc<MemStat>,
+    _mem_stat: Arc<MemStat>,
     old_global_stat_buffer: GlobalStatBuffer,
 }
 
@@ -165,14 +166,14 @@ impl GlobalStatBuffer {
     pub fn mock(mem_stat: Arc<MemStat>) -> MockGuard {
         let mut mock_global_stat_buffer = Self {
             memory_usage: 0,
-            global_mem_stat: unsafe { std::mem::transmute(mem_stat.as_ref()) },
+            global_mem_stat: unsafe { std::mem::transmute::<&_, &'static _>(mem_stat.as_ref()) },
             unlimited_flag: false,
             destroyed_thread_local_macro: false,
         };
 
         std::mem::swap(GlobalStatBuffer::current(), &mut mock_global_stat_buffer);
         MockGuard {
-            mem_stat,
+            _mem_stat: mem_stat,
             old_global_stat_buffer: mock_global_stat_buffer,
         }
     }

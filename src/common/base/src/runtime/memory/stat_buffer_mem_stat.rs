@@ -97,7 +97,7 @@ impl MemStatBuffer {
 
         if self.incr(memory_usage) >= MEM_STAT_BUFFER_SIZE {
             let alloc = memory_usage;
-            self.flush::<true>(alloc)?;
+            self.flush::<false>(alloc)?;
         }
 
         Ok(())
@@ -134,9 +134,7 @@ impl MemStatBuffer {
         if mem_stat.id != self.cur_mem_stat_id {
             if Arc::strong_count(mem_stat) == 1 {
                 mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
-                self.global_mem_stat
-                    .used
-                    .fetch_add(memory_usage, Ordering::Relaxed);
+                GlobalStatBuffer::current().force_alloc(memory_usage);
                 return;
             }
 
@@ -166,7 +164,7 @@ impl MemStatBuffer {
 
 #[cfg(test)]
 pub struct MockGuard {
-    mem_stat: Arc<MemStat>,
+    _mem_stat: Arc<MemStat>,
     old_mem_stat_buffer: MemStatBuffer,
 }
 
@@ -188,11 +186,12 @@ impl Drop for MockGuard {
 #[cfg(test)]
 impl MemStatBuffer {
     pub fn mock(mem_stat: Arc<MemStat>) -> MockGuard {
-        let mut mem_stat_buffer = Self::empty(unsafe { std::mem::transmute(mem_stat.as_ref()) });
+        let mut mem_stat_buffer =
+            Self::empty(unsafe { std::mem::transmute::<&_, &'static _>(mem_stat.as_ref()) });
         std::mem::swap(MemStatBuffer::current(), &mut mem_stat_buffer);
 
         MockGuard {
-            mem_stat,
+            _mem_stat: mem_stat,
             old_mem_stat_buffer: mem_stat_buffer,
         }
     }

@@ -18,7 +18,6 @@ use std::alloc::Layout;
 use std::mem::ManuallyDrop;
 use std::ptr::slice_from_raw_parts_mut;
 use std::ptr::NonNull;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use crate::runtime::GlobalStatBuffer;
@@ -698,7 +697,7 @@ mod tests {
 
             let allocator = Arc::new(MetaTrackerAllocator::create(nest));
             let _guard = ThreadTracker::tracking(tracking_payload);
-            let _mem_stat_guard = MemStatBuffer::mock(mem_stat.clone());
+            let _mem_stat_guard = MemStatBuffer::mock(global.clone());
             let _global_stat_guard = GlobalStatBuffer::mock(global.clone());
             test(mem_stat, allocator);
         }
@@ -727,7 +726,7 @@ mod tests {
             assert_eq!(GlobalStatBuffer::current().memory_usage, 0);
         };
 
-        with_mock_env(test_function, StdAllocator::default());
+        with_mock_env(test_function, StdAllocator);
     }
 
     #[test]
@@ -750,12 +749,12 @@ mod tests {
             assert_eq!(GlobalStatBuffer::current().memory_usage, 0);
         };
 
-        with_mock_env(test_function, StdAllocator::default());
+        with_mock_env(test_function, StdAllocator);
     }
 
     #[test]
     fn test_cross_threshold_grow() {
-        let test_function = |mem_stat: Arc<MemStat>, allocator: Arc<dyn Allocator>| {
+        let test_function = |_mem_stat: Arc<MemStat>, allocator: Arc<dyn Allocator>| {
             let old_layout = Layout::from_size_align(256, 8).unwrap();
             let ptr = allocator.allocate(old_layout).unwrap();
             assert_eq!(GlobalStatBuffer::current().memory_usage, 256);
@@ -803,7 +802,7 @@ mod tests {
 
     #[test]
     fn test_shrink_memory() {
-        let test_function = |mem_stat: Arc<MemStat>, allocator: Arc<dyn Allocator>| {
+        let test_function = |_mem_stat: Arc<MemStat>, allocator: Arc<dyn Allocator>| {
             let old_layout = Layout::from_size_align(1024, 8).unwrap();
             let new_layout = Layout::from_size_align(256, 8).unwrap();
 
@@ -822,12 +821,12 @@ mod tests {
 
             unsafe { allocator.deallocate(new_ptr.as_non_null_ptr(), new_layout) };
         };
-        with_mock_env(test_function, StdAllocator::default());
+        with_mock_env(test_function, StdAllocator);
     }
 
     #[test]
     fn test_extreme_alignment() {
-        let test_function = |mem_stat: Arc<MemStat>, allocator: Arc<dyn Allocator>| {
+        let test_function = |_mem_stat: Arc<MemStat>, allocator: Arc<dyn Allocator>| {
             let layout = Layout::from_size_align(512, 64).unwrap();
             let ptr = allocator.allocate(layout).unwrap();
 
@@ -843,14 +842,14 @@ mod tests {
             unsafe { allocator.deallocate(ptr.as_non_null_ptr(), layout) };
         };
 
-        with_mock_env(test_function, StdAllocator::default());
+        with_mock_env(test_function, StdAllocator);
     }
 
     #[test]
     fn test_allocate_zeroed_failure() {
         struct FailingAllocator;
         unsafe impl Allocator for FailingAllocator {
-            fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+            fn allocate(&self, _layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
                 unreachable!()
             }
 
@@ -858,7 +857,7 @@ mod tests {
                 Err(AllocError)
             }
 
-            unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
+            unsafe fn deallocate(&self, _ptr: NonNull<u8>, _layout: Layout) {
                 unreachable!()
             }
         }
@@ -949,10 +948,7 @@ mod tests {
             unsafe { allocator.deallocate(ptr.as_non_null_ptr(), old_layout) };
         };
 
-        with_mock_env(
-            test_function,
-            PartialFailingAllocator(StdAllocator::default()),
-        );
+        with_mock_env(test_function, PartialFailingAllocator(StdAllocator));
     }
 
     #[test]
@@ -1025,10 +1021,7 @@ mod tests {
             unsafe { allocator.deallocate(ptr.as_non_null_ptr(), old_layout) };
         };
 
-        with_mock_env(
-            test_function,
-            GrowZeroedFailingAllocator(StdAllocator::default()),
-        );
+        with_mock_env(test_function, GrowZeroedFailingAllocator(StdAllocator));
     }
 
     #[test]
@@ -1097,10 +1090,7 @@ mod tests {
             unsafe { allocator.deallocate(ptr.as_non_null_ptr(), old_layout) };
         };
 
-        with_mock_env(
-            test_function,
-            ShrinkFailingAllocator(StdAllocator::default()),
-        );
+        with_mock_env(test_function, ShrinkFailingAllocator(StdAllocator));
     }
 
     #[test]
@@ -1173,9 +1163,8 @@ mod tests {
 
         let test_function = |mem_stat: Arc<MemStat>, allocator: Arc<dyn Allocator>| {
             let mut allocations = vec![];
-            let mut expected_usage = 0;
 
-            for _ in 0..1000 {
+            for _ in 0..1000000 {
                 match rand::random::<u8>() % 6 {
                     // allocate
                     0 => {
@@ -1184,11 +1173,6 @@ mod tests {
 
                         if let Ok(ptr) = allocator.allocate(layout) {
                             allocations.push((ptr, layout));
-                            expected_usage += if size >= META_TRACKER_THRESHOLD {
-                                (size + std::mem::size_of::<usize>()) as i64
-                            } else {
-                                size as i64
-                            };
                         }
                     }
                     // allocate_zero
@@ -1198,11 +1182,6 @@ mod tests {
 
                         if let Ok(ptr) = allocator.allocate_zeroed(layout) {
                             allocations.push((ptr, layout));
-                            expected_usage += if size >= META_TRACKER_THRESHOLD {
-                                (size + std::mem::size_of::<usize>()) as i64
-                            } else {
-                                size as i64
-                            };
                         }
                     }
                     // deallocate
@@ -1211,11 +1190,6 @@ mod tests {
                             let index = rand::random::<usize>() % allocations.len();
                             let (ptr, layout) = allocations.remove(index);
                             unsafe { allocator.deallocate(ptr.as_non_null_ptr(), layout) };
-                            expected_usage -= if layout.size() >= META_TRACKER_THRESHOLD {
-                                (layout.size() + std::mem::size_of::<usize>()) as i64
-                            } else {
-                                layout.size() as i64
-                            };
                         }
                     }
                     // grow
@@ -1230,17 +1204,6 @@ mod tests {
                                 allocator.grow(ptr.as_non_null_ptr(), old_layout, new_layout)
                             } {
                                 allocations[index] = (new_ptr, new_layout);
-                                expected_usage += if new_size >= META_TRACKER_THRESHOLD {
-                                    (new_size + std::mem::size_of::<usize>()) as i64
-                                        - if old_layout.size() >= META_TRACKER_THRESHOLD {
-                                            (old_layout.size() + std::mem::size_of::<usize>())
-                                                as i64
-                                        } else {
-                                            old_layout.size() as i64
-                                        }
-                                } else {
-                                    (new_size - old_layout.size()) as i64
-                                };
                             }
                         }
                     }
@@ -1256,17 +1219,6 @@ mod tests {
                                 allocator.grow_zeroed(ptr.as_non_null_ptr(), old_layout, new_layout)
                             } {
                                 allocations[index] = (new_ptr, new_layout);
-                                expected_usage += if new_size >= META_TRACKER_THRESHOLD {
-                                    (new_size + std::mem::size_of::<usize>()) as i64
-                                        - if old_layout.size() >= META_TRACKER_THRESHOLD {
-                                            (old_layout.size() + std::mem::size_of::<usize>())
-                                                as i64
-                                        } else {
-                                            old_layout.size() as i64
-                                        }
-                                } else {
-                                    (new_size - old_layout.size()) as i64
-                                };
                             }
                         }
                     }
@@ -1284,16 +1236,6 @@ mod tests {
                                 allocator.shrink(ptr.as_non_null_ptr(), old_layout, new_layout)
                             } {
                                 allocations[index] = (new_ptr, new_layout);
-                                expected_usage -= if old_layout.size() >= META_TRACKER_THRESHOLD {
-                                    (old_layout.size() + std::mem::size_of::<usize>()) as i64
-                                        - if new_size >= META_TRACKER_THRESHOLD {
-                                            (new_size + std::mem::size_of::<usize>()) as i64
-                                        } else {
-                                            new_size as i64
-                                        }
-                                } else {
-                                    (old_layout.size() - new_size) as i64
-                                };
                             }
                         }
                     }
@@ -1311,13 +1253,43 @@ mod tests {
 
             assert_eq!(actual_usage, mem_stat_expected_usage);
 
+            let small_usage = allocations
+                .iter()
+                .filter(|(_, r)| r.size() < META_TRACKER_THRESHOLD)
+                .map(|(_, r)| r.size() as i64)
+                .sum::<i64>();
+
+            assert_eq!(
+                small_usage + actual_usage,
+                MemStatBuffer::current().memory_usage
+                    + GlobalStatBuffer::current().memory_usage
+                    + GlobalStatBuffer::current()
+                        .global_mem_stat
+                        .used
+                        .load(Ordering::Relaxed)
+            );
+
             for (ptr, layout) in allocations {
                 unsafe { allocator.deallocate(ptr.as_non_null_ptr(), layout) };
             }
+
+            MemStatBuffer::current().flush::<false>(0).unwrap();
+            GlobalStatBuffer::current().flush::<false>(0).unwrap();
+
+            assert_eq!(0, mem_stat.used.load(Ordering::Relaxed));
+            assert_eq!(0, MemStatBuffer::current().memory_usage);
+            assert_eq!(0, GlobalStatBuffer::current().memory_usage);
+            assert_eq!(
+                0,
+                GlobalStatBuffer::current()
+                    .global_mem_stat
+                    .used
+                    .load(Ordering::Relaxed)
+            );
         };
 
         with_mock_env(test_function, ChaosAllocator {
-            inner: StdAllocator::default(),
+            inner: StdAllocator,
             failure_rate: 0.3,
         });
     }
