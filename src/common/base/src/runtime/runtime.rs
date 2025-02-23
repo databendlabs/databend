@@ -37,7 +37,6 @@ use tokio::sync::Semaphore;
 
 use crate::runtime::catch_unwind::CatchUnwindFuture;
 use crate::runtime::drop_guard;
-use crate::runtime::memory::MemStat;
 use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
 use crate::runtime::ThreadTracker;

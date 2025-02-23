@@ -101,10 +101,6 @@ pub struct PipelinePullingExecutor {
 }
 
 impl PipelinePullingExecutor {
-    fn execution_tracking_payload(query_id: &str) -> TrackingPayload {
-        ThreadTracker::new_tracking_payload()
-    }
-
     fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<DataBlock>) -> Result<()> {
         if pipeline.is_pushing_pipeline()? || !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::Internal(
@@ -127,7 +123,7 @@ impl PipelinePullingExecutor {
         mut pipeline: Pipeline,
         settings: ExecutorSettings,
     ) -> Result<PipelinePullingExecutor> {
-        let tracking_payload = Self::execution_tracking_payload(settings.query_id.as_ref());
+        let tracking_payload = ThreadTracker::new_tracking_payload();
         let _guard = ThreadTracker::tracking(tracking_payload.clone());
 
         let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
@@ -147,7 +143,7 @@ impl PipelinePullingExecutor {
         build_res: PipelineBuildResult,
         settings: ExecutorSettings,
     ) -> Result<PipelinePullingExecutor> {
-        let tracking_payload = Self::execution_tracking_payload(settings.query_id.as_ref());
+        let tracking_payload = ThreadTracker::new_tracking_payload();
         let _guard = ThreadTracker::tracking(tracking_payload.clone());
 
         let mut main_pipeline = build_res.main_pipeline;
