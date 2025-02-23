@@ -80,6 +80,7 @@ impl PhysicalPlan {
         to_format_tree(self, &metadata, &profs)
     }
 
+    #[recursive::recursive]
     pub fn format_join(&self, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
         match self {
             PhysicalPlan::TableScan(plan) => {

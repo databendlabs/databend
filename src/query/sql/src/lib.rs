@@ -17,6 +17,7 @@
 #![feature(box_patterns)]
 #![feature(iterator_try_reduce)]
 #![feature(let_chains)]
+#![feature(trivial_bounds)]
 #![feature(try_blocks)]
 #![feature(extend_one)]
 #![feature(if_let_guard)]

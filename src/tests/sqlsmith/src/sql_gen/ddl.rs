@@ -19,19 +19,25 @@ use databend_common_ast::ast::ColumnExpr;
 use databend_common_ast::ast::CreateOption;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::CreateTableStmt;
+use databend_common_ast::ast::CreateViewStmt;
 use databend_common_ast::ast::DropTableStmt;
+use databend_common_ast::ast::DropViewStmt;
 use databend_common_ast::ast::Engine;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::TypeName;
+use databend_common_exception::ErrorCode;
+use databend_common_expression::types::DataType;
 use rand::distributions::Alphanumeric;
 use rand::Rng;
 
 use crate::sql_gen::SqlGenerator;
 
 const BASE_TABLE_NAMES: [&str; 4] = ["t1", "t2", "t3", "t4"];
+const BASE_VIEW_NAMES: [&str; 4] = ["v1", "v2", "v3", "v4"];
 
 const SIMPLE_COLUMN_TYPES: [TypeName; 22] = [
     TypeName::Boolean,
@@ -102,6 +108,48 @@ impl<R: Rng> SqlGenerator<'_, R> {
             tables.push((drop_table, create_table));
         }
         tables
+    }
+
+    pub(crate) async fn gen_view(
+        &mut self,
+        db_name: &str,
+    ) -> Result<Vec<(DropViewStmt, CreateViewStmt, Vec<DataType>)>, ErrorCode> {
+        let mut views = Vec::with_capacity(BASE_VIEW_NAMES.len());
+
+        for view_name in BASE_VIEW_NAMES {
+            let drop_view = DropViewStmt {
+                if_exists: true,
+                catalog: None,
+                database: Some(Identifier::from_name(None, db_name)),
+                view: Identifier::from_name(None, view_name.to_string()),
+            };
+            let (query, select_list, col_types) = self.gen_view_query();
+            let mut columns = vec![];
+            for s in select_list {
+                match s {
+                    SelectTarget::AliasedExpr { expr, .. } => {
+                        columns.push(Identifier::from_name_with_quoted(
+                            None,
+                            expr.to_string(),
+                            Some('`'),
+                        ));
+                    }
+                    SelectTarget::StarColumns { .. } => {
+                        unreachable!()
+                    }
+                }
+            }
+            let create_view = CreateViewStmt {
+                create_option: CreateOption::CreateOrReplace,
+                catalog: None,
+                database: Some(Identifier::from_name(None, db_name)),
+                columns,
+                view: Identifier::from_name(None, view_name.to_string()),
+                query: Box::new(query),
+            };
+            views.push((drop_view, create_view, col_types));
+        }
+        Ok(views)
     }
 
     fn gen_nested_type(&mut self, depth: u8) -> TypeName {

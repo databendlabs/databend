@@ -975,7 +975,7 @@ impl<'a> Binder {
 
         let mut has_score = false;
         let mut has_matched = false;
-        for column_id in bound_internal_columns.keys() {
+        for (_, column_id) in bound_internal_columns.keys() {
             if *column_id == SEARCH_SCORE_COLUMN_ID {
                 has_score = true;
             } else if *column_id == SEARCH_MATCHED_COLUMN_ID {
@@ -988,7 +988,7 @@ impl<'a> Binder {
             ));
         }
 
-        for (table_index, column_index) in bound_internal_columns.values() {
+        for ((table_index, _), column_index) in bound_internal_columns.iter() {
             let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
                 i.has_score = has_score;
                 i

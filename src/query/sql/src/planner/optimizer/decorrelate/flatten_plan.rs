@@ -53,6 +53,7 @@ use crate::TableInternalColumn;
 use crate::VirtualColumn;
 
 impl SubqueryRewriter {
+    #[recursive::recursive]
     pub fn flatten_plan(
         &mut self,
         plan: &SExpr,

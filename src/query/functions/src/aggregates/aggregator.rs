@@ -28,6 +28,7 @@ use super::aggregate_combinator_distinct::aggregate_combinator_uniq_desc;
 use super::aggregate_combinator_state::AggregateStateCombinator;
 use super::aggregate_covariance::aggregate_covariance_population_desc;
 use super::aggregate_covariance::aggregate_covariance_sample_desc;
+use super::aggregate_markov_tarin::aggregate_markov_train_function_desc;
 use super::aggregate_min_max_any::aggregate_any_function_desc;
 use super::aggregate_min_max_any::aggregate_max_function_desc;
 use super::aggregate_min_max_any::aggregate_min_function_desc;
@@ -150,6 +151,8 @@ impl Aggregators {
         factory.register("mode", aggregate_mode_function_desc());
 
         factory.register("st_collect", aggregate_st_collect_function_desc());
+
+        factory.register("markov_train", aggregate_markov_train_function_desc());
     }
 
     pub fn register_combinator(factory: &mut AggregateFunctionFactory) {

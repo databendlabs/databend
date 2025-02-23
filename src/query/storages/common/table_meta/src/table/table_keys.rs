@@ -55,6 +55,7 @@ pub const OPT_KEY_RANDOM_MAX_STRING_LEN: &str = "max_string_len";
 pub const OPT_KEY_RANDOM_MAX_ARRAY_LEN: &str = "max_array_len";
 
 pub const OPT_KEY_CLUSTER_TYPE: &str = "cluster_type";
+pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
 

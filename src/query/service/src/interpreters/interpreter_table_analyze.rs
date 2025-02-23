@@ -270,6 +270,7 @@ impl Interpreter for AnalyzeTableInterpreter {
 }
 
 fn remove_exchange(plan: PhysicalPlan) -> PhysicalPlan {
+    #[recursive::recursive]
     fn traverse(plan: PhysicalPlan) -> PhysicalPlan {
         match plan {
             PhysicalPlan::Filter(plan) => PhysicalPlan::Filter(Filter {

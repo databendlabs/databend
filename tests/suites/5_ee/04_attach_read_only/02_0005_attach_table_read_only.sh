@@ -113,5 +113,11 @@ echo "show create attach table"
 # e.g. s3://testbucket/admin/data/1/401/ to s3://testbucket/admin/data/PLACE_HOLDER/PLACE_HOLDER/
 echo "show create table attach_read_only" | $BENDSQL_CLIENT_CONNECT | sed -E 's/[0-9]+/PLACE_HOLDER/g'
 
+# 4.2 copy into
+echo "copy into attached table should fail"
+echo "CREATE OR REPLACE STAGE test_attach_source;" | $BENDSQL_CLIENT_CONNECT
+echo "copy into attach_read_only from @test_attach_source" | $BENDSQL_CLIENT_CONNECT
+
+
 echo "drop table if exists base" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists attach_read_only" | $BENDSQL_CLIENT_CONNECT

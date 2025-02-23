@@ -295,6 +295,7 @@ impl<'a> TypeChecker<'a> {
                         let column = self.bind_context.add_internal_column_binding(
                             &column,
                             self.metadata.clone(),
+                            None,
                             true,
                         )?;
                         let data_type = *column.data_type.clone();
@@ -1116,9 +1117,9 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs)?,
 
-            Expr::Hole { span, .. } => {
+            Expr::Hole { span, .. } | Expr::Placeholder { span } => {
                 return Err(ErrorCode::SemanticError(
-                    "Hole expression is impossible in trivial query".to_string(),
+                    "Hole or Placeholder expression is impossible in trivial query".to_string(),
                 )
                 .set_span(*span))
             }
@@ -2199,6 +2200,7 @@ impl<'a> TypeChecker<'a> {
         let column = self.bind_context.add_internal_column_binding(
             &internal_column_binding,
             self.metadata.clone(),
+            None,
             false,
         )?;
 
@@ -2630,6 +2632,7 @@ impl<'a> TypeChecker<'a> {
         let column = self.bind_context.add_internal_column_binding(
             &internal_column_binding,
             self.metadata.clone(),
+            None,
             false,
         )?;
 

@@ -24,7 +24,6 @@ use databend_common_io::cursor_ext::ReadBytesExt;
 use jiff::civil::Date;
 use jiff::fmt::strtime;
 use jiff::tz::TimeZone;
-use log::error;
 use num_traits::AsPrimitive;
 
 use super::number::SimpleDomain;
@@ -54,7 +53,6 @@ pub fn clamp_date(days: i64) -> i32 {
     if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
         days as i32
     } else {
-        error!("{}", format!("date {} is out of range", days));
         DATE_MIN
     }
 }
