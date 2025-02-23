@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
 use crate::runtime::memory::OutOfLimit;
+use crate::runtime::GlobalStatBuffer;
 use crate::runtime::LimitMemGuard;
 use crate::runtime::MemStat;
 use crate::runtime::GLOBAL_MEM_STAT;
@@ -28,7 +29,7 @@ static mut MEM_STAT_BUFFER: MemStatBuffer = MemStatBuffer::empty(&GLOBAL_MEM_STA
 pub struct MemStatBuffer {
     cur_mem_stat_id: usize,
     cur_mem_stat: Option<Arc<MemStat>>,
-    memory_usage: i64,
+    pub(crate) memory_usage: i64,
     // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
     // unlimited_flag: bool,
     global_mem_stat: &'static MemStat,
@@ -56,11 +57,9 @@ impl MemStatBuffer {
         self.memory_usage
     }
 
-    pub fn flush<const FALLBACK: bool>(
-        &mut self,
-        memory_usage: i64,
-        alloc: i64,
-    ) -> Result<(), OutOfLimit> {
+    pub fn flush<const FALLBACK: bool>(&mut self, alloc: i64) -> Result<(), OutOfLimit> {
+        let memory_usage = std::mem::take(&mut self.memory_usage);
+
         if memory_usage == 0 {
             return Ok(());
         }
@@ -90,8 +89,7 @@ impl MemStatBuffer {
         }
 
         if mem_stat.id != self.cur_mem_stat_id {
-            let memory_usage = std::mem::take(&mut self.memory_usage);
-            self.flush::<false>(memory_usage, 0)?;
+            self.flush::<false>(0)?;
 
             self.cur_mem_stat = Some(mem_stat.clone());
             self.cur_mem_stat_id = mem_stat.id;
@@ -99,11 +97,28 @@ impl MemStatBuffer {
 
         if self.incr(memory_usage) >= MEM_STAT_BUFFER_SIZE {
             let alloc = memory_usage;
-            let memory_usage = std::mem::take(&mut self.memory_usage);
-            self.flush::<true>(memory_usage, alloc)?;
+            self.flush::<true>(alloc)?;
         }
 
         Ok(())
+    }
+
+    pub fn force_alloc(&mut self, mem_stat: &Arc<MemStat>, memory_usage: i64) {
+        if self.destroyed_thread_local_macro {
+            mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
+        }
+
+        if mem_stat.id != self.cur_mem_stat_id {
+            let _ = self.flush::<false>(0);
+
+            self.cur_mem_stat = Some(mem_stat.clone());
+            self.cur_mem_stat_id = mem_stat.id;
+        }
+
+        if self.incr(memory_usage) >= MEM_STAT_BUFFER_SIZE {
+            let alloc = memory_usage;
+            let _ = self.flush::<false>(alloc);
+        }
     }
 
     pub fn dealloc(&mut self, mem_stat: &Arc<MemStat>, memory_usage: i64) {
@@ -125,8 +140,7 @@ impl MemStatBuffer {
                 return;
             }
 
-            let memory_usage = std::mem::take(&mut self.memory_usage);
-            let _ = self.flush::<false>(memory_usage, 0);
+            let _ = self.flush::<false>(0);
 
             self.cur_mem_stat = Some(mem_stat.clone());
             self.cur_mem_stat_id = mem_stat.id;
@@ -134,8 +148,7 @@ impl MemStatBuffer {
 
         if self.incr(memory_usage) <= -MEM_STAT_BUFFER_SIZE || Arc::strong_count(mem_stat) == 1 {
             let alloc = memory_usage;
-            let memory_usage = std::mem::take(&mut self.memory_usage);
-            let _ = self.flush::<false>(memory_usage, alloc);
+            let _ = self.flush::<false>(alloc);
         }
 
         // NOTE: De-allocation does not panic
@@ -145,10 +158,43 @@ impl MemStatBuffer {
 
     pub fn mark_destroyed(&mut self) {
         let _guard = LimitMemGuard::enter_unlimited();
-        let memory_usage = std::mem::take(&mut self.memory_usage);
 
         self.destroyed_thread_local_macro = true;
-        let _ = self.flush::<false>(memory_usage, 0);
+        let _ = self.flush::<false>(0);
+    }
+}
+
+#[cfg(test)]
+pub struct MockGuard {
+    mem_stat: Arc<MemStat>,
+    old_mem_stat_buffer: MemStatBuffer,
+}
+
+#[cfg(test)]
+impl MockGuard {
+    pub fn flush(&mut self) -> Result<(), OutOfLimit> {
+        MemStatBuffer::current().flush::<false>(0)
+    }
+}
+
+#[cfg(test)]
+impl Drop for MockGuard {
+    fn drop(&mut self) {
+        let _ = self.flush();
+        std::mem::swap(MemStatBuffer::current(), &mut self.old_mem_stat_buffer);
+    }
+}
+
+#[cfg(test)]
+impl MemStatBuffer {
+    pub fn mock(mem_stat: Arc<MemStat>) -> MockGuard {
+        let mut mem_stat_buffer = Self::empty(unsafe { std::mem::transmute(mem_stat.as_ref()) });
+        std::mem::swap(MemStatBuffer::current(), &mut mem_stat_buffer);
+
+        MockGuard {
+            mem_stat,
+            old_mem_stat_buffer: mem_stat_buffer,
+        }
     }
 }
 

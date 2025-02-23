@@ -187,6 +187,7 @@ impl ThreadTracker {
         let mut guard = TrackingGuard {
             saved: tracking_payload,
         };
+        let _ = MemStatBuffer::current().flush::<false>(0);
         let _ = GlobalStatBuffer::current().flush::<false>(0);
 
         TRACKER.with(move |x| {

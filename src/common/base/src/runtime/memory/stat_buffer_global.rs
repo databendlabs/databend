@@ -14,6 +14,7 @@
 
 use std::ptr::addr_of_mut;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
 use crate::runtime::memory::mem_stat::OutOfLimit;
 use crate::runtime::memory::MemStat;
@@ -30,7 +31,7 @@ pub static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
 /// A StatBuffer buffers stats changes in local variables, and periodically flush them to other storage such as an `Arc<T>` shared by several threads.
 #[derive(Clone)]
 pub struct GlobalStatBuffer {
-    memory_usage: i64,
+    pub(crate) memory_usage: i64,
     // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
     unlimited_flag: bool,
     global_mem_stat: &'static MemStat,
@@ -132,6 +133,48 @@ impl GlobalStatBuffer {
         // Memory operations during destruction will be recorded to global stat.
         self.destroyed_thread_local_macro = true;
         let _ = self.global_mem_stat.record_memory::<false>(memory_usage, 0);
+    }
+}
+
+#[cfg(test)]
+pub struct MockGuard {
+    mem_stat: Arc<MemStat>,
+    old_global_stat_buffer: GlobalStatBuffer,
+}
+
+#[cfg(test)]
+impl MockGuard {
+    pub fn flush(&mut self) -> Result<(), OutOfLimit> {
+        GlobalStatBuffer::current().flush::<false>(0)
+    }
+}
+
+#[cfg(test)]
+impl Drop for MockGuard {
+    fn drop(&mut self) {
+        let _ = self.flush();
+        std::mem::swap(
+            GlobalStatBuffer::current(),
+            &mut self.old_global_stat_buffer,
+        );
+    }
+}
+
+#[cfg(test)]
+impl GlobalStatBuffer {
+    pub fn mock(mem_stat: Arc<MemStat>) -> MockGuard {
+        let mut mock_global_stat_buffer = Self {
+            memory_usage: 0,
+            global_mem_stat: unsafe { std::mem::transmute(mem_stat.as_ref()) },
+            unlimited_flag: false,
+            destroyed_thread_local_macro: false,
+        };
+
+        std::mem::swap(GlobalStatBuffer::current(), &mut mock_global_stat_buffer);
+        MockGuard {
+            mem_stat,
+            old_global_stat_buffer: mock_global_stat_buffer,
+        }
     }
 }
 
