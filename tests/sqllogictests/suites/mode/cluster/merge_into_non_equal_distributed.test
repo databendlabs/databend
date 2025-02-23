@@ -95,17 +95,7 @@ CommitSink
 query T
 explain merge into t1 using (select * from t2) as t on 1 <> 1 when matched then update *
 ----
-CommitSink
-└── Exchange
-    ├── output columns: []
-    ├── exchange type: Merge
-    └── DataMutation
-        ├── target table: [catalog: default] [database: default] [table: t1]
-        ├── matched delete: [condition: None]
-        └── Exchange
-            ├── output columns: [t2.a (#0), t1._row_id (#2)]
-            ├── exchange type: Hash(bit_and(bit_shift_right(t1._row_id (#2), 31), 2047))
-            └── EmptyResultScan
+EmptyResultScan
 
 ## check there is add row_number.
 query T

@@ -30,7 +30,7 @@ Fragment 0:
     ExchangeSink
     ├── output columns: []
     ├── destination fragment: [1]
-    └── MutationSource
+    └── MutationSource(Update)
         ├── table: default.db1.t1
         ├── output columns: [a (#0), b (#1), _predicate (#2)]
         ├── filters: [is_true(t1.b (#1) > '2022-12-31')]
@@ -56,17 +56,4 @@ SELECT * FROM t1 ORDER BY b
 query T
 explain fragments UPDATE t1 SET a = 3 WHERE false
 ----
-Fragment 0:
-  DataExchange: Merge
-    ExchangeSink
-    ├── output columns: []
-    ├── destination fragment: [1]
-    └── EmptyResultScan
-(empty)
-(empty)
-Fragment 1:
-    CommitSink
-    └── ExchangeSource
-        ├── output columns: []
-        └── source fragment: [0]
-(empty)
+EmptyResultScan
