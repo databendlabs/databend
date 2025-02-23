@@ -233,6 +233,14 @@ pub enum ExprElement {
     Literal {
         value: Literal,
     },
+    /// LIST_AGG( [ DISTINCT ] <expr1> [, <delimiter> ] )
+    ///     OVER ( [ PARTITION BY <expr2> ] )
+    ListAgg {
+        distinct: bool,
+        expr: Box<Expr>,
+        delimiter: Option<Box<Expr>>,
+        window: Option<Window>,
+    },
     /// `Count(*)` expression
     CountAll {
         window: Option<Window>,
@@ -416,6 +424,7 @@ impl ExprElement {
             ExprElement::SubString { .. } => Affix::Nilfix,
             ExprElement::Trim { .. } => Affix::Nilfix,
             ExprElement::Literal { .. } => Affix::Nilfix,
+            ExprElement::ListAgg { .. } => Affix::Nilfix,
             ExprElement::CountAll { .. } => Affix::Nilfix,
             ExprElement::Tuple { .. } => Affix::Nilfix,
             ExprElement::FunctionCall { .. } => Affix::Nilfix,
@@ -465,6 +474,7 @@ impl Expr {
             Expr::ColumnRef { .. } => Affix::Nilfix,
             Expr::Trim { .. } => Affix::Nilfix,
             Expr::Literal { .. } => Affix::Nilfix,
+            Expr::ListAgg { .. } => Affix::Nilfix,
             Expr::CountAll { .. } => Affix::Nilfix,
             Expr::Tuple { .. } => Affix::Nilfix,
             Expr::FunctionCall { .. } => Affix::Nilfix,
@@ -551,6 +561,18 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
             ExprElement::Literal { value } => Expr::Literal {
                 span: transform_span(elem.span.tokens),
                 value,
+            },
+            ExprElement::ListAgg {
+                distinct,
+                expr,
+                delimiter,
+                window,
+            } => Expr::ListAgg {
+                span: transform_span(elem.span.tokens),
+                distinct,
+                expr,
+                delimiter,
+                window,
             },
             ExprElement::CountAll { window } => Expr::CountAll {
                 span: transform_span(elem.span.tokens),
@@ -981,6 +1003,22 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
     );
 
+    let list_agg = map(
+        rule! {
+            LIST_AGG ~ "(" ~ DISTINCT? ~ #expr ~ ( "," ~ #expr )? ~ ")"
+            ~ ( OVER ~ #window_spec_ident )?
+        },
+        |(_, _, opt_distinct, expr, delimiter, _, window)| {
+            ExprElement::ListAgg {
+                distinct: opt_distinct.is_some(),
+                expr: Box::new(expr),
+                delimiter: delimiter.map(|(_, expr)| Box::new(expr)),
+                // order_by: orderby.map(|o| o.5),
+                window: window.map(|w| w.1),
+            }
+        },
+    );
+
     let count_all_with_window = map(
         rule! {
             COUNT ~ "(" ~ "*" ~ ")" ~ ( OVER ~ #window_spec_ident )?
@@ -1370,6 +1408,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
                 | #chain_function_call : "x.function(...)"
                 | #list_comprehensions: "[expr for x in ... [if ...]]"
+                | #list_agg: "LIST_AGG( [ DISTINCT ] <expr> [, <delimiter> ] ) OVER ( [ PARTITION BY <expr> ] )"
                 | #count_all_with_window : "`COUNT(*) OVER ...`"
                 | #function_call_with_lambda : "`function(..., x -> ...)`"
                 | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"

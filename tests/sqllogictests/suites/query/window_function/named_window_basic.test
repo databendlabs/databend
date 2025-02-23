@@ -52,6 +52,22 @@ SELECT sum(salary) OVER w ss FROM empsalary WINDOW w AS (PARTITION BY depname OR
 9600
 14600
 
+# list_agg
+query T
+SELECT list_agg(CAST(salary as VARCHAR), '|') OVER w ss FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY salary) ORDER BY depname, ss
+----
+4200
+4200|4500
+4200|4500|5200|5200
+4200|4500|5200|5200
+4200|4500|5200|5200|6000
+3500
+3500|3900
+4800|4800
+4800|4800
+4800|4800|5000
+
+
 # row_number
 query II
 SELECT row_number() OVER w1 rn1, dense_rank() OVER w2 rn2 FROM empsalary WINDOW w1 AS (PARTITION BY depname ORDER BY salary), w2 AS (PARTITION BY depname ORDER BY salary DESC) ORDER BY depname, rn1

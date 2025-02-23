@@ -786,6 +786,22 @@ select * from (select b, row_number() over (order by b) from tbpush) where b > 1
 ----
 2 2
 
+# list_agg
+query T
+SELECT list_agg(CAST(salary as VARCHAR), '|') OVER (PARTITION BY depname ORDER BY salary) ss FROM empsalary ORDER BY depname, ss
+----
+4200
+4200|4500
+4200|4500|5200|5200
+4200|4500|5200|5200
+4200|4500|5200|5200|6000
+3500
+3500|3900
+4800|4800
+4800|4800
+4800|4800|5000
+
+
 # multiple blocks
 statement ok
 DROP TABLE IF EXISTS customers;

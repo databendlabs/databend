@@ -120,6 +120,7 @@ impl Aggregators {
         factory.register("kurtosis", aggregate_kurtosis_function_desc());
         factory.register("skewness", aggregate_skewness_function_desc());
         factory.register("string_agg", aggregate_string_agg_function_desc());
+        factory.register("list_agg", aggregate_string_agg_function_desc());
 
         factory.register("range_bound", aggregate_range_bound_function_desc());
 

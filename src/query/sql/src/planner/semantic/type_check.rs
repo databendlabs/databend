@@ -945,6 +945,36 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
+            Expr::ListAgg {
+                span,
+                distinct,
+                expr: arg_expr,
+                delimiter,
+                window,
+            } => {
+                let mut args = vec![arg_expr.as_ref()];
+                if let Some(delimiter) = delimiter {
+                    args.push(delimiter.as_ref());
+                }
+                let (new_agg_func, data_type) = self.resolve_aggregate_function(
+                    *span,
+                    "list_agg",
+                    expr,
+                    *distinct,
+                    vec![],
+                    &args,
+                )?;
+                if let Some(window) = window {
+                    // aggregate window function
+                    let display_name = format!("{:#}", expr);
+                    let func = WindowFuncType::Aggregate(new_agg_func);
+                    self.resolve_window(*span, display_name, window, func)?
+                } else {
+                    // aggregate function
+                    Box::new((new_agg_func.into(), data_type))
+                }
+            }
+
             Expr::CountAll { span, window } => {
                 let (new_agg_func, data_type) =
                     self.resolve_aggregate_function(*span, "count", expr, false, vec![], &[])?;
@@ -1735,15 +1765,16 @@ impl<'a> TypeChecker<'a> {
         self.in_aggregate_function = false;
 
         // Convert the delimiter of string_agg to params
-        let params = if func_name.eq_ignore_ascii_case("string_agg")
+        let params = if (func_name.eq_ignore_ascii_case("string_agg")
+            || func_name.eq_ignore_ascii_case("list_agg"))
             && arguments.len() == 2
             && params.is_empty()
         {
             let delimiter_value = ConstantExpr::try_from(arguments[1].clone());
             if arg_types[1] != DataType::String || delimiter_value.is_err() {
-                return Err(ErrorCode::SemanticError(
-                    "The delimiter of `string_agg` must be a constant string",
-                ));
+                return Err(ErrorCode::SemanticError(format!(
+                    "The delimiter of `{func_name}` must be a constant string"
+                )));
             }
             let delimiter = delimiter_value.unwrap();
             vec![delimiter.value]

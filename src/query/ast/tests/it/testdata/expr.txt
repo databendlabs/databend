@@ -3571,6 +3571,117 @@ Map {
 
 
 ---------- Input ----------
+list_agg(a)
+---------- Output ---------
+LIST_AGG(a)
+---------- AST ------------
+ListAgg {
+    span: Some(
+        0..11,
+    ),
+    distinct: false,
+    expr: ColumnRef {
+        span: Some(
+            9..10,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        9..10,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    delimiter: None,
+    window: None,
+}
+
+
+---------- Input ----------
+list_agg(distinct a)
+---------- Output ---------
+LIST_AGG(DISTINCT a)
+---------- AST ------------
+ListAgg {
+    span: Some(
+        0..20,
+    ),
+    distinct: true,
+    expr: ColumnRef {
+        span: Some(
+            18..19,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        18..19,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    delimiter: None,
+    window: None,
+}
+
+
+---------- Input ----------
+list_agg(a, '|')
+---------- Output ---------
+LIST_AGG(a, '|')
+---------- AST ------------
+ListAgg {
+    span: Some(
+        0..16,
+    ),
+    distinct: false,
+    expr: ColumnRef {
+        span: Some(
+            9..10,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        9..10,
+                    ),
+                    name: "a",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    delimiter: Some(
+        Literal {
+            span: Some(
+                12..15,
+            ),
+            value: String(
+                "|",
+            ),
+        },
+    ),
+    window: None,
+}
+
+
+---------- Input ----------
 ROW_NUMBER() OVER (ORDER BY salary DESC)
 ---------- Output ---------
 ROW_NUMBER() OVER (ORDER BY salary DESC)
@@ -5250,6 +5361,102 @@ Cast {
     },
     target_type: Interval,
     pg_style: false,
+}
+
+
+---------- Input ----------
+LIST_AGG(salary, '|') OVER (PARTITION BY department ORDER BY hire_date)
+---------- Output ---------
+LIST_AGG(salary, '|') OVER (PARTITION BY department ORDER BY hire_date)
+---------- AST ------------
+ListAgg {
+    span: Some(
+        0..71,
+    ),
+    distinct: false,
+    expr: ColumnRef {
+        span: Some(
+            9..15,
+        ),
+        column: ColumnRef {
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    span: Some(
+                        9..15,
+                    ),
+                    name: "salary",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+        },
+    },
+    delimiter: Some(
+        Literal {
+            span: Some(
+                17..20,
+            ),
+            value: String(
+                "|",
+            ),
+        },
+    ),
+    window: Some(
+        WindowSpec(
+            WindowSpec {
+                existing_window_name: None,
+                partition_by: [
+                    ColumnRef {
+                        span: Some(
+                            41..51,
+                        ),
+                        column: ColumnRef {
+                            database: None,
+                            table: None,
+                            column: Name(
+                                Identifier {
+                                    span: Some(
+                                        41..51,
+                                    ),
+                                    name: "department",
+                                    quote: None,
+                                    ident_type: None,
+                                },
+                            ),
+                        },
+                    },
+                ],
+                order_by: [
+                    OrderByExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                61..70,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            61..70,
+                                        ),
+                                        name: "hire_date",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        asc: None,
+                        nulls_first: None,
+                    },
+                ],
+                window_frame: None,
+            },
+        ),
+    ),
 }
 
 

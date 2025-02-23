@@ -165,6 +165,15 @@ pub enum Expr {
         span: Span,
         value: Literal,
     },
+    /// LIST_AGG( [ DISTINCT ] <expr1> [, <delimiter> ] )
+    ///     OVER ( [ PARTITION BY <expr2> ] )
+    ListAgg {
+        span: Span,
+        distinct: bool,
+        expr: Box<Expr>,
+        delimiter: Option<Box<Expr>>,
+        window: Option<Window>,
+    },
     /// `COUNT(*)` expression
     CountAll {
         span: Span,
@@ -290,6 +299,7 @@ impl Expr {
             | Expr::Substring { span, .. }
             | Expr::Trim { span, .. }
             | Expr::Literal { span, .. }
+            | Expr::ListAgg { span, .. }
             | Expr::CountAll { span, .. }
             | Expr::Tuple { span, .. }
             | Expr::FunctionCall { span, .. }
@@ -382,6 +392,7 @@ impl Expr {
             }
             Expr::Trim { span, expr, .. } => merge_span(*span, expr.whole_span()),
             Expr::Literal { span, .. } => *span,
+            Expr::ListAgg { span, expr, .. } => merge_span(*span, expr.whole_span()),
             Expr::CountAll { span, .. } => *span,
             Expr::Tuple { span, exprs } => {
                 let mut span = *span;
@@ -673,6 +684,26 @@ impl Display for Expr {
                 }
                 Expr::Literal { value, .. } => {
                     write!(f, "{value}")?;
+                }
+                Expr::ListAgg {
+                    distinct,
+                    expr,
+                    delimiter,
+                    window,
+                    ..
+                } => {
+                    write!(f, "LIST_AGG(")?;
+                    if *distinct {
+                        write!(f, "DISTINCT ")?;
+                    }
+                    write!(f, "{expr}")?;
+                    if let Some(delimiter) = delimiter {
+                        write!(f, ", {delimiter}")?;
+                    }
+                    write!(f, ")")?;
+                    if let Some(window) = window {
+                        write!(f, " OVER {window}")?;
+                    }
                 }
                 Expr::CountAll { window, .. } => {
                     write!(f, "COUNT(*)")?;
@@ -2036,6 +2067,22 @@ impl ExprReplacer {
                 self.replace_expr(expr);
                 if let Some((_, trim_str)) = trim_where {
                     self.replace_expr(trim_str);
+                }
+            }
+            Expr::ListAgg {
+                expr,
+                delimiter,
+                window,
+                ..
+            } => {
+                self.replace_expr(expr);
+                if let Some(delimiter) = delimiter {
+                    self.replace_expr(delimiter);
+                }
+                if let Some(window) = window {
+                    if let Window::WindowSpec(window_spec) = window {
+                        self.replace_window_spec(window_spec);
+                    }
                 }
             }
             Expr::CountAll { window, .. } => {

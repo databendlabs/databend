@@ -1247,6 +1247,9 @@ fn test_expr() {
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
         r#"{'k1':1,'k2':2}"#,
+        r#"list_agg(a)"#,
+        r#"list_agg(distinct a)"#,
+        r#"list_agg(a, '|')"#,
         // window expr
         r#"ROW_NUMBER() OVER (ORDER BY salary DESC)"#,
         r#"SUM(salary) OVER ()"#,
@@ -1266,6 +1269,7 @@ fn test_expr() {
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
         r#"INTERVAL '1 YEAR'"#,
+        r#"LIST_AGG(salary, '|') OVER (PARTITION BY department ORDER BY hire_date)"#,
         r#"(?, ?)"#,
     ];
 

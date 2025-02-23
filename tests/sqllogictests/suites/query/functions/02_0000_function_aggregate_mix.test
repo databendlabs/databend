@@ -378,6 +378,21 @@ select string_agg(s, '|') from t3;
 ----
 abc|def|xyz
 
+query T
+select list_agg(s) from t3;
+----
+abcdefxyz
+
+query T
+select list_agg(s, '-') from t3;
+----
+abc-def-xyz
+
+query T
+select list_agg(s, '|') from t3;
+----
+abc|def|xyz
+
 query TT
 select array_agg(s), array_agg(null) from t3;
 ----
