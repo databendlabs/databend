@@ -676,7 +676,7 @@ mod tests {
     use crate::base::GlobalUniqName;
     use crate::mem_allocator::tracker::MetaTrackerAllocator;
     use crate::mem_allocator::tracker::META_TRACKER_THRESHOLD;
-    use crate::mem_allocator::StdAllocator;
+    use crate::mem_allocator::DefaultAllocator;
     use crate::runtime::GlobalStatBuffer;
     use crate::runtime::MemStat;
     use crate::runtime::MemStatBuffer;
@@ -722,7 +722,11 @@ mod tests {
                 assert_eq!(GlobalStatBuffer::current().memory_usage, 0);
             };
 
-        with_mock_env(test_function, StdAllocator, Arc::new(MemStat::global()));
+        with_mock_env(
+            test_function,
+            DefaultAllocator::default(),
+            Arc::new(MemStat::global()),
+        );
     }
 
     #[test]
@@ -746,7 +750,11 @@ mod tests {
                 assert_eq!(GlobalStatBuffer::current().memory_usage, 0);
             };
 
-        with_mock_env(test_function, StdAllocator, Arc::new(MemStat::global()));
+        with_mock_env(
+            test_function,
+            DefaultAllocator::default(),
+            Arc::new(MemStat::global()),
+        );
     }
 
     #[test]
@@ -773,7 +781,11 @@ mod tests {
                 assert_eq!(GlobalStatBuffer::current().memory_usage, 0);
             };
 
-        with_mock_env(test_function, StdAllocator, Arc::new(MemStat::global()));
+        with_mock_env(
+            test_function,
+            DefaultAllocator::default(),
+            Arc::new(MemStat::global()),
+        );
     }
 
     #[test]
@@ -823,7 +835,11 @@ mod tests {
 
                 unsafe { allocator.deallocate(new_ptr.as_non_null_ptr(), new_layout) };
             };
-        with_mock_env(test_function, StdAllocator, Arc::new(MemStat::global()));
+        with_mock_env(
+            test_function,
+            DefaultAllocator::default(),
+            Arc::new(MemStat::global()),
+        );
     }
 
     #[test]
@@ -845,7 +861,11 @@ mod tests {
                 unsafe { allocator.deallocate(ptr.as_non_null_ptr(), layout) };
             };
 
-        with_mock_env(test_function, StdAllocator, Arc::new(MemStat::global()));
+        with_mock_env(
+            test_function,
+            DefaultAllocator::default(),
+            Arc::new(MemStat::global()),
+        );
     }
 
     #[test]
@@ -958,7 +978,7 @@ mod tests {
 
         with_mock_env(
             test_function,
-            PartialFailingAllocator(StdAllocator),
+            PartialFailingAllocator(DefaultAllocator::default()),
             Arc::new(MemStat::global()),
         );
     }
@@ -1036,7 +1056,7 @@ mod tests {
 
         with_mock_env(
             test_function,
-            GrowZeroedFailingAllocator(StdAllocator),
+            GrowZeroedFailingAllocator(DefaultAllocator::default()),
             Arc::new(MemStat::global()),
         );
     }
@@ -1113,7 +1133,7 @@ mod tests {
 
         with_mock_env(
             test_function,
-            ShrinkFailingAllocator(StdAllocator),
+            ShrinkFailingAllocator(DefaultAllocator::default()),
             Arc::new(MemStat::global()),
         );
     }
@@ -1321,7 +1341,7 @@ mod tests {
         with_mock_env(
             test_function,
             ChaosAllocator {
-                inner: StdAllocator,
+                inner: DefaultAllocator::default(),
                 failure_rate: 0.3,
             },
             Arc::new(MemStat::global()),
@@ -1358,7 +1378,11 @@ mod tests {
                 assert_eq!(GlobalStatBuffer::current().memory_usage, 0);
             };
 
-        with_mock_env(test_function, StdAllocator, Arc::new(MemStat::global()));
+        with_mock_env(
+            test_function,
+            DefaultAllocator::default(),
+            Arc::new(MemStat::global()),
+        );
     }
 
     #[test]
@@ -1388,7 +1412,7 @@ mod tests {
                 };
 
                 let (ptr, new_mem_stat, allocator) =
-                    with_mock_env(test_function, StdAllocator, global.clone());
+                    with_mock_env(test_function, DefaultAllocator::default(), global.clone());
 
                 assert_eq!(GlobalStatBuffer::current().memory_usage, 0);
                 assert_eq!(mem_stat.used.load(Ordering::Relaxed), 0);
@@ -1422,7 +1446,7 @@ mod tests {
             }
         };
 
-        with_mock_env(test_function, StdAllocator, global);
+        with_mock_env(test_function, DefaultAllocator::default(), global);
     }
 
     #[test]
@@ -1460,7 +1484,11 @@ mod tests {
                             )
                         };
 
-                        with_mock_env(test_function, StdAllocator, global_stat.clone())
+                        with_mock_env(
+                            test_function,
+                            DefaultAllocator::default(),
+                            global_stat.clone(),
+                        )
                     }));
                 }
 
@@ -1490,6 +1518,6 @@ mod tests {
             }
         };
 
-        with_mock_env(test_function, StdAllocator, global_mem_stat);
+        with_mock_env(test_function, DefaultAllocator::default(), global_mem_stat);
     }
 }
