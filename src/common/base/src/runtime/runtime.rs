@@ -132,15 +132,12 @@ pub struct Runtime {
     /// Runtime handle.
     handle: Handle,
 
-    /// Memory tracker for this runtime
-    tracker: Arc<MemStat>,
-
     /// Use to receive a drop signal when dropper is dropped.
     _dropper: Dropper,
 }
 
 impl Runtime {
-    fn create(name: Option<String>, tracker: Arc<MemStat>, builder: &mut Builder) -> Result<Self> {
+    fn create(name: Option<String>, builder: &mut Builder) -> Result<Self> {
         let runtime = builder
             .build()
             .map_err(|tokio_error| ErrorCode::TokioError(tokio_error.to_string()))?;
@@ -173,7 +170,6 @@ impl Runtime {
 
         Ok(Runtime {
             handle,
-            tracker,
             _dropper: Dropper {
                 name,
                 close: Some(send_stop),
@@ -182,15 +178,10 @@ impl Runtime {
         })
     }
 
-    pub fn get_tracker(&self) -> Arc<MemStat> {
-        self.tracker.clone()
-    }
-
     /// Spawns a new tokio runtime with a default thread count on a background
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
     pub fn with_default_worker_threads() -> Result<Self> {
-        let mem_stat = MemStat::create(String::from("UnnamedRuntime"));
         let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
 
         #[cfg(debug_assertions)]
@@ -207,7 +198,6 @@ impl Runtime {
 
         Self::create(
             None,
-            mem_stat,
             runtime_builder
                 .enable_all()
                 .on_thread_start(ThreadTracker::init),
@@ -216,13 +206,6 @@ impl Runtime {
 
     #[allow(unused_mut)]
     pub fn with_worker_threads(workers: usize, mut thread_name: Option<String>) -> Result<Self> {
-        let mut mem_stat_name = String::from("UnnamedRuntime");
-
-        if let Some(thread_name) = thread_name.as_ref() {
-            mem_stat_name = format!("{}Runtime", thread_name);
-        }
-
-        let mem_stat = MemStat::create(mem_stat_name);
         let mut runtime_builder = tokio::runtime::Builder::new_multi_thread();
 
         #[cfg(debug_assertions)]
@@ -243,7 +226,6 @@ impl Runtime {
 
         Self::create(
             thread_name,
-            mem_stat,
             runtime_builder
                 .enable_all()
                 .on_thread_start(ThreadTracker::init)

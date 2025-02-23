@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_exception::Result;
@@ -24,16 +23,17 @@ use crate::servers::flight::v1::packets::QueryFragments;
 pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
 
 pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
+    let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
+
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.mem_stat = ctx.get_mem_stat();
     tracking_payload.query_id = Some(fragments.query_id.clone());
-    tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", fragments.query_id)));
     let _guard = ThreadTracker::tracking(tracking_payload);
 
     debug!("init query fragments with {:?}", fragments);
 
     // Avoid blocking runtime.
     let query_id = fragments.query_id.clone();
-    let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
     let join_handler = ctx.spawn(ThreadTracker::tracking_future(async move {
         DataExchangeManager::instance().init_query_fragments_plan(&fragments)
     }));

@@ -17,6 +17,7 @@ use std::time::Duration;
 
 use async_channel::Sender;
 use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
@@ -58,6 +59,8 @@ impl StatisticsSender {
                 let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                 let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
+                let mem_stat = ctx.get_mem_stat();
+
                 loop {
                     match futures::future::select(sleep_future, notified).await {
                         Either::Right((Err(_), _)) => {
@@ -81,7 +84,7 @@ impl StatisticsSender {
                             notified = right;
                             sleep_future = Box::pin(sleep(Duration::from_millis(100)));
 
-                            if let Err(cause) = Self::send_progress(&ctx, &tx).await {
+                            if let Err(cause) = Self::send_progress(&ctx, &mem_stat, &tx).await {
                                 ctx.get_exchange_manager()
                                     .shutdown_query(&query_id, Some(cause));
                                 return;
@@ -112,7 +115,7 @@ impl StatisticsSender {
                     warn!("MutationStatus send has error, cause: {:?}.", error);
                 }
 
-                if let Err(error) = Self::send_progress(&ctx, &tx).await {
+                if let Err(error) = Self::send_progress(&ctx, &mem_stat, &tx).await {
                     warn!("Statistics send has error, cause: {:?}.", error);
                 }
             }
@@ -146,8 +149,18 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn send_progress(ctx: &Arc<QueryContext>, tx: &FlightSender) -> Result<()> {
-        let progress = Self::fetch_progress(ctx);
+    async fn send_progress(
+        ctx: &Arc<QueryContext>,
+        mem_stat: &Option<Arc<MemStat>>,
+        tx: &FlightSender,
+    ) -> Result<()> {
+        let mut progress = Self::fetch_progress(ctx);
+
+        if let Some(mem_stat) = mem_stat {
+            let memory_usage = std::cmp::max(0, mem_stat.get_memory_usage());
+            progress.push(ProgressInfo::MemoryUsage(memory_usage as usize));
+        }
+
         let data_packet = DataPacket::SerializeProgress(progress);
         tx.send(data_packet).await
     }

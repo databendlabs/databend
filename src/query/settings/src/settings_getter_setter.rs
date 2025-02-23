@@ -882,4 +882,12 @@ impl Settings {
     pub fn get_copy_dedup_full_path_by_default(&self) -> Result<bool> {
         Ok(self.try_get_u64("copy_dedup_full_path_by_default")? == 1)
     }
+
+    pub fn get_max_query_memory_usage(&self) -> Result<u64> {
+        self.try_get_u64("max_query_memory_usage")
+    }
+
+    pub fn set_max_query_memory_usage(&self, max_memory_usage: u64) -> Result<()> {
+        self.try_set_u64("max_query_memory_usage", max_memory_usage)
+    }
 }

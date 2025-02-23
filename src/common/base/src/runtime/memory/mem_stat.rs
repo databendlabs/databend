@@ -36,7 +36,7 @@ const MINIMUM_MEMORY_LIMIT: i64 = 256 * 1024 * 1024;
 /// - Every stat that is fed to a child is also fed to its parent.
 /// - A MemStat has at most one parent.
 pub struct MemStat {
-    pub(crate) id: usize,
+    pub id: usize,
     name: Option<String>,
 
     pub(crate) used: AtomicI64,

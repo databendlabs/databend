@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
@@ -26,6 +27,7 @@ use databend_common_base::base::short_sql;
 use databend_common_base::base::Progress;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
@@ -151,6 +153,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) spilled_files:
         Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
     pub(in crate::sessions) unload_callbacked: AtomicBool,
+    pub(in crate::sessions) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
+    pub(in crate::sessions) node_memory_usage: Arc<RwLock<HashMap<String, AtomicUsize>>>,
 }
 
 impl QueryContextShared {
@@ -212,6 +216,8 @@ impl QueryContextShared {
             spilled_files: Default::default(),
             unload_callbacked: AtomicBool::new(false),
             warehouse_cache: Arc::new(RwLock::new(None)),
+            mem_stat: Arc::new(RwLock::new(None)),
+            node_memory_usage: Arc::new(RwLock::new(HashMap::new())),
         }))
     }
 
@@ -675,6 +681,43 @@ impl QueryContextShared {
                 }
             };
         }
+    }
+
+    pub fn set_mem_stat(&self, mem_stat: Option<Arc<MemStat>>) {
+        let mut mem_stat_guard = self.mem_stat.write();
+        *mem_stat_guard = mem_stat;
+    }
+
+    pub fn get_mem_stat(&self) -> Option<Arc<MemStat>> {
+        self.mem_stat.read().clone()
+    }
+
+    pub fn set_node_memory_usage(&self, node: &str, node_memory_usage: usize) {
+        {
+            if let Some(v) = self.node_memory_usage.read().get(node) {
+                v.store(node_memory_usage, Ordering::Relaxed);
+                return;
+            }
+        }
+
+        let key = node.to_string();
+        let mut guard = self.node_memory_usage.write();
+        guard.insert(key, AtomicUsize::new(node_memory_usage));
+    }
+
+    pub fn get_nodes_memory_usage(&self) -> usize {
+        let mut memory_usage = {
+            match self.mem_stat.read().as_ref() {
+                None => 0,
+                Some(mem_stat) => std::cmp::max(0, mem_stat.get_memory_usage()) as usize,
+            }
+        };
+
+        for (_, node_memory_usage) in self.node_memory_usage.read().iter() {
+            memory_usage += node_memory_usage.load(Ordering::Relaxed);
+        }
+
+        memory_usage
     }
 }
 

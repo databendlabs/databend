@@ -24,16 +24,23 @@ use crate::servers::flight::v1::packets::QueryEnv;
 pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
 
 pub async fn init_query_env(env: QueryEnv) -> Result<()> {
+    let query_mem_stat = MemStat::create(format!("Query-{}", env.query_id));
+    let query_max_memory_usage = env.settings.get_max_query_memory_usage()?;
+
+    if query_max_memory_usage != 0 {
+        query_mem_stat.set_limit(query_max_memory_usage as i64);
+    }
+
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(env.query_id.clone());
-    tracking_payload.mem_stat = Some(MemStat::create(format!("Query-{}", env.query_id)));
+    tracking_payload.mem_stat = Some(query_mem_stat.clone());
     let _guard = ThreadTracker::tracking(tracking_payload);
 
     ThreadTracker::tracking_future(async move {
         debug!("init query env with {:?}", env);
         let ctx = match env.request_server_id == GlobalConfig::instance().query.node_id {
             true => None,
-            false => Some(env.create_query_ctx().await?),
+            false => Some(env.create_query_ctx(query_mem_stat).await?),
         };
 
         if let Err(e) = DataExchangeManager::instance()

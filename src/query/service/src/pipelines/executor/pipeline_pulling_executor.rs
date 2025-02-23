@@ -21,7 +21,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::runtime::drop_guard;
-use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
@@ -103,12 +102,7 @@ pub struct PipelinePullingExecutor {
 
 impl PipelinePullingExecutor {
     fn execution_tracking_payload(query_id: &str) -> TrackingPayload {
-        let mut tracking_payload = ThreadTracker::new_tracking_payload();
-        tracking_payload.mem_stat = Some(MemStat::create(format!(
-            "QueryExecutionMemStat-{}",
-            query_id
-        )));
-        tracking_payload
+        ThreadTracker::new_tracking_payload()
     }
 
     fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<DataBlock>) -> Result<()> {

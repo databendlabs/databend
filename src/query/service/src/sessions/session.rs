@@ -17,6 +17,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -149,15 +151,22 @@ impl Session {
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
-        self.create_query_context_with_cluster(cluster)
+        let mem_stat = ThreadTracker::mem_stat().cloned();
+        self.create_query_context_with_cluster(cluster, mem_stat)
     }
 
     pub fn create_query_context_with_cluster(
         self: &Arc<Self>,
         cluster: Arc<Cluster>,
+        mem_stat: Option<Arc<MemStat>>,
     ) -> Result<Arc<QueryContext>> {
         let session = self.clone();
         let shared = QueryContextShared::try_create(session, cluster)?;
+
+        if let Some(mem_stat) = mem_stat {
+            mem_stat.set_limit(self.get_settings().get_max_query_memory_usage()? as i64);
+            shared.set_mem_stat(Some(mem_stat));
+        }
 
         self.session_ctx
             .set_query_context_shared(Arc::downgrade(&shared));
