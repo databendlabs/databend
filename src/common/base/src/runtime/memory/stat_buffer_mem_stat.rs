@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
 use crate::runtime::memory::OutOfLimit;
-use crate::runtime::GlobalStatBuffer;
 use crate::runtime::LimitMemGuard;
 use crate::runtime::MemStat;
 use crate::runtime::GLOBAL_MEM_STAT;
@@ -27,12 +26,12 @@ use crate::runtime::GLOBAL_MEM_STAT;
 static mut MEM_STAT_BUFFER: MemStatBuffer = MemStatBuffer::empty(&GLOBAL_MEM_STAT);
 
 pub struct MemStatBuffer {
-    cur_mem_stat_id: usize,
-    cur_mem_stat: Option<Arc<MemStat>>,
+    pub(crate) cur_mem_stat_id: usize,
+    pub(crate) cur_mem_stat: Option<Arc<MemStat>>,
     pub(crate) memory_usage: i64,
     // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
     // unlimited_flag: bool,
-    global_mem_stat: &'static MemStat,
+    pub(crate) global_mem_stat: &'static MemStat,
     destroyed_thread_local_macro: bool,
 }
 
@@ -134,7 +133,9 @@ impl MemStatBuffer {
         if mem_stat.id != self.cur_mem_stat_id {
             if Arc::strong_count(mem_stat) == 1 {
                 mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
-                GlobalStatBuffer::current().force_alloc(memory_usage);
+                self.global_mem_stat
+                    .used
+                    .fetch_add(memory_usage, Ordering::Relaxed);
                 return;
             }
 
@@ -204,6 +205,7 @@ mod tests {
     use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
     use crate::runtime::memory::stat_buffer_mem_stat::MemStatBuffer;
     use crate::runtime::memory::OutOfLimit;
+    use crate::runtime::GlobalStatBuffer;
     use crate::runtime::MemStat;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -319,6 +321,7 @@ mod tests {
         let mem_stat = MemStat::create(String::from("test"));
 
         buffer.dealloc(&mem_stat, 1);
+        let _ = GlobalStatBuffer::current().flush::<false>(0);
         assert_eq!(mem_stat.used.load(Ordering::Relaxed), -1);
         assert_eq!(TEST_GLOBAL.used.load(Ordering::Relaxed), -1);
 
