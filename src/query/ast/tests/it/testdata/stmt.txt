@@ -505,6 +505,38 @@ ShowCreateTable(
             quote: None,
             ident_type: None,
         },
+        with_quoted_ident: false,
+    },
+)
+
+
+---------- Input ----------
+show create table a.b with quoted_identifiers;
+---------- Output ---------
+SHOW CREATE TABLE a.b WITH QUOTED_IDENTIFIERS
+---------- AST ------------
+ShowCreateTable(
+    ShowCreateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    18..19,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                20..21,
+            ),
+            name: "b",
+            quote: None,
+            ident_type: None,
+        },
+        with_quoted_ident: true,
     },
 )
 
@@ -535,6 +567,7 @@ ShowCreateTable(
             quote: None,
             ident_type: None,
         },
+        with_quoted_ident: false,
     },
 )
 
