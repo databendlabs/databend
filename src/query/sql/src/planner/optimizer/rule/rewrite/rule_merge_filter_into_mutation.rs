@@ -19,6 +19,9 @@ use databend_common_expression::types::DataType;
 
 use crate::binder::MutationType;
 use crate::optimizer::extract::Matcher;
+use crate::optimizer::rule::Rule;
+use crate::optimizer::rule::TransformResult;
+use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
 use crate::plans::MutationSource;
@@ -26,20 +29,37 @@ use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::MetadataRef;
 
-pub struct PushDownFilterMutationOptimizer {
-    pub metadata: MetadataRef,
-    pub matcher: Matcher,
+pub struct RuleMergeFilterIntoMutation {
+    id: RuleID,
+    matchers: Vec<Matcher>,
+    metadata: MetadataRef,
 }
 
-impl PushDownFilterMutationOptimizer {
+impl RuleMergeFilterIntoMutation {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
+            id: RuleID::MergeFilterIntoMutation,
+            // Filter
+            //  \
+            //   MutationSource
+            matchers: vec![Matcher::MatchOp {
+                op_type: RelOp::Filter,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::MutationSource,
+                    children: vec![],
+                }],
+            }],
             metadata,
-            matcher: Self::matcher(),
         }
     }
+}
 
-    pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
+impl Rule for RuleMergeFilterIntoMutation {
+    fn id(&self) -> RuleID {
+        self.id
+    }
+
+    fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut mutation: MutationSource = s_expr.child(0)?.plan().clone().try_into()?;
         mutation
@@ -56,21 +76,12 @@ impl PushDownFilterMutationOptimizer {
             mutation.predicate_column_index = Some(column_index);
         }
 
-        Ok(SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
-            mutation,
-        ))))
+        let new_expr = SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation)));
+        state.add_result(new_expr);
+        Ok(())
     }
 
-    fn matcher() -> Matcher {
-        // Filter
-        //  \
-        //   MutationSource
-        Matcher::MatchOp {
-            op_type: RelOp::Filter,
-            children: vec![Matcher::MatchOp {
-                op_type: RelOp::MutationSource,
-                children: vec![],
-            }],
-        }
+    fn matchers(&self) -> &[Matcher] {
+        &self.matchers
     }
 }

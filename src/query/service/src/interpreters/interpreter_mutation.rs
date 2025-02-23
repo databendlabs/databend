@@ -242,7 +242,10 @@ async fn mutation_source_partitions(
     table_snapshot: Option<Arc<TableSnapshot>>,
     dry_run: bool,
 ) -> Result<(PartStatistics, Partitions)> {
-    if mutation.no_effect || mutation.strategy != MutationStrategy::Direct {
+    if mutation.no_effect
+        || mutation.strategy != MutationStrategy::Direct
+        || mutation.truncate_table
+    {
         return Ok(Default::default());
     }
 
@@ -262,10 +265,6 @@ async fn mutation_source_partitions(
             .collect();
         (Some(filters), filter_used_columns)
     } else {
-        if mutation.mutation_type == MutationType::Delete {
-            // do truncate.
-            return Ok(Default::default());
-        }
         (None, vec![])
     };
 

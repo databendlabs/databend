@@ -84,6 +84,7 @@ pub struct Mutation {
     // MutationStrategy::Direct related variables.
     pub predicate_column_index: Option<usize>,
     pub direct_filter: Vec<ScalarExpr>,
+    pub truncate_table: bool,
 }
 
 impl std::fmt::Debug for Mutation {

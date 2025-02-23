@@ -120,7 +120,7 @@ impl PhysicalPlanBuilder {
             row_id_shuffle,
             can_try_update_column_only,
             no_effect,
-            direct_filter,
+            truncate_table,
             ..
         } = mutation;
 
@@ -138,26 +138,27 @@ impl PhysicalPlanBuilder {
 
         let mutation_build_info = self.mutation_build_info.clone().unwrap();
         let mutation_input_schema = plan.output_schema()?;
-        if *strategy == MutationStrategy::Direct {
-            if *mutation_type == MutationType::Delete && direct_filter.is_empty() {
-                // Do truncate.
-                plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
-                    input: Box::new(plan),
-                    snapshot: mutation_build_info.table_snapshot,
-                    table_info: table_info.clone(),
-                    // let's use update first, we will do some optimizations and select exact strategy
-                    commit_type: CommitType::Truncate {
-                        mode: TruncateMode::Delete,
-                    },
-                    update_stream_meta: vec![],
-                    deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
-                    plan_id: u32::MAX,
-                    recluster_info: None,
-                }));
-                plan.adjust_plan_id(&mut 0);
-                return Ok(plan);
-            }
 
+        if *truncate_table {
+            // Do truncate.
+            plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+                input: Box::new(plan),
+                snapshot: mutation_build_info.table_snapshot,
+                table_info: table_info.clone(),
+                // let's use update first, we will do some optimizations and select exact strategy
+                commit_type: CommitType::Truncate {
+                    mode: TruncateMode::Delete,
+                },
+                update_stream_meta: vec![],
+                deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                plan_id: u32::MAX,
+                recluster_info: None,
+            }));
+            plan.adjust_plan_id(&mut 0);
+            return Ok(plan);
+        }
+
+        if *strategy == MutationStrategy::Direct {
             // MutationStrategy::Direct: If the mutation filter is a simple expression,
             // we use MutationSource to execute the mutation directly.
             let mut field_id_to_schema_index = HashMap::new();

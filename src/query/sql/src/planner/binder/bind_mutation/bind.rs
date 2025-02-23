@@ -306,6 +306,7 @@ impl Binder {
             no_effect: false,
             predicate_column_index: None,
             direct_filter: vec![],
+            truncate_table: false,
         };
 
         if mutation_strategy == MutationStrategy::NotMatchedOnly && !insert_only(&mutation) {

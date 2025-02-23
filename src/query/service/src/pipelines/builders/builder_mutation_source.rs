@@ -43,10 +43,10 @@ impl PipelineBuilder {
 
         let table = FuseTable::try_from_table(table.as_ref())?.clone();
         let is_delete = mutation_source.input_type == MutationType::Delete;
-        if is_delete && mutation_source.filters.is_none() {
+        if mutation_source.truncate_table {
             // There is no filter and the mutation type is delete,
             // we can truncate the table directly.
-            debug_assert!(mutation_source.partitions.is_empty());
+            debug_assert!(mutation_source.partitions.is_empty() && is_delete);
             return self.main_pipeline.add_source(
                 |output| {
                     let meta = CommitMeta {

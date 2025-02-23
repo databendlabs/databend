@@ -553,7 +553,7 @@ fn format_mutation_source(
     let payload = match plan.input_type {
         MutationType::Update => "Update",
         MutationType::Delete => {
-            if plan.filters.is_none() {
+            if plan.truncate_table {
                 "DeleteAll"
             } else {
                 "Delete"

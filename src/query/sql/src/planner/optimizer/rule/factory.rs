@@ -52,6 +52,7 @@ use super::transform::RuleEagerAggregation;
 use super::transform::RuleLeftExchangeJoin;
 use super::RuleID;
 use super::RulePtr;
+use crate::optimizer::rule::rewrite::RuleMergeFilterIntoMutation;
 use crate::optimizer::OptimizerContext;
 
 pub struct RuleFactory;
@@ -107,6 +108,9 @@ impl RuleFactory {
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(ctx.metadata))),
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
             RuleID::SemiToInnerJoin => Ok(Box::new(RuleSemiToInnerJoin::new())),
+            RuleID::MergeFilterIntoMutation => {
+                Ok(Box::new(RuleMergeFilterIntoMutation::new(ctx.metadata)))
+            }
         }
     }
 }

@@ -44,6 +44,7 @@ pub struct MutationSource {
     pub output_schema: DataSchemaRef,
     pub input_type: MutationType,
     pub read_partition_columns: ColumnSet,
+    pub truncate_table: bool,
 
     pub partitions: Partitions,
     pub statistics: PartStatistics,
@@ -96,8 +97,10 @@ impl PhysicalPlanBuilder {
                 DataType::Boolean,
             ));
         }
-
         let output_schema = DataSchemaRefExt::create(fields);
+
+        let truncate_table =
+            mutation_source.mutation_type == MutationType::Delete && filters.is_none();
         Ok(PhysicalPlan::MutationSource(MutationSource {
             plan_id: 0,
             table_index: mutation_source.table_index,
@@ -106,6 +109,7 @@ impl PhysicalPlanBuilder {
             filters,
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
+            truncate_table,
             partitions: mutation_info.partitions.clone(),
             statistics: mutation_info.statistics.clone(),
         }))

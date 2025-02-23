@@ -118,6 +118,9 @@ pub enum RuleID {
     CommuteJoinBaseTable,
     LeftExchangeJoin,
     EagerAggregation,
+
+    // Mutation rules
+    MergeFilterIntoMutation,
 }
 
 impl Display for RuleID {
@@ -160,6 +163,8 @@ impl Display for RuleID {
             RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
             RuleID::SemiToInnerJoin => write!(f, "SemiToInnerJoin"),
             RuleID::EliminateUnion => write!(f, "EliminateUnion"),
+
+            RuleID::MergeFilterIntoMutation => write!(f, "MergeFilterIntoMutation"),
         }
     }
 }

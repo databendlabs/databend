@@ -38,7 +38,6 @@ use crate::optimizer::filter::DeduplicateJoinConditionOptimizer;
 use crate::optimizer::filter::PullUpFilterOptimizer;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::join::SingleToInnerOptimizer;
-use crate::optimizer::mutation::PushDownFilterMutationOptimizer;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::optimizer::util::contains_local_table_scan;
@@ -535,6 +534,8 @@ async fn get_optimized_memo(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Result<Plan> {
     // Optimize the input plan.
     let mut input_s_expr = optimize_query(&mut opt_ctx, s_expr.child(0)?.clone()).await?;
+    input_s_expr =
+        RecursiveOptimizer::new(&[RuleID::MergeFilterIntoMutation], &opt_ctx).run(&input_s_expr)?;
 
     // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {
@@ -609,16 +610,16 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
         }
         MutationType::Update | MutationType::Delete => {
             if mutation.strategy == MutationStrategy::Direct {
-                let push_down_filter =
-                    PushDownFilterMutationOptimizer::new(opt_ctx.metadata.clone());
-                if push_down_filter.matcher.matches(&input_s_expr) {
-                    input_s_expr = push_down_filter.optimize(&input_s_expr)?;
-                    let mutation_source: MutationSource = input_s_expr.plan().clone().try_into()?;
-                    mutation.direct_filter = mutation_source.predicates;
-                    if let Some(index) = mutation_source.predicate_column_index {
-                        mutation.required_columns.insert(index);
-                        mutation.predicate_column_index = Some(index);
-                    }
+                let mutation_source: MutationSource = input_s_expr.plan().clone().try_into()?;
+                if mutation_source.mutation_type == MutationType::Delete
+                    && mutation_source.predicates.is_empty()
+                {
+                    mutation.truncate_table = true;
+                }
+                mutation.direct_filter = mutation_source.predicates;
+                if let Some(index) = mutation_source.predicate_column_index {
+                    mutation.required_columns.insert(index);
+                    mutation.predicate_column_index = Some(index);
                 }
             }
             input_s_expr
