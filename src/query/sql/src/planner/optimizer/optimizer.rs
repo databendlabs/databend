@@ -52,7 +52,6 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
-use crate::plans::MutationSource;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
@@ -609,15 +608,12 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
             }
         }
         MutationType::Update | MutationType::Delete => {
-            if mutation.strategy == MutationStrategy::Direct {
-                let mutation_source: MutationSource = input_s_expr.plan().clone().try_into()?;
-                if mutation_source.mutation_type == MutationType::Delete
-                    && mutation_source.predicates.is_empty()
-                {
+            if let RelOperator::MutationSource(rel) = input_s_expr.plan() {
+                if rel.mutation_type == MutationType::Delete && rel.predicates.is_empty() {
                     mutation.truncate_table = true;
                 }
-                mutation.direct_filter = mutation_source.predicates;
-                if let Some(index) = mutation_source.predicate_column_index {
+                mutation.direct_filter = rel.predicates.clone();
+                if let Some(index) = rel.predicate_column_index {
                     mutation.required_columns.insert(index);
                     mutation.predicate_column_index = Some(index);
                 }
