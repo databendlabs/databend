@@ -91,6 +91,13 @@ stmt "drop table if exists attach_tbl"
 echo "attach table attach_tbl (c2, c4) 's3://testbucket/admin/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
 
 stmt "alter table base RENAME COLUMN c2 to c2_new"
+
+echo "'ATTACH' after 'ALTER TABLE RENAME COLUMN' should see the new name of column"
+stmt "drop table if exists attach_tbl2"
+echo "attach table attach_tbl2 's3://testbucket/admin/data/$base_storage_prefix' connection=(connection_name ='my_conn')" | $BENDSQL_CLIENT_CONNECT
+query "desc attach_tbl2"
+
+
 stmt "insert into base values('c1', 'c2_new', 'c3', 'c4')"
 
 echo "select all should work"
@@ -98,6 +105,8 @@ query "select * from attach_tbl order by c2_new"
 
 echo "select c2_new should work"
 query "select c2_new from attach_tbl order by c2_new"
+
+
 
 echo "##################################"
 echo "## drop column from base table ###"

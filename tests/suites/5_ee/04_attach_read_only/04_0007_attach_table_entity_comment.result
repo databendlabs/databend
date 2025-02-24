@@ -5,3 +5,12 @@ tbl comment
 check column comment
 c1	c1 comment
 c2	c2 comment
+>>>> alter table comment_base rename column c1 to c1_new
+c1_new	c1 comment
+c2	c2 comment
+>>>> alter table comment_base comment = 'new tbl comment'
+>>>> select comment from system.tables where name = 'att_comment'
+new tbl comment
+>>>> ALTER TABLE comment_base MODIFY COLUMN c1_new int comment 'new comment of c1_new'
+c1_new	new comment of c1_new
+c2	c2 comment
