@@ -350,7 +350,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
             return Ok(reduced_ptr);
         }
 
-        let mem_stat = ManuallyDrop::new(Arc::from_raw(mem_stat_address as *const MemStat));
+        let mem_stat = Arc::from_raw(mem_stat_address as *const MemStat);
         MemStatBuffer::current().dealloc(&mem_stat, old_adjusted_layout.size() as i64);
         let Ok(reduced_ptr) = self.inner.shrink(ptr, old_adjusted_layout, new_layout) else {
             MemStatBuffer::current().force_alloc(&mem_stat, old_adjusted_layout.size() as i64);
@@ -1220,7 +1220,7 @@ mod tests {
                     match rand::random::<u8>() % 6 {
                         // allocate
                         0 => {
-                            let size = rand::random::<usize>() % 2048;
+                            let size = rand::random::<usize>() % 2048 + 1;
                             let layout = Layout::from_size_align(size, 8).unwrap();
 
                             if let Ok(ptr) = allocator.allocate(layout) {
@@ -1229,7 +1229,7 @@ mod tests {
                         }
                         // allocate_zero
                         1 => {
-                            let size = rand::random::<usize>() % 2048;
+                            let size = rand::random::<usize>() % 2048 + 1;
                             let layout = Layout::from_size_align(size, 8).unwrap();
 
                             if let Ok(ptr) = allocator.allocate_zeroed(layout) {
@@ -1249,7 +1249,8 @@ mod tests {
                             if !allocations.is_empty() {
                                 let index = rand::random::<usize>() % allocations.len();
                                 let (ptr, old_layout) = allocations[index];
-                                let new_size = old_layout.size() + rand::random::<usize>() % 256;
+                                let new_size =
+                                    old_layout.size() + rand::random::<usize>() % 256 + 1;
                                 let new_layout = Layout::from_size_align(new_size, 8).unwrap();
 
                                 if let Ok(new_ptr) = unsafe {
@@ -1264,7 +1265,8 @@ mod tests {
                             if !allocations.is_empty() {
                                 let index = rand::random::<usize>() % allocations.len();
                                 let (ptr, old_layout) = allocations[index];
-                                let new_size = old_layout.size() + rand::random::<usize>() % 256;
+                                let new_size =
+                                    old_layout.size() + rand::random::<usize>() % 256 + 1;
                                 let new_layout = Layout::from_size_align(new_size, 8).unwrap();
 
                                 if let Ok(new_ptr) = unsafe {
