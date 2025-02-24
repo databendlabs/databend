@@ -31,11 +31,13 @@ pub(crate) fn new_rolling_file_appender(
     dir: &str,
     name: impl ToString,
     max_files: usize,
+    max_file_size: usize,
 ) -> (RollingFile, Box<dyn Send + Sync + 'static>) {
     let rolling = RollingFileWriter::builder()
         .rotation(Rotation::Hourly)
         .filename_prefix(name.to_string())
         .max_log_files(max_files)
+        .max_file_size(max_file_size)
         .build(dir)
         .expect("failed to initialize rolling file appender");
     let (non_blocking, guard) = NonBlockingBuilder::default()
