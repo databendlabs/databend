@@ -35,7 +35,7 @@ MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0a
 pWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==
 -----END PUBLIC KEY-----"#;
 
-pub const LICENSE_URL: &str = "https://docs.databend.com/guides/overview/editions/dee/";
+pub const LICENSE_URL: &str = "https://docs.databend.com/guides/products/dee/";
 
 pub struct RealLicenseManager {
     tenant: String,
