@@ -88,6 +88,10 @@ pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }
 
+pub fn grant_ident(i: Input) -> IResult<Identifier> {
+    non_reserved_identifier(|token| token.is_grant_reserved_ident(false, true))(i)
+}
+
 pub fn plain_ident(i: Input) -> IResult<Identifier> {
     plain_identifier(|token| token.is_reserved_ident(false))(i)
 }

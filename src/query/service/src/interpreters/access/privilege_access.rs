@@ -15,12 +15,14 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
+use databend_common_management::WarehouseInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipInfo;
 use databend_common_meta_app::principal::OwnershipObject;
@@ -43,6 +45,7 @@ use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_enterprise_resources_management::ResourcesManagement;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 
 use crate::interpreters::access::AccessChecker;
@@ -151,7 +154,8 @@ impl PrivilegeAccess {
             GrantObject::UDF(name) => OwnershipObject::UDF {
                 name: name.to_string(),
             },
-            GrantObject::Global | GrantObject::Warehouse(_) => return Ok(None),
+            GrantObject::Warehouse(id) => OwnershipObject::Warehouse { id: id.to_string() },
+            GrantObject::Global => return Ok(None),
         };
 
         Ok(Some(object))
@@ -377,6 +381,59 @@ impl PrivilegeAccess {
         Ok(())
     }
 
+    async fn validate_warehouse_ownership(
+        &self,
+        warehouse: String,
+        current_user: String,
+    ) -> Option<Result<()>> {
+        let session = self.ctx.get_current_session();
+        let warehouse_mgr = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+
+        // Only check support_forward_warehouse_request privileges
+        if !warehouse_mgr.support_forward_warehouse_request() {
+            return Some(Ok(()));
+        }
+
+        match warehouse_mgr.list_warehouses().await {
+            Ok(warehouses) => {
+                if let Some(sw) = warehouses
+                    .iter()
+                    .filter_map(|w| {
+                        if let WarehouseInfo::SystemManaged(sw) = w {
+                            Some(sw)
+                        } else {
+                            None
+                        }
+                    })
+                    .find(|sw| sw.id == warehouse.clone())
+                {
+                    let id = sw.role_id.to_string();
+                    let grant_object = GrantObject::Warehouse(id);
+                    match self
+                        .has_ownership(&session, &grant_object, false, false)
+                        .await
+                    {
+                        Ok(has) => {
+                            if has {
+                                Some(Ok(()))
+                            } else {
+                                Some(Err(ErrorCode::PermissionDenied(format!(
+                                    "Permission denied: Ownership is required on WAREHOUSE '{}' for user {}",
+                                    warehouse,
+                                    current_user
+                                ))))
+                            }
+                        }
+                        Err(e) => Some(Err(e.add_message("error on checking warehouse ownership"))),
+                    }
+                } else {
+                    None
+                }
+            }
+            Err(e) => Some(Err(e.add_message("error on validating warehouse ownership"))),
+        }
+    }
+
     async fn has_ownership(
         &self,
         session: &Arc<Session>,
@@ -440,8 +497,9 @@ impl PrivilegeAccess {
             | GrantObject::DatabaseById(_, _)
             | GrantObject::UDF(_)
             | GrantObject::Stage(_)
+            | GrantObject::Warehouse(_)
             | GrantObject::TableById(_, _, _) => true,
-            GrantObject::Global | GrantObject::Warehouse(_) => false,
+            GrantObject::Global => false,
         };
 
         if verify_ownership
@@ -712,7 +770,7 @@ impl AccessChecker for PrivilegeAccess {
                             .await?;
                         let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
-                        check_ownership_access(&identity, catalog, database, show_db_id, &ownerships, &roles_name)?;
+                        check_db_tb_ownership_access(&identity, catalog, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowStreams(database)) => {
                         let ctl = self.ctx.get_catalog(&ctl_name).await?;
@@ -730,7 +788,7 @@ impl AccessChecker for PrivilegeAccess {
                             .await?;
                         let roles = self.ctx.get_all_effective_roles().await?;
                         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
-                        check_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
+                        check_db_tb_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                     }
                     Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
                         if self.ctx.is_temp_table(catalog_name,database,table){
@@ -885,7 +943,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
                 let roles = self.ctx.get_all_effective_roles().await?;
                 let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
-                check_ownership_access(&identity, &ctl_name, &plan.database, show_db_id, &ownerships, &roles_name)?;
+                check_db_tb_ownership_access(&identity, &ctl_name, &plan.database, show_db_id, &ownerships, &roles_name)?;
             }
 
             // Virtual Column.
@@ -1270,27 +1328,62 @@ impl AccessChecker for PrivilegeAccess {
             }
             Plan::Commit => {}
             Plan::Abort => {}
-            Plan::ShowWarehouses => {}
-            Plan::ShowOnlineNodes => {}
-            Plan::DropWarehouse(_) => {}
-            Plan::ResumeWarehouse(_) => {}
-            Plan::SuspendWarehouse(_) => {}
-            Plan::RenameWarehouse(_) => {}
-            Plan::InspectWarehouse(_) => {}
-            Plan::DropWarehouseCluster(_) => {}
-            Plan::RenameWarehouseCluster(_) => {}
-            Plan::UseWarehouse(_) => {}
-            Plan::CreateWarehouse(_) => {}
-            Plan::AddWarehouseCluster(_) => {}
-            Plan::AssignWarehouseNodes(_) => {}
-            Plan::UnassignWarehouseNodes(_) => {}
+            Plan::ShowWarehouses => {
+                // check privilege in interpreter
+            }
+            Plan::ShowOnlineNodes => {
+                // todo: now no limit
+            }
+            Plan::DropWarehouse(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::ResumeWarehouse(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::SuspendWarehouse(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::RenameWarehouse(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::InspectWarehouse(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::DropWarehouseCluster(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::RenameWarehouseCluster(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::UseWarehouse(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::CreateWarehouse(_) => {
+                let warehouse_mgr = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+                // Only check support_forward_warehouse_request privileges
+                if !warehouse_mgr.support_forward_warehouse_request() {
+                    return Ok(());
+                }
+                // only current role has global level create warehouse privilege, it will pass
+                self.validate_access(&GrantObject::Global, UserPrivilegeType::CreateWarehouse, true, false)
+                    .await?;
+            }
+            Plan::AddWarehouseCluster(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::AssignWarehouseNodes(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
+            Plan::UnassignWarehouseNodes(plan) => {
+                self.validate_warehouse_ownership(plan.warehouse.clone(), identity).await.transpose()?;
+            }
         }
 
         Ok(())
     }
 }
 
-fn check_ownership_access(
+fn check_db_tb_ownership_access(
     identity: &String,
     catalog: &String,
     database: &String,
@@ -1324,7 +1417,9 @@ fn check_ownership_access(
                         return Ok(());
                     }
                 }
-                OwnershipObject::UDF { .. } | OwnershipObject::Stage { .. } => {}
+                OwnershipObject::UDF { .. }
+                | OwnershipObject::Stage { .. }
+                | OwnershipObject::Warehouse { .. } => {}
             }
         }
     }

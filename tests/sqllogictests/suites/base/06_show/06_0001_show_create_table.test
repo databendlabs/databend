@@ -12,6 +12,11 @@ SHOW CREATE TABLE `test`.`a`
 ----
 a CREATE TABLE a ( a BIGINT NOT NULL, b INT NOT NULL DEFAULT 3, c VARCHAR NOT NULL DEFAULT 'x', d SMALLINT NULL, e DATE NOT NULL ) ENGINE=NULL
 
+query TT
+SHOW CREATE TABLE `test`.`a` WITH QUOTED_IDENTIFIERS
+----
+a CREATE TABLE "a" ( "a" BIGINT NOT NULL, "b" INT NOT NULL DEFAULT 3, "c" VARCHAR NOT NULL DEFAULT 'x', "d" SMALLINT NULL, "e" DATE NOT NULL ) ENGINE=NULL
+
 statement ok
 CREATE TABLE `test`.`b` ( a bigint not null, b int null default null, c varchar(255) not null, d smallint unsigned null) Engine = Null COMMENT = 'test b'
 
