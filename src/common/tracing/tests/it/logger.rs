@@ -22,7 +22,10 @@ use databend_common_tracing::Config;
 #[test]
 fn test_rolling_files() {
     let mut config = Config::new_testing();
+    // set limit to 2
     config.file.limit = 2;
+    // set log file max_size to 16 bytes, in order to generate more log files
+    config.file.max_size = 16;
     let _drop_guards = init_logging("test", &config, BTreeMap::default());
 
     for _ in 0..30 {
