@@ -1,0 +1,7 @@
+init table
+1
+check table comment
+tbl comment
+check column comment
+c1	c1 comment
+c2	c2 comment

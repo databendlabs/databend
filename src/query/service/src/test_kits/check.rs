@@ -14,15 +14,16 @@
 
 use std::str;
 
+use databend_common_catalog::table::Table;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use databend_common_expression::DataBlock;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_meta_app::storage::StorageParams;
+use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_BLOCK_PREFIX;
-use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use databend_common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
@@ -30,7 +31,6 @@ use databend_common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use futures::TryStreamExt;
 use walkdir::WalkDir;
 
-use crate::sessions::TableContext;
 use crate::test_kits::TestFixture;
 
 pub fn expects_err<T>(case_name: &str, err_code: u16, res: Result<T>) {
@@ -92,14 +92,12 @@ pub async fn check_data_dir(
     let mut sg_count = 0;
     let mut b_count = 0;
     let mut i_count = 0;
-    let mut last_snapshot_loc = "".to_string();
     let mut table_statistic_files = vec![];
     let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
     let prefix_snapshot_statistics = FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
     let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
-    let prefix_last_snapshot_hint = FUSE_TBL_LAST_SNAPSHOT_HINT;
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
@@ -118,15 +116,6 @@ pub async fn check_data_dir(
             } else if path.starts_with(prefix_snapshot_statistics) {
                 ts_count += 1;
                 table_statistic_files.push(entry_path.to_string());
-            } else if path.starts_with(prefix_last_snapshot_hint) && check_last_snapshot.is_some() {
-                let content = fixture
-                    .default_ctx
-                    .get_application_level_data_operator()?
-                    .operator()
-                    .read(entry_path)
-                    .await?
-                    .to_vec();
-                last_snapshot_loc = str::from_utf8(&content)?.to_string();
             }
         }
     }
@@ -162,13 +151,21 @@ pub async fn check_data_dir(
     if check_last_snapshot.is_some() {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let snapshot_loc = fuse_table.snapshot_loc();
-        let snapshot_loc = snapshot_loc.unwrap();
-        assert!(last_snapshot_loc.contains(&snapshot_loc));
-        assert_eq!(
-            last_snapshot_loc.find(&snapshot_loc),
-            Some(last_snapshot_loc.len() - snapshot_loc.len())
-        );
+        let snapshot_loc = fuse_table.snapshot_loc().unwrap();
+
+        let table_info = fuse_table.get_table_info();
+        let storage_prefix = FuseTable::parse_storage_prefix_from_table_info(table_info)?;
+        let hint =
+            load_last_snapshot_hint(storage_prefix.as_str(), fuse_table.get_operator_ref()).await?;
+
+        if let Some(hint) = hint {
+            let operator_meta_data = fuse_table.get_operator_ref().info();
+            let storage_prefix = operator_meta_data.root();
+            let snapshot_full_path = format!("{}{}", storage_prefix, snapshot_loc);
+            assert_eq!(snapshot_full_path, hint.snapshot_full_path);
+        } else {
+            panic!("hint of the last snapshot is not there!");
+        }
     }
 
     if check_table_statistic_file.is_some() {
