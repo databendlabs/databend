@@ -39,7 +39,7 @@ use databend_meta::version::METASRV_COMMIT_VERSION;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Parser)]
-#[clap(name = "databend-metactl", about, version = &**METASRV_COMMIT_VERSION, author)]
+#[clap(name = "databend-metactl", about, version = & * * METASRV_COMMIT_VERSION, author)]
 struct App {
     #[clap(subcommand)]
     command: Option<CtlCommand>,
@@ -197,6 +197,7 @@ async fn main() -> anyhow::Result<()> {
             dir: ".databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
+            max_size: usize::MAX,
         },
         ..Default::default()
     };

@@ -53,7 +53,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
-#[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
+#[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
 struct Config {
     /// The prefix of keys to write.
     #[clap(long, default_value = "0")]
@@ -92,6 +92,7 @@ async fn main() {
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
+            max_size: usize::MAX,
         },
         stderr: StderrConfig {
             on: true,

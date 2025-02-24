@@ -43,6 +43,7 @@ impl Config {
                 dir: "./.databend/logs".to_string(),
                 format: "text".to_string(),
                 limit: 48,
+                max_size: 16, // 16 bytes for test
             },
             stderr: StderrConfig {
                 on: true,
@@ -61,14 +62,15 @@ pub struct FileConfig {
     pub dir: String,
     pub format: String,
     pub limit: usize,
+    pub max_size: usize,
 }
 
 impl Display for FileConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, level='{}', dir={}, format={}, limit={}",
-            self.on, self.level, self.dir, self.format, self.limit,
+            "enabled={}, level='{}', dir={}, format={}, limit={}, max_file_size={}",
+            self.on, self.level, self.dir, self.format, self.limit, self.max_size
         )
     }
 }
@@ -81,6 +83,7 @@ impl Default for FileConfig {
             dir: "./.databend/logs".to_string(),
             format: "json".to_string(),
             limit: 48,
+            max_size: usize::MAX,
         }
     }
 }
