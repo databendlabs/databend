@@ -2130,7 +2130,7 @@ pub struct FileLogConfig {
     #[clap(
         long = "log-file-max-size",
         value_name = "VALUE",
-        default_value = "usize::MAX"
+        default_value_t = usize::MAX
     )]
     #[serde(rename = "max-size")]
     pub file_max_size: usize,
