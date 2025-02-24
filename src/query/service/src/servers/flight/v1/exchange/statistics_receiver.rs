@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use databend_common_base::base::tokio::sync::broadcast::channel;
@@ -26,6 +28,7 @@ use futures_util::future::select;
 use futures_util::future::Either;
 
 use crate::servers::flight::v1::packets::DataPacket;
+use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::servers::flight::FlightExchange;
 use crate::sessions::QueryContext;
 
@@ -49,6 +52,7 @@ impl StatisticsReceiver {
             exchange_handler.push(runtime.spawn({
                 let ctx = ctx.clone();
                 let shutdown_rx = shutdown_tx.subscribe();
+                let node_memory_updater = ctx.get_node_memory_updater(&source_target);
 
                 async move {
                     let mut shutdown_rx = shutdown_rx;
@@ -65,6 +69,7 @@ impl StatisticsReceiver {
                                 match StatisticsReceiver::recv_data(
                                     &ctx,
                                     &source_target,
+                                    &node_memory_updater,
                                     recv.await,
                                 ) {
                                     Ok(true) => {
@@ -78,6 +83,7 @@ impl StatisticsReceiver {
                                         match StatisticsReceiver::recv_data(
                                             &ctx,
                                             &source_target,
+                                            &node_memory_updater,
                                             rx.recv().await,
                                         ) {
                                             Ok(true) => {
@@ -94,7 +100,12 @@ impl StatisticsReceiver {
                                 }
                             }
                             Either::Right((res, left)) => {
-                                match StatisticsReceiver::recv_data(&ctx, &source_target, res) {
+                                match StatisticsReceiver::recv_data(
+                                    &ctx,
+                                    &source_target,
+                                    &node_memory_updater,
+                                    res,
+                                ) {
                                     Ok(true) => {
                                         return Ok(());
                                     }
@@ -124,6 +135,7 @@ impl StatisticsReceiver {
     fn recv_data(
         ctx: &Arc<QueryContext>,
         source_target: &str,
+        node_memory_usage: &Arc<AtomicUsize>,
         recv_data: Result<Option<DataPacket>>,
     ) -> Result<bool> {
         match recv_data {
@@ -134,6 +146,11 @@ impl StatisticsReceiver {
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
             Ok(Some(DataPacket::SerializeProgress(progress))) => {
                 for progress_info in progress {
+                    if let ProgressInfo::MemoryUsage(memory_usage) = &progress_info {
+                        node_memory_usage.store(*memory_usage, Ordering::Relaxed);
+                        continue;
+                    }
+
                     progress_info.inc(source_target, ctx);
                 }
 

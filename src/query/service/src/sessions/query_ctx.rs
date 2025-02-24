@@ -540,8 +540,8 @@ impl QueryContext {
         self.shared.set_mem_stat(mem_stat)
     }
 
-    pub fn set_node_memory_usage(&self, node: &str, memory_usage: usize) {
-        self.shared.set_node_memory_usage(node, memory_usage)
+    pub fn get_node_memory_updater(&self, node: &str) -> Arc<AtomicUsize> {
+        self.shared.get_node_memory_updater(node)
     }
 }
 

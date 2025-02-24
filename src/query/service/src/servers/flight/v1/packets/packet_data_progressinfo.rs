@@ -47,7 +47,7 @@ impl ProgressInfo {
             ProgressInfo::SpillTotalStats(values) => {
                 ctx.set_cluster_spill_progress(source_target, values.clone())
             }
-            ProgressInfo::MemoryUsage(v) => ctx.set_node_memory_usage(source_target, *v),
+            ProgressInfo::MemoryUsage(_) => unreachable!(),
         };
     }
 

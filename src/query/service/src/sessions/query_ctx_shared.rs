@@ -154,7 +154,7 @@ pub struct QueryContextShared {
         Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
     pub(in crate::sessions) unload_callbacked: AtomicBool,
     pub(in crate::sessions) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
-    pub(in crate::sessions) node_memory_usage: Arc<RwLock<HashMap<String, AtomicUsize>>>,
+    pub(in crate::sessions) node_memory_usage: Arc<RwLock<HashMap<String, Arc<AtomicUsize>>>>,
 }
 
 impl QueryContextShared {
@@ -692,17 +692,18 @@ impl QueryContextShared {
         self.mem_stat.read().clone()
     }
 
-    pub fn set_node_memory_usage(&self, node: &str, node_memory_usage: usize) {
+    pub fn get_node_memory_updater(&self, node: &str) -> Arc<AtomicUsize> {
         {
             if let Some(v) = self.node_memory_usage.read().get(node) {
-                v.store(node_memory_usage, Ordering::Relaxed);
-                return;
+                return v.clone();
             }
         }
 
         let key = node.to_string();
+        let node_memory_updater = Arc::new(AtomicUsize::new(0));
         let mut guard = self.node_memory_usage.write();
-        guard.insert(key, AtomicUsize::new(node_memory_usage));
+        guard.insert(key, node_memory_updater.clone());
+        node_memory_updater
     }
 
     pub fn get_nodes_memory_usage(&self) -> usize {
