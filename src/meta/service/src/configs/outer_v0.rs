@@ -327,7 +327,7 @@ impl From<Config> for ConfigViaEnv {
             metasrv_log_file_dir: cfg.log.file.file_dir,
             metasrv_log_file_format: cfg.log.file.file_format,
             metasrv_log_file_limit: cfg.log.file.file_limit,
-            metasrv_log_file_max_size: usize::MAX,
+            metasrv_log_file_max_size: cfg.log.file.file_max_size,
             metasrv_log_stderr_on: cfg.log.stderr.stderr_on,
             metasrv_log_stderr_level: cfg.log.stderr.stderr_level,
             metasrv_log_stderr_format: cfg.log.stderr.stderr_format,

@@ -2176,7 +2176,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
-            file_max_size: usize::MAX,
+            file_max_size: inner.max_size,
 
             // Deprecated Fields
             file_prefix_filter: None,

@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
-            max_size: usize::MAX,
+            max_size: 4294967296,
         },
         stderr: StderrConfig {
             on: true,
