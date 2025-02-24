@@ -43,7 +43,7 @@ impl Config {
                 dir: "./.databend/logs".to_string(),
                 format: "text".to_string(),
                 limit: 48,
-                max_size: 16, // 16 bytes for test
+                max_size: usize::MAX,
             },
             stderr: StderrConfig {
                 on: true,

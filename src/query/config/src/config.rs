@@ -1340,9 +1340,7 @@ pub enum SettingValue {
 
 impl Serialize for SettingValue {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    where S: serde::Serializer {
         match self {
             SettingValue::UInt64(v) => serializer.serialize_u64(*v),
             SettingValue::String(v) => serializer.serialize_str(v),
@@ -1352,9 +1350,7 @@ impl Serialize for SettingValue {
 
 impl<'de> Deserialize<'de> for SettingValue {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    where D: serde::Deserializer<'de> {
         deserializer.deserialize_any(SettingVisitor)
     }
 }
@@ -1378,16 +1374,12 @@ impl serde::de::Visitor<'_> for SettingVisitor {
     }
 
     fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
+    where E: serde::de::Error {
         Ok(SettingValue::UInt64(value))
     }
 
     fn visit_i64<E>(self, value: i64) -> std::result::Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
+    where E: serde::de::Error {
         if value < 0 {
             return Err(E::custom("setting value must be positive"));
         }
@@ -1395,9 +1387,7 @@ impl serde::de::Visitor<'_> for SettingVisitor {
     }
 
     fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
-    where
-        E: serde::de::Error,
-    {
+    where E: serde::de::Error {
         Ok(SettingValue::String(value.to_string()))
     }
 }
@@ -3227,7 +3217,7 @@ mod cache_config_converters {
                     params,
                     ..Default::default()
                 }
-                    .into()
+                .into()
             });
 
             Self {
