@@ -44,6 +44,7 @@ pub struct StageTableInfo {
     pub is_select: bool,
     pub copy_into_location_options: CopyIntoLocationOptions,
     pub copy_into_table_options: CopyIntoTableOptions,
+    pub stage_root: String,
 }
 
 impl StageTableInfo {
