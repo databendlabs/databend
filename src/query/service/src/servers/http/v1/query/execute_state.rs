@@ -298,10 +298,8 @@ impl Executor {
             }
             Running(r) => {
                 info!(
-                    "{}: http query changing state from Running to Stopped, reason {:?} {:?}",
-                    &guard.query_id,
-                    reason,
-                    std::backtrace::Backtrace::force_capture()
+                    "{}: http query changing state from Running to Stopped, reason {:?}",
+                    &guard.query_id, reason,
                 );
                 if let Err(e) = &reason {
                     if e.code() != ErrorCode::CLOSED_QUERY {
