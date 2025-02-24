@@ -448,6 +448,9 @@ impl Binder {
             GrantObjectName::Stage(name) => {
                 format!("SELECT * FROM show_grants('stage', '{}')", name)
             }
+            GrantObjectName::Warehouse(name) => {
+                format!("SELECT * FROM show_grants('warehouse', '{}')", name)
+            }
         };
 
         let (show_limit, limit_str) = get_show_options(show_option, Some("name".to_string()));

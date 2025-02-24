@@ -103,7 +103,7 @@ impl GrantObjectVisibilityChecker {
                             &mut granted_global_ws,
                             ent.privileges().iter(),
                             |privilege| {
-                                UserPrivilegeSet::available_privileges_on_warehouse()
+                                UserPrivilegeSet::available_privileges_on_warehouse(false)
                                     .has_privilege(privilege)
                             },
                         );
@@ -200,6 +200,9 @@ impl GrantObjectVisibilityChecker {
                 OwnershipObject::UDF { name } => {
                     granted_udfs.insert(name.to_string());
                 }
+                OwnershipObject::Warehouse { id } => {
+                    granted_ws.insert(id.to_string());
+                }
             }
         }
 
@@ -259,12 +262,12 @@ impl GrantObjectVisibilityChecker {
         false
     }
 
-    pub fn check_warehouse_visibility(&self, udf: &str) -> bool {
+    pub fn check_warehouse_visibility(&self, id: &str) -> bool {
         if self.granted_global_ws {
             return true;
         }
 
-        if self.granted_ws.contains(udf) {
+        if self.granted_ws.contains(id) {
             return true;
         }
         false

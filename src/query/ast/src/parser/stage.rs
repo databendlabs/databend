@@ -30,6 +30,19 @@ use crate::parser::input::Input;
 use crate::parser::token::*;
 use crate::parser::ErrorKind;
 
+pub fn parameter_to_grant_string(i: Input) -> IResult<String> {
+    let ident_to_string = |i| map_res(grant_ident, |ident| Ok(ident.name))(i);
+    let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
+    let boolean_to_string = |i| map(literal_bool, |v| v.to_string())(i);
+
+    rule!(
+        #literal_string
+        | #ident_to_string
+        | #u64_to_string
+        | #boolean_to_string
+    )(i)
+}
+
 pub fn parameter_to_string(i: Input) -> IResult<String> {
     let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);
     let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);

@@ -150,6 +150,8 @@ pub enum UserPrivilegeType {
     Write,
     // Privilege to Create database
     CreateDatabase,
+    // Privilege to Create warehouse
+    CreateWarehouse,
     // Discard Privilege Type
     Set,
 }
@@ -178,6 +180,7 @@ impl Display for UserPrivilegeType {
             UserPrivilegeType::Read => "Read",
             UserPrivilegeType::Write => "Write",
             UserPrivilegeType::CreateDatabase => "CREATE DATABASE",
+            UserPrivilegeType::CreateWarehouse => "CREATE WAREHOUSE",
         })
     }
 }
