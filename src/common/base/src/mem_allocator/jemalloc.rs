@@ -193,13 +193,12 @@ pub mod linux {
                 return Ok(ptr);
             }
 
+            let flags = layout_to_flags(new_layout.align(), new_layout.size());
             let new_ptr = if new_layout.size() == 0 {
-                let flags = layout_to_flags(old_layout.align(), old_layout.size());
-                ffi::sdallocx(ptr.as_ptr() as *mut c_void, old_layout.size(), flags);
+                ffi::sdallocx(ptr.as_ptr() as *mut c_void, new_layout.size(), flags);
                 let slice = std::slice::from_raw_parts_mut(new_layout.align() as *mut u8, 0);
                 NonNull::new(slice).unwrap_unchecked()
             } else {
-                let flags = layout_to_flags(new_layout.align(), new_layout.size());
                 let data_address =
                     ffi::rallocx(ptr.cast().as_ptr(), new_layout.size(), flags) as *mut u8;
                 if data_address.is_null() {

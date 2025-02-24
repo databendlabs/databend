@@ -350,13 +350,12 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
             return Ok(reduced_ptr);
         }
 
-        let mem_stat = Arc::from_raw(mem_stat_address as *const MemStat);
-        MemStatBuffer::current().dealloc(&mem_stat, old_adjusted_layout.size() as i64);
         let Ok(reduced_ptr) = self.inner.shrink(ptr, old_adjusted_layout, new_layout) else {
-            MemStatBuffer::current().force_alloc(&mem_stat, old_adjusted_layout.size() as i64);
             return Err(AllocError);
         };
 
+        let mem_stat = Arc::from_raw(mem_stat_address as *const MemStat);
+        MemStatBuffer::current().dealloc(&mem_stat, old_adjusted_layout.size() as i64);
         GlobalStatBuffer::current().force_alloc(new_layout.size() as i64);
         Ok(reduced_ptr)
     }
@@ -1288,7 +1287,8 @@ mod tests {
                                 let new_size = old_layout
                                     .size()
                                     .saturating_sub(rand::random::<usize>() % 256);
-                                let new_layout = Layout::from_size_align(new_size, 8).unwrap();
+                                let new_layout =
+                                    Layout::from_size_align(std::cmp::max(1, new_size), 8).unwrap();
 
                                 if let Ok(new_ptr) = unsafe {
                                     allocator.shrink(ptr.as_non_null_ptr(), old_layout, new_layout)
