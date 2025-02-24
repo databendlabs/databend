@@ -24,7 +24,7 @@ use crate::pipelines::executor::PipelinePullingExecutor;
 
 pub struct PullingExecutorStream {
     end_of_stream: bool,
-    executor: PipelinePullingExecutor,
+    executor: Option<PipelinePullingExecutor>,
 }
 
 impl PullingExecutorStream {
@@ -32,8 +32,31 @@ impl PullingExecutorStream {
         executor.start();
         Ok(Self {
             end_of_stream: false,
-            executor,
+            executor: Some(executor),
         })
+    }
+
+    fn poll_next_impl(&mut self) -> Poll<Option<Result<DataBlock>>> {
+        if let Some(mut executor) = self.executor.take() {
+            return match executor.pull_data() {
+                Err(cause) => {
+                    self.end_of_stream = true;
+                    drop(executor);
+                    Poll::Ready(Some(Err(cause)))
+                }
+                Ok(Some(data)) => {
+                    self.executor = Some(executor);
+                    Poll::Ready(Some(Ok(data)))
+                }
+                Ok(None) => {
+                    self.end_of_stream = true;
+                    drop(executor);
+                    Poll::Ready(None)
+                }
+            };
+        }
+
+        Poll::Ready(None)
     }
 }
 
@@ -47,13 +70,6 @@ impl Stream for PullingExecutorStream {
             return Poll::Ready(None);
         }
 
-        match self_.executor.pull_data() {
-            Err(cause) => {
-                self_.end_of_stream = true;
-                Poll::Ready(Some(Err(cause)))
-            }
-            Ok(Some(data)) => Poll::Ready(Some(Ok(data))),
-            Ok(None) => Poll::Ready(None),
-        }
+        self_.poll_next_impl()
     }
 }

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use crate::runtime::memory::mem_stat::OutOfLimit;
 use crate::runtime::memory::MemStat;
 use crate::runtime::LimitMemGuard;
+use crate::runtime::ThreadTracker;
 use crate::runtime::GLOBAL_MEM_STAT;
 
 #[thread_local]
@@ -82,7 +83,6 @@ impl GlobalStatBuffer {
     pub fn alloc(&mut self, memory_usage: i64) -> std::result::Result<(), OutOfLimit> {
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
         // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
-
         if self.destroyed_thread_local_macro {
             self.global_mem_stat
                 .used
@@ -92,7 +92,25 @@ impl GlobalStatBuffer {
 
         match self.incr(memory_usage) <= MEM_STAT_BUFFER_SIZE {
             true => Ok(()),
-            false => self.flush::<true>(memory_usage),
+            false => {
+                match !std::thread::panicking() && !self.unlimited_flag {
+                    true => {
+                        if let Err(out_of_limit) = self.flush::<true>(memory_usage) {
+                            let _guard = LimitMemGuard::enter_unlimited();
+                            ThreadTracker::replace_error_message(Some(format!(
+                                "{:?}",
+                                out_of_limit
+                            )));
+                            return Err(out_of_limit);
+                        }
+                    }
+                    false => {
+                        let _ = self.flush::<false>(0);
+                    }
+                };
+
+                Ok(())
+            }
         }
     }
 

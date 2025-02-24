@@ -20,6 +20,7 @@ use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
 use crate::runtime::memory::OutOfLimit;
 use crate::runtime::LimitMemGuard;
 use crate::runtime::MemStat;
+use crate::runtime::ThreadTracker;
 use crate::runtime::GLOBAL_MEM_STAT;
 
 #[thread_local]
@@ -30,7 +31,7 @@ pub struct MemStatBuffer {
     pub(crate) cur_mem_stat: Option<Arc<MemStat>>,
     pub(crate) memory_usage: i64,
     // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
-    // unlimited_flag: bool,
+    unlimited_flag: bool,
     pub(crate) global_mem_stat: &'static MemStat,
     destroyed_thread_local_macro: bool,
 }
@@ -42,13 +43,19 @@ impl MemStatBuffer {
             cur_mem_stat_id: 0,
             cur_mem_stat: None,
             memory_usage: 0,
-            // unlimited_flag: false,
+            unlimited_flag: false,
             destroyed_thread_local_macro: false,
         }
     }
 
     pub fn current() -> &'static mut MemStatBuffer {
         unsafe { &mut *addr_of_mut!(MEM_STAT_BUFFER) }
+    }
+
+    pub fn set_unlimited_flag(&mut self, flag: bool) -> bool {
+        let old = self.unlimited_flag;
+        self.unlimited_flag = flag;
+        old
     }
 
     pub fn incr(&mut self, bs: i64) -> i64 {
@@ -88,7 +95,13 @@ impl MemStatBuffer {
         }
 
         if mem_stat.id != self.cur_mem_stat_id {
-            self.flush::<false>(0)?;
+            if let Err(out_of_limit) = self.flush::<false>(0) {
+                if !std::thread::panicking() && !self.unlimited_flag {
+                    let _guard = LimitMemGuard::enter_unlimited();
+                    ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
+                    return Err(out_of_limit);
+                }
+            }
 
             self.cur_mem_stat = Some(mem_stat.clone());
             self.cur_mem_stat_id = mem_stat.id;
@@ -96,7 +109,18 @@ impl MemStatBuffer {
 
         if self.incr(memory_usage) >= MEM_STAT_BUFFER_SIZE {
             let alloc = memory_usage;
-            self.flush::<false>(alloc)?;
+            match !std::thread::panicking() && !self.unlimited_flag {
+                true => {
+                    if let Err(out_of_limit) = self.flush::<true>(alloc) {
+                        let _guard = LimitMemGuard::enter_unlimited();
+                        ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
+                        return Err(out_of_limit);
+                    }
+                }
+                false => {
+                    let _ = self.flush::<false>(0);
+                }
+            };
         }
 
         Ok(())

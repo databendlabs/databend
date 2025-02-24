@@ -524,6 +524,13 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        if old_layout.size() == new_layout.size() {
+            return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
+                ptr.as_mut(),
+                new_layout.size(),
+            )));
+        }
+
         if old_layout.size() >= META_TRACKER_THRESHOLD
             && new_layout.size() >= META_TRACKER_THRESHOLD
         {
@@ -542,11 +549,6 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
             };
 
             Ok(grow_ptr)
-        } else if old_layout.size() == new_layout.size() {
-            Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                ptr.as_mut(),
-                new_layout.size(),
-            )))
         } else {
             if let Some(mem_stat) = ThreadTracker::mem_stat() {
                 return self.move_grow(ptr, mem_stat, old_layout, new_layout);
@@ -585,6 +587,13 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        if old_layout.size() == new_layout.size() {
+            return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
+                ptr.as_mut(),
+                new_layout.size(),
+            )));
+        }
+
         if old_layout.size() >= META_TRACKER_THRESHOLD
             && new_layout.size() >= META_TRACKER_THRESHOLD
         {
@@ -602,11 +611,6 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
             };
 
             Ok(grow_ptr)
-        } else if old_layout.size() == new_layout.size() {
-            Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                ptr.as_mut(),
-                new_layout.size(),
-            )))
         } else {
             if let Some(mem_stat) = ThreadTracker::mem_stat() {
                 return self.move_grow_zeroed(ptr, mem_stat, old_layout, new_layout);
@@ -638,6 +642,13 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
+        if old_layout.size() == new_layout.size() {
+            return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
+                ptr.as_mut(),
+                new_layout.size(),
+            )));
+        }
+
         if old_layout.size() >= META_TRACKER_THRESHOLD
             && new_layout.size() >= META_TRACKER_THRESHOLD
         {
@@ -653,11 +664,6 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
             };
 
             Ok(shrink_ptr)
-        } else if old_layout.size() == new_layout.size() {
-            Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                ptr.as_mut(),
-                new_layout.size(),
-            )))
         } else {
             self.move_shrink(ptr, old_layout, new_layout)
         }
