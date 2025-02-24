@@ -69,9 +69,24 @@ impl Binder {
                     self.ctx.get_settings().get_quoted_ident_case_sensitive()?;
                 let subquery = format!(
                     "SELECT * FROM {}.{}.{}{with_options_str}",
-                    display_ident(&catalog_name, quoted_ident_case_sensitive, self.dialect),
-                    display_ident(&database_name, quoted_ident_case_sensitive, self.dialect),
-                    display_ident(&table_name, quoted_ident_case_sensitive, self.dialect),
+                    display_ident(
+                        &catalog_name,
+                        false,
+                        quoted_ident_case_sensitive,
+                        self.dialect
+                    ),
+                    display_ident(
+                        &database_name,
+                        false,
+                        quoted_ident_case_sensitive,
+                        self.dialect
+                    ),
+                    display_ident(
+                        &table_name,
+                        false,
+                        quoted_ident_case_sensitive,
+                        self.dialect
+                    ),
                 );
                 let tokens = tokenize_sql(&subquery)?;
                 let sub_stmt_msg = parse_sql(&tokens, self.dialect)?;

@@ -119,7 +119,7 @@ impl ShowCreateDictionaryInterpreter {
 
         let mut dict_create_sql = format!(
             "CREATE DICTIONARY {}\n(\n",
-            display_ident(dict_name, quoted_ident_case_sensitive, sql_dialect)
+            display_ident(dict_name, false, quoted_ident_case_sensitive, sql_dialect)
         );
 
         // Append columns and indexes.
@@ -132,7 +132,12 @@ impl ShowCreateDictionaryInterpreter {
                     .and_then(|c| format!(" COMMENT '{}'", c).into())
                     .unwrap_or_default();
 
-                let ident = display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect);
+                let ident = display_ident(
+                    field.name(),
+                    false,
+                    quoted_ident_case_sensitive,
+                    sql_dialect,
+                );
                 let data_type = field.data_type().sql_name_explicit_null();
                 let column_str = format!("  {ident} {data_type}{comment}",);
 

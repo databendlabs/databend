@@ -141,6 +141,7 @@ use databend_common_storage::FileStatus;
 use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
+use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_users::GrantObjectVisibilityChecker;
@@ -243,16 +244,16 @@ async fn test_last_snapshot_hint() -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let last_snapshot_location = fuse_table.snapshot_loc().unwrap();
     let operator = fuse_table.get_operator();
-    let location = fuse_table
-        .meta_location_generator()
-        .gen_last_snapshot_hint_location();
     let storage_meta_data = operator.info();
     let storage_prefix = storage_meta_data.root();
 
-    let expected = format!("{}{}", storage_prefix, last_snapshot_location);
-    let content = operator.read(location.as_str()).await?.to_vec();
+    let expected_snapshot_full_path = format!("{}{}", storage_prefix, last_snapshot_location);
 
-    assert_eq!(content.as_slice(), expected.as_bytes());
+    let hint = load_last_snapshot_hint(fuse_table.meta_location_generator().prefix(), &operator)
+        .await?
+        .unwrap();
+
+    assert_eq!(hint.snapshot_full_path, expected_snapshot_full_path);
 
     Ok(())
 }

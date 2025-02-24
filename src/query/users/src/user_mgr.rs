@@ -233,7 +233,7 @@ impl UserApiProvider {
         }
         if let GrantObject::Warehouse(_) = object {
             return Err(ErrorCode::IllegalUser(format!(
-                "Cannot grant warehouse privileges to user `{}`",
+                "Cannot revoke warehouse privileges to user `{}`",
                 user.username
             )));
         }
