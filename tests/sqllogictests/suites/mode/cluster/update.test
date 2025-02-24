@@ -56,4 +56,6 @@ SELECT * FROM t1 ORDER BY b
 query T
 explain fragments UPDATE t1 SET a = 3 WHERE false
 ----
-EmptyResultScan
+Fragment 0:
+    EmptyResultScan
+(empty)
