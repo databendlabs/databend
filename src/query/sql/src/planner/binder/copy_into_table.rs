@@ -225,6 +225,7 @@ impl Binder {
                 default_values,
                 copy_into_location_options: Default::default(),
                 copy_into_table_options: stmt.options.clone(),
+                stage_root: "".to_string(),
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -405,6 +406,7 @@ impl Binder {
                 default_values: Some(default_values),
                 copy_into_location_options: Default::default(),
                 copy_into_table_options: options,
+                stage_root: "".to_string(),
             },
             write_mode,
             query: None,
@@ -482,6 +484,7 @@ impl Binder {
 
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
+        s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;

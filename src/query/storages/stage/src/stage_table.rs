@@ -28,6 +28,9 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::FILENAME_COLUMN_ID;
+use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -134,6 +137,10 @@ impl Table for StageTable {
         &self.table_info_placeholder
     }
 
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
+        (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
+    }
+
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::StageSource(self.table_info.clone())
     }
@@ -175,6 +182,11 @@ impl Table for StageTable {
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
+        let internal_columns = plan
+            .internal_columns
+            .as_ref()
+            .map(|bt| bt.values().cloned().collect())
+            .unwrap_or_default();
         let stage_table_info =
             if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
                 stage_table_info
@@ -194,7 +206,7 @@ impl Table for StageTable {
                     stage_table_info,
                     compact_threshold,
                 }
-                .read_data(ctx, plan, pipeline)
+                .read_data(ctx, plan, pipeline, internal_columns)
             }
             _ => unreachable!(
                 "unexpected format {} in StageTable::read_partition",
