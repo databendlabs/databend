@@ -40,6 +40,7 @@ use crate::parser::stream::stream_table;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
+use crate::span::merge_span;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
@@ -78,7 +79,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
-                options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
+                options: options
+                    .map(|(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts))
+                    .unwrap_or_default(),
                 query: Box::new(statement.stmt),
             })
         },
@@ -4796,12 +4799,13 @@ pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
 pub fn explain_option(i: Input) -> IResult<ExplainOption> {
     map(
         rule! {
-            VERBOSE | LOGICAL | OPTIMIZED
+            VERBOSE | LOGICAL | OPTIMIZED | DECORRELATED
         },
         |opt| match &opt.kind {
             VERBOSE => ExplainOption::Verbose,
             LOGICAL => ExplainOption::Logical,
             OPTIMIZED => ExplainOption::Optimized,
+            DECORRELATED => ExplainOption::Decorrelated,
             _ => unreachable!(),
         },
     )(i)
