@@ -14,12 +14,12 @@
 
 use std::fmt::Display;
 
-/// Constructs the prefix path which covers all the data of of a give table identity
+/// Constructs the prefix path which covers all the data of a give table identity
 pub fn table_storage_prefix(database_id: impl Display, table_id: impl Display) -> String {
     format!("{}/{}", database_id, table_id)
 }
 
-/// Constructs the prefix path which covers all the data of of a give table identity
+/// Constructs the prefix path which covers all the data of a give database identity
 pub fn database_storage_prefix(database_id: impl Display) -> String {
     format!("{}", database_id)
 }
