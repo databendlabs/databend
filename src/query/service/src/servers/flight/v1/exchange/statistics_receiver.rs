@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -30,6 +29,7 @@ use futures_util::future::Either;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::servers::flight::FlightExchange;
+use crate::sessions::MemoryUpdater;
 use crate::sessions::QueryContext;
 
 pub struct StatisticsReceiver {
@@ -135,7 +135,7 @@ impl StatisticsReceiver {
     fn recv_data(
         ctx: &Arc<QueryContext>,
         source_target: &str,
-        node_memory_usage: &Arc<AtomicUsize>,
+        node_memory_usage: &Arc<MemoryUpdater>,
         recv_data: Result<Option<DataPacket>>,
     ) -> Result<bool> {
         match recv_data {
@@ -146,8 +146,15 @@ impl StatisticsReceiver {
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
             Ok(Some(DataPacket::SerializeProgress(progress))) => {
                 for progress_info in progress {
-                    if let ProgressInfo::MemoryUsage(memory_usage) = &progress_info {
-                        node_memory_usage.store(*memory_usage, Ordering::Relaxed);
+                    if let ProgressInfo::MemoryUsage(memory_usage, peek_memory_usage) =
+                        &progress_info
+                    {
+                        node_memory_usage
+                            .memory_usage
+                            .store(*memory_usage, Ordering::Relaxed);
+                        node_memory_usage
+                            .peek_memory_usage
+                            .store(*peek_memory_usage, Ordering::Relaxed);
                         continue;
                     }
 

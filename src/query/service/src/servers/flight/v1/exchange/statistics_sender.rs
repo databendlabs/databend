@@ -59,7 +59,7 @@ impl StatisticsSender {
                 let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                 let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
-                let mem_stat = ctx.get_mem_stat();
+                let mem_stat = ctx.get_query_memory_tracking();
 
                 loop {
                     match futures::future::select(sleep_future, notified).await {
@@ -158,7 +158,11 @@ impl StatisticsSender {
 
         if let Some(mem_stat) = mem_stat {
             let memory_usage = std::cmp::max(0, mem_stat.get_memory_usage());
-            progress.push(ProgressInfo::MemoryUsage(memory_usage as usize));
+            let peek_memory_usage = std::cmp::max(0, mem_stat.get_peek_memory_usage());
+            progress.push(ProgressInfo::MemoryUsage(
+                memory_usage as usize,
+                peek_memory_usage as usize,
+            ));
         }
 
         let data_packet = DataPacket::SerializeProgress(progress);

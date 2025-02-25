@@ -165,7 +165,7 @@ impl Session {
 
         if let Some(mem_stat) = mem_stat {
             mem_stat.set_limit(self.get_settings().get_max_query_memory_usage()? as i64);
-            shared.set_mem_stat(Some(mem_stat));
+            shared.set_query_memory_tracking(Some(mem_stat));
         }
 
         self.session_ctx

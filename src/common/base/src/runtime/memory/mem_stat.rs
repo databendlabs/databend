@@ -19,7 +19,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use bytesize::ByteSize;
-use log::info;
 
 use crate::base::GlobalSequence;
 
@@ -37,9 +36,11 @@ const MINIMUM_MEMORY_LIMIT: i64 = 256 * 1024 * 1024;
 /// - A MemStat has at most one parent.
 pub struct MemStat {
     pub id: usize,
+    #[allow(unused)]
     name: Option<String>,
 
     pub(crate) used: AtomicI64,
+    pub(crate) peek_used: AtomicI64,
 
     /// The limit of max used memory for this tracker.
     ///
@@ -55,6 +56,7 @@ impl MemStat {
             id: 0,
             name: None,
             used: AtomicI64::new(0),
+            peek_used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
             parent_memory_stat: vec![],
         }
@@ -74,6 +76,7 @@ impl MemStat {
             id,
             name: Some(name),
             used: AtomicI64::new(0),
+            peek_used: AtomicI64::new(0),
             limit: AtomicI64::new(0),
             parent_memory_stat,
         })
@@ -104,6 +107,7 @@ impl MemStat {
         let mut used = self.used.fetch_add(batch_memory_used, Ordering::Relaxed);
 
         used += batch_memory_used;
+        self.peek_used.fetch_max(used, Ordering::Relaxed);
 
         for (idx, parent_memory_stat) in self.parent_memory_stat.iter().enumerate() {
             if let Err(cause) = parent_memory_stat
@@ -165,16 +169,9 @@ impl MemStat {
         self.used.load(Ordering::Relaxed)
     }
 
-    #[allow(unused)]
-    pub fn log_memory_usage(&self) {
-        let name = self.name.clone().unwrap_or_else(|| String::from("global"));
-        let memory_usage = self.used.load(Ordering::Relaxed);
-        let memory_usage = std::cmp::max(0, memory_usage) as u64;
-        info!(
-            "Current memory usage({}): {}.",
-            name,
-            ByteSize::b(memory_usage)
-        );
+    #[inline]
+    pub fn get_peek_memory_usage(&self) -> i64 {
+        self.peek_used.load(Ordering::Relaxed)
     }
 }
 

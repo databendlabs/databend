@@ -68,6 +68,11 @@ use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::Session;
 use crate::storages::Table;
 
+pub struct MemoryUpdater {
+    pub memory_usage: AtomicUsize,
+    pub peek_memory_usage: AtomicUsize,
+}
+
 type DatabaseAndTable = (String, String, String);
 
 /// Data that needs to be shared in a query context.
@@ -154,7 +159,7 @@ pub struct QueryContextShared {
         Arc<RwLock<HashMap<crate::spillers::Location, crate::spillers::Layout>>>,
     pub(in crate::sessions) unload_callbacked: AtomicBool,
     pub(in crate::sessions) mem_stat: Arc<RwLock<Option<Arc<MemStat>>>>,
-    pub(in crate::sessions) node_memory_usage: Arc<RwLock<HashMap<String, Arc<AtomicUsize>>>>,
+    pub(in crate::sessions) node_memory_usage: Arc<RwLock<HashMap<String, Arc<MemoryUpdater>>>>,
 }
 
 impl QueryContextShared {
@@ -683,16 +688,16 @@ impl QueryContextShared {
         }
     }
 
-    pub fn set_mem_stat(&self, mem_stat: Option<Arc<MemStat>>) {
+    pub fn set_query_memory_tracking(&self, mem_stat: Option<Arc<MemStat>>) {
         let mut mem_stat_guard = self.mem_stat.write();
         *mem_stat_guard = mem_stat;
     }
 
-    pub fn get_mem_stat(&self) -> Option<Arc<MemStat>> {
+    pub fn get_query_memory_tracking(&self) -> Option<Arc<MemStat>> {
         self.mem_stat.read().clone()
     }
 
-    pub fn get_node_memory_updater(&self, node: &str) -> Arc<AtomicUsize> {
+    pub fn get_node_memory_updater(&self, node: &str) -> Arc<MemoryUpdater> {
         {
             if let Some(v) = self.node_memory_usage.read().get(node) {
                 return v.clone();
@@ -700,7 +705,11 @@ impl QueryContextShared {
         }
 
         let key = node.to_string();
-        let node_memory_updater = Arc::new(AtomicUsize::new(0));
+        let node_memory_updater = Arc::new(MemoryUpdater {
+            memory_usage: AtomicUsize::new(0),
+            peek_memory_usage: AtomicUsize::new(0),
+        });
+
         let mut guard = self.node_memory_usage.write();
         guard.insert(key, node_memory_updater.clone());
         node_memory_updater
@@ -714,11 +723,34 @@ impl QueryContextShared {
             }
         };
 
-        for (_, node_memory_usage) in self.node_memory_usage.read().iter() {
-            memory_usage += node_memory_usage.load(Ordering::Relaxed);
+        for (_, node_memory_updater) in self.node_memory_usage.read().iter() {
+            memory_usage += node_memory_updater.memory_usage.load(Ordering::Relaxed);
         }
 
         memory_usage
+    }
+
+    pub fn get_nodes_peek_memory_usage(&self) -> HashMap<String, usize> {
+        let memory_usage = {
+            match self.mem_stat.read().as_ref() {
+                None => 0,
+                Some(mem_stat) => std::cmp::max(0, mem_stat.get_peek_memory_usage()) as usize,
+            }
+        };
+
+        let mut nodes_peek_memory_usage = HashMap::new();
+
+        nodes_peek_memory_usage
+            .insert(GlobalConfig::instance().query.node_id.clone(), memory_usage);
+
+        for (node, node_memory_updater) in self.node_memory_usage.read().iter() {
+            let peek_memory_usage = node_memory_updater
+                .peek_memory_usage
+                .load(Ordering::Relaxed);
+            nodes_peek_memory_usage.insert(node.clone(), peek_memory_usage);
+        }
+
+        nodes_peek_memory_usage
     }
 }
 

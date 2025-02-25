@@ -84,9 +84,13 @@ impl GlobalStatBuffer {
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
         // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
         if self.destroyed_thread_local_macro {
-            self.global_mem_stat
+            let used = self
+                .global_mem_stat
                 .used
                 .fetch_add(memory_usage, Ordering::Relaxed);
+            self.global_mem_stat
+                .peek_used
+                .fetch_max(used + memory_usage, Ordering::Relaxed);
             return Ok(());
         }
 
@@ -116,9 +120,13 @@ impl GlobalStatBuffer {
 
     pub fn force_alloc(&mut self, memory_usage: i64) {
         if self.destroyed_thread_local_macro {
-            self.global_mem_stat
+            let used = self
+                .global_mem_stat
                 .used
                 .fetch_add(memory_usage, Ordering::Relaxed);
+            self.global_mem_stat
+                .peek_used
+                .fetch_max(used + memory_usage, Ordering::Relaxed);
             return;
         }
 

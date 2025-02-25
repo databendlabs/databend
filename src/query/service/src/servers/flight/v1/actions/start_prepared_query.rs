@@ -25,7 +25,7 @@ pub async fn start_prepared_query(id: String) -> Result<()> {
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
-    tracking_payload.mem_stat = ctx.get_mem_stat();
+    tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     let _guard = ThreadTracker::tracking(tracking_payload);
 
     debug!("start prepared query {}", id);

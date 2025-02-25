@@ -31,7 +31,7 @@ use crate::sessions::TableContext;
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug)]
 pub enum ProgressInfo {
-    MemoryUsage(usize),
+    MemoryUsage(usize, usize),
     ScanProgress(ProgressValues),
     WriteProgress(ProgressValues),
     ResultProgress(ProgressValues),
@@ -47,7 +47,7 @@ impl ProgressInfo {
             ProgressInfo::SpillTotalStats(values) => {
                 ctx.set_cluster_spill_progress(source_target, values.clone())
             }
-            ProgressInfo::MemoryUsage(_) => unreachable!(),
+            ProgressInfo::MemoryUsage(_, _) => unreachable!(),
         };
     }
 
@@ -62,9 +62,10 @@ impl ProgressInfo {
                 bytes.write_u64::<BigEndian>(values.bytes as u64)?;
                 return Ok(());
             }
-            ProgressInfo::MemoryUsage(value) => {
+            ProgressInfo::MemoryUsage(memory_usage, peek_memory_usage) => {
                 bytes.write_u8(5)?;
-                bytes.write_u64::<BigEndian>(value as u64)?;
+                bytes.write_u64::<BigEndian>(memory_usage as u64)?;
+                bytes.write_u64::<BigEndian>(peek_memory_usage as u64)?;
                 return Ok(());
             }
         };
@@ -88,7 +89,8 @@ impl ProgressInfo {
 
         if info_type == 5 {
             let memory_usage = bytes.read_u64::<BigEndian>()? as usize;
-            return Ok(ProgressInfo::MemoryUsage(memory_usage));
+            let peek_memory_usage = bytes.read_u64::<BigEndian>()? as usize;
+            return Ok(ProgressInfo::MemoryUsage(memory_usage, peek_memory_usage));
         }
 
         let rows = bytes.read_u64::<BigEndian>()? as usize;

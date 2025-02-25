@@ -90,7 +90,10 @@ impl MemStatBuffer {
 
     pub fn alloc(&mut self, mem_stat: &Arc<MemStat>, memory_usage: i64) -> Result<(), OutOfLimit> {
         if self.destroyed_thread_local_macro {
-            mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
+            let used = mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
+            mem_stat
+                .peek_used
+                .fetch_max(used + memory_usage, Ordering::Relaxed);
             return Ok(());
         }
 
@@ -128,7 +131,11 @@ impl MemStatBuffer {
 
     pub fn force_alloc(&mut self, mem_stat: &Arc<MemStat>, memory_usage: i64) {
         if self.destroyed_thread_local_macro {
-            mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
+            let used = mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
+            mem_stat
+                .peek_used
+                .fetch_max(used + memory_usage, Ordering::Relaxed);
+            return;
         }
 
         if mem_stat.id != self.cur_mem_stat_id {

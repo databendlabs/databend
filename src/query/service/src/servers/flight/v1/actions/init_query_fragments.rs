@@ -26,7 +26,7 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
     let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
-    tracking_payload.mem_stat = ctx.get_mem_stat();
+    tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     tracking_payload.query_id = Some(fragments.query_id.clone());
     let _guard = ThreadTracker::tracking(tracking_payload);
 
