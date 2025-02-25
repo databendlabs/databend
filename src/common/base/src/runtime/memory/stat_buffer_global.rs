@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::AllocError;
 use std::ptr::addr_of_mut;
 use std::sync::atomic::Ordering;
 #[cfg(test)]
@@ -80,7 +81,7 @@ impl GlobalStatBuffer {
         }
     }
 
-    pub fn alloc(&mut self, memory_usage: i64) -> std::result::Result<(), OutOfLimit> {
+    pub fn alloc(&mut self, memory_usage: i64) -> std::result::Result<(), AllocError> {
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
         // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
         if self.destroyed_thread_local_macro {
@@ -105,7 +106,7 @@ impl GlobalStatBuffer {
                                 "{:?}",
                                 out_of_limit
                             )));
-                            return Err(out_of_limit);
+                            return Err(AllocError);
                         }
                     }
                     false => {

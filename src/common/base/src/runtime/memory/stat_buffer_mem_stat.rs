@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::AllocError;
 use std::ptr::addr_of_mut;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -88,12 +89,12 @@ impl MemStatBuffer {
             .record_memory::<FALLBACK>(memory_usage, alloc)
     }
 
-    pub fn alloc(&mut self, mem_stat: &Arc<MemStat>, memory_usage: i64) -> Result<(), OutOfLimit> {
+    pub fn alloc(&mut self, mem_stat: &Arc<MemStat>, usage: i64) -> Result<(), AllocError> {
         if self.destroyed_thread_local_macro {
-            let used = mem_stat.used.fetch_add(memory_usage, Ordering::Relaxed);
+            let used = mem_stat.used.fetch_add(usage, Ordering::Relaxed);
             mem_stat
                 .peek_used
-                .fetch_max(used + memory_usage, Ordering::Relaxed);
+                .fetch_max(used + usage, Ordering::Relaxed);
             return Ok(());
         }
 
@@ -102,7 +103,7 @@ impl MemStatBuffer {
                 if !std::thread::panicking() && !self.unlimited_flag {
                     let _guard = LimitMemGuard::enter_unlimited();
                     ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
-                    return Err(out_of_limit);
+                    return Err(AllocError);
                 }
             }
 
@@ -110,14 +111,14 @@ impl MemStatBuffer {
             self.cur_mem_stat_id = mem_stat.id;
         }
 
-        if self.incr(memory_usage) >= MEM_STAT_BUFFER_SIZE {
-            let alloc = memory_usage;
+        if self.incr(usage) >= MEM_STAT_BUFFER_SIZE {
+            let alloc = usage;
             match !std::thread::panicking() && !self.unlimited_flag {
                 true => {
                     if let Err(out_of_limit) = self.flush::<true>(alloc) {
                         let _guard = LimitMemGuard::enter_unlimited();
                         ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
-                        return Err(out_of_limit);
+                        return Err(AllocError);
                     }
                 }
                 false => {
@@ -231,16 +232,16 @@ impl MemStatBuffer {
 
 #[cfg(test)]
 mod tests {
+    use std::alloc::AllocError;
     use std::sync::atomic::Ordering;
 
     use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
     use crate::runtime::memory::stat_buffer_mem_stat::MemStatBuffer;
-    use crate::runtime::memory::OutOfLimit;
     use crate::runtime::GlobalStatBuffer;
     use crate::runtime::MemStat;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_alloc_with_same_allocator() -> Result<(), OutOfLimit> {
+    async fn test_alloc_with_same_allocator() -> Result<(), AllocError> {
         static TEST_GLOBAL: MemStat = MemStat::global();
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
@@ -265,7 +266,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_alloc_with_diff_allocator() -> Result<(), OutOfLimit> {
+    async fn test_alloc_with_diff_allocator() -> Result<(), AllocError> {
         static TEST_GLOBAL: MemStat = MemStat::global();
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
@@ -290,7 +291,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_dealloc_with_same_allocator() -> Result<(), OutOfLimit> {
+    async fn test_dealloc_with_same_allocator() -> Result<(), AllocError> {
         static TEST_GLOBAL: MemStat = MemStat::global();
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
@@ -317,7 +318,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_dealloc_with_diff_allocator() -> Result<(), OutOfLimit> {
+    async fn test_dealloc_with_diff_allocator() -> Result<(), AllocError> {
         static TEST_GLOBAL: MemStat = MemStat::global();
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);
@@ -344,7 +345,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_dealloc_with_unique_allocator() -> Result<(), OutOfLimit> {
+    async fn test_dealloc_with_unique_allocator() -> Result<(), AllocError> {
         static TEST_GLOBAL: MemStat = MemStat::global();
 
         let mut buffer = MemStatBuffer::empty(&TEST_GLOBAL);

@@ -47,33 +47,38 @@ impl<T: Allocator + Default> Default for MetaTrackerAllocator<T> {
 static META_TRACKER_THRESHOLD: usize = 512;
 
 impl<T: Allocator> MetaTrackerAllocator<T> {
-    fn alloc(&self, stat: &Arc<MemStat>, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        let meta_layout = Layout::new::<usize>();
-        let adjusted_layout = layout.extend_packed(meta_layout).unwrap();
+    fn metadata_layout() -> Layout {
+        Layout::new::<usize>()
+    }
 
-        MemStatBuffer::current()
-            .alloc(stat, adjusted_layout.size() as i64)
-            .map_err(|_| AllocError)?;
+    fn adjusted_layout(base_layout: Layout) -> Layout {
+        base_layout.extend_packed(Self::metadata_layout()).unwrap()
+    }
+
+    fn with_meta(base: NonNull<[u8]>, layout: Layout, address: usize) -> NonNull<[u8]> {
+        let mut base_ptr = base.as_non_null_ptr();
+
+        unsafe {
+            base_ptr
+                .add(layout.size())
+                .cast::<usize>()
+                .write_unaligned(address);
+
+            NonNull::new_unchecked(slice_from_raw_parts_mut(base_ptr.as_mut(), layout.size()))
+        }
+    }
+
+    fn alloc(&self, stat: &Arc<MemStat>, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
+        let adjusted_layout = Self::adjusted_layout(layout);
+        MemStatBuffer::current().alloc(stat, adjusted_layout.size() as i64)?;
 
         let Ok(allocated_ptr) = self.inner.allocate(adjusted_layout) else {
             MemStatBuffer::current().dealloc(stat, adjusted_layout.size() as i64);
             return Err(AllocError);
         };
 
-        let mut base_ptr = allocated_ptr.as_non_null_ptr();
-
-        unsafe {
-            let address = Arc::into_raw(stat.clone()) as usize;
-            base_ptr
-                .add(layout.size())
-                .cast::<usize>()
-                .write_unaligned(address);
-
-            Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                base_ptr.as_mut(),
-                layout.size(),
-            )))
-        }
+        let address = Arc::into_raw(stat.clone()) as usize;
+        Ok(Self::with_meta(allocated_ptr, layout, address))
     }
 
     fn alloc_zeroed(
@@ -81,38 +86,20 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         stat: &Arc<MemStat>,
         layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let meta_layout = Layout::new::<usize>();
-        let adjusted_layout = layout.extend_packed(meta_layout).unwrap();
-
-        MemStatBuffer::current()
-            .alloc(stat, adjusted_layout.size() as i64)
-            .map_err(|_| AllocError)?;
+        let adjusted_layout = Self::adjusted_layout(layout);
+        MemStatBuffer::current().alloc(stat, adjusted_layout.size() as i64)?;
 
         let Ok(allocated_ptr) = self.inner.allocate_zeroed(adjusted_layout) else {
             MemStatBuffer::current().dealloc(stat, adjusted_layout.size() as i64);
             return Err(AllocError);
         };
 
-        let mut base_ptr = allocated_ptr.as_non_null_ptr();
-
-        unsafe {
-            let address = Arc::into_raw(stat.clone()) as usize;
-            base_ptr
-                .add(layout.size())
-                .cast::<usize>()
-                .write_unaligned(address);
-
-            Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                base_ptr.as_mut(),
-                layout.size(),
-            )))
-        }
+        let address = Arc::into_raw(stat.clone()) as usize;
+        Ok(Self::with_meta(allocated_ptr, layout, address))
     }
 
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Option<Layout> {
-        let meta_layout = Layout::new::<usize>();
-        let adjusted_layout = layout.extend_packed(meta_layout).unwrap();
-
+        let adjusted_layout = Self::adjusted_layout(layout);
         let mem_stat_address = ptr.add(layout.size()).cast::<usize>().read_unaligned();
 
         if mem_stat_address == 0 {
@@ -132,12 +119,8 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let meta_layout = Layout::new::<usize>();
-        let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
-
-        MemStatBuffer::current()
-            .alloc(stat, new_adjusted_layout.size() as i64)
-            .map_err(|_| AllocError)?;
+        let new_adjusted_layout = Self::adjusted_layout(new_layout);
+        MemStatBuffer::current().alloc(stat, new_adjusted_layout.size() as i64)?;
         GlobalStatBuffer::current().dealloc(old_layout.size() as i64);
 
         let Ok(grow_ptr) = self.inner.grow(ptr, old_layout, new_adjusted_layout) else {
@@ -146,20 +129,8 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
             return Err(AllocError);
         };
 
-        let mut base_ptr = grow_ptr.as_non_null_ptr();
-
-        unsafe {
-            let address = Arc::into_raw(stat.clone()) as usize;
-            base_ptr
-                .add(new_layout.size())
-                .cast::<usize>()
-                .write_unaligned(address);
-
-            Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                base_ptr.as_mut(),
-                new_layout.size(),
-            )))
-        }
+        let address = Arc::into_raw(stat.clone()) as usize;
+        Ok(Self::with_meta(grow_ptr, new_layout, address))
     }
 
     unsafe fn grow_impl(
@@ -168,17 +139,13 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let meta_layout = Layout::new::<usize>();
-        let old_adjusted_layout = old_layout.extend_packed(meta_layout).unwrap();
-        let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
-
+        let old_adjusted_layout = Self::adjusted_layout(old_layout);
+        let new_adjusted_layout = Self::adjusted_layout(new_layout);
         let address = ptr.add(old_layout.size()).cast::<usize>().read_unaligned();
 
         if address == 0 {
             let diff = new_adjusted_layout.size() - old_adjusted_layout.size();
-            GlobalStatBuffer::current()
-                .alloc(diff as i64)
-                .map_err(|_| AllocError)?;
+            GlobalStatBuffer::current().alloc(diff as i64)?;
 
             let Ok(grow_ptr) = self
                 .inner
@@ -188,24 +155,13 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
                 return Err(AllocError);
             };
 
-            let mut base_ptr = grow_ptr.as_non_null_ptr();
-            base_ptr
-                .add(new_layout.size())
-                .cast::<usize>()
-                .write_unaligned(address);
-
-            return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                base_ptr.as_mut(),
-                new_layout.size(),
-            )));
+            return Ok(Self::with_meta(grow_ptr, new_layout, address));
         }
 
         let diff = new_adjusted_layout.size() - old_adjusted_layout.size();
         let stat = ManuallyDrop::new(Arc::from_raw(address as *const MemStat));
 
-        MemStatBuffer::current()
-            .alloc(&stat, diff as i64)
-            .map_err(|_| AllocError)?;
+        MemStatBuffer::current().alloc(&stat, diff as i64)?;
 
         let Ok(grow_ptr) = self
             .inner
@@ -215,16 +171,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
             return Err(AllocError);
         };
 
-        let mut base_ptr = grow_ptr.as_non_null_ptr();
-        base_ptr
-            .add(new_layout.size())
-            .cast::<usize>()
-            .write_unaligned(address);
-
-        Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-            base_ptr.as_mut(),
-            new_layout.size(),
-        )))
+        Ok(Self::with_meta(grow_ptr, new_layout, address))
     }
 
     unsafe fn move_grow_zeroed(
@@ -234,12 +181,9 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let meta_layout = Layout::new::<usize>();
-        let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
+        let new_adjusted_layout = Self::adjusted_layout(new_layout);
 
-        MemStatBuffer::current()
-            .alloc(stat, new_adjusted_layout.size() as i64)
-            .map_err(|_| AllocError)?;
+        MemStatBuffer::current().alloc(stat, new_adjusted_layout.size() as i64)?;
         GlobalStatBuffer::current().dealloc(old_layout.size() as i64);
 
         let Ok(grow_ptr) = self.inner.grow_zeroed(ptr, old_layout, new_adjusted_layout) else {
@@ -248,20 +192,8 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
             return Err(AllocError);
         };
 
-        let mut base_ptr = grow_ptr.as_non_null_ptr();
-
-        unsafe {
-            let address = Arc::into_raw(stat.clone()) as usize;
-            base_ptr
-                .add(new_layout.size())
-                .cast::<usize>()
-                .write_unaligned(address);
-
-            Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                base_ptr.as_mut(),
-                new_layout.size(),
-            )))
-        }
+        let address = Arc::into_raw(stat.clone()) as usize;
+        Ok(Self::with_meta(grow_ptr, new_layout, address))
     }
 
     unsafe fn grow_zeroed_impl(
@@ -270,17 +202,14 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let meta_layout = Layout::new::<usize>();
-        let old_adjusted_layout = old_layout.extend_packed(meta_layout).unwrap();
-        let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
+        let old_adjusted_layout = Self::adjusted_layout(old_layout);
+        let new_adjusted_layout = Self::adjusted_layout(new_layout);
 
         let address = ptr.add(old_layout.size()).cast::<usize>().read_unaligned();
 
         if address == 0 {
             let diff = new_adjusted_layout.size() - old_adjusted_layout.size();
-            GlobalStatBuffer::current()
-                .alloc(diff as i64)
-                .map_err(|_| AllocError)?;
+            GlobalStatBuffer::current().alloc(diff as i64)?;
 
             let Ok(grow_ptr) =
                 self.inner
@@ -290,20 +219,13 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
                 return Err(AllocError);
             };
 
-            let mut base_ptr = grow_ptr.as_non_null_ptr();
-
-            return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                base_ptr.as_mut(),
-                new_layout.size(),
-            )));
+            return Ok(Self::with_meta(grow_ptr, new_layout, 0));
         }
 
         let alloc_size = new_adjusted_layout.size() - old_adjusted_layout.size();
         let stat = ManuallyDrop::new(Arc::from_raw(address as *const MemStat));
 
-        MemStatBuffer::current()
-            .alloc(&stat, alloc_size as i64)
-            .map_err(|_| AllocError)?;
+        MemStatBuffer::current().alloc(&stat, alloc_size as i64)?;
 
         let Ok(grow_ptr) = self
             .inner
@@ -313,20 +235,13 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
             return Err(AllocError);
         };
 
-        let mut base_ptr = grow_ptr.as_non_null_ptr();
-        base_ptr
+        grow_ptr
+            .as_non_null_ptr()
             .add(old_layout.size())
             .cast::<usize>()
             .write_unaligned(0);
-        base_ptr
-            .add(new_layout.size())
-            .cast::<usize>()
-            .write_unaligned(address);
 
-        Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-            base_ptr.as_mut(),
-            new_layout.size(),
-        )))
+        Ok(Self::with_meta(grow_ptr, new_layout, address))
     }
 
     unsafe fn move_shrink(
@@ -335,8 +250,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let meta_layout = Layout::new::<usize>();
-        let old_adjusted_layout = old_layout.extend_packed(meta_layout).unwrap();
+        let old_adjusted_layout = Self::adjusted_layout(old_layout);
 
         let mem_stat_address = ptr.add(old_layout.size()).cast::<usize>().read_unaligned();
 
@@ -366,9 +280,8 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        let meta_layout = Layout::new::<usize>();
-        let old_adjusted_layout = old_layout.extend_packed(meta_layout).unwrap();
-        let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
+        let old_adjusted_layout = Self::adjusted_layout(old_layout);
+        let new_adjusted_layout = Self::adjusted_layout(new_layout);
 
         let address = ptr.add(old_layout.size()).cast::<usize>().read_unaligned();
 
@@ -383,16 +296,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
                 return Err(AllocError);
             };
 
-            let mut base_ptr = ptr.as_non_null_ptr();
-            base_ptr
-                .add(new_layout.size())
-                .cast::<usize>()
-                .write_unaligned(address);
-
-            return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                base_ptr.as_mut(),
-                new_layout.size(),
-            )));
+            return Ok(Self::with_meta(ptr, new_layout, address));
         }
 
         let alloc_size = old_adjusted_layout.size() - new_adjusted_layout.size();
@@ -407,16 +311,7 @@ impl<T: Allocator> MetaTrackerAllocator<T> {
             return Err(AllocError);
         };
 
-        let mut base_ptr = ptr.as_non_null_ptr();
-        base_ptr
-            .add(new_layout.size())
-            .cast::<usize>()
-            .write_unaligned(address);
-
-        Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-            base_ptr.as_mut(),
-            new_layout.size(),
-        )))
+        Ok(Self::with_meta(ptr, new_layout, address))
     }
 }
 
@@ -428,34 +323,18 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
                 return self.alloc(mem_stat, layout);
             }
 
-            let meta_layout = Layout::new::<usize>();
-            let adjusted_layout = layout.extend_packed(meta_layout).unwrap();
+            let adjusted_layout = Self::adjusted_layout(layout);
 
-            GlobalStatBuffer::current()
-                .alloc(adjusted_layout.size() as i64)
-                .map_err(|_| AllocError)?;
+            GlobalStatBuffer::current().alloc(adjusted_layout.size() as i64)?;
             let Ok(allocated_ptr) = self.inner.allocate(adjusted_layout) else {
                 GlobalStatBuffer::current().dealloc(adjusted_layout.size() as i64);
                 return Err(AllocError);
             };
 
-            unsafe {
-                let mut base_ptr = allocated_ptr.as_non_null_ptr();
-                base_ptr
-                    .add(layout.size())
-                    .cast::<usize>()
-                    .write_unaligned(0);
-
-                return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                    base_ptr.as_mut(),
-                    layout.size(),
-                )));
-            }
+            return Ok(Self::with_meta(allocated_ptr, layout, 0));
         }
 
-        GlobalStatBuffer::current()
-            .alloc(layout.size() as i64)
-            .map_err(|_| AllocError)?;
+        GlobalStatBuffer::current().alloc(layout.size() as i64)?;
         let Ok(allocated_ptr) = self.inner.allocate(layout) else {
             GlobalStatBuffer::current().dealloc(layout.size() as i64);
             return Err(AllocError);
@@ -471,28 +350,18 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
                 return self.alloc_zeroed(mem_stat, layout);
             }
 
-            let meta_layout = Layout::new::<usize>();
-            let adjusted_layout = layout.extend_packed(meta_layout).unwrap();
-            GlobalStatBuffer::current()
-                .alloc(adjusted_layout.size() as i64)
-                .map_err(|_| AllocError)?;
+            let adjusted_layout = Self::adjusted_layout(layout);
+            GlobalStatBuffer::current().alloc(adjusted_layout.size() as i64)?;
 
             let Ok(allocated_ptr) = self.inner.allocate_zeroed(adjusted_layout) else {
                 GlobalStatBuffer::current().dealloc(adjusted_layout.size() as i64);
                 return Err(AllocError);
             };
 
-            unsafe {
-                return Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                    allocated_ptr.as_non_null_ptr().as_mut(),
-                    layout.size(),
-                )));
-            }
+            return Ok(Self::with_meta(allocated_ptr, layout, 0));
         }
 
-        GlobalStatBuffer::current()
-            .alloc(layout.size() as i64)
-            .map_err(|_| AllocError)?;
+        GlobalStatBuffer::current().alloc(layout.size() as i64)?;
         let Ok(allocated_ptr) = self.inner.allocate_zeroed(layout) else {
             GlobalStatBuffer::current().dealloc(layout.size() as i64);
             return Err(AllocError);
@@ -539,9 +408,7 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
         {
             let diff = new_layout.size() - old_layout.size();
 
-            GlobalStatBuffer::current()
-                .alloc(diff as i64)
-                .map_err(|_| AllocError)?;
+            GlobalStatBuffer::current().alloc(diff as i64)?;
             let Ok(grow_ptr) = self.inner.grow(ptr, old_layout, new_layout) else {
                 GlobalStatBuffer::current().dealloc(diff as i64);
                 return Err(AllocError);
@@ -553,29 +420,17 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
                 return self.move_grow(ptr, mem_stat, old_layout, new_layout);
             }
 
-            let meta_layout = Layout::new::<usize>();
-            let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
+            let new_adjusted_layout = Self::adjusted_layout(new_layout);
 
             let diff = new_adjusted_layout.size() - old_layout.size();
-            GlobalStatBuffer::current()
-                .alloc(diff as i64)
-                .map_err(|_| AllocError)?;
+            GlobalStatBuffer::current().alloc(diff as i64)?;
 
             let Ok(grow_ptr) = self.inner.grow(ptr, old_layout, new_adjusted_layout) else {
                 GlobalStatBuffer::current().dealloc(diff as i64);
                 return Err(AllocError);
             };
 
-            let mut base_ptr = grow_ptr.as_non_null_ptr();
-            base_ptr
-                .add(new_layout.size())
-                .cast::<usize>()
-                .write_unaligned(0);
-
-            Ok(NonNull::new_unchecked(slice_from_raw_parts_mut(
-                base_ptr.as_mut(),
-                new_layout.size(),
-            )))
+            Ok(Self::with_meta(grow_ptr, new_layout, 0))
         }
     }
 
@@ -601,9 +456,7 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
             && new_layout.size() < META_TRACKER_THRESHOLD
         {
             let diff = new_layout.size() - old_layout.size();
-            GlobalStatBuffer::current()
-                .alloc(diff as i64)
-                .map_err(|_| AllocError)?;
+            GlobalStatBuffer::current().alloc(diff as i64)?;
             let Ok(grow_ptr) = self.inner.grow_zeroed(ptr, old_layout, new_layout) else {
                 GlobalStatBuffer::current().dealloc(diff as i64);
                 return Err(AllocError);
@@ -615,13 +468,10 @@ unsafe impl<T: Allocator> Allocator for MetaTrackerAllocator<T> {
                 return self.move_grow_zeroed(ptr, mem_stat, old_layout, new_layout);
             }
 
-            let meta_layout = Layout::new::<usize>();
-            let new_adjusted_layout = new_layout.extend_packed(meta_layout).unwrap();
+            let new_adjusted_layout = Self::adjusted_layout(new_layout);
 
             let diff = new_adjusted_layout.size() - old_layout.size();
-            GlobalStatBuffer::current()
-                .alloc(diff as i64)
-                .map_err(|_| AllocError)?;
+            GlobalStatBuffer::current().alloc(diff as i64)?;
             let Ok(grow_ptr) = self.inner.grow_zeroed(ptr, old_layout, new_adjusted_layout) else {
                 GlobalStatBuffer::current().dealloc(diff as i64);
                 return Err(AllocError);
