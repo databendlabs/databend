@@ -12,21 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use databend_common_ast::parser::parse_sql;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
-use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -41,20 +40,22 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::Recluster;
 use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::executor::PhysicalPlanBuilder;
+use databend_common_sql::plans::plan_hilbert_sql;
+use databend_common_sql::plans::replace_with_constant;
 use databend_common_sql::plans::set_update_stream_columns;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::query_executor::QueryExecutor;
 use databend_common_sql::IdentifierNormalizer;
+use databend_common_sql::IndexType;
+use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
-use databend_common_sql::Planner;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeChecker;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 use databend_storages_common_table_meta::table::ClusterType;
 use derive_visitor::DriveMut;
-use itertools::Itertools;
 use log::error;
 use log::warn;
 
@@ -109,6 +110,7 @@ impl Interpreter for ReclusterTableInterpreter {
 
         let mut times = 0;
         let mut push_downs = None;
+        let mut hilbert_info = None;
         let start = SystemTime::now();
         let timeout = Duration::from_secs(recluster_timeout_secs);
         let is_final = self.plan.is_final;
@@ -120,7 +122,9 @@ impl Interpreter for ReclusterTableInterpreter {
                 return Err(err.with_context("failed to execute"));
             }
 
-            let res = self.execute_recluster(&mut push_downs).await;
+            let res = self
+                .execute_recluster(&mut push_downs, &mut hilbert_info)
+                .await;
 
             match res {
                 Ok(is_break) => {
@@ -181,7 +185,11 @@ impl Interpreter for ReclusterTableInterpreter {
 }
 
 impl ReclusterTableInterpreter {
-    async fn execute_recluster(&self, push_downs: &mut Option<PushDownInfo>) -> Result<bool> {
+    async fn execute_recluster(
+        &self,
+        push_downs: &mut Option<PushDownInfo>,
+        hilbert_info: &mut Option<HilbertBuildInfo>,
+    ) -> Result<bool> {
         let start = SystemTime::now();
         let settings = self.ctx.get_settings();
 
@@ -252,123 +260,187 @@ impl ReclusterTableInterpreter {
                 let rows_per_block = block_thresholds.calc_rows_per_block(total_bytes, total_rows);
                 let total_partitions = total_rows / rows_per_block;
 
-                let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
-                let cluster_keys_len = ast_exprs.len();
-                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-                let cluster_key_strs = ast_exprs.into_iter().fold(
-                    Vec::with_capacity(cluster_keys_len),
-                    |mut acc, mut ast| {
+                if hilbert_info.is_none() {
+                    let partitions = settings.get_hilbert_num_range_ids()? as usize;
+                    let sample_size = settings.get_hilbert_sample_size_per_block()?;
+
+                    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                    let (mut expr_bind_context, expr_metadata) = bind_table(tbl.clone())?;
+                    let mut type_checker = TypeChecker::try_create(
+                        &mut expr_bind_context,
+                        self.ctx.clone(),
+                        &name_resolution_ctx,
+                        expr_metadata,
+                        &[],
+                        true,
+                    )?;
+
+                    let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
+                    let cluster_keys_len = ast_exprs.len();
+                    let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
+                    let mut cluster_key_types = Vec::with_capacity(cluster_keys_len);
+                    let mut variable_map = Vec::with_capacity(cluster_keys_len + 1);
+                    for mut ast in ast_exprs {
                         let mut normalizer = IdentifierNormalizer {
                             ctx: &name_resolution_ctx,
                         };
                         ast.drive_mut(&mut normalizer);
-                        acc.push(format!("{:#}", &ast));
-                        acc
-                    },
-                );
+                        cluster_key_strs.push(format!("{:#}", &ast));
 
-                let query_str = self.ctx.get_query_str();
-                let write_progress = self.ctx.get_write_progress();
-                let write_progress_value = write_progress.as_ref().get_values();
+                        let (scalar, _) = *type_checker.resolve(&ast)?;
+                        cluster_key_types.push(scalar.data_type()?);
+                    }
 
-                let subquery_executor = Arc::new(ServiceQueryExecutor::new(
-                    QueryContext::create_from(self.ctx.as_ref()),
-                ));
-                let partitions = std::cmp::max(
-                    total_partitions,
-                    settings.get_hilbert_num_range_ids()? as usize,
-                );
-                let sample_size = settings.get_hilbert_sample_size_per_block()?;
-                let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
-                for (index, cluster_key_str) in cluster_key_strs.iter().enumerate() {
-                    keys_bounds.push(format!(
-                        "range_bound({partitions}, {sample_size})({cluster_key_str}) AS bound_{index}"
-                    ));
-                }
-                let keys_bounds_query =
-                    format!("SELECT {} FROM {database}.{table}", keys_bounds.join(", "));
-                let data_blocks = subquery_executor
-                    .execute_query_with_sql_string(&keys_bounds_query)
+                    let metadata = MetadataRef::default();
+                    let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
+                    let mut hilbert_keys = Vec::with_capacity(cluster_key_strs.len());
+                    for (index, cluster_key_str) in cluster_key_strs.into_iter().enumerate() {
+                        let bound = format!("_bound_{index}");
+                        keys_bounds.push(format!(
+                            "range_bound({partitions}, {sample_size})({cluster_key_str}) AS {bound}"
+                        ));
+
+                        hilbert_keys.push(format!(
+                            "hilbert_key(cast(range_partition_id({table}.{cluster_key_str}, {bound}) as uint16))"
+                        ));
+
+                        let idx = metadata.write().add_derived_column(
+                            bound,
+                            DataType::Array(Box::new(cluster_key_types[index].clone())),
+                            None,
+                        );
+                        variable_map.push(idx);
+                    }
+                    let hilbert_keys_str = hilbert_keys.join(", ");
+
+                    let keys_bounds_query =
+                        format!("SELECT {} FROM {database}.{table}", keys_bounds.join(", "));
+                    let keys_bound = plan_hilbert_sql(
+                        self.ctx.clone(),
+                        MetadataRef::default(),
+                        &keys_bounds_query,
+                    )
                     .await?;
-                let keys_bounds = DataBlock::concat(&data_blocks)?;
+                    println!("keys_bound: {keys_bound:?}");
 
-                let mut hilbert_keys = Vec::with_capacity(keys_bounds.num_columns());
-                for (entry, cluster_key_str) in keys_bounds
-                    .columns()
-                    .iter()
-                    .zip(cluster_key_strs.into_iter())
-                {
-                    let v = entry.value.index(0).unwrap().to_string();
-                    hilbert_keys.push(format!(
-                        "hilbert_key(cast(range_partition_id({table}.{cluster_key_str}, {v}) as uint16))"
-                    ));
-                }
-                let hilbert_keys_str = hilbert_keys.join(", ");
-                let index_bound_query = format!(
-                    "WITH _source_data AS ( \
+                    let index_bound_query = format!(
+                        "WITH _source_data AS ( \
                         SELECT \
                             hilbert_index([{hilbert_keys_str}], 2) AS index \
                         FROM {database}.{table} \
-                    ) \
-                    SELECT range_bound({total_partitions}, {sample_size})(index) AS bound \
-                        FROM _source_data"
-                );
-                let data_blocks = subquery_executor
-                    .execute_query_with_sql_string(&index_bound_query)
-                    .await?;
-                debug_assert!(data_blocks.len() == 1);
-                let val = data_blocks[0].value_at(0, 0).unwrap();
-                let col = val.as_array().unwrap().as_binary().unwrap();
-                let index_bound_str = col
-                    .iter()
-                    .map(|s| {
-                        let binary = s
-                            .iter()
-                            .map(|byte| format!("{:02X}", byte))
-                            .collect::<Vec<String>>()
-                            .join("");
-                        format!("unhex('{}')", binary)
-                    })
-                    .join(", ");
+                        ) \
+                        SELECT range_bound({total_partitions}, {sample_size})(index) AS bound \
+                            FROM _source_data"
+                    );
+                    println!("metadata: {:?}", metadata);
+                    let index_bound =
+                        plan_hilbert_sql(self.ctx.clone(), metadata.clone(), &index_bound_query)
+                            .await?;
+                    println!("index_bound: {index_bound:?}");
 
-                let quote = settings.get_sql_dialect()?.default_ident_quote();
-                let schema = tbl.schema_with_stream();
-                let mut output_with_table = Vec::with_capacity(schema.fields.len());
-                for field in &schema.fields {
-                    output_with_table.push(format!(
-                        "{quote}{table}{quote}.{quote}{}{quote}",
-                        field.name
-                    ));
+                    let quote = settings.get_sql_dialect()?.default_ident_quote();
+                    let schema = tbl.schema_with_stream();
+                    let mut output_with_table = Vec::with_capacity(schema.fields.len());
+                    for field in &schema.fields {
+                        output_with_table.push(format!(
+                            "{quote}{table}{quote}.{quote}{}{quote}",
+                            field.name
+                        ));
+                    }
+                    let output_with_table_str = output_with_table.join(", ");
+                    let query = format!(
+                        "SELECT \
+                            {output_with_table_str}, \
+                            range_partition_id(hilbert_index([{hilbert_keys_str}], 2), _index_bound)AS _predicate \
+                        FROM {database}.{table}"
+                    );
+                    let idx = metadata.write().add_derived_column(
+                        "_index_bound".to_string(),
+                        DataType::Binary,
+                        None,
+                    );
+                    variable_map.push(idx);
+
+                    let query =
+                        plan_hilbert_sql(self.ctx.clone(), metadata.clone(), &query).await?;
+
+                    *hilbert_info = Some(HilbertBuildInfo {
+                        keys_bound,
+                        index_bound,
+                        query,
+                        variable_map,
+                    });
                 }
-                let output_with_table_str = output_with_table.join(", ");
-                let query = format!(
-                    "SELECT \
-                        {output_with_table_str}, \
-                        range_partition_id(hilbert_index([{hilbert_keys_str}], 2), [{index_bound_str}])AS _predicate \
-                    FROM {database}.{table}"
-                );
-                let tokens = tokenize_sql(query.as_str())?;
-                let sql_dialect = settings.get_sql_dialect().unwrap_or_default();
-                let (stmt, _) = parse_sql(&tokens, sql_dialect)?;
 
-                let mut planner = Planner::new(self.ctx.clone());
-                let plan = planner.plan_stmt(&stmt, false).await?;
+                let HilbertBuildInfo {
+                    keys_bound,
+                    index_bound,
+                    query,
+                    variable_map,
+                } = hilbert_info.as_ref().unwrap();
+
+                let mut variables = HashMap::with_capacity(variable_map.len());
+                let subquery_executor = Arc::new(ServiceQueryExecutor::new(
+                    QueryContext::create_from(self.ctx.as_ref()),
+                ));
+
                 let Plan::Query {
-                    mut s_expr,
+                    s_expr,
                     metadata,
                     bind_context,
                     ..
-                } = plan
+                } = keys_bound
                 else {
                     unreachable!()
                 };
-                if tbl.change_tracking_enabled() {
-                    *s_expr = set_update_stream_columns(&s_expr)?;
+                let mut builder =
+                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+                let plan = Box::new(builder.build(s_expr, bind_context.column_set()).await?);
+                let data_blocks = subquery_executor
+                    .execute_query_with_physical_plan(&plan)
+                    .await?;
+                let keys_bounds = DataBlock::concat(&data_blocks)?;
+                for (index, entry) in keys_bounds.columns().iter().enumerate() {
+                    let v = entry.value.index(0).unwrap().to_owned();
+                    variables.insert(variable_map[index], v);
                 }
 
-                write_progress.set(&write_progress_value);
-                self.ctx.attach_query_str(QueryKind::Other, query_str);
-                let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone(), false);
+                let Plan::Query {
+                    s_expr,
+                    metadata,
+                    bind_context,
+                    ..
+                } = index_bound
+                else {
+                    unreachable!()
+                };
+                let s_expr = replace_with_constant(s_expr, &variables, total_partitions as u16);
+                let mut builder =
+                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+                let plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
+                let data_blocks = subquery_executor
+                    .execute_query_with_physical_plan(&plan)
+                    .await?;
+                debug_assert!(data_blocks.len() == 1);
+                let val = data_blocks[0].value_at(0, 0).unwrap().to_owned();
+                variables.insert(*variable_map.last().unwrap(), val);
+
+                let Plan::Query {
+                    s_expr,
+                    metadata,
+                    bind_context,
+                    ..
+                } = query
+                else {
+                    unreachable!()
+                };
+                let mut s_expr = replace_with_constant(s_expr, &variables, total_partitions as u16);
+                if tbl.change_tracking_enabled() {
+                    s_expr = set_update_stream_columns(&s_expr)?;
+                }
+
+                let mut builder =
+                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let mut plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
                 let mut is_exchange = false;
                 if let PhysicalPlan::Exchange(Exchange {
@@ -549,4 +621,11 @@ impl ReclusterTableInterpreter {
         InterpreterClusteringHistory::write_log(&self.ctx, start, database, table)?;
         Ok(false)
     }
+}
+
+struct HilbertBuildInfo {
+    keys_bound: Plan,
+    index_bound: Plan,
+    query: Plan,
+    variable_map: Vec<IndexType>,
 }

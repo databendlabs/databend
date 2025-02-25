@@ -85,7 +85,7 @@ impl Planner {
     #[fastrace::trace]
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let extras = self.parse_sql(sql)?;
-        let plan = self.plan_stmt(&extras.statement, true).await?;
+        let plan = self.plan_stmt(&extras.statement).await?;
         Ok((plan, extras))
     }
 
@@ -221,7 +221,7 @@ impl Planner {
 
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn plan_stmt(&mut self, stmt: &Statement, attach_query: bool) -> Result<Plan> {
+    pub async fn plan_stmt(&mut self, stmt: &Statement) -> Result<Plan> {
         let start = Instant::now();
         let query_kind = get_query_kind(stmt);
         let settings = self.ctx.get_settings();
@@ -242,10 +242,8 @@ impl Planner {
             );
             if let Some(plan) = plan {
                 info!("logical plan from cache, time used: {:?}", start.elapsed());
-                if attach_query {
-                    // update for clickhouse handler
-                    self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
-                }
+                // update for clickhouse handler
+                self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
                 return Ok(plan.plan);
             }
             enable_planner_cache = c;
@@ -261,14 +259,10 @@ impl Planner {
         .with_subquery_executor(self.query_executor.clone());
 
         // must attach before bind, because ParquetRSTable::create used it.
-        if attach_query {
-            self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
-        }
+        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
         let plan = binder.bind(stmt).await?;
         // attach again to avoid the query kind is overwritten by the subquery
-        if attach_query {
-            self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
-        }
+        self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());
 
         // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
         let opt_ctx = OptimizerContext::new(self.ctx.clone(), metadata.clone())
