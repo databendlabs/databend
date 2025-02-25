@@ -132,7 +132,6 @@ EvalScalar
     └── Join(Cross)
         ├── build keys: []
         ├── probe keys: []
-        ├── keys is null equal: []
         ├── other filters: []
         ├── Scan
         │   ├── table: default.t1
@@ -153,7 +152,6 @@ EvalScalar
 └── Join(Inner)
     ├── build keys: [t2.a (#2), t2.b (#3)]
     ├── probe keys: [t1.a (#0), t1.b (#1)]
-    ├── keys is null equal: [false, false]
     ├── other filters: []
     ├── Filter
     │   ├── filters: [gt(t1.a (#0), 2)]

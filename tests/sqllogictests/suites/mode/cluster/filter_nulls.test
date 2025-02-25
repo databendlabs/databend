@@ -100,7 +100,7 @@ Exchange
     │       ├── join type: INNER
     │       ├── build keys: [table2.value (#1)]
     │       ├── probe keys: [table3.value (#2)]
-    |       ├── keys is null equal: [false]
+    │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── estimated rows: 250.00
     │       ├── Exchange(Build)

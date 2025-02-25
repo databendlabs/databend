@@ -241,7 +241,7 @@ CommitSink
                 ├── push downs: [filters: [], limit: NONE]
                 └── estimated rows: 0.00
 
-query ok
+query T
 explain MERGE INTO column_only_optimization_target as t1 using column_only_optimization_source as t2
 on t1.a = t2.a when matched then update * when not matched then insert *;
 ----

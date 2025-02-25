@@ -160,6 +160,7 @@ CommitSink
         ├── join type: RIGHT OUTER
         ├── build keys: []
         ├── probe keys: []
+        ├── keys is null equal: []
         ├── filters: [t1.a (#1) < t2.a (#0)]
         ├── estimated rows: 15.00
         ├── TableScan(Build)
