@@ -25,6 +25,10 @@ use crate::runtime::MemStat;
 use crate::runtime::MemStatBuffer;
 use crate::runtime::ThreadTracker;
 
+/// Memory allocation tracker threshold (512 bytes)
+static META_TRACKER_THRESHOLD: usize = 512;
+
+/// An allocator wrapper that tracks memory usage statistics through metadata.
 #[derive(Debug, Clone, Copy)]
 pub struct MetaTrackerAllocator<T: Allocator> {
     inner: T,
@@ -43,8 +47,6 @@ impl<T: Allocator + Default> Default for MetaTrackerAllocator<T> {
         }
     }
 }
-
-static META_TRACKER_THRESHOLD: usize = 512;
 
 impl<T: Allocator> MetaTrackerAllocator<T> {
     fn metadata_layout() -> Layout {
