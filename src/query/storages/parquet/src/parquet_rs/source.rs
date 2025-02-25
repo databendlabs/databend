@@ -159,30 +159,20 @@ impl Processor for ParquetSource {
             }
             State::ReadFiles(buffers) => {
                 let mut blocks = Vec::with_capacity(buffers.len());
-                // Write `if` outside to reduce branches.
-                if self.is_copy {
-                    for (path, buffer) in buffers {
-                        let bs = self
-                            .full_file_reader
-                            .as_ref()
-                            .unwrap()
-                            .read_blocks_from_binary(buffer, &path)?;
+                for (path, buffer) in buffers {
+                    let bs = self
+                        .full_file_reader
+                        .as_ref()
+                        .unwrap()
+                        .read_blocks_from_binary(buffer, &path)?;
+                    if self.is_copy {
                         let num_rows = bs.iter().map(|b| b.num_rows()).sum();
                         self.copy_status.add_chunk(path.as_str(), FileStatus {
                             num_rows_loaded: num_rows,
                             error: None,
                         });
-                        blocks.extend(bs);
                     }
-                } else {
-                    for (path, buffer) in buffers {
-                        blocks.extend(
-                            self.full_file_reader
-                                .as_ref()
-                                .unwrap()
-                                .read_blocks_from_binary(buffer, &path)?,
-                        );
-                    }
+                    blocks.extend(bs);
                 }
 
                 if !blocks.is_empty() {
