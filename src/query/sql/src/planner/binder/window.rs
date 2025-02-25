@@ -346,6 +346,7 @@ impl<'a> WindowRewriter<'a> {
                     params: agg.params.clone(),
                     args: replaced_args,
                     return_type: agg.return_type.clone(),
+                    sort_descs: agg.sort_descs.clone(),
                 })
             }
             WindowFuncType::LagLead(ll) => {

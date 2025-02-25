@@ -59,6 +59,8 @@ pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
 
 pub const ASYNC_FUNCTIONS: [Ascii<&str>; 2] = [Ascii::new("nextval"), Ascii::new("dict_get")];
 
+pub const GENERAL_WITHIN_GROUP_FUNCTIONS: [Ascii<&str>; 1] = [Ascii::new("list_agg")];
+
 pub const GENERAL_WINDOW_FUNCTIONS: [Ascii<&str>; 13] = [
     Ascii::new("row_number"),
     Ascii::new("rank"),

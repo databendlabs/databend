@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
@@ -653,6 +654,7 @@ pub struct AggregateFunction {
     pub params: Vec<Scalar>,
     pub args: Vec<ScalarExpr>,
     pub return_type: Box<DataType>,
+    pub sort_descs: Vec<AggregateFunctionSortDesc>,
 
     pub display_name: String,
 }

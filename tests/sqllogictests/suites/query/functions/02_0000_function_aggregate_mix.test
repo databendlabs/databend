@@ -354,14 +354,14 @@ select group_array_moving_sum(k), group_array_moving_sum(2)(v) from aggr;
 [1,3,5,7,9,11,13,15,17,19,21] [10,20,20,20,30,40,45,55,60,60,60]
 
 statement ok
-create table t3(s string null);
+create table t3(s string null, i int null);
 
 statement ok
 insert into t3 values
-    ('abc'),
-    ('def'),
-    (null),
-    ('xyz');
+    ('abc', 0),
+    ('def', 1),
+    (null, 2),
+    ('xyz', 3);
 
 query T
 select string_agg(s) from t3;
@@ -377,6 +377,34 @@ query T
 select string_agg(s, '|') from t3;
 ----
 abc|def|xyz
+
+query T
+select list_agg(s) from t3;
+----
+abcdefxyz
+
+query T
+select list_agg(s, '-') from t3;
+----
+abc-def-xyz
+
+query T
+select list_agg(s, '|') from t3;
+----
+abc|def|xyz
+
+query T
+select list_agg(s, '|') from t3;
+----
+abc|def|xyz
+
+query T
+select list_agg(s, '|') within group (order by s desc) from t3;
+----
+xyz|def|abc
+
+statement error 1065
+select list_agg(s, '|') within group (order by i desc) from t3;
 
 query TT
 select array_agg(s), array_agg(null) from t3;

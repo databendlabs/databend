@@ -27,6 +27,7 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::Column;
 use databend_common_expression::FromData;
 use databend_common_functions::aggregates::eval_aggr_for_test;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use goldenfile::Mint;
 use itertools::Itertools;
 use roaring::RoaringTreemap;
@@ -40,8 +41,9 @@ fn eval_aggr(
     params: Vec<databend_common_expression::Scalar>,
     columns: &[Column],
     rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    eval_aggr_for_test(name, params, columns, rows, true)
+    eval_aggr_for_test(name, params, columns, rows, true, sort_descs)
 }
 
 #[test]
@@ -72,13 +74,14 @@ fn test_agg() {
     test_agg_quantile_cont(file, eval_aggr);
     test_agg_quantile_tdigest(file, eval_aggr);
     // FIXME
-    test_agg_quantile_tdigest_weighted(file, |name, params, columns, rows| {
-        eval_aggr_for_test(name, params, columns, rows, false)
+    test_agg_quantile_tdigest_weighted(file, |name, params, columns, rows, _sort_descs| {
+        eval_aggr_for_test(name, params, columns, rows, false, vec![])
     });
     test_agg_median(file, eval_aggr);
     test_agg_median_tdigest(file, eval_aggr);
     test_agg_array_agg(file, eval_aggr);
     test_agg_string_agg(file, eval_aggr);
+    test_agg_list_agg(file, eval_aggr);
     test_agg_bitmap_count(file, eval_aggr);
     test_agg_bitmap(file, eval_aggr);
     test_agg_group_array_moving_avg(file, eval_aggr);
@@ -121,6 +124,7 @@ fn test_agg_group_by() {
     test_agg_approx_count_distinct(file, simulate_two_groups_group_by);
     test_agg_array_agg(file, simulate_two_groups_group_by);
     test_agg_string_agg(file, simulate_two_groups_group_by);
+    test_agg_list_agg(file, simulate_two_groups_group_by);
     test_agg_bitmap_count(file, simulate_two_groups_group_by);
     test_agg_bitmap(file, simulate_two_groups_group_by);
     test_agg_group_array_moving_avg(file, eval_aggr);
@@ -335,33 +339,99 @@ fn get_geometry_example() -> Vec<(&'static str, Column)> {
 }
 
 fn test_count(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "count(1)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "count()", get_example().as_slice(), simulator);
-    run_agg_ast(file, "count(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "count(x_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "count(all_null)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "count(1)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(file, "count()", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "count(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "count(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "count(all_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_sum(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "sum(1)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "sum(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "sum(x_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "sum(all_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "sum(1)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(file, "sum(a)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "sum(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "sum(all_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_avg(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "avg(1)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "avg(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "avg(dec)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "avg(x_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "avg(all_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "avg(1)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(file, "avg(a)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "avg(dec)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "avg(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "avg(all_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_uniq(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "uniq(1)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "uniq(c)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "uniq(x_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "uniq(all_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "uniq(1)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(file, "uniq(c)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "uniq(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "uniq(all_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_agg_if(file: &mut impl Write, simulator: impl AggregationSimulator) {
@@ -370,121 +440,230 @@ fn test_agg_if(file: &mut impl Write, simulator: impl AggregationSimulator) {
         "count_if(1, x_null is null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "sum_if(a, x_null is null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "sum_if(b, x_null is null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_distinct(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "sum_distinct(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "sum_distinct(c)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "sum_distinct(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "sum_distinct(c)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "sum_distinct(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "sum_distinct(all_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_max(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "max(1)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "max(NULL)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "max(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "max(b)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "max(x_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "max(all_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "max(1)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "max(NULL)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(file, "max(a)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(file, "max(b)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "max(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "max(all_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_agg_min(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "min(1)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "min(NULL)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "min(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "min(b)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "min(x_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "min(all_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "min(1)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "min(NULL)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(file, "min(a)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(file, "min(b)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "min(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "min(all_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_agg_any(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "any(1)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "any(NULL)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "any(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "any(b)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "any(x_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "any(y_null)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "any(all_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "any(1)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "any(NULL)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(file, "any(a)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(file, "any(b)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "any(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "any(y_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "any(all_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_agg_arg_min(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "arg_min(a, b)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "arg_min(b, a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "arg_min(a, b)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_min(b, a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "arg_min(y_null, a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "arg_min(a, y_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "arg_min(all_null, a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "arg_min(a, all_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_arg_max(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "arg_max(a, b)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "arg_max(b, a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "arg_max(a, b)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "arg_max(b, a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "arg_max(y_null, a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "arg_max(a, y_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "arg_max(all_null, a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "arg_max(a, all_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -494,34 +673,45 @@ fn test_agg_covar_samp(file: &mut impl Write, simulator: impl AggregationSimulat
         "covar_samp(a, b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "covar_samp(a, x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "covar_samp(a, all_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_covar_pop(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "covar_pop(a, b)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "covar_pop(a, b)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "covar_pop(a, x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "covar_pop(a, all_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -531,57 +721,94 @@ fn test_agg_retention(file: &mut impl Write, simulator: impl AggregationSimulato
         "retention(a > 1, b > 1)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "retention(a > 1, b > 1, x_null > 1)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "retention(a > 1, b > 1, x_null > 1, all_null > 1)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_stddev(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "stddev_pop(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "stddev(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "stddev_pop(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "stddev(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 
-    run_agg_ast(file, "stddev_samp(a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "stddev_samp(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "stddev_samp(dec)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "stddev_samp(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_kurtosis(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "kurtosis(a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "kurtosis(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "kurtosis(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_skewness(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "skewness(a)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "skewness(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "skewness(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -591,12 +818,14 @@ fn test_agg_quantile_disc(file: &mut impl Write, simulator: impl AggregationSimu
         "quantile_cont(0.8)(a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "quantile_cont(0.8)(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -606,18 +835,32 @@ fn test_agg_quantile_cont(file: &mut impl Write, simulator: impl AggregationSimu
         "quantile_cont(0.8)(a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "quantile_cont(0.8)(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_median(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "median(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "median(x_null)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "median(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "median(x_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_agg_median_tdigest(file: &mut impl Write, simulator: impl AggregationSimulator) {
@@ -626,12 +869,14 @@ fn test_agg_median_tdigest(file: &mut impl Write, simulator: impl AggregationSim
         "median_tdigest(a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "median_tdigest(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -641,6 +886,7 @@ fn test_agg_window_funnel(file: &mut impl Write, simulator: impl AggregationSimu
         "window_funnel(2)(dt, event1, event2, event3)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -650,68 +896,202 @@ fn test_agg_approx_count_distinct(file: &mut impl Write, simulator: impl Aggrega
         "approx_count_distinct(a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "approx_count_distinct(b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "approx_count_distinct(null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_array_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "array_agg(1)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "array_agg('a')", get_example().as_slice(), simulator);
-    run_agg_ast(file, "array_agg(NULL)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "array_agg(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "array_agg(b)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "array_agg(1)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg('a')",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg(NULL)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "array_agg(b)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "array_agg(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "array_agg(all_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
-    run_agg_ast(file, "array_agg(dt)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "array_agg(dt)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "array_agg(event1)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
-    run_agg_ast(file, "array_agg(dec)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "array_agg(dec)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_agg_string_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "string_agg(s)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "string_agg(s)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
     run_agg_ast(
         file,
         "string_agg(s_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "string_agg(s, '|')",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "string_agg(s_null, '-')",
         get_example().as_slice(),
         simulator,
+        vec![],
+    );
+}
+
+fn test_agg_list_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "list_agg(s)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "list_agg(s_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "list_agg(s, '|')",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "list_agg(s_null, '-')",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+
+    // WITHIN GROUP
+    run_agg_ast(
+        file,
+        "list_agg(s)",
+        get_example().as_slice(),
+        simulator,
+        vec![AggregateFunctionSortDesc {
+            column: 0,
+            nulls_first: None,
+            asc: Some(false),
+        }],
+    );
+    run_agg_ast(
+        file,
+        "list_agg(s_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![AggregateFunctionSortDesc {
+            column: 0,
+            nulls_first: None,
+            asc: Some(false),
+        }],
+    );
+    run_agg_ast(
+        file,
+        "list_agg(s, '|')",
+        get_example().as_slice(),
+        simulator,
+        vec![AggregateFunctionSortDesc {
+            column: 0,
+            nulls_first: None,
+            asc: Some(false),
+        }],
+    );
+    run_agg_ast(
+        file,
+        "list_agg(s_null, '-')",
+        get_example().as_slice(),
+        simulator,
+        vec![AggregateFunctionSortDesc {
+            column: 0,
+            nulls_first: None,
+            asc: Some(false),
+        }],
     );
 }
 
@@ -721,36 +1101,42 @@ fn test_agg_bitmap_count(file: &mut impl Write, simulator: impl AggregationSimul
         "bitmap_and_count(bm)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "bitmap_or_count(bm)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "bitmap_xor_count(bm)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "bitmap_not_count(bm)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "intersect_count(1, 2, 3, 4)(bm, b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "intersect_count(1, 2)(bm, b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -760,12 +1146,14 @@ fn test_agg_bitmap(file: &mut impl Write, simulator: impl AggregationSimulator) 
         "bitmap_union(bm)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "bitmap_intersect(bm)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -775,12 +1163,14 @@ fn test_agg_quantile_tdigest(file: &mut impl Write, simulator: impl AggregationS
         "quantile_tdigest(0.8)(a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "quantile_tdigest(0.8)(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -790,12 +1180,14 @@ fn test_agg_quantile_tdigest_weighted(file: &mut impl Write, simulator: impl Agg
         "quantile_tdigest_weighted(0.8)(a, b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "quantile_tdigest_weighted(0.8)(x_null, b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -805,54 +1197,63 @@ fn test_agg_group_array_moving_avg(file: &mut impl Write, simulator: impl Aggreg
         "group_array_moving_avg(1)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_avg('a')",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_avg(NULL)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_avg(a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_avg(2)(b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_avg(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_avg(1)(y_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_avg(dec)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_avg(2)(dec)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -862,54 +1263,63 @@ fn test_agg_group_array_moving_sum(file: &mut impl Write, simulator: impl Aggreg
         "group_array_moving_sum(1)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_sum('a')",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_sum(NULL)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_sum(a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_sum(2)(b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_sum(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_sum(1)(y_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_sum(dec)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "group_array_moving_sum(2)(dec)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -919,15 +1329,29 @@ fn test_agg_histogram(file: &mut impl Write, simulator: impl AggregationSimulato
         "histogram(all_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "histogram(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
-    run_agg_ast(file, "histogram(a)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "histogram(a, 1)", get_example().as_slice(), simulator);
+    run_agg_ast(
+        file,
+        "histogram(a)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "histogram(a, 1)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_agg_json_array_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
@@ -936,60 +1360,70 @@ fn test_agg_json_array_agg(file: &mut impl Write, simulator: impl AggregationSim
         "json_array_agg(1)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_array_agg('a')",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_array_agg(NULL)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_array_agg(a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_array_agg(b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_array_agg(x_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_array_agg(all_null)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_array_agg(dt)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_array_agg(event1)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_array_agg(dec)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
@@ -999,38 +1433,55 @@ fn test_agg_json_object_agg(file: &mut impl Write, simulator: impl AggregationSi
         "json_object_agg('k', 'a')",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_object_agg(s, a)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_object_agg(s_null, b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_object_agg(a, b)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "json_object_agg(s, dec)",
         get_example().as_slice(),
         simulator,
+        vec![],
     );
 }
 
 fn test_agg_mode(file: &mut impl Write, simulator: impl AggregationSimulator) {
-    run_agg_ast(file, "mode(1)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "mode(NULL)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "mode(d)", get_example().as_slice(), simulator);
-    run_agg_ast(file, "mode(all_null)", get_example().as_slice(), simulator);
+    run_agg_ast(file, "mode(1)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "mode(NULL)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(file, "mode(d)", get_example().as_slice(), simulator, vec![]);
+    run_agg_ast(
+        file,
+        "mode(all_null)",
+        get_example().as_slice(),
+        simulator,
+        vec![],
+    );
 }
 
 fn test_agg_st_collect(file: &mut impl Write, simulator: impl AggregationSimulator) {
@@ -1039,18 +1490,21 @@ fn test_agg_st_collect(file: &mut impl Write, simulator: impl AggregationSimulat
         "st_collect(to_geometry('point(10 20)'))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry('srid=4326;linestring(10 20, 40 50)'))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(NULL)",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
 
     run_agg_ast(
@@ -1058,77 +1512,90 @@ fn test_agg_st_collect(file: &mut impl Write, simulator: impl AggregationSimulat
         "st_collect(to_geometry(point))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(point_null))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(line_string))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(line_string_null))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(polygon))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(mixed_geom))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(mixed_geom_null))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(point_4326))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(line_string_4326))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(polygon_4326))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(mixed_3857))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(mixed_srid))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
     run_agg_ast(
         file,
         "st_collect(to_geometry(mixed_srid_null))",
         get_geometry_example().as_slice(),
         simulator,
+        vec![],
     );
 }

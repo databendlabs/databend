@@ -66,6 +66,7 @@ impl SubqueryRewriter {
                     params: agg.params.clone(),
                     args,
                     return_type: agg.return_type.clone(),
+                    sort_descs: agg.sort_descs.clone(),
                 }))
             }
             ScalarExpr::FunctionCall(func) => {

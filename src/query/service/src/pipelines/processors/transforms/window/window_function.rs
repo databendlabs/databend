@@ -185,6 +185,7 @@ impl WindowFunctionInfo {
                     agg.sig.name.as_str(),
                     agg.sig.params.clone(),
                     agg.sig.args.clone(),
+                    agg.sig.sort_descs.clone(),
                 )?;
                 let args = agg
                     .arg_indices

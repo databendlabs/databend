@@ -209,6 +209,7 @@ impl<'a> AggregateRewriter<'a> {
             params: aggregate.params.clone(),
             args: replaced_args,
             return_type: aggregate.return_type.clone(),
+            sort_descs: aggregate.sort_descs.clone(),
         };
 
         self.bind_context.aggregate_info.push_aggregate_function(
