@@ -15,12 +15,16 @@
 use std::mem;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::InternalColumn;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::ScalarRef;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_storage::FileStatus;
 use log::debug;
@@ -31,15 +35,19 @@ use crate::read::row_based::format::RowBasedFileFormat;
 use crate::read::row_based::format::RowDecoder;
 
 pub struct BlockBuilderState {
-    pub mutable_columns: Vec<ColumnBuilder>,
+    pub column_builders: Vec<ColumnBuilder>,
+    pub internal_column_builders: Vec<ColumnBuilder>,
+    pub internal_columns: Vec<InternalColumn>,
+    pub row_id_column_pos: Option<usize>,
     pub num_rows: usize,
     pub file_status: FileStatus,
-    pub file_name: String,
+    pub file_path: String,
+    pub file_full_path: String,
 }
 
 impl BlockBuilderState {
     fn create(ctx: Arc<LoadContext>) -> Self {
-        let columns = ctx
+        let column_builders: Vec<_> = ctx
             .schema
             .fields()
             .iter()
@@ -52,12 +60,26 @@ impl BlockBuilderState {
                 )
             })
             .collect();
+        let internal_column_builders = ctx
+            .internal_columns
+            .iter()
+            .map(|c| ColumnBuilder::with_capacity_hint(&c.data_type(), 1024, false))
+            .collect();
+
+        let row_id_column_pos = ctx
+            .internal_columns
+            .iter()
+            .position(|c| c.column_type == InternalColumnType::FileRowNumber);
 
         BlockBuilderState {
-            mutable_columns: columns,
+            column_builders,
+            internal_column_builders,
+            internal_columns: ctx.internal_columns.clone(),
+            row_id_column_pos,
             num_rows: 0,
             file_status: Default::default(),
-            file_name: "".to_string(),
+            file_path: "".to_string(),
+            file_full_path: "".to_string(),
         }
     }
 
@@ -65,25 +87,67 @@ impl BlockBuilderState {
         // todo(youngsofun): calculate the capacity according to last batch
         let capacity = if on_finish { 0 } else { 1024 };
         self.num_rows = 0;
-        self.file_name = "".to_string();
-        Ok(self
-            .mutable_columns
+        let cols: Vec<_> = self
+            .column_builders
             .iter_mut()
             .map(|col| {
                 let empty_builder =
                     ColumnBuilder::with_capacity_hint(&col.data_type(), capacity, false);
                 std::mem::replace(col, empty_builder).build()
             })
-            .collect())
+            .collect();
+        Ok(cols)
+    }
+
+    fn take_internal_columns(&mut self, on_finish: bool) -> Result<Vec<Column>> {
+        let capacity = if on_finish { 0 } else { 1024 };
+        let cols: Vec<_> = self
+            .internal_column_builders
+            .iter_mut()
+            .map(|col| {
+                let empty_builder =
+                    ColumnBuilder::with_capacity_hint(&col.data_type(), capacity, false);
+                std::mem::replace(col, empty_builder).build()
+            })
+            .collect();
+        Ok(cols)
     }
 
     fn flush_status(&mut self, ctx: &Arc<dyn TableContext>) -> Result<()> {
         let file_status = mem::take(&mut self.file_status);
-        ctx.add_file_status(&self.file_name, file_status)
+        ctx.add_file_status(&self.file_path, file_status)
+    }
+
+    pub(crate) fn add_row(&mut self, row_id: usize) {
+        self.num_rows += 1;
+        self.file_status.num_rows_loaded += 1;
+        if let Some(pos) = self.row_id_column_pos {
+            self.internal_column_builders[pos]
+                .push(ScalarRef::Number(NumberScalar::UInt64(row_id as u64)))
+        }
+    }
+
+    fn add_internals_columns_batch(&mut self, n: usize) {
+        for (i, c) in self.internal_columns.iter().enumerate() {
+            match c.column_type {
+                InternalColumnType::FileName => {
+                    self.internal_column_builders[i]
+                        .push_repeat(&ScalarRef::String(&self.file_full_path), n);
+                }
+                InternalColumnType::FileRowNumber => {}
+                _ => {
+                    unreachable!()
+                }
+            }
+        }
     }
 
     fn memory_size(&self) -> usize {
-        self.mutable_columns.iter().map(|x| x.memory_size()).sum()
+        self.column_builders
+            .iter()
+            .chain(self.internal_column_builders.iter())
+            .map(|x| x.memory_size())
+            .sum()
     }
 }
 
@@ -107,10 +171,12 @@ impl BlockBuilder {
     pub fn flush_block(&mut self, on_finish: bool) -> Result<Vec<DataBlock>> {
         let num_rows = self.state.num_rows;
         let columns = self.state.take_columns(on_finish)?;
-        if columns.is_empty() || num_rows == 0 {
+        let internal_columns = self.state.take_internal_columns(on_finish)?;
+        if columns.is_empty() && internal_columns.is_empty() || num_rows == 0 {
             Ok(vec![])
         } else {
-            let columns = self.decoder.flush(columns, num_rows);
+            let mut columns = self.decoder.flush(columns, num_rows);
+            columns.extend(internal_columns);
             Ok(vec![DataBlock::new_from_columns(columns)])
         }
     }
@@ -138,21 +204,25 @@ impl AccumulatingTransform for BlockBuilder {
             .get_owned_meta()
             .and_then(RowBatchWithPosition::downcast_from)
             .unwrap();
-        if self.state.file_name != batch.start_pos.path {
-            self.state.file_name = batch.start_pos.path.clone();
+        if self.state.file_path != batch.start_pos.path {
+            self.state.file_path = batch.start_pos.path.clone();
+            self.state.file_full_path = format!("{}{}", self.ctx.stage_root, batch.start_pos.path)
         }
-        let mut blocks = self.decoder.add(&mut self.state, batch)?;
+        let num_rows = self.state.num_rows;
+        self.decoder.add(&mut self.state, batch)?;
+        self.state
+            .add_internals_columns_batch(self.state.num_rows - num_rows);
+
         self.state.flush_status(&self.ctx.table_context)?;
-        let more = self.try_flush_block_by_memory()?;
-        blocks.extend(more);
+        let blocks = self.try_flush_block_by_memory()?;
         Ok(blocks)
     }
 
     fn on_finish(&mut self, output: bool) -> Result<Vec<DataBlock>> {
         if output {
-            return self.flush_block(true);
+            self.flush_block(true)
+        } else {
+            Ok(vec![])
         }
-
-        Ok(vec![])
     }
 }

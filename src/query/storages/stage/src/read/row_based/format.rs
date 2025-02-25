@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::Column;
-use databend_common_expression::DataBlock;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_storage::FileStatus;
 
@@ -33,11 +32,8 @@ pub trait SeparatorState: Send + Sync {
 }
 
 pub trait RowDecoder: Send + Sync {
-    fn add(
-        &self,
-        block_builder: &mut BlockBuilderState,
-        batch: RowBatchWithPosition,
-    ) -> Result<Vec<DataBlock>>;
+    fn add(&self, block_builder: &mut BlockBuilderState, batch: RowBatchWithPosition)
+        -> Result<()>;
 
     fn flush(&self, columns: Vec<Column>, _num_rows: usize) -> Vec<Column> {
         columns

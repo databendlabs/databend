@@ -101,7 +101,7 @@ pub fn init_logging(
         ),
     };
 
-    // initialize tracing reporter
+    // initialize tracing a reporter
     if cfg.tracing.on {
         let endpoint = cfg.tracing.otlp.endpoint.clone();
         let mut kvs = cfg
@@ -183,7 +183,7 @@ pub fn init_logging(
     // file logger
     if cfg.file.on {
         let (normal_log_file, flush_guard) =
-            new_rolling_file_appender(&cfg.file.dir, log_name, cfg.file.limit);
+            new_rolling_file_appender(&cfg.file.dir, log_name, cfg.file.limit, cfg.file.max_size);
         _drop_guards.push(flush_guard);
 
         let dispatch = Dispatch::new()
@@ -237,8 +237,12 @@ pub fn init_logging(
     // query logger
     if cfg.query.on {
         if !cfg.query.dir.is_empty() {
-            let (query_log_file, flush_guard) =
-                new_rolling_file_appender(&cfg.query.dir, log_name, cfg.file.limit);
+            let (query_log_file, flush_guard) = new_rolling_file_appender(
+                &cfg.query.dir,
+                log_name,
+                cfg.file.limit,
+                cfg.file.max_size,
+            );
             _drop_guards.push(flush_guard);
 
             let dispatch = Dispatch::new()
@@ -279,8 +283,12 @@ pub fn init_logging(
     // profile logger
     if cfg.profile.on {
         if !cfg.profile.dir.is_empty() {
-            let (profile_log_file, flush_guard) =
-                new_rolling_file_appender(&cfg.profile.dir, log_name, cfg.file.limit);
+            let (profile_log_file, flush_guard) = new_rolling_file_appender(
+                &cfg.profile.dir,
+                log_name,
+                cfg.file.limit,
+                cfg.file.max_size,
+            );
             _drop_guards.push(flush_guard);
 
             let dispatch = Dispatch::new()
@@ -320,8 +328,12 @@ pub fn init_logging(
 
     // structured logger
     if cfg.structlog.on && !cfg.structlog.dir.is_empty() {
-        let (structlog_log_file, flush_guard) =
-            new_rolling_file_appender(&cfg.structlog.dir, log_name, cfg.file.limit);
+        let (structlog_log_file, flush_guard) = new_rolling_file_appender(
+            &cfg.structlog.dir,
+            log_name,
+            cfg.file.limit,
+            cfg.file.max_size,
+        );
         _drop_guards.push(flush_guard);
 
         let dispatch = Dispatch::new()

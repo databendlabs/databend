@@ -272,7 +272,7 @@ impl ToReadDataSourcePlan for dyn Table {
             description,
             tbl_args: self.table_args(),
             push_downs,
-            query_internal_columns: internal_columns.is_some(),
+            internal_columns,
             base_block_ids,
             update_stream_columns,
             data_mask_policy,

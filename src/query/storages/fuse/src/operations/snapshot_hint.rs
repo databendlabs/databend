@@ -102,7 +102,12 @@ async fn try_read_legacy_hint(
     let begin_load_hint = Instant::now();
     let maybe_hint_content = operator.read(&hint_file_path).await;
     info!(
-        "loaded last snapshot hint file [{}], time used {:?}",
+        "{} load last snapshot hint file [{}], time used {:?}",
+        if maybe_hint_content.is_ok() {
+            "successfully"
+        } else {
+            "failed to"
+        },
         hint_file_path,
         begin_load_hint.elapsed()
     );

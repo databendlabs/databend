@@ -565,6 +565,12 @@ impl FuseTable {
             return Ok(());
         }
 
+        info!(
+            "extracting snapshot location of table {} with id {:?} from the last snapshot hint file.",
+            table_info.desc,
+            table_info.ident
+        );
+
         let snapshot_hint =
             Self::refresh_schema_from_hint(operator, storage_prefix, &table_info.desc)?;
 

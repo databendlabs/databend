@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StageTableInfo;
@@ -74,6 +75,7 @@ impl RowBasedReadPipelineBuilder<'_> {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        internal_columns: Vec<InternalColumn>,
     ) -> Result<()> {
         if plan.parts.is_empty() {
             // no file match
@@ -105,6 +107,7 @@ impl RowBasedReadPipelineBuilder<'_> {
             self.stage_table_info,
             pos_projection,
             self.compact_threshold,
+            internal_columns,
         )?);
 
         match self

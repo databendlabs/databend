@@ -19,7 +19,6 @@ use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_formats::SeparatedTextDecoder;
 use databend_common_meta_app::principal::EmptyFieldAs;
@@ -150,18 +149,15 @@ impl CsvDecoder {
 }
 
 impl RowDecoder for CsvDecoder {
-    fn add(
-        &self,
-        state: &mut BlockBuilderState,
-        batch: RowBatchWithPosition,
-    ) -> Result<Vec<DataBlock>> {
+    fn add(&self, state: &mut BlockBuilderState, batch: RowBatchWithPosition) -> Result<()> {
         let data = batch.data.into_csv().unwrap();
-        let columns = &mut state.mutable_columns;
         let mut start = 0usize;
         let mut field_end_idx = 0;
         for (i, end) in data.row_ends.iter().enumerate() {
+            let columns = &mut state.column_builders;
             let num_fields = data.num_fields[i];
             let buf = &data.data[start..*end];
+            let row_id = batch.start_pos.rows + i;
             if let Err(e) = self.read_row(
                 buf,
                 columns,
@@ -172,16 +168,15 @@ impl RowDecoder for CsvDecoder {
                     Some((columns, state.num_rows)),
                     &mut state.file_status,
                     &batch.start_pos.path,
-                    i + batch.start_pos.rows,
+                    row_id,
                 )?
             } else {
-                state.num_rows += 1;
-                state.file_status.num_rows_loaded += 1;
+                state.add_row(row_id);
             }
             start = *end;
             field_end_idx += num_fields;
         }
-        Ok(vec![])
+        Ok(())
     }
 
     fn flush(&self, columns: Vec<Column>, num_rows: usize) -> Vec<Column> {
