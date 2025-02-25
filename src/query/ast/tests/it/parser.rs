@@ -1255,6 +1255,8 @@ fn test_expr() {
         r#"a is distinct from b"#,
         r#"1 is not distinct from null"#,
         r#"{'k1':1,'k2':2}"#,
+        // within group
+        r#"LIST_AGG(salary, '|') WITHIN GROUP (ORDER BY salary DESC NULLS LAST)"#,
         // window expr
         r#"ROW_NUMBER() OVER (ORDER BY salary DESC)"#,
         r#"SUM(salary) OVER ()"#,

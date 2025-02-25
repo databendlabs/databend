@@ -42,6 +42,7 @@ use ethnum::i256;
 use roaring::RoaringTreemap;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::StateAddr;
 use super::StateAddrs;
 use crate::aggregates::assert_arguments;
@@ -516,6 +517,7 @@ pub fn try_create_aggregate_bitmap_function<const OP_TYPE: u8, const AGG_TYPE: u
     display_name: &str,
     _params: Vec<Scalar>,
     argument_types: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, argument_types.len())?;
     let data_type = argument_types[0].clone();
@@ -552,6 +554,7 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_arguments(display_name, argument_types.len(), 2)?;
     assert_variadic_params(display_name, params.len(), (1, 32))?;

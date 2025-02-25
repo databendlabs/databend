@@ -58,6 +58,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             func_sig.name.clone(),
             vec![],
             func_sig.args_type,
+            vec![],
             None,
             None,
         )
@@ -379,7 +380,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             }
         };
 
-        self.gen_func(name, params, args_type, None, None)
+        self.gen_func(name, params, args_type, vec![], None, None)
     }
 
     pub(crate) fn gen_agg_func(&mut self, ty: &DataType) -> Expr {
@@ -617,7 +618,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             self.gen_window(&name)
         };
 
-        self.gen_func(name, params, args_type, window, None)
+        self.gen_func(name, params, args_type, vec![], window, None)
     }
 
     pub(crate) fn gen_window_func(&mut self, ty: &DataType) -> Expr {
@@ -634,14 +635,14 @@ impl<R: Rng> SqlGenerator<'_, R> {
                     vec![]
                 };
                 let window = self.gen_window(name);
-                self.gen_func(name.to_string(), vec![], args_type, window, None)
+                self.gen_func(name.to_string(), vec![], args_type, vec![], window, None)
             }
             DataType::Number(NumberDataType::Float64) if by_ty => {
                 let names = ["percent_rank", "cume_dist"];
                 let idx = self.rng.gen_range(0..names.len());
                 let name = names[idx];
                 let window = self.gen_window(name);
-                self.gen_func(name.to_string(), vec![], vec![], window, None)
+                self.gen_func(name.to_string(), vec![], vec![], vec![], window, None)
             }
             _ => {
                 let names = [
@@ -663,7 +664,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                     vec![ty]
                 };
                 let window = self.gen_window(name);
-                self.gen_func(name.to_string(), vec![], args_type, window, None)
+                self.gen_func(name.to_string(), vec![], args_type, vec![], window, None)
             }
         }
     }
@@ -774,7 +775,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
         self.bound_columns = current_bound_columns;
         self.is_join = current_is_join;
 
-        self.gen_func(name, vec![], args_type, None, Some(lambda))
+        self.gen_func(name, vec![], args_type, vec![], None, Some(lambda))
     }
 
     fn gen_func(
@@ -782,6 +783,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
         name: String,
         params: Vec<Literal>,
         args_type: Vec<DataType>,
+        order_by: Vec<OrderByExpr>,
         window: Option<WindowDesc>,
         lambda: Option<Lambda>,
     ) -> Expr {
@@ -828,6 +830,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 name,
                 args,
                 params,
+                order_by,
                 window,
                 lambda,
             },

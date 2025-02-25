@@ -259,6 +259,7 @@ impl PipelineBuilder {
                         agg_func.sig.name.as_str(),
                         agg_func.sig.params.clone(),
                         agg_func.sig.args.clone(),
+                        agg_func.sig.sort_descs.clone(),
                     ),
                     Some((UDFType::Script(code), state_fields)) => create_udaf_script_function(
                         code,

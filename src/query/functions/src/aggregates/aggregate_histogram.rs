@@ -35,6 +35,7 @@ use string::StringColumnBuilder;
 
 use super::FunctionData;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::aggregate_unary::UnaryState;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggregateUnaryFunction;
@@ -167,6 +168,7 @@ pub fn try_create_aggregate_histogram_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_variadic_arguments(display_name, arguments.len(), (1, 2))?;
 

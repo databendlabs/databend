@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -39,14 +41,23 @@ const NEED_NULL_AGGREGATE_FUNCTIONS: [&str; 7] = [
 
 const STATE_SUFFIX: &str = "_state";
 
-pub type AggregateFunctionCreator =
-    Box<dyn Fn(&str, Vec<Scalar>, Vec<DataType>) -> Result<AggregateFunctionRef> + Sync + Send>;
+pub type AggregateFunctionCreator = Box<
+    dyn Fn(
+            &str,
+            Vec<Scalar>,
+            Vec<DataType>,
+            Vec<AggregateFunctionSortDesc>,
+        ) -> Result<AggregateFunctionRef>
+        + Sync
+        + Send,
+>;
 
 pub type AggregateFunctionCombinatorCreator = Box<
     dyn Fn(
             &str,
             Vec<Scalar>,
             Vec<DataType>,
+            Vec<AggregateFunctionSortDesc>,
             &AggregateFunctionCreator,
         ) -> Result<AggregateFunctionRef>
         + Sync
@@ -117,6 +128,34 @@ impl AggregateFunctionDescription {
     }
 }
 
+#[derive(
+    BorshSerialize,
+    BorshDeserialize,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Debug,
+    serde::Serialize,
+    serde::Deserialize,
+)]
+pub struct AggregateFunctionSortDesc {
+    pub column: usize,
+    pub nulls_first: Option<bool>,
+    pub asc: Option<bool>,
+}
+
+impl AggregateFunctionSortDesc {
+    pub fn nulls_first(&self) -> bool {
+        self.nulls_first.unwrap_or(false)
+    }
+
+    pub fn asc(&self) -> bool {
+        self.asc.unwrap_or(true)
+    }
+}
+
 pub struct CombinatorDescription {
     creator: AggregateFunctionCombinatorCreator,
     // TODO(Winter): function document, this is very interesting.
@@ -170,8 +209,9 @@ impl AggregateFunctionFactory {
         name: impl AsRef<str>,
         params: Vec<Scalar>,
         arguments: Vec<DataType>,
+        sort_descs: Vec<AggregateFunctionSortDesc>,
     ) -> Result<AggregateFunctionRef> {
-        self.get_or_null(name, params, arguments, true)
+        self.get_or_null(name, params, arguments, sort_descs, true)
     }
 
     pub fn get_or_null(
@@ -179,18 +219,19 @@ impl AggregateFunctionFactory {
         name: impl AsRef<str>,
         params: Vec<Scalar>,
         arguments: Vec<DataType>,
+        sort_descs: Vec<AggregateFunctionSortDesc>,
         or_null: bool,
     ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
         let mut features = AggregateFunctionFeatures::default();
 
         if NEED_NULL_AGGREGATE_FUNCTIONS.contains(&name) {
-            let agg = self.get_impl(name, params, arguments, &mut features)?;
+            let agg = self.get_impl(name, params, arguments, sort_descs, &mut features)?;
             return Ok(agg);
         }
 
         if arguments.iter().all(|f| !f.is_nullable_or_null()) {
-            let agg = self.get_impl(name, params, arguments, &mut features)?;
+            let agg = self.get_impl(name, params, arguments, sort_descs, &mut features)?;
             return if or_null {
                 AggregateFunctionOrNullAdaptor::create(agg, features)
             } else {
@@ -199,11 +240,17 @@ impl AggregateFunctionFactory {
         }
 
         let nested = if name.to_lowercase().strip_suffix(STATE_SUFFIX).is_some() {
-            self.get_impl(name, params.clone(), arguments.clone(), &mut features)?
+            self.get_impl(
+                name,
+                params.clone(),
+                arguments.clone(),
+                sort_descs,
+                &mut features,
+            )?
         } else {
             let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
             let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
-            self.get_impl(name, new_params, new_arguments, &mut features)?
+            self.get_impl(name, new_params, new_arguments, sort_descs, &mut features)?
         };
 
         let agg = AggregateFunctionCombinatorNull::try_create(
@@ -225,13 +272,14 @@ impl AggregateFunctionFactory {
         name: &str,
         params: Vec<Scalar>,
         arguments: Vec<DataType>,
+        sort_descs: Vec<AggregateFunctionSortDesc>,
         features: &mut AggregateFunctionFeatures,
     ) -> Result<AggregateFunctionRef> {
         let lowercase_name = name.to_lowercase();
         let aggregate_functions_map = &self.case_insensitive_desc;
         if let Some(desc) = aggregate_functions_map.get(&lowercase_name) {
             *features = desc.features.clone();
-            return (desc.aggregate_function_creator)(name, params, arguments);
+            return (desc.aggregate_function_creator)(name, params, arguments, sort_descs);
         }
 
         // find suffix
@@ -252,6 +300,7 @@ impl AggregateFunctionFactory {
                             nested_name,
                             params,
                             arguments,
+                            sort_descs,
                             &nested_desc.aggregate_function_creator,
                         );
                     }

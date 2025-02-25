@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
@@ -22,6 +23,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
@@ -31,9 +33,12 @@ use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
+use super::ArrayAggState;
 use super::StateAddr;
+use crate::aggregates::aggregate_scalar_state::ScalarStateFunc;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
@@ -42,6 +47,51 @@ use crate::aggregates::AggregateFunction;
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct StringAggState {
     values: String,
+}
+
+#[derive(BorshSerialize, BorshDeserialize, Debug, Default)]
+pub struct SortStringAggState {
+    inner: ArrayAggState<StringType>,
+    delimiter: String,
+    sort_desc: Option<AggregateFunctionSortDesc>,
+}
+
+impl ScalarStateFunc<StringType> for SortStringAggState {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn add(&mut self, other: Option<&'_ str>) {
+        self.inner.add(other);
+    }
+
+    fn add_batch(&mut self, column: &StringColumn, validity: Option<&Bitmap>) -> Result<()> {
+        self.inner.add_batch(column, validity)
+    }
+
+    fn merge(&mut self, rhs: &Self) -> Result<()> {
+        self.inner.merge(&rhs.inner)
+    }
+
+    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
+        if let Some(opts) = self.sort_desc {
+            self.inner.values.sort_by(|a, b| {
+                if opts.asc() {
+                    a.partial_cmp(b).unwrap_or(Ordering::Equal)
+                } else {
+                    b.partial_cmp(a).unwrap_or(Ordering::Equal)
+                }
+            });
+        }
+        let values = &self.inner.values;
+        let builder = StringType::try_downcast_builder(builder).unwrap();
+        if !values.is_empty() {
+            builder.put_and_commit(values.join(self.delimiter.as_str()));
+        } else {
+            builder.put_and_commit("");
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -173,13 +223,124 @@ impl fmt::Display for AggregateStringAggFunction {
     }
 }
 
-impl AggregateStringAggFunction {
-    fn try_create(display_name: &str, delimiter: String) -> Result<Arc<dyn AggregateFunction>> {
-        let func = AggregateStringAggFunction {
-            display_name: display_name.to_string(),
-            delimiter,
-        };
-        Ok(Arc::new(func))
+#[derive(Clone)]
+pub struct SortAggregateStringAggFunction {
+    display_name: String,
+    delimiter: String,
+    sort_desc: AggregateFunctionSortDesc,
+}
+
+impl AggregateFunction for SortAggregateStringAggFunction {
+    fn name(&self) -> &str {
+        "SortAggregateStringAggFunction"
+    }
+
+    fn return_type(&self) -> Result<DataType> {
+        Ok(DataType::String)
+    }
+
+    fn init_state(&self, place: AggrState) {
+        place.write(|| SortStringAggState {
+            inner: Default::default(),
+            delimiter: self.delimiter.clone(),
+            sort_desc: Some(self.sort_desc),
+        });
+    }
+
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<SortStringAggState>()));
+    }
+
+    fn accumulate(
+        &self,
+        place: AggrState,
+        columns: InputColumns,
+        validity: Option<&Bitmap>,
+        _input_rows: usize,
+    ) -> Result<()> {
+        let column = StringType::try_downcast_column(&columns[0]).unwrap();
+        let state = place.get::<SortStringAggState>();
+        match validity {
+            Some(validity) => {
+                column.iter().zip(validity.iter()).for_each(|(v, b)| {
+                    if b {
+                        state.add(Some(v));
+                    }
+                });
+            }
+            None => {
+                column.iter().for_each(|v| {
+                    state.add(Some(v));
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn accumulate_keys(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        columns: InputColumns,
+        _input_rows: usize,
+    ) -> Result<()> {
+        let column = StringType::try_downcast_column(&columns[0]).unwrap();
+        let column_iter = StringType::iter_column(&column);
+        column_iter.zip(places.iter()).for_each(|(v, place)| {
+            let state = AggrState::new(*place, loc).get::<SortStringAggState>();
+            state.add(Some(v));
+        });
+        Ok(())
+    }
+
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
+        let column = StringType::try_downcast_column(&columns[0]).unwrap();
+        let v = StringType::index_column(&column, row);
+        if let Some(v) = v {
+            let state = place.get::<SortStringAggState>();
+            state.add(Some(v));
+        }
+        Ok(())
+    }
+
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
+        borsh_serialize_state(writer, place.get::<SortStringAggState>())?;
+        Ok(())
+    }
+
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
+        let rhs: SortStringAggState = borsh_deserialize_state(reader)?;
+        place.get::<SortStringAggState>().merge(&rhs)?;
+        Ok(())
+    }
+
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
+        let state = place.get::<SortStringAggState>();
+        let other = rhs.get::<SortStringAggState>();
+        state.merge(other)?;
+        Ok(())
+    }
+
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
+        let state = place.get::<SortStringAggState>();
+        state.merge_result(builder)?;
+        Ok(())
+    }
+
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: AggrState) {
+        let state = place.get::<SortStringAggState>();
+        std::ptr::drop_in_place(state);
+    }
+}
+
+impl fmt::Display for SortAggregateStringAggFunction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.display_name)
     }
 }
 
@@ -187,6 +348,7 @@ pub fn try_create_aggregate_string_agg_function(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_variadic_arguments(display_name, argument_types.len(), (1, 2))?;
     // TODO:(b41sh) support other data types
@@ -201,7 +363,20 @@ pub fn try_create_aggregate_string_agg_function(
     } else {
         String::new()
     };
-    AggregateStringAggFunction::try_create(display_name, delimiter)
+    if let Some(sort_desc) = sort_descs.first() {
+        let func = SortAggregateStringAggFunction {
+            display_name: display_name.to_string(),
+            delimiter,
+            sort_desc: *sort_desc,
+        };
+        Ok(Arc::new(func))
+    } else {
+        let func = AggregateStringAggFunction {
+            display_name: display_name.to_string(),
+            delimiter,
+        };
+        Ok(Arc::new(func))
+    }
 }
 
 pub fn aggregate_string_agg_function_desc() -> AggregateFunctionDescription {

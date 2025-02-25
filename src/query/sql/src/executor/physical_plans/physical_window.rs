@@ -271,6 +271,7 @@ impl PhysicalPlanBuilder {
                         .map(|s| s.data_type())
                         .collect::<Result<_>>()?,
                     params: agg.params.clone(),
+                    sort_descs: agg.sort_descs.clone(),
                 },
                 output_column: w.index,
                 arg_indices: agg
