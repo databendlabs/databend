@@ -103,6 +103,7 @@ pub struct Runner {
     db: String,
     timeout: u64,
     file_buf: BufWriter<File>,
+    err_file_buf: BufWriter<File>,
 }
 
 impl Runner {
@@ -111,7 +112,7 @@ impl Runner {
         username: String,
         password: String,
         db: String,
-        log_path: String,
+        log_dir: String,
         count: usize,
         seed: Option<u64>,
         timeout: u64,
@@ -119,12 +120,16 @@ impl Runner {
         let client = HttpClient::create(host, username, password).await?;
 
         // Create SQL log directory and file.
-        create_dir_all(&log_path)?;
+        create_dir_all(&log_dir)?;
         let now = Zoned::now();
         let time = strtime::format(LOG_FILE_FORMAT, &now).unwrap();
-        let log_path = format!("{}/databend-sqlsmith.{}.sql", log_path, time);
+        let log_path = format!("{}/databend-sqlsmith.{}.sql", log_dir, time);
         let file = File::create(log_path)?;
         let file_buf = BufWriter::new(file);
+
+        let err_log_path = format!("{}/databend-sqlsmith.{}.error.sql", log_dir, time);
+        let err_file = File::create(err_log_path)?;
+        let err_file_buf = BufWriter::new(err_file);
 
         Ok(Self {
             count,
@@ -133,6 +138,7 @@ impl Runner {
             db,
             timeout,
             file_buf,
+            err_file_buf,
         })
     }
 
@@ -188,7 +194,7 @@ impl Runner {
         for _ in 0..self.count {
             let query = generator.gen_query();
             let query_sql = query.to_string();
-            let is_conn_error = self.run_sql(query_sql, Some(query)).await;
+            let (_, is_conn_error) = self.run_sql(query_sql, Some(query)).await;
             if is_conn_error {
                 conn_error_cnt += 1;
             }
@@ -207,16 +213,18 @@ impl Runner {
         for sql in sqls {
             tracing::info!("orig sql: {}", sql);
             let Ok(tokens) = tokenize_sql(&sql) else {
+                tracing::error!("invalid sql: {}", sql);
                 continue;
             };
             let Ok((stmt, _)) = parse_sql(&tokens, Dialect::PostgreSQL) else {
+                tracing::error!("invalid sql: {}", sql);
                 continue;
             };
             let fuzz_stmt = query_fuzzer.fuzz(stmt);
             let fuzz_sql = fuzz_stmt.to_string();
             tracing::info!("fuzz sql: {}", fuzz_sql);
             if let Statement::Query(_) = fuzz_stmt {
-                let is_conn_error = self.run_sql(fuzz_sql, None).await;
+                let (_, is_conn_error) = self.run_sql(fuzz_sql, None).await;
                 if is_conn_error {
                     conn_error_cnt += 1;
                 }
@@ -232,7 +240,7 @@ impl Runner {
         Ok(())
     }
 
-    async fn run_sql(&mut self, query_sql: String, query: Option<Query>) -> bool {
+    async fn run_sql(&mut self, query_sql: String, query: Option<Query>) -> (bool, bool) {
         // Write SQL to log file for replay.
         writeln!(self.file_buf, "{};", query_sql).unwrap();
 
@@ -250,6 +258,11 @@ impl Runner {
                             let value = error.as_object().unwrap();
                             let code = value["code"].as_u64().unwrap();
                             let message = value["message"].as_str().unwrap();
+
+                            writeln!(self.err_file_buf, "{};", query_sql).unwrap();
+                            writeln!(self.err_file_buf, "{}-{};", code, message).unwrap();
+
+                            is_error = true;
                             if code == 1005 || code == 1065 || code == 2004 || code == 1010 {
                                 return;
                             }
@@ -259,7 +272,6 @@ impl Runner {
                             {
                                 return;
                             }
-                            is_error = true;
                             err_code = code;
                             err_message = format!("error: {}", message);
                             try_reduce = true;
@@ -280,10 +292,10 @@ impl Runner {
         )
         .await;
 
-        if let Some(timeout_err) = timeout_err {
+        if let Some(ref timeout_err) = timeout_err {
             tracing::info!("sql: {}", query_sql);
             tracing::error!("sql timeout: {}", timeout_err);
-        } else if is_error {
+        } else if is_error && err_code > 0 {
             tracing::info!("sql: {}", query_sql);
             if try_reduce {
                 if let Some(query) = query {
@@ -293,7 +305,7 @@ impl Runner {
             }
             tracing::error!(err_message);
         }
-        is_conn_error
+        (is_error | timeout_err.is_some(), is_conn_error)
     }
 
     fn generate_rng(seed: Option<u64>) -> impl Rng {
@@ -342,21 +354,20 @@ impl Runner {
             let drop_view_sql = drop_view_stmt.to_string();
             let _ = self.run_sql(drop_view_sql, None).await;
             let create_view_sql = create_view_stmt.to_string();
-            if let Ok(responses) = self.client.query(&create_view_sql).await {
-                if !responses.is_empty() && responses[0].error.is_none() {
-                    let db_name = create_view_stmt.database.clone();
-                    let view_name = create_view_stmt.view.clone();
+            let (is_err, _) = self.run_sql(create_view_sql, None).await;
 
-                    let mut fields = Vec::new();
-                    for (c_name, c_type) in create_view_stmt.columns.iter().zip(col_types) {
-                        let table_dt = infer_schema_type(&c_type)?;
-                        let field = TableField::new(&c_name.to_string(), table_dt);
-                        fields.push(field);
-                    }
-                    let schema = TableSchemaRefExt::create(fields);
-                    let table = Table::new(db_name, view_name, schema);
-                    views.push(table);
+            if !is_err {
+                let db_name = create_view_stmt.database.clone();
+                let view_name = create_view_stmt.view.clone();
+                let mut fields = Vec::with_capacity(create_view_stmt.columns.len());
+                for (c_name, c_type) in create_view_stmt.columns.iter().zip(col_types) {
+                    let table_dt = infer_schema_type(&c_type)?;
+                    let field = TableField::new(&c_name.to_string(), table_dt);
+                    fields.push(field);
                 }
+                let schema = TableSchemaRefExt::create(fields);
+                let table = Table::new(db_name, view_name, schema);
+                views.push(table);
             }
         }
         Ok(views)

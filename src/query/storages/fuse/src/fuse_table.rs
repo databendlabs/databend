@@ -106,7 +106,9 @@ use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::TableSnapshotReader;
 use crate::io::WriteSettings;
+use crate::operations::load_last_snapshot_hint;
 use crate::operations::ChangesDesc;
+use crate::operations::SnapshotHint;
 use crate::operations::TruncateMode;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::Trim;
@@ -123,7 +125,6 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
-use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -485,23 +486,21 @@ impl FuseTable {
         operator: &Operator,
         storage_prefix: &str,
         table_description: &str,
-    ) -> Result<Option<(String, TableSchema)>> {
+    ) -> Result<Option<(SnapshotHint, TableSchema)>> {
         let refresh_task = async {
-            let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
             let begin_load_hint = Instant::now();
-            let maybe_hint_content = operator.read(&hint_file_path).await;
+            let maybe_hint = load_last_snapshot_hint(storage_prefix, operator).await?;
             info!(
-                "loaded last snapshot hint file [{}], time used {:?}",
-                hint_file_path,
+                "loaded last snapshot hint, time used {:?}",
                 begin_load_hint.elapsed()
             );
 
-            match maybe_hint_content {
-                Ok(buf) => {
-                    let hint_content = buf.to_vec();
-                    let snapshot_full_path = String::from_utf8(hint_content)?;
+            match maybe_hint {
+                Some(hint) => {
+                    let snapshot_full_path = &hint.snapshot_full_path;
                     let operator_info = operator.info();
 
+                    assert!(snapshot_full_path.starts_with(operator_info.root()));
                     let loc = snapshot_full_path[operator_info.root().len()..].to_string();
 
                     // refresh table schema by loading the snapshot
@@ -521,16 +520,12 @@ impl FuseTable {
                         .schema
                         .clone();
 
-                    Ok::<_, ErrorCode>(Some((
-                        snapshot_full_path[operator_info.root().len()..].to_string(),
-                        schema,
-                    )))
+                    Ok::<_, ErrorCode>(Some((hint, schema)))
                 }
-                Err(e) if e.kind() == opendal::ErrorKind::NotFound => {
+                None => {
                     // Table be attached has not last snapshot hint file, treat it as empty table
                     Ok(None)
                 }
-                Err(e) => Err(e.into()),
             }
         };
 
@@ -570,25 +565,34 @@ impl FuseTable {
             return Ok(());
         }
 
-        let refreshed = Self::refresh_schema_from_hint(operator, storage_prefix, &table_info.desc)?;
+        let snapshot_hint =
+            Self::refresh_schema_from_hint(operator, storage_prefix, &table_info.desc)?;
 
         info!(
             "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",
-            refreshed.as_ref().map(|(location, _)| location),
+            snapshot_hint.as_ref().map(|(hint, _)| &hint.snapshot_full_path),
             table_info.desc,
             table_info.ident
         );
 
         // Adjust snapshot location to the values extracted from the last snapshot hint
-        match refreshed {
+        match snapshot_hint {
             None => {
                 table_info.options_mut().remove(OPT_KEY_SNAPSHOT_LOCATION);
             }
-            Some((location, base_table_schema)) => {
+            Some((hint, base_table_schema)) => {
+                let full_location = &hint.snapshot_full_path;
+
+                let operator_info = operator.info();
+                assert!(full_location.starts_with(operator_info.root()));
+                let location = full_location[operator.info().root().len()..].to_string();
+
+                // update table meta options
                 table_info
                     .options_mut()
-                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
+                    .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location.clone());
 
+                // tweak schema
                 if let Some(ids_string) = table_info
                     .schema()
                     .metadata
@@ -626,6 +630,13 @@ impl FuseTable {
                 } else {
                     table_info.meta.schema = Arc::new(base_table_schema);
                 }
+
+                // tweak table/field comments
+                let comments = hint.entity_comments;
+
+                table_info.meta.comment = comments.table_comment;
+                // TODO assert about field comments
+                table_info.meta.field_comments = comments.field_comments;
             }
         }
 

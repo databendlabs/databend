@@ -26,8 +26,8 @@ use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
-use databend_common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use databend_enterprise_attach_table::AttachTableHandler;
 use databend_enterprise_attach_table::AttachTableHandlerWrapper;
 use databend_storages_common_cache::LoadParams;
@@ -48,13 +48,23 @@ impl AttachTableHandler for RealAttachTableHandler {
         let sp = plan.storage_params.as_ref().unwrap();
         let operator = init_operator(sp)?;
         check_operator(&operator, sp).await?;
+
+        let snapshot_hint = load_last_snapshot_hint(storage_prefix, &operator)
+            .await?
+            .ok_or_else(|| {
+                ErrorCode::StorageOther(format!(
+                    "hint file of table {}.{} does not exist",
+                    &plan.database, &plan.table
+                ))
+            })?;
+
         let reader = MetaReaders::table_snapshot_reader(operator.clone());
-        let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-        let snapshot_loc = operator.read(&hint).await?.to_vec();
-        let snapshot_loc = String::from_utf8(snapshot_loc)?;
+
+        // TODO duplicated code
+        let snapshot_full_path = snapshot_hint.snapshot_full_path;
         let info = operator.info();
         let root = info.root();
-        let snapshot_loc = snapshot_loc[root.len()..].to_string();
+        let snapshot_loc = snapshot_full_path[root.len()..].to_string();
         let mut options = plan.options.clone();
         options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
 
@@ -77,13 +87,16 @@ impl AttachTableHandler for RealAttachTableHandler {
 
         let attach_table_schema = Self::gen_schema(&plan, &snapshot)?;
 
-        let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
+        // let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
+        let field_comments = snapshot_hint.entity_comments.field_comments;
+        let comment = snapshot_hint.entity_comments.table_comment;
         let table_meta = TableMeta {
             schema: Arc::new(attach_table_schema),
             engine: plan.engine.to_string(),
             storage_params: plan.storage_params.clone(),
             options,
             cluster_key: None,
+            comment,
             field_comments,
             drop_on: None,
             statistics: stat,

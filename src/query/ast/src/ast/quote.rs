@@ -50,10 +50,16 @@ pub fn ident_needs_quote(ident: &str) -> bool {
     false
 }
 
-pub fn display_ident(name: &str, quoted_ident_case_sensitive: bool, dialect: Dialect) -> String {
+pub fn display_ident(
+    name: &str,
+    force_quoted_ident: bool,
+    quoted_ident_case_sensitive: bool,
+    dialect: Dialect,
+) -> String {
     // Db-s -> "Db-s" ; dbs -> dbs
     if name.chars().any(|c| c.is_ascii_uppercase()) && quoted_ident_case_sensitive
         || ident_needs_quote(name)
+        || force_quoted_ident
     {
         QuotedIdent(name, dialect.default_ident_quote()).to_string()
     } else {

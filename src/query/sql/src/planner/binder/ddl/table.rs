@@ -252,6 +252,7 @@ impl Binder {
             catalog,
             database,
             table,
+            with_quoted_ident,
         } = stmt;
 
         let (catalog, database, table) =
@@ -266,6 +267,7 @@ impl Binder {
             database,
             table,
             schema,
+            with_quoted_ident: *with_quoted_ident,
         })))
     }
 

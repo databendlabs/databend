@@ -52,6 +52,7 @@ pub struct ShowCreateTableInterpreter {
 
 pub struct ShowCreateQuerySettings {
     pub sql_dialect: Dialect,
+    pub force_quoted_ident: bool,
     pub quoted_ident_case_sensitive: bool,
     pub hide_options_in_show_create_table: bool,
 }
@@ -85,6 +86,7 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let settings = ShowCreateQuerySettings {
             sql_dialect: settings.get_sql_dialect()?,
+            force_quoted_ident: self.plan.with_quoted_ident,
             quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
             hide_options_in_show_create_table: settings
                 .get_hide_options_in_show_create_table()
@@ -144,24 +146,40 @@ impl ShowCreateTableInterpreter {
         let field_comments = table.field_comments();
         let n_fields = schema.fields().len();
         let sql_dialect = settings.sql_dialect;
+        let force_quoted_ident = settings.force_quoted_ident;
         let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
         let hide_options_in_show_create_table = settings.hide_options_in_show_create_table;
 
         let mut table_create_sql = format!(
             "CREATE TABLE {} (\n",
-            display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+            display_ident(
+                name,
+                force_quoted_ident,
+                quoted_ident_case_sensitive,
+                sql_dialect
+            )
         );
         if table.options().contains_key("TRANSIENT") {
             table_create_sql = format!(
                 "CREATE TRANSIENT TABLE {} (\n",
-                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+                display_ident(
+                    name,
+                    force_quoted_ident,
+                    quoted_ident_case_sensitive,
+                    sql_dialect
+                )
             )
         }
 
         if table.options().contains_key(OPT_KEY_TEMP_PREFIX) {
             table_create_sql = format!(
                 "CREATE TEMP TABLE {} (\n",
-                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+                display_ident(
+                    name,
+                    force_quoted_ident,
+                    quoted_ident_case_sensitive,
+                    sql_dialect
+                )
             )
         }
 
@@ -198,7 +216,12 @@ impl ShowCreateTableInterpreter {
                 } else {
                     "".to_string()
                 };
-                let ident = display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect);
+                let ident = display_ident(
+                    field.name(),
+                    force_quoted_ident,
+                    quoted_ident_case_sensitive,
+                    sql_dialect,
+                );
                 let data_type = field.data_type().sql_name_explicit_null();
                 let column_str =
                     format!("  {ident} {data_type}{default_expr}{computed_expr}{comment}");
@@ -226,7 +249,12 @@ impl ShowCreateTableInterpreter {
                 let mut index_str = format!(
                     "  {} INVERTED INDEX {} ({})",
                     sync,
-                    display_ident(&index_field.name, quoted_ident_case_sensitive, sql_dialect),
+                    display_ident(
+                        &index_field.name,
+                        force_quoted_ident,
+                        quoted_ident_case_sensitive,
+                        sql_dialect
+                    ),
                     column_names_str
                 );
                 if !options.is_empty() {
