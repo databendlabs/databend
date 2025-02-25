@@ -19,13 +19,21 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumnBuilder;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 use databend_common_expression::TopKSorter;
+use databend_common_expression::Value;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -41,7 +49,7 @@ use crate::ReadSettings;
 
 enum State {
     Init,
-    ReadRowGroup(ReadPolicyImpl),
+    ReadRowGroup((ReadPolicyImpl, u64, String)),
     ReadFiles(Vec<(String, Vec<u8>)>),
 }
 
@@ -67,6 +75,8 @@ pub struct ParquetSource {
     copy_status: Arc<CopyStatus>,
     /// Pushed-down topk sorter.
     topk_sorter: Option<TopKSorter>,
+
+    internal_columns: Vec<InternalColumnType>,
 }
 
 impl ParquetSource {
@@ -76,6 +86,7 @@ impl ParquetSource {
         row_group_reader: Arc<ParquetRSRowGroupReader>,
         full_file_reader: Option<Arc<ParquetRSFullReader>>,
         topk: Arc<Option<TopK>>,
+        internal_columns: Vec<InternalColumnType>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let is_copy = matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
@@ -98,6 +109,7 @@ impl ParquetSource {
             copy_status,
             topk_sorter,
             full_file_reader,
+            internal_columns,
         })))
     }
 }
@@ -105,7 +117,7 @@ impl ParquetSource {
 #[async_trait::async_trait]
 impl Processor for ParquetSource {
     fn name(&self) -> String {
-        "ParquetRSSource".to_string()
+        "ParquetSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -150,17 +162,23 @@ impl Processor for ParquetSource {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Init) {
-            State::ReadRowGroup(mut reader) => {
-                if let Some(block) = reader.as_mut().read_block()? {
+            State::ReadRowGroup((mut reader, mut start_row, path)) => {
+                if let Some(mut block) = reader.as_mut().read_block()? {
+                    add_internal_columns(
+                        &self.internal_columns,
+                        path.clone(),
+                        &mut block,
+                        &mut start_row,
+                    );
                     self.generated_data = Some(block);
-                    self.state = State::ReadRowGroup(reader);
+                    self.state = State::ReadRowGroup((reader, start_row, path));
                 }
                 // Else: The reader is finished. We should try to build another reader.
             }
             State::ReadFiles(buffers) => {
                 let mut blocks = Vec::with_capacity(buffers.len());
                 for (path, buffer) in buffers {
-                    let bs = self
+                    let mut bs = self
                         .full_file_reader
                         .as_ref()
                         .unwrap()
@@ -171,6 +189,15 @@ impl Processor for ParquetSource {
                             num_rows_loaded: num_rows,
                             error: None,
                         });
+                    }
+                    let mut rows_start = 0;
+                    for b in bs.iter_mut() {
+                        add_internal_columns(
+                            &self.internal_columns,
+                            path.to_string(),
+                            b,
+                            &mut rows_start,
+                        );
                     }
                     blocks.extend(bs);
                 }
@@ -201,7 +228,11 @@ impl Processor for ParquetSource {
                                 )
                                 .await?
                             {
-                                self.state = State::ReadRowGroup(reader);
+                                self.state = State::ReadRowGroup((
+                                    reader,
+                                    part.start_row,
+                                    part.location.clone(),
+                                ));
                             }
                             // Else: keep in init state.
                         }
@@ -228,5 +259,37 @@ impl Processor for ParquetSource {
         }
 
         Ok(())
+    }
+}
+
+fn add_internal_columns(
+    internal_columns: &[InternalColumnType],
+    path: String,
+    b: &mut DataBlock,
+    start_row: &mut u64,
+) {
+    for c in internal_columns {
+        match c {
+            InternalColumnType::FileName => {
+                b.add_column(BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(path.clone())),
+                ));
+            }
+            InternalColumnType::FileRowNumber => {
+                let end_row = (*start_row) + b.num_rows() as u64;
+                b.add_column(BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(
+                        NumberColumnBuilder::UInt64(((*start_row)..end_row).collect::<Vec<_>>())
+                            .build(),
+                    )),
+                ));
+                *start_row = end_row;
+            }
+            _ => {
+                unreachable!()
+            }
+        }
     }
 }
