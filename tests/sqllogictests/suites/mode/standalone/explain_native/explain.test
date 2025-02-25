@@ -36,6 +36,7 @@ Filter
     ├── join type: INNER
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [t2.a (#2)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── TableScan(Build)
@@ -67,6 +68,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#2)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -100,6 +102,7 @@ EvalScalar
     └── Join(Cross)
         ├── build keys: []
         ├── probe keys: []
+        ├── keys is null equal: []
         ├── other filters: []
         ├── Scan
         │   ├── table: default.t1
@@ -120,6 +123,7 @@ EvalScalar
 └── Join(Inner)
     ├── build keys: [t2.a (#2), t2.b (#3)]
     ├── probe keys: [t1.a (#0), t1.b (#1)]
+    ├── keys is null equal: [false, false]
     ├── other filters: []
     ├── Filter
     │   ├── filters: [gt(t1.a (#0), 2)]
@@ -301,6 +305,7 @@ Filter
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
+    ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 4.40
     ├── TableScan(Build)
@@ -336,6 +341,7 @@ Filter
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
+    ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 5.00
     ├── TableScan(Build)
@@ -373,6 +379,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: []
 ├── probe keys: []
+├── keys is null equal: []
 ├── filters: [(((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4)) OR t3.a (#4) = 2)]
 ├── estimated rows: 50.00
 ├── HashJoin(Build)
@@ -380,6 +387,7 @@ HashJoin
 │   ├── join type: CROSS
 │   ├── build keys: []
 │   ├── probe keys: []
+│   ├── keys is null equal: []
 │   ├── filters: []
 │   ├── estimated rows: 5.00
 │   ├── TableScan(Build)
@@ -421,6 +429,7 @@ HashJoin
 ├── join type: CROSS
 ├── build keys: []
 ├── probe keys: []
+├── keys is null equal: []
 ├── filters: []
 ├── estimated rows: 28.16
 ├── Filter(Build)
@@ -432,6 +441,7 @@ HashJoin
 │       ├── join type: CROSS
 │       ├── build keys: []
 │       ├── probe keys: []
+│       ├── keys is null equal: []
 │       ├── filters: []
 │       ├── estimated rows: 4.40
 │       ├── TableScan(Build)
@@ -486,6 +496,7 @@ Limit
             ├── join type: CROSS
             ├── build keys: []
             ├── probe keys: []
+            ├── keys is null equal: []
             ├── filters: []
             ├── estimated rows: 4.40
             ├── TableScan(Build)
@@ -517,6 +528,7 @@ HashJoin
 ├── join type: CROSS
 ├── build keys: []
 ├── probe keys: []
+├── keys is null equal: []
 ├── filters: []
 ├── estimated rows: 5.00
 ├── TableScan(Build)
@@ -727,6 +739,7 @@ Sort
     ├── join type: LEFT OUTER
     ├── build keys: [t2.k (#2)]
     ├── probe keys: [t1.i (#0)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 3.00
     ├── EmptyResultScan(Build)
