@@ -1244,7 +1244,6 @@ impl AccessChecker for PrivilegeAccess {
             // SET ROLE & SHOW ROLES is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
             Plan::SetRole(_) => {}
             Plan::SetSecondaryRoles(_) => {}
-            Plan::ShowRoles(_) => {}
             Plan::Presign(plan) => {
                 let privilege = match &plan.action {
                     PresignAction::Upload => UserPrivilegeType::Write,

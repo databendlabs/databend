@@ -45,7 +45,6 @@ use databend_common_pipeline_sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
 use itertools::Itertools;
 
-
 const SHOW_ROLES: &str = "show_roles";
 
 pub struct ShowRoles {
