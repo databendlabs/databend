@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -25,7 +25,6 @@ use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::DataBlock;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -48,7 +47,6 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::plans::ReclusterPlan;
 use databend_common_sql::query_executor::QueryExecutor;
 use databend_common_sql::IdentifierNormalizer;
-use databend_common_sql::IndexType;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarExpr;
@@ -260,6 +258,9 @@ impl ReclusterTableInterpreter {
                 let rows_per_block = block_thresholds.calc_rows_per_block(total_bytes, total_rows);
                 let total_partitions = total_rows / rows_per_block;
 
+                let subquery_executor = Arc::new(ServiceQueryExecutor::new(
+                    QueryContext::create_from(self.ctx.as_ref()),
+                ));
                 if hilbert_info.is_none() {
                     let partitions = settings.get_hilbert_num_range_ids()? as usize;
                     let sample_size = settings.get_hilbert_sample_size_per_block()?;
@@ -279,7 +280,6 @@ impl ReclusterTableInterpreter {
                     let cluster_keys_len = ast_exprs.len();
                     let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
                     let mut cluster_key_types = Vec::with_capacity(cluster_keys_len);
-                    let mut variable_map = Vec::with_capacity(cluster_keys_len + 1);
                     for mut ast in ast_exprs {
                         let mut normalizer = IdentifierNormalizer {
                             ctx: &name_resolution_ctx,
@@ -291,25 +291,16 @@ impl ReclusterTableInterpreter {
                         cluster_key_types.push(scalar.data_type()?);
                     }
 
-                    let metadata = MetadataRef::default();
                     let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
                     let mut hilbert_keys = Vec::with_capacity(cluster_key_strs.len());
-                    for (index, cluster_key_str) in cluster_key_strs.into_iter().enumerate() {
-                        let bound = format!("_bound_{index}");
+                    for cluster_key_str in cluster_key_strs.into_iter() {
                         keys_bounds.push(format!(
-                            "range_bound({partitions}, {sample_size})({cluster_key_str}) AS {bound}"
+                            "range_bound({partitions}, {sample_size})({cluster_key_str})"
                         ));
 
                         hilbert_keys.push(format!(
-                            "hilbert_key(cast(range_partition_id({table}.{cluster_key_str}, {bound}) as uint16))"
+                            "hilbert_key(cast(range_partition_id({table}.{cluster_key_str}, []) as uint16))"
                         ));
-
-                        let idx = metadata.write().add_derived_column(
-                            bound,
-                            DataType::Array(Box::new(cluster_key_types[index].clone())),
-                            None,
-                        );
-                        variable_map.push(idx);
                     }
                     let hilbert_keys_str = hilbert_keys.join(", ");
 
@@ -321,22 +312,18 @@ impl ReclusterTableInterpreter {
                         &keys_bounds_query,
                     )
                     .await?;
-                    println!("keys_bound: {keys_bound:?}");
 
                     let index_bound_query = format!(
-                        "WITH _source_data AS ( \
-                        SELECT \
-                            hilbert_index([{hilbert_keys_str}], 2) AS index \
-                        FROM {database}.{table} \
-                        ) \
-                        SELECT range_bound({total_partitions}, {sample_size})(index) AS bound \
-                            FROM _source_data"
+                        "SELECT \
+                            range_bound({total_partitions}, {sample_size})(hilbert_index([{hilbert_keys_str}], 2)) \
+                        FROM {database}.{table}"
                     );
-                    println!("metadata: {:?}", metadata);
-                    let index_bound =
-                        plan_hilbert_sql(self.ctx.clone(), metadata.clone(), &index_bound_query)
-                            .await?;
-                    println!("index_bound: {index_bound:?}");
+                    let index_bound = plan_hilbert_sql(
+                        self.ctx.clone(),
+                        MetadataRef::default(),
+                        &index_bound_query,
+                    )
+                    .await?;
 
                     let quote = settings.get_sql_dialect()?.default_ident_quote();
                     let schema = tbl.schema_with_stream();
@@ -351,24 +338,16 @@ impl ReclusterTableInterpreter {
                     let query = format!(
                         "SELECT \
                             {output_with_table_str}, \
-                            range_partition_id(hilbert_index([{hilbert_keys_str}], 2), _index_bound)AS _predicate \
+                            range_partition_id(hilbert_index([{hilbert_keys_str}], 2), [])AS _predicate \
                         FROM {database}.{table}"
                     );
-                    let idx = metadata.write().add_derived_column(
-                        "_index_bound".to_string(),
-                        DataType::Binary,
-                        None,
-                    );
-                    variable_map.push(idx);
-
                     let query =
-                        plan_hilbert_sql(self.ctx.clone(), metadata.clone(), &query).await?;
+                        plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &query).await?;
 
                     *hilbert_info = Some(HilbertBuildInfo {
                         keys_bound,
                         index_bound,
                         query,
-                        variable_map,
                     });
                 }
 
@@ -376,13 +355,9 @@ impl ReclusterTableInterpreter {
                     keys_bound,
                     index_bound,
                     query,
-                    variable_map,
                 } = hilbert_info.as_ref().unwrap();
 
-                let mut variables = HashMap::with_capacity(variable_map.len());
-                let subquery_executor = Arc::new(ServiceQueryExecutor::new(
-                    QueryContext::create_from(self.ctx.as_ref()),
-                ));
+                let mut variables = VecDeque::new();
 
                 let Plan::Query {
                     s_expr,
@@ -393,6 +368,7 @@ impl ReclusterTableInterpreter {
                 else {
                     unreachable!()
                 };
+                metadata.write().replace_all_tables(tbl.clone());
                 let mut builder =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let plan = Box::new(builder.build(s_expr, bind_context.column_set()).await?);
@@ -400,9 +376,9 @@ impl ReclusterTableInterpreter {
                     .execute_query_with_physical_plan(&plan)
                     .await?;
                 let keys_bounds = DataBlock::concat(&data_blocks)?;
-                for (index, entry) in keys_bounds.columns().iter().enumerate() {
+                for entry in keys_bounds.columns().iter() {
                     let v = entry.value.index(0).unwrap().to_owned();
-                    variables.insert(variable_map[index], v);
+                    variables.push_back(v);
                 }
 
                 let Plan::Query {
@@ -415,6 +391,7 @@ impl ReclusterTableInterpreter {
                     unreachable!()
                 };
                 let s_expr = replace_with_constant(s_expr, &variables, total_partitions as u16);
+                metadata.write().replace_all_tables(tbl.clone());
                 let mut builder =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
@@ -423,7 +400,7 @@ impl ReclusterTableInterpreter {
                     .await?;
                 debug_assert!(data_blocks.len() == 1);
                 let val = data_blocks[0].value_at(0, 0).unwrap().to_owned();
-                variables.insert(*variable_map.last().unwrap(), val);
+                variables.push_front(val);
 
                 let Plan::Query {
                     s_expr,
@@ -439,6 +416,7 @@ impl ReclusterTableInterpreter {
                     s_expr = set_update_stream_columns(&s_expr)?;
                 }
 
+                metadata.write().replace_all_tables(tbl.clone());
                 let mut builder =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let mut plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
@@ -627,5 +605,4 @@ struct HilbertBuildInfo {
     keys_bound: Plan,
     index_bound: Plan,
     query: Plan,
-    variable_map: Vec<IndexType>,
 }

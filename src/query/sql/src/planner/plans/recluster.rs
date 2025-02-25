@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
@@ -31,7 +31,6 @@ use crate::plans::ConstantExpr;
 use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::Binder;
-use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarExpr;
@@ -96,24 +95,23 @@ pub async fn plan_hilbert_sql(
 
 pub fn replace_with_constant(
     expr: &SExpr,
-    variables: &HashMap<IndexType, Scalar>,
+    variables: &VecDeque<Scalar>,
     total_partitions: u16,
 ) -> SExpr {
     #[recursive::recursive]
-    fn visit_expr_column(expr: &mut ScalarExpr, variables: &HashMap<IndexType, Scalar>) {
+    fn visit_expr_column(expr: &mut ScalarExpr, variables: &mut VecDeque<Scalar>) {
         match expr {
-            ScalarExpr::BoundColumnRef(col) => {
-                if let Some(value) = variables.get(&col.column.index).cloned() {
-                    *expr = ScalarExpr::ConstantExpr(ConstantExpr {
-                        span: col.span,
-                        value,
-                    });
-                }
-            }
             ScalarExpr::CastExpr(cast) => {
                 visit_expr_column(&mut cast.argument, variables);
             }
             ScalarExpr::FunctionCall(call) => {
+                if call.func_name == "range_partition_id" {
+                    debug_assert_eq!(call.arguments.len(), 2);
+                    let last = call.arguments.last_mut().unwrap();
+                    let value = variables.pop_front().unwrap();
+                    *last = ScalarExpr::ConstantExpr(ConstantExpr { span: None, value });
+                }
+
                 for arg in &mut call.arguments {
                     visit_expr_column(arg, variables);
                 }
@@ -125,7 +123,7 @@ pub fn replace_with_constant(
     #[recursive::recursive]
     fn replace_with_constant_into_child(
         s_expr: &SExpr,
-        variables: &HashMap<IndexType, Scalar>,
+        variables: &mut VecDeque<Scalar>,
         total_partitions: u16,
     ) -> SExpr {
         let mut s_expr = s_expr.clone();
@@ -169,5 +167,6 @@ pub fn replace_with_constant(
         }
     }
 
-    replace_with_constant_into_child(expr, variables, total_partitions)
+    let mut variables = variables.clone();
+    replace_with_constant_into_child(expr, &mut variables, total_partitions)
 }
