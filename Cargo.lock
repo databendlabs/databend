@@ -1274,32 +1274,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 
 [[package]]
-name = "bendsave"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-stream",
- "bytes",
- "clap",
- "databend-common-base",
- "databend-common-config",
- "databend-common-meta-client",
- "databend-common-meta-control",
- "databend-common-meta-types",
- "databend-common-storage",
- "databend-meta",
- "epochfs",
- "form_urlencoded",
- "futures",
- "http 1.1.0",
- "log",
- "logforth",
- "opendal 0.51.2",
- "tokio",
- "toml 0.8.19",
-]
-
-[[package]]
 name = "bigdecimal"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2938,6 +2912,32 @@ name = "data-encoding"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8566979429cf69b49a5c740c60791108e86440e8be149bbea4fe54d2c32d6e2"
+
+[[package]]
+name = "databend-bendsave"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "bytes",
+ "clap",
+ "databend-common-base",
+ "databend-common-config",
+ "databend-common-meta-client",
+ "databend-common-meta-control",
+ "databend-common-meta-types",
+ "databend-common-storage",
+ "databend-meta",
+ "epochfs",
+ "form_urlencoded",
+ "futures",
+ "http 1.1.0",
+ "log",
+ "logforth",
+ "opendal 0.51.2",
+ "tokio",
+ "toml 0.8.19",
+]
 
 [[package]]
 name = "databend-binaries"

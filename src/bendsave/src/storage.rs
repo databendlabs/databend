@@ -33,7 +33,6 @@ use databend_common_storage::init_operator;
 use futures::TryStream;
 use futures::TryStreamExt;
 use log::debug;
-use log::warn;
 use opendal::layers::LoggingLayer;
 use opendal::layers::RetryLayer;
 use opendal::Operator;
@@ -44,8 +43,7 @@ use opendal::Operator;
 pub fn load_query_storage(path: &str) -> Result<Operator> {
     GlobalInstance::init_production();
 
-    let content = std::fs::read_to_string(path)?;
-    let outer_config: Config = toml::from_str(&content)?;
+    let outer_config: Config = Config::load_with_config_file(path)?;
     let inner_config: InnerConfig = outer_config.try_into()?;
 
     // FIXME: I really don't like this pattern, but it's how databend work.

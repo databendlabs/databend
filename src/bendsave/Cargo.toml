@@ -1,5 +1,5 @@
 [package]
-name = "bendsave"
+name = "databend-bendsave"
 description = "databend backup and restore tools"
 version = "0.1.0"
 authors = { workspace = true }

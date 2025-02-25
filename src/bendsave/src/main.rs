@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use anyhow::Result;
-use bendsave::backup;
-use bendsave::restore;
 use clap::Parser;
 use clap::Subcommand;
+use databend_bendsave::backup;
+use databend_bendsave::restore;
 use logforth::append;
 use logforth::filter::EnvFilter;
 use logforth::Dispatch;
