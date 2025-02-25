@@ -54,6 +54,7 @@ use log::warn;
 
 use super::Finder;
 use crate::binder::bind_query::ExpressionScanContext;
+use crate::binder::show::get_show_options;
 use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
@@ -74,7 +75,6 @@ use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
-use crate::plans::ShowRolesPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
@@ -199,19 +199,34 @@ impl<'a> Binder {
             }
 
             Statement::StatementWithSettings { settings, stmt } => {
-                self.bind_statement_settings(bind_context, settings, stmt).await?
+                self.bind_statement_settings(bind_context, settings, stmt)
+                    .await?
             }
 
-            Statement::Explain { query, options, kind } => {
-                self.bind_explain(bind_context, kind, options, query).await?
+            Statement::Explain {
+                query,
+                options,
+                kind,
+            } => {
+                self.bind_explain(bind_context, kind, options, query)
+                    .await?
             }
 
-            Statement::ExplainAnalyze { partial, graphical, query } => {
-                if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = query.as_ref() {
+            Statement::ExplainAnalyze {
+                partial,
+                graphical,
+                query,
+            } => {
+                if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = query.as_ref()
+                {
                     return Err(ErrorCode::SyntaxException("Invalid statement"));
                 }
                 let plan = self.bind_statement(bind_context, query).await?;
-                Plan::ExplainAnalyze { partial: *partial, graphical: *graphical, plan: Box::new(plan) }
+                Plan::ExplainAnalyze {
+                    partial: *partial,
+                    graphical: *graphical,
+                    plan: Box::new(plan),
+                }
             }
 
             Statement::ShowFunctions { show_options } => {
@@ -219,17 +234,22 @@ impl<'a> Binder {
             }
 
             Statement::ShowUserFunctions { show_options } => {
-                self.bind_show_user_functions(bind_context, show_options).await?
+                self.bind_show_user_functions(bind_context, show_options)
+                    .await?
             }
 
             Statement::ShowTableFunctions { show_options } => {
-                self.bind_show_table_functions(bind_context, show_options).await?
+                self.bind_show_table_functions(bind_context, show_options)
+                    .await?
             }
 
             Statement::CopyIntoTable(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                        warn!(
+                            "In Copy resolve optimize hints {:?} failed, err: {:?}",
+                            hints, e
+                        );
                     }
                 }
                 self.bind_copy_into_table(bind_context, stmt).await?
@@ -238,18 +258,34 @@ impl<'a> Binder {
             Statement::CopyIntoLocation(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                        warn!(
+                            "In Copy resolve optimize hints {:?} failed, err: {:?}",
+                            hints, e
+                        );
                     }
                 }
                 self.bind_copy_into_location(bind_context, stmt).await?
             }
 
-            Statement::ShowMetrics { show_options } => self.bind_show_metrics(bind_context, show_options).await?,
-            Statement::ShowProcessList { show_options } => self.bind_show_process_list(bind_context, show_options).await?,
-            Statement::ShowEngines { show_options } => self.bind_show_engines(bind_context, show_options).await?,
-            Statement::ShowSettings { show_options } => self.bind_show_settings(bind_context, show_options).await?,
-            Statement::ShowVariables { show_options } => self.bind_show_variables(bind_context, show_options).await?,
-            Statement::ShowIndexes { show_options } => self.bind_show_indexes(bind_context, show_options).await?,
+            Statement::ShowMetrics { show_options } => {
+                self.bind_show_metrics(bind_context, show_options).await?
+            }
+            Statement::ShowProcessList { show_options } => {
+                self.bind_show_process_list(bind_context, show_options)
+                    .await?
+            }
+            Statement::ShowEngines { show_options } => {
+                self.bind_show_engines(bind_context, show_options).await?
+            }
+            Statement::ShowSettings { show_options } => {
+                self.bind_show_settings(bind_context, show_options).await?
+            }
+            Statement::ShowVariables { show_options } => {
+                self.bind_show_variables(bind_context, show_options).await?
+            }
+            Statement::ShowIndexes { show_options } => {
+                self.bind_show_indexes(bind_context, show_options).await?
+            }
             Statement::ShowLocks(stmt) => self.bind_show_locks(bind_context, stmt).await?,
             // Catalogs
             Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
@@ -258,14 +294,14 @@ impl<'a> Binder {
             Statement::DropCatalog(stmt) => self.bind_drop_catalog(stmt).await?,
             Statement::UseCatalog { catalog } => {
                 let catalog = normalize_identifier(catalog, &self.name_resolution_ctx).name;
-                Plan::UseCatalog(Box::new(UseCatalogPlan {
-                    catalog,
-                }))
+                Plan::UseCatalog(Box::new(UseCatalogPlan { catalog }))
             }
 
             // Databases
             Statement::ShowDatabases(stmt) => self.bind_show_databases(bind_context, stmt).await?,
-            Statement::ShowDropDatabases(stmt) => self.bind_show_drop_databases(bind_context, stmt).await?,
+            Statement::ShowDropDatabases(stmt) => {
+                self.bind_show_drop_databases(bind_context, stmt).await?
+            }
             Statement::ShowCreateDatabase(stmt) => self.bind_show_create_database(stmt).await?,
             Statement::CreateDatabase(stmt) => self.bind_create_database(stmt).await?,
             Statement::DropDatabase(stmt) => self.bind_drop_database(stmt).await?,
@@ -273,9 +309,7 @@ impl<'a> Binder {
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
             Statement::UseDatabase { database } => {
                 let database = normalize_identifier(database, &self.name_resolution_ctx).name;
-                Plan::UseDatabase(Box::new(UseDatabasePlan {
-                    database,
-                }))
+                Plan::UseDatabase(Box::new(UseDatabasePlan { database }))
             }
             // Columns
             Statement::ShowColumns(stmt) => self.bind_show_columns(bind_context, stmt).await?,
@@ -298,15 +332,21 @@ impl<'a> Binder {
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
-            Statement::VacuumDropTable(stmt) => self.bind_vacuum_drop_table(bind_context, stmt).await?,
-            Statement::VacuumTemporaryFiles(stmt) => self.bind_vacuum_temporary_files(bind_context, stmt).await?,
+            Statement::VacuumDropTable(stmt) => {
+                self.bind_vacuum_drop_table(bind_context, stmt).await?
+            }
+            Statement::VacuumTemporaryFiles(stmt) => {
+                self.bind_vacuum_temporary_files(bind_context, stmt).await?
+            }
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
             // Dictionaries
             Statement::CreateDictionary(stmt) => self.bind_create_dictionary(stmt).await?,
             Statement::DropDictionary(stmt) => self.bind_drop_dictionary(stmt).await?,
             Statement::ShowCreateDictionary(stmt) => self.bind_show_create_dictionary(stmt).await?,
-            Statement::ShowDictionaries(stmt) => self.bind_show_dictionaries(bind_context, stmt).await?,
+            Statement::ShowDictionaries(stmt) => {
+                self.bind_show_dictionaries(bind_context, stmt).await?
+            }
             Statement::RenameDictionary(stmt) => self.bind_rename_dictionary(stmt).await?,
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
@@ -319,16 +359,24 @@ impl<'a> Binder {
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
             Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
             Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
-            Statement::CreateInvertedIndex(stmt) => self.bind_create_inverted_index(bind_context, stmt).await?,
-            Statement::DropInvertedIndex(stmt) => self.bind_drop_inverted_index(bind_context, stmt).await?,
-            Statement::RefreshInvertedIndex(stmt) => self.bind_refresh_inverted_index(bind_context, stmt).await?,
+            Statement::CreateInvertedIndex(stmt) => {
+                self.bind_create_inverted_index(bind_context, stmt).await?
+            }
+            Statement::DropInvertedIndex(stmt) => {
+                self.bind_drop_inverted_index(bind_context, stmt).await?
+            }
+            Statement::RefreshInvertedIndex(stmt) => {
+                self.bind_refresh_inverted_index(bind_context, stmt).await?
+            }
 
             // Virtual Columns
             Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
             Statement::AlterVirtualColumn(stmt) => self.bind_alter_virtual_column(stmt).await?,
             Statement::DropVirtualColumn(stmt) => self.bind_drop_virtual_column(stmt).await?,
             Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
-            Statement::ShowVirtualColumns(stmt) => self.bind_show_virtual_columns(bind_context, stmt).await?,
+            Statement::ShowVirtualColumns(stmt) => {
+                self.bind_show_virtual_columns(bind_context, stmt).await?
+            }
 
             // Users
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
@@ -336,14 +384,24 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone().into(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers { show_options } => {
+                let (show_limit, limit_str) = get_show_options(show_options, None);
+                let query = format!(
+                    "SELECT name, hostname, auth_type, is_configured, default_role, roles, disabled, network_policy, password_policy, must_change_password FROM system.users {} ORDER BY name {}",
+                    show_limit, limit_str
+                );
+                self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowUsers)
+                    .await?
+            }
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
             Statement::DescribeUser { user } => Plan::DescUser(Box::new(DescUserPlan {
                 user: user.clone().into(),
             })),
 
             // Roles
-            Statement::ShowRoles => Plan::ShowRoles(Box::new(ShowRolesPlan {})),
+            Statement::ShowRoles { show_options } => {
+                self.bind_show_roles(bind_context, show_options).await?
+            }
             Statement::CreateRole {
                 if_not_exists,
                 role_name,
@@ -367,16 +425,37 @@ impl<'a> Binder {
             })),
 
             // Stages
-            Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
+            Statement::ShowStages { show_options } => {
+                let (show_limit, limit_str) = get_show_options(show_options, None);
+                let query = format!(
+                    "SELECT name, stage_type, number_of_files, creator, created_on, comment FROM system.stages {} ORDER BY name {}",
+                    show_limit, limit_str,
+                );
+                self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowStages)
+                    .await?
+            }
             Statement::ListStage { location, pattern } => {
                 let pattern = if let Some(pattern) = pattern {
                     format!(", pattern => '{pattern}'")
                 } else {
                     "".to_string()
                 };
-                self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern})").as_str(), RewriteKind::ListStage).await?
+                self.bind_rewrite_to_query(
+                    bind_context,
+                    format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern})")
+                        .as_str(),
+                    RewriteKind::ListStage,
+                )
+                .await?
             }
-            Statement::DescribeStage { stage_name } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(), RewriteKind::DescribeStage).await?,
+            Statement::DescribeStage { stage_name } => {
+                self.bind_rewrite_to_query(
+                    bind_context,
+                    format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(),
+                    RewriteKind::DescribeStage,
+                )
+                .await?
+            }
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
             Statement::DropStage {
                 stage_name,
@@ -399,7 +478,10 @@ impl<'a> Binder {
             Statement::Insert(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!("In INSERT resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                        warn!(
+                            "In INSERT resolve optimize hints {:?} failed, err: {:?}",
+                            hints, e
+                        );
                     }
                 }
                 self.bind_insert(bind_context, stmt).await?
@@ -410,7 +492,10 @@ impl<'a> Binder {
             Statement::Replace(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!("In REPLACE resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                        warn!(
+                            "In REPLACE resolve optimize hints {:?} failed, err: {:?}",
+                            hints, e
+                        );
                     }
                 }
                 self.bind_replace(bind_context, stmt).await?
@@ -418,7 +503,10 @@ impl<'a> Binder {
             Statement::MergeInto(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!("In Merge resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                        warn!(
+                            "In Merge resolve optimize hints {:?} failed, err: {:?}",
+                            hints, e
+                        );
                     }
                 }
                 self.bind_merge_into(bind_context, stmt).await?
@@ -426,16 +514,21 @@ impl<'a> Binder {
             Statement::Delete(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!("In DELETE resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                        warn!(
+                            "In DELETE resolve optimize hints {:?} failed, err: {:?}",
+                            hints, e
+                        );
                     }
                 }
-                self.bind_delete(bind_context, stmt)
-                    .await?
+                self.bind_delete(bind_context, stmt).await?
             }
             Statement::Update(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).err() {
-                        warn!("In UPDATE resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                        warn!(
+                            "In UPDATE resolve optimize hints {:?} failed, err: {:?}",
+                            hints, e
+                        );
                     }
                 }
                 self.bind_update(bind_context, stmt).await?
@@ -443,12 +536,24 @@ impl<'a> Binder {
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
-            Statement::ShowGrants { principal, show_options } => self.bind_show_account_grants(bind_context, principal, show_options).await?,
-            Statement::ShowObjectPrivileges(stmt) => self.bind_show_object_privileges(bind_context, stmt).await?,
+            Statement::ShowGrants {
+                principal,
+                show_options,
+            } => {
+                self.bind_show_account_grants(bind_context, principal, show_options)
+                    .await?
+            }
+            Statement::ShowObjectPrivileges(stmt) => {
+                self.bind_show_object_privileges(bind_context, stmt).await?
+            }
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
-            Statement::CreateFileFormat { create_option, name, file_format_options } => {
+            Statement::CreateFileFormat {
+                create_option,
+                name,
+                file_format_options,
+            } => {
                 if StageFileFormatType::from_str(name).is_ok() {
                     return Err(ErrorCode::SyntaxException(format!(
                         "File format {name} is reserved"
@@ -457,16 +562,18 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     create_option: create_option.clone().into(),
                     name: name.clone(),
-                    file_format_params: FileFormatParams::try_from_reader(FileFormatOptionsReader::from_ast(file_format_options), false)?,
+                    file_format_params: FileFormatParams::try_from_reader(
+                        FileFormatOptionsReader::from_ast(file_format_options),
+                        false,
+                    )?,
                 }))
             }
-            Statement::DropFileFormat {
-                if_exists,
-                name,
-            } => Plan::DropFileFormat(Box::new(DropFileFormatPlan {
-                if_exists: *if_exists,
-                name: name.clone(),
-            })),
+            Statement::DropFileFormat { if_exists, name } => {
+                Plan::DropFileFormat(Box::new(DropFileFormatPlan {
+                    if_exists: *if_exists,
+                    name: name.clone(),
+                }))
+            }
             Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
             // Connections
@@ -475,10 +582,14 @@ impl<'a> Binder {
                 if_exists: stmt.if_exists,
                 name: stmt.name.to_string(),
             })),
-            Statement::DescribeConnection(stmt) => Plan::DescConnection(Box::new(DescConnectionPlan {
-                name: stmt.name.to_string(),
-            })),
-            Statement::ShowConnections(_) => Plan::ShowConnections(Box::new(ShowConnectionsPlan {})),
+            Statement::DescribeConnection(stmt) => {
+                Plan::DescConnection(Box::new(DescConnectionPlan {
+                    name: stmt.name.to_string(),
+                }))
+            }
+            Statement::ShowConnections(_) => {
+                Plan::ShowConnections(Box::new(ShowConnectionsPlan {}))
+            }
 
             // UDFs
             Statement::CreateUDF(stmt) => self.bind_create_udf(stmt).await?,
@@ -492,13 +603,21 @@ impl<'a> Binder {
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
             Statement::SetStmt { settings } => {
-                let Settings { set_type, identifiers, values } = settings;
+                let Settings {
+                    set_type,
+                    identifiers,
+                    values,
+                } = settings;
                 self.bind_set(bind_context, *set_type, identifiers, values)
                     .await?
             }
 
             Statement::UnSetStmt { settings } => {
-                let Settings { set_type, identifiers, .. } = settings;
+                let Settings {
+                    set_type,
+                    identifiers,
+                    ..
+                } = settings;
                 self.bind_unset(bind_context, *set_type, identifiers)
                     .await?
             }
@@ -507,13 +626,17 @@ impl<'a> Binder {
                 is_default,
                 role_name,
             } => {
-                self.bind_set_role(bind_context, *is_default, role_name).await?
+                self.bind_set_role(bind_context, *is_default, role_name)
+                    .await?
             }
             Statement::SetSecondaryRoles { option } => {
                 self.bind_set_secondary_roles(bind_context, option).await?
             }
 
-            Statement::KillStmt { kill_target, object_id } => {
+            Statement::KillStmt {
+                kill_target,
+                object_id,
+            } => {
                 self.bind_kill_stmt(bind_context, kill_target, object_id.as_str())
                     .await?
             }
@@ -521,64 +644,35 @@ impl<'a> Binder {
             Statement::CreateDatamaskPolicy(stmt) => {
                 self.bind_create_data_mask_policy(stmt).await?
             }
-            Statement::DropDatamaskPolicy(stmt) => {
-                self.bind_drop_data_mask_policy(stmt).await?
+            Statement::DropDatamaskPolicy(stmt) => self.bind_drop_data_mask_policy(stmt).await?,
+            Statement::DescDatamaskPolicy(stmt) => self.bind_desc_data_mask_policy(stmt).await?,
+            Statement::CreateNetworkPolicy(stmt) => self.bind_create_network_policy(stmt).await?,
+            Statement::AlterNetworkPolicy(stmt) => self.bind_alter_network_policy(stmt).await?,
+            Statement::DropNetworkPolicy(stmt) => self.bind_drop_network_policy(stmt).await?,
+            Statement::DescNetworkPolicy(stmt) => self.bind_desc_network_policy(stmt).await?,
+            Statement::ShowNetworkPolicies => self.bind_show_network_policies().await?,
+            Statement::CreatePasswordPolicy(stmt) => self.bind_create_password_policy(stmt).await?,
+            Statement::AlterPasswordPolicy(stmt) => self.bind_alter_password_policy(stmt).await?,
+            Statement::DropPasswordPolicy(stmt) => self.bind_drop_password_policy(stmt).await?,
+            Statement::DescPasswordPolicy(stmt) => self.bind_desc_password_policy(stmt).await?,
+            Statement::ShowPasswordPolicies { show_options } => {
+                self.bind_show_password_policies(bind_context, show_options)
+                    .await?
             }
-            Statement::DescDatamaskPolicy(stmt) => {
-                self.bind_desc_data_mask_policy(stmt).await?
-            }
-            Statement::CreateNetworkPolicy(stmt) => {
-                self.bind_create_network_policy(stmt).await?
-            }
-            Statement::AlterNetworkPolicy(stmt) => {
-                self.bind_alter_network_policy(stmt).await?
-            }
-            Statement::DropNetworkPolicy(stmt) => {
-                self.bind_drop_network_policy(stmt).await?
-            }
-            Statement::DescNetworkPolicy(stmt) => {
-                self.bind_desc_network_policy(stmt).await?
-            }
-            Statement::ShowNetworkPolicies => {
-                self.bind_show_network_policies().await?
-            }
-            Statement::CreatePasswordPolicy(stmt) => {
-                self.bind_create_password_policy(stmt).await?
-            }
-            Statement::AlterPasswordPolicy(stmt) => {
-                self.bind_alter_password_policy(stmt).await?
-            }
-            Statement::DropPasswordPolicy(stmt) => {
-                self.bind_drop_password_policy(stmt).await?
-            }
-            Statement::DescPasswordPolicy(stmt) => {
-                self.bind_desc_password_policy(stmt).await?
-            }
-            Statement::ShowPasswordPolicies { show_options } => self.bind_show_password_policies(bind_context, show_options).await?,
-            Statement::CreateTask(stmt) => {
-                self.bind_create_task(stmt).await?
-            }
-            Statement::AlterTask(stmt) => {
-                self.bind_alter_task(stmt).await?
-            }
-            Statement::DropTask(stmt) => {
-                self.bind_drop_task(stmt).await?
-            }
-            Statement::DescribeTask(stmt) => {
-                self.bind_describe_task(stmt).await?
-            }
-            Statement::ExecuteTask(stmt) => {
-                self.bind_execute_task(stmt).await?
-            }
-            Statement::ShowTasks(stmt) => {
-                self.bind_show_tasks(stmt).await?
-            }
+            Statement::CreateTask(stmt) => self.bind_create_task(stmt).await?,
+            Statement::AlterTask(stmt) => self.bind_alter_task(stmt).await?,
+            Statement::DropTask(stmt) => self.bind_drop_task(stmt).await?,
+            Statement::DescribeTask(stmt) => self.bind_describe_task(stmt).await?,
+            Statement::ExecuteTask(stmt) => self.bind_execute_task(stmt).await?,
+            Statement::ShowTasks(stmt) => self.bind_show_tasks(stmt).await?,
 
             // Streams
             Statement::CreateStream(stmt) => self.bind_create_stream(bind_context, stmt).await?,
             Statement::DropStream(stmt) => self.bind_drop_stream(stmt).await?,
             Statement::ShowStreams(stmt) => self.bind_show_streams(bind_context, stmt).await?,
-            Statement::DescribeStream(stmt) => self.bind_describe_stream(bind_context, stmt).await?,
+            Statement::DescribeStream(stmt) => {
+                self.bind_describe_stream(bind_context, stmt).await?
+            }
 
             // Dynamic Table
             Statement::CreateDynamicTable(stmt) => self.bind_create_dynamic_table(stmt).await?,
@@ -595,65 +689,85 @@ impl<'a> Binder {
             Statement::DropPipe(_) => {
                 todo!()
             }
-            Statement::CreateNotification(stmt) => {
-                self.bind_create_notification(stmt).await?
-            }
-            Statement::DropNotification(stmt) => {
-                self.bind_drop_notification(stmt).await?
-            }
-            Statement::AlterNotification(stmt) => {
-                self.bind_alter_notification(stmt).await?
-            }
-            Statement::DescribeNotification(stmt) => {
-                self.bind_desc_notification(stmt).await?
-            }
-            Statement::CreateSequence(stmt) => {
-                self.bind_create_sequence(stmt).await?
-            }
-            Statement::DropSequence(stmt) => {
-                self.bind_drop_sequence(stmt).await?
-            }
+            Statement::CreateNotification(stmt) => self.bind_create_notification(stmt).await?,
+            Statement::DropNotification(stmt) => self.bind_drop_notification(stmt).await?,
+            Statement::AlterNotification(stmt) => self.bind_alter_notification(stmt).await?,
+            Statement::DescribeNotification(stmt) => self.bind_desc_notification(stmt).await?,
+            Statement::CreateSequence(stmt) => self.bind_create_sequence(stmt).await?,
+            Statement::DropSequence(stmt) => self.bind_drop_sequence(stmt).await?,
             Statement::Begin => Plan::Begin,
             Statement::Commit => Plan::Commit,
             Statement::Abort => Plan::Abort,
             Statement::ExecuteImmediate(stmt) => self.bind_execute_immediate(stmt).await?,
-            Statement::SetPriority { priority, object_id } => {
-                self.bind_set_priority(priority, object_id).await?
-            }
+            Statement::SetPriority {
+                priority,
+                object_id,
+            } => self.bind_set_priority(priority, object_id).await?,
             Statement::System(stmt) => self.bind_system(stmt).await?,
             Statement::CreateProcedure(stmt) => {
-                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_procedure()?
+                {
                     self.bind_create_procedure(stmt).await?
                 } else {
-                    return Err(ErrorCode::SyntaxException("CREATE PROCEDURE, set enable_experimental_procedure=1"));
+                    return Err(ErrorCode::SyntaxException(
+                        "CREATE PROCEDURE, set enable_experimental_procedure=1",
+                    ));
                 }
             }
             Statement::DropProcedure(stmt) => {
-                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_procedure()?
+                {
                     self.bind_drop_procedure(stmt).await?
                 } else {
-                    return Err(ErrorCode::SyntaxException("DROP PROCEDURE, set enable_experimental_procedure=1"));
+                    return Err(ErrorCode::SyntaxException(
+                        "DROP PROCEDURE, set enable_experimental_procedure=1",
+                    ));
                 }
             }
             Statement::ShowProcedures { show_options } => {
-                if self.ctx.get_settings().get_enable_experimental_procedure()? {
-                    self.bind_show_procedures(bind_context, show_options).await?
+                if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_procedure()?
+                {
+                    self.bind_show_procedures(bind_context, show_options)
+                        .await?
                 } else {
-                    return Err(ErrorCode::SyntaxException("SHOW PROCEDURES, set enable_experimental_procedure=1"));
+                    return Err(ErrorCode::SyntaxException(
+                        "SHOW PROCEDURES, set enable_experimental_procedure=1",
+                    ));
                 }
             }
             Statement::DescProcedure(stmt) => {
-                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_procedure()?
+                {
                     self.bind_desc_procedure(stmt).await?
                 } else {
-                    return Err(ErrorCode::SyntaxException("DESC PROCEDURE, set enable_experimental_procedure=1"));
+                    return Err(ErrorCode::SyntaxException(
+                        "DESC PROCEDURE, set enable_experimental_procedure=1",
+                    ));
                 }
             }
             Statement::CallProcedure(stmt) => {
-                if self.ctx.get_settings().get_enable_experimental_procedure()? {
+                if self
+                    .ctx
+                    .get_settings()
+                    .get_enable_experimental_procedure()?
+                {
                     self.bind_call_procedure(bind_context, stmt).await?
                 } else {
-                    return Err(ErrorCode::SyntaxException("CALL PROCEDURE, set enable_experimental_procedure=1"));
+                    return Err(ErrorCode::SyntaxException(
+                        "CALL PROCEDURE, set enable_experimental_procedure=1",
+                    ));
                 }
             }
             Statement::ShowOnlineNodes(v) => self.bind_show_online_nodes(v)?,

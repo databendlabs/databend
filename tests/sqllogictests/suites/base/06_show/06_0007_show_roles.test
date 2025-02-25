@@ -8,6 +8,10 @@ account_admin
 public
 test
 
+query T
+show roles like 'account_admin';
+----
+account_admin 0 true true
+
 statement ok
 DROP ROLE test
-

@@ -77,6 +77,127 @@ ShowTables(
 
 
 ---------- Input ----------
+show stages like '%a'
+---------- Output ---------
+SHOW STAGES LIKE '%a'
+---------- AST ------------
+ShowStages {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "%a",
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+show users where name='root'
+---------- Output ---------
+SHOW USERS WHERE name = 'root'
+---------- AST ------------
+ShowUsers {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            21..22,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                17..21,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            17..21,
+                                        ),
+                                        name: "name",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                22..28,
+                            ),
+                            value: String(
+                                "root",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+show roles where name='public'
+---------- Output ---------
+SHOW ROLES WHERE name = 'public'
+---------- AST ------------
+ShowRoles {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            21..22,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                17..21,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            17..21,
+                                        ),
+                                        name: "name",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                22..30,
+                            ),
+                            value: String(
+                                "public",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
 show drop tables
 ---------- Output ---------
 SHOW DROP TABLES
