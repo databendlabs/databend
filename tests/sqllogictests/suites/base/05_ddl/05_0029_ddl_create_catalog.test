@@ -13,6 +13,15 @@ statement error 1001
 CREATE CATALOG ctl TYPE=ICEBERG CONNECTION=(TYPE='REST' ADDRESS='http://127.0.0.1:1000' WAREHOUSE='default' );
 
 statement ok
+CREATE DATABASE db1;
+
+statement ok
+SHOW TABLE STATUS FROM db1;
+
+statement ok
+DROP DATABASE db1;
+
+statement ok
 DROP CATALOG IF EXISTS ctl;
 
 statement error 1001

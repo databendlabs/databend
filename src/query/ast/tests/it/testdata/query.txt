@@ -1,4 +1,47 @@
 ---------- Input ----------
+select ?
+---------- Output ---------
+SELECT ?
+---------- AST ------------
+Query {
+    span: Some(
+        0..8,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..8,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                AliasedExpr {
+                    expr: Placeholder {
+                        span: Some(
+                            7..8,
+                        ),
+                    },
+                    alias: None,
+                },
+            ],
+            from: [],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
 select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1
 ---------- Output ---------
 SELECT * EXCLUDE (c1), b.* EXCLUDE (c2, c3, c4) FROM customer INNER JOIN orders ON a = b LIMIT 1

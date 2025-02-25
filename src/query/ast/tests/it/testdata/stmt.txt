@@ -505,6 +505,38 @@ ShowCreateTable(
             quote: None,
             ident_type: None,
         },
+        with_quoted_ident: false,
+    },
+)
+
+
+---------- Input ----------
+show create table a.b with quoted_identifiers;
+---------- Output ---------
+SHOW CREATE TABLE a.b WITH QUOTED_IDENTIFIERS
+---------- AST ------------
+ShowCreateTable(
+    ShowCreateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    18..19,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                20..21,
+            ),
+            name: "b",
+            quote: None,
+            ident_type: None,
+        },
+        with_quoted_ident: true,
     },
 )
 
@@ -535,6 +567,7 @@ ShowCreateTable(
             quote: None,
             ident_type: None,
         },
+        with_quoted_ident: false,
     },
 )
 
@@ -2937,9 +2970,9 @@ UseDatabase {
 
 
 ---------- Input ----------
-create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
+create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary' warehouse='default');
 ---------- Output ---------
-CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>' )
+CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>', warehouse = 'default' )
 ---------- AST ------------
 CreateCatalog(
     CreateCatalogStmt {
@@ -2949,6 +2982,7 @@ CreateCatalog(
         catalog_options: {
             "thrift_protocol": "binary",
             "url": "<hive-meta-store>",
+            "warehouse": "default",
         },
     },
 )
@@ -16489,38 +16523,29 @@ UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
 Update(
     UpdateStmt {
         hints: None,
-        table: Table {
-            span: Some(
-                7..14,
-            ),
-            catalog: None,
-            database: Some(
-                Identifier {
-                    span: Some(
-                        7..10,
-                    ),
-                    name: "db1",
-                    quote: None,
-                    ident_type: None,
-                },
-            ),
-            table: Identifier {
+        catalog: None,
+        database: Some(
+            Identifier {
                 span: Some(
-                    11..14,
+                    7..10,
                 ),
-                name: "tb1",
+                name: "db1",
                 quote: None,
                 ident_type: None,
             },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
+        ),
+        table: Identifier {
+            span: Some(
+                11..14,
+            ),
+            name: "tb1",
+            quote: None,
+            ident_type: None,
         },
+        table_alias: None,
         update_list: [
-            UpdateExpr {
+            MutationUpdateExpr {
+                table: None,
                 name: Identifier {
                     span: Some(
                         19..20,
@@ -16563,7 +16588,8 @@ Update(
                     },
                 },
             },
-            UpdateExpr {
+            MutationUpdateExpr {
+                table: None,
                 name: Identifier {
                     span: Some(
                         30..31,
@@ -16582,6 +16608,7 @@ Update(
                 },
             },
         ],
+        from: None,
         selection: Some(
             BinaryOp {
                 span: Some(
@@ -23667,6 +23694,28 @@ Grant(
 
 
 ---------- Input ----------
+GRANT OWNERSHIP ON WAREHOUSE w1 TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON  WAREHOUSE w1 TO ROLE 'd20_0015_owner'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Warehouse(
+                "w1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
 GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
 GRANT OWNERSHIP ON  UDF f1 TO ROLE 'd20_0015_owner'
@@ -23705,6 +23754,7 @@ AttachTable(
             quote: None,
             ident_type: None,
         },
+        columns_opt: None,
         uri_location: UriLocation {
             protocol: "s3",
             name: "a",

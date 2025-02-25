@@ -15,6 +15,7 @@
 mod bind;
 mod bind_join;
 mod bind_location;
+mod bind_obfuscate;
 mod bind_subquery;
 mod bind_table;
 mod bind_table_function;

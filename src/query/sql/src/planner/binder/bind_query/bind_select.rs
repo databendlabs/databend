@@ -305,7 +305,10 @@ impl SelectRewriter<'_> {
                 func: FunctionCall { name, args, .. },
                 ..
             } => Ok((name, args)),
-            _ => Err(ErrorCode::SyntaxException("Aggregate function is required")),
+            _ => {
+                Err(ErrorCode::SyntaxException("Aggregate function is required")
+                    .set_span(expr.span()))
+            }
         }
     }
 
@@ -418,18 +421,23 @@ impl<'a> SelectRewriter<'a> {
         }
         let pivot = stmt.from[0].pivot().unwrap();
         let (aggregate_name, aggregate_args) = Self::parse_aggregate_function(&pivot.aggregate)?;
-        let aggregate_columns = aggregate_args
+        let aggregate_args_names = aggregate_args
             .iter()
             .map(|expr| match expr {
-                Expr::ColumnRef { column, .. } => Some(column.clone()),
-                _ => None,
+                Expr::ColumnRef {
+                    column:
+                        ColumnRef {
+                            column: ColumnID::Name(ident),
+                            ..
+                        },
+                    ..
+                } => Ok(ident.clone()),
+                _ => Err(ErrorCode::SyntaxException(
+                    "The aggregate function of pivot only support column_name",
+                )
+                .set_span(expr.span())),
             })
-            .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))?;
-        let aggregate_column_names = aggregate_columns
-            .iter()
-            .map(|col| col.column.name())
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>>>()?;
         let new_group_by = stmt.group_by.clone().unwrap_or_else(|| {
             GroupBy::Normal(
                 self.column_binding
@@ -437,9 +445,9 @@ impl<'a> SelectRewriter<'a> {
                     .filter(|col_bind| {
                         !self
                             .compare_unquoted_ident(&col_bind.column_name, &pivot.value_column.name)
-                            && !aggregate_column_names
-                                .iter()
-                                .any(|col| self.compare_unquoted_ident(col, &col_bind.column_name))
+                            && !aggregate_args_names.iter().any(|col| {
+                                self.compare_unquoted_ident(&col.name, &col_bind.column_name)
+                            })
                     })
                     .map(|col| Expr::Literal {
                         span: Span::default(),
@@ -451,10 +459,7 @@ impl<'a> SelectRewriter<'a> {
 
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            let mut exclude_columns: Vec<_> = aggregate_columns
-                .iter()
-                .map(|c| Identifier::from_name(stmt.span, c.column.name()))
-                .collect();
+            let mut exclude_columns = aggregate_args_names;
             exclude_columns.push(pivot.value_column.clone());
             star.exclude(exclude_columns);
         };

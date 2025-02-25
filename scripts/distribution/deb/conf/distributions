@@ -4,4 +4,4 @@ Codename: stable
 Architectures: arm64 amd64
 Components: main
 Description: Apt repository for databend
-SignWith: CB9E5FC23EF2F28E79C6A5ECF1BC0F3013DAF193
+SignWith: 331121067B94BA2339A7735036E98EBBE94E4794

@@ -25,16 +25,9 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::compare_scalars;
-use databend_common_expression::types::boolean::BooleanDomain;
-use databend_common_expression::types::decimal::DecimalDomain;
-use databend_common_expression::types::decimal::DecimalScalar;
-use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::types::number::NumberScalar;
-use databend_common_expression::types::string::StringDomain;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberDomain;
-use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
@@ -488,106 +481,11 @@ fn get_min_max_stats(
         let (_, domain_opt) =
             ConstantFolder::fold_with_domain(expr, &input_domains, &func_ctx, &BUILTIN_FUNCTIONS);
         let domain = domain_opt.unwrap_or_else(|| Domain::full(expr.data_type()));
-        let (min, max) = domain_to_minmax(&domain);
+        let (min, max) = domain.to_minmax();
         mins.push(min);
         maxs.push(max);
     }
     (mins, maxs)
-}
-
-fn domain_to_minmax(domain: &Domain) -> (Scalar, Scalar) {
-    match domain {
-        Domain::Number(NumberDomain::Int8(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::Int8(*min)),
-            Scalar::Number(NumberScalar::Int8(*max)),
-        ),
-        Domain::Number(NumberDomain::Int16(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::Int16(*min)),
-            Scalar::Number(NumberScalar::Int16(*max)),
-        ),
-        Domain::Number(NumberDomain::Int32(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::Int32(*min)),
-            Scalar::Number(NumberScalar::Int32(*max)),
-        ),
-        Domain::Number(NumberDomain::Int64(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::Int64(*min)),
-            Scalar::Number(NumberScalar::Int64(*max)),
-        ),
-        Domain::Number(NumberDomain::UInt8(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::UInt8(*min)),
-            Scalar::Number(NumberScalar::UInt8(*max)),
-        ),
-        Domain::Number(NumberDomain::UInt16(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::UInt16(*min)),
-            Scalar::Number(NumberScalar::UInt16(*max)),
-        ),
-        Domain::Number(NumberDomain::UInt32(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::UInt32(*min)),
-            Scalar::Number(NumberScalar::UInt32(*max)),
-        ),
-        Domain::Number(NumberDomain::UInt64(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::UInt64(*min)),
-            Scalar::Number(NumberScalar::UInt64(*max)),
-        ),
-        Domain::Number(NumberDomain::Float32(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::Float32(*min)),
-            Scalar::Number(NumberScalar::Float32(*max)),
-        ),
-        Domain::Number(NumberDomain::Float64(SimpleDomain { min, max })) => (
-            Scalar::Number(NumberScalar::Float64(*min)),
-            Scalar::Number(NumberScalar::Float64(*max)),
-        ),
-        Domain::Decimal(DecimalDomain::Decimal128(SimpleDomain { min, max }, sz)) => (
-            Scalar::Decimal(DecimalScalar::Decimal128(*min, *sz)),
-            Scalar::Decimal(DecimalScalar::Decimal128(*max, *sz)),
-        ),
-        Domain::Decimal(DecimalDomain::Decimal256(SimpleDomain { min, max }, sz)) => (
-            Scalar::Decimal(DecimalScalar::Decimal256(*min, *sz)),
-            Scalar::Decimal(DecimalScalar::Decimal256(*max, *sz)),
-        ),
-        Domain::Boolean(BooleanDomain {
-            has_false,
-            has_true,
-        }) => (Scalar::Boolean(!*has_false), Scalar::Boolean(*has_true)),
-        Domain::String(StringDomain { min, max }) => {
-            let max = if let Some(max) = max {
-                Scalar::String(max.clone())
-            } else {
-                Scalar::Null
-            };
-            (Scalar::String(min.clone()), max)
-        }
-        Domain::Timestamp(SimpleDomain { min, max }) => {
-            (Scalar::Timestamp(*min), Scalar::Timestamp(*max))
-        }
-        Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
-        Domain::Interval(SimpleDomain { min, max }) => {
-            (Scalar::Interval(*min), Scalar::Interval(*max))
-        }
-        Domain::Nullable(NullableDomain { has_null, value }) => {
-            if let Some(v) = value {
-                let (min, mut max) = domain_to_minmax(v);
-                if *has_null {
-                    max = Scalar::Null;
-                }
-                (min, max)
-            } else {
-                (Scalar::Null, Scalar::Null)
-            }
-        }
-        Domain::Tuple(fields) => {
-            let mut mins = Vec::with_capacity(fields.len());
-            let mut maxs = Vec::with_capacity(fields.len());
-            for field in fields {
-                let (min, max) = domain_to_minmax(field);
-                mins.push(min);
-                maxs.push(max);
-            }
-            (Scalar::Tuple(mins), Scalar::Tuple(maxs))
-        }
-        // cluster key only allow number|string|boolean|date|timestamp|decimal, so unreachable.
-        _ => (Scalar::Null, Scalar::Null),
-    }
 }
 
 /// The histogram contains buckets with widths:

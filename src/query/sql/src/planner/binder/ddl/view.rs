@@ -157,9 +157,9 @@ impl Binder {
         let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if stmt.with_history {
-            SelectBuilder::from("system.views_with_history")
+            SelectBuilder::from("default.system.views_with_history")
         } else {
-            SelectBuilder::from("system.views")
+            SelectBuilder::from("default.system.views")
         };
 
         if *full {

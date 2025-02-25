@@ -33,6 +33,7 @@ jobs:
             benchmark/**
             docker/**
             scripts/setup/**
+            scripts/distribution/**
             .devcontainer/**
       - name: Output Source File Changes
         run: |

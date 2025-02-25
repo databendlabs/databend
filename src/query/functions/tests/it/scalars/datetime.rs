@@ -63,6 +63,11 @@ fn test_to_timestamp(file: &mut impl Write) {
             315360000000000,
         ]),
     )]);
+
+    run_ast(file, "to_timestamp(b)", &[(
+        "b",
+        StringType::from_data(vec!["2020-01-01", "2020-01-02", "2020-01-03", "2029-01-01"]),
+    )]);
 }
 
 fn test_to_date(file: &mut impl Write) {
@@ -79,6 +84,10 @@ fn test_to_date(file: &mut impl Write) {
     run_ast(file, "to_date(a)", &[(
         "a",
         Int32Type::from_data(vec![-354285, -100, 0, 100, 2932896]),
+    )]);
+    run_ast(file, "to_date(b)", &[(
+        "b",
+        StringType::from_data(vec!["2020-01-01", "2020-01-02", "2020-01-03", "2029-01-01"]),
     )]);
 }
 

@@ -148,6 +148,10 @@ impl Catalog for SessionCatalog {
         self.inner.info()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Ok(self)
+    }
+
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         self.inner.get_database(tenant, db_name).await
@@ -683,7 +687,7 @@ impl Catalog for SessionCatalog {
                     } else {
                         self.get_table_by_info(&stream.source)
                     }
-                    })
+                })
                 .transpose()
         } else {
             Ok(None)

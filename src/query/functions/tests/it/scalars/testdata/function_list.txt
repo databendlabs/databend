@@ -1751,6 +1751,20 @@ Functions overloads:
 13 factorial(Int32 NULL) :: Int64 NULL
 14 factorial(Int64) :: Int64
 15 factorial(Int64 NULL) :: Int64 NULL
+0 feistel_obfuscate(UInt64, UInt64) :: UInt64
+1 feistel_obfuscate(UInt64 NULL, UInt64 NULL) :: UInt64 NULL
+2 feistel_obfuscate(Int8, UInt64) :: Int8
+3 feistel_obfuscate(Int8 NULL, UInt64 NULL) :: Int8 NULL
+4 feistel_obfuscate(Int16, UInt64) :: Int16
+5 feistel_obfuscate(Int16 NULL, UInt64 NULL) :: Int16 NULL
+6 feistel_obfuscate(Int32, UInt64) :: Int32
+7 feistel_obfuscate(Int32 NULL, UInt64 NULL) :: Int32 NULL
+8 feistel_obfuscate(Int64, UInt64) :: Int64
+9 feistel_obfuscate(Int64 NULL, UInt64 NULL) :: Int64 NULL
+10 feistel_obfuscate(Float32, UInt64) :: Float32
+11 feistel_obfuscate(Float32 NULL, UInt64 NULL) :: Float32 NULL
+12 feistel_obfuscate(Float64, UInt64) :: Float64
+13 feistel_obfuscate(Float64 NULL, UInt64 NULL) :: Float64 NULL
 0 flatten FACTORY
 0 floor FACTORY
 1 floor(Float64) :: Float64
@@ -2283,6 +2297,8 @@ Functions overloads:
 0 map_values(Map(Nothing)) :: Array(Nothing)
 1 map_values(Map(T0, T1)) :: Array(T1)
 2 map_values(Map(T0, T1) NULL) :: Array(T1) NULL
+0 markov_generate(Array(T0), String, UInt64, String) :: String
+1 markov_generate(Array(T0) NULL, String NULL, UInt64 NULL, String NULL) :: String NULL
 0 md5(String) :: String
 1 md5(String NULL) :: String NULL
 0 minus(Variant, Int32) :: Variant

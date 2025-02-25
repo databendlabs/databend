@@ -91,6 +91,7 @@ use databend_common_pipeline_core::InputError;
 use databend_common_pipeline_core::LockGuard;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
+use databend_common_storage::init_stage_operator;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
@@ -403,6 +404,7 @@ impl QueryContext {
     pub fn get_spill_file_stats(&self, node_id: Option<String>) -> SpillProgress {
         let r = self.shared.cluster_spill_progress.read();
         let node_id = node_id.unwrap_or(self.get_cluster().local_id());
+
         r.get(&node_id).cloned().unwrap_or(SpillProgress::default())
     }
 
@@ -1171,6 +1173,7 @@ impl TableContext for QueryContext {
         database_name: &str,
         table_name: &str,
         files: &[StageFileInfo],
+        path_prefix: Option<String>,
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         if files.is_empty() {
@@ -1197,8 +1200,20 @@ impl TableContext for QueryContext {
         let mut duplicated_files = Vec::with_capacity(files.len());
 
         for chunk in files.chunks(batch_size) {
-            let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
-            let req = GetTableCopiedFileReq { table_id, files };
+            let files = chunk
+                .iter()
+                .map(|v| {
+                    if let Some(p) = &path_prefix {
+                        format!("{}{}", p, v.path)
+                    } else {
+                        v.path.clone()
+                    }
+                })
+                .collect::<Vec<_>>();
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: files.clone(),
+            };
             let start_request = Instant::now();
             let copied_files = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
@@ -1209,8 +1224,8 @@ impl TableContext for QueryContext {
                 Instant::now().duration_since(start_request).as_millis() as u64,
             );
             // Colored
-            for file in chunk {
-                if !copied_files.contains_key(&file.path) {
+            for (file, key) in chunk.iter().zip(files.iter()) {
+                if !copied_files.contains_key(key) {
                     files_to_copy.push(file.clone());
                     result_size += 1;
                     if result_size == max_files {
@@ -1525,6 +1540,14 @@ impl TableContext for QueryContext {
         max_column_position: usize,
         case_sensitive: bool,
     ) -> Result<Arc<dyn Table>> {
+        let operator = init_stage_operator(&stage_info)?;
+        let info = operator.info();
+        let stage_root = format!("{}{}", info.name(), info.root());
+        let stage_root = if stage_root.ends_with('/') {
+            stage_root
+        } else {
+            format!("{}/", stage_root)
+        };
         match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
                 let mut read_options = ParquetReadOptions::default();
@@ -1564,6 +1587,7 @@ impl TableContext for QueryContext {
                     default_values: None,
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
+                    stage_root,
                 };
                 OrcTable::try_create(info).await
             }
@@ -1582,6 +1606,7 @@ impl TableContext for QueryContext {
                     default_values: None,
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
+                    stage_root,
                 };
                 StageTable::try_create(info)
             }
@@ -1618,6 +1643,7 @@ impl TableContext for QueryContext {
                     default_values: None,
                     copy_into_location_options: Default::default(),
                     copy_into_table_options: Default::default(),
+                    stage_root,
                 };
                 StageTable::try_create(info)
             }

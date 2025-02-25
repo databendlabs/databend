@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use educe::Educe;
 use nom::branch::alt;
 use nom::combinator::consumed;
 use nom::combinator::map;
@@ -227,7 +228,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             MERGE ~ #hint?
             ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias?
-            ~ USING ~ #merge_source
+            ~ USING ~ #mutation_source
             ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
@@ -271,15 +272,30 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let update = map(
         rule! {
-            #with? ~ UPDATE ~ #hint? ~ #table_reference_only
-            ~ SET ~ ^#comma_separated_list1(update_expr)
+            #with? ~ UPDATE ~ #hint? ~ #dot_separated_idents_1_to_3 ~ #table_alias?
+            ~ SET ~ ^#comma_separated_list1(mutation_update_expr)
+            ~ ( FROM ~ #mutation_source )?
             ~ ( WHERE ~ ^#expr )?
         },
-        |(with, _, hints, table, _, update_list, opt_selection)| {
+        |(
+            with,
+            _,
+            hints,
+            (catalog, database, table),
+            table_alias,
+            _,
+            update_list,
+            from,
+            opt_selection,
+        )| {
             Statement::Update(UpdateStmt {
                 hints,
+                catalog,
+                database,
                 table,
+                table_alias,
                 update_list,
+                from: from.map(|(_, table)| table),
                 selection: opt_selection.map(|(_, selection)| selection),
                 with,
             })
@@ -807,13 +823,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_create_table = map(
         rule! {
-            SHOW ~ CREATE ~ TABLE ~ #dot_separated_idents_1_to_3
+            SHOW ~ CREATE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ ( WITH ~ ^QUOTED_IDENTIFIERS )?
         },
-        |(_, _, _, (catalog, database, table))| {
+        |(_, _, _, (catalog, database, table), comment_opt)| {
             Statement::ShowCreateTable(ShowCreateTableStmt {
                 catalog,
                 database,
                 table,
+                with_quoted_ident: comment_opt.is_some(),
             })
         },
     );
@@ -869,13 +886,15 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ ("(" ~ #comma_separated_list1(ident) ~ ")")? ~ #uri_location
         },
-        |(_, _, (catalog, database, table), uri_location)| {
+        |(_, _, (catalog, database, table), columns_opt, uri_location)| {
+            let columns_opt = columns_opt.map(|(_, v, _)| v);
             Statement::AttachTable(AttachTableStmt {
                 catalog,
                 database,
                 table,
+                columns_opt,
                 uri_location,
             })
         },
@@ -2897,12 +2916,12 @@ pub fn raw_insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
-pub fn merge_source(i: Input) -> IResult<MergeSource> {
+pub fn mutation_source(i: Input) -> IResult<MutationSource> {
     let streaming_v2 = map(
         rule! {
            #file_format_clause  ~ (ON_ERROR ~ ^"=" ~ ^#ident)? ~  #rest_str
         },
-        |(options, on_error_opt, (_, start))| MergeSource::StreamingV2 {
+        |(options, on_error_opt, (_, start))| MutationSource::StreamingV2 {
             settings: options,
             on_error_mode: on_error_opt.map(|v| v.2.to_string()),
             start,
@@ -2910,7 +2929,7 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
     );
 
     let query = map(rule! {#query ~ #table_alias}, |(query, source_alias)| {
-        MergeSource::Select {
+        MutationSource::Select {
             query: Box::new(query),
             source_alias,
         }
@@ -2918,7 +2937,7 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
 
     let source_table = map(
         rule!(#dot_separated_idents_1_to_3 ~ #with_options? ~ #table_alias?),
-        |((catalog, database, table), with_options, alias)| MergeSource::Table {
+        |((catalog, database, table), with_options, alias)| MutationSource::Table {
             catalog,
             database,
             table,
@@ -3287,6 +3306,10 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             UserPrivilegeType::CreateDatabase,
             rule! { CREATE ~ DATABASE },
         ),
+        value(
+            UserPrivilegeType::CreateWarehouse,
+            rule! { CREATE ~ WAREHOUSE },
+        ),
         value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
         value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
         value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),
@@ -3346,11 +3369,16 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         GrantObjectName::UDF(udf_name.to_string())
     });
 
+    let warehouse = map(rule! { WAREHOUSE ~ #ident}, |(_, w)| {
+        GrantObjectName::Warehouse(w.to_string())
+    });
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #udf : "UDF <udf_name>"
+        | #warehouse : "WAREHOUSE <warehouse_name>"
     )(i)
 }
 
@@ -3426,7 +3454,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     // "*": as current db or "table" with current db
     let db = map(
         rule! {
-            ( #ident ~ "." )? ~ "*"
+            ( #grant_ident ~ "." )? ~ "*"
         },
         |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
     );
@@ -3434,7 +3462,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
     let table = map(
         rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
+            ( #grant_ident ~ "." )? ~ #parameter_to_grant_string
         },
         |(database, table)| {
             AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
@@ -3445,25 +3473,28 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     enum Object {
         Stage,
         Udf,
+        Warehouse,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
         value(Object::Stage, rule! { STAGE }),
+        value(Object::Warehouse, rule! { WAREHOUSE }),
     ));
 
     // Object object_name
     let object = map(
-        rule! { #object ~ #ident},
+        rule! { #object ~ #grant_ident },
         |(object, object_name)| match object {
             Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
             Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
+            Object::Warehouse => AccountMgrLevel::Warehouse(object_name.to_string()),
         },
     );
 
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
-        | #object : "STAGE | UDF <object_name>"
+        | #object : "STAGE | UDF | WAREHOUSE <object_name>"
     )(i)
 }
 
@@ -3566,7 +3597,8 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
 }
 
 pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
-    #[derive(Clone)]
+    #[derive(Educe)]
+    #[educe(Clone(bound = false, attrs = "#[recursive::recursive]"))]
     enum ColumnConstraint {
         Nullable(bool),
         DefaultExpr(Box<Expr>),
@@ -3811,7 +3843,7 @@ fn match_operation(i: Input) -> IResult<MatchOperation> {
         value(MatchOperation::Delete, rule! { DELETE }),
         map(
             rule! {
-                UPDATE ~ SET ~ ^#comma_separated_list1(merge_update_expr)
+                UPDATE ~ SET ~ ^#comma_separated_list1(mutation_update_expr)
             },
             |(_, _, update_list)| MatchOperation::Update {
                 update_list,
@@ -4638,10 +4670,10 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     )(i)
 }
 
-pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
+pub fn mutation_update_expr(i: Input) -> IResult<MutationUpdateExpr> {
     map(
         rule! { #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr },
-        |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
+        |((table, name), _, expr)| MutationUpdateExpr { table, name, expr },
     )(i)
 }
 

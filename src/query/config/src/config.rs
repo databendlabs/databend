@@ -2126,6 +2126,15 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
+    /// The max size(bytes) of the log file, default is 4GB.
+    #[clap(
+        long = "log-file-max-size",
+        value_name = "VALUE",
+        default_value = "4294967296"
+    )]
+    #[serde(rename = "max-size")]
+    pub file_max_size: usize,
+
     /// Deprecated fields, used for catching error, will be removed later.
     #[clap(skip)]
     #[serde(rename = "prefix_filter")]
@@ -2154,6 +2163,7 @@ impl TryInto<InnerFileLogConfig> for FileLogConfig {
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
+            max_size: self.file_max_size,
         })
     }
 }
@@ -2166,6 +2176,7 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
+            file_max_size: inner.max_size,
 
             // Deprecated Fields
             file_prefix_filter: None,

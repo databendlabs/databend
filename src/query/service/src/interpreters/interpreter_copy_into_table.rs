@@ -16,12 +16,14 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::CopyIntoTable;
@@ -96,6 +98,7 @@ impl CopyIntoTableInterpreter {
     #[async_backtrace::framed]
     pub async fn build_physical_plan(
         &self,
+        table_info: TableInfo,
         plan: &CopyIntoTablePlan,
     ) -> Result<(PhysicalPlan, Vec<UpdateStreamMetaReq>)> {
         let to_table = self
@@ -161,7 +164,7 @@ impl CopyIntoTableInterpreter {
             values_consts: plan.values_consts.clone(),
             required_source_schema: plan.required_source_schema.clone(),
             stage_table_info: plan.stage_table_info.clone(),
-            table_info: to_table.get_table_info().clone(),
+            table_info,
             write_mode: plan.write_mode,
             validation_mode: plan.validation_mode.clone(),
             project_columns,
@@ -240,6 +243,7 @@ impl CopyIntoTableInterpreter {
         duplicated_files_detected: Vec<String>,
         update_stream_meta: Vec<UpdateStreamMetaReq>,
         deduplicated_label: Option<String>,
+        path_prefix: Option<String>,
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let to_table = ctx
@@ -257,6 +261,7 @@ impl CopyIntoTableInterpreter {
                 to_table.as_ref(),
                 &files_to_copy,
                 &plan.stage_table_info.copy_into_table_options,
+                path_prefix,
             )?;
 
             let fuse_table = FuseTable::try_from_table(to_table.as_ref())?;
@@ -357,12 +362,26 @@ impl Interpreter for CopyIntoTableInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
+        let plan = &self.plan;
+        let to_table = self
+            .ctx
+            .get_table(
+                plan.catalog_info.catalog_name(),
+                &plan.database_name,
+                &plan.table_name,
+            )
+            .await?;
+
+        to_table.check_mutable()?;
+
         if self.plan.no_file_to_copy {
             info!("no file to copy");
             return self.on_no_files_to_copy().await;
         }
 
-        let (physical_plan, update_stream_meta) = self.build_physical_plan(&self.plan).await?;
+        let (physical_plan, update_stream_meta) = self
+            .build_physical_plan(to_table.get_table_info().clone(), &self.plan)
+            .await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
 
@@ -385,6 +404,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 duplicated_files_detected,
                 update_stream_meta,
                 unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                self.plan.path_prefix.clone(),
             )
             .await?;
         }

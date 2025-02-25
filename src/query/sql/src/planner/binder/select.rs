@@ -520,6 +520,18 @@ impl Binder {
             return Ok(());
         }
 
+        for order_by_item in order_by {
+            let column = metadata.column(order_by_item.index);
+            // If order by contains derived column or virtual column,
+            // limit can't be pushed down, so there's no need row fetcher.
+            if matches!(
+                column,
+                ColumnEntry::DerivedColumn(_) | ColumnEntry::VirtualColumn(_)
+            ) {
+                return Ok(());
+            }
+        }
+
         // As we don't if this is subquery, we need add required cols to metadata's non_lazy_columns,
         // so if the inner query not match the lazy materialized but outer query matched, we can prevent
         // the cols that inner query required not be pruned when analyze outer query.

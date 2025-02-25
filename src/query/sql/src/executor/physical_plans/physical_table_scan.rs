@@ -497,12 +497,7 @@ impl PhysicalPlanBuilder {
                             internal_column.column_name().to_owned(),
                             internal_column.data_type(),
                         ),
-                        ColumnEntry::VirtualColumn(VirtualColumn {
-                            column_name,
-                            data_type,
-                            ..
-                        }) => (column_name.clone(), DataType::from(data_type)),
-                        ColumnEntry::DerivedColumn(_) => {
+                        ColumnEntry::VirtualColumn(_) | ColumnEntry::DerivedColumn(_) => {
                             return None;
                         }
                     };
@@ -520,6 +515,16 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>()
         });
 
+        let order_by = order_by.unwrap_or_default();
+        let mut limit = scan.limit;
+        if let Some(scan_order_by) = &scan.order_by {
+            // If some order by columns can't be pushed down, then the limit can't be pushed down either,
+            // as this may cause some blocks are pruned by the limit pruner.
+            if scan_order_by.len() != order_by.len() {
+                limit = None;
+            }
+        }
+
         let virtual_column = self.build_virtual_column(&scan.columns);
 
         Ok(PushDownInfo {
@@ -528,8 +533,8 @@ impl PhysicalPlanBuilder {
             filters: push_down_filter,
             is_deterministic,
             prewhere: prewhere_info,
-            limit: scan.limit,
-            order_by: order_by.unwrap_or_default(),
+            limit,
+            order_by,
             virtual_column,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
             agg_index: None,

@@ -5,7 +5,8 @@
 # shellcheck disable=SC2034
 target_dir="tests/sqllogictests/"
 
-db="tpcds"
+db=${1:-"tpcds"}
+
 
 tables=(
     call_center
@@ -34,39 +35,30 @@ tables=(
     web_site
 )
 
-# Clear Data
-# shellcheck disable=SC2068
-for t in ${tables[@]}; do
-    echo "DROP TABLE IF EXISTS ${db}.$t" | $BENDSQL_CLIENT_CONNECT
-done
 
-echo "CREATE DATABASE IF NOT EXISTS tpcds" | $BENDSQL_CLIENT_CONNECT
+force=${2:-"1"}
+if [ "$force" == "0" ]; then
+    res=`echo "SELECT COUNT() from ${db}.call_center" | $BENDSQL_CLIENT_CONNECT`
+    if [ "$res" != "0" -a "$res" != "" ]; then
+        echo "Table $db.call_center already exists and is not empty, size: ${res}. Use force=1 to override it."
+        exit 0
+    fi
+fi
+
+echo "CREATE OR REPLACE DATABASE tpcds" | $BENDSQL_CLIENT_CONNECT
 
 # Create Tables;
 # shellcheck disable=SC2002
 cat ${target_dir}/scripts/tpcds.sql | $BENDSQL_CLIENT_CONNECT
-
-# download data
-mkdir -p ${target_dir}/data/
-if [ ! -d ${target_dir}/data/tpcds.tar.gz ]; then
-    curl -s -o ${target_dir}/data/tpcds.tar.gz https://ci.databend.com/dataset/stateful/tpcds.tar.gz
-fi
-
-tar -zxf ${target_dir}/data/tpcds.tar.gz -C ${target_dir}/data
-
-# insert data to tables
-# shellcheck disable=SC2068
+python ${target_dir}/scripts/prepare_duckdb_tpcds_data.py 1
 
 stmt "drop stage if exists s1"
-stmt "create stage s1 url='fs://${PWD}/${target_dir}/'"
+stmt "create stage s1 url='fs:///tmp/tpcds_1/'"
 
 for t in ${tables[@]}; do
     echo "$t"
-    sub_path="data/data/$t.csv"
-   	query "copy into ${db}.${t} from @s1/${sub_path} file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
+   	query "copy into ${db}.${t} from @s1/${t}.csv file_format = (type = CSV skip_header = 1 field_delimiter = '|' record_delimiter = '\n')"
     query "analyze table $db.$t"
 done
 
-if [ -d "tests/sqllogictests/data" ]; then
-    rm -rf tests/sqllogictests/data
-fi
+# rm -rf /tmp/tpcds_1

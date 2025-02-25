@@ -4,7 +4,7 @@
 echo """
 INSTALL tpch;
 LOAD tpch;
-SELECT * FROM dsdgen(sf=1); -- sf can be other values, such as 0.1, 1, 10, ...
+SELECT * FROM dbgen(sf=1); -- sf can be other values, such as 0.1, 1, 10, ...
 EXPORT DATABASE '/tmp/tpch_1/' (FORMAT CSV, DELIMITER '|');
 """ | duckdb
 

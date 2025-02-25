@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
 use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -47,9 +45,10 @@ impl InterpreterMetrics {
     }
 
     fn record_query_detail(ctx: &QueryContext, labels: &Vec<(&'static str, String)>) {
-        let event_time = convert_query_timestamp(SystemTime::now());
-        let query_start_time = convert_query_timestamp(ctx.get_created_time());
-        let query_duration_ms = (event_time - query_start_time) as f64 / 1_000.0;
+        let query_duration_ms = SystemTime::now()
+            .duration_since(ctx.get_created_time())
+            .map(|d| d.as_micros() as f64 / 1000.0)
+            .unwrap_or(0.0);
 
         let data_metrics = ctx.get_data_metrics();
 
@@ -128,10 +127,4 @@ impl InterpreterMetrics {
             }
         };
     }
-}
-
-fn convert_query_timestamp(time: SystemTime) -> u128 {
-    time.duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::new(0, 0))
-        .as_micros()
 }

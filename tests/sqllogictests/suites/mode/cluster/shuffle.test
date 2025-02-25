@@ -50,6 +50,7 @@ Sort
             │       └── WindowPartition
             │           ├── output columns: [t2.number (#1)]
             │           ├── hash keys: [number]
+            │           ├── top: 1           
             │           ├── estimated rows: 14.00
             │           └── Exchange
             │               ├── output columns: [t2.number (#1)]

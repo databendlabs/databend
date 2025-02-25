@@ -37,6 +37,8 @@ use databend_common_expression::Value;
 use databend_common_expression::BASE_BLOCK_IDS_COLUMN_ID;
 use databend_common_expression::BASE_ROW_ID_COLUMN_ID;
 use databend_common_expression::BLOCK_NAME_COLUMN_ID;
+use databend_common_expression::FILENAME_COLUMN_ID;
+use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::SEARCH_MATCHED_COLUMN_ID;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
@@ -141,6 +143,9 @@ pub enum InternalColumnType {
     // search columns
     SearchMatched,
     SearchScore,
+
+    FileName,
+    FileRowNumber,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -176,6 +181,8 @@ impl InternalColumn {
             )),
             InternalColumnType::SearchMatched => TableDataType::Boolean,
             InternalColumnType::SearchScore => TableDataType::Number(NumberDataType::Float32),
+            InternalColumnType::FileName => TableDataType::String,
+            InternalColumnType::FileRowNumber => TableDataType::Number(NumberDataType::UInt64),
         }
     }
 
@@ -198,6 +205,8 @@ impl InternalColumn {
             InternalColumnType::BaseBlockIds => BASE_BLOCK_IDS_COLUMN_ID,
             InternalColumnType::SearchMatched => SEARCH_MATCHED_COLUMN_ID,
             InternalColumnType::SearchScore => SEARCH_SCORE_COLUMN_ID,
+            InternalColumnType::FileName => FILENAME_COLUMN_ID,
+            InternalColumnType::FileRowNumber => FILE_ROW_NUMBER_COLUMN_ID,
         }
     }
 
@@ -314,6 +323,9 @@ impl InternalColumn {
                     DataType::Number(NumberDataType::Float32),
                     Value::Column(Float32Type::from_data(scores)),
                 )
+            }
+            InternalColumnType::FileName | InternalColumnType::FileRowNumber => {
+                todo!("generate_column_values not support for file related")
             }
         }
     }

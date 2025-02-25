@@ -76,7 +76,7 @@ pub enum RawExpr<Index: ColumnIndex = usize> {
 /// A type-checked and ready to be evaluated expression, having all overloads chosen for function calls.
 /// It is .
 #[derive(Debug, Educe, EnumAsInner)]
-#[educe(Hash)]
+#[educe(Hash(bound = false))]
 pub enum Expr<Index: ColumnIndex = usize> {
     Constant {
         #[educe(Hash(ignore))]
@@ -291,16 +291,16 @@ impl<Index: ColumnIndex> PartialEq for Expr<Index> {
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
 /// up the function registry with the `FunctionID`.
 #[derive(Debug, Clone, Educe, Serialize, Deserialize, EnumAsInner)]
-#[educe(PartialEq, Eq, Hash)]
+#[educe(PartialEq(bound(false)), Eq, Hash(bound(false)))]
 pub enum RemoteExpr<Index: ColumnIndex = usize> {
     Constant {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore), PartialEq(ignore))]
         span: Span,
         scalar: Scalar,
         data_type: DataType,
     },
     ColumnRef {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore), PartialEq(ignore))]
         span: Span,
         id: Index,
         data_type: DataType,
@@ -309,14 +309,14 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         display_name: String,
     },
     Cast {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore), PartialEq(ignore))]
         span: Span,
         is_try: bool,
         expr: Box<RemoteExpr<Index>>,
         dest_type: DataType,
     },
     FunctionCall {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore), PartialEq(ignore))]
         span: Span,
         id: FunctionID,
         generics: Vec<DataType>,
@@ -324,7 +324,7 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         return_type: DataType,
     },
     LambdaFunctionCall {
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+        #[educe(Hash(ignore), PartialEq(ignore))]
         span: Span,
         name: String,
         args: Vec<RemoteExpr<Index>>,

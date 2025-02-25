@@ -1,0 +1,47 @@
+statement ok
+create or replace table t1 (a string, b string not null, c int32, d int64 not null, e bool, f float)
+
+query T
+explain select * from obfuscate(t1, seed=>20)
+----
+EvalScalar
+├── output columns: [t1.e (#4), a (#14), b (#15), c (#16), d (#17), f (#18)]
+├── expressions: [markov_generate(model.a (#12), '{"order":5,"sliding_window_size":8}', 20, t1.a (#0)), markov_generate(model.b (#13), '{"order":5,"sliding_window_size":8}', 21, CAST(t1.b (#1) AS String NULL)), feistel_obfuscate(t1.c (#2), 22), feistel_obfuscate(t1.d (#3), 23), feistel_obfuscate(t1.f (#5), 24)]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── output columns: [markov_train(5)(default.t1.a) (#12), markov_train(5)(default.t1.b) (#13), t1.a (#0), t1.b (#1), t1.c (#2), t1.d (#3), t1.e (#4), t1.f (#5)]
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.t1
+    │   ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#4), f (#5)]
+    │   ├── read rows: 0
+    │   ├── read size: 0
+    │   ├── partitions total: 0
+    │   ├── partitions scanned: 0
+    │   ├── push downs: [filters: [], limit: NONE]
+    │   └── estimated rows: 0.00
+    └── AggregateFinal(Probe)
+        ├── output columns: [markov_train(5)(default.t1.a) (#12), markov_train(5)(default.t1.b) (#13)]
+        ├── group by: []
+        ├── aggregate functions: [markov_train(a), markov_train(b)]
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: []
+            ├── aggregate functions: [markov_train(a), markov_train(b)]
+            ├── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── output columns: [a (#6), b (#7)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
+
+statement ok
+drop table t1

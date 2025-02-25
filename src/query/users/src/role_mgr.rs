@@ -198,31 +198,6 @@ impl UserApiProvider {
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
         let client = self.role_api(tenant);
-        // Enforces warehouse exclusivity: a warehouse’s specific permission can only be granted to a single role.
-        // This logic verifies that no other role within the given tenant currently holds the target permission on the specified warehouse.
-        if let GrantObject::Warehouse(w) = &object {
-            let roles = self.get_roles(tenant).await?;
-            let mut illegal_role = String::new();
-            let has_same_warehouse_grant = roles.iter().any(|r| {
-                let has_grant = r.grants.entries().iter().any(|grant| match grant.object() {
-                    GrantObject::Warehouse(rw) => {
-                        if w.to_lowercase() == rw.to_lowercase() {
-                            illegal_role = r.identity().to_string();
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
-                });
-                has_grant
-            });
-            if has_same_warehouse_grant {
-                return Err(ErrorCode::IllegalRole(format!(
-                    "Error granting '{privileges}' access on data warehouse '{w}' to role '{role}'. Role '{illegal_role}' already possesses this access"
-                )));
-            }
-        }
         client
             .update_role_with(role, MatchSeq::GE(1), |ri: &mut RoleInfo| {
                 ri.update_role_time();

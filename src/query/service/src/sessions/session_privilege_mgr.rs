@@ -12,9 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
+use databend_common_management::WarehouseInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -25,6 +30,7 @@ use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::BUILTIN_ROLE_PUBLIC;
+use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::sessions::SessionContext;
 
@@ -229,15 +235,27 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
     async fn set_current_warehouse(&self, warehouse: Option<String>) -> Result<()> {
         let warehouse = match &warehouse {
             Some(warehouse) => {
+                let warehouse_mgr = GlobalInstance::get::<Arc<dyn ResourcesManagement>>();
+                let warehouses = warehouse_mgr.list_warehouses().await?;
+                let user_warehouse: HashMap<String, String> = warehouses
+                    .into_iter()
+                    .filter_map(|w| match w {
+                        WarehouseInfo::SystemManaged(sw) => Some((sw.role_id, sw.id)),
+                        _ => None,
+                    })
+                    .collect();
                 let effective_roles = self.get_all_effective_roles().await?;
                 effective_roles.iter().find_map(|role| {
                     role.grants.entries().iter().find_map(|grant| {
-                        if let GrantObject::Warehouse(rw) = grant.object() {
-                            if warehouse == rw {
-                                Some(warehouse.to_string())
-                            } else {
-                                None
-                            }
+                        let obj = grant.object();
+                        if let GrantObject::Warehouse(rw) = obj {
+                            user_warehouse.get(warehouse).and_then(|w| {
+                                if w == rw {
+                                    Some(warehouse.to_string())
+                                } else {
+                                    None
+                                }
+                            })
                         } else {
                             None
                         }

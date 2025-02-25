@@ -45,6 +45,7 @@ impl PullUpFilterOptimizer {
         }
     }
 
+    #[recursive::recursive]
     pub fn run(mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = self.pull_up(s_expr)?;
         s_expr = self.finish(s_expr)?;
@@ -65,6 +66,7 @@ impl PullUpFilterOptimizer {
         }
     }
 
+    #[recursive::recursive]
     pub fn pull_up(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             RelOperator::Filter(filter) => self.pull_up_filter(s_expr, filter),
@@ -156,6 +158,7 @@ impl PullUpFilterOptimizer {
         Ok(s_expr.replace_children(children))
     }
 
+    #[recursive::recursive]
     fn replace_predicate(
         predicate: &mut ScalarExpr,
         items: &mut Vec<ScalarItem>,

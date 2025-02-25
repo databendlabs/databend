@@ -1,0 +1,49 @@
+name: "databend-query"
+arch: "${arch}"
+platform: "linux"
+version: "${version}"
+section: "database"
+priority: "extra"
+maintainer: "Databend Labs <opensource@databend.com>"
+description: |
+  Databend is a powerful cloud data warehouse. Built for elasticity and efficiency.
+  Free and open. Also available in the cloud: https://app.databend.com
+vendor: "Databend Labs"
+homepage: "https://databend.com"
+license: "Apache-2.0"
+depends:
+  - libc6 (>= 2.31)
+contents:
+  # Binaries
+  - src: ${path}/bin/databend-query
+    dst: /usr/bin/databend-query
+
+  # Configs
+  - src: ${path}/configs/databend-query.toml
+    dst: /etc/databend/databend-query.toml
+    type: config
+
+  # Systemd
+  - src: ${path}/systemd/databend-query.service
+    dst: /lib/systemd/system/databend-query.service
+  - src: ${path}/systemd/databend-query.default
+    dst: /etc/default/databend-query
+
+  # Docs
+  - src: ${path}/readme.txt
+    dst: /usr/share/doc/databend/readme.txt
+    file_info:
+      mode: 0644
+
+  - dst: /var/lib/databend
+    type: dir
+    file_info:
+      mode: 0750
+  - dst: /var/log/databend
+    type: dir
+    file_info:
+      mode: 0755
+
+scripts:
+  preinstall: ${path}/scripts/preinstall.sh
+  postinstall: ${path}/scripts/postinstall.sh
