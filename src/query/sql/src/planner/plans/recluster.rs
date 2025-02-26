@@ -93,11 +93,7 @@ pub async fn plan_hilbert_sql(
     optimize(opt_ctx, plan).await
 }
 
-pub fn replace_with_constant(
-    expr: &SExpr,
-    variables: &VecDeque<Scalar>,
-    total_partitions: u16,
-) -> SExpr {
+pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partitions: u16) -> SExpr {
     #[recursive::recursive]
     fn visit_expr_column(expr: &mut ScalarExpr, variables: &mut VecDeque<Scalar>) {
         match expr {
@@ -124,11 +120,11 @@ pub fn replace_with_constant(
     fn replace_with_constant_into_child(
         s_expr: &SExpr,
         variables: &mut VecDeque<Scalar>,
-        total_partitions: u16,
+        partitions: u16,
     ) -> SExpr {
         let mut s_expr = s_expr.clone();
         s_expr.plan = match s_expr.plan.as_ref() {
-            RelOperator::EvalScalar(expr) => {
+            RelOperator::EvalScalar(expr) if !variables.is_empty() => {
                 let mut expr = expr.clone();
                 for item in &mut expr.items {
                     visit_expr_column(&mut item.scalar, variables);
@@ -137,12 +133,10 @@ pub fn replace_with_constant(
             }
             RelOperator::Aggregate(aggr) => {
                 let mut aggr = aggr.clone();
-                if aggr.aggregate_functions.len() == 1 {
-                    let mut agg_func = aggr.aggregate_functions[0].clone();
-                    if let ScalarExpr::AggregateFunction(func) = &mut agg_func.scalar {
+                for item in &mut aggr.aggregate_functions {
+                    if let ScalarExpr::AggregateFunction(func) = &mut item.scalar {
                         if func.func_name == "range_bound" {
-                            func.params[0] = Scalar::Number(NumberScalar::UInt16(total_partitions));
-                            aggr.aggregate_functions = vec![agg_func];
+                            func.params[0] = Scalar::Number(NumberScalar::UInt16(partitions));
                         }
                     }
                 }
@@ -157,9 +151,7 @@ pub fn replace_with_constant(
             let mut children = Vec::with_capacity(s_expr.children.len());
             for child in s_expr.children.iter() {
                 children.push(Arc::new(replace_with_constant_into_child(
-                    child,
-                    variables,
-                    total_partitions,
+                    child, variables, partitions,
                 )));
             }
             s_expr.children = children;
@@ -168,5 +160,5 @@ pub fn replace_with_constant(
     }
 
     let mut variables = variables.clone();
-    replace_with_constant_into_child(expr, &mut variables, total_partitions)
+    replace_with_constant_into_child(expr, &mut variables, partitions)
 }

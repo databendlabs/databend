@@ -255,14 +255,17 @@ impl ReclusterTableInterpreter {
                 let block_thresholds = tbl.get_block_thresholds();
                 let total_bytes = recluster_info.removed_statistics.uncompressed_byte_size as usize;
                 let total_rows = recluster_info.removed_statistics.row_count as usize;
-                let rows_per_block = block_thresholds.calc_rows_per_block(total_bytes, total_rows);
-                let total_partitions = total_rows / rows_per_block;
+                let block_size = settings.get_max_block_size()?;
+                let rows_per_block = block_thresholds
+                    .calc_rows_per_block(total_bytes, total_rows)
+                    .max(block_size as usize);
+                let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
 
                 let subquery_executor = Arc::new(ServiceQueryExecutor::new(
                     QueryContext::create_from(self.ctx.as_ref()),
                 ));
+                let partitions = settings.get_hilbert_num_range_ids()? as usize;
                 if hilbert_info.is_none() {
-                    let partitions = settings.get_hilbert_num_range_ids()? as usize;
                     let sample_size = settings.get_hilbert_sample_size_per_block()?;
 
                     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -360,18 +363,20 @@ impl ReclusterTableInterpreter {
                 let mut variables = VecDeque::new();
 
                 let Plan::Query {
-                    s_expr,
+                    mut s_expr,
                     metadata,
                     bind_context,
                     ..
-                } = keys_bound
+                } = keys_bound.clone()
                 else {
                     unreachable!()
                 };
+                if total_partitions > partitions {
+                    *s_expr = replace_with_constant(&s_expr, &variables, total_partitions as u16)
+                }
                 metadata.write().replace_all_tables(tbl.clone());
-                let mut builder =
-                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                let plan = Box::new(builder.build(s_expr, bind_context.column_set()).await?);
+                let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone(), false);
+                let plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
                 let data_blocks = subquery_executor
                     .execute_query_with_physical_plan(&plan)
                     .await?;
