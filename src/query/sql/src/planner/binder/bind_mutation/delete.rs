@@ -68,6 +68,7 @@ impl Binder {
             target_table_identifier,
             expression: MutationExpression::Delete {
                 target: table.clone(),
+                from: None,
                 filter: selection.clone(),
             },
             strategy: MutationStrategy::MatchedOnly,

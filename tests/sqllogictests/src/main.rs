@@ -259,6 +259,10 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                 .to_str()
                 .unwrap()
                 .to_string();
+
+            if !file_name.ends_with(".test") {
+                continue;
+            }
             if let Some(ref specific_file) = args.file {
                 if !specific_file.split(',').any(|f| f.eq(&file_name)) {
                     continue;
@@ -278,8 +282,10 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
         }
     }
 
-    // lazy load test datas
-    lazy_prepare_data(&lazy_dirs)?;
+    if !args.bench {
+        // lazy load test datas
+        lazy_prepare_data(&lazy_dirs, args.force_load)?;
+    }
     // lazy run dictionaries containers
     let _dict_container = lazy_run_dictionary_containers(&lazy_dirs).await?;
 
@@ -314,7 +320,9 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
         let mut tasks = Vec::with_capacity(files.len());
         for file in files {
             let client_type = client_type.clone();
-            tasks.push(async move { run_file_async(&client_type, file.unwrap().path()).await });
+            tasks.push(async move {
+                run_file_async(&client_type, args.bench, file.unwrap().path()).await
+            });
         }
         // Run all tasks parallel
         run_parallel_async(tasks, num_of_tests).await?;
@@ -358,6 +366,7 @@ async fn run_parallel_async(
 
 async fn run_file_async(
     client_type: &ClientType,
+    bench: bool,
     filename: impl AsRef<Path>,
 ) -> std::result::Result<Vec<TestError>, TestError> {
     let start = Instant::now();
@@ -374,6 +383,16 @@ async fn run_file_async(
         }
         // Capture error record and continue to run next records
         if let Err(e) = runner.run_async(record).await {
+            // Skip query result error in bench
+            if bench
+                && matches!(
+                    e.kind(),
+                    sqllogictest::TestErrorKind::QueryResultMismatch { .. }
+                )
+            {
+                continue;
+            }
+
             if no_fail_fast {
                 error_records.push(e);
             } else {

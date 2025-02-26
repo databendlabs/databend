@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
 use std::borrow::Cow;
+use std::fmt::Display;
 use std::io::Write;
 
 use databend_common_column::types::months_days_micros;
@@ -38,6 +40,7 @@ use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::Bitmap;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
 use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
@@ -619,11 +622,15 @@ fn register_to_string(registry: &mut FunctionRegistry) {
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
                 let format = replace_time_format(format);
-                match write!(
-                    output.builder.row_buffer,
-                    "{}",
-                    ts.strftime(format.as_ref())
-                ) {
+                let mut buf = String::new();
+                let mut formatter = fmt::Formatter::new(&mut buf);
+                if Display::fmt(&ts.strftime(format.as_ref()), &mut formatter).is_err() {
+                    ctx.set_error(output.len(), format!("{format} is invalid time format"));
+                    output.builder.commit_row();
+                    output.validity.push(true);
+                    return;
+                }
+                match write!(output.builder.row_buffer, "{}", buf) {
                     Ok(_) => {
                         output.builder.commit_row();
                         output.validity.push(true);
@@ -1277,6 +1284,26 @@ fn register_real_time_functions(registry: &mut FunctionRegistry) {
     registry.properties.insert(
         "tomorrow".to_string(),
         FunctionProperty::default().non_deterministic(),
+    );
+
+    for name in &["to_timestamp", "to_date", "to_yyyymm", "to_yyyymmdd"] {
+        registry
+            .properties
+            .insert(name.to_string(), FunctionProperty::default().monotonicity());
+    }
+
+    registry.properties.insert(
+        "to_string".to_string(),
+        FunctionProperty::default()
+            .monotonicity_type(DataType::Timestamp)
+            .monotonicity_type(DataType::Timestamp.wrap_nullable()),
+    );
+
+    registry.properties.insert(
+        "to_string".to_string(),
+        FunctionProperty::default()
+            .monotonicity_type(DataType::Date)
+            .monotonicity_type(DataType::Date.wrap_nullable()),
     );
 
     registry.register_0_arg_core::<TimestampType, _, _>(

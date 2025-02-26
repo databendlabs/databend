@@ -1,0 +1,221 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpch_test;
+
+statement ok
+set join_spilling_memory_ratio = 10;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 100;
+
+statement ok
+set disable_join_reorder = 1;
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    orders
+        left join
+    customer
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+    limit 20;
+----
+101 13
+103 11
+104 6
+106 20
+107 7
+109 15
+110 9
+112 16
+113 9
+115 16
+116 11
+118 17
+119 7
+NULL 1499843
+
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        left join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+    limit 20;
+----
+1 0
+2 0
+3 0
+4 0
+5 0
+6 0
+7 0
+8 0
+9 0
+10 0
+11 0
+12 0
+13 0
+14 0
+15 0
+16 0
+17 0
+18 0
+19 0
+20 0
+
+#left semi
+query II
+select
+    c_custkey
+from
+    customer
+        left semi join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by c_custkey
+    limit 20;
+----
+101
+103
+104
+106
+107
+109
+110
+112
+113
+115
+116
+118
+119
+
+#left anti
+query I
+select
+    c_custkey
+from
+    customer
+    left anti join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by c_custkey
+    limit 20;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+
+
+# tpch queries contain left join
+#Q13
+query I
+select
+    c_count,
+    count(*) as custdist
+from
+    (
+        select
+            c_custkey,
+            count(o_orderkey) as c_count
+        from
+            customer
+                left outer join
+            orders
+            on c_custkey = o_custkey
+                and o_comment not like '%pending%deposits%'
+        group by
+            c_custkey
+    )
+        c_orders
+group by
+    c_count
+order by
+    custdist desc,
+    c_count desc;
+----
+0 50004
+9 6623
+10 6541
+11 6109
+8 5909
+12 5524
+13 5013
+19 4805
+7 4682
+17 4555
+14 4521
+15 4520
+20 4506
+18 4491
+16 4276
+21 4203
+22 3743
+6 3266
+23 3187
+24 2707
+25 2072
+5 1948
+26 1622
+27 1194
+4 1028
+28 874
+29 582
+3 402
+30 369
+31 242
+2 132
+32 126
+33 82
+34 52
+35 30
+1 22
+36 20
+37 8
+41 3
+38 3
+40 2
+39 2
+
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+set join_spilling_memory_ratio = 0;
+
+statement ok
+set join_spilling_bytes_threshold_per_proc = 0;

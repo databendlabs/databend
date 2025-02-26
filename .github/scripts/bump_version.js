@@ -170,6 +170,7 @@ module.exports = async ({ github, context, core }) => {
       }
       core.setOutput("previous", previous);
       core.info(`Stable release with previous release: ${previous}`);
+      return;
     }
 
     case "patch": {

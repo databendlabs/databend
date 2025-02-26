@@ -942,6 +942,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("QUOTED_IDENTIFIERS", ignore(ascii_case))]
+    QUOTED_IDENTIFIERS,
     #[token("RANGE", ignore(ascii_case))]
     RANGE,
     #[token("RAWDEFLATE", ignore(ascii_case))]
@@ -1573,10 +1575,10 @@ impl TokenKind {
             | TokenKind::TABLE
             | TokenKind::THEN
             // | TokenKind::TIME
-            | TokenKind::TIMESTAMP
+            // | TokenKind::TIMESTAMP
             | TokenKind::TRAILING
             // | TokenKind::TREAT
-            | TokenKind::TRIM
+            // | TokenKind::TRIM
             | TokenKind::TRUE
             | TokenKind::TRY_CAST
             // | TokenKind::UNIQUE
@@ -1711,6 +1713,7 @@ impl TokenKind {
             // | TokenKind::SIMILAR
             | TokenKind::SOME
             | TokenKind::SEMI
+            | TokenKind::SET
             | TokenKind::SAMPLE
             // | TokenKind::SYMMETRIC
             // | TokenKind::TABLESAMPLE
@@ -1769,6 +1772,13 @@ impl TokenKind {
             | TokenKind::NOTIFICATION
             if !after_as => true,
             _ => false
+        }
+    }
+
+    pub(crate) fn is_grant_reserved_ident(&self, after_as: bool, in_grant: bool) -> bool {
+        match self {
+            TokenKind::WAREHOUSE if in_grant => true,
+            _ => self.is_reserved_ident(after_as),
         }
     }
 }

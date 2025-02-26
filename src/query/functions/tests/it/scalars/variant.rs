@@ -326,6 +326,7 @@ fn test_get_string_arrow_op(file: &mut impl Write) {
     run_ast(file, "parse_json('[1,2,3,4]')->>(2+3)", &[]);
     run_ast(file, "parse_json('{\"k\":\"v\"}')->>'k'", &[]);
     run_ast(file, "parse_json('{\"k\":\"v\"}')->>'x'", &[]);
+    run_ast(file, "parse_json('{\"k\":null}')->>'k'", &[]);
     run_ast(file, "CAST(('a', 'b') AS VARIANT)->>'2'", &[]);
 
     run_ast(file, "parse_json(s)->>i", &[
@@ -471,6 +472,7 @@ fn test_json_extract_path_text(file: &mut impl Write) {
     );
     run_ast(file, "json_extract_path_text('{\"a\":{\"b\":2}}', 'a')", &[
     ]);
+    run_ast(file, "json_extract_path_text('{\"a\":null}', 'a')", &[]);
 
     run_ast(file, "json_extract_path_text(s, k)", &[
         (

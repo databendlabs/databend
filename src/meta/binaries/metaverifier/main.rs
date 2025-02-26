@@ -47,7 +47,7 @@ use serde::Serialize;
 pub static VERIFIER_RESULT_FILE: &str = "/tmp/meta-verifier";
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
-#[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
+#[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
 struct Config {
     /// The prefix of keys to write.
     #[clap(long, default_value = "0")]
@@ -66,7 +66,7 @@ struct Config {
     #[clap(long, default_value = "10000")]
     pub number: u64,
 
-    #[clap(long, default_value = "INFO")]
+    #[clap(long, default_value = "warn,databend_=info")]
     pub log_level: String,
 
     #[clap(long, env = "METASRV_GRPC_API_ADDRESS", default_value = "")]
@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
-            prefix_filter: "databend_".to_string(),
+            max_size: 4294967296,
         },
         stderr: StderrConfig {
             on: true,

@@ -60,7 +60,6 @@ node_group
 level = "INFO"
 format = "text"
 dir = "./.databend/query_logs"
-prefix_filter = ""
 
 [meta]
 # It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config

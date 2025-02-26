@@ -942,7 +942,7 @@ error:
   --> SQL:1:16
   |
 1 | SHOW GRANTS ON task t1;
-  |                ^^^^ unexpected `task`, expecting `STAGE`, `TABLE`, `DATABASE`, or `UDF`
+  |                ^^^^ unexpected `task`, expecting `STAGE`, `TABLE`, `WAREHOUSE`, `DATABASE`, or `UDF`
 
 
 ---------- Input ----------

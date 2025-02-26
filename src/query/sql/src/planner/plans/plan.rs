@@ -24,6 +24,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use educe::Educe;
 
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
@@ -147,7 +148,6 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
-use crate::plans::ShowRolesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SystemPlan;
@@ -166,7 +166,11 @@ use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::MetadataRef;
 
-#[derive(Clone, Debug)]
+#[derive(Educe)]
+#[educe(
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub enum Plan {
     // `SELECT` statement
     Query {
@@ -315,7 +319,6 @@ pub enum Plan {
     DropUDF(Box<DropUDFPlan>),
 
     // Role
-    ShowRoles(Box<ShowRolesPlan>),
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
@@ -503,7 +506,6 @@ impl Plan {
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
-            Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),

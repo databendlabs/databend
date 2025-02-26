@@ -30,13 +30,12 @@ use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MergeIntoStmt;
 use databend_common_ast::ast::MergeOption;
-use databend_common_ast::ast::MergeSource;
-use databend_common_ast::ast::MergeUpdateExpr;
+use databend_common_ast::ast::MutationSource;
+use databend_common_ast::ast::MutationUpdateExpr;
 use databend_common_ast::ast::ReplaceStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
-use databend_common_ast::ast::UpdateExpr;
 use databend_common_ast::ast::UpdateStmt;
 use databend_common_ast::Span;
 use databend_common_expression::types::DataType;
@@ -142,7 +141,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
 
     fn gen_update(&mut self) -> UpdateStmt {
         let hints = self.gen_hints();
-        let (table, table_reference) = self.random_select_table();
+        let (table, _) = self.random_select_table();
         let selection = if self.rng.gen_bool(0.8) {
             None
         } else {
@@ -152,15 +151,22 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         let fields = self.random_select_fields(&table);
         let mut update_list = Vec::with_capacity(fields.len());
         for field in fields {
-            update_list.push(UpdateExpr {
+            update_list.push(MutationUpdateExpr {
+                table: None,
                 name: Identifier::from_name(None, field.name().clone()),
                 expr: self.gen_scalar_value(&DataType::from(field.data_type())),
             });
         }
         UpdateStmt {
             hints,
-            table: table_reference,
+            catalog: None,
+            database: table
+                .db_name
+                .map(|name| Identifier::from_name(None, name.name)),
+            table: Identifier::from_name(None, table.name.name.clone()),
+            table_alias: None,
             update_list,
+            from: None,
             selection,
             with: None,
         }
@@ -210,7 +216,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         let (query, schema) = self.gen_subquery(false);
         let (source_table, source_alias) = self.gen_subquery_table(schema);
         self.bound_table(source_table);
-        let source = MergeSource::Select {
+        let source = MutationSource::Select {
             query: Box::new(query),
             source_alias,
         };
@@ -234,7 +240,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     let mut update_list = Vec::with_capacity(fields.len());
                     for field in fields {
                         self.only_scalar_expr = true;
-                        let update_expr = MergeUpdateExpr {
+                        let update_expr = MutationUpdateExpr {
                             table: None,
                             name: Identifier::from_name(None, field.name().clone()),
                             expr: self.gen_expr(&DataType::from(field.data_type())),

@@ -92,6 +92,8 @@ pub struct ProcessInfo {
     /// storage metrics for persisted data reading.
     pub data_metrics: Option<StorageMetrics>,
     pub scan_progress_value: Option<ProgressValues>,
+    pub write_progress_value: Option<ProgressValues>,
+    pub spill_progress_value: Option<ProgressValues>,
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
     pub status_info: Option<String>,
@@ -219,7 +221,7 @@ pub trait TableContext: Send + Sync {
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
     ) -> Result<()>;
-    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
@@ -278,6 +280,7 @@ pub trait TableContext: Send + Sync {
         database_name: &str,
         table_name: &str,
         files: &[StageFileInfo],
+        path_prefix: Option<String>,
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles>;
 

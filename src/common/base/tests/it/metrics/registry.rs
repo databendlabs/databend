@@ -145,7 +145,7 @@ fn test_tracking_scoped_gauge_metrics() -> Result<()> {
 fn test_tracking_scoped_histogram_in_seconds_metrics() -> Result<()> {
     let uniq_metric_name = GlobalUniqName::unique();
     let histogram = register_histogram_in_seconds(&uniq_metric_name);
-    histogram.observe(1801.0);
+    histogram.observe(28801.0);
 
     fn seconds_histogram_value(v: f64) -> Vec<HistogramCount> {
         BUCKET_SECONDS
@@ -168,7 +168,7 @@ fn test_tracking_scoped_histogram_in_seconds_metrics() -> Result<()> {
         new_tracking_payload.metrics = Some(scoped_registry.clone());
         let _guard = ThreadTracker::tracking(new_tracking_payload);
 
-        histogram.observe(1801.0);
+        histogram.observe(28801.0);
 
         assert_contain_metric(GLOBAL_METRICS_REGISTRY.dump_sample()?, MetricSample {
             name: uniq_metric_name.clone(),
@@ -184,7 +184,7 @@ fn test_tracking_scoped_histogram_in_seconds_metrics() -> Result<()> {
     }
 
     // untracking assert
-    histogram.observe(1801.0);
+    histogram.observe(28801.0);
 
     assert_contain_metric(GLOBAL_METRICS_REGISTRY.dump_sample()?, MetricSample {
         name: uniq_metric_name.clone(),
@@ -205,7 +205,7 @@ fn test_tracking_scoped_histogram_in_seconds_metrics() -> Result<()> {
 fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
     let uniq_metric_name = GlobalUniqName::unique();
     let histogram = register_histogram_in_milliseconds(&uniq_metric_name);
-    histogram.observe(1800001.0);
+    histogram.observe(28800001.0);
 
     fn milliseconds_histogram_value(v: f64) -> Vec<HistogramCount> {
         BUCKET_MILLISECONDS
@@ -228,7 +228,7 @@ fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
         new_tracking_payload.metrics = Some(scoped_registry.clone());
         let _guard = ThreadTracker::tracking(new_tracking_payload);
 
-        histogram.observe(1800001.0);
+        histogram.observe(28800001.0);
 
         assert_contain_metric(GLOBAL_METRICS_REGISTRY.dump_sample()?, MetricSample {
             name: uniq_metric_name.clone(),
@@ -244,7 +244,7 @@ fn test_tracking_scoped_histogram_in_milliseconds_metrics() -> Result<()> {
     }
 
     // untracking assert
-    histogram.observe(1800001.0);
+    histogram.observe(28800001.0);
 
     assert_contain_metric(GLOBAL_METRICS_REGISTRY.dump_sample()?, MetricSample {
         name: uniq_metric_name.clone(),

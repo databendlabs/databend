@@ -4,6 +4,10 @@ select (number % 2) as a from numbers(5) group by grouping sets (a) order by a;
 0
 1
 
+statement ok
+select sum(number), number % 3 a, grouping(number % 3)+grouping(number % 4) AS lochierarchy from numbers(10)
+group by rollup(number % 3, number % 4)  order by  grouping(number % 3)+grouping(number % 4) ;
+
 query TT
 select number % 2 as a, number % 3 as b from numbers(24) group by grouping sets ((a,b), (a), (b)) order by a,b;
 ----

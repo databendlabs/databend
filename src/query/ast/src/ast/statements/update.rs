@@ -19,17 +19,24 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
-use crate::ast::TableReference;
+use crate::ast::MutationSource;
+use crate::ast::MutationUpdateExpr;
+use crate::ast::TableAlias;
 use crate::ast::With;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct UpdateStmt {
     pub hints: Option<Hint>,
-    pub table: TableReference,
-    pub update_list: Vec<UpdateExpr>,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub table_alias: Option<TableAlias>,
+    pub update_list: Vec<MutationUpdateExpr>,
+    pub from: Option<MutationSource>,
     pub selection: Option<Expr>,
     // With clause, common table expression
     pub with: Option<With>,
@@ -44,8 +51,21 @@ impl Display for UpdateStmt {
         if let Some(hints) = &self.hints {
             write!(f, "{} ", hints)?;
         }
-        write!(f, "{} SET ", self.table)?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        if let Some(alias) = &self.table_alias {
+            write!(f, " AS {}", alias.name)?;
+        }
+        write!(f, " SET ")?;
         write_comma_separated_list(f, &self.update_list)?;
+        if let Some(from) = &self.from {
+            write!(f, " FROM {} ", from)?;
+        }
         if let Some(conditions) = &self.selection {
             write!(f, " WHERE {conditions}")?;
         }

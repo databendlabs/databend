@@ -20,8 +20,13 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_management::RoleApi;
 use databend_common_management::SelectedNode;
+use databend_common_management::WarehouseInfo;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::CreateWarehousePlan;
+use databend_common_users::RoleCacheManager;
+use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::interpreters::util::AuditElement;
@@ -56,6 +61,7 @@ impl Interpreter for CreateWarehouseInterpreter {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::SystemManagement)?;
 
+        let tenant = self.ctx.get_tenant();
         if let Some(warehouse_size) = self.plan.options.get("warehouse_size") {
             if !self.plan.nodes.is_empty() {
                 return Err(ErrorCode::InvalidArgument(
@@ -69,12 +75,25 @@ impl Interpreter for CreateWarehouseInterpreter {
                 ));
             };
 
-            GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+            let warehouse = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
                 .create_warehouse(self.plan.warehouse.clone(), vec![
                     SelectedNode::Random(None);
                     warehouse_size
                 ])
                 .await?;
+
+            if let WarehouseInfo::SystemManaged(sw) = warehouse {
+                let role_api = UserApiProvider::instance().role_api(&tenant);
+                if let Some(current_role) = self.ctx.get_current_role() {
+                    role_api
+                        .grant_ownership(
+                            &OwnershipObject::Warehouse { id: sw.role_id },
+                            &current_role.name,
+                        )
+                        .await?;
+                    RoleCacheManager::instance().invalidate_cache(&tenant);
+                }
+            }
 
             return Ok(PipelineBuildResult::create());
         }
@@ -90,9 +109,22 @@ impl Interpreter for CreateWarehouseInterpreter {
             }
         }
 
-        GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+        let warehouse = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
             .create_warehouse(self.plan.warehouse.clone(), selected_nodes)
             .await?;
+
+        if let WarehouseInfo::SystemManaged(sw) = warehouse {
+            let role_api = UserApiProvider::instance().role_api(&tenant);
+            if let Some(current_role) = self.ctx.get_current_role() {
+                role_api
+                    .grant_ownership(
+                        &OwnershipObject::Warehouse { id: sw.role_id },
+                        &current_role.name,
+                    )
+                    .await?;
+                RoleCacheManager::instance().invalidate_cache(&tenant);
+            }
+        }
 
         let user_info = self.ctx.get_current_user()?;
         log::info!(

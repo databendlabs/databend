@@ -394,8 +394,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 match get_by_name(val, name, false) {
                     Some(v) => {
-                        let json_str = cast_to_string(&v);
-                        output.push(&json_str);
+                        if is_null(&v) {
+                            output.push_null();
+                        } else {
+                            let json_str = cast_to_string(&v);
+                            output.push(&json_str);
+                        }
                     }
                     None => output.push_null(),
                 }
@@ -419,8 +423,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                 } else {
                     match get_by_index(val, idx as usize) {
                         Some(v) => {
-                            let json_str = cast_to_string(&v);
-                            output.push(&json_str);
+                            if is_null(&v) {
+                                output.push_null();
+                            } else {
+                                let json_str = cast_to_string(&v);
+                                output.push(&json_str);
+                            }
                         }
                         None => {
                             output.push_null();
@@ -632,7 +640,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 let mut out_offsets = Vec::new();
                                 match get_by_path(&buf, json_path, &mut out_buf, &mut out_offsets) {
                                     Ok(()) => {
-                                        if out_offsets.is_empty() {
+                                        if out_offsets.is_empty() || is_null(&out_buf) {
                                             output.push_null();
                                         } else {
                                             let json_str = cast_to_string(&out_buf);

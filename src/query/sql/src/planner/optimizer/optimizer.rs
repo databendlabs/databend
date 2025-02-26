@@ -212,8 +212,8 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
                 Ok(Plan::Explain { config, kind, plan })
             }
-            ExplainKind::Decorrelated => {
-                if let Plan::Query {
+            ExplainKind::Plan if config.decorrelated => {
+                let Plan::Query {
                     s_expr,
                     metadata,
                     bind_context,
@@ -221,31 +221,32 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
                     formatted_ast,
                     ignore_result,
                 } = *plan
-                {
-                    let mut s_expr = s_expr;
-                    if s_expr.contain_subquery() {
-                        s_expr = Box::new(decorrelate_subquery(
-                            opt_ctx.metadata.clone(),
-                            *s_expr.clone(),
-                        )?);
-                    }
-                    Ok(Plan::Explain {
-                        kind,
-                        config,
-                        plan: Box::new(Plan::Query {
-                            s_expr,
-                            bind_context,
-                            metadata,
-                            rewrite_kind,
-                            formatted_ast,
-                            ignore_result,
-                        }),
-                    })
-                } else {
-                    Err(ErrorCode::BadArguments(
+                else {
+                    return Err(ErrorCode::BadArguments(
                         "Cannot use EXPLAIN DECORRELATED with a non-query statement",
-                    ))
+                    ));
+                };
+
+                let mut s_expr = s_expr;
+                if s_expr.contain_subquery() {
+                    s_expr = Box::new(decorrelate_subquery(
+                        opt_ctx.table_ctx.clone(),
+                        opt_ctx.metadata.clone(),
+                        *s_expr.clone(),
+                    )?);
                 }
+                Ok(Plan::Explain {
+                    kind,
+                    config,
+                    plan: Box::new(Plan::Query {
+                        s_expr,
+                        bind_context,
+                        metadata,
+                        rewrite_kind,
+                        formatted_ast,
+                        ignore_result,
+                    }),
+                })
             }
             ExplainKind::Memo(_) => {
                 if let box Plan::Query { ref s_expr, .. } = plan {
@@ -393,7 +394,11 @@ pub async fn optimize_query(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())
@@ -487,7 +492,11 @@ async fn get_optimized_memo(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 
     // Decorrelate subqueries, after this step, there should be no subquery in the expression.
     if s_expr.contain_subquery() {
-        s_expr = decorrelate_subquery(opt_ctx.metadata.clone(), s_expr.clone())?;
+        s_expr = decorrelate_subquery(
+            opt_ctx.table_ctx.clone(),
+            opt_ctx.metadata.clone(),
+            s_expr.clone(),
+        )?;
     }
 
     s_expr = RuleStatsAggregateOptimizer::new(opt_ctx.table_ctx.clone(), opt_ctx.metadata.clone())

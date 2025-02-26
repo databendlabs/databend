@@ -206,6 +206,12 @@ jobs:
         storage:
           - "s3"
           - "fs"
+        handler:
+          - "hybrid"
+          - "http"
+        dedup:
+          - "full_path"
+          - "sub_path"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_stage
@@ -213,12 +219,13 @@ jobs:
         with:
           storage: ${{ matrix.storage }}
           dirs: stage
-          handlers: http,hybrid
+          handlers: ${{ matrix.handler }}
+          dedup: ${{ matrix.dedup }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-stage-${{ matrix.storage }}
+          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handler }}-${{ matrix.dedup }}
 
   standalone_no_table_meta_cache:
     runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]

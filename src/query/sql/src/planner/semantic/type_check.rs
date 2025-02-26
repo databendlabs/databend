@@ -295,6 +295,7 @@ impl<'a> TypeChecker<'a> {
                         let column = self.bind_context.add_internal_column_binding(
                             &column,
                             self.metadata.clone(),
+                            None,
                             true,
                         )?;
                         let data_type = *column.data_type.clone();
@@ -1116,9 +1117,9 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs)?,
 
-            Expr::Hole { span, .. } => {
+            Expr::Hole { span, .. } | Expr::Placeholder { span } => {
                 return Err(ErrorCode::SemanticError(
-                    "Hole expression is impossible in trivial query".to_string(),
+                    "Hole or Placeholder expression is impossible in trivial query".to_string(),
                 )
                 .set_span(*span))
             }
@@ -2199,6 +2200,7 @@ impl<'a> TypeChecker<'a> {
         let column = self.bind_context.add_internal_column_binding(
             &internal_column_binding,
             self.metadata.clone(),
+            None,
             false,
         )?;
 
@@ -2630,6 +2632,7 @@ impl<'a> TypeChecker<'a> {
         let column = self.bind_context.add_internal_column_binding(
             &internal_column_binding,
             self.metadata.clone(),
+            None,
             false,
         )?;
 
@@ -3169,10 +3172,10 @@ impl<'a> TypeChecker<'a> {
         if let SetExpr::Select(select_stmt) = &subquery.body {
             if typ == SubqueryType::Scalar {
                 let select = &select_stmt.select_list[0];
-                if let SelectTarget::AliasedExpr { expr, .. } = select {
+                if matches!(select, SelectTarget::AliasedExpr { .. }) {
                     // Check if contain aggregation function
                     #[derive(Visitor)]
-                    #[visitor(ASTFunctionCall(enter))]
+                    #[visitor(Expr(enter), ASTFunctionCall(enter))]
                     struct AggFuncVisitor {
                         contain_agg: bool,
                     }
@@ -3182,9 +3185,13 @@ impl<'a> TypeChecker<'a> {
                                 || AggregateFunctionFactory::instance()
                                     .contains(func.name.to_string());
                         }
+                        fn enter_expr(&mut self, expr: &Expr) {
+                            self.contain_agg = self.contain_agg
+                                || matches!(expr, Expr::CountAll { window: None, .. });
+                        }
                     }
                     let mut visitor = AggFuncVisitor { contain_agg: false };
-                    expr.drive(&mut visitor);
+                    select.drive(&mut visitor);
                     contain_agg = Some(visitor.contain_agg);
                 }
             }
@@ -4100,19 +4107,22 @@ impl<'a> TypeChecker<'a> {
             code: code_blob.into(),
         });
 
-        let mut arguments = Vec::with_capacity(arg_types.len());
-        for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
-            let box (arg, ty) = self.resolve(argument)?;
-            if ty != *dest_type {
-                arguments.push(wrap_cast(&arg, dest_type));
-            } else {
-                arguments.push(arg);
-            }
-        }
+        let arguments = args
+            .iter()
+            .zip(arg_types.iter())
+            .map(|(argument, dest_type)| {
+                let box (arg, ty) = self.resolve(argument)?;
+                Ok(if ty == *dest_type {
+                    arg
+                } else {
+                    wrap_cast(&arg, dest_type)
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
 
         let display_name = format!(
             "{name}({})",
-            arg_types.iter().map(|arg| format!("{arg}")).join(", ")
+            args.iter().map(|arg| format!("{:#}", arg)).join(", ")
         );
 
         self.bind_context.have_udf_script = true;

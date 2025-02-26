@@ -54,6 +54,7 @@ impl DeduplicateJoinConditionOptimizer {
         self.deduplicate(s_expr)
     }
 
+    #[recursive::recursive]
     pub fn deduplicate(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             RelOperator::Join(join) if join.join_type == JoinType::Inner => {

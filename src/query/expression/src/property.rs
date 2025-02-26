@@ -41,17 +41,34 @@ use crate::types::TimestampType;
 use crate::types::ValueType;
 use crate::with_decimal_type;
 use crate::with_number_type;
+use crate::ColumnBuilder;
 use crate::Scalar;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct FunctionProperty {
     pub non_deterministic: bool,
     pub kind: FunctionKind,
+    // strictly increasing or strictly decreasing, like y = x + 1
+    // y = x ^ 2 is not monotonicity, but it's only monotonicity in [-x, 0] and [0, +x]
+    // only works for function with 1-sized arg now
+    pub monotonicity: bool,
+    // will be monotonicity if arg is one of `monotonicity_by_type`
+    pub monotonicity_by_type: Vec<DataType>,
 }
 
 impl FunctionProperty {
     pub fn non_deterministic(mut self) -> Self {
         self.non_deterministic = true;
+        self
+    }
+
+    pub fn monotonicity(mut self) -> Self {
+        self.monotonicity = true;
+        self
+    }
+
+    pub fn monotonicity_type(mut self, data_type: DataType) -> Self {
+        self.monotonicity_by_type.push(data_type);
         self
     }
 
@@ -65,6 +82,8 @@ impl Default for FunctionProperty {
     fn default() -> Self {
         FunctionProperty {
             non_deterministic: false,
+            monotonicity: false,
+            monotonicity_by_type: vec![],
             kind: FunctionKind::Scalar,
         }
     }
@@ -136,6 +155,13 @@ impl<T: ArgType> FunctionDomain<T> {
 }
 
 impl Domain {
+    pub fn from_min_max(min: Scalar, max: Scalar, t: &DataType) -> Self {
+        let mut builder = ColumnBuilder::with_capacity(t, 2);
+        builder.push(min.as_ref());
+        builder.push(max.as_ref());
+        builder.build().domain()
+    }
+
     pub fn full(data_type: &DataType) -> Self {
         match data_type {
             DataType::Boolean => Domain::Boolean(BooleanType::full_domain()),
@@ -411,6 +437,101 @@ impl Domain {
                     .collect::<Option<Vec<_>>>()?,
             )),
             _ => None,
+        }
+    }
+
+    pub fn to_minmax(&self) -> (Scalar, Scalar) {
+        match self {
+            Domain::Number(NumberDomain::Int8(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::Int8(*min)),
+                Scalar::Number(NumberScalar::Int8(*max)),
+            ),
+            Domain::Number(NumberDomain::Int16(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::Int16(*min)),
+                Scalar::Number(NumberScalar::Int16(*max)),
+            ),
+            Domain::Number(NumberDomain::Int32(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::Int32(*min)),
+                Scalar::Number(NumberScalar::Int32(*max)),
+            ),
+            Domain::Number(NumberDomain::Int64(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::Int64(*min)),
+                Scalar::Number(NumberScalar::Int64(*max)),
+            ),
+            Domain::Number(NumberDomain::UInt8(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::UInt8(*min)),
+                Scalar::Number(NumberScalar::UInt8(*max)),
+            ),
+            Domain::Number(NumberDomain::UInt16(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::UInt16(*min)),
+                Scalar::Number(NumberScalar::UInt16(*max)),
+            ),
+            Domain::Number(NumberDomain::UInt32(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::UInt32(*min)),
+                Scalar::Number(NumberScalar::UInt32(*max)),
+            ),
+            Domain::Number(NumberDomain::UInt64(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::UInt64(*min)),
+                Scalar::Number(NumberScalar::UInt64(*max)),
+            ),
+            Domain::Number(NumberDomain::Float32(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::Float32(*min)),
+                Scalar::Number(NumberScalar::Float32(*max)),
+            ),
+            Domain::Number(NumberDomain::Float64(SimpleDomain { min, max })) => (
+                Scalar::Number(NumberScalar::Float64(*min)),
+                Scalar::Number(NumberScalar::Float64(*max)),
+            ),
+            Domain::Decimal(DecimalDomain::Decimal128(SimpleDomain { min, max }, sz)) => (
+                Scalar::Decimal(DecimalScalar::Decimal128(*min, *sz)),
+                Scalar::Decimal(DecimalScalar::Decimal128(*max, *sz)),
+            ),
+            Domain::Decimal(DecimalDomain::Decimal256(SimpleDomain { min, max }, sz)) => (
+                Scalar::Decimal(DecimalScalar::Decimal256(*min, *sz)),
+                Scalar::Decimal(DecimalScalar::Decimal256(*max, *sz)),
+            ),
+            Domain::Boolean(BooleanDomain {
+                has_false,
+                has_true,
+            }) => (Scalar::Boolean(!*has_false), Scalar::Boolean(*has_true)),
+            Domain::String(StringDomain { min, max }) => {
+                let max = if let Some(max) = max {
+                    Scalar::String(max.clone())
+                } else {
+                    Scalar::Null
+                };
+                (Scalar::String(min.clone()), max)
+            }
+            Domain::Timestamp(SimpleDomain { min, max }) => {
+                (Scalar::Timestamp(*min), Scalar::Timestamp(*max))
+            }
+            Domain::Date(SimpleDomain { min, max }) => (Scalar::Date(*min), Scalar::Date(*max)),
+            Domain::Interval(SimpleDomain { min, max }) => {
+                (Scalar::Interval(*min), Scalar::Interval(*max))
+            }
+            Domain::Nullable(NullableDomain { has_null, value }) => {
+                if let Some(v) = value {
+                    let (min, mut max) = v.to_minmax();
+                    if *has_null {
+                        max = Scalar::Null;
+                    }
+                    (min, max)
+                } else {
+                    (Scalar::Null, Scalar::Null)
+                }
+            }
+            Domain::Tuple(fields) => {
+                let mut mins = Vec::with_capacity(fields.len());
+                let mut maxs = Vec::with_capacity(fields.len());
+                for field in fields {
+                    let (min, max) = field.to_minmax();
+                    mins.push(min);
+                    maxs.push(max);
+                }
+                (Scalar::Tuple(mins), Scalar::Tuple(maxs))
+            }
+            // cluster key only allow number|string|boolean|date|timestamp|decimal, so unreachable.
+            _ => (Scalar::Null, Scalar::Null),
         }
     }
 }

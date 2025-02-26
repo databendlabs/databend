@@ -400,7 +400,7 @@ impl Binder {
     ) -> Result<Plan> {
         let ShowDictionariesStmt { database, limit } = stmt;
 
-        let mut select_builder = SelectBuilder::from("system.dictionaries");
+        let mut select_builder = SelectBuilder::from("default.system.dictionaries");
 
         select_builder
             .with_column("database AS Database")

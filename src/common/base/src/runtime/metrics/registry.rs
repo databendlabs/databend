@@ -110,6 +110,10 @@ impl GlobalRegistry {
         metric
     }
 
+    pub fn register_collector(&self, collector: Box<dyn prometheus_client::collector::Collector>) {
+        self.inner.lock().registry.register_collector(collector);
+    }
+
     pub(crate) fn new_scoped_metric(&self, index: usize) -> impl Iterator<Item = ScopedMetric> {
         let global_registry = self.inner.lock();
         let mut scoped_metrics = Vec::with_capacity(global_registry.metrics.len() - index);

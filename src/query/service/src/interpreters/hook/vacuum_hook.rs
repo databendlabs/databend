@@ -45,11 +45,12 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
 
         let cluster = query_ctx.get_cluster();
         let query_id = query_ctx.get_id();
-
+        let abort_checker = query_ctx.clone().get_abort_checker();
         let mut node_files = HashMap::new();
         for node in cluster.nodes.iter() {
             let stats = query_ctx.get_spill_file_stats(Some(node.id.clone()));
-            if stats.file_nums != 0 {
+            // if query was aborted, we can't trust the stats
+            if stats.file_nums != 0 || abort_checker.try_check_aborting().is_err() {
                 if let Some(index) = cluster.index_of_nodeid(&node.id) {
                     node_files.insert(index, stats.file_nums);
                 }
@@ -65,7 +66,6 @@ pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
         );
 
         let nodes = node_files.keys().cloned().collect::<Vec<usize>>();
-        let abort_checker = query_ctx.clone().get_abort_checker();
         let _ = GlobalIORuntime::instance().block_on::<(), ErrorCode, _>(async move {
             let removed_files = handler
                 .do_vacuum_temporary_files(

@@ -19,14 +19,12 @@ use databend_common_expression::Scalar;
 use iceberg::expr::Predicate;
 use iceberg::expr::Reference;
 use iceberg::spec::Datum;
+use log::debug;
 
-#[derive(Default, Copy, Clone, Debug)]
-pub struct PredicateBuilder {
-    uncertain: bool,
-}
+pub struct PredicateBuilder;
 
 impl PredicateBuilder {
-    pub fn build(&mut self, expr: &RemoteExpr<String>) -> Predicate {
+    pub fn build(expr: &RemoteExpr<String>) -> (bool, Predicate) {
         match expr {
             RemoteExpr::Constant {
                 span: _,
@@ -36,9 +34,9 @@ impl PredicateBuilder {
                 let value = scalar.as_boolean();
                 let is_true = value.copied().unwrap_or(false);
                 if is_true {
-                    Predicate::AlwaysTrue
+                    (false, Predicate::AlwaysTrue)
                 } else {
-                    Predicate::AlwaysFalse
+                    (false, Predicate::AlwaysFalse)
                 }
             }
 
@@ -50,14 +48,14 @@ impl PredicateBuilder {
                 args,
                 return_type: _,
             } if args.len() == 1 && id.name().as_ref() == "is_true" => {
-                let predicate = self.build(&args[0]);
-                if self.uncertain {
-                    return Predicate::AlwaysTrue;
+                let (uncertain, predicate) = Self::build(&args[0]);
+                if uncertain {
+                    return (uncertain, Predicate::AlwaysTrue);
                 }
                 match predicate {
-                    Predicate::AlwaysTrue => Predicate::AlwaysTrue,
-                    Predicate::AlwaysFalse => Predicate::AlwaysFalse,
-                    _ => predicate,
+                    Predicate::AlwaysTrue => (false, Predicate::AlwaysTrue),
+                    Predicate::AlwaysFalse => (false, Predicate::AlwaysFalse),
+                    _ => (false, predicate),
                 }
             }
 
@@ -72,10 +70,9 @@ impl PredicateBuilder {
                 let (_, name, _, _) = args[0].as_column_ref().unwrap();
                 let r = Reference::new(name);
                 if let Some(op) = build_unary(r, id.name().as_ref()) {
-                    return op;
+                    return (false, op);
                 }
-                self.uncertain = true;
-                Predicate::AlwaysTrue
+                (true, Predicate::AlwaysTrue)
             }
 
             // not
@@ -86,15 +83,18 @@ impl PredicateBuilder {
                 args,
                 return_type: _,
             } if args.len() == 1 && id.name().as_ref() == "not" => {
-                let predicate = self.build(&args[0]);
-                if self.uncertain {
-                    return Predicate::AlwaysTrue;
+                let (uncertain, predicate) = Self::build(&args[0]);
+                if uncertain {
+                    return (true, Predicate::AlwaysTrue);
                 }
-                match predicate {
+
+                let predicate = match predicate {
                     Predicate::AlwaysTrue => Predicate::AlwaysFalse,
                     Predicate::AlwaysFalse => Predicate::AlwaysTrue,
                     _ => predicate.negate(),
-                }
+                };
+
+                (false, predicate)
             }
 
             // binary {a op datum}
@@ -105,16 +105,18 @@ impl PredicateBuilder {
                 args,
                 return_type: _,
             } if args.len() == 2 && ["and", "and_filters", "or"].contains(&id.name().as_ref()) => {
-                let left = self.build(&args[0]);
-                let right = self.build(&args[1]);
-                if self.uncertain {
-                    return Predicate::AlwaysTrue;
+                let (left_uncertain, left) = Self::build(&args[0]);
+                let (right_uncertain, right) = Self::build(&args[1]);
+                if left_uncertain || right_uncertain {
+                    return (true, Predicate::AlwaysTrue);
                 }
-                match id.name().as_ref() {
+                let predicate = match id.name().as_ref() {
                     "and" | "and_filters" => left.and(right),
                     "or" => left.or(right),
                     _ => unreachable!(),
-                }
+                };
+
+                (false, predicate)
             }
 
             // binary {a op datum}
@@ -135,11 +137,10 @@ impl PredicateBuilder {
                     let r = Reference::new(name);
                     let p = build_binary(r, id.name().as_ref(), datum);
                     if let Some(op) = p {
-                        return op;
+                        return (false, op);
                     }
                 }
-                self.uncertain = true;
-                Predicate::AlwaysTrue
+                (true, Predicate::AlwaysTrue)
             }
 
             // binary {datum op a}
@@ -160,16 +161,15 @@ impl PredicateBuilder {
                     let r = Reference::new(name);
                     let p = build_reverse_binary(r, id.name().as_ref(), datum);
                     if let Some(op) = p {
-                        return op;
+                        return (false, op);
                     }
                 }
-                self.uncertain = true;
-                Predicate::AlwaysTrue
+                (true, Predicate::AlwaysTrue)
             }
 
-            _ => {
-                self.uncertain = true;
-                Predicate::AlwaysTrue
+            v => {
+                debug!("predicate build for {v:?} is nit supported yet");
+                (true, Predicate::AlwaysTrue)
             }
         }
     }

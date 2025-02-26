@@ -32,6 +32,7 @@ pub enum MultiwayStrategy {
 
 pub trait Exchange: Send + Sync + 'static {
     const NAME: &'static str;
+    const SKIP_EMPTY_DATA_BLOCK: bool = false;
     const STRATEGY: MultiwayStrategy = MultiwayStrategy::Random;
 
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>>;
@@ -247,6 +248,10 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
 
     fn process(&mut self) -> Result<()> {
         if let Some(block) = self.input_data.take() {
+            if T::SKIP_EMPTY_DATA_BLOCK && block.is_empty() {
+                return Ok(());
+            }
+
             let partitioned = self.exchange.partition(block, self.outputs.len())?;
 
             for (index, block) in partitioned.into_iter().enumerate() {

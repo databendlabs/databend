@@ -1,0 +1,18 @@
+statement ok
+DROP CATALOG IF EXISTS ctl;
+
+statement ok
+CREATE CATALOG ctl
+TYPE=ICEBERG
+CONNECTION=(
+    TYPE='rest'
+    ADDRESS='http://127.0.0.1:8181'
+    WAREHOUSE='s3://iceberg-tpch'
+    "s3.region"='us-east-1'
+    "s3.endpoint"='http://127.0.0.1:9000'
+);
+
+query T
+show databases from ctl;
+----
+tpch

@@ -80,6 +80,7 @@ impl PhysicalPlan {
         to_format_tree(self, &metadata, &profs)
     }
 
+    #[recursive::recursive]
     pub fn format_join(&self, metadata: &MetadataRef) -> Result<FormatTreeNode<String>> {
         match self {
             PhysicalPlan::TableScan(plan) => {
@@ -1262,6 +1263,10 @@ fn window_partition_to_format_tree(
         FormatTreeNode::new(format!("hash keys: [{partition_by}]")),
     ];
 
+    if let Some(top_n) = &plan.top_n {
+        children.push(FormatTreeNode::new(format!("top: {}", top_n.top)));
+    }
+
     if let Some(info) = &plan.stat_info {
         let items = plan_stats_info_to_format_tree(info);
         children.extend(items);
@@ -1422,6 +1427,7 @@ fn hash_join_to_format_tree(
         .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
+    let is_null_equal = plan.is_null_equal.iter().map(|b| format!("{b}")).join(", ");
     let filters = plan
         .non_equi_conditions
         .iter()
@@ -1443,6 +1449,7 @@ fn hash_join_to_format_tree(
         FormatTreeNode::new(format!("join type: {}", plan.join_type)),
         FormatTreeNode::new(format!("build keys: [{build_keys}]")),
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
+        FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
         FormatTreeNode::new(format!("filters: [{filters}]")),
     ];
 

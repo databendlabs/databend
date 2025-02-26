@@ -47,7 +47,7 @@ use crate::IndexType;
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct Window {
-    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    #[educe(PartialEq(ignore), Hash(ignore))]
     pub span: Span,
 
     // aggregate scalar expressions, such as: sum(col1), count(*);

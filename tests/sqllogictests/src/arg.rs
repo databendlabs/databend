@@ -114,6 +114,13 @@ pub struct SqlLogicTestArgs {
     )]
     pub bench: bool,
 
+    #[arg(
+        long = "force_load",
+        default_missing_value = "false",
+        help = "The arg is used to force load test data (tpch/tpcds)"
+    )]
+    pub force_load: bool,
+
     // Set specific the database to connect
     #[arg(
         long = "database",

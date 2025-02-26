@@ -83,7 +83,7 @@ impl PipelineBuilder {
                     description,
                     tbl_args: table.table_args(),
                     push_downs: None,
-                    query_internal_columns: false,
+                    internal_columns: None,
                     base_block_ids: None,
                     update_stream_columns: table.change_tracking_enabled(),
                     data_mask_policy: None,

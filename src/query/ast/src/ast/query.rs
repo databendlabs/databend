@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
+use educe::Educe;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_string_map;
@@ -97,6 +98,7 @@ pub struct With {
 }
 
 impl Display for With {
+    #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.recursive {
             write!(f, "RECURSIVE ")?;
@@ -116,6 +118,7 @@ pub struct CTE {
 }
 
 impl Display for CTE {
+    #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "{} AS ", self.alias)?;
         if self.materialized {
@@ -126,7 +129,12 @@ impl Display for CTE {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Educe, Drive, DriveMut)]
+#[educe(
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub struct SetOperation {
     pub span: Span,
     pub op: SetOperator,
@@ -281,7 +289,12 @@ impl Display for GroupBy {
 }
 
 /// A relational set expression, like `SELECT ... FROM ... {UNION|EXCEPT|INTERSECT} SELECT ... FROM ...`
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Educe, Drive, DriveMut)]
+#[educe(
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub enum SetExpr {
     Select(Box<SelectStmt>),
     Query(Box<Query>),
@@ -292,6 +305,7 @@ pub enum SetExpr {
 }
 
 impl Display for SetExpr {
+    #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SetExpr::Select(select_stmt) => {
@@ -877,6 +891,7 @@ impl TableReference {
 }
 
 impl Display for TableReference {
+    #[recursive::recursive]
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             TableReference::Table {

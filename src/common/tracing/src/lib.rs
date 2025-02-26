@@ -37,6 +37,7 @@ pub use crate::config::QueryLogConfig;
 pub use crate::config::StderrConfig;
 pub use crate::config::StructLogConfig;
 pub use crate::config::TracingConfig;
+pub use crate::config::CONFIG_DEFAULT_LOG_LEVEL;
 pub use crate::crash_hook::set_crash_hook;
 pub use crate::init::init_logging;
 pub use crate::init::inject_span_to_tonic_request;

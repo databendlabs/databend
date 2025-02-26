@@ -67,6 +67,8 @@ impl WindowPartitionTopNExchange {
 
 impl Exchange for WindowPartitionTopNExchange {
     const NAME: &'static str = "WindowTopN";
+    const SKIP_EMPTY_DATA_BLOCK: bool = true;
+
     fn partition(&self, block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let partition_permutation = self.partition_permutation(&block);
 
