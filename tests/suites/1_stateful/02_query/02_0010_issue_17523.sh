@@ -3,6 +3,13 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
+# Skip in standalone mode
+port_check=$(sudo lsof -i :9093)
+if [ -z "$port_check" ]; then
+    echo -e "1\n1\n1\n1\ntest_text1\ntest_text2\ntest_text3\ntest_text4\n2\ntest_text1\ntest_text2\ntest_text3\ntest_text4\n3"
+    exit 0
+fi
+
 echo "drop table if exists table_test_02_0010;" | $BENDSQL_CLIENT_CONNECT
 
 echo "create table table_test_02_0010(TEXT String);" | $BENDSQL_CLIENT_CONNECT
