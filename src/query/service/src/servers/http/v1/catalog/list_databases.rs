@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_catalog::catalog::CatalogManager;
+use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
@@ -35,11 +36,21 @@ pub struct DatabaseInfo {
 #[async_backtrace::framed]
 pub async fn list_databases_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
     let tenant = ctx.session.get_current_tenant();
-    let user = ctx.session.get_current_user()?;
-    let visibility_checker = ctx.session.get_visibility_checker(false).await?;
+    let user = ctx
+        .session
+        .get_current_user()
+        .map_err(InternalServerError)?;
+    let visibility_checker = ctx
+        .session
+        .get_visibility_checker(false)
+        .await
+        .map_err(InternalServerError)?;
 
     let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
-    let dbs = catalog.list_databases(&tenant).await?;
+    let dbs = catalog
+        .list_databases(&tenant)
+        .await
+        .map_err(InternalServerError)?;
 
     let databases = dbs
         .into_iter()
