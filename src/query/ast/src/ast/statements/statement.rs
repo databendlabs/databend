@@ -34,6 +34,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::Span;
 
 // SQL statement
 #[allow(clippy::large_enum_variant)]
@@ -46,7 +47,7 @@ pub enum Statement {
     },
     Explain {
         kind: ExplainKind,
-        options: Vec<ExplainOption>,
+        options: (Span, Vec<ExplainOption>),
         query: Box<Statement>,
     },
     ExplainAnalyze {
@@ -586,7 +587,7 @@ impl Display for Statement {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Statement::Explain {
-                options,
+                options: (_, options),
                 kind,
                 query,
             } => {
@@ -602,6 +603,7 @@ impl Display for Statement {
                                     ExplainOption::Verbose => "VERBOSE",
                                     ExplainOption::Logical => "LOGICAL",
                                     ExplainOption::Optimized => "OPTIMIZED",
+                                    ExplainOption::Decorrelated => "DECORRELATED",
                                 }
                             })
                             .join(", ")
