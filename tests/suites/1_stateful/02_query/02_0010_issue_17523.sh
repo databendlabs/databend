@@ -20,14 +20,14 @@ for i in "${table_inserts[@]}"; do
 done
 
 
-echo "select count(*) from table_test_02_0010;" | $BENDSQL_CLIENT_CONNECT
+echo "select * from table_test_02_0010 order by text;" | $BENDSQL_CLIENT_CONNECT
 
 # kill a node
 sudo lsof -i :9093 -t | xargs -r sudo kill -9
 
 echo "select count(*) from system.clusters;" | $BENDSQL_CLIENT_CONNECT
 
-echo "select count(*) from table_test_02_0010;" | $BENDSQL_CLIENT_CONNECT
+echo "select * from table_test_02_0010 order by text;" | $BENDSQL_CLIENT_CONNECT
 
 # restart the node
 ROOTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../../../ && pwd)"
