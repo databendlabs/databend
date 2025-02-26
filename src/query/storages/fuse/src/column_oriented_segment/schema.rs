@@ -19,9 +19,21 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::supported_stat_type;
 
+pub const ROW_COUNT: &str = "row_count";
+pub const BLOCK_SIZE: &str = "block_size";
+pub const FILE_SIZE: &str = "file_size";
+pub const CLUSTER_STATS: &str = "cluster_stats";
+pub const LOCATION: &str = "location";
+pub const BLOOM_FILTER_INDEX_LOCATION: &str = "bloom_filter_index_location";
+pub const BLOOM_FILTER_INDEX_SIZE: &str = "bloom_filter_index_size";
+pub const INVERTED_INDEX_SIZE: &str = "inverted_index_size";
+pub const COMPRESSION: &str = "compression";
+pub const CREATE_ON: &str = "create_on";
+pub const LOCATION_PATH: &str = "path";
+pub const LOCATION_FORMAT_VERSION: &str = "format_version";
 fn location_parts() -> (Vec<String>, Vec<TableDataType>) {
     (
-        vec!["path".to_string(), "format_version".to_string()],
+        vec![LOCATION_PATH.to_string(), LOCATION_FORMAT_VERSION.to_string()],
         vec![
             TableDataType::String,
             TableDataType::Number(NumberDataType::UInt64),
@@ -87,17 +99,17 @@ pub fn segment_schema(table_schema: &TableSchema) -> TableSchema {
     let i64_t = TableDataType::Number(NumberDataType::Int64);
     let nullable_binary_t = TableDataType::Nullable(Box::new(TableDataType::Binary));
     let mut fields = vec![
-        TableField::new("row_count", u64_t.clone()),
-        TableField::new("block_size", u64_t.clone()),
-        TableField::new("file_size", u64_t.clone()),
+        TableField::new(ROW_COUNT, u64_t.clone()),
+        TableField::new(BLOCK_SIZE, u64_t.clone()),
+        TableField::new(FILE_SIZE, u64_t.clone()),
         // In order to simplify the implementation, cluster stats is serialized as binary instead of nested struct, TODO(Sky): find out if nested struct is better
-        TableField::new("cluster_stats", nullable_binary_t.clone()),
-        TableField::new("location", location_type()),
-        TableField::new("bloom_filter_index_location", nullable_location_type()),
-        TableField::new("bloom_filter_index_size", u64_t.clone()),
-        TableField::new("inverted_index_size", nullable_u64_t.clone()),
-        TableField::new("compression", u8_t.clone()),
-        TableField::new("create_on", i64_t.clone()),
+        TableField::new(CLUSTER_STATS, nullable_binary_t.clone()),
+        TableField::new(LOCATION, location_type()),
+        TableField::new(BLOOM_FILTER_INDEX_LOCATION, nullable_location_type()),
+        TableField::new(BLOOM_FILTER_INDEX_SIZE, u64_t.clone()),
+        TableField::new(INVERTED_INDEX_SIZE, nullable_u64_t.clone()),
+        TableField::new(COMPRESSION, u8_t.clone()),
+        TableField::new(CREATE_ON, i64_t.clone()),
     ];
 
     for field in table_schema.leaf_fields() {

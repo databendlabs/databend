@@ -26,13 +26,23 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
-use databend_common_storages_fuse::meta_name;
-use databend_common_storages_fuse::stat_name;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reduce_block_metas;
 use databend_common_storages_fuse::ColumnOrientedSegmentBuilder;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::SegmentBuilder;
+use databend_common_storages_fuse::BLOCK_SIZE;
+use databend_common_storages_fuse::BLOOM_FILTER_INDEX_LOCATION;
+use databend_common_storages_fuse::BLOOM_FILTER_INDEX_SIZE;
+use databend_common_storages_fuse::CLUSTER_STATS;
+use databend_common_storages_fuse::COMPRESSION;
+use databend_common_storages_fuse::CREATE_ON;
+use databend_common_storages_fuse::FILE_SIZE;
+use databend_common_storages_fuse::INVERTED_INDEX_SIZE;
+use databend_common_storages_fuse::LOCATION;
+use databend_common_storages_fuse::LOCATION_FORMAT_VERSION;
+use databend_common_storages_fuse::LOCATION_PATH;
+use databend_common_storages_fuse::ROW_COUNT;
 use databend_query::test_kits::BlockWriter;
 use databend_storages_common_table_meta::meta::decode;
 use databend_storages_common_table_meta::meta::testing::MetaEncoding;
@@ -112,31 +122,31 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
         block_metas.len()
     );
 
-    let columns = column_oriented_segment.block_metas.columns();
-
     // check row count
-    let row_count = columns[0].to_column(column_oriented_segment.block_metas.num_rows());
+    let row_count = column_oriented_segment.col_by_name(&[ROW_COUNT]).unwrap();
     for (row_count, block_meta) in row_count.iter().zip(block_metas.iter()) {
         let row_count = row_count.as_number().unwrap().as_u_int64().unwrap();
         assert_eq!(row_count, &block_meta.row_count);
     }
 
     // check block size
-    let block_size = columns[1].to_column(column_oriented_segment.block_metas.num_rows());
+    let block_size = column_oriented_segment.col_by_name(&[BLOCK_SIZE]).unwrap();
     for (block_size, block_meta) in block_size.iter().zip(block_metas.iter()) {
         let block_size = block_size.as_number().unwrap().as_u_int64().unwrap();
         assert_eq!(block_size, &block_meta.block_size);
     }
 
     // check file size
-    let file_size = columns[2].to_column(column_oriented_segment.block_metas.num_rows());
+    let file_size = column_oriented_segment.col_by_name(&[FILE_SIZE]).unwrap();
     for (file_size, block_meta) in file_size.iter().zip(block_metas.iter()) {
         let file_size = file_size.as_number().unwrap().as_u_int64().unwrap();
         assert_eq!(file_size, &block_meta.file_size);
     }
 
     // check cluster stats
-    let cluster_stats = columns[3].to_column(column_oriented_segment.block_metas.num_rows());
+    let cluster_stats = column_oriented_segment
+        .col_by_name(&[CLUSTER_STATS])
+        .unwrap();
     for (cluster_stats, block_meta) in cluster_stats.iter().zip(block_metas.iter()) {
         let cluster_stats = cluster_stats.as_binary().unwrap();
         let cluster_stats: ClusterStatistics =
@@ -145,19 +155,33 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     }
 
     // check location
-    let location = columns[4].to_column(column_oriented_segment.block_metas.num_rows());
-    for (location, block_meta) in location.iter().zip(block_metas.iter()) {
-        let location = location.as_tuple().unwrap();
-        assert_eq!(location[0].as_string().unwrap(), &block_meta.location.0);
+    let location_path = column_oriented_segment
+        .col_by_name(&[LOCATION, LOCATION_PATH])
+        .unwrap();
+    for (location_path, block_meta) in location_path.iter().zip(block_metas.iter()) {
+        assert_eq!(location_path.as_string().unwrap(), &block_meta.location.0);
+    }
+
+    let location_format_version = column_oriented_segment
+        .col_by_name(&[LOCATION, LOCATION_FORMAT_VERSION])
+        .unwrap();
+    for (location_format_version, block_meta) in
+        location_format_version.iter().zip(block_metas.iter())
+    {
         assert_eq!(
-            location[1].as_number().unwrap().as_u_int64().unwrap(),
+            location_format_version
+                .as_number()
+                .unwrap()
+                .as_u_int64()
+                .unwrap(),
             &block_meta.location.1
         );
     }
 
     // check bloom filter index location
-    let bloom_filter_index_location =
-        columns[5].to_column(column_oriented_segment.block_metas.num_rows());
+    let bloom_filter_index_location = column_oriented_segment
+        .col_by_name(&[BLOOM_FILTER_INDEX_LOCATION])
+        .unwrap();
     for (bloom_filter_index_location, block_meta) in
         bloom_filter_index_location.iter().zip(block_metas.iter())
     {
@@ -177,8 +201,9 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     }
 
     // check bloom filter index size
-    let bloom_filter_index_size =
-        columns[6].to_column(column_oriented_segment.block_metas.num_rows());
+    let bloom_filter_index_size = column_oriented_segment
+        .col_by_name(&[BLOOM_FILTER_INDEX_SIZE])
+        .unwrap();
     for (bloom_filter_index_size, block_meta) in
         bloom_filter_index_size.iter().zip(block_metas.iter())
     {
@@ -191,7 +216,9 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     }
 
     // check inverted index size
-    let inverted_index_size = columns[7].to_column(column_oriented_segment.block_metas.num_rows());
+    let inverted_index_size = column_oriented_segment
+        .col_by_name(&[INVERTED_INDEX_SIZE])
+        .unwrap();
     for (inverted_index_size, block_meta) in inverted_index_size.iter().zip(block_metas.iter()) {
         let is_null = inverted_index_size.is_null();
         assert_eq!(is_null, block_meta.inverted_index_size.is_none());
@@ -199,14 +226,14 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     }
 
     // check compression
-    let compression = columns[8].to_column(column_oriented_segment.block_metas.num_rows());
+    let compression = column_oriented_segment.col_by_name(&[COMPRESSION]).unwrap();
     for (compression, block_meta) in compression.iter().zip(block_metas.iter()) {
         let compression = compression.as_number().unwrap().as_u_int8().unwrap();
         assert_eq!(Compression::from_u8(*compression), block_meta.compression);
     }
 
     // check create_on
-    let create_on = columns[9].to_column(column_oriented_segment.block_metas.num_rows());
+    let create_on = column_oriented_segment.col_by_name(&[CREATE_ON]).unwrap();
     for (create_on, block_meta) in create_on.iter().zip(block_metas.iter()) {
         let create_on = create_on.as_number().unwrap().as_int64().unwrap();
         assert_eq!(create_on, &block_meta.create_on.unwrap().timestamp());
@@ -215,12 +242,7 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     // check column stats
     for (i, block_meta) in block_metas.iter().enumerate() {
         for (col_id, col_stat) in block_meta.col_stats.iter() {
-            let stat_name = stat_name(*col_id);
-            let (index, _) = column_oriented_segment
-                .segment_schema
-                .column_with_name(&stat_name)
-                .unwrap();
-            let stat = columns[index].to_column(column_oriented_segment.block_metas.num_rows());
+            let stat = column_oriented_segment.stat_col(*col_id).unwrap();
             let stat = stat.as_tuple().unwrap();
             let min = stat[0].index(i).unwrap();
             let max = stat[1].index(i).unwrap();
@@ -246,12 +268,7 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     for (i, block_meta) in block_metas.iter().enumerate() {
         for (col_id, col_meta) in block_meta.col_metas.iter() {
             let col_meta = col_meta.as_parquet().unwrap();
-            let meta_name = meta_name(*col_id);
-            let (index, _) = column_oriented_segment
-                .segment_schema
-                .column_with_name(&meta_name)
-                .unwrap();
-            let meta = columns[index].to_column(column_oriented_segment.block_metas.num_rows());
+            let meta = column_oriented_segment.meta_col(*col_id).unwrap();
             let meta = meta.as_tuple().unwrap();
             let offset = meta[0].index(i).unwrap();
             let offset = offset.as_number().unwrap().as_u_int64().unwrap();

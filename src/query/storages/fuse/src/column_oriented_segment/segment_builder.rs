@@ -75,6 +75,7 @@ pub struct ColumnOrientedSegmentBuilder {
 
     segment_schema: TableSchema,
     table_schema: TableSchemaRef,
+    block_per_segment: usize,
 }
 
 struct ColStatBuilder {
@@ -206,8 +207,12 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
     ) -> Result<Self::Segment> {
-        let summary = self.build_summary(thresholds, default_cluster_key_id)?;
-        let cluster_stats = std::mem::take(&mut self.cluster_stats);
+        let mut this = std::mem::replace(
+            self,
+            ColumnOrientedSegmentBuilder::new(self.table_schema.clone(), self.block_per_segment),
+        );
+        let summary = this.build_summary(thresholds, default_cluster_key_id)?;
+        let cluster_stats = this.cluster_stats;
         let mut cluster_stats_binary = Vec::with_capacity(cluster_stats.len());
         for stats in cluster_stats {
             if let Some(stats) = stats {

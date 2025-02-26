@@ -64,8 +64,10 @@ use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::pruning::SegmentPruner;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
+use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
+use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SegmentPruneTransform;
@@ -459,6 +461,51 @@ impl FuseTable {
                 Ok(())
             });
         }
+
+        Ok(())
+    }
+
+    pub fn prune_column_oriented_segments_with_pipeline(
+        &self,
+        pruner: Arc<FusePruner>,
+        prune_pipeline: &mut Pipeline,
+        ctx: Arc<dyn TableContext>,
+        segment_rx: Receiver<SegmentLocation>,
+        part_info_tx: Sender<Result<PartInfoPtr>>,
+        _derterministic_cache_key: Option<String>,
+    ) -> Result<()> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        prune_pipeline.add_source(
+            |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
+            max_threads,
+        )?;
+        let segment_pruner =
+            SegmentPruner::create(pruner.pruning_ctx.clone(), pruner.table_schema.clone())?;
+
+        prune_pipeline.add_transform(|input, output| {
+            SegmentPruneTransform::<PrunedColumnOrientedSegmentMeta>::create(
+                input,
+                output,
+                segment_pruner.clone(),
+                pruner.pruning_ctx.clone(),
+            )
+        })?;
+
+        // TODO(Sky): deal with sample
+
+        let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        let push_down = pruner.push_down.clone();
+        prune_pipeline.add_sink(|input| {
+            ColumnOrientedBlockPruneSink::create(
+                input,
+                block_pruner.clone(),
+                push_down.clone(),
+                pruner.table_schema.clone(),
+                part_info_tx.clone(),
+            )
+        })?;
+
+        // TODO(Sky): populate prune cache , deal with topn prune
 
         Ok(())
     }

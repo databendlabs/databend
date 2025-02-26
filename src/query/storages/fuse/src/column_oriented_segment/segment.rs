@@ -17,8 +17,10 @@ use std::sync::Arc;
 use arrow::datatypes::Schema;
 use bytes::Bytes;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 // use super::block_meta::ColumnOrientedBlockMeta;
@@ -38,6 +40,10 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::ArrowWriter;
 use parquet::file::properties::WriterProperties;
 
+// use super::block_meta::ColumnOrientedBlockMeta;
+use super::meta_name;
+use super::stat_name;
+// use super::AbstractBlockMeta;
 use crate::io::read::meta::bytes_reader;
 use crate::io::SegmentsIO;
 
@@ -52,7 +58,6 @@ pub trait AbstractSegment: Send + Sync + 'static + Sized {
         table_schema: TableSchemaRef,
         put_cache: bool,
     ) -> Result<Arc<Self>>;
-    // fn deserialize(&self, data: Bytes) -> Result<Arc<dyn AbstractSegment>>;
 }
 
 #[async_trait::async_trait]
@@ -73,10 +78,6 @@ impl AbstractSegment for SegmentInfo {
         &self.summary
     }
 
-    // fn deserialize(&self, data: Bytes) -> Result<Arc<dyn AbstractSegment>> {
-    //     Ok(Arc::new(Self::from_slice(&data)?))
-    // }
-
     async fn read_and_deserialize(
         _dal: Operator,
         _location: Location,
@@ -89,6 +90,10 @@ impl AbstractSegment for SegmentInfo {
 
 #[async_trait::async_trait]
 impl AbstractSegment for CompactSegmentInfo {
+    // fn blocks(&self) -> Box<dyn Iterator<Item = Arc<dyn AbstractBlockMeta>> + '_> {
+    //     unimplemented!()
+    // }
+
     fn summary(&self) -> &Statistics {
         &self.summary
     }
@@ -96,10 +101,6 @@ impl AbstractSegment for CompactSegmentInfo {
     fn serialize(&self) -> Result<Vec<u8>> {
         unimplemented!()
     }
-
-    // fn deserialize(&self, _data: Bytes) -> Result<Arc<dyn AbstractSegment>> {
-    //     unimplemented!()
-    // }
 
     async fn read_and_deserialize(
         dal: Operator,
@@ -117,12 +118,79 @@ pub struct ColumnOrientedSegment {
     pub segment_schema: TableSchema,
 }
 
-#[async_trait::async_trait]
-impl AbstractSegment for ColumnOrientedSegment {
-    // fn blocks(&self) -> Box<dyn Iterator<Item = Arc<(dyn AbstractBlockMeta + 'static)>>> {
+impl ColumnOrientedSegment {
+    // pub fn blocks(&self) -> Box<dyn Iterator<Item = Arc<dyn AbstractBlockMeta>> + '_> {
     //     Box::new(BlockMetaIter::new(self.block_metas.clone()))
     // }
 
+    pub fn stat_col(&self, col_id: u32) -> Option<Column> {
+        let stat_name = stat_name(col_id);
+        self.col_by_name(&[&stat_name])
+    }
+
+    pub fn meta_col(&self, col_id: u32) -> Option<Column> {
+        let meta_name = meta_name(col_id);
+        self.col_by_name(&[&meta_name])
+    }
+
+    pub fn col_by_name(&self, name: &[&str]) -> Option<Column> {
+        let (index, field) = self.segment_schema.column_with_name(name[0])?;
+        let column = self
+            .block_metas
+            .get_by_offset(index)
+            .to_column(self.block_metas.num_rows());
+        if name.len() == 1 {
+            Some(column)
+        } else {
+            let sub_cols = column.as_tuple().unwrap();
+            match &field.data_type {
+                TableDataType::Tuple {
+                    fields_name,
+                    fields_type,
+                } => Self::col_by_name_inner(
+                    &name[1..],
+                    &sub_cols,
+                    &fields_name,
+                    &fields_type,
+                    self.block_metas.num_rows(),
+                ),
+                _ => panic!("expect tuple type"),
+            }
+        }
+    }
+
+    fn col_by_name_inner(
+        name: &[&str],
+        cols: &[Column],
+        field_names: &[String],
+        field_types: &[TableDataType],
+        num_rows: usize,
+    ) -> Option<Column> {
+        let index = field_names.iter().position(|f| f == name[0])?;
+        let column = cols[index].clone();
+        if name.len() == 1 {
+            Some(column)
+        } else {
+            let sub_cols = column.as_tuple().unwrap();
+            match &field_types[index] {
+                TableDataType::Tuple {
+                    fields_name,
+                    fields_type,
+                } => Self::col_by_name_inner(
+                    &name[1..],
+                    &sub_cols,
+                    &fields_name,
+                    &fields_type,
+                    num_rows,
+                ),
+                _ => panic!("expect tuple type"),
+            }
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl AbstractSegment for ColumnOrientedSegment {
     fn summary(&self) -> &Statistics {
         &self.summary
     }
