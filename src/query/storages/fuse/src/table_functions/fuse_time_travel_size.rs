@@ -134,9 +134,12 @@ impl SimpleArgFunc for FuseTimeTravelSize {
             if db.name() == "system" || db.name() == "information_schema" {
                 continue;
             }
+
+            info!("loading tables from database : {}", db.name());
             let tables = match &args.table_name {
                 Some(table_name) => {
                     let start = std::time::Instant::now();
+                    info!("loading table {}", table_name);
                     let table = db.get_table(table_name.as_str()).await?;
                     info!("get_table cost: {:?}", start.elapsed());
                     vec![table]

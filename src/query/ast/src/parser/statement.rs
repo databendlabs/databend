@@ -40,6 +40,7 @@ use crate::parser::stream::stream_table;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
+use crate::span::merge_span;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
@@ -78,7 +79,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
-                options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
+                options: options
+                    .map(|(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts))
+                    .unwrap_or_default(),
                 query: Box::new(statement.stmt),
             })
         },
@@ -314,7 +317,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, show_options)| Statement::ShowVariables { show_options },
     );
-    let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
+    let show_stages = map(
+        rule! {
+            SHOW ~ STAGES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowStages { show_options },
+    );
     let show_process_list = map(
         rule! {
             SHOW ~ PROCESSLIST ~ #show_options?
@@ -823,13 +831,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let show_create_table = map(
         rule! {
-            SHOW ~ CREATE ~ TABLE ~ #dot_separated_idents_1_to_3
+            SHOW ~ CREATE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ ( WITH ~ ^QUOTED_IDENTIFIERS )?
         },
-        |(_, _, _, (catalog, database, table))| {
+        |(_, _, _, (catalog, database, table), comment_opt)| {
             Statement::ShowCreateTable(ShowCreateTableStmt {
                 catalog,
                 database,
                 table,
+                with_quoted_ident: comment_opt.is_some(),
             })
         },
     );
@@ -1520,7 +1529,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
+    let show_users = map(
+        rule! {
+            SHOW ~ USERS ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowUsers { show_options },
+    );
+
     let describe_user = map(
         rule! {
             ( DESC | DESCRIBE ) ~ USER ~ ^#user_identity
@@ -1588,7 +1603,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             user,
         },
     );
-    let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
+    let show_roles = map(
+        rule! {
+            SHOW ~ ROLES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowRoles { show_options },
+    );
     let create_role = map(
         rule! {
             CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
@@ -3305,6 +3325,10 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
             UserPrivilegeType::CreateDatabase,
             rule! { CREATE ~ DATABASE },
         ),
+        value(
+            UserPrivilegeType::CreateWarehouse,
+            rule! { CREATE ~ WAREHOUSE },
+        ),
         value(UserPrivilegeType::DropUser, rule! { DROP ~ USER }),
         value(UserPrivilegeType::CreateRole, rule! { CREATE ~ ROLE }),
         value(UserPrivilegeType::DropRole, rule! { DROP ~ ROLE }),
@@ -3364,11 +3388,16 @@ pub fn on_object_name(i: Input) -> IResult<GrantObjectName> {
         GrantObjectName::UDF(udf_name.to_string())
     });
 
+    let warehouse = map(rule! { WAREHOUSE ~ #ident}, |(_, w)| {
+        GrantObjectName::Warehouse(w.to_string())
+    });
+
     rule!(
         #database : "DATABASE <database>"
         | #table : "TABLE <database>.<table>"
         | #stage : "STAGE <stage_name>"
         | #udf : "UDF <udf_name>"
+        | #warehouse : "WAREHOUSE <warehouse_name>"
     )(i)
 }
 
@@ -3444,7 +3473,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     // "*": as current db or "table" with current db
     let db = map(
         rule! {
-            ( #ident ~ "." )? ~ "*"
+            ( #grant_ident ~ "." )? ~ "*"
         },
         |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
     );
@@ -3452,7 +3481,7 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
     let table = map(
         rule! {
-            ( #ident ~ "." )? ~ #parameter_to_string
+            ( #grant_ident ~ "." )? ~ #parameter_to_grant_string
         },
         |(database, table)| {
             AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
@@ -3463,25 +3492,28 @@ pub fn grant_ownership_level(i: Input) -> IResult<AccountMgrLevel> {
     enum Object {
         Stage,
         Udf,
+        Warehouse,
     }
     let object = alt((
         value(Object::Udf, rule! { UDF }),
         value(Object::Stage, rule! { STAGE }),
+        value(Object::Warehouse, rule! { WAREHOUSE }),
     ));
 
     // Object object_name
     let object = map(
-        rule! { #object ~ #ident},
+        rule! { #object ~ #grant_ident },
         |(object, object_name)| match object {
             Object::Stage => AccountMgrLevel::Stage(object_name.to_string()),
             Object::Udf => AccountMgrLevel::UDF(object_name.to_string()),
+            Object::Warehouse => AccountMgrLevel::Warehouse(object_name.to_string()),
         },
     );
 
     rule!(
         #db : "<database>.*"
         | #table : "<database>.<table>"
-        | #object : "STAGE | UDF <object_name>"
+        | #object : "STAGE | UDF | WAREHOUSE <object_name>"
     )(i)
 }
 
@@ -4783,12 +4815,13 @@ pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
 pub fn explain_option(i: Input) -> IResult<ExplainOption> {
     map(
         rule! {
-            VERBOSE | LOGICAL | OPTIMIZED
+            VERBOSE | LOGICAL | OPTIMIZED | DECORRELATED
         },
         |opt| match &opt.kind {
             VERBOSE => ExplainOption::Verbose,
             LOGICAL => ExplainOption::Logical,
             OPTIMIZED => ExplainOption::Optimized,
+            DECORRELATED => ExplainOption::Decorrelated,
             _ => unreachable!(),
         },
     )(i)

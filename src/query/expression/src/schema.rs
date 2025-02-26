@@ -67,11 +67,16 @@ pub const CHANGE_ROW_ID_COL_NAME: &str = "change$row_id";
 
 pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 
+pub const FILENAME_COLUMN_NAME: &str = "metadata$filename";
+pub const FILE_ROW_NUMBER_COLUMN_NAME: &str = "metadata$file_row_number";
+
 // stream column id.
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
 pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
 pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
 pub const ROW_VERSION_COLUMN_ID: u32 = u32::MAX - 13;
+pub const FILENAME_COLUMN_ID: u32 = u32::MAX - 14;
+pub const FILE_ROW_NUMBER_COLUMN_ID: u32 = u32::MAX - 15;
 // stream column name.
 pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
@@ -98,12 +103,15 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         ORIGIN_BLOCK_ID_COL_NAME,
         ORIGIN_BLOCK_ROW_NUM_COL_NAME,
         ROW_VERSION_COL_NAME,
+        FILENAME_COLUMN_NAME,
+        FILE_ROW_NUMBER_COLUMN_NAME,
     ])
 });
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
     column_id >= SEARCH_SCORE_COLUMN_ID
+        || (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
 }
 
 #[inline]

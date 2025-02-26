@@ -35,7 +35,7 @@ use crate::index::filters::BlockFilter;
 use crate::index::InvertedIndexFile;
 use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_INVERTED_INDEX_PREFIX;
-use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use crate::FUSE_TBL_LAST_SNAPSHOT_HINT_V2;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
@@ -160,7 +160,7 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn gen_last_snapshot_hint_location(&self) -> String {
-        format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT)
+        format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT_V2)
     }
 
     pub fn gen_virtual_block_location(location: &str) -> String {

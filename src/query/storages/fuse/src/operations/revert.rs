@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_meta_types::MatchSeq;
 
+use crate::operations::SnapshotHintWriter;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -57,7 +58,7 @@ impl FuseTable {
         let req = UpdateTableMetaReq {
             table_id,
             seq: MatchSeq::Exact(base_version),
-            new_table_meta: table_meta_to_be_committed,
+            new_table_meta: table_meta_to_be_committed.clone(),
         };
 
         // 4. let's roll
@@ -67,13 +68,17 @@ impl FuseTable {
             let snapshot_location = table_reverting_to.snapshot_loc().ok_or_else(|| {
                     ErrorCode::Internal("internal error, fuse table which navigated to given point has no snapshot location")
                 })?;
-            Self::write_last_snapshot_hint(
-                ctx.as_ref(),
-                &table_reverting_to.operator,
-                &table_reverting_to.meta_location_generator,
-                &snapshot_location,
-            )
-            .await;
+
+            // Left a hint file which indicates the location of the latest snapshot
+            let snapshot_hint_writer =
+                SnapshotHintWriter::new(ctx.as_ref(), &table_reverting_to.operator);
+            snapshot_hint_writer
+                .write_last_snapshot_hint(
+                    &table_reverting_to.meta_location_generator,
+                    &snapshot_location,
+                    &table_meta_to_be_committed,
+                )
+                .await;
         };
 
         reply.map(|_| ())

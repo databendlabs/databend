@@ -10,6 +10,7 @@ Filter
     ├── join type: LEFT OUTER
     ├── build keys: [number (#2)]
     ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 1.00
     ├── AggregateFinal(Build)
@@ -26,6 +27,7 @@ Filter
     │           ├── join type: CROSS
     │           ├── build keys: []
     │           ├── probe keys: []
+    │           ├── keys is null equal: []
     │           ├── filters: []
     │           ├── estimated rows: 1.00
     │           ├── TableScan(Build)
@@ -51,6 +53,7 @@ Filter
         ├── join type: CROSS
         ├── build keys: []
         ├── probe keys: []
+        ├── keys is null equal: []
         ├── filters: []
         ├── estimated rows: 1.00
         ├── TableScan(Build)
@@ -84,6 +87,7 @@ Filter
     ├── join type: RIGHT MARK
     ├── build keys: [number (#1)]
     ├── probe keys: [number (#0)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 1.00
     ├── TableScan(Build)
@@ -113,6 +117,7 @@ HashJoin
 ├── join type: CROSS
 ├── build keys: []
 ├── probe keys: []
+├── keys is null equal: []
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
@@ -164,6 +169,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [scalar_subquery_1 (#1)]
 ├── probe keys: [t.number (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
@@ -197,6 +203,7 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -226,6 +233,7 @@ HashJoin
 ├── join type: LEFT ANTI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -255,6 +263,7 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -284,6 +293,7 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
@@ -321,6 +331,7 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
+├── keys is null equal: [false]
 ├── filters: [t.number (#0) < numbers.number (#1)]
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -350,6 +361,7 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [numbers.number (#1)]
 ├── probe keys: [t.number (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -379,6 +391,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [number (#2)]
 ├── probe keys: [number (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.20
 ├── HashJoin(Build)
@@ -386,6 +399,7 @@ HashJoin
 │   ├── join type: INNER
 │   ├── build keys: [number (#2)]
 │   ├── probe keys: [t1.number (#1)]
+│   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── estimated rows: 0.20
 │   ├── Filter(Build)
@@ -437,6 +451,7 @@ HashJoin
 ├── join type: LEFT ANTI
 ├── build keys: []
 ├── probe keys: []
+├── keys is null equal: []
 ├── filters: [t.number (#0) < t1.number (#2)]
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -453,6 +468,7 @@ HashJoin
     ├── join type: LEFT SEMI
     ├── build keys: []
     ├── probe keys: []
+    ├── keys is null equal: []
     ├── filters: [t.number (#0) > t1.number (#1)]
     ├── estimated rows: 1.00
     ├── TableScan(Build)
@@ -495,6 +511,7 @@ EvalScalar
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
+    ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)

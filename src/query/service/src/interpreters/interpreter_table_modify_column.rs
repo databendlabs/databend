@@ -57,6 +57,7 @@ use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 
 use crate::interpreters::common::check_referenced_computed_columns;
+use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
@@ -276,18 +277,14 @@ impl ModifyTableColumnInterpreter {
 
         // if don't need rebuild table, only update table meta.
         if modified_field_indices.is_empty() {
-            let table_id = table_info.ident.table_id;
-            let table_version = table_info.ident.seq;
-
-            let req = UpdateTableMetaReq {
-                table_id,
-                seq: MatchSeq::Exact(table_version),
-                new_table_meta: table_info.meta,
-            };
-
-            let _resp = catalog
-                .update_single_table_meta(req, table.get_table_info())
-                .await?;
+            commit_table_meta(
+                &self.ctx,
+                table.as_ref(),
+                &table_info,
+                table_info.meta.clone(),
+                catalog,
+            )
+            .await?;
 
             return Ok(PipelineBuildResult::create());
         }
