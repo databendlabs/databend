@@ -30,6 +30,8 @@ echo "select count(*) from system.clusters;" | $BENDSQL_CLIENT_CONNECT
 echo "select count(*) from table_test_02_0010;" | $BENDSQL_CLIENT_CONNECT
 
 # restart the node
-"$CURDIR"/../../../../scripts/ci/deploy/databend-query-cluster-3-nodes.sh > /dev/null 2>&1
+ROOTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../../../ && pwd)"
+env "RUST_BACKTRACE=1" nohup "$ROOTDIR"/target/${BUILD_PROFILE}/databend-query -c "$ROOTDIR"/scripts/ci/deploy/config/databend-query-node-3.toml --internal-enable-sandbox-tenant > "$ROOTDIR"/.databend/query-3.out 2>&1 &
+python3 "$ROOTDIR"/scripts/ci/wait_tcp.py --timeout 30 --port 9093 > /dev/null 2>&1
 
 echo "select count(*) from system.clusters;" | $BENDSQL_CLIENT_CONNECT
