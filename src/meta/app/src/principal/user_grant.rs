@@ -111,7 +111,9 @@ impl GrantObject {
             GrantObject::Stage(_) => {
                 UserPrivilegeSet::available_privileges_on_stage(available_ownership)
             }
-            GrantObject::Warehouse(_) => UserPrivilegeSet::available_privileges_on_warehouse(),
+            GrantObject::Warehouse(_) => {
+                UserPrivilegeSet::available_privileges_on_warehouse(available_ownership)
+            }
         }
     }
 

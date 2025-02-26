@@ -448,11 +448,26 @@ impl Binder {
             GrantObjectName::Stage(name) => {
                 format!("SELECT * FROM show_grants('stage', '{}')", name)
             }
+            GrantObjectName::Warehouse(name) => {
+                format!("SELECT * FROM show_grants('warehouse', '{}')", name)
+            }
         };
 
         let (show_limit, limit_str) = get_show_options(show_option, Some("name".to_string()));
         let query = format!("{} {} {}", query, show_limit, limit_str,);
 
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_roles(
+        &mut self,
+        bind_context: &mut BindContext,
+        show_options: &Option<ShowOptions>,
+    ) -> Result<Plan> {
+        let (show_limit, limit_str) = get_show_options(show_options, None);
+        let query = format!("SELECT * FROM show_roles() {} {}", show_limit, limit_str);
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)
             .await
     }

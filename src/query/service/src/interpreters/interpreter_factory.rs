@@ -65,7 +65,6 @@ use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
 use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
 use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
-use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_show_online_nodes::ShowOnlineNodesInterpreter;
 use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
@@ -502,8 +501,6 @@ impl InterpreterFactory {
             Plan::SetSecondaryRoles(set_secondary_roles) => Ok(Arc::new(
                 SetSecondaryRolesInterpreter::try_create(ctx, *set_secondary_roles.clone())?,
             )),
-
-            Plan::ShowRoles(_show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
 
             // Stages
             Plan::CreateStage(create_stage) => Ok(Arc::new(

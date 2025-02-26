@@ -149,6 +149,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (117, "2025-01-21: Add: config.proto: add disable_list_batch in WebhdfsConfig"),
     (118, "2025-01-22: Add: config.proto: add user_name in WebhdfsConfig"),
     (119, "2025-01-25: Add: virtual_column add alias_names and auto_generated field"),
+    (120, "2025-02-11: Add: Add new UserPrivilege CreateWarehouse and new OwnershipObject::Warehouse"),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)
