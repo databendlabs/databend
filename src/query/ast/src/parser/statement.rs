@@ -317,7 +317,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, show_options)| Statement::ShowVariables { show_options },
     );
-    let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
+    let show_stages = map(
+        rule! {
+            SHOW ~ STAGES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowStages { show_options },
+    );
     let show_process_list = map(
         rule! {
             SHOW ~ PROCESSLIST ~ #show_options?
@@ -1524,7 +1529,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
+    let show_users = map(
+        rule! {
+            SHOW ~ USERS ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowUsers { show_options },
+    );
+
     let describe_user = map(
         rule! {
             ( DESC | DESCRIBE ) ~ USER ~ ^#user_identity
@@ -1592,7 +1603,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             user,
         },
     );
-    let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
+    let show_roles = map(
+        rule! {
+            SHOW ~ ROLES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowRoles { show_options },
+    );
     let create_role = map(
         rule! {
             CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
