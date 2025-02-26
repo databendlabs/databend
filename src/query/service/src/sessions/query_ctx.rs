@@ -840,7 +840,7 @@ impl TableContext for QueryContext {
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
     }
-    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         self.get_current_session().get_all_available_roles().await
     }
 
