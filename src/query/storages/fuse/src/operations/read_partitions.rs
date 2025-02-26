@@ -76,6 +76,7 @@ use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::pruning_pipeline::TopNPruneTransform;
 use crate::FuseLazyPartInfo;
+use crate::FuseSegmentFormat;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -248,14 +249,28 @@ impl FuseTable {
 
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
-        self.prune_segments_with_pipeline(
-            pruner.clone(),
-            &mut prune_pipeline,
-            ctx.clone(),
-            segment_rx,
-            part_info_tx,
-            derterministic_cache_key.clone(),
-        )?;
+        match self.segment_format {
+            FuseSegmentFormat::Row => {
+                self.prune_segments_with_pipeline(
+                    pruner.clone(),
+                    &mut prune_pipeline,
+                    ctx.clone(),
+                    segment_rx,
+                    part_info_tx,
+                    derterministic_cache_key.clone(),
+                )?;
+            }
+            FuseSegmentFormat::Column => {
+                self.prune_column_oriented_segments_with_pipeline(
+                    pruner.clone(),
+                    &mut prune_pipeline,
+                    ctx.clone(),
+                    segment_rx,
+                    part_info_tx,
+                    derterministic_cache_key.clone(),
+                )?;
+            }
+        }
         prune_pipeline.set_on_init(move || {
             // We cannot use the runtime associated with the query to avoid increasing its lifetime.
             GlobalIORuntime::instance().spawn(async move {
