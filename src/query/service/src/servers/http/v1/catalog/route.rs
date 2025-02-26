@@ -16,7 +16,7 @@ use poem::get;
 use poem::Route;
 
 pub fn catalog_route() -> Route {
-    let mut route = Route::new()
+    let route = Route::new()
         .at(
             "/databases",
             get(super::list_databases::list_databases_handler),

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_exception::Result;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
@@ -32,25 +33,14 @@ pub struct DatabaseInfo {
     pub name: String,
 }
 
-#[poem::handler]
 #[async_backtrace::framed]
-pub async fn list_databases_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
+async fn list_databases(ctx: &HttpQueryContext) -> Result<ListDatabasesResponse> {
     let tenant = ctx.session.get_current_tenant();
-    let user = ctx
-        .session
-        .get_current_user()
-        .map_err(InternalServerError)?;
-    let visibility_checker = ctx
-        .session
-        .get_visibility_checker(false)
-        .await
-        .map_err(InternalServerError)?;
+    let user = ctx.session.get_current_user()?;
+    let visibility_checker = ctx.session.get_visibility_checker(false).await?;
 
     let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
-    let dbs = catalog
-        .list_databases(&tenant)
-        .await
-        .map_err(InternalServerError)?;
+    let dbs = catalog.list_databases(&tenant).await?;
 
     let databases = dbs
         .into_iter()
@@ -67,8 +57,15 @@ pub async fn list_databases_handler(ctx: &HttpQueryContext) -> PoemResult<impl I
         .collect::<Vec<_>>();
     let warnings = vec![];
 
-    Ok(Json(ListDatabasesResponse {
+    Ok(ListDatabasesResponse {
         databases,
         warnings,
-    }))
+    })
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn list_databases_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
+    let response = list_databases(ctx).await.map_err(InternalServerError)?;
+    Ok(Json(response))
 }
