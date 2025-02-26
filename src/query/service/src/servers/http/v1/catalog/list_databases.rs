@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::catalog::CatalogManager;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
@@ -33,9 +34,28 @@ pub struct DatabaseInfo {
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn list_databases_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
-    // TODO:
-    let databases = vec![];
+    let tenant = ctx.session.get_current_tenant();
+    let user = ctx.session.get_current_user()?;
+    let visibility_checker = ctx.session.get_visibility_checker(false).await?;
+
+    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
+    let dbs = catalog.list_databases(&tenant).await?;
+
+    let databases = dbs
+        .into_iter()
+        .filter(|db| {
+            visibility_checker.check_database_visibility(
+                catalog.name().as_str(),
+                db.name(),
+                db.get_db_info().database_id.db_id,
+            )
+        })
+        .map(|db| DatabaseInfo {
+            name: db.name().to_string(),
+        })
+        .collect::<Vec<_>>();
     let warnings = vec![];
+
     Ok(Json(ListDatabasesResponse {
         databases,
         warnings,
