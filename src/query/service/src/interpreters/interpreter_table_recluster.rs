@@ -22,12 +22,17 @@ use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_pipeline_core::always_callback;
+use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::bind_table;
 use databend_common_sql::executor::physical_plans::create_push_down_filters;
 use databend_common_sql::executor::physical_plans::CommitSink;
@@ -52,6 +57,7 @@ use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeChecker;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use derive_visitor::DriveMut;
 use log::error;
@@ -169,13 +175,6 @@ impl Interpreter for ReclusterTableInterpreter {
                 );
                 break;
             }
-
-            self.ctx.clear_selected_segment_locations();
-            self.ctx.evict_table_from_cache(
-                &self.plan.catalog,
-                &self.plan.database,
-                &self.plan.table,
-            )?;
         }
 
         Ok(PipelineBuildResult::create())
@@ -195,7 +194,6 @@ impl ReclusterTableInterpreter {
             catalog,
             database,
             table,
-            selection,
             limit,
             ..
         } = &self.plan;
@@ -207,7 +205,6 @@ impl ReclusterTableInterpreter {
             .await?;
 
         let tbl = self.ctx.get_table(catalog, database, table).await?;
-        let table_info = tbl.get_table_info().clone();
         // check mutability
         tbl.check_mutable()?;
         let Some(cluster_type) = tbl.cluster_type() else {
@@ -217,8 +214,273 @@ impl ReclusterTableInterpreter {
             )));
         };
 
+        self.build_push_downs(push_downs, &tbl)?;
+
+        let physical_plan = match cluster_type {
+            ClusterType::Hilbert => {
+                self.build_hilbert_plan(&tbl, push_downs, hilbert_info)
+                    .await?
+            }
+            ClusterType::Linear => self.build_linear_plan(&tbl, push_downs, *limit).await?,
+        };
+        let Some(mut physical_plan) = physical_plan else {
+            return Ok(true);
+        };
+        physical_plan.adjust_plan_id(&mut 0);
+        let mut build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
+        {
+            let ctx = self.ctx.clone();
+            let catalog = self.plan.catalog.clone();
+            let database = self.plan.database.clone();
+            let table = self.plan.table.clone();
+            build_res.main_pipeline.set_on_finished(always_callback(
+                move |info: &ExecutionInfo| {
+                    ctx.clear_written_segment_locations()?;
+                    ctx.clear_selected_segment_locations();
+                    ctx.evict_table_from_cache(&catalog, &database, &table)?;
+
+                    ctx.unload_spill_meta();
+                    hook_clear_m_cte_temp_table(&ctx)?;
+                    hook_vacuum_temp_files(&ctx)?;
+                    hook_disk_temp_dir(&ctx)?;
+                    match &info.res {
+                        Ok(_) => {
+                            InterpreterClusteringHistory::write_log(
+                                &ctx, start, &database, &table,
+                            )?;
+
+                            Ok(())
+                        }
+                        Err(error) => Err(error.clone()),
+                    }
+                },
+            ));
+        }
+
+        debug_assert!(build_res.main_pipeline.is_complete_pipeline()?);
+
+        let max_threads = settings.get_max_threads()? as usize;
+        build_res.set_max_threads(max_threads);
+
+        let executor_settings = ExecutorSettings::try_create(self.ctx.clone())?;
+
+        let mut pipelines = build_res.sources_pipelines;
+        pipelines.push(build_res.main_pipeline);
+
+        let complete_executor =
+            PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
+        self.ctx.set_executor(complete_executor.get_inner())?;
+        complete_executor.execute()?;
+
+        // make sure the executor is dropped before the next loop.
+        drop(complete_executor);
+        // make sure the lock guard is dropped before the next loop.
+        drop(lock_guard);
+
+        Ok(false)
+    }
+
+    async fn build_hilbert_plan(
+        &self,
+        tbl: &Arc<dyn Table>,
+        push_downs: &mut Option<PushDownInfo>,
+        hilbert_info: &mut Option<HilbertBuildInfo>,
+    ) -> Result<Option<PhysicalPlan>> {
+        LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::HilbertClustering)?;
+        let handler = get_hilbert_clustering_handler();
+        let Some((recluster_info, snapshot)) = handler
+            .do_hilbert_clustering(tbl.clone(), self.ctx.clone(), push_downs.clone())
+            .await?
+        else {
+            return Ok(None);
+        };
+
+        let settings = self.ctx.get_settings();
+        let block_thresholds = tbl.get_block_thresholds();
+        let total_bytes = recluster_info.removed_statistics.uncompressed_byte_size as usize;
+        let total_rows = recluster_info.removed_statistics.row_count as usize;
+        let block_size = settings.get_max_block_size()?;
+        let rows_per_block = block_thresholds
+            .calc_rows_per_block(total_bytes, total_rows)
+            .max(block_size as usize);
+        let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
+
+        let subquery_executor = Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
+            self.ctx.as_ref(),
+        )));
+        let partitions = settings.get_hilbert_num_range_ids()? as usize;
+
+        self.build_hilbert_info(tbl, hilbert_info).await?;
+        let HilbertBuildInfo {
+            keys_bound,
+            index_bound,
+            query,
+        } = hilbert_info.as_ref().unwrap();
+
+        let mut variables = VecDeque::new();
+
+        let keys_bounds = self
+            .execute_hilbert_plan(
+                &subquery_executor,
+                keys_bound,
+                std::cmp::max(total_partitions, partitions),
+                &variables,
+                tbl,
+            )
+            .await?;
+        for entry in keys_bounds.columns().iter() {
+            let v = entry.value.index(0).unwrap().to_owned();
+            variables.push_back(v);
+        }
+
+        let index_bounds = self
+            .execute_hilbert_plan(
+                &subquery_executor,
+                index_bound,
+                total_partitions,
+                &variables,
+                tbl,
+            )
+            .await?;
+        let val = index_bounds.value_at(0, 0).unwrap().to_owned();
+        variables.push_front(val);
+
+        // reset the scan progress.
+        self.ctx.get_scan_progress().set(&Default::default());
+        let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } = query
+        else {
+            unreachable!()
+        };
+        let mut s_expr = replace_with_constant(s_expr, &variables, total_partitions as u16);
+        if tbl.change_tracking_enabled() {
+            s_expr = set_update_stream_columns(&s_expr)?;
+        }
+        metadata.write().replace_all_tables(tbl.clone());
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+        let mut plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
+
+        let mut is_exchange = false;
+        if let PhysicalPlan::Exchange(Exchange {
+            input,
+            kind: FragmentKind::Merge,
+            ..
+        }) = plan.as_ref()
+        {
+            is_exchange = true;
+            plan = input.clone();
+        }
+
+        let cluster = self.ctx.get_cluster();
+        let is_distributed = is_exchange || !cluster.is_empty();
+        if is_distributed {
+            let expr = scalar_expr_to_remote_expr(
+                &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: bind_context.columns.last().unwrap().clone(),
+                }),
+                plan.output_schema()?.as_ref(),
+            )?;
+            plan = Box::new(PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: plan,
+                kind: FragmentKind::Normal,
+                keys: vec![expr],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            }));
+        }
+
+        let table_info = tbl.get_table_info().clone();
+        let plan = PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
+            plan_id: 0,
+            input: plan,
+            table_info: table_info.clone(),
+            num_partitions: total_partitions,
+        }));
+        Ok(Some(Self::add_commit_sink(
+            plan,
+            is_distributed,
+            table_info,
+            snapshot,
+            false,
+            Some(recluster_info),
+        )))
+    }
+
+    async fn build_linear_plan(
+        &self,
+        tbl: &Arc<dyn Table>,
+        push_downs: &mut Option<PushDownInfo>,
+        limit: Option<usize>,
+    ) -> Result<Option<PhysicalPlan>> {
+        let Some((parts, snapshot)) = tbl
+            .recluster(self.ctx.clone(), push_downs.clone(), limit)
+            .await?
+        else {
+            return Ok(None);
+        };
+        if parts.is_empty() {
+            return Ok(None);
+        }
+
+        let table_info = tbl.get_table_info().clone();
+        let is_distributed = parts.is_distributed(self.ctx.clone());
+        let plan = match parts {
+            ReclusterParts::Recluster {
+                tasks,
+                remained_blocks,
+                removed_segment_indexes,
+                removed_segment_summary,
+            } => {
+                let root = PhysicalPlan::Recluster(Box::new(Recluster {
+                    tasks,
+                    table_info: table_info.clone(),
+                    plan_id: u32::MAX,
+                }));
+
+                Self::add_commit_sink(
+                    root,
+                    is_distributed,
+                    table_info,
+                    snapshot,
+                    false,
+                    Some(ReclusterInfoSideCar {
+                        merged_blocks: remained_blocks,
+                        removed_segment_indexes,
+                        removed_statistics: removed_segment_summary,
+                    }),
+                )
+            }
+            ReclusterParts::Compact(parts) => {
+                let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
+                let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
+                    parts,
+                    table_info: table_info.clone(),
+                    column_ids: snapshot.schema.to_leaf_column_id_set(),
+                    plan_id: u32::MAX,
+                }));
+
+                Self::add_commit_sink(root, is_distributed, table_info, snapshot, merge_meta, None)
+            }
+        };
+        Ok(Some(plan))
+    }
+
+    fn build_push_downs(
+        &self,
+        push_downs: &mut Option<PushDownInfo>,
+        tbl: &Arc<dyn Table>,
+    ) -> Result<()> {
         if push_downs.is_none() {
-            if let Some(expr) = &selection {
+            if let Some(expr) = &self.plan.selection {
+                let settings = self.ctx.get_settings();
                 let (mut bind_context, metadata) = bind_table(tbl.clone())?;
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let mut type_checker = TypeChecker::try_create(
@@ -237,372 +499,164 @@ impl ReclusterTableInterpreter {
                 });
             }
         }
+        Ok(())
+    }
 
-        let mut physical_plan = match cluster_type {
-            ClusterType::Hilbert => {
-                LicenseManagerSwitch::instance().check_enterprise_enabled(
-                    self.ctx.get_license_key(),
-                    Feature::HilbertClustering,
-                )?;
-                let handler = get_hilbert_clustering_handler();
-                let Some((recluster_info, snapshot)) = handler
-                    .do_hilbert_clustering(tbl.clone(), self.ctx.clone(), push_downs.clone())
-                    .await?
-                else {
-                    return Ok(true);
-                };
+    async fn build_hilbert_info(
+        &self,
+        tbl: &Arc<dyn Table>,
+        hilbert_info: &mut Option<HilbertBuildInfo>,
+    ) -> Result<()> {
+        if hilbert_info.is_some() {
+            return Ok(());
+        }
 
-                let block_thresholds = tbl.get_block_thresholds();
-                let total_bytes = recluster_info.removed_statistics.uncompressed_byte_size as usize;
-                let total_rows = recluster_info.removed_statistics.row_count as usize;
-                let block_size = settings.get_max_block_size()?;
-                let rows_per_block = block_thresholds
-                    .calc_rows_per_block(total_bytes, total_rows)
-                    .max(block_size as usize);
-                let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
+        let database = &self.plan.database;
+        let table = &self.plan.table;
+        let settings = self.ctx.get_settings();
+        let sample_size = settings.get_hilbert_sample_size_per_block()?;
 
-                let subquery_executor = Arc::new(ServiceQueryExecutor::new(
-                    QueryContext::create_from(self.ctx.as_ref()),
-                ));
-                let partitions = settings.get_hilbert_num_range_ids()? as usize;
-                if hilbert_info.is_none() {
-                    let sample_size = settings.get_hilbert_sample_size_per_block()?;
+        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let (mut expr_bind_context, expr_metadata) = bind_table(tbl.clone())?;
+        let mut type_checker = TypeChecker::try_create(
+            &mut expr_bind_context,
+            self.ctx.clone(),
+            &name_resolution_ctx,
+            expr_metadata,
+            &[],
+            true,
+        )?;
 
-                    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-                    let (mut expr_bind_context, expr_metadata) = bind_table(tbl.clone())?;
-                    let mut type_checker = TypeChecker::try_create(
-                        &mut expr_bind_context,
-                        self.ctx.clone(),
-                        &name_resolution_ctx,
-                        expr_metadata,
-                        &[],
-                        true,
-                    )?;
+        let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
+        let cluster_keys_len = ast_exprs.len();
+        let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
+        let mut cluster_key_types = Vec::with_capacity(cluster_keys_len);
+        for mut ast in ast_exprs {
+            let mut normalizer = IdentifierNormalizer {
+                ctx: &name_resolution_ctx,
+            };
+            ast.drive_mut(&mut normalizer);
+            cluster_key_strs.push(format!("{:#}", &ast));
 
-                    let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
-                    let cluster_keys_len = ast_exprs.len();
-                    let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
-                    let mut cluster_key_types = Vec::with_capacity(cluster_keys_len);
-                    for mut ast in ast_exprs {
-                        let mut normalizer = IdentifierNormalizer {
-                            ctx: &name_resolution_ctx,
-                        };
-                        ast.drive_mut(&mut normalizer);
-                        cluster_key_strs.push(format!("{:#}", &ast));
+            let (scalar, _) = *type_checker.resolve(&ast)?;
+            cluster_key_types.push(scalar.data_type()?);
+        }
 
-                        let (scalar, _) = *type_checker.resolve(&ast)?;
-                        cluster_key_types.push(scalar.data_type()?);
-                    }
+        let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
+        let mut hilbert_keys = Vec::with_capacity(cluster_key_strs.len());
+        for cluster_key_str in cluster_key_strs.into_iter() {
+            keys_bounds.push(format!(
+                "range_bound(1000, {sample_size})({cluster_key_str})"
+            ));
 
-                    let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
-                    let mut hilbert_keys = Vec::with_capacity(cluster_key_strs.len());
-                    for cluster_key_str in cluster_key_strs.into_iter() {
-                        keys_bounds.push(format!(
-                            "range_bound({partitions}, {sample_size})({cluster_key_str})"
-                        ));
+            hilbert_keys.push(format!(
+                "hilbert_key(cast(range_partition_id({table}.{cluster_key_str}, []) as uint16))"
+            ));
+        }
+        let hilbert_keys_str = hilbert_keys.join(", ");
 
-                        hilbert_keys.push(format!(
-                            "hilbert_key(cast(range_partition_id({table}.{cluster_key_str}, []) as uint16))"
-                        ));
-                    }
-                    let hilbert_keys_str = hilbert_keys.join(", ");
+        let keys_bounds_query =
+            format!("SELECT {} FROM {database}.{table}", keys_bounds.join(", "));
+        let keys_bound =
+            plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &keys_bounds_query).await?;
 
-                    let keys_bounds_query =
-                        format!("SELECT {} FROM {database}.{table}", keys_bounds.join(", "));
-                    let keys_bound = plan_hilbert_sql(
-                        self.ctx.clone(),
-                        MetadataRef::default(),
-                        &keys_bounds_query,
-                    )
-                    .await?;
+        let index_bound_query = format!(
+            "SELECT \
+                range_bound(1000, {sample_size})(hilbert_index([{hilbert_keys_str}], 2)) \
+            FROM {database}.{table}"
+        );
+        let index_bound =
+            plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &index_bound_query).await?;
 
-                    let index_bound_query = format!(
-                        "SELECT \
-                            range_bound({total_partitions}, {sample_size})(hilbert_index([{hilbert_keys_str}], 2)) \
-                        FROM {database}.{table}"
-                    );
-                    let index_bound = plan_hilbert_sql(
-                        self.ctx.clone(),
-                        MetadataRef::default(),
-                        &index_bound_query,
-                    )
-                    .await?;
+        let quote = settings.get_sql_dialect()?.default_ident_quote();
+        let schema = tbl.schema_with_stream();
+        let mut output_with_table = Vec::with_capacity(schema.fields.len());
+        for field in &schema.fields {
+            output_with_table.push(format!(
+                "{quote}{table}{quote}.{quote}{}{quote}",
+                field.name
+            ));
+        }
+        let output_with_table_str = output_with_table.join(", ");
+        let query = format!(
+            "SELECT \
+                {output_with_table_str}, \
+                range_partition_id(hilbert_index([{hilbert_keys_str}], 2), [])AS _predicate \
+            FROM {database}.{table}"
+        );
+        let query = plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &query).await?;
 
-                    let quote = settings.get_sql_dialect()?.default_ident_quote();
-                    let schema = tbl.schema_with_stream();
-                    let mut output_with_table = Vec::with_capacity(schema.fields.len());
-                    for field in &schema.fields {
-                        output_with_table.push(format!(
-                            "{quote}{table}{quote}.{quote}{}{quote}",
-                            field.name
-                        ));
-                    }
-                    let output_with_table_str = output_with_table.join(", ");
-                    let query = format!(
-                        "SELECT \
-                            {output_with_table_str}, \
-                            range_partition_id(hilbert_index([{hilbert_keys_str}], 2), [])AS _predicate \
-                        FROM {database}.{table}"
-                    );
-                    let query =
-                        plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &query).await?;
+        *hilbert_info = Some(HilbertBuildInfo {
+            keys_bound,
+            index_bound,
+            query,
+        });
+        Ok(())
+    }
 
-                    *hilbert_info = Some(HilbertBuildInfo {
-                        keys_bound,
-                        index_bound,
-                        query,
-                    });
-                }
-
-                let HilbertBuildInfo {
-                    keys_bound,
-                    index_bound,
-                    query,
-                } = hilbert_info.as_ref().unwrap();
-
-                let mut variables = VecDeque::new();
-
-                let Plan::Query {
-                    mut s_expr,
-                    metadata,
-                    bind_context,
-                    ..
-                } = keys_bound.clone()
-                else {
-                    unreachable!()
-                };
-                if total_partitions > partitions {
-                    *s_expr = replace_with_constant(&s_expr, &variables, total_partitions as u16)
-                }
-                metadata.write().replace_all_tables(tbl.clone());
-                let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone(), false);
-                let plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
-                let data_blocks = subquery_executor
-                    .execute_query_with_physical_plan(&plan)
-                    .await?;
-                let keys_bounds = DataBlock::concat(&data_blocks)?;
-                for entry in keys_bounds.columns().iter() {
-                    let v = entry.value.index(0).unwrap().to_owned();
-                    variables.push_back(v);
-                }
-
-                let Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    ..
-                } = index_bound
-                else {
-                    unreachable!()
-                };
-                let s_expr = replace_with_constant(s_expr, &variables, total_partitions as u16);
-                metadata.write().replace_all_tables(tbl.clone());
-                let mut builder =
-                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                let plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
-                let data_blocks = subquery_executor
-                    .execute_query_with_physical_plan(&plan)
-                    .await?;
-                debug_assert!(data_blocks.len() == 1);
-                let val = data_blocks[0].value_at(0, 0).unwrap().to_owned();
-                variables.push_front(val);
-
-                let Plan::Query {
-                    s_expr,
-                    metadata,
-                    bind_context,
-                    ..
-                } = query
-                else {
-                    unreachable!()
-                };
-                let mut s_expr = replace_with_constant(s_expr, &variables, total_partitions as u16);
-                if tbl.change_tracking_enabled() {
-                    s_expr = set_update_stream_columns(&s_expr)?;
-                }
-
-                metadata.write().replace_all_tables(tbl.clone());
-                let mut builder =
-                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                let mut plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
-                let mut is_exchange = false;
-                if let PhysicalPlan::Exchange(Exchange {
-                    input,
-                    kind: FragmentKind::Merge,
-                    ..
-                }) = plan.as_ref()
-                {
-                    is_exchange = true;
-                    plan = input.clone();
-                }
-
-                let cluster = self.ctx.get_cluster();
-                let is_distributed = is_exchange || !cluster.is_empty();
-                if is_distributed {
-                    let expr = scalar_expr_to_remote_expr(
-                        &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: bind_context.columns.last().unwrap().clone(),
-                        }),
-                        plan.output_schema()?.as_ref(),
-                    )?;
-                    plan = Box::new(PhysicalPlan::Exchange(Exchange {
-                        plan_id: 0,
-                        input: plan,
-                        kind: FragmentKind::Normal,
-                        keys: vec![expr],
-                        allow_adjust_parallelism: true,
-                        ignore_exchange: false,
-                    }));
-                }
-
-                let mut plan = PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
-                    plan_id: 0,
-                    input: plan,
-                    table_info: table_info.clone(),
-                    num_partitions: total_partitions,
-                }));
-
-                if is_distributed {
-                    plan = PhysicalPlan::Exchange(Exchange {
-                        plan_id: 0,
-                        input: Box::new(plan),
-                        kind: FragmentKind::Merge,
-                        keys: vec![],
-                        allow_adjust_parallelism: true,
-                        ignore_exchange: false,
-                    });
-                }
-
-                PhysicalPlan::CommitSink(Box::new(CommitSink {
-                    input: Box::new(plan),
-                    table_info,
-                    snapshot: Some(snapshot),
-                    mutation_kind: MutationKind::Recluster,
-                    update_stream_meta: vec![],
-                    merge_meta: false,
-                    deduplicated_label: None,
-                    plan_id: u32::MAX,
-                    recluster_info: Some(recluster_info),
-                }))
-            }
-            ClusterType::Linear => {
-                let Some((parts, snapshot)) = tbl
-                    .recluster(self.ctx.clone(), push_downs.clone(), *limit)
-                    .await?
-                else {
-                    return Ok(true);
-                };
-                if parts.is_empty() {
-                    return Ok(true);
-                }
-
-                let is_distributed = parts.is_distributed(self.ctx.clone());
-                match parts {
-                    ReclusterParts::Recluster {
-                        tasks,
-                        remained_blocks,
-                        removed_segment_indexes,
-                        removed_segment_summary,
-                    } => {
-                        let mut root = PhysicalPlan::Recluster(Box::new(Recluster {
-                            tasks,
-                            table_info: table_info.clone(),
-                            plan_id: u32::MAX,
-                        }));
-
-                        if is_distributed {
-                            root = PhysicalPlan::Exchange(Exchange {
-                                plan_id: 0,
-                                input: Box::new(root),
-                                kind: FragmentKind::Merge,
-                                keys: vec![],
-                                allow_adjust_parallelism: true,
-                                ignore_exchange: false,
-                            });
-                        }
-                        PhysicalPlan::CommitSink(Box::new(CommitSink {
-                            input: Box::new(root),
-                            table_info,
-                            snapshot: Some(snapshot),
-                            mutation_kind: MutationKind::Recluster,
-                            update_stream_meta: vec![],
-                            merge_meta: false,
-                            deduplicated_label: None,
-                            plan_id: u32::MAX,
-                            recluster_info: Some(ReclusterInfoSideCar {
-                                merged_blocks: remained_blocks,
-                                removed_segment_indexes,
-                                removed_statistics: removed_segment_summary,
-                            }),
-                        }))
-                    }
-                    ReclusterParts::Compact(parts) => {
-                        let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-                        let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
-                            parts,
-                            table_info: table_info.clone(),
-                            column_ids: snapshot.schema.to_leaf_column_id_set(),
-                            plan_id: u32::MAX,
-                        }));
-
-                        if is_distributed {
-                            root = PhysicalPlan::Exchange(Exchange {
-                                plan_id: 0,
-                                input: Box::new(root),
-                                kind: FragmentKind::Merge,
-                                keys: vec![],
-                                allow_adjust_parallelism: true,
-                                ignore_exchange: false,
-                            });
-                        }
-
-                        PhysicalPlan::CommitSink(Box::new(CommitSink {
-                            input: Box::new(root),
-                            table_info,
-                            snapshot: Some(snapshot),
-                            mutation_kind: MutationKind::Compact,
-                            update_stream_meta: vec![],
-                            merge_meta,
-                            deduplicated_label: None,
-                            plan_id: u32::MAX,
-                            recluster_info: None,
-                        }))
-                    }
-                }
-            }
+    async fn execute_hilbert_plan(
+        &self,
+        executor: &Arc<ServiceQueryExecutor>,
+        plan: &Plan,
+        partitions: usize,
+        variables: &VecDeque<Scalar>,
+        tbl: &Arc<dyn Table>,
+    ) -> Result<DataBlock> {
+        let Plan::Query {
+            s_expr,
+            metadata,
+            bind_context,
+            ..
+        } = plan
+        else {
+            unreachable!()
         };
-        physical_plan.adjust_plan_id(&mut 0);
-        let mut build_res =
-            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan).await?;
-        debug_assert!(build_res.main_pipeline.is_complete_pipeline()?);
 
-        let max_threads = settings.get_max_threads()? as usize;
-        build_res.set_max_threads(max_threads);
+        let s_expr = replace_with_constant(s_expr, variables, partitions as u16);
+        metadata.write().replace_all_tables(tbl.clone());
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
+        let plan = builder.build(&s_expr, bind_context.column_set()).await?;
+        let data_blocks = executor.execute_query_with_physical_plan(&plan).await?;
+        DataBlock::concat(&data_blocks)
+    }
 
-        let executor_settings = ExecutorSettings::try_create(self.ctx.clone())?;
+    fn add_commit_sink(
+        input: PhysicalPlan,
+        is_distributed: bool,
+        table_info: TableInfo,
+        snapshot: Arc<TableSnapshot>,
+        merge_meta: bool,
+        recluster_info: Option<ReclusterInfoSideCar>,
+    ) -> PhysicalPlan {
+        let plan = if is_distributed {
+            PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(input),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                allow_adjust_parallelism: true,
+                ignore_exchange: false,
+            })
+        } else {
+            input
+        };
 
-        let mut pipelines = build_res.sources_pipelines;
-        pipelines.push(build_res.main_pipeline);
-
-        let complete_executor =
-            PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-        self.ctx.clear_written_segment_locations()?;
-        self.ctx.set_executor(complete_executor.get_inner())?;
-        complete_executor.execute()?;
-        // make sure the executor is dropped before the next loop.
-        drop(complete_executor);
-        // make sure the lock guard is dropped before the next loop.
-        drop(lock_guard);
-
-        // vacuum temp files.
-        self.ctx.unload_spill_meta();
-        hook_clear_m_cte_temp_table(&self.ctx)?;
-        hook_vacuum_temp_files(&self.ctx)?;
-        hook_disk_temp_dir(&self.ctx)?;
-
-        InterpreterClusteringHistory::write_log(&self.ctx, start, database, table)?;
-        Ok(false)
+        let mutation_kind = if recluster_info.is_some() {
+            MutationKind::Recluster
+        } else {
+            MutationKind::Compact
+        };
+        PhysicalPlan::CommitSink(Box::new(CommitSink {
+            input: Box::new(plan),
+            table_info,
+            snapshot: Some(snapshot),
+            mutation_kind,
+            update_stream_meta: vec![],
+            merge_meta,
+            deduplicated_label: None,
+            plan_id: u32::MAX,
+            recluster_info,
+        }))
     }
 }
 
