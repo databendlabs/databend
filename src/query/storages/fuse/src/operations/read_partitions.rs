@@ -514,6 +514,20 @@ impl FuseTable {
 
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
         let push_down = pruner.push_down.clone();
+        let arrow_schema = self.schema().as_ref().into();
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema()));
+        let column_nodes = match push_down.as_ref().and_then(|p| p.projection.as_ref()) {
+            Some(projection) => match push_down.as_ref().and_then(|p| p.output_columns.as_ref()) {
+                Some(output_columns) => output_columns.project_column_nodes(&column_nodes)?,
+                None => projection.project_column_nodes(&column_nodes)?,
+            },
+            None => column_nodes.column_nodes.iter().collect(),
+        };
+        let column_ids: Vec<_> = column_nodes
+            .iter()
+            .map(|c| c.leaf_column_ids.clone())
+            .flatten()
+            .collect();
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(
                 input,
@@ -521,6 +535,7 @@ impl FuseTable {
                 push_down.clone(),
                 pruner.table_schema.clone(),
                 part_info_tx.clone(),
+                column_ids.clone(),
             )
         })?;
 

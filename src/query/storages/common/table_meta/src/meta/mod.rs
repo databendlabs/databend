@@ -44,6 +44,7 @@ pub use utils::try_extract_uuid_str_from_path;
 pub use utils::TEMP_TABLE_STORAGE_PREFIX;
 pub use utils::VACUUM2_OBJECT_KEY_PREFIX;
 pub(crate) use utils::*;
+pub use v0::ColumnMeta as ColumnMetaV0;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;

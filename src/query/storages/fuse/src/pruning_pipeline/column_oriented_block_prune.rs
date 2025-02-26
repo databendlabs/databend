@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_channel::Sender;
@@ -22,6 +23,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::TableSchemaRef;
@@ -31,6 +33,9 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_table_meta::meta::ColumnMeta;
+use databend_storages_common_table_meta::meta::ColumnMetaV0;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 
 use super::PrunedColumnOrientedSegmentMeta;
@@ -46,6 +51,7 @@ pub struct ColumnOrientedBlockPruneSink {
     block_pruner: Arc<BlockPruner>,
     push_downs: Option<PushDownInfo>,
     table_schema: TableSchemaRef,
+    column_ids: Vec<ColumnId>,
     sender: Option<Sender<Result<PartInfoPtr>>>,
 }
 
@@ -56,6 +62,7 @@ impl ColumnOrientedBlockPruneSink {
         push_downs: Option<PushDownInfo>,
         table_schema: TableSchemaRef,
         sender: Sender<Result<PartInfoPtr>>,
+        column_ids: Vec<ColumnId>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
@@ -63,6 +70,7 @@ impl ColumnOrientedBlockPruneSink {
                 block_pruner,
                 push_downs,
                 table_schema,
+                column_ids,
                 sender: Some(sender),
             },
         )))
@@ -135,11 +143,57 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 virtual_block_meta: None,
             };
 
+            let mut columns_meta = HashMap::with_capacity(self.column_ids.len());
+            let mut columns_stat = HashMap::with_capacity(self.column_ids.len());
+
+            for column_id in &self.column_ids {
+                if let Some(meta) = segment.meta_col(*column_id) {
+                    let meta = meta.index(block_idx).unwrap();
+                    let meta = meta.as_tuple().unwrap();
+                    let offset = meta[0].as_number().unwrap().as_u_int64().unwrap();
+                    let length = meta[1].as_number().unwrap().as_u_int64().unwrap();
+                    let num_values = meta[2].as_number().unwrap().as_u_int64().unwrap();
+                    columns_meta.insert(
+                        *column_id,
+                        ColumnMeta::Parquet(ColumnMetaV0 {
+                            offset: *offset,
+                            len: *length,
+                            num_values: *num_values,
+                        }),
+                    );
+                }
+                if let Some(stat) = segment.stat_col(*column_id) {
+                    let stat = stat.index(block_idx).unwrap();
+                    let stat = stat.as_tuple().unwrap();
+                    let min = stat[0].to_owned();
+                    let max = stat[1].to_owned();
+                    let null_count = stat[2].as_number().unwrap().as_u_int64().unwrap();
+                    let in_memory_size = stat[3].as_number().unwrap().as_u_int64().unwrap();
+                    let distinct_of_values = match stat[4] {
+                        ScalarRef::Number(number_scalar) => {
+                            Some(*number_scalar.as_u_int64().unwrap())
+                        }
+                        ScalarRef::Null => None,
+                        _ => unreachable!(),
+                    };
+                    columns_stat.insert(
+                        *column_id,
+                        ColumnStatistics::new(
+                            min,
+                            max,
+                            *null_count,
+                            *in_memory_size,
+                            distinct_of_values,
+                        ),
+                    );
+                }
+            }
+
             let part_info = FuseBlockPartInfo::create(
                 location_path.to_string(),
                 *row_count,
-                Default::default(),
-                Default::default(),
+                columns_meta,
+                Some(columns_stat),
                 compression,
                 None, // TODO(Sky): sort_min_max
                 Some(block_meta_index),
