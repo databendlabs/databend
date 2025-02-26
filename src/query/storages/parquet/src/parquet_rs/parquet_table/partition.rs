@@ -56,6 +56,7 @@ impl ParquetRSTable {
             match &self.files_to_read {
                 Some(files) => files
                     .iter()
+                    .filter(|f| f.size > 0)
                     .map(|f| (f.path.clone(), f.size))
                     .collect::<Vec<_>>(),
                 None => self
@@ -75,7 +76,7 @@ impl ParquetRSTable {
         };
 
         // If a file size is less than `parquet_fast_read_bytes`,
-        // we treat it as a small file and it will be totally loaded into memory.
+        // we treat it as a small file, and it will be totally loaded into memory.
         let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;
         let mut large_files = vec![];
         let mut large_file_indices = vec![];
@@ -85,7 +86,7 @@ impl ParquetRSTable {
             if size > fast_read_bytes {
                 large_files.push((location, size));
                 large_file_indices.push(index);
-            } else {
+            } else if size > 0 {
                 small_files.push((location, size));
                 small_file_indices.push(index);
             }
