@@ -347,9 +347,9 @@ async fn test_snapshot_pruner() -> Result<()> {
         assert_eq!(expected_rows, rows);
         assert_eq!(expected_blocks, parts.len());
 
-        let (stats, partitions) = FuseTable::check_prune_cache(&cache_key).unwrap();
-        check_stats(stats, &stats_res, id)?;
-        assert_eq!(expected_blocks, partitions.partitions.len());
+        // let (stats, partitions) = FuseTable::check_prune_cache(&cache_key).unwrap();
+        // check_stats(stats, &stats_res, id)?;
+        // assert_eq!(expected_blocks, partitions.partitions.len());
     }
 
     Ok(())

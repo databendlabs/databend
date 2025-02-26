@@ -144,6 +144,7 @@ impl ColumnOrientedSegmentBuilder {
             column_meta,
             segment_schema,
             table_schema,
+            block_per_segment,
         }
     }
 }
@@ -222,29 +223,29 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             }
         }
         let mut columns = vec![
-            UInt64Type::from_data(std::mem::take(&mut self.row_count)),
-            UInt64Type::from_data(std::mem::take(&mut self.block_size)),
-            UInt64Type::from_data(std::mem::take(&mut self.file_size)),
+            UInt64Type::from_data(this.row_count),
+            UInt64Type::from_data(this.block_size),
+            UInt64Type::from_data(this.file_size),
             BinaryType::from_opt_data(cluster_stats_binary),
             Column::Tuple(vec![
-                StringType::from_data(std::mem::take(&mut self.location.0)),
-                UInt64Type::from_data(std::mem::take(&mut self.location.1)),
+                StringType::from_data(this.location.0),
+                UInt64Type::from_data(this.location.1),
             ]),
             Column::Nullable(Box::new(NullableColumn::new(
                 Column::Tuple(vec![
-                    StringType::from_data(std::mem::take(&mut self.bloom_filter_index_location.0)),
-                    UInt64Type::from_data(std::mem::take(&mut self.bloom_filter_index_location.1)),
+                    StringType::from_data(this.bloom_filter_index_location.0),
+                    UInt64Type::from_data(this.bloom_filter_index_location.1),
                 ]),
-                std::mem::take(&mut self.bloom_filter_index_location.2).into(),
+                this.bloom_filter_index_location.2.into(),
             ))),
-            UInt64Type::from_data(std::mem::take(&mut self.bloom_filter_index_size)),
-            UInt64Type::from_opt_data(std::mem::take(&mut self.inverted_index_size)),
-            UInt8Type::from_data(std::mem::take(&mut self.compression)),
-            Int64Type::from_opt_data(std::mem::take(&mut self.create_on)),
+            UInt64Type::from_data(this.bloom_filter_index_size),
+            UInt64Type::from_opt_data(this.inverted_index_size),
+            UInt8Type::from_data(this.compression),
+            Int64Type::from_opt_data(this.create_on),
         ];
-        let mut column_stats = std::mem::take(&mut self.column_stats);
-        let mut column_meta = std::mem::take(&mut self.column_meta);
-        for field in self.table_schema.leaf_fields() {
+        let mut column_stats = this.column_stats;
+        let mut column_meta = this.column_meta;
+        for field in this.table_schema.leaf_fields() {
             let col_id = field.column_id();
             if supported_stat_type(&field.data_type().into()) {
                 let col_stat = column_stats.remove(&col_id).unwrap();
@@ -267,7 +268,7 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
         let segment = ColumnOrientedSegment {
             block_metas: DataBlock::new_from_columns(columns),
             summary,
-            segment_schema: self.segment_schema.clone(),
+            segment_schema: this.segment_schema.clone(),
         };
         Ok(segment)
     }
