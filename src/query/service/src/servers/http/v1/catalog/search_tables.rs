@@ -38,29 +38,15 @@ pub struct SearchTablesResponse {
 
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct TableInfo {
-    pub catalog: String,
-    pub database: String,
-    pub database_id: u64,
     pub name: String,
-    pub table_id: u64,
-    pub total_columns: u64,
+    pub database: String,
+    pub catalog: String,
     pub engine: String,
-    pub engine_full: String,
-    pub cluster_by: String,
-    pub is_transient: bool,
-    pub is_attach: bool,
-    pub created_on: DateTime<Utc>,
-    pub dropped_on: Option<DateTime<Utc>>,
-    pub updated_on: DateTime<Utc>,
+    pub create_time: DateTime<Utc>,
     pub num_rows: u64,
     pub data_size: u64,
     pub data_compressed_size: u64,
     pub index_size: u64,
-    pub number_of_segments: u64,
-    pub number_of_blocks: u64,
-    pub owner: String,
-    pub comment: String,
-    pub table_type: String,
 }
 
 #[async_backtrace::framed]
@@ -96,29 +82,15 @@ async fn handle(ctx: &HttpQueryContext, keywords: String) -> Result<SearchTables
                 continue;
             }
             tables.push(TableInfo {
-                catalog: catalog.name().to_string(),
-                database: db.name().to_string(),
-                database_id: db.get_db_info().database_id.db_id,
                 name: tbl.name().to_string(),
-                table_id: tbl.get_table_info().ident.table_id,
-                total_columns: tbl.get_table_info().schema().fields.len() as u64,
+                database: db.name().to_string(),
+                catalog: catalog.name().to_string(),
                 engine: tbl.get_table_info().meta.engine.clone(),
-                engine_full: tbl.get_table_info().meta.engine.clone(),
-                cluster_by: tbl.get_table_info().meta.cluster_by.clone(),
-                is_transient: tbl.get_table_info().meta.is_transient,
-                is_attach: tbl.get_table_info().meta.is_attach,
-                created_on: tbl.get_table_info().meta.created_on,
-                dropped_on: tbl.get_table_info().meta.dropped_on,
-                updated_on: tbl.get_table_info().meta.updated_on,
+                create_time: tbl.get_table_info().meta.created_on,
                 num_rows: tbl.get_table_info().meta.statistics.number_of_rows,
                 data_size: tbl.get_table_info().meta.statistics.data_bytes,
                 data_compressed_size: tbl.get_table_info().meta.statistics.data_bytes,
                 index_size: tbl.get_table_info().meta.statistics.index_bytes,
-                number_of_segments: tbl.get_table_info().meta.statistics.number_of_segments,
-                number_of_blocks: tbl.get_table_info().meta.statistics.number_of_blocks,
-                owner: tbl.get_table_info().meta.owner.clone(),
-                comment: tbl.get_table_info().meta.comment.clone(),
-                table_type: tbl.get_table_info().meta.table_type.clone(),
             });
         }
     }
