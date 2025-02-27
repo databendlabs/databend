@@ -126,49 +126,29 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ #task_warehouse_option
-            ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
-            ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
-            ~ ( WHEN ~ #expr )?
-            ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
-            ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
-            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ #task_set_option*
             ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
-        |(
-            _,
-            _,
-            opt_if_not_exists,
-            task,
-            warehouse_opts,
-            schedule_opts,
-            after_tasks,
-            when_conditions,
-            suspend_opt,
-            error_integration,
-            comment_opt,
-            session_opts,
-            _,
-            sql,
-        )| {
+        |(_, _, opt_if_not_exists, task, task_set_options, session_opts, _, sql)| {
             let session_opts = session_opts.unwrap_or_default();
-            Statement::CreateTask(CreateTaskStmt {
+            let mut stmt = CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
-                warehouse_opts,
-                schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
-                suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
-                comments: comment_opt.map(|(_, _, comment)| comment),
-                after: match after_tasks {
-                    Some((_, tasks)) => tasks,
-                    None => Vec::new(),
-                },
-                error_integration: error_integration.map(|(_, _, name)| name.to_string()),
-                when_condition: when_conditions.map(|(_, cond)| cond),
+                warehouse_opts: WarehouseOptions { warehouse: None },
+                schedule_opts: None,
+                suspend_task_after_num_failures: None,
+                comments: None,
+                after: vec![],
+                error_integration: None,
+                when_condition: None,
                 sql,
                 session_parameters: session_opts,
-            })
+            };
+            for opt in task_set_options {
+                stmt.apply_opt(opt);
+            }
+            Statement::CreateTask(stmt)
         },
     );
 
@@ -4825,6 +4805,53 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             _ => unreachable!(),
         },
     )(i)
+}
+
+pub fn task_set_option(i: Input) -> IResult<TaskSetOption> {
+    alt((
+        map(
+            rule! {
+                (WAREHOUSE  ~ "=" ~ #literal_string)
+            },
+            |(_, _, warehouse)| TaskSetOption::Warehouse(warehouse),
+        ),
+        map(
+            rule! {
+                SCHEDULE ~ "=" ~ #task_schedule_option
+            },
+            |(_, _, schedule)| TaskSetOption::Schedule(schedule),
+        ),
+        map(
+            rule! {
+                AFTER ~ #comma_separated_list0(literal_string)
+            },
+            |(_, after)| TaskSetOption::After(after),
+        ),
+        map(
+            rule! {
+                WHEN ~ #expr
+            },
+            |(_, expr)| TaskSetOption::When(expr),
+        ),
+        map(
+            rule! {
+                SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64
+            },
+            |(_, _, num)| TaskSetOption::SuspendTaskAfterNumFailures(num),
+        ),
+        map(
+            rule! {
+                ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string
+            },
+            |(_, _, integration)| TaskSetOption::ErrorIntegration(integration),
+        ),
+        map(
+            rule! {
+                (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string
+            },
+            |(_, _, comment)| TaskSetOption::Comment(comment),
+        ),
+    ))(i)
 }
 
 pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {

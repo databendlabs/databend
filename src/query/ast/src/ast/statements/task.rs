@@ -46,6 +46,17 @@ impl Display for TaskSql {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum TaskSetOption {
+    Warehouse(String),
+    Schedule(ScheduleOptions),
+    After(Vec<String>),
+    When(Expr),
+    SuspendTaskAfterNumFailures(u64),
+    ErrorIntegration(String),
+    Comment(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTaskStmt {
     pub if_not_exists: bool,
@@ -60,6 +71,34 @@ pub struct CreateTaskStmt {
     pub after: Vec<String>,
     pub when_condition: Option<Expr>,
     pub sql: TaskSql,
+}
+
+impl CreateTaskStmt {
+    pub fn apply_opt(&mut self, opt: TaskSetOption) {
+        match opt {
+            TaskSetOption::Warehouse(wh) => {
+                self.warehouse_opts.warehouse = Some(wh);
+            }
+            TaskSetOption::Schedule(schedule) => {
+                self.schedule_opts = Some(schedule);
+            }
+            TaskSetOption::After(after) => {
+                self.after = after;
+            }
+            TaskSetOption::When(when) => {
+                self.when_condition = Some(when);
+            }
+            TaskSetOption::SuspendTaskAfterNumFailures(num) => {
+                self.suspend_task_after_num_failures = Some(num as u64);
+            }
+            TaskSetOption::ErrorIntegration(integration) => {
+                self.error_integration = Some(integration);
+            }
+            TaskSetOption::Comment(comment) => {
+                self.comments = Some(comment);
+            }
+        }
+    }
 }
 
 impl Display for CreateTaskStmt {
