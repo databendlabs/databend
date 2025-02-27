@@ -96,6 +96,7 @@ Exchange
                 ├── join type: INNER
                 ├── build keys: [d.department_id (#4)]
                 ├── probe keys: [e.department_id (#2)]
+                ├── keys is null equal: [false]
                 ├── filters: []
                 ├── estimated rows: 8.00
                 ├── Exchange(Build)

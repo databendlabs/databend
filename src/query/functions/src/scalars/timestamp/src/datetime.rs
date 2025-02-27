@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::fmt;
 use std::borrow::Cow;
+use std::fmt::Display;
 use std::io::Write;
 
 use databend_common_column::types::months_days_micros;
@@ -620,11 +622,15 @@ fn register_to_string(registry: &mut FunctionRegistry) {
             |micros, format, output, ctx| {
                 let ts = micros.to_timestamp(ctx.func_ctx.tz.clone());
                 let format = replace_time_format(format);
-                match write!(
-                    output.builder.row_buffer,
-                    "{}",
-                    ts.strftime(format.as_ref())
-                ) {
+                let mut buf = String::new();
+                let mut formatter = fmt::Formatter::new(&mut buf);
+                if Display::fmt(&ts.strftime(format.as_ref()), &mut formatter).is_err() {
+                    ctx.set_error(output.len(), format!("{format} is invalid time format"));
+                    output.builder.commit_row();
+                    output.validity.push(true);
+                    return;
+                }
+                match write!(output.builder.row_buffer, "{}", buf) {
                     Ok(_) => {
                         output.builder.commit_row();
                         output.validity.push(true);

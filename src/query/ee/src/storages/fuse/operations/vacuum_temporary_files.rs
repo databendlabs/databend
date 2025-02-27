@@ -173,8 +173,10 @@ async fn vacuum_by_duration(
     Ok(removed_total)
 }
 
+// Vacuum temporary files by query hook
+// If query was killed, we still need to clean up the temporary files
 async fn vacuum_query_hook(
-    abort_checker: AbortChecker,
+    _abort_checker: AbortChecker,
     temporary_dir: &str,
     nodes: &[usize],
     query_id: &str,
@@ -198,7 +200,6 @@ async fn vacuum_query_hook(
         .filter_map(|x| x.is_ok().then(|| x.unwrap()));
 
     for (meta_file_path, buffer) in metas {
-        abort_checker.try_check_aborting()?;
         let removed = vacuum_by_meta_buffer(
             &meta_file_path,
             temporary_dir,
@@ -247,12 +248,13 @@ async fn vacuum_by_meta_buffer(
     *removed_total += cur_removed;
     // Log for the current batch
     info!(
-            "Total progress: {} files removed, now vacuum removed {} temp files from meta: {}(elapsed: {} seconds)",
-            *removed_total,
-            cur_removed,
-            meta_file_path,
-            start_time.elapsed().as_secs(),
-        );
+        "Vacuum temporary files progress(by meta file): Total removed: {}, Current batch: {} (from '{}'), Dir: '{}', Time: {} sec",
+        *removed_total,
+        cur_removed,
+        meta_file_path,
+        temporary_dir,
+        start_time.elapsed().as_secs(),
+    );
 
     Ok(cur_removed)
 }
@@ -298,14 +300,14 @@ async fn vacuum_by_list_dir(
     let _ = operator.delete_iter(batches.into_iter().take(limit)).await;
 
     *removed_total += cur_removed;
-    // Log for the current batch
+    // Log progress for the current batch
     info!(
-            "Total progress: {} files removed, now vacuum removed {} temp files from list query dir: {}(elapsed: {} seconds)",
-            *removed_total,
-            cur_removed,
-            dir_path,
-            start_time.elapsed().as_secs(),
-        );
+        "Vacuum temporary files progress(by list dir): Total removed: {}, Current batch: {} (from '{}'), Time: {} sec",
+        *removed_total,
+        cur_removed,
+        dir_path,
+        start_time.elapsed().as_secs(),
+    );
 
     Ok(cur_removed)
 }

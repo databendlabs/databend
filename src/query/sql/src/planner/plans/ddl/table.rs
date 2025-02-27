@@ -383,6 +383,7 @@ pub struct ShowCreateTablePlan {
     pub table: String,
     /// The table schema
     pub schema: DataSchemaRef,
+    pub with_quoted_ident: bool,
 }
 
 impl ShowCreateTablePlan {

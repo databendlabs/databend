@@ -23,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::CommitSink;
@@ -188,6 +189,7 @@ impl ReplaceInterpreter {
         } = self
             .connect_input_source(
                 self.ctx.clone(),
+                table_info.clone(),
                 &self.plan.source,
                 self.plan.schema(),
                 &mut purge_info,
@@ -379,6 +381,7 @@ impl ReplaceInterpreter {
     async fn connect_input_source<'a>(
         &'a self,
         ctx: Arc<QueryContext>,
+        table_info: TableInfo,
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
@@ -400,7 +403,9 @@ impl ReplaceInterpreter {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
+                    let (physical_plan, _) = interpreter
+                        .build_physical_plan(table_info, &copy_plan)
+                        .await?;
 
                     // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
 

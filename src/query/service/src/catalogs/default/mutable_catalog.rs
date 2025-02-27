@@ -234,6 +234,10 @@ impl Catalog for MutableCatalog {
         CatalogInfo::default().into()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Ok(self)
+    }
+
     #[async_backtrace::framed]
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self

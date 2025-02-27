@@ -17,7 +17,6 @@ use chrono::Utc;
 use databend_common_ast::ast::AlterPasswordAction;
 use databend_common_ast::ast::PasswordSetOptions;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
@@ -117,21 +116,6 @@ pub struct SetRolePlan {
 pub enum SetSecondaryRolesPlan {
     All,
     None,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ShowRolesPlan {}
-
-impl ShowRolesPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![
-            DataField::new("name", DataType::String),
-            DataField::new("inherited_roles", DataType::Number(NumberDataType::UInt64)),
-            DataField::new("inherited_roles_name", DataType::String),
-            DataField::new("is_current", DataType::Boolean),
-            DataField::new("is_default", DataType::Boolean),
-        ])
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

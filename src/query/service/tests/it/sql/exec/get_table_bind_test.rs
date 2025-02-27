@@ -167,6 +167,10 @@ impl Catalog for FakedCatalog {
         self.cat.info()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        todo!()
+    }
+
     async fn get_database(&self, _tenant: &Tenant, _db_name: &str) -> Result<Arc<dyn Database>> {
         todo!()
     }
@@ -674,7 +678,7 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
-    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {

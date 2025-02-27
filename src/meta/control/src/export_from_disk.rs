@@ -20,8 +20,8 @@ use databend_common_meta_raft_store::config::RaftConfig;
 use databend_meta::store::RaftStoreInner;
 use futures::TryStreamExt;
 
+use crate::args::ExportArgs;
 use crate::upgrade;
-use crate::ExportArgs;
 
 /// Print the entire sled db.
 ///

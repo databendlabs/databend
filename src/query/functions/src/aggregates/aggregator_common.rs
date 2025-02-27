@@ -20,9 +20,13 @@ use bumpalo::Bump;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Number;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::Expr;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::StateAddr;
 
@@ -31,6 +35,7 @@ use super::AggrState;
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
 use crate::aggregates::StatesLayout;
+use crate::BUILTIN_FUNCTIONS;
 
 pub fn assert_unary_params<D: Display>(name: D, actual: usize) -> Result<()> {
     if actual != 1 {
@@ -199,4 +204,17 @@ pub fn borsh_serialize_state<W: std::io::Write, T: BorshSerialize>(
 #[inline]
 pub fn borsh_deserialize_state<T: BorshDeserialize>(slice: &mut &[u8]) -> Result<T> {
     Ok(T::deserialize(slice)?)
+}
+
+pub fn extract_number_param<T: Number>(param: Scalar) -> Result<T> {
+    check_number::<_, T>(
+        None,
+        &FunctionContext::default(),
+        &Expr::<usize>::Constant {
+            span: None,
+            data_type: param.as_ref().infer_data_type(),
+            scalar: param,
+        },
+        &BUILTIN_FUNCTIONS,
+    )
 }

@@ -23,8 +23,8 @@ use thiserror::Error;
 
 use crate::exception_backtrace::capture;
 use crate::span::pretty_print_error;
+use crate::span::Span;
 use crate::ErrorFrame;
-use crate::Span;
 use crate::StackTrace;
 
 #[derive(Error)]

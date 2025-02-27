@@ -23,6 +23,8 @@
 #![feature(try_blocks)]
 #![feature(downcast_unchecked)]
 #![feature(str_internals)]
+#![feature(fmt_internals)]
+extern crate core;
 
 pub mod datetime;
 pub mod interval;

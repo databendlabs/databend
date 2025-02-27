@@ -92,6 +92,9 @@ fn test_statement() {
         r#"show drop databases like 'db%'"#,
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
+        r#"show stages like '%a'"#,
+        r#"show users where name='root'"#,
+        r#"show roles where name='public'"#,
         r#"show drop tables"#,
         r#"show drop tables like 't%'"#,
         r#"show drop tables where name='t'"#,
@@ -107,6 +110,7 @@ fn test_statement() {
         r#"show processlist like 't%' limit 2;"#,
         r#"show processlist where database='default' limit 2;"#,
         r#"show create table a.b;"#,
+        r#"show create table a.b with quoted_identifiers;"#,
         r#"show create table a.b format TabSeparatedWithNamesAndTypes;"#,
         r#"replace into test on(c) select sum(c) as c from source group by v;"#,
         r#"explain pipeline select a from b;"#,
@@ -137,7 +141,7 @@ fn test_statement() {
         r#"drop table a;"#,
         r#"drop table if exists a."b";"#,
         r#"use "a";"#,
-        r#"create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');"#,
+        r#"create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary' warehouse='default');"#,
         r#"select current_catalog();"#,
         r#"use catalog ctl;"#,
         r#"create database if not exists a;"#,
@@ -293,7 +297,7 @@ fn test_statement() {
         r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
-        r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';"#,
         r#"CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
@@ -774,6 +778,7 @@ fn test_statement() {
         r#"GRANT OWNERSHIP ON d20_0014.* TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON d20_0014.t TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON STAGE s1 TO ROLE 'd20_0015_owner';"#,
+        r#"GRANT OWNERSHIP ON WAREHOUSE w1 TO ROLE 'd20_0015_owner';"#,
         r#"GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';"#,
         r#"attach table t 's3://a' connection=(access_key_id ='x' secret_access_key ='y' endpoint_url='http://127.0.0.1:9900')"#,
         r#"CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p));"#,
@@ -1069,6 +1074,7 @@ fn test_query() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("query.txt").unwrap();
     let cases = &[
+        r#"select ?"#,
         r#"select * exclude c1, b.* exclude (c2, c3, c4) from customer inner join orders on a = b limit 1"#,
         r#"select columns('abc'), columns(a -> length(a) = 3) from t"#,
         r#"select * from customer at(offset => -10 * 30)"#,
@@ -1173,6 +1179,7 @@ fn test_expr() {
 
     let cases = &[
         r#"a"#,
+        r#"?"#,
         r#"'I''m who I\'m.'"#,
         r#"'\776 \n \t \u0053 \xaa'"#,
         r#"char(0xD0, 0xBF, 0xD1)"#,
@@ -1264,6 +1271,7 @@ fn test_expr() {
         r#"MAP_TRANSFORM_KEYS({1:10,2:20,3:30}, (k, v) -> k + 1)"#,
         r#"MAP_TRANSFORM_VALUES({1:10,2:20,3:30}, (k, v) -> v + 1)"#,
         r#"INTERVAL '1 YEAR'"#,
+        r#"(?, ?)"#,
     ];
 
     for case in cases {

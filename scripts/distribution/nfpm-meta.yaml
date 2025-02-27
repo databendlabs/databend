@@ -1,50 +1,35 @@
-name: "${name}"
+name: "databend-meta"
 arch: "${arch}"
 platform: "linux"
 version: "${version}"
 section: "database"
 priority: "extra"
-maintainer: "Databend Authors <opensource@datafuselabs.com>"
+maintainer: "Databend Labs <opensource@databend.com>"
 description: |
   Databend is a powerful cloud data warehouse. Built for elasticity and efficiency.
-  Free and open. Also available in the cloud: https://app.databend.com
-vendor: "Datafuse Labs"
+  Free and open. Databend Meta is is responsible for storing and managing various types of metadata.
+vendor: "Databend Labs"
 homepage: "https://databend.com"
 license: "Apache-2.0"
 depends:
   - libc6 (>= 2.31)
 contents:
   # Binaries
-  - src: ${path}/bin/databend-query
-    dst: /usr/bin/databend-query
   - src: ${path}/bin/databend-meta
     dst: /usr/bin/databend-meta
   - src: ${path}/bin/databend-metactl
     dst: /usr/bin/databend-metactl
 
   # Configs
-  - src: ${path}/configs/databend-query.toml
-    dst: /etc/databend/databend-query.toml
-    type: config
   - src: ${path}/configs/databend-meta.toml
     dst: /etc/databend/databend-meta.toml
     type: config
 
   # Systemd
-  - src: ${path}/systemd/databend-query.service
-    dst: /lib/systemd/system/databend-query.service
   - src: ${path}/systemd/databend-meta.service
     dst: /lib/systemd/system/databend-meta.service
-  - src: ${path}/systemd/databend-query.default
-    dst: /etc/default/databend-query
   - src: ${path}/systemd/databend-meta.default
     dst: /etc/default/databend-meta
-
-  # Docs
-  - src: ${path}/readme.txt
-    dst: /usr/share/doc/databend/readme.txt
-    file_info:
-      mode: 0644
 
   - dst: /var/lib/databend
     type: dir

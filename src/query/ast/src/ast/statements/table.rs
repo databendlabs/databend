@@ -20,6 +20,7 @@ use std::time::Duration;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_string_map;
@@ -73,6 +74,7 @@ pub struct ShowCreateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub with_quoted_ident: bool,
 }
 
 impl Display for ShowCreateTableStmt {
@@ -84,7 +86,11 @@ impl Display for ShowCreateTableStmt {
                 .iter()
                 .chain(&self.database)
                 .chain(Some(&self.table)),
-        )
+        )?;
+        if self.with_quoted_ident {
+            write!(f, " WITH QUOTED_IDENTIFIERS")?
+        }
+        Ok(())
     }
 }
 
@@ -452,7 +458,7 @@ impl Display for AlterTableAction {
                 write!(f, "RENAME TO {new_table}")?;
             }
             AlterTableAction::ModifyTableComment { new_comment } => {
-                write!(f, "COMMENT='{new_comment}'")?;
+                write!(f, "COMMENT={}", QuotedString(new_comment, '\''))?;
             }
             AlterTableAction::RenameColumn {
                 old_column,
@@ -892,7 +898,7 @@ impl Display for ColumnDefinition {
             write!(f, "{expr}")?;
         }
         if let Some(comment) = &self.comment {
-            write!(f, " COMMENT '{comment}'")?;
+            write!(f, " COMMENT {}", QuotedString(comment, '\''))?;
         }
         Ok(())
     }

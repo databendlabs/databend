@@ -105,7 +105,6 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::anyerror::func_name;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_storages_common_session::SessionState;
@@ -141,23 +140,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get the info of the catalog.
     fn info(&self) -> Arc<CatalogInfo>;
 
-    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
-        Err(ErrorCode::Unimplemented(format!(
-            "{} not implemented",
-            func_name!()
-        )))
-    }
+    // This is used to return a new catalog; in the new catalog, the table info is not refreshed
+    // This is used for attached table, if we attach many tables each is to read from s3, query system.tables it will be very slow.
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>>;
 
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>>;
 
-    // List all databases history
+    // List all database history
     async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
 
     // Get all the databases.
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
 
-    // Operation with database.
+    // Operation with a database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply>;

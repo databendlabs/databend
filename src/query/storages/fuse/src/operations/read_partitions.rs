@@ -178,7 +178,7 @@ impl FuseTable {
         plan: &DataSourcePlan,
         source_pipeline: &mut Pipeline,
     ) -> Result<Option<Pipeline>> {
-        let segments_location = plan.statistics.snapshot.clone();
+        let snapshot = plan.statistics.snapshot.clone();
         let table_schema = self.schema_with_stream();
         let dal = self.operator.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
@@ -188,7 +188,7 @@ impl FuseTable {
                 lazy_init_segments.push(SegmentLocation {
                     segment_idx: lazy_part_info.segment_index,
                     location: lazy_part_info.segment_location.clone(),
-                    snapshot_loc: segments_location.clone(),
+                    snapshot_loc: snapshot.clone(),
                 });
             }
         }
@@ -210,7 +210,7 @@ impl FuseTable {
                 .map(|push_downs| {
                     format!(
                         "{:x}",
-                        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+                        Sha256::digest(format!("{:?}_{:?}", lazy_init_segments, push_downs))
                     )
                 });
 

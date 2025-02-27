@@ -88,6 +88,9 @@ impl FromToProto for mt::principal::OwnershipObject {
             pb::ownership_object::Object::Stage(pb::ownership_object::OwnershipStageObject {
                 stage,
             }) => Ok(mt::principal::OwnershipObject::Stage { name: stage }),
+            pb::ownership_object::Object::Warehouse(
+                pb::ownership_object::OwnershipWarehouseObject { id },
+            ) => Ok(mt::principal::OwnershipObject::Warehouse { id }),
         }
     }
 
@@ -123,6 +126,11 @@ impl FromToProto for mt::principal::OwnershipObject {
                     stage: name.clone(),
                 }),
             ),
+            mt::principal::OwnershipObject::Warehouse { id } => {
+                Some(pb::ownership_object::Object::Warehouse(
+                    pb::ownership_object::OwnershipWarehouseObject { id: id.clone() },
+                ))
+            }
         };
         Ok(pb::OwnershipObject {
             ver: VER,

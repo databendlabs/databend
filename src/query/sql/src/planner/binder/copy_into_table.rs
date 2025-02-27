@@ -34,7 +34,7 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TypeName;
-use databend_common_ast::parser::parse_values_with_placeholder;
+use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::Span;
 use databend_common_catalog::plan::list_stage_files;
@@ -225,6 +225,7 @@ impl Binder {
                 default_values,
                 copy_into_location_options: Default::default(),
                 copy_into_table_options: stmt.options.clone(),
+                stage_root: "".to_string(),
             },
             values_consts: vec![],
             required_source_schema: required_values_schema.clone(),
@@ -405,6 +406,7 @@ impl Binder {
                 default_values: Some(default_values),
                 copy_into_location_options: Default::default(),
                 copy_into_table_options: options,
+                stage_root: "".to_string(),
             },
             write_mode,
             query: None,
@@ -482,6 +484,7 @@ impl Binder {
 
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;
+        s_expr = self.add_internal_column_into_expr(&mut from_context, s_expr)?;
 
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
@@ -531,7 +534,7 @@ impl Binder {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(values_str)?;
-        let expr_or_placeholders = parse_values_with_placeholder(&tokens, sql_dialect)?;
+        let expr_or_placeholders = parse_values(&tokens, sql_dialect)?;
 
         if source_schema.num_fields() != expr_or_placeholders.len() {
             return Err(ErrorCode::SemanticError(format!(
@@ -546,11 +549,13 @@ impl Binder {
         let mut exprs = vec![];
         for (i, eo) in expr_or_placeholders.into_iter().enumerate() {
             match eo {
-                Some(e) => {
+                Expr::Placeholder { .. } => {
+                    attachment_fields.push(source_schema.fields()[i].clone());
+                }
+                e => {
                     exprs.push(e);
                     const_fields.push(source_schema.fields()[i].clone());
                 }
-                None => attachment_fields.push(source_schema.fields()[i].clone()),
             }
         }
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
