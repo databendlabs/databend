@@ -2918,7 +2918,6 @@ name = "databend-bendsave"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-stream",
  "bytes",
  "clap",
  "databend-common-base",
