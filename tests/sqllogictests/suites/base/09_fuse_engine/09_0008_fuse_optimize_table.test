@@ -841,4 +841,3 @@ select cluster_key, type, average_overlaps, average_depth from clustering_inform
 
 statement ok
 DROP DATABASE db_09_0008
-

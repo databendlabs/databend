@@ -40,6 +40,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storages_orc::OrcTableForCopy;
 use databend_common_storages_parquet::ParquetTableForCopy;
 use databend_storages_common_stage::SingleFilePartition;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
 use crate::read::row_based::RowBasedReadPipelineBuilder;
@@ -216,7 +217,12 @@ impl Table for StageTable {
         }
     }
 
-    fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+    fn append_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<()> {
         self.do_append_data(ctx, pipeline)
     }
 

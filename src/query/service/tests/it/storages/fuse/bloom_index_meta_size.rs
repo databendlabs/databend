@@ -125,7 +125,7 @@ use uuid::Uuid;
 #[ignore]
 async fn test_random_location_memory_size() -> databend_common_exception::Result<()> {
     // generate random location of Type Location
-    let location_gen = TableMetaLocationGenerator::with_prefix("/root".to_string());
+    let location_gen = TableMetaLocationGenerator::new("/root".to_string());
 
     let num_segments = 5_000_000;
     let sys = System::new_all();
@@ -141,7 +141,7 @@ async fn test_random_location_memory_size() -> databend_common_exception::Result
 
     let mut locations: HashSet<Location, _> = HashSet::new();
     for _ in 0..num_segments {
-        let segment_path = location_gen.gen_segment_info_location();
+        let segment_path = location_gen.gen_segment_info_location(Default::default());
         let segment_location = (segment_path, SegmentInfo::VERSION);
         locations.insert(segment_location);
     }
@@ -320,9 +320,9 @@ fn build_test_segment_info(
     }
     assert_eq!(num_number_columns + num_string_columns, col_stats.len());
 
-    let location_gen = TableMetaLocationGenerator::with_prefix("/root/12345/67890".to_owned());
+    let location_gen = TableMetaLocationGenerator::new("/root/12345/67890".to_owned());
 
-    let (block_location, block_uuid) = location_gen.gen_block_location();
+    let (block_location, block_uuid) = location_gen.gen_block_location(Default::default());
     let block_meta = BlockMeta {
         row_count: 0,
         block_size: 0,
@@ -382,9 +382,9 @@ async fn setup() -> databend_common_exception::Result<FileMetaData> {
 
     let block = DataBlock::new_from_columns(columns);
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
-    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
+    let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     let col_stats = gen_columns_statistics(&block, None, &schema)?;
-    let block_writer = BlockWriter::new(&operator, &loc_generator);
+    let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default(), true);
     let (_block_meta, thrift_file_meta) = block_writer
         .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
         .await?;

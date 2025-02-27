@@ -52,6 +52,7 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
@@ -236,7 +237,12 @@ impl Table for MemoryTable {
         )
     }
 
-    fn append_data(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
+    fn append_data(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _pipeline: &mut Pipeline,
+        _table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -249,6 +255,7 @@ impl Table for MemoryTable {
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 

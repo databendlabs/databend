@@ -16,10 +16,12 @@ use std::marker::PhantomData;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_storages_common_table_meta::meta::trim_vacuum2_object_prefix;
+use databend_storages_common_table_meta::meta::trim_object_prefix;
+use databend_storages_common_table_meta::meta::uuid_from_date_time;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::SnapshotVersion;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
@@ -58,16 +60,18 @@ pub struct TableMetaLocationGenerator {
     block_location_prefix: String,
     segment_info_location_prefix: String,
     bloom_index_location_prefix: String,
+    snapshot_location_prefix: String,
     agg_index_location_prefix: String,
     inverted_index_location_prefix: String,
 }
 
 impl TableMetaLocationGenerator {
-    pub fn with_prefix(prefix: String) -> Self {
+    pub fn new(prefix: String) -> Self {
         let block_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_BLOCK_PREFIX,);
         let bloom_index_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_XOR_BLOOM_INDEX_PREFIX);
         let segment_info_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SEGMENT_PREFIX);
+        let snapshot_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_SNAPSHOT_PREFIX);
         let agg_index_location_prefix = format!("{}/{}/", &prefix, FUSE_TBL_AGG_INDEX_PREFIX);
         let inverted_index_location_prefix =
             format!("{}/{}/", &prefix, FUSE_TBL_INVERTED_INDEX_PREFIX);
@@ -76,6 +80,7 @@ impl TableMetaLocationGenerator {
             block_location_prefix,
             segment_info_location_prefix,
             bloom_index_location_prefix,
+            snapshot_location_prefix,
             agg_index_location_prefix,
             inverted_index_location_prefix,
         }
@@ -85,20 +90,36 @@ impl TableMetaLocationGenerator {
         &self.prefix
     }
 
-    pub fn gen_block_location(&self) -> (Location, Uuid) {
-        let part_uuid = Uuid::new_v4();
+    pub fn block_location_prefix(&self) -> &str {
+        &self.block_location_prefix
+    }
+
+    pub fn block_bloom_index_prefix(&self) -> &str {
+        &self.bloom_index_location_prefix
+    }
+
+    pub fn segment_location_prefix(&self) -> &str {
+        &self.segment_info_location_prefix
+    }
+
+    pub fn snapshot_location_prefix(&self) -> &str {
+        &self.snapshot_location_prefix
+    }
+
+    pub fn gen_block_location(
+        &self,
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> (Location, Uuid) {
+        let part_uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
         let location_path = format!(
-            "{}{}_v{}.parquet",
+            "{}{}{}_v{}.parquet",
             self.block_location_prefix(),
+            VACUUM2_OBJECT_KEY_PREFIX,
             part_uuid.as_simple(),
             DataBlock::VERSION,
         );
 
         ((location_path, DataBlock::VERSION), part_uuid)
-    }
-
-    pub fn block_location_prefix(&self) -> &str {
-        &self.block_location_prefix
     }
 
     pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
@@ -113,22 +134,15 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn block_bloom_index_prefix(&self) -> &str {
-        &self.bloom_index_location_prefix
-    }
-
-    pub fn gen_segment_info_location(&self) -> String {
-        let segment_uuid = Uuid::new_v4().simple().to_string();
+    pub fn gen_segment_info_location(&self, table_meta_timestamps: TableMetaTimestamps) -> String {
+        let segment_uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
         format!(
-            "{}{}_v{}.mpk",
-            self.segment_info_prefix(),
-            segment_uuid,
+            "{}{}{}_v{}.mpk",
+            &self.segment_location_prefix(),
+            VACUUM2_OBJECT_KEY_PREFIX,
+            segment_uuid.as_simple(),
             SegmentInfo::VERSION,
         )
-    }
-
-    pub fn segment_info_prefix(&self) -> &str {
-        &self.segment_info_location_prefix
     }
 
     pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
@@ -187,7 +201,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = trim_vacuum2_object_prefix(splits[len - 1]);
+        let block_name = trim_object_prefix(splits[len - 1]);
         format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
     }
 
@@ -221,7 +235,7 @@ impl TableMetaLocationGenerator {
         let splits = loc.split('/').collect::<Vec<_>>();
         let len = splits.len();
         let prefix = splits[..len - 2].join("/");
-        let block_name = trim_vacuum2_object_prefix(splits[len - 1]);
+        let block_name = trim_object_prefix(splits[len - 1]);
         let id: String = block_name.chars().take(32).collect();
         let short_ver: String = index_version.chars().take(7).collect();
         format!(
@@ -234,6 +248,21 @@ impl TableMetaLocationGenerator {
             InvertedIndexFile::VERSION,
         )
     }
+
+    pub fn gen_bloom_index_location_from_block_location(loc: &str) -> String {
+        let splits = loc.split('/').collect::<Vec<_>>();
+        let len = splits.len();
+        let prefix = splits[..len - 2].join("/");
+        let block_name = trim_object_prefix(splits[len - 1]);
+        let id: String = block_name.chars().take(32).collect();
+        format!(
+            "{}/{}/{}_v{}.parquet",
+            prefix,
+            FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
+            id,
+            BlockFilter::VERSION,
+        )
+    }
 }
 
 trait SnapshotLocationCreator {
@@ -242,6 +271,7 @@ trait SnapshotLocationCreator {
 }
 
 impl SnapshotLocationCreator for SnapshotVersion {
+    // todo rename this
     fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
         let vacuum_prefix = if id
             .get_version()

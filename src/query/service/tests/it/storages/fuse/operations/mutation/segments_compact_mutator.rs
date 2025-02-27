@@ -638,7 +638,7 @@ pub struct CompactSegmentTestFixture {
 
 impl CompactSegmentTestFixture {
     fn try_new(ctx: &Arc<QueryContext>, block_per_seg: u64) -> Result<Self> {
-        let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+        let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
         let data_accessor = ctx.get_application_level_data_operator()?;
         Ok(Self {
             ctx: ctx.clone(),
@@ -706,7 +706,7 @@ impl CompactSegmentTestFixture {
         block_per_seg: usize,
         unclustered: bool,
     ) -> Result<(Vec<Location>, Vec<BlockMeta>, Vec<SegmentInfo>)> {
-        let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+        let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
         let data_accessor = ctx.get_application_level_data_operator()?.operator();
         let threads_nums = ctx.get_settings().get_max_threads()? as usize;
 
@@ -747,7 +747,7 @@ impl CompactSegmentTestFixture {
                         })
                     };
 
-                    let (location, _) = location_gen.gen_block_location();
+                    let (location, _) = location_gen.gen_block_location(Default::default());
                     let row_count = block.num_rows() as u64;
                     let block_size = block.memory_size() as u64;
 
@@ -782,7 +782,7 @@ impl CompactSegmentTestFixture {
                 }
                 let summary = stats_acc.summary(thresholds, cluster_key_id);
                 let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
-                let path = location_gen.gen_segment_info_location();
+                let path = location_gen.gen_segment_info_location(Default::default());
                 segment_info.write_meta(&data_accessor, &path).await?;
                 Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))
             });
@@ -964,7 +964,7 @@ async fn test_compact_segment_with_cluster() -> Result<()> {
 
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
-    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+    let location_gen = TableMetaLocationGenerator::new("test/".to_owned());
     let data_accessor = ctx.get_application_level_data_operator()?.operator();
     let schema = TestFixture::default_table_schema();
 

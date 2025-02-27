@@ -49,6 +49,7 @@ impl PipelineBuilder {
                     table,
                     ClusterStatsGenerator::default(),
                     MutationKind::Recluster,
+                    serialize.table_meta_timestamps,
                 )?;
                 proc.into_processor()
             })

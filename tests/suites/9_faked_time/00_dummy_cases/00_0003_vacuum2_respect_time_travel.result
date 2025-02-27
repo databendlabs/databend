@@ -1,0 +1,13 @@
+>>>> insert into test_vacuum2_respect_time_travel values(2);
+>>>> set data_retention_time_in_days = 2;truncate table test_vacuum2_respect_time_travel;
+>>>> insert into test_vacuum2_respect_time_travel values(3);
+>>>> select count(*) from fuse_snapshot('default','test_vacuum2_respect_time_travel')
+4
+<<<<
+>>>> select count(*) from fuse_snapshot('default','test_vacuum2_respect_time_travel')
+1
+<<<<
+>>>> select * from test_vacuum2_respect_time_travel;
+3
+<<<<
+>>>> set data_retention_time_in_days = 1;
