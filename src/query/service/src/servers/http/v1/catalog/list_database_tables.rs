@@ -103,6 +103,6 @@ pub async fn list_database_tables_handler(
     ctx: &HttpQueryContext,
     Path(database): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let response = handle(ctx, database).await.map_err(InternalServerError)?;
-    Ok(Json(response))
+    let resp = handle(ctx, database).await.map_err(InternalServerError)?;
+    Ok(Json(resp))
 }
