@@ -4053,30 +4053,22 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     let set = map(
         rule! {
              SET
-             ~ ( WAREHOUSE  ~ ^"=" ~ ^#literal_string )?
-             ~ ( SCHEDULE ~ ^"=" ~ ^#task_schedule_option )?
-             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ ^"=" ~ ^#literal_u64 )?
-             ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
-             ~ ( ERROR_INTEGRATION  ~ ^"=" ~ ^#literal_string )?
+             ~ #task_set_option*
              ~ #set_table_option?
         },
-        |(
-            _,
-            warehouse_opts,
-            schedule_opts,
-            suspend_opts,
-            comment,
-            err_integration,
-            session_opts,
-        )| {
-            AlterTaskOptions::Set {
-                warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
-                schedule: schedule_opts.map(|(_, _, schedule)| schedule),
-                suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
-                comments: comment.map(|(_, _, comment)| comment),
-                error_integration: err_integration.map(|(_, _, integration)| integration),
+        |(_, task_set_options, session_opts)| {
+            let mut set = AlterTaskOptions::Set {
                 session_parameters: session_opts,
+                warehouse: None,
+                schedule: None,
+                suspend_task_after_num_failures: None,
+                comments: None,
+                error_integration: None,
+            };
+            for opt in task_set_options {
+                set.apply_opt(opt);
             }
+            set
         },
     );
     let unset = map(

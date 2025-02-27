@@ -233,6 +233,45 @@ pub enum AlterTaskOptions {
     RemoveAfter(Vec<String>),
 }
 
+impl AlterTaskOptions {
+    pub fn apply_opt(&mut self, opt: TaskSetOption) {
+        match self {
+            AlterTaskOptions::Set {
+                warehouse,
+                schedule,
+                suspend_task_after_num_failures,
+                #[allow(unused_variables)]
+                session_parameters,
+                error_integration,
+                comments,
+            } => match opt {
+                TaskSetOption::Warehouse(wh) => {
+                    *warehouse = Some(wh);
+                }
+                TaskSetOption::Schedule(s) => {
+                    *schedule = Some(s);
+                }
+                TaskSetOption::After(_after) => {
+                    // _
+                }
+                TaskSetOption::When(_expr) => {
+                    // _
+                }
+                TaskSetOption::ErrorIntegration(integration) => {
+                    *error_integration = Some(integration);
+                }
+                TaskSetOption::SuspendTaskAfterNumFailures(num) => {
+                    *suspend_task_after_num_failures = Some(num);
+                }
+                TaskSetOption::Comment(comment) => {
+                    *comments = Some(comment);
+                }
+            },
+            _ => {}
+        }
+    }
+}
+
 impl Display for AlterTaskOptions {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
