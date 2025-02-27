@@ -61,7 +61,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     ) {
         return Ok(ListDatabaseTablesResponse {
             tables: vec![],
-            warnings: vec![format!("database {} not found", database)],
+            warnings: vec![format!("database `{}` not found", database)],
         });
     }
 
