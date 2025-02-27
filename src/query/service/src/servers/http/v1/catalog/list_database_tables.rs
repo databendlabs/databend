@@ -53,30 +53,30 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     let visibility_checker = ctx.session.get_visibility_checker(false).await?;
 
     let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
-    let database = catalog.get_database(&tenant, &database).await?;
+    let db = catalog.get_database(&tenant, &database).await?;
 
     if !visibility_checker.check_database_visibility(
         catalog.name().as_str(),
-        database.name(),
-        database.get_db_info().database_id.db_id,
+        db.name(),
+        db.get_db_info().database_id.db_id,
     ) {
         return Ok(ListDatabaseTablesResponse {
             tables: vec![],
-            warnings: vec![],
+            warnings: vec![format!("database {} not found", database)],
         });
     }
 
     let warnings = vec![];
-    let tables = database
+    let tables = db
         .list_tables()
         .await?
         .into_iter()
         .filter(|tbl| {
             visibility_checker.check_table_visibility(
                 catalog.name().as_str(),
-                database.name(),
+                db.name(),
                 tbl.name(),
-                tbl.get_table_info().database_id.db_id,
+                db.get_db_info().database_id.db_id,
                 tbl.get_table_info().table_id,
             )
         })
@@ -85,16 +85,16 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
             TableInfo {
                 name: tbl.name().to_string(),
                 table_type: tbl.table_type().to_string(),
-                database: database.name().to_string(),
+                database: db.name().to_string(),
                 catalog: catalog.name().to_string(),
                 owner: user.name().to_string(),
                 engine: tbl.engine().to_string(),
                 cluster_by: tbl.cluster_by().to_string(),
                 create_time: tbl.create_time(),
-                num_rows: stats.num_rows,
-                data_size: stats.data_size,
-                data_compressed_size: stats.data_compressed_size,
-                index_size: stats.index_size,
+                num_rows: stats.number_of_rows,
+                data_size: stats.data_bytes,
+                data_compressed_size: stats.compressed_data_bytes,
+                index_size: stats.index_data_bytes,
             }
         })
         .collect::<Vec<_>>();
