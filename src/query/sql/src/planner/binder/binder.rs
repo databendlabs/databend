@@ -408,7 +408,7 @@ impl<'a> Binder {
             } => {
                 if illegal_ident_name(role_name) {
                     return Err(ErrorCode::IllegalRole(
-                        format!("Illegal Role Name: Illegal role name [{}], not support username contain ' or \"", role_name),
+                        format!("Illegal Role Name: Illegal role name [{}], not support username contain ' or \" or \\b or \\f", role_name),
                     ));
                 }
                 Plan::CreateRole(Box::new(CreateRolePlan {

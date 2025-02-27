@@ -297,7 +297,7 @@ fn test_statement() {
         r#"VACUUM DROP TABLE DRY RUN SUMMARY;"#,
         r#"VACUUM DROP TABLE FROM db;"#,
         r#"VACUUM DROP TABLE FROM db LIMIT 10;"#,
-        r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
+        r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';"#,
         r#"CREATE TEMPORARY TABLE t (a INT COMMENT 'col comment')"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant';"#,
