@@ -265,7 +265,7 @@ impl Binder {
         } = stmt;
         if illegal_ident_name(&user.username) {
             return Err(ErrorCode::IllegalUser(format!(
-                "Illegal Username: Illegal user name [{}], not support username contain ' or \"",
+                "Illegal Username: Illegal user name [{}], not support username contain ' or \" \\b or \\f",
                 user.username
             )));
         }
