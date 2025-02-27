@@ -116,15 +116,15 @@ async fn handle(
 
     Ok(GetDatabaseTableResponse {
         table: Some(TableDetails {
-            name: info.ident.table_name.clone(),
-            database: info.ident.db_name.clone(),
+            name: tbl.name().to_string(),
+            database: db.name().to_string(),
             catalog: catalog.name().to_string(),
-            engine: info.engine.to_string(),
-            create_time: info.create_time,
-            num_rows: info.num_rows,
-            data_size: info.data_size,
-            data_compressed_size: info.data_compressed_size,
-            index_size: info.index_size,
+            engine: info.meta.engine.clone(),
+            create_time: info.meta.created_on,
+            num_rows: info.meta.statistics.number_of_rows,
+            data_size: info.meta.statistics.data_bytes,
+            data_compressed_size: info.meta.statistics.compressed_data_bytes,
+            index_size: info.meta.statistics.index_data_bytes,
             create_query,
         }),
         warnings,
