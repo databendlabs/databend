@@ -20,6 +20,7 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use ethnum::i256;
 
+use super::quote::QuotedString;
 use crate::ast::quote::QuotedIdent;
 use crate::ast::WithOptions;
 use crate::Span;
@@ -271,7 +272,7 @@ pub(crate) fn write_comma_separated_string_map(
         if i > 0 {
             write!(f, ", ")?;
         }
-        write!(f, "{k} = '{v}'")?;
+        write!(f, "{k} = {}", QuotedString(v.to_string(), '\''))?;
     }
     Ok(())
 }
@@ -285,7 +286,7 @@ pub(crate) fn write_space_separated_string_map(
         if i > 0 {
             write!(f, " ")?;
         }
-        write!(f, "{k} = '{v}'")?;
+        write!(f, "{k} = {}", QuotedString(v.to_string(), '\''))?;
     }
     Ok(())
 }

@@ -26,11 +26,12 @@ pub enum ExplainKind {
     Pipeline,
     Fragments,
 
-    // `EXPLAIN RAW` and `EXPLAIN OPTIMIZED` will be deprecated in the future,
-    // use explain options instead
+    /// `EXPLAIN RAW` will be deprecated in the future, use EXPLAIN(LOGICAL) instead
     Raw,
-    // `EXPLAIN DECORRELATED` will show the plan after subquery decorrelation
+    /// `EXPLAIN DECORRELATED` will show the plan after subquery decorrelation
+    /// `EXPLAIN DECORRELATED` will be deprecated in the future, use `EXPLAIN(LOGICAL, DECORRELATED)` instead
     Decorrelated,
+    /// `EXPLAIN OPTIMIZED` will be deprecated in the future, use `EXPLAIN(LOGICAL, OPTIMIZED)` instead
     Optimized,
 
     Plan,
@@ -43,9 +44,10 @@ pub enum ExplainKind {
     Graphical,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Drive, DriveMut)]
 pub enum ExplainOption {
     Verbose,
     Logical,
     Optimized,
+    Decorrelated,
 }

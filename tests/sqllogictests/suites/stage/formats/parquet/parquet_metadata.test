@@ -1,0 +1,35 @@
+query ok
+select metadata$filename, $2, metadata$file_row_number, $1 from @data_s3/parquet/ii/ order by metadata$filename, $2 limit 3;
+----
+parquet/ii/f1.parquet 1 0 1
+parquet/ii/f1.parquet 2 1 2
+parquet/ii/f2.parquet 3 0 3
+
+
+query ok
+select metadata$filename, $2, metadata$file_row_number, $1 from @data_s3/parquet/ii/ where metadata$file_row_number = 0 and $1 > 1;
+----
+parquet/ii/f2.parquet 3 0 3
+parquet/ii/f3.parquet 5 0 5
+
+
+statement ok
+create or replace table t(file_name string, id string,  row int)
+
+query ok
+copy into t from (select metadata$filename, $2, metadata$file_row_number + 1 from @data_s3/parquet/ii/)
+----
+parquet/ii/f1.parquet 2 0 NULL NULL
+parquet/ii/f2.parquet 2 0 NULL NULL
+parquet/ii/f3.parquet 2 0 NULL NULL
+
+query ok
+select * from t order by $1,$2
+----
+parquet/ii/f1.parquet 1 1
+parquet/ii/f1.parquet 2 2
+parquet/ii/f2.parquet 3 1
+parquet/ii/f2.parquet 4 2
+parquet/ii/f3.parquet 5 1
+parquet/ii/f3.parquet 6 2
+

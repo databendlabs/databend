@@ -72,6 +72,7 @@ CommitSink
                 ├── join type: LEFT OUTER
                 ├── build keys: []
                 ├── probe keys: []
+                ├── keys is null equal: []
                 ├── filters: []
                 ├── estimated rows: 1.00
                 ├── Exchange(Build)
@@ -121,6 +122,7 @@ CommitSink
         ├── join type: RIGHT OUTER
         ├── build keys: []
         ├── probe keys: []
+        ├── keys is null equal: []
         ├── filters: [t1.a (#1) > t.a (#0)]
         ├── estimated rows: 15.00
         ├── TableScan(Build)
@@ -158,6 +160,7 @@ CommitSink
         ├── join type: RIGHT OUTER
         ├── build keys: []
         ├── probe keys: []
+        ├── keys is null equal: []
         ├── filters: [t1.a (#1) < t2.a (#0)]
         ├── estimated rows: 15.00
         ├── TableScan(Build)
@@ -255,6 +258,7 @@ CommitSink
                 ├── join type: RIGHT OUTER
                 ├── build keys: [CAST(t2.a (#0) AS Int64 NULL)]
                 ├── probe keys: [CAST(t1.a (#1) AS Int64 NULL)]
+                ├── keys is null equal: [false]
                 ├── filters: []
                 ├── estimated rows: 0.00
                 ├── Exchange(Build)

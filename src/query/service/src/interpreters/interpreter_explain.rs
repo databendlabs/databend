@@ -90,9 +90,6 @@ impl Interpreter for ExplainInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
-            ExplainKind::Raw | ExplainKind::Optimized | ExplainKind::Decorrelated => {
-                self.explain_plan(&self.plan)?
-            }
             ExplainKind::Plan if self.config.logical => self.explain_plan(&self.plan)?,
             ExplainKind::Plan => match &self.plan {
                 Plan::Query {
@@ -262,6 +259,10 @@ impl Interpreter for ExplainInterpreter {
                 let line_split_result: Vec<&str> = display_string.lines().collect();
                 let column = StringType::from_data(line_split_result);
                 vec![DataBlock::new_from_columns(vec![column])]
+            }
+
+            ExplainKind::Raw | ExplainKind::Optimized | ExplainKind::Decorrelated => {
+                unreachable!()
             }
         };
 

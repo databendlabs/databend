@@ -15,6 +15,7 @@
 use databend_common_ast::ast::ExplainKind;
 use databend_common_ast::ast::ExplainOption;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -28,30 +29,64 @@ pub struct ExplainConfig {
     pub verbose: bool,
     pub logical: bool,
     pub optimized: bool,
+    pub decorrelated: bool,
 }
 
+impl ExplainConfig {
+    fn validate(&self, span: Span, kind: &ExplainKind) -> Result<()> {
+        if self.logical
+            && !matches!(
+                kind,
+                ExplainKind::Plan
+                    | ExplainKind::Raw
+                    | ExplainKind::Optimized
+                    | ExplainKind::Decorrelated
+            )
+        {
+            return Err(ErrorCode::SyntaxException(
+                "This EXPLAIN statement does not support LOGICAL options".to_string(),
+            )
+            .set_span(span));
+        }
+
+        if self.decorrelated && !matches!(kind, ExplainKind::Plan | ExplainKind::Decorrelated) {
+            return Err(ErrorCode::SyntaxException(
+                "This EXPLAIN statement does not support DECORRELATED options".to_string(),
+            )
+            .set_span(span));
+        }
+
+        if self.optimized && !matches!(kind, ExplainKind::Plan | ExplainKind::Optimized) {
+            return Err(ErrorCode::SyntaxException(
+                "This EXPLAIN statement does not support OPTIMIZED option".to_string(),
+            )
+            .set_span(span));
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Default)]
 struct ExplainConfigBuilder {
     verbose: bool,
     logical: bool,
     optimized: bool,
+    decorrelated: bool,
 }
 
 impl ExplainConfigBuilder {
-    pub fn new() -> Self {
-        ExplainConfigBuilder {
-            verbose: false,
-            logical: false,
-            optimized: false,
-        }
-    }
-
-    pub fn add_option(mut self, option: &ExplainOption) -> Self {
+    pub fn add_option(mut self, option: ExplainOption) -> Self {
         match option {
             ExplainOption::Verbose => self.verbose = true,
             ExplainOption::Logical => self.logical = true,
             ExplainOption::Optimized => {
                 self.logical = true;
                 self.optimized = true;
+            }
+            ExplainOption::Decorrelated => {
+                self.logical = true;
+                self.decorrelated = true;
             }
         }
 
@@ -63,6 +98,7 @@ impl ExplainConfigBuilder {
             verbose: self.verbose,
             logical: self.logical,
             optimized: self.optimized,
+            decorrelated: self.decorrelated,
         }
     }
 }
@@ -72,82 +108,56 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         kind: &ExplainKind,
-        options: &[ExplainOption],
+        (span, options): &(Span, Vec<ExplainOption>),
         inner: &Statement,
     ) -> Result<Plan> {
-        let mut builder = ExplainConfigBuilder::new();
+        let mut builder = ExplainConfigBuilder::default();
         if let Statement::Explain { .. } | Statement::ExplainAnalyze { .. } = inner {
             return Err(ErrorCode::SyntaxException("Invalid statement"));
         }
 
-        // Rewrite `EXPLAIN RAW` to `EXPLAIN(LOGICAL)`
-        if matches!(kind, ExplainKind::Raw) {
-            builder = builder.add_option(&ExplainOption::Logical);
-        }
-
-        // Rewrite `EXPLAIN OPTIMIZED` to `EXPLAIN(LOGICAL, OPTIMIZED)`
-        if matches!(kind, ExplainKind::Optimized) {
-            builder = builder.add_option(&ExplainOption::Logical);
-            builder = builder.add_option(&ExplainOption::Optimized);
-        }
-
         for option in options {
-            builder = builder.add_option(option);
+            builder = builder.add_option(*option);
         }
+
+        match kind {
+            ExplainKind::Raw => {
+                // Rewrite `EXPLAIN RAW` to `EXPLAIN(LOGICAL)`
+                builder = builder.add_option(ExplainOption::Logical);
+            }
+            ExplainKind::Decorrelated => {
+                // Rewrite `EXPLAIN DECORRELATED` to `EXPLAIN(LOGICAL, DECORRELATED)`
+                builder = builder.add_option(ExplainOption::Decorrelated);
+            }
+            ExplainKind::Optimized => {
+                // Rewrite `EXPLAIN OPTIMIZED` to `EXPLAIN(LOGICAL, OPTIMIZED)`
+                builder = builder.add_option(ExplainOption::Optimized);
+            }
+            _ => {}
+        };
 
         let config = builder.build();
+        config.validate(span.to_owned(), kind)?;
 
-        // Validate the configuration
-        validate_explain_config(kind, &config)?;
-
-        let plan = match kind {
-            ExplainKind::Ast(formatted_stmt) => Plan::ExplainAst {
+        match kind {
+            ExplainKind::Ast(formatted_stmt) => Ok(Plan::ExplainAst {
                 formatted_string: formatted_stmt.clone(),
-            },
-            ExplainKind::Syntax(formatted_sql) => Plan::ExplainSyntax {
+            }),
+            ExplainKind::Syntax(formatted_sql) => Ok(Plan::ExplainSyntax {
                 formatted_sql: formatted_sql.clone(),
-            },
-            _ => Plan::Explain {
+            }),
+            ExplainKind::Raw | ExplainKind::Decorrelated | ExplainKind::Optimized => {
+                Ok(Plan::Explain {
+                    kind: ExplainKind::Plan,
+                    config,
+                    plan: Box::new(self.bind_statement(bind_context, inner).await?),
+                })
+            }
+            _ => Ok(Plan::Explain {
                 kind: kind.clone(),
                 config,
                 plan: Box::new(self.bind_statement(bind_context, inner).await?),
-            },
-        };
-
-        Ok(plan)
+            }),
+        }
     }
-}
-
-fn validate_explain_config(kind: &ExplainKind, config: &ExplainConfig) -> Result<()> {
-    if !matches!(
-        kind,
-        ExplainKind::Plan | ExplainKind::Raw | ExplainKind::Optimized
-    ) && config.logical
-    {
-        return Err(ErrorCode::SyntaxException(
-            "LOGICAL option is only supported for EXPLAIN SELECT statement".to_string(),
-        ));
-    }
-
-    if !matches!(
-        kind,
-        ExplainKind::Plan | ExplainKind::Raw | ExplainKind::Optimized
-    ) && config.optimized
-    {
-        return Err(ErrorCode::SyntaxException(
-            "OPTIMIZED option is only supported for EXPLAIN SELECT statement".to_string(),
-        ));
-    }
-
-    if !matches!(
-        kind,
-        ExplainKind::Plan | ExplainKind::Raw | ExplainKind::Optimized
-    ) && config.verbose
-    {
-        return Err(ErrorCode::SyntaxException(
-            "VERBOSE option is only supported for EXPLAIN SELECT statement".to_string(),
-        ));
-    }
-
-    Ok(())
 }

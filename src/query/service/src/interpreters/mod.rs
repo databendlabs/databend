@@ -94,7 +94,6 @@ mod interpreter_role_grant;
 mod interpreter_role_revoke;
 mod interpreter_role_set;
 mod interpreter_role_set_secondary;
-mod interpreter_role_show;
 mod interpreter_select;
 mod interpreter_sequence_create;
 mod interpreter_sequence_drop;

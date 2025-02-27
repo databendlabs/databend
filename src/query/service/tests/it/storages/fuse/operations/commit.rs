@@ -576,7 +576,7 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
-    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {

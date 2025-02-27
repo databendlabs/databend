@@ -150,6 +150,11 @@ impl TryFrom<&Field> for TableField {
                         fields_type,
                     }
                 }
+                ArrowDataType::Dictionary(_, b) => {
+                    let inner_f =
+                        Field::new(arrow_f.name(), b.as_ref().clone(), arrow_f.is_nullable());
+                    return Self::try_from(&inner_f);
+                }
                 arrow_type => {
                     return Err(ErrorCode::Internal(format!(
                         "Unsupported Arrow type: {:?}",
@@ -235,7 +240,11 @@ impl Column {
         Field::from(&f)
     }
 
-    pub fn from_arrow_rs(array: ArrayRef, data_type: &DataType) -> Result<Self> {
+    pub fn from_arrow_rs(mut array: ArrayRef, data_type: &DataType) -> Result<Self> {
+        if let ArrowDataType::Dictionary(_, v) = array.data_type() {
+            array = arrow_cast::cast(array.as_ref(), v.as_ref())?;
+        }
+
         let column = match data_type {
             DataType::Null => Column::Null { len: array.len() },
             DataType::EmptyArray => Column::EmptyArray { len: array.len() },

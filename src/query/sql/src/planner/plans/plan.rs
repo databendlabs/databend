@@ -148,7 +148,6 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
-use crate::plans::ShowRolesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SystemPlan;
@@ -320,7 +319,6 @@ pub enum Plan {
     DropUDF(Box<DropUDFPlan>),
 
     // Role
-    ShowRoles(Box<ShowRolesPlan>),
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
@@ -508,7 +506,6 @@ impl Plan {
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
-            Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),

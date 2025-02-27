@@ -342,6 +342,16 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
+                let mut is_null_equal = Vec::new();
+                for (i, (l, r)) in left_conditions
+                    .iter()
+                    .zip(right_conditions.iter())
+                    .enumerate()
+                {
+                    if l.data_type()?.is_nullable() || r.data_type()?.is_nullable() {
+                        is_null_equal.push(i);
+                    }
+                }
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -356,7 +366,7 @@ impl SubqueryRewriter {
                     equi_conditions: JoinEquiCondition::new_conditions(
                         right_conditions,
                         left_conditions,
-                        vec![],
+                        is_null_equal,
                     ),
                     non_equi_conditions: vec![],
                     join_type: JoinType::RightMark,

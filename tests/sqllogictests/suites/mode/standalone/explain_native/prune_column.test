@@ -77,6 +77,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t1.b (#2)]
 ├── probe keys: [t2.b (#7)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.20
 ├── EvalScalar(Build)
@@ -118,6 +119,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [scalar_subquery_12 (#12)]
 ├── probe keys: [t1.a (#1)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 2.00
 ├── AggregateFinal(Build)
@@ -134,6 +136,7 @@ HashJoin
 │           ├── join type: INNER
 │           ├── build keys: [t2.b (#5)]
 │           ├── probe keys: [t3.b (#10)]
+│           ├── keys is null equal: [false]
 │           ├── filters: []
 │           ├── estimated rows: 0.20
 │           ├── EvalScalar(Build)
@@ -205,6 +208,7 @@ HashJoin
 ├── join type: CROSS
 ├── build keys: []
 ├── probe keys: []
+├── keys is null equal: []
 ├── filters: []
 ├── estimated rows: 10.00
 ├── Filter(Build)

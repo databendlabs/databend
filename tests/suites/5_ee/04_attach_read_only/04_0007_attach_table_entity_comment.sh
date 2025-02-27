@@ -25,5 +25,23 @@ echo "check column comment"
 echo "select name, comment from system.columns where table = 'att_comment' order by name" | $BENDSQL_CLIENT_CONNECT
 
 
+# alter table rename column should generate new hint file
+stmt "alter table comment_base rename column c1 to c1_new"
+echo "drop table if exists att_comment" | $BENDSQL_CLIENT_CONNECT
+echo "attach table att_comment 's3://testbucket/admin/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
+echo "select name, comment from system.columns where table = 'att_comment' order by name" | $BENDSQL_CLIENT_CONNECT
+
+# alter table rename comment should generate new hint file
+stmt "alter table comment_base comment = 'new tbl comment'"
+echo "drop table if exists att_comment" | $BENDSQL_CLIENT_CONNECT
+echo "attach table att_comment 's3://testbucket/admin/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
+stmt "select comment from system.tables where name = 'att_comment'"
+
+# alter table modify column comment should generate new hint file
+stmt "ALTER TABLE comment_base MODIFY COLUMN c1_new int comment 'new comment of c1_new'"
+echo "drop table if exists att_comment" | $BENDSQL_CLIENT_CONNECT
+echo "attach table att_comment 's3://testbucket/admin/$storage_prefix' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $BENDSQL_CLIENT_CONNECT
+echo "select name, comment from system.columns where table = 'att_comment' order by name" | $BENDSQL_CLIENT_CONNECT
+
 echo "drop table if exists comment_base" | $BENDSQL_CLIENT_CONNECT
 echo "drop table if exists att_comment" | $BENDSQL_CLIENT_CONNECT

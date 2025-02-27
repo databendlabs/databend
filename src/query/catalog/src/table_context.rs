@@ -221,7 +221,7 @@ pub trait TableContext: Send + Sync {
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
     ) -> Result<()>;
-    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,

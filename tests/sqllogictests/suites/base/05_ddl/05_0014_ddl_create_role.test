@@ -7,6 +7,18 @@ CREATE ROLE `test-a`
 statement error 2216
 CREATE ROLE `test-a`
 
+statement error 2217
+CREATE ROLE 'a\b'
+
+statement error 2217
+CREATE ROLE 'a\f'
+
+statement ok
+drop role if exists 'a\b';
+
+statement ok
+drop role if exists 'a\f';
+
 statement ok
 CREATE ROLE IF NOT EXISTS `test-a`
 
@@ -32,7 +44,7 @@ statement error 2217
 create role 'public'
 
 statement error 2217
-create role `a"a`
+create role 'a"a'
 
 statement error 2217
-create role `a'a`
+create role "a'a"

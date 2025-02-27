@@ -1427,6 +1427,7 @@ fn hash_join_to_format_tree(
         .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
+    let is_null_equal = plan.is_null_equal.iter().map(|b| format!("{b}")).join(", ");
     let filters = plan
         .non_equi_conditions
         .iter()
@@ -1448,6 +1449,7 @@ fn hash_join_to_format_tree(
         FormatTreeNode::new(format!("join type: {}", plan.join_type)),
         FormatTreeNode::new(format!("build keys: [{build_keys}]")),
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
+        FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
         FormatTreeNode::new(format!("filters: [{filters}]")),
     ];
 

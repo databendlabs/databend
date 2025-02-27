@@ -149,7 +149,6 @@ impl Plan {
             Plan::UseDatabase(_) => Ok("UseDatabase".to_string()),
             Plan::Kill(_) => Ok("Kill".to_string()),
 
-            Plan::ShowRoles(_) => Ok("ShowRoles".to_string()),
             Plan::RevertTable(_) => Ok("RevertTable".to_string()),
 
             // data mask
