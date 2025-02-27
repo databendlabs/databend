@@ -82,15 +82,16 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         })
         .map(|tbl| {
             let stats = tbl.get_table_info().meta.statistics;
+            let info = tbl.get_table_info();
             TableInfo {
                 name: tbl.name().to_string(),
                 table_type: tbl.table_type().to_string(),
                 database: db.name().to_string(),
                 catalog: catalog.name().to_string(),
                 owner: user.name().to_string(),
-                engine: tbl.engine().to_string(),
-                cluster_by: tbl.cluster_by().to_string(),
-                create_time: tbl.create_time(),
+                engine: info.engine.to_string(),
+                cluster_by: info.cluster_key.clone().unwrap_or_default(),
+                create_time: info.created_on,
                 num_rows: stats.number_of_rows,
                 data_size: stats.data_bytes,
                 data_compressed_size: stats.compressed_data_bytes,
