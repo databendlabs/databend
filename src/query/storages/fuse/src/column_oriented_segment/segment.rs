@@ -23,14 +23,12 @@ use databend_common_expression::DataSchema;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
-// use super::block_meta::ColumnOrientedBlockMeta;
 use databend_storages_common_table_meta::meta::format::compress;
 use databend_storages_common_table_meta::meta::format::decode;
 use databend_storages_common_table_meta::meta::format::decompress;
 use databend_storages_common_table_meta::meta::format::encode;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
-// use crate::meta::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::MetaCompression;
 use databend_storages_common_table_meta::meta::MetaEncoding;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -40,16 +38,13 @@ use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::ArrowWriter;
 use parquet::file::properties::WriterProperties;
 
-// use super::block_meta::ColumnOrientedBlockMeta;
 use super::meta_name;
 use super::stat_name;
-// use super::AbstractBlockMeta;
 use crate::io::read::meta::bytes_reader;
 use crate::io::SegmentsIO;
 
 #[async_trait::async_trait]
 pub trait AbstractSegment: Send + Sync + 'static + Sized {
-    // fn blocks(&self) -> Box<dyn Iterator<Item = Arc<dyn AbstractBlockMeta>> + '_>;
     fn summary(&self) -> &Statistics;
     fn serialize(&self) -> Result<Vec<u8>>;
     async fn read_and_deserialize(
@@ -62,14 +57,6 @@ pub trait AbstractSegment: Send + Sync + 'static + Sized {
 
 #[async_trait::async_trait]
 impl AbstractSegment for SegmentInfo {
-    // fn blocks(&self) -> Box<dyn Iterator<Item = Arc<dyn AbstractBlockMeta>> + '_> {
-    //     Box::new(
-    //         self.blocks
-    //             .iter()
-    //             .map(|b| b.clone() as Arc<dyn AbstractBlockMeta>),
-    //     )
-    // }
-
     fn serialize(&self) -> Result<Vec<u8>> {
         self.to_bytes()
     }
@@ -90,10 +77,6 @@ impl AbstractSegment for SegmentInfo {
 
 #[async_trait::async_trait]
 impl AbstractSegment for CompactSegmentInfo {
-    // fn blocks(&self) -> Box<dyn Iterator<Item = Arc<dyn AbstractBlockMeta>> + '_> {
-    //     unimplemented!()
-    // }
-
     fn summary(&self) -> &Statistics {
         &self.summary
     }
@@ -119,10 +102,6 @@ pub struct ColumnOrientedSegment {
 }
 
 impl ColumnOrientedSegment {
-    // pub fn blocks(&self) -> Box<dyn Iterator<Item = Arc<dyn AbstractBlockMeta>> + '_> {
-    //     Box::new(BlockMetaIter::new(self.block_metas.clone()))
-    // }
-
     pub fn stat_col(&self, col_id: u32) -> Option<Column> {
         let stat_name = stat_name(col_id);
         self.col_by_name(&[&stat_name])
@@ -269,30 +248,3 @@ fn deserialize_column_oriented_segment(data: Bytes) -> Result<Arc<ColumnOriented
         segment_schema: TableSchema::try_from(&(*batch.schema()))?,
     }))
 }
-
-// pub struct BlockMetaIter {
-//     blocks: DataBlock,
-//     index: usize,
-// }
-
-// impl BlockMetaIter {
-//     pub fn new(blocks: DataBlock) -> Self {
-//         Self { blocks, index: 0 }
-//     }
-// }
-
-// impl Iterator for BlockMetaIter {
-//     type Item = Arc<dyn AbstractBlockMeta>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if self.index >= self.blocks.num_rows() {
-//             return None;
-//         }
-//         let index = self.index;
-//         self.index += 1;
-//         Some(Arc::new(ColumnOrientedBlockMeta::new(
-//             self.blocks.clone(),
-//             index,
-//         )))
-//     }
-// }

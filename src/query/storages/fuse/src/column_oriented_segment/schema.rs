@@ -31,9 +31,13 @@ pub const COMPRESSION: &str = "compression";
 pub const CREATE_ON: &str = "create_on";
 pub const LOCATION_PATH: &str = "path";
 pub const LOCATION_FORMAT_VERSION: &str = "format_version";
+
 fn location_parts() -> (Vec<String>, Vec<TableDataType>) {
     (
-        vec![LOCATION_PATH.to_string(), LOCATION_FORMAT_VERSION.to_string()],
+        vec![
+            LOCATION_PATH.to_string(),
+            LOCATION_FORMAT_VERSION.to_string(),
+        ],
         vec![
             TableDataType::String,
             TableDataType::Number(NumberDataType::UInt64),

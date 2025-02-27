@@ -532,8 +532,6 @@ impl FuseTable {
             ColumnOrientedBlockPruneSink::create(
                 input,
                 block_pruner.clone(),
-                push_down.clone(),
-                pruner.table_schema.clone(),
                 part_info_tx.clone(),
                 column_ids.clone(),
             )

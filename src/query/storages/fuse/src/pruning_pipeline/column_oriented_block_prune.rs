@@ -49,8 +49,6 @@ use crate::ROW_COUNT;
 
 pub struct ColumnOrientedBlockPruneSink {
     block_pruner: Arc<BlockPruner>,
-    push_downs: Option<PushDownInfo>,
-    table_schema: TableSchemaRef,
     column_ids: Vec<ColumnId>,
     sender: Option<Sender<Result<PartInfoPtr>>>,
 }
@@ -59,8 +57,6 @@ impl ColumnOrientedBlockPruneSink {
     pub fn create(
         input: Arc<InputPort>,
         block_pruner: Arc<BlockPruner>,
-        push_downs: Option<PushDownInfo>,
-        table_schema: TableSchemaRef,
         sender: Sender<Result<PartInfoPtr>>,
         column_ids: Vec<ColumnId>,
     ) -> Result<ProcessorPtr> {
@@ -68,8 +64,6 @@ impl ColumnOrientedBlockPruneSink {
             input,
             ColumnOrientedBlockPruneSink {
                 block_pruner,
-                push_downs,
-                table_schema,
                 column_ids,
                 sender: Some(sender),
             },
@@ -153,6 +147,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             if !range_pruner.should_keep(&columns_stat, None) {
                 continue;
             }
+
+            // TODO(Sky): add bloom filter pruning, inverted index pruning
 
             let row_count = rows_count_col.index(block_idx).unwrap();
             let row_count = row_count.as_number().unwrap().as_u_int64().unwrap();
