@@ -34,7 +34,7 @@ pub struct DatabaseInfo {
 }
 
 #[async_backtrace::framed]
-async fn list_databases(ctx: &HttpQueryContext) -> Result<ListDatabasesResponse> {
+async fn handle(ctx: &HttpQueryContext) -> Result<ListDatabasesResponse> {
     let tenant = ctx.session.get_current_tenant();
     let user = ctx.session.get_current_user()?;
     let visibility_checker = ctx.session.get_visibility_checker(false).await?;
@@ -66,6 +66,6 @@ async fn list_databases(ctx: &HttpQueryContext) -> Result<ListDatabasesResponse>
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn list_databases_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
-    let response = list_databases(ctx).await.map_err(InternalServerError)?;
+    let response = handle(ctx).await.map_err(InternalServerError)?;
     Ok(Json(response))
 }
