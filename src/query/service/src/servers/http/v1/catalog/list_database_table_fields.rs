@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chrono::DateTime;
-use chrono::Utc;
-use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -49,7 +46,6 @@ async fn handle(
     table: String,
 ) -> Result<ListDatabaseTableFieldsResponse> {
     let tenant = ctx.session.get_current_tenant();
-    let user = ctx.session.get_current_user()?;
     let visibility_checker = ctx.session.get_visibility_checker(false).await?;
 
     let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;

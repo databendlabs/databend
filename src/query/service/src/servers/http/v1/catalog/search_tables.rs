@@ -74,6 +74,55 @@ async fn handle(ctx: &HttpQueryContext, keywords: String) -> Result<SearchTables
     let tables = vec![];
     let warnings = vec![];
 
+    for db in catalog.list_databases(&tenant).await? {
+        if !visibility_checker.check_database_visibility(
+            catalog.name().as_str(),
+            db.name(),
+            db.get_db_info().database_id.db_id,
+        ) {
+            continue;
+        }
+        for tbl in db.list_tables().await? {
+            if !tbl.name().contains(&keywords) {
+                continue;
+            }
+            if !visibility_checker.check_table_visibility(
+                catalog.name().as_str(),
+                db.name(),
+                tbl.name(),
+                db.get_db_info().database_id.db_id,
+                tbl.get_table_info().ident.table_id,
+            ) {
+                continue;
+            }
+            tables.push(TableInfo {
+                catalog: catalog.name().to_string(),
+                database: db.name().to_string(),
+                database_id: db.get_db_info().database_id.db_id,
+                name: tbl.name().to_string(),
+                table_id: tbl.get_table_info().ident.table_id,
+                total_columns: tbl.get_table_info().schema().fields.len() as u64,
+                engine: tbl.get_table_info().meta.engine.clone(),
+                engine_full: tbl.get_table_info().meta.engine.clone(),
+                cluster_by: tbl.get_table_info().meta.cluster_by.clone(),
+                is_transient: tbl.get_table_info().meta.is_transient,
+                is_attach: tbl.get_table_info().meta.is_attach,
+                created_on: tbl.get_table_info().meta.created_on,
+                dropped_on: tbl.get_table_info().meta.dropped_on,
+                updated_on: tbl.get_table_info().meta.updated_on,
+                num_rows: tbl.get_table_info().meta.statistics.number_of_rows,
+                data_size: tbl.get_table_info().meta.statistics.data_bytes,
+                data_compressed_size: tbl.get_table_info().meta.statistics.data_bytes,
+                index_size: tbl.get_table_info().meta.statistics.index_bytes,
+                number_of_segments: tbl.get_table_info().meta.statistics.number_of_segments,
+                number_of_blocks: tbl.get_table_info().meta.statistics.number_of_blocks,
+                owner: tbl.get_table_info().meta.owner.clone(),
+                comment: tbl.get_table_info().meta.comment.clone(),
+                table_type: tbl.get_table_info().meta.table_type.clone(),
+            });
+        }
+    }
+
     Ok(SearchTablesResponse { tables, warnings })
 }
 

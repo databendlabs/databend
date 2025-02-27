@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use poem::get;
+use poem::post;
 use poem::Route;
 
 pub fn catalog_route() -> Route {

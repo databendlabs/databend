@@ -36,7 +36,6 @@ pub struct DatabaseInfo {
 #[async_backtrace::framed]
 async fn handle(ctx: &HttpQueryContext) -> Result<ListDatabasesResponse> {
     let tenant = ctx.session.get_current_tenant();
-    let user = ctx.session.get_current_user()?;
     let visibility_checker = ctx.session.get_visibility_checker(false).await?;
 
     let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
