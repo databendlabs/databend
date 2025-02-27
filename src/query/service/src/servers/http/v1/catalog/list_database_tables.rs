@@ -77,7 +77,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
                 db.name(),
                 tbl.name(),
                 db.get_db_info().database_id.db_id,
-                tbl.get_table_info().table_id,
+                tbl.get_table_info().ident.table_id,
             )
         })
         .map(|tbl| {
@@ -87,11 +87,11 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
                 name: tbl.name().to_string(),
                 table_type: tbl.table_type().to_string(),
                 database: db.name().to_string(),
-                catalog: catalog.name().to_string(),
-                owner: user.name().to_string(),
-                engine: info.engine.to_string(),
-                cluster_by: info.cluster_key.clone().unwrap_or_default(),
-                create_time: info.created_on,
+                catalog: catalog.name().clone(),
+                owner: user.name.clone(),
+                engine: info.meta.engine.clone(),
+                cluster_by: info.meta.cluster_key.clone().unwrap_or_default(),
+                create_time: info.meta.created_on,
                 num_rows: stats.number_of_rows,
                 data_size: stats.data_bytes,
                 data_compressed_size: stats.compressed_data_bytes,
