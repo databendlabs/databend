@@ -525,8 +525,7 @@ impl FuseTable {
         };
         let column_ids: Vec<_> = column_nodes
             .iter()
-            .map(|c| c.leaf_column_ids.clone())
-            .flatten()
+            .flat_map(|c| c.leaf_column_ids.clone())
             .collect();
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(

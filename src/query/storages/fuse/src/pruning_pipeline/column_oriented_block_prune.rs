@@ -19,14 +19,12 @@ use async_channel::Sender;
 use chrono::DateTime;
 use databend_common_catalog::plan::block_id_in_segment;
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::plan::PushDownInfo;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::ProcessorPtr;
@@ -107,7 +105,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 .pruning_ctx
                 .internal_column_pruner
                 .as_ref()
-                .is_some_and(|pruner| !pruner.should_keep(BLOCK_NAME_COL_NAME, &location_path))
+                .is_some_and(|pruner| !pruner.should_keep(BLOCK_NAME_COL_NAME, location_path))
             {
                 continue;
             }

@@ -126,13 +126,7 @@ impl ColumnOrientedSegment {
                 TableDataType::Tuple {
                     fields_name,
                     fields_type,
-                } => Self::col_by_name_inner(
-                    &name[1..],
-                    &sub_cols,
-                    &fields_name,
-                    &fields_type,
-                    self.block_metas.num_rows(),
-                ),
+                } => Self::col_by_name_inner(&name[1..], sub_cols, fields_name, fields_type),
                 _ => panic!("expect tuple type"),
             }
         }
@@ -143,7 +137,6 @@ impl ColumnOrientedSegment {
         cols: &[Column],
         field_names: &[String],
         field_types: &[TableDataType],
-        num_rows: usize,
     ) -> Option<Column> {
         let index = field_names.iter().position(|f| f == name[0])?;
         let column = cols[index].clone();
@@ -155,13 +148,7 @@ impl ColumnOrientedSegment {
                 TableDataType::Tuple {
                     fields_name,
                     fields_type,
-                } => Self::col_by_name_inner(
-                    &name[1..],
-                    &sub_cols,
-                    &fields_name,
-                    &fields_type,
-                    num_rows,
-                ),
+                } => Self::col_by_name_inner(&name[1..], sub_cols, fields_name, fields_type),
                 _ => panic!("expect tuple type"),
             }
         }
