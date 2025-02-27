@@ -183,7 +183,7 @@ mod tests {
         let file_path = Path::new(manifest_dir).join("tests/fixtures/databend_meta_config.toml");
         let cfg = load_meta_config(&file_path.to_string_lossy())?;
 
-        assert_eq!(cfg.raft_config.raft_dir, "./.databend/meta1");
+        assert_eq!(cfg.raft_config.raft_dir, "/tmp/.databend/meta1");
         assert_eq!(cfg.raft_config.id, 1);
         Ok(())
     }
