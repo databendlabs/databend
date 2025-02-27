@@ -2082,6 +2082,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     return (expr.clone(), None);
                 }
 
+                if let Some(res) = self.try_eliminate_cast(expr) {
+                    return res;
+                }
+
                 let (mut args_expr, mut args_domain) = (
                     Vec::with_capacity(args.len()),
                     Some(Vec::with_capacity(args.len())),
@@ -2273,6 +2277,135 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         debug_assert_eq!(expr.data_type(), new_expr.data_type());
 
         (new_expr, domain)
+    }
+
+    fn try_eliminate_cast(&self, expr: &Expr<Index>) -> Option<(Expr<Index>, Option<Domain>)> {
+        let (span, _, function, _, args, _) = expr.as_function_call()?;
+        if function.signature.name != "eq" {
+            return None;
+        }
+
+        match (&args[0], &args[1]) {
+            (
+                Expr::Cast {
+                    is_try,
+                    box expr,
+                    dest_type,
+                    ..
+                },
+                Expr::Constant { scalar, .. },
+            )
+            | (
+                Expr::Constant { scalar, .. },
+                Expr::Cast {
+                    is_try,
+                    box expr,
+                    dest_type,
+                    ..
+                },
+            ) if !is_try => {
+                let src_type = expr.data_type();
+                let (inner_expr, inner_domain) = self.fold_once(expr);
+                let inner_domain = inner_domain?;
+                self.calculate_cast(*span, src_type, dest_type, &inner_domain)?;
+
+                let scalar_domain = scalar.as_ref().domain(dest_type);
+                let new_scalar = self
+                    .calculate_cast(*span, dest_type, src_type, &scalar_domain)?
+                    .as_singleton()?;
+                let scalar_domain = new_scalar.as_ref().domain(src_type);
+
+                let func_expr = check_function(
+                    *span,
+                    "eq",
+                    &[],
+                    &[inner_expr, Expr::Constant {
+                        span: None,
+                        scalar: new_scalar,
+                        data_type: src_type.clone(),
+                    }],
+                    self.fn_registry,
+                )
+                .ok()?;
+
+                let calc_domain = func_expr
+                    .as_function_call()
+                    .unwrap()
+                    .2
+                    .eval
+                    .as_scalar()
+                    .unwrap()
+                    .0;
+
+                let domain = match calc_domain(self.func_ctx, &[inner_domain, scalar_domain]) {
+                    FunctionDomain::MayThrow => None,
+                    FunctionDomain::Full => None,
+                    FunctionDomain::Domain(domain) => Some(domain),
+                };
+
+                Some((func_expr, domain))
+            }
+            (
+                Expr::FunctionCall {
+                    function: cast_func,
+                    args,
+                    ..
+                },
+                Expr::Constant { scalar, .. },
+            )
+            | (
+                Expr::Constant { scalar, .. },
+                Expr::FunctionCall {
+                    function: cast_func,
+                    args,
+                    ..
+                },
+            ) if cast_func.signature.name.starts_with("to_") && args.len() == 1 => {
+                let expr = &args[0];
+                let src_type = expr.data_type();
+                let dest_type = &cast_func.signature.return_type;
+                let (inner_expr, inner_domain) = self.fold_once(expr);
+                let inner_domain = inner_domain?;
+                self.calculate_cast(*span, src_type, dest_type, &inner_domain)?;
+
+                let scalar_domain = scalar.as_ref().domain(dest_type);
+                let new_scalar = self
+                    .calculate_cast(*span, dest_type, src_type, &scalar_domain)?
+                    .as_singleton()?;
+                let scalar_domain = new_scalar.as_ref().domain(src_type);
+
+                let func_expr = check_function(
+                    *span,
+                    "eq",
+                    &[],
+                    &[inner_expr, Expr::Constant {
+                        span: None,
+                        scalar: new_scalar,
+                        data_type: src_type.clone(),
+                    }],
+                    self.fn_registry,
+                )
+                .ok()?;
+
+                let calc_domain = func_expr
+                    .as_function_call()
+                    .unwrap()
+                    .2
+                    .eval
+                    .as_scalar()
+                    .unwrap()
+                    .0;
+
+                let domain = match calc_domain(self.func_ctx, &[inner_domain, scalar_domain]) {
+                    FunctionDomain::MayThrow => None,
+                    FunctionDomain::Full => None,
+                    FunctionDomain::Domain(domain) => Some(domain),
+                };
+
+                Some((func_expr, domain))
+            }
+            _ => None,
+        }
     }
 
     fn calculate_cast(
