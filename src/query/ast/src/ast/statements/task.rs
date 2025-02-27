@@ -47,7 +47,7 @@ impl Display for TaskSql {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TaskSetOption {
+pub enum CreateTaskOption {
     Warehouse(String),
     Schedule(ScheduleOptions),
     After(Vec<String>),
@@ -74,27 +74,27 @@ pub struct CreateTaskStmt {
 }
 
 impl CreateTaskStmt {
-    pub fn apply_opt(&mut self, opt: TaskSetOption) {
+    pub fn apply_opt(&mut self, opt: CreateTaskOption) {
         match opt {
-            TaskSetOption::Warehouse(wh) => {
+            CreateTaskOption::Warehouse(wh) => {
                 self.warehouse_opts.warehouse = Some(wh);
             }
-            TaskSetOption::Schedule(schedule) => {
+            CreateTaskOption::Schedule(schedule) => {
                 self.schedule_opts = Some(schedule);
             }
-            TaskSetOption::After(after) => {
+            CreateTaskOption::After(after) => {
                 self.after = after;
             }
-            TaskSetOption::When(when) => {
+            CreateTaskOption::When(when) => {
                 self.when_condition = Some(when);
             }
-            TaskSetOption::SuspendTaskAfterNumFailures(num) => {
+            CreateTaskOption::SuspendTaskAfterNumFailures(num) => {
                 self.suspend_task_after_num_failures = Some(num as u64);
             }
-            TaskSetOption::ErrorIntegration(integration) => {
+            CreateTaskOption::ErrorIntegration(integration) => {
                 self.error_integration = Some(integration);
             }
-            TaskSetOption::Comment(comment) => {
+            CreateTaskOption::Comment(comment) => {
                 self.comments = Some(comment);
             }
         }
@@ -211,6 +211,15 @@ impl Display for AlterTaskStmt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTaskSetOption {
+    Warehouse(String),
+    Schedule(ScheduleOptions),
+    SuspendTaskAfterNumFailures(u64),
+    ErrorIntegration(String),
+    Comment(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AlterTaskOptions {
     Resume,
@@ -234,7 +243,7 @@ pub enum AlterTaskOptions {
 }
 
 impl AlterTaskOptions {
-    pub fn apply_opt(&mut self, opt: TaskSetOption) {
+    pub fn apply_opt(&mut self, opt: AlterTaskSetOption) {
         match self {
             AlterTaskOptions::Set {
                 warehouse,
@@ -245,25 +254,19 @@ impl AlterTaskOptions {
                 error_integration,
                 comments,
             } => match opt {
-                TaskSetOption::Warehouse(wh) => {
+                AlterTaskSetOption::Warehouse(wh) => {
                     *warehouse = Some(wh);
                 }
-                TaskSetOption::Schedule(s) => {
+                AlterTaskSetOption::Schedule(s) => {
                     *schedule = Some(s);
                 }
-                TaskSetOption::After(_after) => {
-                    // _
-                }
-                TaskSetOption::When(_expr) => {
-                    // _
-                }
-                TaskSetOption::ErrorIntegration(integration) => {
+                AlterTaskSetOption::ErrorIntegration(integration) => {
                     *error_integration = Some(integration);
                 }
-                TaskSetOption::SuspendTaskAfterNumFailures(num) => {
+                AlterTaskSetOption::SuspendTaskAfterNumFailures(num) => {
                     *suspend_task_after_num_failures = Some(num);
                 }
-                TaskSetOption::Comment(comment) => {
+                AlterTaskSetOption::Comment(comment) => {
                     *comments = Some(comment);
                 }
             },
