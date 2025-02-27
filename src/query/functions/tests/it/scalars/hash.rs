@@ -99,6 +99,8 @@ fn test_siphash64(file: &mut impl Write) {
     run_ast(file, "siphash64('Abc')", &[]);
     run_ast(file, "siphash64(to_datetime(100000))", &[]);
     run_ast(file, "siphash64(1234567890)", &[]);
+    run_ast(file, "siphash64([1, 2, 3, null])", &[]);
+    run_ast(file, "siphash64(['ab', 'cd', null, 'ef'])", &[]);
     run_ast(file, "siphash64(1.1)", &[]);
     run_ast(file, "siphash64(to_date(100000))", &[]);
     run_ast(file, "siphash64(NULL)", &[]);
