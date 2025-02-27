@@ -79,14 +79,14 @@ async fn handle(
         )));
     }
 
-    let mut warnings = vec![];
+    let warnings = vec![];
     let mut fields = vec![];
-    for field in tbl.get_table_info().schema().fields {
+    for field in &tbl.get_table_info().schema().fields {
         fields.push(FieldInfo {
-            name: field.name,
+            name: field.name.clone(),
             r#type: field.data_type.to_string(),
             nullable: field.is_nullable(),
-            default: field.default_expr,
+            default: field.default_expr.clone(),
         });
     }
     Ok(ListDatabaseTableFieldsResponse { fields, warnings })
