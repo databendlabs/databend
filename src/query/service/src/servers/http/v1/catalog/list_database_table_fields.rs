@@ -82,7 +82,7 @@ async fn handle(
 
     let mut warnings = vec![];
     let mut fields = vec![];
-    for field in tbl.get_table_info().schema.fields {
+    for field in tbl.get_table_info().schema().fields {
         fields.push(FieldInfo {
             name: field.name,
             r#type: field.data_type.to_string(),
