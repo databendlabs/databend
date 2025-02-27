@@ -291,6 +291,7 @@ impl Table for ParquetRSTable {
         let file_locations = match &self.files_to_read {
             Some(files) => files
                 .iter()
+                .filter(|f| f.size > 0)
                 .map(|f| (f.path.clone(), f.size))
                 .collect::<Vec<_>>(),
             None => self
