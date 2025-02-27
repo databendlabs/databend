@@ -303,6 +303,7 @@ faststr = "0.2"
 feature-set = { version = "0.1.1" }
 flatbuffers = "24" # Must use the same version with arrow-ipc
 foreign_vec = "0.1.0"
+form_urlencoded = { version = "1" }
 fs_extra = "1.3.0"
 futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
@@ -514,8 +515,6 @@ wkt = "0.10.3"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
 xorfilter-rs = "0.5"
 zstd = "0.12.3"
-form_urlencoded = { version = "1" }
-
 
 # AST needed
 cargo-license = "0.6.1"
