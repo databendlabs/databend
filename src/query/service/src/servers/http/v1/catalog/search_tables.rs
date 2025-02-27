@@ -81,16 +81,17 @@ async fn handle(ctx: &HttpQueryContext, keywords: String) -> Result<SearchTables
             ) {
                 continue;
             }
+            let info = tbl.get_table_info();
             tables.push(TableInfo {
                 name: tbl.name().to_string(),
                 database: db.name().to_string(),
                 catalog: catalog.name().to_string(),
-                engine: tbl.get_table_info().meta.engine.clone(),
-                create_time: tbl.get_table_info().meta.created_on,
-                num_rows: tbl.get_table_info().meta.statistics.number_of_rows,
-                data_size: tbl.get_table_info().meta.statistics.data_bytes,
-                data_compressed_size: tbl.get_table_info().meta.statistics.data_bytes,
-                index_size: tbl.get_table_info().meta.statistics.index_bytes,
+                engine: info.meta.engine.clone(),
+                create_time: info.meta.created_on,
+                num_rows: info.meta.statistics.number_of_rows,
+                data_size: info.meta.statistics.data_bytes,
+                data_compressed_size: info.meta.statistics.compressed_data_bytes,
+                index_size: info.meta.statistics.index_data_bytes,
             });
         }
     }
