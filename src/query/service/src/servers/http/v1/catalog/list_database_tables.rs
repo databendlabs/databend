@@ -105,7 +105,7 @@ pub async fn list_database_tables_handler(
     ctx: &HttpQueryContext,
     Path(database): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let resp = handle(ctx, database).await.map_err(|e| match e {
+    let resp = handle(ctx, database).await.map_err(|e| match e.code() {
         ErrorCode::UNKNOWN_DATABASE => NotFound(e),
         _ => InternalServerError(e),
     })?;
