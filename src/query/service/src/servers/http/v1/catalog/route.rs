@@ -16,7 +16,7 @@ use poem::get;
 use poem::Route;
 
 pub fn catalog_route() -> Route {
-    let route = Route::new()
+    Route::new()
         .at(
             "/databases",
             get(super::list_databases::list_databases_handler),
@@ -36,7 +36,5 @@ pub fn catalog_route() -> Route {
         .at(
             "/tables/search",
             get(super::search_tables::search_tables_handler),
-        );
-
-    route
+        )
 }
