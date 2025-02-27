@@ -36,7 +36,6 @@ pub struct TableInfo {
     pub name: String,
     pub database: String,
     pub catalog: String,
-    pub owner: String,
     pub engine: String,
     pub create_time: DateTime<Utc>,
     pub num_rows: u64,
@@ -50,6 +49,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     let tenant = ctx.session.get_current_tenant();
     let user = ctx.session.get_current_user()?;
     let visibility_checker = ctx.session.get_visibility_checker(false).await?;
+    let user_api = UserApiProvider::instance();
 
     let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
     let db = catalog.get_database(&tenant, &database).await?;
@@ -85,7 +85,6 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
                 name: tbl.name().to_string(),
                 database: db.name().to_string(),
                 catalog: catalog.name().clone(),
-                owner: user.name.clone(),
                 engine: info.meta.engine.clone(),
                 create_time: info.meta.created_on,
                 num_rows: info.meta.statistics.number_of_rows,
