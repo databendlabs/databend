@@ -33,7 +33,6 @@ pub struct ListDatabaseTablesResponse {
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct TableInfo {
     pub name: String,
-    pub table_type: String,
     pub database: String,
     pub catalog: String,
     pub owner: String,
@@ -85,7 +84,6 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
             let info = tbl.get_table_info();
             TableInfo {
                 name: tbl.name().to_string(),
-                table_type: tbl.table_type().to_string(),
                 database: db.name().to_string(),
                 catalog: catalog.name().clone(),
                 owner: user.name.clone(),
