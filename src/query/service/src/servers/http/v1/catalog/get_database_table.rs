@@ -16,8 +16,10 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use poem::error::InternalServerError;
+use poem::error::NotFound;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Path;
@@ -66,10 +68,10 @@ async fn handle(
         db.name(),
         db.get_db_info().database_id.db_id,
     ) {
-        return Ok(GetDatabaseTableResponse {
-            table: None,
-            warnings: vec![format!("database `{}` not found", database)],
-        });
+        return Err(ErrorCode::UnknownDatabase(format!(
+            "Unknown database '{}'.",
+            database
+        )));
     }
 
     let tbl = db.get_table(&table).await?;
@@ -80,10 +82,10 @@ async fn handle(
         db.get_db_info().database_id.db_id,
         tbl.get_table_info().ident.table_id,
     ) {
-        return Ok(GetDatabaseTableResponse {
-            table: None,
-            warnings: vec![format!("table `{}`.`{}` not found", database, table)],
-        });
+        return Err(ErrorCode::UnknownTable(format!(
+            "Unknown table '{}'.",
+            table
+        )));
     }
 
     let info = tbl.get_table_info();
@@ -138,8 +140,10 @@ pub async fn get_database_table_handler(
     ctx: &HttpQueryContext,
     Path((database, table)): Path<(String, String)>,
 ) -> PoemResult<impl IntoResponse> {
-    let resp = handle(ctx, database, table)
-        .await
-        .map_err(InternalServerError)?;
+    let resp = handle(ctx, database, table).await.map_err(|e| match e {
+        ErrorCode::UnknownDatabase(_) => NotFound(e),
+        ErrorCode::UnknownTable(_) => NotFound(e),
+        _ => InternalServerError(e),
+    })?;
     Ok(Json(resp))
 }

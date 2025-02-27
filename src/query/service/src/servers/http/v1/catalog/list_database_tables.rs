@@ -15,8 +15,10 @@
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use poem::error::InternalServerError;
+use poem::error::NotFound;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Path;
@@ -58,10 +60,10 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         db.name(),
         db.get_db_info().database_id.db_id,
     ) {
-        return Ok(ListDatabaseTablesResponse {
-            tables: vec![],
-            warnings: vec![format!("database `{}` not found", database)],
-        });
+        return Err(ErrorCode::UnknownDatabase(format!(
+            "Unknown database '{}'.",
+            database
+        )));
     }
 
     let warnings = vec![];
@@ -103,6 +105,9 @@ pub async fn list_database_tables_handler(
     ctx: &HttpQueryContext,
     Path(database): Path<String>,
 ) -> PoemResult<impl IntoResponse> {
-    let resp = handle(ctx, database).await.map_err(InternalServerError)?;
+    let resp = handle(ctx, database).await.map_err(|e| match e {
+        ErrorCode::UnknownDatabase(_) => NotFound(e),
+        _ => InternalServerError(e),
+    })?;
     Ok(Json(resp))
 }
