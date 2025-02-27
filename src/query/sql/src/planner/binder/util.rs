@@ -33,7 +33,9 @@ use crate::NameResolutionSuggest;
 /// Ident name can not contain ' or "
 /// Forbidden ' or " in UserName and RoleName, to prevent Meta injection problem
 pub fn illegal_ident_name(ident_name: &str) -> bool {
-    ident_name.chars().any(|c| c == '\'' || c == '\"')
+    ident_name
+        .chars()
+        .any(|c| c == '\'' || c == '\"' || c == '\u{000C}' || c == '\u{0008}')
 }
 
 impl Binder {
