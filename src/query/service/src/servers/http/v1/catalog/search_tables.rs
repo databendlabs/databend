@@ -27,7 +27,7 @@ use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Deserialize, Clone)]
 struct SearchTablesRequest {
-    pub keywords: String,
+    pub keyword: String,
 }
 
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
@@ -50,7 +50,7 @@ pub struct TableInfo {
 }
 
 #[async_backtrace::framed]
-async fn handle(ctx: &HttpQueryContext, keywords: String) -> Result<SearchTablesResponse> {
+async fn handle(ctx: &HttpQueryContext, keyword: String) -> Result<SearchTablesResponse> {
     let tenant = ctx.session.get_current_tenant();
     let visibility_checker = ctx.session.get_visibility_checker(false).await?;
 
@@ -68,7 +68,7 @@ async fn handle(ctx: &HttpQueryContext, keywords: String) -> Result<SearchTables
             continue;
         }
         for tbl in db.list_tables().await? {
-            if !tbl.name().contains(&keywords) {
+            if !tbl.name().contains(&keyword) {
                 continue;
             }
             if !visibility_checker.check_table_visibility(
@@ -104,7 +104,7 @@ pub async fn search_tables_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<SearchTablesRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    let resp = handle(ctx, req.keywords)
+    let resp = handle(ctx, req.keyword)
         .await
         .map_err(InternalServerError)?;
     Ok(Json(resp))
