@@ -89,7 +89,7 @@ impl CreateTaskStmt {
                 self.when_condition = Some(when);
             }
             CreateTaskOption::SuspendTaskAfterNumFailures(num) => {
-                self.suspend_task_after_num_failures = Some(num as u64);
+                self.suspend_task_after_num_failures = Some(num);
             }
             CreateTaskOption::ErrorIntegration(integration) => {
                 self.error_integration = Some(integration);
@@ -244,15 +244,16 @@ pub enum AlterTaskOptions {
 
 impl AlterTaskOptions {
     pub fn apply_opt(&mut self, opt: AlterTaskSetOption) {
-        match self {
-            AlterTaskOptions::Set {
-                warehouse,
-                schedule,
-                suspend_task_after_num_failures,
-                session_parameters: _,
-                error_integration,
-                comments,
-            } => match opt {
+        if let AlterTaskOptions::Set {
+            warehouse,
+            schedule,
+            suspend_task_after_num_failures,
+            session_parameters: _,
+            error_integration,
+            comments,
+        } = self
+        {
+            match opt {
                 AlterTaskSetOption::Warehouse(wh) => {
                     *warehouse = Some(wh);
                 }
@@ -268,8 +269,7 @@ impl AlterTaskOptions {
                 AlterTaskSetOption::Comment(comment) => {
                     *comments = Some(comment);
                 }
-            },
-            _ => {}
+            }
         }
     }
 }
