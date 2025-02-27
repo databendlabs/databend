@@ -16,7 +16,10 @@ pub mod get_database_table;
 pub mod list_database_table_fields;
 pub mod list_database_tables;
 pub mod list_databases;
-pub mod route;
 pub mod search_tables;
 
-pub use route::catalog_route;
+pub use get_database_table::get_database_table_handler;
+pub use list_database_table_fields::list_database_table_fields_handler;
+pub use list_database_tables::list_database_tables_handler;
+pub use list_databases::list_databases_handler;
+pub use search_tables::search_tables_handler;
