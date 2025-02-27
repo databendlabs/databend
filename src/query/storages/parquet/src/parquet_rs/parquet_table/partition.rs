@@ -358,7 +358,8 @@ fn prune_and_generate_partitions(
             ..
         } = meta.as_ref();
         part_stats.partitions_total += meta.num_row_groups();
-        let (rgs, omits) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref(), None)?;
+        let (rgs, omits, start_rows) =
+            pruner.prune_row_groups(meta, row_group_level_stats.as_deref(), None)?;
         let mut row_selections = if omits.iter().all(|x| *x) {
             None
         } else {
@@ -367,7 +368,7 @@ fn prune_and_generate_partitions(
 
         let mut rows_read = 0; // Rows read in current file.
 
-        for (rg, omit) in rgs.into_iter().zip(omits.into_iter()) {
+        for ((rg, omit), start_row) in rgs.into_iter().zip(omits.into_iter()).zip(start_rows) {
             let rg_meta = meta.row_group(rg);
             let num_rows = rg_meta.num_rows() as usize;
             // Split rows belonging to current row group.
@@ -418,6 +419,7 @@ fn prune_and_generate_partitions(
 
             parts.push(ParquetRSRowGroupPart {
                 location: location.clone(),
+                start_row,
                 selectors: serde_selection,
                 meta: rg_meta.clone(),
                 page_locations,

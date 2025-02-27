@@ -63,7 +63,7 @@ async fn test_impl_batch(args: &[(Scenario, &str, Vec<usize>)], prune: bool) {
         )
         .unwrap();
 
-        let (rgs, _) = pruner.prune_row_groups(&parquet_meta, None, None).unwrap();
+        let (rgs, _, _) = pruner.prune_row_groups(&parquet_meta, None, None).unwrap();
 
         assert_eq!(
             expected_rgs.to_vec(),

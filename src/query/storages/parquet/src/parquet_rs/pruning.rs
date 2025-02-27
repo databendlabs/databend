@@ -119,30 +119,45 @@ impl ParquetRSPruner {
         meta: &ParquetMetaData,
         stats: Option<&[StatisticsOfColumns]>,
         partition_values: Option<&HashMap<String, Scalar>>,
-    ) -> Result<(Vec<usize>, Vec<bool>)> {
+    ) -> Result<(Vec<usize>, Vec<bool>, Vec<u64>)> {
         let default_selection = (0..meta.num_row_groups()).collect();
         let default_omits = vec![false; meta.num_row_groups()];
+        let sizes = meta
+            .row_groups()
+            .iter()
+            .map(|r| r.num_rows() as u64)
+            .collect::<Vec<_>>();
+        let default_start_rows = std::iter::once(0)
+            .chain(sizes)
+            .scan(0, |state, x| {
+                let old_state = *state;
+                *state += x;
+                Some(old_state)
+            })
+            .collect();
         if !self.prune_row_groups {
-            return Ok((default_selection, default_omits));
+            return Ok((default_selection, default_omits, default_start_rows));
         }
 
         match &self.range_pruner {
-            None => Ok((default_selection, default_omits)),
+            None => Ok((default_selection, default_omits, default_start_rows)),
 
             Some((pruner, inverted_pruner)) => {
                 let mut selection = Vec::with_capacity(meta.num_row_groups());
                 let mut omits = Vec::with_capacity(meta.num_row_groups());
+                let mut start_rows = Vec::with_capacity(meta.num_row_groups());
                 if let Some(row_group_stats) = stats {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
                         if pruner.should_keep_with_partition_columns(row_group, partition_values) {
                             selection.push(i);
+                            start_rows.push(default_start_rows[i]);
 
                             let omit = !inverted_pruner
                                 .should_keep_with_partition_columns(row_group, partition_values);
                             omits.push(omit);
                         }
                     }
-                    Ok((selection, omits))
+                    Ok((selection, omits, start_rows))
                 } else if let Some(row_group_stats) = collect_row_group_stats(
                     meta.row_groups(),
                     &self.leaf_fields,
@@ -151,15 +166,16 @@ impl ParquetRSPruner {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
                         if pruner.should_keep_with_partition_columns(row_group, partition_values) {
                             selection.push(i);
+                            start_rows.push(default_start_rows[i]);
 
                             let omit = !inverted_pruner
                                 .should_keep_with_partition_columns(row_group, partition_values);
                             omits.push(omit);
                         }
                     }
-                    Ok((selection, omits))
+                    Ok((selection, omits, start_rows))
                 } else {
-                    Ok((default_selection, default_omits))
+                    Ok((default_selection, default_omits, default_start_rows))
                 }
             }
         }
