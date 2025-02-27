@@ -16,6 +16,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
+use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Path;
@@ -79,7 +80,6 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
             )
         })
         .map(|tbl| {
-            let stats = tbl.get_table_info().meta.statistics;
             let info = tbl.get_table_info();
             TableInfo {
                 name: tbl.name().to_string(),
@@ -88,10 +88,10 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
                 owner: user.name.clone(),
                 engine: info.meta.engine.clone(),
                 create_time: info.meta.created_on,
-                num_rows: stats.number_of_rows,
-                data_size: stats.data_bytes,
-                data_compressed_size: stats.compressed_data_bytes,
-                index_size: stats.index_data_bytes,
+                num_rows: info.meta.statistics.number_of_rows,
+                data_size: info.meta.statistics.data_bytes,
+                data_compressed_size: info.meta.statistics.compressed_data_bytes,
+                index_size: info.meta.statistics.index_data_bytes,
             }
         })
         .collect::<Vec<_>>();
