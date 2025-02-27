@@ -40,7 +40,6 @@ pub struct FieldInfo {
     pub r#type: String,
     pub nullable: bool,
     pub default: Option<String>,
-    pub extra: Option<String>,
 }
 
 #[async_backtrace::framed]
@@ -88,7 +87,6 @@ async fn handle(
             r#type: field.data_type.to_string(),
             nullable: field.is_nullable(),
             default: field.default_expr,
-            extra: field.computed_expr,
         });
     }
     Ok(ListDatabaseTableFieldsResponse { fields, warnings })
