@@ -14,6 +14,7 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
 use poem::error::InternalServerError;
