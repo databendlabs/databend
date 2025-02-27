@@ -13508,9 +13508,9 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
+CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';
 ---------- Output ---------
-CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'table comment'
+CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'Comment types type speedily \' \\\\ \'\' Fun!'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -13551,7 +13551,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {
-            "comment": "table comment",
+            "comment": "Comment types type speedily ' \\\\ '' Fun!",
         },
         as_query: None,
         table_type: Normal,
