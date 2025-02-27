@@ -61,7 +61,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         db.get_db_info().database_id.db_id,
     ) {
         return Err(ErrorCode::UnknownDatabase(format!(
-            "Unknown database '{}'.",
+            "Unknown database '{}'",
             database
         )));
     }
