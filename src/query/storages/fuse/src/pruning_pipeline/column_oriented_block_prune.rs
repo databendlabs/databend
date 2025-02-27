@@ -96,6 +96,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             })?
             .segments;
 
+        let range_pruner = &self.block_pruner.pruning_ctx.range_pruner;
+
         let block_num = segment.block_metas.num_rows();
         let location_path_col = segment.col_by_name(&[LOCATION, LOCATION_PATH]).unwrap();
         let rows_count_col = segment.col_by_name(&[ROW_COUNT]).unwrap();
@@ -103,6 +105,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         let create_on_col = segment.col_by_name(&[CREATE_ON]).unwrap();
 
         for block_idx in 0..block_num {
+            // 1. prune internal column
             let location_path = location_path_col.index(block_idx).unwrap();
             let location_path = location_path.as_string().unwrap();
             if self
@@ -112,6 +115,42 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 .as_ref()
                 .is_some_and(|pruner| !pruner.should_keep(BLOCK_NAME_COL_NAME, &location_path))
             {
+                continue;
+            }
+
+            // 2. prune columns by range index
+            let mut columns_stat = HashMap::with_capacity(self.column_ids.len());
+            let mut columns_meta = HashMap::with_capacity(self.column_ids.len());
+
+            for column_id in &self.column_ids {
+                if let Some(stat) = segment.stat_col(*column_id) {
+                    let stat = stat.index(block_idx).unwrap();
+                    let stat = stat.as_tuple().unwrap();
+                    let min = stat[0].to_owned();
+                    let max = stat[1].to_owned();
+                    let null_count = stat[2].as_number().unwrap().as_u_int64().unwrap();
+                    let in_memory_size = stat[3].as_number().unwrap().as_u_int64().unwrap();
+                    let distinct_of_values = match stat[4] {
+                        ScalarRef::Number(number_scalar) => {
+                            Some(*number_scalar.as_u_int64().unwrap())
+                        }
+                        ScalarRef::Null => None,
+                        _ => unreachable!(),
+                    };
+                    columns_stat.insert(
+                        *column_id,
+                        ColumnStatistics::new(
+                            min,
+                            max,
+                            *null_count,
+                            *in_memory_size,
+                            distinct_of_values,
+                        ),
+                    );
+                }
+            }
+
+            if !range_pruner.should_keep(&columns_stat, None) {
                 continue;
             }
 
@@ -143,9 +182,6 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 virtual_block_meta: None,
             };
 
-            let mut columns_meta = HashMap::with_capacity(self.column_ids.len());
-            let mut columns_stat = HashMap::with_capacity(self.column_ids.len());
-
             for column_id in &self.column_ids {
                 if let Some(meta) = segment.meta_col(*column_id) {
                     let meta = meta.index(block_idx).unwrap();
@@ -160,31 +196,6 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                             len: *length,
                             num_values: *num_values,
                         }),
-                    );
-                }
-                if let Some(stat) = segment.stat_col(*column_id) {
-                    let stat = stat.index(block_idx).unwrap();
-                    let stat = stat.as_tuple().unwrap();
-                    let min = stat[0].to_owned();
-                    let max = stat[1].to_owned();
-                    let null_count = stat[2].as_number().unwrap().as_u_int64().unwrap();
-                    let in_memory_size = stat[3].as_number().unwrap().as_u_int64().unwrap();
-                    let distinct_of_values = match stat[4] {
-                        ScalarRef::Number(number_scalar) => {
-                            Some(*number_scalar.as_u_int64().unwrap())
-                        }
-                        ScalarRef::Null => None,
-                        _ => unreachable!(),
-                    };
-                    columns_stat.insert(
-                        *column_id,
-                        ColumnStatistics::new(
-                            min,
-                            max,
-                            *null_count,
-                            *in_memory_size,
-                            distinct_of_values,
-                        ),
                     );
                 }
             }
