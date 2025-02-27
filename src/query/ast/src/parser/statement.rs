@@ -4808,50 +4808,61 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
 }
 
 pub fn task_set_option(i: Input) -> IResult<TaskSetOption> {
-    alt((
-        map(
-            rule! {
-                (WAREHOUSE  ~ "=" ~ #literal_string)
-            },
-            |(_, _, warehouse)| TaskSetOption::Warehouse(warehouse),
-        ),
-        map(
-            rule! {
-                SCHEDULE ~ "=" ~ #task_schedule_option
-            },
-            |(_, _, schedule)| TaskSetOption::Schedule(schedule),
-        ),
-        map(
-            rule! {
-                AFTER ~ #comma_separated_list0(literal_string)
-            },
-            |(_, after)| TaskSetOption::After(after),
-        ),
-        map(
-            rule! {
-                WHEN ~ #expr
-            },
-            |(_, expr)| TaskSetOption::When(expr),
-        ),
-        map(
-            rule! {
-                SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64
-            },
-            |(_, _, num)| TaskSetOption::SuspendTaskAfterNumFailures(num),
-        ),
-        map(
-            rule! {
-                ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string
-            },
-            |(_, _, integration)| TaskSetOption::ErrorIntegration(integration),
-        ),
-        map(
-            rule! {
-                (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string
-            },
-            |(_, _, comment)| TaskSetOption::Comment(comment),
-        ),
-    ))(i)
+    let warehouse_opt = map(
+        rule! {
+            (WAREHOUSE  ~ "=" ~ #literal_string)
+        },
+        |(_, _, warehouse)| TaskSetOption::Warehouse(warehouse),
+    );
+    let schedule_opt = map(
+        rule! {
+            SCHEDULE ~ "=" ~ #task_schedule_option
+        },
+        |(_, _, schedule)| TaskSetOption::Schedule(schedule),
+    );
+    let after_opt = map(
+        rule! {
+            AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, after)| TaskSetOption::After(after),
+    );
+    let when_opt = map(
+        rule! {
+            WHEN ~ #expr
+        },
+        |(_, expr)| TaskSetOption::When(expr),
+    );
+    let suspend_task_after_num_failures_opt = map(
+        rule! {
+            SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64
+        },
+        |(_, _, num)| TaskSetOption::SuspendTaskAfterNumFailures(num),
+    );
+    let error_integration_opt = map(
+        rule! {
+            ERROR_INTEGRATION ~ "=" ~ #literal_string
+        },
+        |(_, _, integration)| TaskSetOption::ErrorIntegration(integration),
+    );
+    let comment_opt = map(
+        rule! {
+            (COMMENT | COMMENTS) ~ "=" ~ #literal_string
+        },
+        |(_, _, comment)| TaskSetOption::Comment(comment),
+    );
+
+    map(
+        rule! {
+            #warehouse_opt
+            | #schedule_opt
+            | #after_opt
+            | #when_opt
+            | #suspend_task_after_num_failures_opt
+            | #error_integration_opt
+            | #comment_opt
+        },
+        |opt| opt,
+    )(i)
 }
 
 pub fn notification_webhook_options(i: Input) -> IResult<NotificationWebhookOptions> {
