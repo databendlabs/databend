@@ -98,7 +98,7 @@ async fn handle(
     let create_query = ShowCreateTableInterpreter::show_create_query(
         catalog.as_ref(),
         db.name(),
-        tbl.name(),
+        tbl.as_ref(),
         &settings,
     )
     .await
