@@ -249,8 +249,7 @@ impl AlterTaskOptions {
                 warehouse,
                 schedule,
                 suspend_task_after_num_failures,
-                #[allow(unused_variables)]
-                session_parameters,
+                session_parameters: _,
                 error_integration,
                 comments,
             } => match opt {
