@@ -14,6 +14,8 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_exception::Result;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
@@ -69,7 +71,7 @@ async fn handle(
         });
     }
 
-    let tbl = db.get_table(&tenant, &table).await?;
+    let tbl = db.get_table(&table).await?;
     if !visibility_checker.check_table_visibility(
         catalog.name().as_str(),
         db.name(),
