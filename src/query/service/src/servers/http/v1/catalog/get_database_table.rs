@@ -141,8 +141,8 @@ pub async fn get_database_table_handler(
     Path((database, table)): Path<(String, String)>,
 ) -> PoemResult<impl IntoResponse> {
     let resp = handle(ctx, database, table).await.map_err(|e| match e {
-        ErrorCode::UnknownDatabase => NotFound(e),
-        ErrorCode::UnknownTable => NotFound(e),
+        ErrorCode::UNKNOWN_DATABASE => NotFound(e),
+        ErrorCode::UNKNOWN_TABLE => NotFound(e),
         _ => InternalServerError(e),
     })?;
     Ok(Json(resp))
