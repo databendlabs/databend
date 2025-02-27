@@ -14,12 +14,21 @@
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_exception::Result;
+use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
+use serde::Deserialize;
 use serde::Serialize;
 
 use crate::servers::http::v1::HttpQueryContext;
+
+#[derive(Deserialize, Clone)]
+struct SearchTablesRequest {
+    pub keywords: String,
+}
 
 #[derive(Serialize, Eq, PartialEq, Debug, Default)]
 pub struct SearchTablesResponse {
@@ -54,11 +63,28 @@ pub struct TableInfo {
     pub table_type: String,
 }
 
-#[poem::handler]
 #[async_backtrace::framed]
-pub async fn search_tables_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
-    // TODO:
+async fn handle(ctx: &HttpQueryContext, keywords: String) -> Result<SearchTablesResponse> {
+    let tenant = ctx.session.get_current_tenant();
+    let user = ctx.session.get_current_user()?;
+    let visibility_checker = ctx.session.get_visibility_checker(false).await?;
+
+    let catalog = CatalogManager::instance().get_default_catalog(Default::default())?;
+
     let tables = vec![];
     let warnings = vec![];
-    Ok(Json(SearchTablesResponse { tables, warnings }))
+
+    Ok(SearchTablesResponse { tables, warnings })
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn search_tables_handler(
+    ctx: &HttpQueryContext,
+    Json(req): Json<SearchTablesRequest>,
+) -> PoemResult<impl IntoResponse> {
+    let resp = handle(ctx, req.keywords)
+        .await
+        .map_err(InternalServerError)?;
+    Ok(Json(resp))
 }

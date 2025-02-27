@@ -35,6 +35,6 @@ pub fn catalog_route() -> Route {
         )
         .at(
             "/tables/search",
-            get(super::search_tables::search_tables_handler),
+            post(super::search_tables::search_tables_handler),
         )
 }
