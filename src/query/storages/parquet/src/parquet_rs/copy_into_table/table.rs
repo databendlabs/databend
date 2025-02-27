@@ -60,6 +60,7 @@ impl ParquetTableForCopy {
         );
         let file_infos = files
             .iter()
+            .filter(|f| f.size > 0)
             .map(|f| (f.path.clone(), f.size))
             .collect::<Vec<_>>();
         let total_size = file_infos.iter().map(|(_, size)| *size as usize).sum();
