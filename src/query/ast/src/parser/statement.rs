@@ -135,7 +135,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             let mut stmt = CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
-                warehouse_opts: WarehouseOptions { warehouse: None },
+                warehouse: None,
                 schedule_opts: None,
                 suspend_task_after_num_failures: None,
                 comments: None,

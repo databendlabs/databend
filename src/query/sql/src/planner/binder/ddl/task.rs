@@ -113,7 +113,7 @@ impl Binder {
         let CreateTaskStmt {
             if_not_exists,
             name,
-            warehouse_opts,
+            warehouse,
             schedule_opts,
             suspend_task_after_num_failures,
             comments,

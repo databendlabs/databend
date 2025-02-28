@@ -61,7 +61,7 @@ pub enum CreateTaskOption {
 pub struct CreateTaskStmt {
     pub if_not_exists: bool,
     pub name: String,
-    pub warehouse_opts: WarehouseOptions,
+    pub warehouse: Option<String>,
     pub schedule_opts: Option<ScheduleOptions>,
     pub session_parameters: BTreeMap<String, String>,
     pub suspend_task_after_num_failures: Option<u64>,
@@ -77,7 +77,7 @@ impl CreateTaskStmt {
     pub fn apply_opt(&mut self, opt: CreateTaskOption) {
         match opt {
             CreateTaskOption::Warehouse(wh) => {
-                self.warehouse_opts.warehouse = Some(wh);
+                self.warehouse = Some(wh);
             }
             CreateTaskOption::Schedule(schedule) => {
                 self.schedule_opts = Some(schedule);
@@ -110,8 +110,8 @@ impl Display for CreateTaskStmt {
 
         write!(f, " {}", self.name)?;
 
-        if self.warehouse_opts.warehouse.is_some() {
-            write!(f, " {}", self.warehouse_opts)?;
+        if let Some(warehouse) = self.warehouse.as_ref() {
+            write!(f, " WAREHOUSE ='{}'", warehouse)?;
         }
 
         if let Some(schedule_opt) = self.schedule_opts.as_ref() {
