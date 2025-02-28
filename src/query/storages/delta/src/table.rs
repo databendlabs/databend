@@ -254,7 +254,7 @@ impl DeltaTable {
                 .with_pruner(Some(pruner))
                 .with_partition_columns(self.meta.partition_columns.clone());
 
-        let parquet_reader = Arc::new(builder.build_full_reader()?);
+        let parquet_reader = Arc::new(builder.build_full_reader(false)?);
 
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(

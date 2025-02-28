@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -36,6 +37,18 @@ impl ParquetRSTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let internal_columns = plan
+            .internal_columns
+            .as_ref()
+            .map(|m| {
+                m.values()
+                    .map(|i| i.column_type.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let need_row_number = internal_columns.contains(&InternalColumnType::FileRowNumber);
+
         let table_schema: TableSchemaRef = self.table_info.schema();
         // If there is a `ParquetFilesPart`, we should create pruner for it.
         // Although `ParquetFilesPart`s are always staying at the end of `parts` when `do_read_partitions`,
@@ -75,13 +88,15 @@ impl ParquetRSTable {
             Some(self.schema_from.clone()),
         )
         .with_options(self.read_options)
-        .with_push_downs(plan.push_downs.as_ref())
-        .with_pruner(pruner)
-        .with_topk(topk.as_ref());
+        .with_push_downs(plan.push_downs.as_ref());
 
-        let row_group_reader = Arc::new(builder.build_row_group_reader()?);
+        if !need_row_number {
+            builder = builder.with_pruner(pruner).with_topk(topk.as_ref());
+        }
+
+        let row_group_reader = Arc::new(builder.build_row_group_reader(need_row_number)?);
         let full_file_reader = if has_files_part {
-            Some(Arc::new(builder.build_full_reader()?))
+            Some(Arc::new(builder.build_full_reader(need_row_number)?))
         } else {
             None
         };
@@ -95,6 +110,7 @@ impl ParquetRSTable {
                     row_group_reader.clone(),
                     full_file_reader.clone(),
                     topk.clone(),
+                    internal_columns.clone(),
                 )
             },
             num_threads,
