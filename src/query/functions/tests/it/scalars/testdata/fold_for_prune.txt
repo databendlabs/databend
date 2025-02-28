@@ -104,3 +104,21 @@ output type    : Boolean
 output domain  : None
 
 
+ast            : x = 1::int8
+raw expr       : eq(x::Int16 NULL, CAST(1 AS Int8))
+checked expr   : eq<Int16 NULL, Int16 NULL>(x, CAST(to_int8<UInt8>(1_u8) AS Int16 NULL))
+input domain  : {0: Nullable(NullableDomain { has_null: false, value: Some(Number(Int16(SimpleDomain { min: 0, max: 100 }))) })}
+optimized expr : eq<Int16 NULL, Int16 NULL>(x, 1_i16)
+output type    : Boolean NULL
+output domain  : Some(Nullable(NullableDomain { has_null: false, value: Some(Boolean(BooleanDomain { has_false: true, has_true: true })) }))
+
+
+ast            : x::int8 null = 1::int8
+raw expr       : eq(CAST(x::Int16 NULL AS Int8 NULL), CAST(1 AS Int8))
+checked expr   : eq<Int8 NULL, Int8 NULL>(CAST(x AS Int8 NULL), CAST(to_int8<UInt8>(1_u8) AS Int8 NULL))
+input domain  : {0: Nullable(NullableDomain { has_null: false, value: Some(Number(Int16(SimpleDomain { min: 0, max: 100 }))) })}
+optimized expr : eq<Int16 NULL, Int16 NULL>(x, 1_i16)
+output type    : Boolean NULL
+output domain  : Some(Nullable(NullableDomain { has_null: false, value: Some(Boolean(BooleanDomain { has_false: true, has_true: true })) }))
+
+
