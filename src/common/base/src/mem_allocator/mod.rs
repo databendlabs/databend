@@ -18,7 +18,9 @@ mod jemalloc;
 mod std_;
 
 pub use default::DefaultAllocator;
+pub use global::DefaultGlobalAllocator;
 pub use global::GlobalAllocator;
+pub use global::TrackingGlobalAllocator;
 #[cfg(feature = "jemalloc")]
 pub use jemalloc::JEAllocator;
 pub use std_::StdAllocator;

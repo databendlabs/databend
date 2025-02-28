@@ -22,15 +22,18 @@ use std::ptr::NonNull;
 use crate::mem_allocator::tracker::MetaTrackerAllocator;
 use crate::mem_allocator::DefaultAllocator;
 
+pub type DefaultGlobalAllocator = GlobalAllocator<DefaultAllocator>;
+pub type TrackingGlobalAllocator = GlobalAllocator<MetaTrackerAllocator<DefaultAllocator>>;
+
 /// Global allocator, default is JeAllocator.
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GlobalAllocator {
-    inner: MetaTrackerAllocator<DefaultAllocator>,
+pub struct GlobalAllocator<T> {
+    inner: T,
 }
 
-impl GlobalAllocator {
-    pub const fn create() -> GlobalAllocator {
+impl GlobalAllocator<MetaTrackerAllocator<DefaultAllocator>> {
+    pub const fn create() -> GlobalAllocator<MetaTrackerAllocator<DefaultAllocator>> {
         GlobalAllocator {
             inner: MetaTrackerAllocator::create(DefaultAllocator::create()),
         }
@@ -45,7 +48,23 @@ impl GlobalAllocator {
     }
 }
 
-unsafe impl Allocator for GlobalAllocator {
+impl GlobalAllocator<DefaultAllocator> {
+    pub const fn create() -> GlobalAllocator<DefaultAllocator> {
+        GlobalAllocator {
+            inner: DefaultAllocator::create(),
+        }
+    }
+
+    pub fn name() -> String {
+        DefaultAllocator::name()
+    }
+
+    pub fn conf() -> String {
+        DefaultAllocator::conf()
+    }
+}
+
+unsafe impl<T: Allocator> Allocator for GlobalAllocator<T> {
     #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         self.inner.allocate(layout)
@@ -92,7 +111,7 @@ unsafe impl Allocator for GlobalAllocator {
     }
 }
 
-unsafe impl GlobalAlloc for GlobalAllocator {
+unsafe impl<T: Allocator> GlobalAlloc for GlobalAllocator<T> {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         match self.allocate(layout) {
