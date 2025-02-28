@@ -21168,11 +21168,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 900,
@@ -21210,11 +21208,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 15,
@@ -21247,11 +21243,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1215,
@@ -21284,11 +21278,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1215,
@@ -21321,9 +21313,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: Some(
             CronExpression(
                 "0 6 * * *",
@@ -21356,9 +21346,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: Some(
             CronExpression(
                 "0 12 * * *",
@@ -21387,9 +21375,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: Some(
             CronExpression(
                 "0 13 * * *",
@@ -21418,9 +21404,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: None,
         session_parameters: {},
         suspend_task_after_num_failures: None,
@@ -21491,9 +21475,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: None,
         session_parameters: {
             "database": "target",
@@ -21535,9 +21517,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: None,
         session_parameters: {
             "database": "target",
@@ -21582,11 +21562,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "merge_task",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "test-parser",
-            ),
-        },
+        warehouse: Some(
+            "test-parser",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1,
@@ -21627,11 +21605,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "merge_task",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "test-parser",
-            ),
-        },
+        warehouse: Some(
+            "test-parser",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1,

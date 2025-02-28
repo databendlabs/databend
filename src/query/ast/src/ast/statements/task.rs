@@ -111,7 +111,7 @@ impl Display for CreateTaskStmt {
         write!(f, " {}", self.name)?;
 
         if let Some(warehouse) = self.warehouse.as_ref() {
-            write!(f, " WAREHOUSE ='{}'", warehouse)?;
+            write!(f, " WAREHOUSE = '{}'", warehouse)?;
         }
 
         if let Some(schedule_opt) = self.schedule_opts.as_ref() {
