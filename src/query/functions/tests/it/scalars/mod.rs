@@ -36,12 +36,12 @@ mod bitmap;
 mod boolean;
 mod cast;
 mod comparison;
+mod constant_folder;
 mod control;
 mod datetime;
 mod geo;
 // NOTE:(everpcpc) result different on macos
 // TODO: fix this in running on linux
-mod constant_folder;
 #[cfg(not(target_os = "macos"))]
 mod geo_h3;
 mod geography;

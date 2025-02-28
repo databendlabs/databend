@@ -123,4 +123,14 @@ fn test_fold_for_prune() {
         "x",
         Int16Type::from_data(vec![0, 300]),
     )]);
+
+    run_ast_for_prune(file, "x = 1::int8", &[(
+        "x",
+        Int16Type::from_data(vec![0, 100]).wrap_nullable(None),
+    )]);
+
+    run_ast_for_prune(file, "x::int8 null = 1::int8", &[(
+        "x",
+        Int16Type::from_data(vec![0, 100]).wrap_nullable(None),
+    )]);
 }

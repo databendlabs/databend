@@ -2103,8 +2103,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 if self.prune {
                     if let Some(res) = self.try_eliminate_cast(expr) {
-                        log::info!("expr {expr:?}");
-                        log::info!("res {res:?}");
                         return res;
                     }
                 }
@@ -2424,6 +2422,9 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             // {
             //     false
             // }
+            (DataType::Nullable(src), DataType::Nullable(dest)) => {
+                Self::is_injective_cast(src, _src_domain, dest)
+            }
             _ => false,
         }
     }
