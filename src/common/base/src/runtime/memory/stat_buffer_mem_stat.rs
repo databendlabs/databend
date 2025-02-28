@@ -160,7 +160,12 @@ impl MemStatBuffer {
             return;
         }
 
-        debug_assert_eq!(Arc::weak_count(mem_stat), 0);
+        debug_assert_eq!(
+            Arc::weak_count(mem_stat),
+            0,
+            "mem stat address {}",
+            Arc::as_ptr(mem_stat) as usize
+        );
 
         if mem_stat.id != self.cur_mem_stat_id {
             if Arc::strong_count(mem_stat) == 1 {
