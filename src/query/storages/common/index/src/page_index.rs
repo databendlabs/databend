@@ -184,7 +184,7 @@ impl PageIndex {
             }
         }
 
-        let (new_expr, _) = ConstantFolder::fold_with_domain(
+        let (new_expr, _) = ConstantFolder::fold_for_prune(
             &self.expr,
             &input_domains,
             &self.func_ctx,

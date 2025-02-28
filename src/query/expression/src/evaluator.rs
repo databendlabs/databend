@@ -1801,6 +1801,7 @@ pub struct ConstantFolder<'a, Index: ColumnIndex> {
     input_domains: &'a HashMap<Index, Domain>,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
+    prune: bool,
 }
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
@@ -1816,6 +1817,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains: &input_domains,
             func_ctx,
             fn_registry,
+            prune: false,
         };
 
         folder.fold_to_stable(expr)
@@ -1833,6 +1835,23 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains,
             func_ctx,
             fn_registry,
+            prune: false,
+        };
+
+        folder.fold_to_stable(expr)
+    }
+
+    pub fn fold_for_prune(
+        expr: &Expr<Index>,
+        input_domains: &'a HashMap<Index, Domain>,
+        func_ctx: &'a FunctionContext,
+        fn_registry: &'a FunctionRegistry,
+    ) -> (Expr<Index>, Option<Domain>) {
+        let folder = ConstantFolder {
+            input_domains,
+            func_ctx,
+            fn_registry,
+            prune: true,
         };
 
         folder.fold_to_stable(expr)
@@ -2082,8 +2101,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     return (expr.clone(), None);
                 }
 
-                if let Some(res) = self.try_eliminate_cast(expr) {
-                    return res;
+                if self.prune {
+                    if let Some(res) = self.try_eliminate_cast(expr) {
+                        log::info!("expr {expr:?}");
+                        log::info!("res {res:?}");
+                        return res;
+                    }
                 }
 
                 let (mut args_expr, mut args_domain) = (
@@ -2266,131 +2289,128 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     }
 
     fn try_eliminate_cast(&self, expr: &Expr<Index>) -> Option<(Expr<Index>, Option<Domain>)> {
+        // For any injective function y = f(x), the `eq(column, inverse_f(const))` is a necessary condition for `eq(f(column), const)`.
+        // For example, the result of `col = '+1'::int` contains `col::string = '+1'`.
         let (span, _, function, _, args, _) = expr.as_function_call()?;
         if function.signature.name != "eq" {
             return None;
         }
 
-        match (&args[0], &args[1]) {
+        let (inner, dest_type, right) = match (&args[0], &args[1]) {
             (
-                Expr::Cast {
-                    is_try,
+                cast @ Expr::Cast {
+                    is_try: false,
                     box expr,
                     dest_type,
                     ..
                 },
-                Expr::Constant { scalar, .. },
+                right,
             )
             | (
-                Expr::Constant { scalar, .. },
-                Expr::Cast {
-                    is_try,
+                right,
+                cast @ Expr::Cast {
+                    is_try: false,
                     box expr,
                     dest_type,
                     ..
                 },
-            ) if !is_try => {
-                let src_type = expr.data_type();
-                let (inner_expr, inner_domain) = self.fold_once(expr);
-                let inner_domain = inner_domain?;
-                self.calculate_cast(*span, src_type, dest_type, &inner_domain)?;
-
-                let scalar_domain = scalar.as_ref().domain(dest_type);
-                let new_scalar = self
-                    .calculate_cast(*span, dest_type, src_type, &scalar_domain)?
-                    .as_singleton()?;
-                let scalar_domain = new_scalar.as_ref().domain(src_type);
-
-                let func_expr = check_function(
-                    *span,
-                    "eq",
-                    &[],
-                    &[inner_expr, Expr::Constant {
-                        span: None,
-                        scalar: new_scalar,
-                        data_type: src_type.clone(),
-                    }],
-                    self.fn_registry,
-                )
-                .ok()?;
-
-                let calc_domain = func_expr
-                    .as_function_call()
-                    .unwrap()
-                    .2
-                    .eval
-                    .as_scalar()
-                    .unwrap()
-                    .0;
-
-                let domain = match calc_domain(self.func_ctx, &[inner_domain, scalar_domain]) {
-                    FunctionDomain::MayThrow => None,
-                    FunctionDomain::Full => None,
-                    FunctionDomain::Domain(domain) => Some(domain),
-                };
-
-                Some((func_expr, domain))
+            ) if !cast.column_refs().is_empty() && right.column_refs().is_empty() => {
+                Some((expr, dest_type, right))
             }
             (
-                Expr::FunctionCall {
+                cast @ Expr::FunctionCall {
                     function: cast_func,
                     args,
                     ..
                 },
-                Expr::Constant { scalar, .. },
+                right,
             )
             | (
-                Expr::Constant { scalar, .. },
-                Expr::FunctionCall {
+                right,
+                cast @ Expr::FunctionCall {
                     function: cast_func,
                     args,
                     ..
                 },
-            ) if cast_func.signature.name.starts_with("to_") && args.len() == 1 => {
-                let expr = &args[0];
-                let src_type = expr.data_type();
-                let dest_type = &cast_func.signature.return_type;
-                let (inner_expr, inner_domain) = self.fold_once(expr);
-                let inner_domain = inner_domain?;
-                self.calculate_cast(*span, src_type, dest_type, &inner_domain)?;
-
-                let scalar_domain = scalar.as_ref().domain(dest_type);
-                let new_scalar = self
-                    .calculate_cast(*span, dest_type, src_type, &scalar_domain)?
-                    .as_singleton()?;
-                let scalar_domain = new_scalar.as_ref().domain(src_type);
-
-                let func_expr = check_function(
-                    *span,
-                    "eq",
-                    &[],
-                    &[inner_expr, Expr::Constant {
-                        span: None,
-                        scalar: new_scalar,
-                        data_type: src_type.clone(),
-                    }],
-                    self.fn_registry,
-                )
-                .ok()?;
-
-                let calc_domain = func_expr
-                    .as_function_call()
-                    .unwrap()
-                    .2
-                    .eval
-                    .as_scalar()
-                    .unwrap()
-                    .0;
-
-                let domain = match calc_domain(self.func_ctx, &[inner_domain, scalar_domain]) {
-                    FunctionDomain::MayThrow => None,
-                    FunctionDomain::Full => None,
-                    FunctionDomain::Domain(domain) => Some(domain),
-                };
-
-                Some((func_expr, domain))
+            ) if cast_func.signature.name.starts_with("to_")
+                && args.len() == 1
+                && !cast.column_refs().is_empty()
+                && right.column_refs().is_empty() =>
+            {
+                Some((&args[0], &cast_func.signature.return_type, right))
             }
             _ => None,
+        }?;
+
+        let (inner_expr, inner_domain) = self.fold_once(inner);
+        let inner_domain = inner_domain?;
+        let src_type = inner_expr.data_type();
+        if !Self::is_injective_cast(src_type, &inner_domain, dest_type) {
+            return None;
+        }
+        self.calculate_cast(*span, src_type, dest_type, &inner_domain)?; // check MayThrow
+
+        let (right, right_domain) = self.fold_once(right);
+        let cast_right_domain = self.calculate_cast(*span, dest_type, src_type, &right_domain?)?;
+
+        let cast = Expr::Cast {
+            span: None,
+            is_try: false,
+            expr: Box::new(right),
+            dest_type: src_type.clone(),
+        };
+        let func_expr =
+            check_function(*span, "eq", &[], &[inner_expr, cast], self.fn_registry).ok()?;
+
+        let calc_domain = func_expr
+            .as_function_call()
+            .unwrap()
+            .2
+            .eval
+            .as_scalar()
+            .unwrap()
+            .0;
+
+        let domain = match calc_domain(self.func_ctx, &[inner_domain, cast_right_domain]) {
+            FunctionDomain::MayThrow => None,
+            FunctionDomain::Full => None,
+            FunctionDomain::Domain(domain) => Some(domain),
+        };
+
+        Some((func_expr, domain))
+    }
+
+    fn is_injective_cast(src: &DataType, _src_domain: &Domain, dest: &DataType) -> bool {
+        if src == dest {
+            return true;
+        }
+
+        // Ignore FunctionDomain::MayThrow
+        match (src, dest) {
+            (DataType::Boolean, DataType::String | DataType::Number(_) | DataType::Decimal(_)) => {
+                true
+            }
+
+            (DataType::Number(src), DataType::Number(dest))
+                if src.is_integer() && dest.is_integer() =>
+            {
+                true
+            }
+            (DataType::Number(src), DataType::Decimal(_)) if src.is_integer() => true,
+            (DataType::Number(_), DataType::String) => true,
+            (DataType::Decimal(_), DataType::String) => true,
+
+            (DataType::Date, DataType::Timestamp) => true,
+
+            // (_, DataType::Boolean) => false,
+            // (DataType::String, _) => false,
+            // (DataType::Decimal(_), DataType::Number(_)) => false,
+            // (DataType::Number(src), DataType::Number(dest))
+            //     if src.is_float() && dest.is_integer() =>
+            // {
+            //     false
+            // }
+            _ => false,
         }
     }
 
@@ -2591,12 +2611,21 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             return None;
         }
 
-        let (_, output_domain) = ConstantFolder::fold_with_domain(
-            &cast_expr,
-            &[(0, domain.clone())].into_iter().collect(),
-            self.func_ctx,
-            self.fn_registry,
-        );
+        let (_, output_domain) = if self.prune {
+            ConstantFolder::fold_for_prune(
+                &cast_expr,
+                &[(0, domain.clone())].into_iter().collect(),
+                self.func_ctx,
+                self.fn_registry,
+            )
+        } else {
+            ConstantFolder::fold_with_domain(
+                &cast_expr,
+                &[(0, domain.clone())].into_iter().collect(),
+                self.func_ctx,
+                self.fn_registry,
+            )
+        };
 
         Some(output_domain)
     }
