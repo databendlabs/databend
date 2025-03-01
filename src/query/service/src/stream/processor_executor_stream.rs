@@ -28,8 +28,7 @@ pub struct PullingExecutorStream {
 }
 
 impl PullingExecutorStream {
-    pub fn create(mut executor: PipelinePullingExecutor) -> Result<Self> {
-        executor.start();
+    pub fn create(executor: PipelinePullingExecutor) -> Result<Self> {
         Ok(Self {
             end_of_stream: false,
             executor,

@@ -351,7 +351,11 @@ async fn test_schedule_with_one_tasks() -> Result<()> {
 
     let init_queue = unsafe { graph.clone().init_schedule_queue(0)? };
     assert_eq!(init_queue.sync_queue.len(), 1);
-    init_queue.schedule(&executor.global_tasks_queue, &mut context, &executor);
+    init_queue.schedule(
+        &executor.global_tasks_queue,
+        &mut context,
+        &executor.async_runtime,
+    );
     assert!(context.has_task());
     assert_eq!(
         format!("{:?}", context.take_task()),
@@ -374,7 +378,11 @@ async fn test_schedule_with_two_tasks() -> Result<()> {
 
     let init_queue = unsafe { graph.clone().init_schedule_queue(0)? };
     assert_eq!(init_queue.sync_queue.len(), 2);
-    init_queue.schedule(&executor.global_tasks_queue, &mut context, &executor);
+    init_queue.schedule(
+        &executor.global_tasks_queue,
+        &mut context,
+        &executor.async_runtime,
+    );
     assert!(context.has_task());
     assert_eq!(
         format!("{:?}", context.take_task()),

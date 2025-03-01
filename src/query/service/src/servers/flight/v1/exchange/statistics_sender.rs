@@ -15,59 +15,88 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_channel::Sender;
 use databend_common_base::base::tokio::time::sleep;
+use databend_common_base::runtime::defer;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
-use databend_common_base::JoinHandle;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storage::MutationStatus;
 use futures_util::future::Either;
 use log::warn;
+use parking_lot::Mutex;
 
-use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::executor::QueryHandle;
+use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::servers::flight::FlightExchange;
 use crate::servers::flight::FlightSender;
 use crate::sessions::QueryContext;
 
-pub struct StatisticsSender {
-    _spawner: Arc<QueryContext>,
-    shutdown_flag_sender: Sender<Option<ErrorCode>>,
-    join_handle: Option<JoinHandle<()>>,
+pub struct DistributedQueryDaemon {
+    query_id: String,
+    ctx: Arc<QueryContext>,
 }
 
-impl StatisticsSender {
-    pub fn spawn(
-        query_id: &str,
-        ctx: Arc<QueryContext>,
-        exchange: FlightExchange,
-        executor: Arc<PipelineExecutor>,
-    ) -> Self {
-        let spawner = ctx.clone();
-        let tx = exchange.convert_to_sender();
-        let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
+impl DistributedQueryDaemon {
+    pub fn create(query_id: &str, ctx: Arc<QueryContext>) -> Self {
+        DistributedQueryDaemon {
+            ctx,
+            query_id: query_id.to_string(),
+        }
+    }
 
-        let handle = spawner.spawn({
-            let query_id = query_id.to_string();
+    pub fn run(self, exchange: FlightExchange, executor: Arc<PipelineCompleteExecutor>) {
+        GlobalIORuntime::instance().spawn(async move {
+            let ctx = self.ctx.clone();
+            let query_id = self.query_id.clone();
+            let tx = exchange.convert_to_sender();
 
-            async move {
+            let statistics_handle = self.ctx.spawn(async move {
+                let shutdown_cause = Arc::new(Mutex::new(None));
+                let _shutdown_guard = defer({
+                    let query_id = query_id.clone();
+                    let shutdown_cause = shutdown_cause.clone();
+
+                    move || {
+                        let exchange_manager = DataExchangeManager::instance();
+
+                        let shutdown_cause = shutdown_cause.lock().take();
+                        exchange_manager.on_finished_query(&query_id, shutdown_cause);
+                    }
+                });
+
+                if let Err(cause) = executor.execute().await {
+                    *shutdown_cause.lock() = Some(cause.clone());
+
+                    let data = DataPacket::ErrorCode(cause);
+                    if let Err(error_code) = tx.send(data).await {
+                        warn!(
+                            "Cannot send data via flight exchange, cause: {:?}",
+                            error_code
+                        );
+                    }
+
+                    return;
+                }
+
+                let query_handle = executor.get_handle();
+
                 let mut cnt = 0;
+                let mut wait_shutdown = Box::pin(query_handle.wait());
                 let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
-                let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
                 loop {
-                    match futures::future::select(sleep_future, notified).await {
-                        Either::Right((Err(_), _)) => {
+                    match futures::future::select(sleep_future, wait_shutdown).await {
+                        Either::Right((Ok(_), _)) => {
+                            // query completed.
                             break;
                         }
-                        Either::Right((Ok(None), _)) => {
-                            break;
-                        }
-                        Either::Right((Ok(Some(error_code)), _recv)) => {
-                            let data = DataPacket::ErrorCode(error_code);
+                        Either::Right((Err(cause), _)) => {
+                            *shutdown_cause.lock() = Some(cause.clone());
+                            let data = DataPacket::ErrorCode(cause);
                             if let Err(error_code) = tx.send(data).await {
                                 warn!(
                                     "Cannot send data via flight exchange, cause: {:?}",
@@ -78,7 +107,7 @@ impl StatisticsSender {
                             return;
                         }
                         Either::Left((_, right)) => {
-                            notified = right;
+                            wait_shutdown = right;
                             sleep_future = Box::pin(sleep(Duration::from_millis(100)));
 
                             if let Err(cause) = Self::send_progress(&ctx, &tx).await {
@@ -91,7 +120,8 @@ impl StatisticsSender {
 
                             if cnt % 5 == 0 {
                                 // send profiles per 500 millis
-                                if let Err(error) = Self::send_profile(&executor, &tx, false).await
+                                if let Err(error) =
+                                    Self::send_profile(&query_handle, &tx, false).await
                                 {
                                     warn!("Profiles send has error, cause: {:?}.", error);
                                 }
@@ -100,7 +130,7 @@ impl StatisticsSender {
                     }
                 }
 
-                if let Err(error) = Self::send_profile(&executor, &tx, true).await {
+                if let Err(error) = Self::send_profile(&query_handle, &tx, true).await {
                     warn!("Profiles send has error, cause: {:?}.", error);
                 }
 
@@ -115,32 +145,15 @@ impl StatisticsSender {
                 if let Err(error) = Self::send_progress(&ctx, &tx).await {
                     warn!("Statistics send has error, cause: {:?}.", error);
                 }
-            }
-        });
+            });
 
-        StatisticsSender {
-            _spawner: spawner,
-            shutdown_flag_sender,
-            join_handle: Some(handle),
-        }
-    }
-
-    pub fn shutdown(&mut self, error: Option<ErrorCode>) {
-        let shutdown_flag_sender = self.shutdown_flag_sender.clone();
-
-        let join_handle = self.join_handle.take();
-        futures::executor::block_on(async move {
-            if let Err(error_code) = shutdown_flag_sender.send(error).await {
+            if let Err(cause) = statistics_handle.await {
                 warn!(
-                    "Cannot send data via flight exchange, cause: {:?}",
-                    error_code
+                    "Distributed query statistics handle abort. cause: {:?}",
+                    cause
                 );
-            }
-
-            shutdown_flag_sender.close();
-
-            if let Some(join_handle) = join_handle {
-                let _ = join_handle.await;
+                let exchange_manager = DataExchangeManager::instance();
+                exchange_manager.on_finished_query(&self.query_id, Some(cause));
             }
         });
     }
@@ -182,11 +195,11 @@ impl StatisticsSender {
     }
 
     async fn send_profile(
-        executor: &PipelineExecutor,
+        query_handle: &Arc<dyn QueryHandle>,
         tx: &FlightSender,
         collect_metrics: bool,
     ) -> Result<()> {
-        let plans_profile = executor.fetch_profiling(collect_metrics);
+        let plans_profile = query_handle.fetch_profiling(collect_metrics);
 
         if !plans_profile.is_empty() {
             let data_packet = DataPacket::QueryProfiles(plans_profile);
@@ -236,8 +249,4 @@ impl StatisticsSender {
         }
         progress_info
     }
-
-    // fn fetch_profiling(ctx: &Arc<QueryContext>) -> Result<Vec<PlanProfile>> {
-    //     // ctx.get_exchange_manager()
-    // }
 }

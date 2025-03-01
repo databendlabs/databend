@@ -43,12 +43,13 @@ pub async fn execute_command(ctx: Arc<QueryContext>, query: &str) -> Result<()> 
     Ok(())
 }
 
-pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
+pub async fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) -> Result<()> {
     let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
     res.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let mut pipelines = res.sources_pipelines;
     pipelines.push(res.main_pipeline);
     let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-    ctx.set_executor(executor.get_inner())?;
-    executor.execute()
+    let query_handle = executor.execute().await?;
+    ctx.set_query_handle(executor.get_handle())?;
+    query_handle.wait().await
 }
