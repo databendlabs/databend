@@ -17,7 +17,7 @@ use std::io;
 use std::ops::RangeBounds;
 
 use databend_common_meta_types::CmdContext;
-use databend_common_meta_types::EvalExpireTime;
+use databend_common_meta_types::Expirable;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
@@ -69,7 +69,7 @@ pub trait StateMachineApiExt: StateMachineApi {
             }
         };
 
-        let expire_ms = kv_meta.eval_expire_at_ms();
+        let expire_ms = kv_meta.expiry_ms();
         if expire_ms < self.get_expire_cursor().time_ms {
             // The record has expired, delete it at once.
             //

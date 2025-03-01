@@ -28,12 +28,12 @@
 ///
 /// With such a design, the system seq increases only when a new normal record is inserted, ensuring compatibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct InternalSeq {
+pub(crate) struct SeqTombstone {
     pub(crate) seq: u64,
     pub(crate) tombstone: bool,
 }
 
-impl InternalSeq {
+impl SeqTombstone {
     pub fn normal(seq: u64) -> Self {
         Self {
             seq,
@@ -59,16 +59,16 @@ impl InternalSeq {
 
 #[cfg(test)]
 mod tests {
-    use super::InternalSeq;
+    use super::SeqTombstone;
 
     #[test]
     fn test_ord() -> Result<(), anyhow::Error> {
-        assert!(InternalSeq::normal(5) < InternalSeq::normal(6));
-        assert!(InternalSeq::normal(7) > InternalSeq::normal(6));
-        assert!(InternalSeq::normal(6) == InternalSeq::normal(6));
+        assert!(SeqTombstone::normal(5) < SeqTombstone::normal(6));
+        assert!(SeqTombstone::normal(7) > SeqTombstone::normal(6));
+        assert!(SeqTombstone::normal(6) == SeqTombstone::normal(6));
 
-        assert!(InternalSeq::normal(6) < InternalSeq::tombstone(6));
-        assert!(InternalSeq::normal(6) > InternalSeq::tombstone(5));
+        assert!(SeqTombstone::normal(6) < SeqTombstone::tombstone(6));
+        assert!(SeqTombstone::normal(6) > SeqTombstone::tombstone(5));
 
         Ok(())
     }

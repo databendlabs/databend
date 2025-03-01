@@ -15,7 +15,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::EvalExpireTime;
+use crate::Expirable;
 
 /// The meta data of a record in kv
 #[derive(Serialize, Deserialize, Debug, Default, Clone, Eq, PartialEq)]
@@ -43,8 +43,8 @@ impl KVMeta {
     }
 }
 
-impl EvalExpireTime for KVMeta {
-    fn eval_expire_at_ms(&self) -> u64 {
+impl Expirable for KVMeta {
+    fn expiry_ms(&self) -> u64 {
         match self.expire_at {
             None => u64::MAX,
             Some(exp_at_sec) => exp_at_sec * 1000,

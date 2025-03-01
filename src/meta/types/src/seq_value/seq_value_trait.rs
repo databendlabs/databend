@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::seq_value::kv_meta::KVMeta;
-use crate::EvalExpireTime;
+use crate::Expirable;
 
 pub trait SeqValue<V = Vec<u8>> {
     fn seq(&self) -> u64;
@@ -36,12 +36,12 @@ pub trait SeqValue<V = Vec<u8>> {
     }
 
     /// Evaluate and returns the absolute expire time in millisecond since 1970.
-    fn eval_expire_at_ms(&self) -> u64 {
-        self.meta().eval_expire_at_ms()
+    fn expiry_ms(&self) -> u64 {
+        self.meta().expiry_ms()
     }
 
     /// Return true if the record is expired.
     fn is_expired(&self, now_ms: u64) -> bool {
-        self.eval_expire_at_ms() < now_ms
+        self.expiry_ms() < now_ms
     }
 }
