@@ -35,6 +35,7 @@ Sort
             ├── join type: RIGHT OUTER
             ├── build keys: [t2.number (#1)]
             ├── probe keys: [t1.number (#0)]
+            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 0.01
             ├── Filter(Build)
