@@ -43,8 +43,9 @@ create role 'Public'
 statement error 2217
 create role 'public'
 
+onlyif http
 statement error 2217
 create role 'a"a'
 
-statement error 2217
+statement error 1005
 create role "a'a"

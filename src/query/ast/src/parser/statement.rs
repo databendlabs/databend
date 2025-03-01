@@ -3209,11 +3209,33 @@ pub fn create_def(i: Input) -> IResult<CreateDefinition> {
 }
 
 pub fn role_name(i: Input) -> IResult<String> {
-    let role_ident = map(
+    let role_ident = map_res(
         rule! {
             #ident
         },
-        |role_name| role_name.name,
+        |role_name| {
+            let name = role_name.name;
+            let mut chars = name.chars();
+            while let Some(c) = chars.next() {
+                match c {
+                    '\\' => match chars.next() {
+                        Some('f') | Some('b') => {
+                            return Err(nom::Err::Failure(ErrorKind::Other(
+                                "' or \" or \\f or \\b are not allowed in role name",
+                            )));
+                        }
+                        _ => {}
+                    },
+                    '\'' | '"' => {
+                        return Err(nom::Err::Failure(ErrorKind::Other(
+                            "' or \" or \\f or \\b are not allowed in role name",
+                        )));
+                    }
+                    _ => {}
+                }
+            }
+            Ok(name)
+        },
     );
     let role_lit = map(
         rule! {

@@ -37,19 +37,22 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<(SExpr, bool)> {
 
     // remove mark index filter
     for (idx, predicate) in filter.predicates.iter().enumerate() {
-        if !predicate.used_columns().contains(&mark_index) {
-            continue;
-        }
-
-        if let ScalarExpr::BoundColumnRef(col) = predicate {
-            if col.column.index == mark_index {
+        match predicate {
+            ScalarExpr::BoundColumnRef(col) if col.column.index == mark_index => {
                 find_mark_index = true;
                 filter.predicates.remove(idx);
                 break;
             }
+            ScalarExpr::FunctionCall(func) if func.func_name == "not" => {
+                // Check if the argument is mark index, if so, we won't convert it to semi join
+                if let ScalarExpr::BoundColumnRef(col) = &func.arguments[0] {
+                    if col.column.index == mark_index {
+                        return Ok((s_expr.clone(), false));
+                    }
+                }
+            }
+            _ => (),
         }
-        // Check if the predicate used mark, if so, we won't convert it to semi join
-        return Ok((s_expr.clone(), false));
     }
 
     if !find_mark_index {
