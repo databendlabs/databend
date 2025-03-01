@@ -34,8 +34,8 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::executor::physical_plans::Mutation;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_common_storages_fuse::operations::new_serialize_segment_pipe_item;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
-use databend_common_storages_fuse::operations::TransformSerializeSegment;
 use databend_common_storages_fuse::operations::UnMatchedExprs;
 use databend_common_storages_fuse::FuseTable;
 
@@ -61,12 +61,12 @@ impl PipelineBuilder {
         let io_request_semaphore =
             Arc::new(Semaphore::new(self.settings.get_max_threads()? as usize));
 
-        let serialize_segment_transform = TransformSerializeSegment::new(
+        let serialize_segment_transform = new_serialize_segment_pipe_item(
             InputPort::create(),
             OutputPort::create(),
             table,
             block_thresholds,
-        );
+        )?;
 
         // For row_id port, create rowid_aggregate_mutator
         // For matched data port and unmatched port, do serialize
@@ -158,7 +158,7 @@ impl PipelineBuilder {
                 vec.push(create_dummy_item());
             }
             // data port
-            vec.push(serialize_segment_transform.into_pipe_item());
+            vec.push(serialize_segment_transform);
             vec
         };
 

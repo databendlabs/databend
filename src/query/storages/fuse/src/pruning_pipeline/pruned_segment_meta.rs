@@ -21,25 +21,55 @@ use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoPtr;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
+use crate::column_oriented_segment::AbstractSegment;
+use crate::column_oriented_segment::ColumnOrientedSegment;
 use crate::SegmentLocation;
 
-pub struct PrunedSegmentMeta {
+pub struct PrunedCompactSegmentMeta {
     pub segments: (SegmentLocation, Arc<CompactSegmentInfo>),
 }
 
-impl PrunedSegmentMeta {
-    pub fn create(segments: (SegmentLocation, Arc<CompactSegmentInfo>)) -> BlockMetaInfoPtr {
-        Box::new(PrunedSegmentMeta { segments })
-    }
-}
-
-impl Debug for PrunedSegmentMeta {
+impl Debug for PrunedCompactSegmentMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PrunedSegmentMeta").finish()
     }
 }
 
-local_block_meta_serde!(PrunedSegmentMeta);
+local_block_meta_serde!(PrunedCompactSegmentMeta);
 
 #[typetag::serde(name = "pruned_segment_meta")]
-impl BlockMetaInfo for PrunedSegmentMeta {}
+impl BlockMetaInfo for PrunedCompactSegmentMeta {}
+
+pub struct PrunedColumnOrientedSegmentMeta {
+    pub segments: (SegmentLocation, Arc<ColumnOrientedSegment>),
+}
+
+impl Debug for PrunedColumnOrientedSegmentMeta {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PrunedColumnOrientedSegmentMeta").finish()
+    }
+}
+
+local_block_meta_serde!(PrunedColumnOrientedSegmentMeta);
+
+#[typetag::serde(name = "pruned_column_oriented_segment_meta")]
+impl BlockMetaInfo for PrunedColumnOrientedSegmentMeta {}
+
+pub trait PrunedSegmentMeta: Send + Sync + 'static {
+    type Segment: AbstractSegment;
+    fn create(segments: (SegmentLocation, Arc<Self::Segment>)) -> BlockMetaInfoPtr;
+}
+
+impl PrunedSegmentMeta for PrunedCompactSegmentMeta {
+    type Segment = CompactSegmentInfo;
+    fn create(segments: (SegmentLocation, Arc<CompactSegmentInfo>)) -> BlockMetaInfoPtr {
+        Box::new(PrunedCompactSegmentMeta { segments })
+    }
+}
+
+impl PrunedSegmentMeta for PrunedColumnOrientedSegmentMeta {
+    type Segment = ColumnOrientedSegment;
+    fn create(segments: (SegmentLocation, Arc<ColumnOrientedSegment>)) -> BlockMetaInfoPtr {
+        Box::new(PrunedColumnOrientedSegmentMeta { segments })
+    }
+}

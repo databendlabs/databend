@@ -43,11 +43,12 @@ use databend_common_storages_fuse::statistics::Trim;
 use databend_common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
 use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_common_storages_fuse::FuseStorageFormat;
+use databend_common_storages_fuse::SegmentBuilder;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
-use databend_query::storages::fuse::statistics::StatisticsAccumulator;
+use databend_query::storages::fuse::statistics::RowOrientedSegmentBuilder;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -314,7 +315,7 @@ fn test_reduce_cluster_statistics() -> databend_common_exception::Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_accumulator() -> databend_common_exception::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
-    let mut stats_acc = StatisticsAccumulator::default();
+    let mut stats_acc = RowOrientedSegmentBuilder::default();
 
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
@@ -325,11 +326,11 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
         let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
-        stats_acc.add_with_block_meta(block_meta);
+        stats_acc.add_block(block_meta).unwrap();
     }
 
     assert_eq!(10, stats_acc.blocks_metas.len());
-    assert!(stats_acc.summary_row_count > 0);
+    assert!(stats_acc.block_count() > 0);
     Ok(())
 }
 

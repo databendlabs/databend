@@ -54,6 +54,7 @@ use log::debug;
 use log::info;
 use opendal::Operator;
 
+use super::new_serialize_segment_processor;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -61,7 +62,6 @@ use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TableMutationAggregator;
-use crate::operations::common::TransformSerializeSegment;
 use crate::operations::set_backoff;
 use crate::operations::SnapshotHintWriter;
 use crate::statistics::merge_statistics;
@@ -84,8 +84,7 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
-            proc.into_processor()
+            new_serialize_segment_processor(input, output, self, block_thresholds)
         })?;
 
         pipeline.add_async_accumulating_transformer(|| {

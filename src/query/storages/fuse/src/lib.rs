@@ -24,6 +24,7 @@
 #![allow(clippy::large_enum_variant)]
 #![recursion_limit = "256"]
 
+mod column_oriented_segment;
 mod constants;
 mod fuse_column;
 mod fuse_part;
@@ -37,6 +38,7 @@ mod pruning_pipeline;
 pub mod statistics;
 pub mod table_functions;
 
+pub use column_oriented_segment::*;
 pub use constants::*;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
@@ -46,6 +48,7 @@ pub use fuse_column::FuseTableColumnStatisticsProvider;
 pub use fuse_part::FuseBlockPartInfo;
 pub use fuse_part::FuseLazyPartInfo;
 pub use fuse_table::FuseTable;
+pub use fuse_type::FuseSegmentFormat;
 pub use fuse_type::FuseStorageFormat;
 pub use fuse_type::FuseTableType;
 pub use io::BlockReadResult;

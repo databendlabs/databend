@@ -44,6 +44,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_ARRAY_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MAX_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_MIN_STRING_LEN;
 use databend_storages_common_table_meta::table::OPT_KEY_RANDOM_SEED;
+use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
@@ -73,6 +74,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
 
     r.insert("transient");
     r.insert(OPT_KEY_TEMP_PREFIX);
+    r.insert(OPT_KEY_SEGMENT_FORMAT);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r
 });
