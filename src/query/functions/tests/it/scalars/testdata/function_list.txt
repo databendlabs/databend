@@ -3341,6 +3341,8 @@ Functions overloads:
 33 siphash64(Float32 NULL) :: UInt64 NULL
 34 siphash64(Float64) :: UInt64
 35 siphash64(Float64 NULL) :: UInt64 NULL
+36 siphash64(T0) :: UInt64
+37 siphash64(T0 NULL) :: UInt64 NULL
 0 sleep(Float64) :: UInt8
 0 slice(Array(Nothing), UInt64) :: Array(Nothing)
 1 slice(Array(Nothing) NULL, UInt64 NULL) :: Array(Nothing) NULL

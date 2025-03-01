@@ -510,6 +510,7 @@ impl Binder {
             || stmt.qualify.is_some()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || !bind_context.srf_info.srfs.is_empty()
         {
             return Ok(());
         }
