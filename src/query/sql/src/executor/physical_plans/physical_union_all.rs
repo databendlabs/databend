@@ -65,7 +65,10 @@ impl PhysicalPlanBuilder {
         required.extend(lazy_columns.clone());
 
         let indices: Vec<usize> = (0..union_all.left_outputs.len())
-            .filter(|index| required.contains(&union_all.output_indexes[*index]))
+            .filter(|index| {
+                required.contains(&union_all.output_indexes[*index])
+                    || !union_all.cte_scan_names.is_empty()
+            })
             .collect();
 
         let (left_required, right_required) = if indices.is_empty() {
