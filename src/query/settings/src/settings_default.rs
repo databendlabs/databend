@@ -171,6 +171,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("max_query_memory_usage", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "The maximum memory usage for query. If set to 0, memory usage is unlimited. This setting is the successor/replacement to the older max_memory_usage setting.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("data_retention_time_in_days", DefaultSettingValue {
                     // unit of retention_period is day
                     value: UserSettingValue::UInt64(1),
@@ -1200,7 +1207,6 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-
             ]);
 
             Ok(Arc::new(DefaultSettings {

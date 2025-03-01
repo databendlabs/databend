@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use chrono::DateTime;
 use databend_common_exception::Result;
 use databend_common_expression::types::number::NumberScalar;
@@ -177,6 +179,7 @@ pub struct QueryLogElement {
     // Transaction
     pub txn_state: String,
     pub txn_id: String,
+    pub peek_memory_usage: HashMap<String, usize>,
 }
 
 impl SystemLogElement for QueryLogElement {
@@ -318,6 +321,7 @@ impl SystemLogElement for QueryLogElement {
             // Extra.
             TableField::new("extra", TableDataType::String),
             TableField::new("has_profile", TableDataType::Boolean),
+            TableField::new("peek_memory_usage", TableDataType::Variant),
         ])
     }
 
@@ -568,6 +572,17 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::Boolean(self.has_profiles).as_ref());
+        columns.next().unwrap().push(
+            Scalar::Variant(
+                jsonb::Value::from(jsonb::Object::from_iter(
+                    self.peek_memory_usage
+                        .iter()
+                        .map(|(k, v)| (k.clone(), jsonb::Value::from(*v))),
+                ))
+                .to_vec(),
+            )
+            .as_ref(),
+        );
         Ok(())
     }
 }

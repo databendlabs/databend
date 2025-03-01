@@ -26,6 +26,9 @@
 #![feature(variant_count)]
 #![feature(ptr_alignment_type)]
 #![feature(vec_into_raw_parts)]
+#![feature(slice_ptr_get)]
+#![feature(alloc_layout_extra)]
+#![feature(let_chains)]
 
 pub mod base;
 pub mod containers;

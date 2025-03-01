@@ -42,7 +42,6 @@
 //! When `TrackedFuture` is `poll()`ed, its `ThreadTracker` is installed to the running thread
 //! and will be restored when `poll()` returns.
 
-use std::alloc::AllocError;
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
@@ -52,11 +51,11 @@ use std::task::Poll;
 
 use pin_project_lite::pin_project;
 
+use crate::runtime::memory::GlobalStatBuffer;
 use crate::runtime::memory::MemStat;
-use crate::runtime::memory::OutOfLimit;
-use crate::runtime::memory::StatBuffer;
 use crate::runtime::metrics::ScopedRegistry;
 use crate::runtime::profile::Profile;
+use crate::runtime::MemStatBuffer;
 
 // For implemented and needs to call drop, we cannot use the attribute tag thread local.
 // https://play.rust-lang.org/?version=nightly&mode=debug&edition=2021&gist=ea33533387d401e86423df1a764b5609
@@ -65,30 +64,30 @@ thread_local! {
 }
 
 pub struct LimitMemGuard {
-    saved: bool,
+    global_saved: bool,
+    mem_stat_saved: bool,
 }
 
 impl LimitMemGuard {
     pub fn enter_unlimited() -> Self {
         Self {
-            saved: StatBuffer::current().set_unlimited_flag(true),
+            global_saved: GlobalStatBuffer::current().set_unlimited_flag(true),
+            mem_stat_saved: MemStatBuffer::current().set_unlimited_flag(true),
         }
     }
 
     pub fn enter_limited() -> Self {
         Self {
-            saved: StatBuffer::current().set_unlimited_flag(false),
+            global_saved: GlobalStatBuffer::current().set_unlimited_flag(false),
+            mem_stat_saved: MemStatBuffer::current().set_unlimited_flag(false),
         }
-    }
-
-    pub(crate) fn is_unlimited() -> bool {
-        StatBuffer::current().is_unlimited()
     }
 }
 
 impl Drop for LimitMemGuard {
     fn drop(&mut self) {
-        StatBuffer::current().set_unlimited_flag(self.saved);
+        MemStatBuffer::current().set_unlimited_flag(self.mem_stat_saved);
+        GlobalStatBuffer::current().set_unlimited_flag(self.global_saved);
     }
 }
 
@@ -112,7 +111,7 @@ pub struct TrackingGuard {
 
 impl Drop for TrackingGuard {
     fn drop(&mut self) {
-        let _ = StatBuffer::current().flush::<false>(0);
+        let _ = GlobalStatBuffer::current().flush::<false>(0);
 
         TRACKER.with(|x| {
             let mut thread_tracker = x.borrow_mut();
@@ -146,7 +145,8 @@ impl<T: Future> Future for TrackingFuture<T> {
 
 impl Drop for ThreadTracker {
     fn drop(&mut self) {
-        StatBuffer::current().mark_destroyed();
+        MemStatBuffer::current().mark_destroyed();
+        GlobalStatBuffer::current().mark_destroyed();
     }
 }
 
@@ -157,7 +157,6 @@ impl Drop for ThreadTracker {
 impl ThreadTracker {
     pub(crate) const fn empty() -> Self {
         Self {
-            // mem_stat: None,
             out_of_limit_desc: None,
             payload: TrackingPayload {
                 profile: None,
@@ -185,7 +184,8 @@ impl ThreadTracker {
         let mut guard = TrackingGuard {
             saved: tracking_payload,
         };
-        let _ = StatBuffer::current().flush::<false>(0);
+        let _ = MemStatBuffer::current().flush::<false>(0);
+        let _ = GlobalStatBuffer::current().flush::<false>(0);
 
         TRACKER.with(move |x| {
             let mut thread_tracker = x.borrow_mut();
@@ -224,63 +224,13 @@ impl ThreadTracker {
         })
     }
 
-    /// Accumulate stat about allocated memory.
-    ///
-    /// `size` is the positive number of allocated bytes.
-    #[inline]
-    pub fn alloc(size: i64) -> Result<(), AllocError> {
-        if let Err(out_of_limit) = StatBuffer::current().alloc(size) {
-            // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
-            if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
-                let _guard = LimitMemGuard::enter_unlimited();
-                ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
-                return Err(AllocError);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Accumulate deallocated memory.
-    ///
-    /// `size` is positive number of bytes of the memory to deallocate.
-    #[inline]
-    pub fn dealloc(size: i64) {
-        StatBuffer::current().dealloc(size)
-    }
-
-    pub fn movein_memory(size: i64) {
-        TRACKER.with(|tracker| {
-            let thread_tracker = tracker.borrow();
-            if let Some(mem_stat) = &thread_tracker.payload.mem_stat {
-                mem_stat.movein_memory(size);
-            }
-        })
-    }
-
-    pub fn moveout_memory(size: i64) {
-        TRACKER.with(|tracker| {
-            let thread_tracker = tracker.borrow();
-            if let Some(mem_stat) = &thread_tracker.payload.mem_stat {
-                mem_stat.moveout_memory(size);
-            }
-        })
-    }
-
-    pub fn record_memory<const ROLLBACK: bool>(batch: i64, cur: i64) -> Result<(), OutOfLimit> {
-        let has_thread_local = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
-            // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
-            let tracker = tracker.borrow();
-            match tracker.payload.mem_stat.as_deref() {
-                None => Ok(()),
-                Some(mem_stat) => mem_stat.record_memory::<ROLLBACK>(batch, cur),
-            }
-        });
-
-        match has_thread_local {
-            Ok(Ok(_)) | Err(_) => Ok(()),
-            Ok(Err(oom)) => Err(oom),
-        }
+    pub fn mem_stat() -> Option<&'static Arc<MemStat>> {
+        TRACKER
+            .try_with(|tracker| {
+                let tracker = tracker.borrow();
+                unsafe { std::mem::transmute(tracker.payload.mem_stat.as_ref()) }
+            })
+            .unwrap_or(None)
     }
 
     pub fn query_id() -> Option<&'static String> {

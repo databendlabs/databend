@@ -37,6 +37,7 @@ use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_base::JoinHandle;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -130,6 +131,7 @@ use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::sessions::query_affect::QueryAffect;
+use crate::sessions::query_ctx_shared::MemoryUpdater;
 use crate::sessions::ProcessInfo;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContextShared;
@@ -531,6 +533,22 @@ impl QueryContext {
         {
             log::error!("create spill meta file error: {}", e);
         }
+    }
+
+    pub fn get_query_memory_tracking(&self) -> Option<Arc<MemStat>> {
+        self.shared.get_query_memory_tracking()
+    }
+
+    pub fn set_query_memory_tracking(&self, mem_stat: Option<Arc<MemStat>>) {
+        self.shared.set_query_memory_tracking(mem_stat)
+    }
+
+    pub fn get_node_memory_updater(&self, node: &str) -> Arc<MemoryUpdater> {
+        self.shared.get_node_memory_updater(node)
+    }
+
+    pub fn get_node_peek_memory_usage(&self) -> HashMap<String, usize> {
+        self.shared.get_nodes_peek_memory_usage()
     }
 }
 
