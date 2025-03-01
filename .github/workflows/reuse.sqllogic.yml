@@ -140,6 +140,18 @@ jobs:
         with:
           name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
 
+  standalone_minio_with_bendsave:
+    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_sqllogic_standalone_linux_minio_with_bendsave
+        timeout-minutes: 15
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-minio-tpch-http-with-bendsave
+
   standalone_iceberg_tpch:
     runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
     steps:

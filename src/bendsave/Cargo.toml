@@ -1,0 +1,32 @@
+[package]
+name = "databend-bendsave"
+description = "databend backup and restore tools"
+version = "0.1.0"
+authors = { workspace = true }
+license = "Elastic-2.0"
+edition = "2021"
+
+[dependencies]
+databend-common-base = { workspace = true }
+databend-common-config = { workspace = true }
+databend-common-meta-client = { workspace = true }
+databend-common-meta-control = { workspace = true }
+databend-common-meta-types = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-meta = { workspace = true }
+
+anyhow = { workspace = true }
+bytes = { workspace = true }
+clap = { workspace = true }
+epochfs = { workspace = true }
+form_urlencoded = { workspace = true }
+futures = { workspace = true }
+http = { workspace = true }
+log = { workspace = true }
+logforth = { workspace = true }
+opendal = { workspace = true, features = ["services-s3", "services-fs"] }
+tokio = { workspace = true }
+toml = { workspace = true, features = ["parse"] }
+
+[lints]
+workspace = true

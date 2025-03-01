@@ -21,6 +21,7 @@ includes = [
     "src/binaries/meta/ee_main.rs",
     "src/meta/ee",
     "src/query/ee",
+    "src/bendsave",
 ]
 
 excludes = [
@@ -33,10 +34,8 @@ excludes = [
     ".gitignore",
     ".gitattributes",
     ".editorconfig",
-
     "LICENSE",
     "Makefile",
-
     # docs and generated files
     "**/*.md",
     "**/*.hbs",

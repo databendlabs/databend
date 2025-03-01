@@ -108,6 +108,7 @@ members = [
     "src/meta/service",
     "tests/sqllogictests",
     "src/tests/sqlsmith",
+    "src/bendsave",
 ]
 
 # Workspace dependencies
@@ -296,11 +297,13 @@ enquote = "1.1.0"
 enum-as-inner = "0.6"
 enum_dispatch = "0.3.13"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
+epochfs = "0.1.4"
 ethnum = { version = "1.5.0" }
 faststr = "0.2"
 feature-set = { version = "0.1.1" }
 flatbuffers = "24" # Must use the same version with arrow-ipc
 foreign_vec = "0.1.0"
+form_urlencoded = { version = "1" }
 fs_extra = "1.3.0"
 futures = "0.3.24"
 futures-async-stream = { version = "0.2.7" }
