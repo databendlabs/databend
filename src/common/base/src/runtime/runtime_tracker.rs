@@ -82,10 +82,6 @@ impl LimitMemGuard {
             mem_stat_saved: MemStatBuffer::current().set_unlimited_flag(false),
         }
     }
-
-    // pub(crate) fn is_unlimited() -> bool {
-    //     GlobalStatBuffer::current().is_unlimited()
-    // }
 }
 
 impl Drop for LimitMemGuard {
@@ -228,31 +224,6 @@ impl ThreadTracker {
         })
     }
 
-    // Accumulate stat about allocated memory.
-    //
-    // `size` is the positive number of allocated bytes.
-    // #[inline]
-    // pub fn alloc(size: i64) -> Result<(), AllocError> {
-    //     if let Err(out_of_limit) = GlobalStatBuffer::current().alloc(size) {
-    //         // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=03d21a15e52c7c0356fca04ece283cf9
-    //         if !std::thread::panicking() && !LimitMemGuard::is_unlimited() {
-    //             let _guard = LimitMemGuard::enter_unlimited();
-    //             ThreadTracker::replace_error_message(Some(format!("{:?}", out_of_limit)));
-    //             return Err(AllocError);
-    //         }
-    //     }
-    //
-    //     Ok(())
-    // }
-
-    // Accumulate deallocated memory.
-    //
-    // `size` is positive number of bytes of the memory to deallocate.
-    // #[inline]
-    // pub fn dealloc(size: i64) {
-    //     GlobalStatBuffer::current().dealloc(size)
-    // }
-
     pub fn mem_stat() -> Option<&'static Arc<MemStat>> {
         TRACKER
             .try_with(|tracker| {
@@ -261,22 +232,6 @@ impl ThreadTracker {
             })
             .unwrap_or(None)
     }
-
-    // pub fn record_memory<const ROLLBACK: bool>(batch: i64, cur: i64) -> Result<(), OutOfLimit> {
-    //     let has_thread_local = TRACKER.try_with(|tracker: &RefCell<ThreadTracker>| {
-    //         // We need to ensure no heap memory alloc or dealloc. it will cause panic of borrow recursive call.
-    //         let tracker = tracker.borrow();
-    //         match tracker.payload.mem_stat.as_deref() {
-    //             None => Ok(()),
-    //             Some(mem_stat) => mem_stat.record_memory::<ROLLBACK>(batch, cur),
-    //         }
-    //     });
-    //
-    //     match has_thread_local {
-    //         Ok(Ok(_)) | Err(_) => Ok(()),
-    //         Ok(Err(oom)) => Err(oom),
-    //     }
-    // }
 
     pub fn query_id() -> Option<&'static String> {
         TRACKER.with(|tracker| {
