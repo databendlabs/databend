@@ -23,6 +23,7 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
@@ -133,9 +134,11 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
             input: Box::new(root),
             table_info,
             snapshot: Some(snapshot),
-            mutation_kind: MutationKind::Compact,
+            commit_type: CommitType::Mutation {
+                kind: MutationKind::Compact,
+                merge_meta,
+            },
             update_stream_meta: vec![],
-            merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
             recluster_info: None,

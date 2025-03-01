@@ -17,20 +17,11 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
+use databend_common_sql::plans::TruncateMode;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
 use crate::operations::common::SnapshotGenerator;
-
-#[derive(Clone)]
-pub enum TruncateMode {
-    // Truncate and keep the historical data.
-    Normal,
-    // Delete the data, used for delete operation.
-    Delete,
-    // Truncate and purge the historical data.
-    Purge,
-}
 
 #[derive(Clone)]
 pub struct TruncateGenerator {

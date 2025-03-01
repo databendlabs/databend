@@ -21,6 +21,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::physical_plans::common::MutationKind;
 use crate::executor::PhysicalPlan;
+use crate::plans::TruncateMode;
 
 // serde is required by `PhysicalPlan`
 /// The commit sink is used to commit the data to the table.
@@ -30,11 +31,21 @@ pub struct CommitSink {
     pub input: Box<PhysicalPlan>,
     pub snapshot: Option<Arc<TableSnapshot>>,
     pub table_info: TableInfo,
-    pub mutation_kind: MutationKind,
+    pub commit_type: CommitType,
     pub update_stream_meta: Vec<UpdateStreamMetaReq>,
-    pub merge_meta: bool,
     pub deduplicated_label: Option<String>,
 
     // Used for recluster.
     pub recluster_info: Option<ReclusterInfoSideCar>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub enum CommitType {
+    Truncate {
+        mode: TruncateMode,
+    },
+    Mutation {
+        kind: MutationKind,
+        merge_meta: bool,
+    },
 }
