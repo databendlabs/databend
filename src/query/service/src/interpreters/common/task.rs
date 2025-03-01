@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_ast::ast::ScheduleOptions;
-use databend_common_ast::ast::WarehouseOptions;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::ClientConfig;
@@ -53,16 +52,12 @@ pub fn make_schedule_options(
 }
 
 pub fn make_warehouse_options(
-    opt: WarehouseOptions,
+    opt: Option<String>,
 ) -> databend_common_cloud_control::pb::WarehouseOptions {
-    let mut ret = databend_common_cloud_control::pb::WarehouseOptions {
-        warehouse: None,
+    databend_common_cloud_control::pb::WarehouseOptions {
+        warehouse: opt,
         using_warehouse_size: None,
-    };
-    if let Some(warehouse) = opt.warehouse {
-        ret.warehouse = Some(warehouse);
     }
-    ret
 }
 
 pub fn get_task_client_config(ctx: Arc<QueryContext>, timeout: Duration) -> Result<ClientConfig> {
