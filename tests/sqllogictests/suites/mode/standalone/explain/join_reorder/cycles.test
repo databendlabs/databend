@@ -24,7 +24,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t.a (#0)]
 ├── probe keys: [t2.a (#2)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
@@ -32,7 +31,6 @@ HashJoin
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
 │   ├── probe keys: [t1.a (#1)]
-│   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
@@ -74,7 +72,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t.a (#0)]
 ├── probe keys: [t1.a (#2)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
@@ -82,7 +79,6 @@ HashJoin
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#0)]
 │   ├── probe keys: [t2.a (#1)]
-│   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
@@ -124,7 +120,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
@@ -132,7 +127,6 @@ HashJoin
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
 │   ├── probe keys: [t2.a (#2)]
-│   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
@@ -174,7 +168,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t.a (#2)]
 ├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
@@ -182,7 +175,6 @@ HashJoin
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
 │   ├── probe keys: [t2.a (#1)]
-│   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
@@ -224,7 +216,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t.a (#2)]
 ├── probe keys: [t2.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
@@ -232,7 +223,6 @@ HashJoin
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#2)]
 │   ├── probe keys: [t1.a (#1)]
-│   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)
@@ -274,7 +264,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t1.a (#2)]
 ├── probe keys: [t2.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── HashJoin(Build)
@@ -282,7 +271,6 @@ HashJoin
 │   ├── join type: INNER
 │   ├── build keys: [t.a (#1)]
 │   ├── probe keys: [t1.a (#2)]
-│   ├── keys is null equal: [false]
 │   ├── filters: []
 │   ├── estimated rows: 1.00
 │   ├── TableScan(Build)

@@ -31,7 +31,6 @@ CommitSink
             ├── join type: LEFT SEMI
             ├── build keys: [subquery_2 (#2)]
             ├── probe keys: [t1.a (#0)]
-            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 2.00
             ├── TableScan(Build)
@@ -74,7 +73,6 @@ CommitSink
         ├── join type: LEFT SEMI
         ├── build keys: [subquery_2 (#2)]
         ├── probe keys: [t1.a (#0)]
-        ├── keys is null equal: [false]
         ├── filters: []
         ├── estimated rows: 2.00
         ├── TableScan(Build)
@@ -147,7 +145,6 @@ CommitSink
             ├── join type: INNER
             ├── build keys: [p.c_code (#9), p.id (#8), p.me_id (#10)]
             ├── probe keys: [c.c_code (#1), c.id (#0), c.me_id (#2)]
-            ├── keys is null equal: [false, false, false]
             ├── filters: []
             ├── estimated rows: 3.20
             ├── TableScan(Build)

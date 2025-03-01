@@ -104,7 +104,6 @@ Limit
                     ├── join type: LEFT OUTER
                     ├── build keys: [number (#2)]
                     ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
-                    ├── keys is null equal: [false]
                     ├── filters: []
                     ├── estimated rows: 1.00
                     ├── AggregateFinal(Build)
@@ -121,7 +120,6 @@ Limit
                     │           ├── join type: CROSS
                     │           ├── build keys: []
                     │           ├── probe keys: []
-                    │           ├── keys is null equal: []
                     │           ├── filters: []
                     │           ├── estimated rows: 1.00
                     │           ├── TableScan(Build)
@@ -147,7 +145,6 @@ Limit
                         ├── join type: CROSS
                         ├── build keys: []
                         ├── probe keys: []
-                        ├── keys is null equal: []
                         ├── filters: []
                         ├── estimated rows: 1.00
                         ├── TableScan(Build)
@@ -186,7 +183,6 @@ Limit
         ├── join type: RIGHT OUTER
         ├── build keys: [CAST(t3.c1 (#1) AS UInt64 NULL)]
         ├── probe keys: [t4.c (#4)]
-        ├── keys is null equal: [false]
         ├── filters: []
         ├── estimated rows: 2.00
         ├── AggregateFinal(Build)

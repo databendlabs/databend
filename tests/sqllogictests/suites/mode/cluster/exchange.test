@@ -9,7 +9,6 @@ Exchange
     ├── join type: INNER
     ├── build keys: [t.number (#0)]
     ├── probe keys: [t1.number (#1)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 2.00
     ├── Exchange(Build)
@@ -45,7 +44,6 @@ Exchange
     ├── join type: INNER
     ├── build keys: [t.number (#0)]
     ├── probe keys: [t2.number (#2)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 6.00
     ├── Exchange(Build)
@@ -56,7 +54,6 @@ Exchange
     │       ├── join type: INNER
     │       ├── build keys: [t.number (#0)]
     │       ├── probe keys: [t1.number (#1)]
-    │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── estimated rows: 2.00
     │       ├── Exchange(Build)
@@ -101,7 +98,6 @@ Exchange
     ├── join type: INNER
     ├── build keys: [t.b (#1)]
     ├── probe keys: [t2.number (#3)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 6.00
     ├── Exchange(Build)
@@ -112,7 +108,6 @@ Exchange
     │       ├── join type: INNER
     │       ├── build keys: [t.a (#0)]
     │       ├── probe keys: [t1.number (#2)]
-    │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── estimated rows: 2.00
     │       ├── Exchange(Build)
@@ -161,7 +156,6 @@ Exchange
     ├── join type: INNER
     ├── build keys: [t.number (#1)]
     ├── probe keys: [CAST(t1.number (#2) AS UInt64 NULL)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 2.00
     ├── Exchange(Build)
@@ -246,7 +240,6 @@ Fragment 2:
         ├── join type: INNER
         ├── build keys: [t.number (#1)]
         ├── probe keys: [CAST(t1.number (#2) AS UInt64 NULL)]
-        ├── keys is null equal: [false]
         ├── filters: []
         ├── estimated rows: 2.00
         ├── ExchangeSource(Build)
@@ -301,7 +294,6 @@ AggregateFinal
             │   ├── join type: INNER
             │   ├── build keys: [t1.a (#0)]
             │   ├── probe keys: [t2.a (#1)]
-            │   ├── keys is null equal: [false]
             │   ├── filters: []
             │   ├── estimated rows: 10000.00
             │   ├── Exchange(Build)
@@ -330,7 +322,6 @@ AggregateFinal
                 ├── join type: INNER
                 ├── build keys: [t3.a (#3)]
                 ├── probe keys: [t1.a (#2)]
-                ├── keys is null equal: [false]
                 ├── filters: []
                 ├── estimated rows: 100.00
                 ├── Exchange(Build)
@@ -388,7 +379,6 @@ AggregateFinal
         │       ├── join type: INNER
         │       ├── build keys: [t1.a (#0)]
         │       ├── probe keys: [t2.a (#1)]
-        │       ├── keys is null equal: [false]
         │       ├── filters: []
         │       ├── estimated rows: 10000.00
         │       ├── Exchange(Build)
@@ -429,7 +419,6 @@ AggregateFinal
                         ├── join type: INNER
                         ├── build keys: [t3.a (#3)]
                         ├── probe keys: [t1.a (#2)]
-                        ├── keys is null equal: [false]
                         ├── filters: []
                         ├── estimated rows: 100.00
                         ├── Exchange(Build)
@@ -486,7 +475,6 @@ AggregateFinal
             │   ├── join type: INNER
             │   ├── build keys: [t1.a (#0)]
             │   ├── probe keys: [t2.a (#1)]
-            │   ├── keys is null equal: [false]
             │   ├── filters: []
             │   ├── estimated rows: 10000.00
             │   ├── Exchange(Build)
@@ -536,7 +524,6 @@ Exchange
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
-    ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 100000.00
     ├── Exchange(Build)
@@ -556,7 +543,6 @@ Exchange
         ├── join type: CROSS
         ├── build keys: []
         ├── probe keys: []
-        ├── keys is null equal: []
         ├── filters: []
         ├── estimated rows: 10000.00
         ├── Exchange(Build)
@@ -595,7 +581,6 @@ Exchange
     ├── join type: INNER
     ├── build keys: [t2.number (#1)]
     ├── probe keys: [t1.number (#0)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 200.00
     ├── Exchange(Build)

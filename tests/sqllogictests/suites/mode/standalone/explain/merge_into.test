@@ -38,7 +38,6 @@ CommitSink
         ├── join type: LEFT OUTER
         ├── build keys: []
         ├── probe keys: []
-        ├── keys is null equal: []
         ├── filters: []
         ├── estimated rows: 4.00
         ├── EmptyResultScan(Build)
@@ -79,7 +78,6 @@ CommitSink
             ├── join type: LEFT OUTER
             ├── build keys: [salaries2.employee_id (#3)]
             ├── probe keys: [employees2.employee_id (#0)]
-            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 4.00
             ├── TableScan(Build)
@@ -123,7 +121,6 @@ CommitSink
             ├── join type: RIGHT OUTER
             ├── build keys: [employees2.employee_id (#0)]
             ├── probe keys: [salaries2.employee_id (#3)]
-            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 4.00
             ├── TableScan(Build)
@@ -163,7 +160,6 @@ CommitSink
             ├── join type: RIGHT OUTER
             ├── build keys: [employees2.employee_id (#0)]
             ├── probe keys: [salaries2.employee_id (#3)]
-            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 4.00
             ├── TableScan(Build)
@@ -219,7 +215,6 @@ CommitSink
             ├── join type: LEFT OUTER
             ├── build keys: [t1.a (#2)]
             ├── probe keys: [t2.a (#0)]
-            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 0.00
             ├── TableScan(Build)
@@ -258,7 +253,6 @@ CommitSink
             ├── join type: LEFT OUTER
             ├── build keys: [t1.a (#2)]
             ├── probe keys: [t2.a (#0)]
-            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 0.00
             ├── TableScan(Build)
@@ -300,7 +294,6 @@ CommitSink
             ├── join type: LEFT OUTER
             ├── build keys: [t1.a (#2)]
             ├── probe keys: [t2.a (#0)]
-            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 0.00
             ├── TableScan(Build)
@@ -339,7 +332,6 @@ CommitSink
             ├── join type: LEFT OUTER
             ├── build keys: [t1.a (#2)]
             ├── probe keys: [t2.a (#0)]
-            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 0.00
             ├── TableScan(Build)

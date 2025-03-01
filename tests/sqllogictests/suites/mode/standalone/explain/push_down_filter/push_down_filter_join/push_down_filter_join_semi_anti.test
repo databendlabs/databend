@@ -26,7 +26,6 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
@@ -67,7 +66,6 @@ HashJoin
 ├── join type: LEFT ANTI
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)

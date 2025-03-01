@@ -6,7 +6,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.b (#1)]
 ├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 100.00
 ├── TableScan(Build)
@@ -36,7 +35,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.b (#1)]
 ├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 100.00
 ├── TableScan(Build)

@@ -16,7 +16,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [b2.a (#2)]
 ├── probe keys: [b1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: [d.b (#1) < d.b (#3)]
 ├── estimated rows: 400.00
 ├── TableScan(Build)

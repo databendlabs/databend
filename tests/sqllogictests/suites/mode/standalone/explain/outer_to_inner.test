@@ -19,7 +19,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.b (#3)]
 ├── probe keys: [t1.b (#1)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
@@ -67,7 +66,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.b (#3)]
 ├── probe keys: [t1.b (#1)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
@@ -114,7 +112,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.b (#3)]
 ├── probe keys: [t1.b (#1)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
@@ -161,7 +158,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.b (#3)]
 ├── probe keys: [t1.b (#1)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)

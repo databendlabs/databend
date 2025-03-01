@@ -6,7 +6,6 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [subquery_1 (#1)]
 ├── probe keys: [numbers.number (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 10000.00
 ├── TableScan(Build)
@@ -36,7 +35,6 @@ HashJoin
 ├── join type: RIGHT SEMI
 ├── build keys: [numbers.number (#0)]
 ├── probe keys: [subquery_1 (#1)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
@@ -91,7 +89,6 @@ EvalScalar
     ├── join type: LEFT SINGLE
     ├── build keys: [c (#8)]
     ├── probe keys: [c (#0)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)
@@ -103,7 +100,6 @@ EvalScalar
     │       ├── join type: RIGHT MARK
     │       ├── build keys: [a (#2)]
     │       ├── probe keys: [c (#8)]
-    │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── estimated rows: 4.00
     │       ├── Filter(Build)
@@ -125,7 +121,6 @@ EvalScalar
     │           ├── join type: CROSS
     │           ├── build keys: []
     │           ├── probe keys: []
-    │           ├── keys is null equal: []
     │           ├── filters: []
     │           ├── estimated rows: 4.00
     │           ├── DummyTableScan(Build)

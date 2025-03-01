@@ -52,7 +52,6 @@ Filter
     ├── join type: INNER
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [t2.a (#2)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── Filter(Build)
@@ -92,7 +91,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#2)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -327,7 +325,6 @@ Filter
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
-    ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 4.40
     ├── Filter(Build)
@@ -371,7 +368,6 @@ Filter
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
-    ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 5.00
     ├── Filter(Build)
@@ -413,7 +409,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: []
 ├── probe keys: []
-├── keys is null equal: []
 ├── filters: [(((t1.a (#0) > 1 AND t2.a (#2) > 2) OR (t1.b (#1) < 3 AND t2.b (#3) < 4)) OR t3.a (#4) = 2)]
 ├── estimated rows: 50.00
 ├── HashJoin(Build)
@@ -421,7 +416,6 @@ HashJoin
 │   ├── join type: CROSS
 │   ├── build keys: []
 │   ├── probe keys: []
-│   ├── keys is null equal: []
 │   ├── filters: []
 │   ├── estimated rows: 5.00
 │   ├── TableScan(Build)
@@ -463,7 +457,6 @@ HashJoin
 ├── join type: CROSS
 ├── build keys: []
 ├── probe keys: []
-├── keys is null equal: []
 ├── filters: []
 ├── estimated rows: 28.16
 ├── Filter(Build)
@@ -475,7 +468,6 @@ HashJoin
 │       ├── join type: CROSS
 │       ├── build keys: []
 │       ├── probe keys: []
-│       ├── keys is null equal: []
 │       ├── filters: []
 │       ├── estimated rows: 4.40
 │       ├── Filter(Build)
@@ -542,7 +534,6 @@ Limit
             ├── join type: CROSS
             ├── build keys: []
             ├── probe keys: []
-            ├── keys is null equal: []
             ├── filters: []
             ├── estimated rows: 4.40
             ├── Filter(Build)
@@ -582,7 +573,6 @@ HashJoin
 ├── join type: CROSS
 ├── build keys: []
 ├── probe keys: []
-├── keys is null equal: []
 ├── filters: []
 ├── estimated rows: 5.00
 ├── Filter(Build)
@@ -814,7 +804,6 @@ Limit
     ├── join type: INNER
     ├── build keys: [a.id (#0)]
     ├── probe keys: [b.id (#2)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 1.00
     ├── Filter(Build)
@@ -868,7 +857,6 @@ Sort
     ├── join type: INNER
     ├── build keys: [b.register_at (#3), numbers.number (#2)]
     ├── probe keys: [a.pt (#1), a.number (#0)]
-    ├── keys is null equal: [false, false]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── EvalScalar(Build)
@@ -934,7 +922,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [scalar_subquery_2 (#2), id (#2)]
 ├── probe keys: [a.id (#0), a.id (#0)]
-├── keys is null equal: [false, false]
 ├── filters: []
 ├── estimated rows: 0.40
 ├── Filter(Build)
@@ -982,7 +969,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 3.00
 ├── TableScan(Build)
@@ -1020,7 +1006,6 @@ Filter
     ├── join type: LEFT MARK
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 3.00
     ├── TableScan(Build)
@@ -1079,7 +1064,6 @@ Sort
     ├── join type: LEFT OUTER
     ├── build keys: [t2.k (#2)]
     ├── probe keys: [t1.i (#0)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 3.00
     ├── EmptyResultScan(Build)
@@ -1292,7 +1276,6 @@ EvalScalar
     ├── join type: LEFT OUTER
     ├── build keys: [t2.b (#1)]
     ├── probe keys: [t1.a (#0)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 0.00
     ├── Filter(Build)
@@ -1344,7 +1327,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [a (#3)]
 ├── probe keys: [a (#0)]
-├── keys is null equal: [false]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── estimated rows: 0.00
 ├── Sort(Build)
@@ -1391,7 +1373,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [a (#3)]
 ├── probe keys: [a (#0)]
-├── keys is null equal: [false]
 ├── filters: [t2.c (#2) > scalar_subquery_5 (#5)]
 ├── estimated rows: 0.00
 ├── Sort(Build)

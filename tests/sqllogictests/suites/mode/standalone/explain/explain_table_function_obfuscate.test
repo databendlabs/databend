@@ -13,7 +13,6 @@ EvalScalar
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
-    ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 0.00
     ├── TableScan(Build)

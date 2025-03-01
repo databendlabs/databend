@@ -24,7 +24,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t.number (#0)]
 ├── probe keys: [t1.number (#1)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -56,7 +55,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t.number (#0), t.number (#0)]
 ├── probe keys: [t1.number (#1), t1.number (#1) + 1]
-├── keys is null equal: [false, false]
 ├── filters: []
 ├── estimated rows: 1.00
 ├── TableScan(Build)
@@ -88,7 +86,6 @@ HashJoin
 ├── join type: CROSS
 ├── build keys: []
 ├── probe keys: []
-├── keys is null equal: []
 ├── filters: []
 ├── estimated rows: 0.00
 ├── TableScan(Build)
@@ -124,7 +121,6 @@ Filter
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
-    ├── keys is null equal: []
     ├── filters: []
     ├── estimated rows: 10.00
     ├── TableScan(Build)
@@ -157,7 +153,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t1.number (#1)]
 ├── probe keys: [t2.number (#2)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── HashJoin(Build)
@@ -165,7 +160,6 @@ HashJoin
 │   ├── join type: CROSS
 │   ├── build keys: []
 │   ├── probe keys: []
-│   ├── keys is null equal: []
 │   ├── filters: []
 │   ├── estimated rows: 0.00
 │   ├── TableScan(Build)
@@ -227,7 +221,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 2.37
 ├── TableScan(Build)
@@ -259,7 +252,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1.33
 ├── TableScan(Build)
@@ -291,7 +283,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [b.x (#1)]
 ├── probe keys: [a.x (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 2.37
 ├── TableScan(Build)
@@ -329,7 +320,6 @@ Filter
     ├── join type: LEFT OUTER
     ├── build keys: [b.x (#1)]
     ├── probe keys: [a.x (#0)]
-    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 4.00
     ├── TableScan(Build)
@@ -361,7 +351,6 @@ HashJoin
 ├── join type: LEFT OUTER
 ├── build keys: [a.x (#0)]
 ├── probe keys: [b.x (#1)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 2.67
 ├── TableScan(Build)
@@ -408,7 +397,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── TableScan(Build)
@@ -438,7 +426,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── TableScan(Build)
@@ -468,7 +455,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.a (#2), t2.b (#3)]
 ├── probe keys: [t1.a (#0), t1.b (#1)]
-├── keys is null equal: [false, false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── TableScan(Build)
@@ -498,7 +484,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.a (#2), t2.b (#3)]
 ├── probe keys: [t1.a (#0), t1.b (#1)]
-├── keys is null equal: [false, false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── TableScan(Build)
@@ -528,7 +513,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.a (#2), t2.b (#3)]
 ├── probe keys: [t1.a (#0), t1.b (#1)]
-├── keys is null equal: [false, false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── TableScan(Build)
@@ -558,7 +542,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
-├── keys is null equal: [false]
 ├── filters: [t1.b (#1) > t2.b (#3)]
 ├── estimated rows: 0.00
 ├── TableScan(Build)
@@ -672,7 +655,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: []
 ├── probe keys: []
-├── keys is null equal: []
 ├── filters: [t1.a (#0) >= CAST(scalar_subquery_2 (#2) AS Int32 NULL)]
 ├── estimated rows: 4.00
 ├── EvalScalar(Build)
@@ -699,7 +681,6 @@ HashJoin
 ├── join type: INNER
 ├── build keys: []
 ├── probe keys: []
-├── keys is null equal: []
 ├── filters: [t1.a (#0) >= scalar_subquery_1 (#1)]
 ├── estimated rows: 4.00
 ├── TableScan(Build)
