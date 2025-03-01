@@ -43,7 +43,7 @@ pub trait MapKeyEncode {
 ///
 /// It is `Clone` to let MapApi clone a range of key.
 /// It is `Unpin` to let MapApi extract a key from pinned data, such as a stream.
-/// And it only accepts `'static` value for simplicity.
+/// And it only accepts `static` value for simplicity.
 pub trait MapKey: MapKeyEncode + Clone + Ord + fmt::Debug + Send + Sync + Unpin + 'static {
     type V: MapValue;
 
@@ -54,10 +54,10 @@ pub trait MapKey: MapKeyEncode + Clone + Ord + fmt::Debug + Send + Sync + Unpin 
 ///
 /// It is `Clone` to let MapApi return an owned value.
 /// It is `Unpin` to let MapApi extract a value from pinned data, such as a stream.
-/// And it only accepts `'static` value for simplicity.
+/// And it only accepts `static` value for simplicity.
 pub trait MapValue: Clone + Send + Sync + Unpin + 'static {}
 
-/// A Marked value type of a key type.
+/// A Marked value type of key type.
 pub(crate) type MarkedOf<K> = Marked<<K as MapKey>::V>;
 
 /// A key-value pair used in a map.
@@ -210,6 +210,10 @@ impl MapApiExt {
 /// Returns the first non-tombstone entry.
 ///
 /// `persisted` is a series of persisted on disk levels.
+///
+/// - `K`: key type used in a map.
+/// - `L`: type of the several top levels
+/// - `PL`: the bottom persistent level.
 pub(crate) async fn compacted_get<'d, K, Q, L, PL>(
     key: &Q,
     levels: impl IntoIterator<Item = &'d L>,
@@ -225,14 +229,14 @@ where
 {
     for lvl in levels {
         let got = lvl.get(key).await?;
-        if !got.not_found() {
+        if !got.is_not_found() {
             return Ok(got);
         }
     }
 
     for p in persisted {
         let got = p.get(key).await?;
-        if !got.not_found() {
+        if !got.is_not_found() {
             return Ok(got);
         }
     }

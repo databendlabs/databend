@@ -15,14 +15,14 @@
 #[cfg(test)]
 mod marked_test;
 
-mod internal_seq;
+mod seq_tombstone;
 
 mod marked_impl;
 
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
-pub(crate) use internal_seq::InternalSeq;
+pub(crate) use seq_tombstone::SeqTombstone;
 
 use crate::state_machine::ExpireValue;
 
@@ -108,12 +108,12 @@ impl<T> Marked<T> {
     }
 
     /// Return a key to determine which one of the values of the same key are the last inserted.
-    pub(crate) fn order_key(&self) -> InternalSeq {
+    pub(crate) fn order_key(&self) -> SeqTombstone {
         match self {
-            Marked::TombStone { internal_seq: seq } => InternalSeq::tombstone(*seq),
+            Marked::TombStone { internal_seq: seq } => SeqTombstone::tombstone(*seq),
             Marked::Normal {
                 internal_seq: seq, ..
-            } => InternalSeq::normal(*seq),
+            } => SeqTombstone::normal(*seq),
         }
     }
 
@@ -199,7 +199,7 @@ impl<T> Marked<T> {
     }
 
     /// Return if the entry is neither a normal entry nor a tombstone.
-    pub fn not_found(&self) -> bool {
+    pub fn is_not_found(&self) -> bool {
         matches!(self, Marked::TombStone { internal_seq: 0 })
     }
 
