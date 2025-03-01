@@ -1,0 +1,95 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! This mod integrates watcher into meta service
+
+use std::future::Future;
+use std::io::Error;
+use std::ops::Deref;
+
+use databend_common_meta_raft_store::state_machine_api::SMEventSender;
+use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::SeqV;
+use databend_common_meta_watcher::dispatch::Command;
+use databend_common_meta_watcher::dispatch::DispatcherHandle as GenericDispatcherHandle;
+use databend_common_meta_watcher::type_config::KVChange;
+use databend_common_meta_watcher::type_config::TypeConfig;
+use futures::future::BoxFuture;
+use tonic::Status;
+
+use crate::metrics::server_metrics;
+
+/// Watch Type Config
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WatchTypes {}
+
+impl TypeConfig for WatchTypes {
+    type Key = String;
+    type Value = SeqV;
+    type Response = WatchResponse;
+    type Error = Status;
+
+    fn new_response(change: KVChange<Self>) -> Self::Response {
+        WatchResponse::new3(change.0, change.1, change.2)
+    }
+
+    fn data_error(error: Error) -> Self::Error {
+        Status::internal(error.to_string())
+    }
+
+    fn update_watcher_metrics(delta: i64) {
+        server_metrics::incr_watchers(delta);
+    }
+
+    fn spawn<T>(fut: T)
+    where
+        T: Future + Send + 'static,
+        T::Output: Send + 'static,
+    {
+        databend_common_base::runtime::spawn(fut);
+    }
+}
+
+/// A handle to a watching stream that feeds messages to connected watchers.
+///
+/// This is a wrapper around the generic dispatcher handle,
+/// in order to implement 3rd party traits for it.
+#[derive(Clone, Debug)]
+pub struct DispatcherHandle {
+    handle: GenericDispatcherHandle<WatchTypes>,
+}
+
+impl Deref for DispatcherHandle {
+    type Target = GenericDispatcherHandle<WatchTypes>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.handle
+    }
+}
+
+impl DispatcherHandle {
+    pub fn new(handle: GenericDispatcherHandle<WatchTypes>) -> Self {
+        DispatcherHandle { handle }
+    }
+}
+
+impl SMEventSender for DispatcherHandle {
+    fn send(&self, change: KVChange<WatchTypes>) {
+        self.send_command(Command::Update(change));
+    }
+
+    fn send_future(&self, fut: BoxFuture<'static, ()>) {
+        self.send_command(Command::Future(fut));
+    }
+}

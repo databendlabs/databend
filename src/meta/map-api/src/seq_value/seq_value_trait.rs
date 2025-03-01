@@ -12,33 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::seq_value::kv_meta::KVMeta;
-use crate::Expirable;
+use crate::expirable::Expirable;
 
-pub trait SeqValue<V = Vec<u8>> {
+pub trait SeqValue<M, V = Vec<u8>> {
     fn seq(&self) -> u64;
     fn value(&self) -> Option<&V>;
     fn into_value(self) -> Option<V>;
-    fn meta(&self) -> Option<&KVMeta>;
+    fn meta(&self) -> Option<&M>;
 
     fn unpack(self) -> (u64, Option<V>)
     where Self: Sized {
         (self.seq(), self.into_value())
     }
 
-    /// Return the expiry time in millisecond since 1970.
-    fn expires_at_ms_opt(&self) -> Option<u64> {
+    /// Return the expire time in millisecond since 1970.
+    fn expires_at_ms_opt(&self) -> Option<u64>
+    where M: Expirable {
         let meta = self.meta()?;
-        meta.get_expire_at_ms()
+        meta.expires_at_ms_opt()
     }
 
     /// Evaluate and returns the absolute expire time in millisecond since 1970.
-    fn expires_at_ms(&self) -> u64 {
+    fn expires_at_ms(&self) -> u64
+    where M: Expirable {
         self.meta().expires_at_ms()
     }
 
     /// Return true if the record is expired.
-    fn is_expired(&self, now_ms: u64) -> bool {
+    fn is_expired(&self, now_ms: u64) -> bool
+    where M: Expirable {
         self.expires_at_ms() < now_ms
     }
 }

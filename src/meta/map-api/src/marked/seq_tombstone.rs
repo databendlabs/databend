@@ -28,7 +28,7 @@
 ///
 /// With such a design, the system seq increases only when a new normal record is inserted, ensuring compatibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct SeqTombstone {
+pub struct SeqTombstone {
     pub(crate) seq: u64,
     pub(crate) tombstone: bool,
 }

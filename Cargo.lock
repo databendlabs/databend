@@ -3650,6 +3650,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-meta-map-api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "futures-util",
+ "log",
+ "pretty_assertions",
+ "serde",
+ "stream-more",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "databend-common-meta-process"
 version = "0.1.0"
 dependencies = [
@@ -3682,6 +3698,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-kvapi",
+ "databend-common-meta-map-api",
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
@@ -3710,7 +3727,6 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.65",
  "tokio",
- "tonic",
 ]
 
 [[package]]
@@ -3765,6 +3781,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-building",
  "databend-common-exception",
+ "databend-common-meta-map-api",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
  "deepsize",
@@ -3783,6 +3800,19 @@ dependencies = [
  "tokio",
  "tonic",
  "tonic-build",
+]
+
+[[package]]
+name = "databend-common-meta-watcher"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fastrace",
+ "futures",
+ "log",
+ "span-map",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -4943,6 +4973,7 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
+ "databend-common-meta-watcher",
  "databend-common-metrics",
  "databend-common-tracing",
  "deepsize",
@@ -4968,7 +4999,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serfig",
- "span-map",
  "temp-env",
  "tempfile",
  "test-harness",
@@ -14815,9 +14845,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.11"
+version = "0.7.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
+checksum = "d7fcaa8d55a2bdd6b83ace262b016eca0d79ee02818c5c1bcdf0305114081078"
 dependencies = [
  "bytes",
  "futures-core",

@@ -22,8 +22,7 @@ use std::time::UNIX_EPOCH;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::KVMeta;
-use crate::SeqValue;
+use crate::seq_value::SeqValue;
 
 /// Some value bound with a seq number.
 ///
@@ -36,13 +35,13 @@ use crate::SeqValue;
 /// A `Marked::TombStone` also has an `internal_seq`, representing the freshness of the tombstone.
 /// `internal_seq` will be discarded when `Marked::TombStone` is converted to `None::<SeqV>`.
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq)]
-pub struct SeqV<T = Vec<u8>> {
+pub struct SeqV<M, T = Vec<u8>> {
     pub seq: u64,
-    pub meta: Option<KVMeta>,
+    pub meta: Option<M>,
     pub data: T,
 }
 
-impl<T> Deref for SeqV<T> {
+impl<M, T> Deref for SeqV<M, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -50,13 +49,13 @@ impl<T> Deref for SeqV<T> {
     }
 }
 
-impl<T> DerefMut for SeqV<T> {
+impl<M, T> DerefMut for SeqV<M, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
 }
 
-impl<V> SeqValue<V> for SeqV<V> {
+impl<M, V> SeqValue<M, V> for SeqV<M, V> {
     fn seq(&self) -> u64 {
         self.seq
     }
@@ -69,12 +68,12 @@ impl<V> SeqValue<V> for SeqV<V> {
         Some(self.data)
     }
 
-    fn meta(&self) -> Option<&KVMeta> {
+    fn meta(&self) -> Option<&M> {
         self.meta.as_ref()
     }
 }
 
-impl<V> SeqValue<V> for Option<SeqV<V>> {
+impl<M, V> SeqValue<M, V> for Option<SeqV<M, V>> {
     fn seq(&self) -> u64 {
         self.as_ref().map(|v| v.seq()).unwrap_or(0)
     }
@@ -87,12 +86,16 @@ impl<V> SeqValue<V> for Option<SeqV<V>> {
         self.map(|v| v.data)
     }
 
-    fn meta(&self) -> Option<&KVMeta> {
+    fn meta(&self) -> Option<&M> {
         self.as_ref().and_then(|v| v.meta())
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for SeqV<T> {
+impl<M, T> fmt::Debug for SeqV<M, T>
+where
+    M: fmt::Debug,
+    T: fmt::Debug,
+{
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let mut de = f.debug_struct("SeqV");
         de.field("seq", &self.seq);
@@ -103,7 +106,7 @@ impl<T: fmt::Debug> fmt::Debug for SeqV<T> {
     }
 }
 
-impl<T> From<(u64, T)> for SeqV<T> {
+impl<M, T> From<(u64, T)> for SeqV<M, T> {
     fn from((seq, data): (u64, T)) -> Self {
         Self {
             seq,
@@ -113,7 +116,7 @@ impl<T> From<(u64, T)> for SeqV<T> {
     }
 }
 
-impl<T> SeqV<T> {
+impl<M, T> SeqV<M, T> {
     pub fn new(seq: u64, data: T) -> Self {
         Self {
             seq,
@@ -146,30 +149,30 @@ impl<T> SeqV<T> {
             .as_millis() as u64
     }
 
-    pub fn with_meta(seq: u64, meta: Option<KVMeta>, data: T) -> Self {
+    pub fn with_meta(seq: u64, meta: Option<M>, data: T) -> Self {
         Self { seq, meta, data }
     }
 
     #[must_use]
-    pub fn set_seq(mut self, seq: u64) -> SeqV<T> {
+    pub fn set_seq(mut self, seq: u64) -> Self {
         self.seq = seq;
         self
     }
 
     #[must_use]
-    pub fn set_meta(mut self, m: Option<KVMeta>) -> SeqV<T> {
+    pub fn set_meta(mut self, m: Option<M>) -> Self {
         self.meta = m;
         self
     }
 
     #[must_use]
-    pub fn set_value(mut self, v: T) -> SeqV<T> {
+    pub fn set_value(mut self, v: T) -> Self {
         self.data = v;
         self
     }
 
     /// Convert data to type U and leave seq and meta unchanged.
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> SeqV<U> {
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> SeqV<M, U> {
         SeqV {
             seq: self.seq,
             meta: self.meta,
@@ -179,7 +182,7 @@ impl<T> SeqV<T> {
 
     /// Try to convert data to type U and leave seq and meta unchanged.
     /// `f` returns an error if the conversion fails.
-    pub fn try_map<U, E>(self, f: impl FnOnce(T) -> Result<U, E>) -> Result<SeqV<U>, E> {
+    pub fn try_map<U, E>(self, f: impl FnOnce(T) -> Result<U, E>) -> Result<SeqV<M, U>, E> {
         Ok(SeqV {
             seq: self.seq,
             meta: self.meta,

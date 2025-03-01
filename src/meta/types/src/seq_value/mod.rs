@@ -13,9 +13,8 @@
 // limitations under the License.
 
 mod kv_meta;
-mod seq_value_trait;
-mod seqv;
 
+pub use databend_common_meta_map_api::seq_value::SeqValue;
 pub use kv_meta::KVMeta;
-pub use seq_value_trait::SeqValue;
-pub use seqv::SeqV;
+
+pub type SeqV<T = Vec<u8>> = databend_common_meta_map_api::seq_value::SeqV<KVMeta, T>;

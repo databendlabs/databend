@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_map_api::map_api::MapApi;
+use databend_common_meta_map_api::map_api_ro::MapApiRO;
 use databend_common_meta_types::seq_value::KVMeta;
 use futures_util::TryStreamExt;
 
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiExt;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::marked::Marked;
 
 #[tokio::test]

@@ -22,7 +22,6 @@ mod applied_state;
 mod change;
 mod cluster;
 mod endpoint;
-mod eval_expire_time;
 mod grpc_config;
 mod grpc_helper;
 mod log_entry;
@@ -59,11 +58,13 @@ pub mod protobuf {
 
     pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("meta_descriptor");
 }
+
 pub use applied_state::AppliedState;
 pub use change::Change;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
 pub use cluster::NodeType;
+pub use databend_common_meta_map_api::expirable::Expirable;
 pub use endpoint::Endpoint;
 pub use errors::meta_api_errors::MetaAPIError;
 pub use errors::meta_api_errors::MetaDataError;
@@ -80,7 +81,6 @@ pub use errors::meta_network_errors::MetaNetworkError;
 pub use errors::meta_network_errors::MetaNetworkResult;
 pub use errors::meta_startup_errors::MetaStartupError;
 pub use errors::rpc_errors::ForwardRPCError;
-pub use eval_expire_time::Expirable;
 pub use grpc_config::GrpcConfig;
 pub use log_entry::LogEntry;
 pub use match_seq::MatchSeq;

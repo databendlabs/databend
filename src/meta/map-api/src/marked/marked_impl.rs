@@ -18,11 +18,11 @@ use std::io;
 
 use crate::marked::Marked;
 
-impl TryFrom<Marked> for Marked<String> {
+impl<M> TryFrom<Marked<M>> for Marked<M, String> {
     type Error = io::Error;
 
     /// Convert Marked<Vec<u8>> to Marked<String>
-    fn try_from(marked: Marked) -> Result<Self, Self::Error> {
+    fn try_from(marked: Marked<M>) -> Result<Self, Self::Error> {
         // convert Vec<u8> to String
         match marked {
             Marked::TombStone { internal_seq } => Ok(Marked::TombStone { internal_seq }),
@@ -47,9 +47,9 @@ impl TryFrom<Marked> for Marked<String> {
     }
 }
 
-impl From<Marked<String>> for Marked {
+impl<M> From<Marked<M, String>> for Marked<M> {
     /// Convert Marked<String> to Marked<Vec<u8>>
-    fn from(value: Marked<String>) -> Self {
+    fn from(value: Marked<M, String>) -> Self {
         match value {
             Marked::TombStone { internal_seq } => Marked::TombStone { internal_seq },
             Marked::Normal {
