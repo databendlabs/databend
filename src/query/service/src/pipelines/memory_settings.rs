@@ -49,15 +49,13 @@ impl MemorySettingsExt for MemorySettings {
             MemoryExceededBehavior::EnableSpill => max_query_memory_usage != 0,
         };
 
-        let spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
-
         Ok(MemorySettings {
             max_memory_usage,
             max_query_memory_usage,
             enable_query_level_spill,
             enable_global_level_spill,
+            spill_unit_size: 0,
             query_memory_tracking: ctx.get_query_memory_tracking(),
-            spill_unit_size: spilling_batch_bytes,
             global_memory_tracking: &GLOBAL_MEM_STAT,
         })
     }
@@ -155,5 +153,234 @@ impl MemorySettingsExt for MemorySettings {
             query_memory_tracking: ctx.get_query_memory_tracking(),
             global_memory_tracking: &GLOBAL_MEM_STAT,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_catalog::table_context::TableContext;
+    use databend_common_exception::Result;
+    use databend_common_pipeline_transforms::MemorySettings;
+
+    use crate::pipelines::memory_settings::MemorySettingsExt;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_global_spill_disabled_when_max_memory_zero() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "0".into())?;
+        settings.set_setting("join_spilling_memory_ratio".into(), "50".into())?;
+        settings.set_setting("query_out_of_memory_behavior".into(), "EnableSpill".into())?;
+        settings.set_setting("max_query_memory_usage".into(), "2000".into())?;
+
+        let memory_settings = MemorySettings::from_join_settings(&ctx)?;
+
+        assert!(!memory_settings.enable_global_level_spill);
+        assert_eq!(memory_settings.max_memory_usage, 0);
+        assert!(memory_settings.enable_query_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_query_spill_disabled_when_max_query_memory_zero() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "1000".into())?;
+        settings.set_setting("join_spilling_memory_ratio".into(), "50".into())?;
+        settings.set_setting("query_out_of_memory_behavior".into(), "EnableSpill".into())?;
+        settings.set_setting("max_query_memory_usage".into(), "0".into())?;
+
+        let memory_settings = MemorySettings::from_join_settings(&ctx)?;
+
+        assert!(!memory_settings.enable_query_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_both_global_and_query_spill_enabled() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "2000".into())?;
+        settings.set_setting("join_spilling_memory_ratio".into(), "75".into())?;
+        settings.set_setting("query_out_of_memory_behavior".into(), "EnableSpill".into())?;
+        settings.set_setting("max_query_memory_usage".into(), "3000".into())?;
+
+        let memory_settings = MemorySettings::from_join_settings(&ctx)?;
+
+        assert!(memory_settings.enable_global_level_spill);
+        assert_eq!(memory_settings.max_memory_usage, 1500);
+        assert!(memory_settings.enable_query_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_sort_spill_disabled_globally() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        ctx.set_enable_sort_spill(false);
+
+        let memory_settings = MemorySettings::from_sort_settings(&ctx)?;
+
+        assert!(!memory_settings.enable_global_level_spill);
+        assert!(!memory_settings.enable_query_level_spill);
+        assert_eq!(memory_settings.max_memory_usage, usize::MAX);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_global_sort_spill_enabled() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        ctx.set_enable_sort_spill(true);
+        settings.set_setting("max_memory_usage".into(), "1000".into())?;
+        settings.set_setting("sort_spilling_memory_ratio".into(), "50".into())?;
+        settings.set_setting("query_out_of_memory_behavior".into(), "ThrowOOM".into())?;
+        settings.set_setting("max_query_memory_usage".into(), "0".into())?;
+
+        let memory_settings = MemorySettings::from_sort_settings(&ctx)?;
+
+        assert!(memory_settings.enable_global_level_spill);
+        assert_eq!(memory_settings.max_memory_usage, 500);
+        assert!(!memory_settings.enable_query_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_global_sort_spill_disabled_when_max_memory_zero() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        ctx.set_enable_sort_spill(true);
+        settings.set_setting("max_memory_usage".into(), "0".into())?;
+        settings.set_setting("sort_spilling_memory_ratio".into(), "50".into())?;
+
+        let memory_settings = MemorySettings::from_sort_settings(&ctx)?;
+
+        assert!(!memory_settings.enable_global_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_query_level_spill_enabled() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        ctx.set_enable_sort_spill(true);
+        settings.set_setting("query_out_of_memory_behavior".into(), "EnableSpill".into())?;
+        settings.set_setting("max_query_memory_usage".into(), "2000".into())?;
+
+        let memory_settings = MemorySettings::from_sort_settings(&ctx)?;
+
+        assert!(memory_settings.enable_query_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_sort_spilling_batch_bytes() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        ctx.set_enable_sort_spill(true);
+        settings.set_setting("sort_spilling_batch_bytes".into(), "8192".into())?;
+
+        let memory_settings = MemorySettings::from_sort_settings(&ctx)?;
+
+        assert_eq!(memory_settings.spill_unit_size, 8192);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_global_window_spill_enabled() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "2000".into())?;
+        settings.set_setting("window_partition_spilling_memory_ratio".into(), "50".into())?;
+        settings.set_setting("query_out_of_memory_behavior".into(), "ThrowOOM".into())?;
+        settings.set_setting("max_query_memory_usage".into(), "0".into())?;
+
+        let memory_settings = MemorySettings::from_window_settings(&ctx)?;
+
+        assert!(memory_settings.enable_global_level_spill);
+        assert_eq!(memory_settings.max_memory_usage, 1000);
+        assert!(!memory_settings.enable_query_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_global_window_spill_disabled_when_max_memory_zero() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "0".into())?;
+        settings.set_setting("window_partition_spilling_memory_ratio".into(), "50".into())?;
+
+        let memory_settings = MemorySettings::from_window_settings(&ctx)?;
+
+        assert!(!memory_settings.enable_global_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_query_level_window_spill_enabled() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("query_out_of_memory_behavior".into(), "EnableSpill".into())?;
+        settings.set_setting("max_query_memory_usage".into(), "3000".into())?;
+
+        let memory_settings = MemorySettings::from_window_settings(&ctx)?;
+
+        assert!(memory_settings.enable_query_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_both_window_spills_enabled() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "4000".into())?;
+        settings.set_setting("window_partition_spilling_memory_ratio".into(), "25".into())?;
+        settings.set_setting("query_out_of_memory_behavior".into(), "EnableSpill".into())?;
+        settings.set_setting("max_query_memory_usage".into(), "5000".into())?;
+
+        let memory_settings = MemorySettings::from_window_settings(&ctx)?;
+
+        assert!(memory_settings.enable_global_level_spill);
+        assert_eq!(memory_settings.max_memory_usage, 1000);
+        assert!(memory_settings.enable_query_level_spill);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_window_spill_unit_size_conversion() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("window_spill_unit_size_mb".into(), "3".into())?;
+
+        let memory_settings = MemorySettings::from_window_settings(&ctx)?;
+
+        assert_eq!(memory_settings.spill_unit_size, 3 * 1024 * 1024);
+        Ok(())
     }
 }
