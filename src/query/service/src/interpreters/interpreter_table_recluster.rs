@@ -302,7 +302,10 @@ impl ReclusterTableInterpreter {
         let total_bytes = recluster_info.removed_statistics.uncompressed_byte_size as usize;
         let total_rows = recluster_info.removed_statistics.row_count as usize;
         let rows_per_block = block_thresholds.calc_rows_per_block(total_bytes, total_rows);
-
+        let max_block_size = settings.get_max_block_size()? as usize;
+        if max_block_size > rows_per_block {
+            settings.set_max_block_size(rows_per_block as u64)?;
+        }
         let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
 
         let subquery_executor = Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
