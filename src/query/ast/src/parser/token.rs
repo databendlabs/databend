@@ -369,6 +369,8 @@ pub enum TokenKind {
     ARRAY,
     #[token("AS", ignore(ascii_case))]
     AS,
+    #[token("ASOF", ignore(ascii_case))]
+    ASOF,
     #[token("AST", ignore(ascii_case))]
     AST,
     #[token("AT", ignore(ascii_case))]
@@ -1728,6 +1730,7 @@ impl TokenKind {
             | TokenKind::WHEN => true,
             | TokenKind::ARRAY
             | TokenKind::AS
+            | TokenKind::ASOF
             | TokenKind::BETWEEN
             | TokenKind::CREATE
             | TokenKind::ATTACH

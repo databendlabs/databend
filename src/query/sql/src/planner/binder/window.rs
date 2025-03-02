@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_ast::ast::WindowDefinition;
 use databend_common_ast::ast::WindowSpec;
 use databend_common_ast::Span;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -57,88 +58,7 @@ impl Binder {
         window_info: &WindowFunctionInfo,
         child: SExpr,
     ) -> Result<SExpr> {
-        let window_plan = Window {
-            span: window_info.span,
-            index: window_info.index,
-            function: window_info.func.clone(),
-            arguments: window_info.arguments.clone(),
-            partition_by: window_info.partition_by_items.clone(),
-            order_by: window_info.order_by_items.clone(),
-            frame: window_info.frame.clone(),
-            limit: None,
-        };
-
-        // eval scalars before sort
-        // Generate a `EvalScalar` as the input of `Window`.
-        let mut scalar_items: Vec<ScalarItem> = Vec::new();
-        for arg in &window_plan.arguments {
-            scalar_items.push(arg.clone());
-        }
-        for part in &window_plan.partition_by {
-            scalar_items.push(part.clone());
-        }
-        for order in &window_plan.order_by {
-            scalar_items.push(order.order_by_item.clone())
-        }
-
-        let child = if !scalar_items.is_empty() {
-            let eval_scalar_plan = EvalScalar {
-                items: scalar_items,
-            };
-            SExpr::create_unary(Arc::new(eval_scalar_plan.into()), Arc::new(child))
-        } else {
-            child
-        };
-
-        let default_nulls_first = self.ctx.get_settings().get_nulls_first();
-
-        let mut sort_items: Vec<SortItem> = vec![];
-        if !window_plan.partition_by.is_empty() {
-            for part in window_plan.partition_by.iter() {
-                sort_items.push(SortItem {
-                    index: part.index,
-                    asc: true,
-                    nulls_first: default_nulls_first(true),
-                });
-            }
-        }
-
-        for order in window_plan.order_by.iter() {
-            let asc = order.asc.unwrap_or(true);
-            sort_items.push(SortItem {
-                index: order.order_by_item.index,
-                asc,
-                nulls_first: order
-                    .nulls_first
-                    .unwrap_or_else(|| default_nulls_first(asc)),
-            });
-        }
-
-        let child = if !sort_items.is_empty() {
-            let sort_plan = Sort {
-                items: sort_items,
-                limit: None,
-                after_exchange: None,
-                pre_projection: None,
-                window_partition: if window_plan.partition_by.is_empty() {
-                    None
-                } else {
-                    Some(WindowPartition {
-                        partition_by: window_plan.partition_by.clone(),
-                        top: None,
-                        func: window_plan.function.clone(),
-                    })
-                },
-            };
-            SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
-        } else {
-            child
-        };
-
-        Ok(SExpr::create_unary(
-            Arc::new(window_plan.into()),
-            Arc::new(child),
-        ))
+        bind_window_function_info(&self.ctx, window_info, child)
     }
 
     pub(super) fn analyze_window_definition(
@@ -642,6 +562,95 @@ pub fn find_replaced_window_function(
             )
             .build()
         })
+}
+
+pub fn bind_window_function_info(
+    ctx: &Arc<dyn TableContext>,
+    window_info: &WindowFunctionInfo,
+    child: SExpr,
+) -> Result<SExpr> {
+    let window_plan = Window {
+        span: window_info.span,
+        index: window_info.index,
+        function: window_info.func.clone(),
+        arguments: window_info.arguments.clone(),
+        partition_by: window_info.partition_by_items.clone(),
+        order_by: window_info.order_by_items.clone(),
+        frame: window_info.frame.clone(),
+        limit: None,
+    };
+
+    // eval scalars before sort
+    // Generate a `EvalScalar` as the input of `Window`.
+    let mut scalar_items: Vec<ScalarItem> = Vec::new();
+    for arg in &window_plan.arguments {
+        scalar_items.push(arg.clone());
+    }
+    for part in &window_plan.partition_by {
+        scalar_items.push(part.clone());
+    }
+    for order in &window_plan.order_by {
+        scalar_items.push(order.order_by_item.clone())
+    }
+
+    let child = if !scalar_items.is_empty() {
+        let eval_scalar_plan = EvalScalar {
+            items: scalar_items,
+        };
+        SExpr::create_unary(Arc::new(eval_scalar_plan.into()), Arc::new(child))
+    } else {
+        child
+    };
+
+    let default_nulls_first = ctx.get_settings().get_nulls_first();
+
+    let mut sort_items: Vec<SortItem> = vec![];
+    if !window_plan.partition_by.is_empty() {
+        for part in window_plan.partition_by.iter() {
+            sort_items.push(SortItem {
+                index: part.index,
+                asc: true,
+                nulls_first: default_nulls_first(true),
+            });
+        }
+    }
+
+    for order in window_plan.order_by.iter() {
+        let asc = order.asc.unwrap_or(true);
+        sort_items.push(SortItem {
+            index: order.order_by_item.index,
+            asc,
+            nulls_first: order
+                .nulls_first
+                .unwrap_or_else(|| default_nulls_first(asc)),
+        });
+    }
+
+    let child = if !sort_items.is_empty() {
+        let sort_plan = Sort {
+            items: sort_items,
+            limit: None,
+            after_exchange: None,
+            pre_projection: None,
+            window_partition: if window_plan.partition_by.is_empty() {
+                None
+            } else {
+                Some(WindowPartition {
+                    partition_by: window_plan.partition_by.clone(),
+                    top: None,
+                    func: window_plan.function.clone(),
+                })
+            },
+        };
+        SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(child))
+    } else {
+        child
+    };
+
+    Ok(SExpr::create_unary(
+        Arc::new(window_plan.into()),
+        Arc::new(child),
+    ))
 }
 
 impl Binder {

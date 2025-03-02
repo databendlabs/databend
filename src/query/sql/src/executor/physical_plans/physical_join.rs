@@ -32,16 +32,22 @@ pub enum PhysicalJoinType {
     Hash,
     // The first arg is range conditions, the second arg is other conditions
     RangeJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
+    AsofJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
 }
 
 // Choose physical join type by join conditions
 pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
-    if !join.equi_conditions.is_empty() {
+    let check_asof = matches!(
+        join.join_type,
+        JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+    );
+
+    if !join.equi_conditions.is_empty() && !check_asof {
         // Contain equi condition, use hash join
         return Ok(PhysicalJoinType::Hash);
     }
 
-    if join.build_side_cache_info.is_some() {
+    if join.build_side_cache_info.is_some() && !check_asof {
         // There is a build side cache, use hash join.
         return Ok(PhysicalJoinType::Hash);
     }
@@ -49,8 +55,9 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     let left_rel_expr = RelExpr::with_s_expr(s_expr.child(0)?);
     let right_rel_expr = RelExpr::with_s_expr(s_expr.child(1)?);
     let right_stat_info = right_rel_expr.derive_cardinality()?;
-    if matches!(right_stat_info.statistics.precise_cardinality, Some(1))
-        || right_stat_info.cardinality == 1.0
+    if !check_asof
+        && (matches!(right_stat_info.statistics.precise_cardinality, Some(1))
+            || right_stat_info.cardinality == 1.0)
     {
         // If the output rows of build side is equal to 1, we use CROSS JOIN + FILTER instead of RANGE JOIN.
         return Ok(PhysicalJoinType::Hash);
@@ -69,14 +76,18 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
             &mut other_conditions,
         )
     }
-
     if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
         return Ok(PhysicalJoinType::RangeJoin(
             range_conditions,
             other_conditions,
         ));
     }
-
+    if check_asof {
+        return Ok(PhysicalJoinType::AsofJoin(
+            range_conditions,
+            other_conditions,
+        ));
+    }
     // Leverage hash join to execute nested loop join
     Ok(PhysicalJoinType::Hash)
 }
@@ -174,9 +185,20 @@ impl PhysicalPlanBuilder {
                 )
                 .await
             }
-            PhysicalJoinType::RangeJoin(range, other) => {
-                self.build_range_join(s_expr, left_required, right_required, range, other)
+            PhysicalJoinType::AsofJoin(range, other) => {
+                self.build_asof_join(join, s_expr, (left_required, right_required), range, other)
                     .await
+            }
+            PhysicalJoinType::RangeJoin(range, other) => {
+                self.build_range_join(
+                    join.join_type.clone(),
+                    s_expr,
+                    left_required,
+                    right_required,
+                    range,
+                    other,
+                )
+                .await
             }
         }
     }
