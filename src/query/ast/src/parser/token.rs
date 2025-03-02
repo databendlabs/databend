@@ -1256,6 +1256,8 @@ pub enum TokenKind {
     WINDOW,
     #[token("WITH", ignore(ascii_case))]
     WITH,
+    #[token("WITHIN", ignore(ascii_case))]
+    WITHIN,
     #[token("XML", ignore(ascii_case))]
     XML,
     #[token("XOR", ignore(ascii_case))]

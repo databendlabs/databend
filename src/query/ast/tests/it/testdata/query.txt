@@ -391,6 +391,7 @@ Query {
                                                 },
                                             ],
                                             params: [],
+                                            order_by: [],
                                             window: None,
                                             lambda: None,
                                         },
@@ -3508,6 +3509,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            order_by: [],
                             window: None,
                             lambda: None,
                         },
@@ -3657,6 +3659,7 @@ Query {
                                                     },
                                                 ],
                                                 params: [],
+                                                order_by: [],
                                                 window: None,
                                                 lambda: None,
                                             },
@@ -6340,6 +6343,7 @@ Query {
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -6567,6 +6571,7 @@ Query {
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -6744,6 +6749,7 @@ Query {
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -7009,6 +7015,7 @@ Query {
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -7619,6 +7626,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            order_by: [],
                             window: Some(
                                 WindowDesc {
                                     ignore_nulls: None,
@@ -7820,6 +7828,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            order_by: [],
                             window: Some(
                                 WindowDesc {
                                     ignore_nulls: None,
@@ -7879,6 +7888,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            order_by: [],
                             window: Some(
                                 WindowDesc {
                                     ignore_nulls: None,
@@ -7938,6 +7948,7 @@ Query {
                                 },
                             ],
                             params: [],
+                            order_by: [],
                             window: Some(
                                 WindowDesc {
                                     ignore_nulls: None,
@@ -8972,6 +8983,7 @@ Query {
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },

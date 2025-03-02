@@ -26,6 +26,7 @@ use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunctionRef;
 
@@ -115,6 +116,7 @@ pub fn try_create_aggregate_kurtosis_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
 

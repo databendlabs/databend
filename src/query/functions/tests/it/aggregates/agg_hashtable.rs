@@ -82,16 +82,16 @@ fn test_agg_hashtable() {
 
         let aggrs = vec![
             factory
-                .get("min", vec![], vec![Int64Type::data_type()])
+                .get("min", vec![], vec![Int64Type::data_type()], vec![])
                 .unwrap(),
             factory
-                .get("max", vec![], vec![Int64Type::data_type()])
+                .get("max", vec![], vec![Int64Type::data_type()], vec![])
                 .unwrap(),
             factory
-                .get("sum", vec![], vec![Int64Type::data_type()])
+                .get("sum", vec![], vec![Int64Type::data_type()], vec![])
                 .unwrap(),
             factory
-                .get("count", vec![], vec![Int64Type::data_type()])
+                .get("count", vec![], vec![Int64Type::data_type()], vec![])
                 .unwrap(),
         ];
 
@@ -190,7 +190,9 @@ fn test_layout() {
         scale: 2,
     }));
 
-    let aggrs = factory.get("sum", vec![], vec![decimal_type]).unwrap();
+    let aggrs = factory
+        .get("sum", vec![], vec![decimal_type], vec![])
+        .unwrap();
     type S = DecimalSumState<false, DecimalType<i128>>;
     type M = DecimalSumState<false, DecimalType<I256>>;
 

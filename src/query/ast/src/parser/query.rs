@@ -1232,6 +1232,15 @@ pub fn window_spec_ident(i: Input) -> IResult<Window> {
     ))(i)
 }
 
+pub fn within_group(i: Input) -> IResult<Vec<OrderByExpr>> {
+    map(
+        rule! {
+        WITHIN ~ GROUP ~ "(" ~ ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) ~ ")"
+        },
+        |(_, _, _, _, _, order_by, _)| order_by,
+    )(i)
+}
+
 pub fn window_function(i: Input) -> IResult<WindowDesc> {
     map(
         rule! {

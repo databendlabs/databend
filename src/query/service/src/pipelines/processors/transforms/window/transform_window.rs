@@ -1407,7 +1407,8 @@ mod tests {
         bounds: (FrameBound<u64>, FrameBound<u64>),
         arg_type: DataType,
     ) -> Result<TransformWindow<u64>> {
-        let agg = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
+        let agg =
+            AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type], vec![])?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         TransformWindow::try_create_rows(
             InputPort::create(),
@@ -1429,7 +1430,8 @@ mod tests {
         bounds: (FrameBound<u64>, FrameBound<u64>),
         arg_type: DataType,
     ) -> Result<TransformWindow<u64>> {
-        let agg = AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type])?;
+        let agg =
+            AggregateFunctionFactory::instance().get("sum", vec![], vec![arg_type], vec![])?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         TransformWindow::try_create_rows(
             InputPort::create(),
@@ -2274,8 +2276,12 @@ mod tests {
         _unit: WindowFuncFrameUnits,
         bounds: (FrameBound<u64>, FrameBound<u64>),
     ) -> Result<(Box<dyn Processor>, Arc<InputPort>, Arc<OutputPort>)> {
-        let agg = AggregateFunctionFactory::instance()
-            .get("sum", vec![], vec![DataType::Number(NumberDataType::Int32)])?;
+        let agg = AggregateFunctionFactory::instance().get(
+            "sum",
+            vec![],
+            vec![DataType::Number(NumberDataType::Int32)],
+            vec![],
+        )?;
         let func = WindowFunctionInfo::Aggregate(agg, vec![0]);
         let input = InputPort::create();
         let output = OutputPort::create();

@@ -250,6 +250,7 @@ impl PipelineBuilder {
                 let args = agg_func
                     .arg_indices
                     .iter()
+                    .chain(agg_func.sort_desc_indices.iter())
                     .map(|i| input_schema.index_of(&i.to_string()))
                     .collect::<Result<Vec<_>>>()?;
                 agg_args.push(args);
@@ -259,6 +260,7 @@ impl PipelineBuilder {
                         agg_func.sig.name.as_str(),
                         agg_func.sig.params.clone(),
                         agg_func.sig.args.clone(),
+                        agg_func.sig.sort_descs.clone(),
                     ),
                     Some((UDFType::Script(code), state_fields)) => create_udaf_script_function(
                         code,

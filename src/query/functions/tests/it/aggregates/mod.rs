@@ -35,12 +35,19 @@ use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::scalars::parser;
 
-pub trait AggregationSimulator = Fn(&str, Vec<Scalar>, &[Column], usize) -> databend_common_exception::Result<(Column, DataType)>
+pub trait AggregationSimulator = Fn(
+        &str,
+        Vec<Scalar>,
+        &[Column],
+        usize,
+        Vec<AggregateFunctionSortDesc>,
+    ) -> databend_common_exception::Result<(Column, DataType)>
     + Copy;
 
 /// run ast which is agg expr
@@ -49,6 +56,7 @@ pub fn run_agg_ast(
     text: &str,
     columns: &[(&str, Column)],
     simulator: impl AggregationSimulator,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
 ) {
     let raw_expr = parser::parse_raw_expr(
         text,
@@ -113,7 +121,13 @@ pub fn run_agg_ast(
                     })
                     .collect();
 
-                simulator(name.as_str(), params, &arg_columns, block.num_rows())?
+                simulator(
+                    name.as_str(),
+                    params,
+                    &arg_columns,
+                    block.num_rows(),
+                    sort_descs,
+                )?
             }
             _ => unimplemented!(),
         }
@@ -186,11 +200,12 @@ pub fn simulate_two_groups_group_by(
     params: Vec<Scalar>,
     columns: &[Column],
     rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> databend_common_exception::Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
     let arguments: Vec<DataType> = columns.iter().map(|c| c.data_type()).collect();
 
-    let func = factory.get(name, params, arguments)?;
+    let func = factory.get(name, params, arguments, sort_descs)?;
     let data_type = func.return_type()?;
     let states_layout = get_states_layout(&[func.clone()])?;
     let loc = states_layout.states_loc[0].clone();

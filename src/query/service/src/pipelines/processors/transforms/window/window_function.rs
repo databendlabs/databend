@@ -185,10 +185,12 @@ impl WindowFunctionInfo {
                     agg.sig.name.as_str(),
                     agg.sig.params.clone(),
                     agg.sig.args.clone(),
+                    agg.sig.sort_descs.clone(),
                 )?;
                 let args = agg
                     .arg_indices
                     .iter()
+                    .chain(agg.sort_desc_indices.iter())
                     .map(|p| {
                         let offset = schema.index_of(&p.to_string())?;
                         Ok(offset)

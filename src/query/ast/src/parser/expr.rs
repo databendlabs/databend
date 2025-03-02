@@ -612,6 +612,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                             ),
                             args: vec![source],
                             params: vec![],
+                            order_by: vec![],
                             window: None,
                             lambda: Some(Lambda {
                                 params: vec![param.clone()],
@@ -628,6 +629,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                         name: Identifier::from_name(transform_span(elem.span.tokens), "array_map"),
                         args: vec![source],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: Some(Lambda {
                             params: vec![param.clone()],
@@ -794,6 +796,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                     name,
                     args: [vec![lhs], args].concat(),
                     params: vec![],
+                    order_by: vec![],
                     window: None,
                     lambda,
                 },
@@ -1028,6 +1031,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name,
                 args: opt_args.unwrap_or_default(),
                 params: vec![],
+                order_by: vec![],
                 window: None,
                 lambda: None,
             },
@@ -1044,6 +1048,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name,
                 args: vec![arg],
                 params: vec![],
+                order_by: vec![],
                 window: None,
                 lambda: Some(Lambda {
                     params,
@@ -1064,7 +1069,27 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name,
                 args: opt_args.unwrap_or_default(),
                 params: vec![],
+                order_by: vec![],
                 window: Some(window),
+                lambda: None,
+            },
+        },
+    );
+    let function_call_with_within_group_window = map(
+        rule! {
+            #function_name
+            ~ "(" ~ DISTINCT? ~ #comma_separated_list0(subexpr(0))? ~ ")"
+            ~ #within_group
+            ~ #window_function?
+        },
+        |(name, _, opt_distinct, opt_args, _, order_by, window)| ExprElement::FunctionCall {
+            func: FunctionCall {
+                distinct: opt_distinct.is_some(),
+                name,
+                args: opt_args.unwrap_or_default(),
+                params: vec![],
+                order_by,
+                window,
                 lambda: None,
             },
         },
@@ -1082,6 +1107,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name,
                 args: opt_args.unwrap_or_default(),
                 params,
+                order_by: vec![],
                 window,
                 lambda: None,
             },
@@ -1326,6 +1352,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 name: Identifier::from_name(transform_span(span.tokens), "current_timestamp"),
                 args: vec![],
                 params: vec![],
+                order_by: vec![],
                 window: None,
                 lambda: None,
             },
@@ -1373,6 +1400,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
                 | #count_all_with_window : "`COUNT(*) OVER ...`"
                 | #function_call_with_lambda : "`function(..., x -> ...)`"
                 | #function_call_with_window : "`function(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
+                | #function_call_with_within_group_window: "`function(...) [ WITHIN GROUP ( ORDER BY <expr>, ... ) ] OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
                 | #function_call_with_params_window : "`function(...)(...) OVER ([ PARTITION BY <expr>, ... ] [ ORDER BY <expr>, ... ] [ <window frame> ])`"
                 | #function_call : "`function(...)`"
             ),
@@ -2029,6 +2057,7 @@ pub(crate) fn make_func_get_variable(span: Span, name: String) -> Expr {
                 value: Literal::String(name),
             }],
             params: vec![],
+            order_by: vec![],
             window: None,
             lambda: None,
         },

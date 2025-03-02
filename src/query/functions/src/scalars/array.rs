@@ -896,7 +896,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                 }
                 Scalar::Array(col) => {
                     let len = col.len();
-                    match eval_aggr(name, vec![], &[col.clone()], len) {
+                    match eval_aggr(name, vec![], &[col.clone()], len, vec![]) {
                         Ok((res_col, _)) => {
                             let val = unsafe { res_col.index_unchecked(0) };
                             Value::Scalar(val.to_owned())
@@ -919,7 +919,7 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                     }
                     let array_column = arr.as_array().unwrap();
                     let len = array_column.len();
-                    match eval_aggr(name, vec![], &[array_column.clone()], len) {
+                    match eval_aggr(name, vec![], &[array_column.clone()], len, vec![]) {
                         Ok((col, _)) => {
                             let val = unsafe { col.index_unchecked(0) };
                             builder.push(val)
@@ -947,7 +947,9 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
         }
         let array_type = arg_type.as_array()?;
         let factory = AggregateFunctionFactory::instance();
-        let func = factory.get(name, vec![], vec![*array_type.clone()]).ok()?;
+        let func = factory
+            .get(name, vec![], vec![*array_type.clone()], vec![])
+            .ok()?;
         let return_type = func.return_type().ok()?;
         if args_type[0].is_nullable() {
             Some(return_type.wrap_nullable())

@@ -37,6 +37,7 @@ use super::aggregate_distinct_state::DistinctStateFunc;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionCreator;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_function_factory::CombinatorDescription;
 use super::aggregator_common::assert_variadic_arguments;
 use super::AggregateCountFunction;
@@ -191,15 +192,17 @@ pub fn try_create_uniq(
     nested_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     let creator: AggregateFunctionCreator = Box::new(AggregateCountFunction::try_create);
-    try_create(nested_name, params, arguments, &creator)
+    try_create(nested_name, params, arguments, sort_descs, &creator)
 }
 
 pub fn try_create(
     nested_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
     nested_creator: &AggregateFunctionCreator,
 ) -> Result<Arc<dyn AggregateFunction>> {
     let name = format!("DistinctCombinator({})", nested_name);
@@ -209,7 +212,7 @@ pub fn try_create(
         "count" | "uniq" => vec![],
         _ => arguments.clone(),
     };
-    let nested = nested_creator(nested_name, params, nested_arguments)?;
+    let nested = nested_creator(nested_name, params, nested_arguments, sort_descs)?;
 
     if arguments.len() == 1 {
         match &arguments[0] {
