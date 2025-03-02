@@ -644,6 +644,27 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct AggregateFunctionScalarSortDesc {
+    pub expr: ScalarExpr,
+    pub nulls_first: Option<bool>,
+    pub asc: Option<bool>,
+}
+
+impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> std::result::Result<AggregateFunctionSortDesc, Self::Error> {
+        let expr = &self.expr.as_expr()?;
+
+        Ok(AggregateFunctionSortDesc {
+            data_type: expr.data_type().clone(),
+            nulls_first: self.nulls_first,
+            asc: self.asc,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct AggregateFunction {
@@ -654,9 +675,23 @@ pub struct AggregateFunction {
     pub params: Vec<Scalar>,
     pub args: Vec<ScalarExpr>,
     pub return_type: Box<DataType>,
-    pub sort_descs: Vec<AggregateFunctionSortDesc>,
+    pub sort_descs: Vec<AggregateFunctionScalarSortDesc>,
 
     pub display_name: String,
+}
+
+impl AggregateFunction {
+    pub fn exprs(&self) -> impl Iterator<Item = &ScalarExpr> {
+        self.args
+            .iter()
+            .chain(self.sort_descs.iter().map(|desc| &desc.expr))
+    }
+
+    pub fn exprs_mut(&mut self) -> impl Iterator<Item = &mut ScalarExpr> {
+        self.args
+            .iter_mut()
+            .chain(self.sort_descs.iter_mut().map(|desc| &mut desc.expr))
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -999,7 +1034,7 @@ pub trait Visitor<'a>: Sized {
         walk_window(self, window)
     }
     fn visit_aggregate_function(&mut self, aggregate: &'a AggregateFunction) -> Result<()> {
-        for expr in &aggregate.args {
+        for expr in aggregate.exprs() {
             self.visit(expr)?;
         }
         Ok(())
@@ -1111,7 +1146,7 @@ pub trait VisitorMut<'a>: Sized {
         walk_window_mut(self, window)
     }
     fn visit_aggregate_function(&mut self, aggregate: &'a mut AggregateFunction) -> Result<()> {
-        for expr in &mut aggregate.args {
+        for expr in aggregate.exprs_mut() {
             self.visit(expr)?;
         }
         Ok(())

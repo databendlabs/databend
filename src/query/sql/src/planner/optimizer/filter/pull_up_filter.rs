@@ -193,8 +193,8 @@ impl PullUpFilterOptimizer {
             ScalarExpr::WindowFunction(window) => {
                 match &mut window.func {
                     WindowFuncType::Aggregate(agg) => {
-                        for arg in agg.args.iter_mut() {
-                            Self::replace_predicate(arg, items, metadata)?;
+                        for expr in agg.exprs_mut() {
+                            Self::replace_predicate(expr, items, metadata)?;
                         }
                     }
                     WindowFuncType::LagLead(ll) => {
@@ -218,8 +218,8 @@ impl PullUpFilterOptimizer {
                 }
             }
             ScalarExpr::AggregateFunction(agg_func) => {
-                for arg in agg_func.args.iter_mut() {
-                    Self::replace_predicate(arg, items, metadata)?;
+                for expr in agg_func.exprs_mut() {
+                    Self::replace_predicate(expr, items, metadata)?;
                 }
             }
             ScalarExpr::FunctionCall(func) => {

@@ -45,6 +45,7 @@ use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
+use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
@@ -133,6 +134,9 @@ pub struct AggregateInfo {
     /// Arguments of aggregation functions
     pub aggregate_arguments: Vec<ScalarItem>,
 
+    /// SortDesc of aggregation functions
+    pub aggregate_sort_descs: Vec<ScalarItem>,
+
     /// Group items of aggregation
     pub group_items: Vec<ScalarItem>,
 
@@ -194,6 +198,8 @@ impl<'a> AggregateRewriter<'a> {
         }
 
         let replaced_args = self.replace_function_args(&aggregate.args, &aggregate.func_name)?;
+        let replaced_sort_desc =
+            self.replace_sort_descs(&aggregate.sort_descs, &aggregate.func_name)?;
 
         let index = self.metadata.write().add_derived_column(
             aggregate.display_name.clone(),
@@ -209,7 +215,7 @@ impl<'a> AggregateRewriter<'a> {
             params: aggregate.params.clone(),
             args: replaced_args,
             return_type: aggregate.return_type.clone(),
-            sort_descs: aggregate.sort_descs.clone(),
+            sort_descs: replaced_sort_desc,
         };
 
         self.bind_context.aggregate_info.push_aggregate_function(
@@ -261,6 +267,88 @@ impl<'a> AggregateRewriter<'a> {
         );
 
         Ok(replaced_udaf.into())
+    }
+
+    fn replace_sort_descs(
+        &mut self,
+        sort_descs: &[AggregateFunctionScalarSortDesc],
+        func_name: &str,
+    ) -> Result<Vec<AggregateFunctionScalarSortDesc>> {
+        let AggregateInfo {
+            ref mut aggregate_sort_descs,
+            ref aggregate_arguments,
+            ref group_items,
+            ..
+        } = self.bind_context.aggregate_info;
+
+        sort_descs
+            .iter()
+            .enumerate()
+            .map(|(i, desc)| {
+                let name = format!("{}_sort_desc_{}", func_name, i);
+                let expr = &desc.expr;
+
+                let column = if let ScalarExpr::BoundColumnRef(column_ref) = expr {
+                    // the columns required for sort describe always come after aggregate_sort_descs
+                    aggregate_sort_descs.push(ScalarItem {
+                        index: column_ref.column.index,
+                        scalar: expr.clone(),
+                    });
+                    column_ref.clone()
+                } else if let Some(item) = aggregate_arguments
+                    .iter()
+                    .chain(group_items.iter())
+                    .chain(aggregate_sort_descs.iter())
+                    .find(|x| &x.scalar == expr)
+                {
+                    // check if the arg is in aggregate_sort_descs items
+                    // we can reuse the index
+                    let column_binding = ColumnBindingBuilder::new(
+                        name,
+                        item.index,
+                        Box::new(expr.data_type()?),
+                        Visibility::Visible,
+                    )
+                    .build();
+
+                    BoundColumnRef {
+                        span: expr.span(),
+                        column: column_binding,
+                    }
+                } else {
+                    let data_type = expr.data_type()?;
+                    let index = self.metadata.write().add_derived_column(
+                        name.clone(),
+                        data_type.clone(),
+                        Some(expr.clone()),
+                    );
+
+                    // Generate a ColumnBinding for each sort describe of aggregates
+                    let column_binding = ColumnBindingBuilder::new(
+                        name,
+                        index,
+                        Box::new(data_type),
+                        Visibility::Visible,
+                    )
+                    .build();
+
+                    aggregate_sort_descs.push(ScalarItem {
+                        index,
+                        scalar: expr.clone(),
+                    });
+
+                    BoundColumnRef {
+                        span: expr.span(),
+                        column: column_binding.clone(),
+                    }
+                };
+                Ok(AggregateFunctionScalarSortDesc {
+                    expr: column.into(),
+                    nulls_first: desc.nulls_first,
+                    asc: desc.asc,
+                })
+            })
+            .collect()
     }
 
     fn replace_function_args(
@@ -577,11 +665,18 @@ impl Binder {
 
         // Build a ProjectPlan, which will produce aggregate arguments and group items
         let agg_info = &bind_context.aggregate_info;
-        let mut scalar_items: Vec<ScalarItem> =
-            Vec::with_capacity(agg_info.aggregate_arguments.len() + agg_info.group_items.len());
+        let mut scalar_items: Vec<ScalarItem> = Vec::with_capacity(
+            agg_info.aggregate_arguments.len()
+                + agg_info.aggregate_sort_descs.len()
+                + agg_info.group_items.len(),
+        );
 
         for arg in agg_info.aggregate_arguments.iter() {
             scalar_items.push(arg.clone());
+        }
+
+        for sort_desc_expr in agg_info.aggregate_sort_descs.iter() {
+            scalar_items.push(sort_desc_expr.clone());
         }
 
         for item in agg_info.group_items.iter() {

@@ -250,6 +250,7 @@ impl PipelineBuilder {
                 let args = agg_func
                     .arg_indices
                     .iter()
+                    .chain(agg_func.sort_desc_indices.iter())
                     .map(|i| input_schema.index_of(&i.to_string()))
                     .collect::<Result<Vec<_>>>()?;
                 agg_args.push(args);
