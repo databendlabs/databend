@@ -40,6 +40,12 @@ pub enum SpillFileFormat {
     Parquet,
 }
 
+#[derive(Clone, Copy)]
+pub enum MemoryExceededBehavior {
+    ThrowOOM,
+    EnableSpill,
+}
+
 impl SpillFileFormat {
     pub fn range() -> Vec<String> {
         ["arrow", "parquet"]
@@ -327,10 +333,6 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
 
-    pub fn get_join_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("join_spilling_bytes_threshold_per_proc")? as usize)
-    }
-
     pub fn get_join_spilling_partition_bits(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
     }
@@ -452,16 +454,8 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_allow_inconsistent")? != 0)
     }
 
-    pub fn get_aggregate_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("aggregate_spilling_bytes_threshold_per_proc")? as usize)
-    }
-
     pub fn get_aggregate_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("aggregate_spilling_memory_ratio")? as usize)
-    }
-
-    pub fn get_window_partition_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("window_partition_spilling_bytes_threshold_per_proc")? as usize)
     }
 
     pub fn get_window_partition_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
@@ -482,10 +476,6 @@ impl Settings {
 
     pub fn get_window_partition_sort_block_size(&self) -> Result<u64> {
         self.try_get_u64("window_partition_sort_block_size")
-    }
-
-    pub fn get_sort_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("sort_spilling_bytes_threshold_per_proc")? as usize)
     }
 
     pub fn get_sort_spilling_batch_bytes(&self) -> Result<usize> {
@@ -889,5 +879,17 @@ impl Settings {
 
     pub fn set_max_query_memory_usage(&self, max_memory_usage: u64) -> Result<()> {
         self.try_set_u64("max_query_memory_usage", max_memory_usage)
+    }
+
+    pub fn get_query_out_of_memory_behavior(&self) -> Result<MemoryExceededBehavior> {
+        match self
+            .try_get_string("query_out_of_memory_behavior")?
+            .to_lowercase()
+            .as_str()
+        {
+            "throwoom" => Ok(MemoryExceededBehavior::ThrowOOM),
+            "enablespill" => Ok(MemoryExceededBehavior::EnableSpill),
+            _ => Err(ErrorCode::BadArguments("")),
+        }
     }
 }

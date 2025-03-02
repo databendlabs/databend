@@ -16,6 +16,7 @@ pub mod builders;
 pub mod executor;
 pub mod processors;
 
+mod memory_settings;
 mod pipeline_build_res;
 mod pipeline_builder;
 

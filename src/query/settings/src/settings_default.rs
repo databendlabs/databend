@@ -178,6 +178,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("query_out_of_memory_behavior", DefaultSettingValue {
+                    value: UserSettingValue::String(String::from("ThrowOOM")),
+                    desc: "The maximum memory usage for query. If set to 0, memory usage is unlimited. This setting is the successor/replacement to the older max_memory_usage setting.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![String::from("ThrowOOM"), String::from("EnableSpill")])),
+                }),
                 ("data_retention_time_in_days", DefaultSettingValue {
                     // unit of retention_period is day
                     value: UserSettingValue::UInt64(1),
@@ -351,13 +358,6 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
-                }),
-                ("join_spilling_bytes_threshold_per_proc", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of memory in bytes that one join processor can use before spilling data to storage during query execution, 0 is unlimited.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("join_spilling_partition_bits", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
@@ -549,26 +549,12 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
-                ("aggregate_spilling_bytes_threshold_per_proc", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of memory in bytes that an aggregator can use before spilling data to storage during query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
                 ("aggregate_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
-                }),
-                ("window_partition_spilling_bytes_threshold_per_proc", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of memory in bytes that a window partitioner can use before spilling data to storage during query execution.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_partition_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
@@ -601,13 +587,6 @@ impl DefaultSettings {
                 ("window_partition_sort_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the block size of data blocks to be sorted in window partition.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
-                }),
-                ("sort_spilling_bytes_threshold_per_proc", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Sets the maximum amount of memory in bytes that a sorter can use before spilling data to storage during query execution.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
