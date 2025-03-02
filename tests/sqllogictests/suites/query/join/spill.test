@@ -2,7 +2,10 @@ statement ok
 set join_spilling_memory_ratio = 1;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 1;
+SET query_out_of_memory_behavior = 'EnableSpill';
+
+statement ok
+SET max_query_memory_usage = 1;
 
 statement ok
 set join_spilling_buffer_threshold_per_proc_mb = 1;
@@ -70,6 +73,12 @@ NULL 16
 NULL 17
 NULL 18
 NULL 19
+
+statement ok
+unset max_query_memory_usage;
+
+statement ok
+unset query_out_of_memory_behavior;
 
 statement ok
 drop table if exists t1;

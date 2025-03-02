@@ -157,10 +157,10 @@ impl StatisticsSender {
         let mut progress = Self::fetch_progress(ctx);
 
         if let Some(mem_stat) = mem_stat {
-            let memory_usage = std::cmp::max(0, mem_stat.get_memory_usage());
+            let memory_usage = mem_stat.get_memory_usage();
             let peek_memory_usage = std::cmp::max(0, mem_stat.get_peek_memory_usage());
             progress.push(ProgressInfo::MemoryUsage(
-                memory_usage as usize,
+                memory_usage,
                 peek_memory_usage as usize,
             ));
         }

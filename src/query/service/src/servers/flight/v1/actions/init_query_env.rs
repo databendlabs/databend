@@ -16,6 +16,7 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use databend_common_settings::MemoryExceededBehavior;
 use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -26,8 +27,11 @@ pub static INIT_QUERY_ENV: &str = "/actions/init_query_env";
 pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     let query_mem_stat = MemStat::create(format!("Query-{}", env.query_id));
     let query_max_memory_usage = env.settings.get_max_query_memory_usage()?;
+    let out_of_memory_behavior = env.settings.get_query_out_of_memory_behavior()?;
 
-    if query_max_memory_usage != 0 {
+    if query_max_memory_usage != 0
+        && matches!(out_of_memory_behavior, MemoryExceededBehavior::ThrowOOM)
+    {
         query_mem_stat.set_limit(query_max_memory_usage as i64);
     }
 

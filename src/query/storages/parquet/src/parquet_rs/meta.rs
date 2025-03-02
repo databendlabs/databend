@@ -239,7 +239,7 @@ pub async fn read_parquet_metas_batch_for_copy(
 // TODO(parquet): how to limit the memory when running this method is to be determined.
 fn check_memory_usage(max_memory_usage: u64) -> Result<()> {
     let used = GLOBAL_MEM_STAT.get_memory_usage();
-    if max_memory_usage as i64 - used < 100 * 1024 * 1024 {
+    if (max_memory_usage - used as u64) < 100 * 1024 * 1024 {
         return Err(ErrorCode::Internal(format!(
             "not enough memory to load parquet file metas, max_memory_usage = {}, used = {}.",
             max_memory_usage, used
