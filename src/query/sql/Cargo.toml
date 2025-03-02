@@ -35,7 +35,6 @@ databend-common-storages-result-cache = { workspace = true }
 databend-common-storages-view = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
-databend-enterprise-hilbert-clustering = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-io = { workspace = true }
 databend-storages-common-session = { workspace = true }

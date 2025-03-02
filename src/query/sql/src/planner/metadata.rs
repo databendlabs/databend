@@ -498,6 +498,12 @@ impl Metadata {
         }
         table_name
     }
+
+    pub fn replace_all_tables(&mut self, table: Arc<dyn Table>) {
+        for entry in self.tables.iter_mut() {
+            entry.table = table.clone();
+        }
+    }
 }
 
 #[derive(Clone)]

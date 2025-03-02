@@ -229,7 +229,7 @@ impl PipelineBuilder {
 
             // Recluster.
             PhysicalPlan::Recluster(recluster) => self.build_recluster(recluster),
-            PhysicalPlan::HilbertSerialize(serialize) => self.build_hilbert_serialize(serialize),
+            PhysicalPlan::HilbertPartition(partition) => self.build_hilbert_partition(partition),
 
             PhysicalPlan::Duplicate(duplicate) => self.build_duplicate(duplicate),
             PhysicalPlan::Shuffle(shuffle) => self.build_shuffle(shuffle),

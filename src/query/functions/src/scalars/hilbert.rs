@@ -24,9 +24,11 @@ use databend_common_expression::types::ALL_NUMERICS_TYPES;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::Column;
 use databend_common_expression::FixedLengthEncoding;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::ScalarRef;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, BinaryType, _, _>(
@@ -92,22 +94,45 @@ pub fn register(registry: &mut FunctionRegistry) {
     // The column values are conceptually divided into multiple partitions defined by the range_bounds.
     // For example, given the column values (0, 1, 3, 6, 8) and a partition configuration with 3 partitions,
     // the range_bounds might be [1, 6]. The function would then return partition IDs as (0, 0, 1, 1, 2).
-    registry.register_passthrough_nullable_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
+    registry
+        .register_2_arg_core::<GenericType<0>, ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
+            "range_partition_id",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<
+                GenericType<0>,
+                ArrayType<GenericType<0>>,
+                NumberType<u64>,
+            >(|val, arr, builder, _| {
+                let id = calc_range_partition_id(val, arr);
+                builder.push(id);
+            }),
+        );
+
+    registry.register_2_arg_core::<NullableType<GenericType<0>>, NullableType<ArrayType<GenericType<0>>>, NumberType<u64>, _, _>(
         "range_partition_id",
         |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<GenericType<0>, ArrayType<GenericType<0>>, NumberType<u64>>(|val, arr, builder, _| {
-            let mut low = 0;
-            let mut high = arr.len();
-            while low < high {
-                let mid = low + ((high - low) / 2);
-                let bound = unsafe {arr.index_unchecked(mid)};
-                if val > bound {
-                    low = mid + 1;
-                } else {
-                    high = mid;
-                }
-            }
-            builder.push(low as u64);
+        vectorize_with_builder_2_arg::<NullableType<GenericType<0>>, NullableType<ArrayType<GenericType<0>>>, NumberType<u64>>(|val, arr, builder, _| {
+            let id = match (val, arr) {
+                (Some(val), Some(arr)) => calc_range_partition_id(val, arr),
+                (None, Some(arr)) => arr.len() as u64,
+                _ => 0,
+            };
+            builder.push(id);
         }),
     );
+}
+
+fn calc_range_partition_id(val: ScalarRef, arr: Column) -> u64 {
+    let mut low = 0;
+    let mut high = arr.len();
+    while low < high {
+        let mid = low + ((high - low) / 2);
+        let bound = unsafe { arr.index_unchecked(mid) };
+        if val > bound {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    low as u64
 }
