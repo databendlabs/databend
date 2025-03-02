@@ -9,7 +9,10 @@ statement ok
 set join_spilling_memory_ratio = 1;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 1;
+SET query_out_of_memory_behavior = 'EnableSpill';
+
+statement ok
+SET max_query_memory_usage = 1;
 
 statement ok
 set join_spilling_buffer_threshold_per_proc_mb = 1;
@@ -18,22 +21,13 @@ statement ok
 set sort_spilling_memory_ratio = 1;
 
 statement ok
-set sort_spilling_bytes_threshold_per_proc = 1;
-
-statement ok
 set window_partition_spilling_memory_ratio = 1;
 
 statement ok
 set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
 
 statement ok
-set window_partition_spilling_bytes_threshold_per_proc = 1;
-
-statement ok
 set aggregate_spilling_memory_ratio = 1;
-
-statement ok
-set aggregate_spilling_bytes_threshold_per_proc = 1;
 
 # TPC-H TEST
 include ./queries.test
@@ -494,25 +488,19 @@ statement ok
 set join_spilling_memory_ratio = 60;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 0;
-
-statement ok
 set join_spilling_buffer_threshold_per_proc_mb = 512;
 
 statement ok
 set sort_spilling_memory_ratio = 60;
 
 statement ok
-set sort_spilling_bytes_threshold_per_proc = 0;
-
-statement ok
 set window_partition_spilling_memory_ratio = 60;
-
-statement ok
-set window_partition_spilling_bytes_threshold_per_proc = 0;
 
 statement ok
 set aggregate_spilling_memory_ratio = 60;
 
 statement ok
-set aggregate_spilling_bytes_threshold_per_proc = 0;
+unset max_query_memory_usage;
+
+statement ok
+unset query_out_of_memory_behavior;

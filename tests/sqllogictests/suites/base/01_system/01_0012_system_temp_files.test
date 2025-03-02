@@ -8,7 +8,11 @@ SET max_vacuum_temp_files_after_query=0;
 
 onlyif http
 statement ok
-SET aggregate_spilling_bytes_threshold_per_proc=1;
+SET query_out_of_memory_behavior = 'EnableSpill';
+
+onlyif http
+statement ok
+SET max_query_memory_usage = 1;
 
 
 onlyif http
@@ -33,4 +37,8 @@ unset max_vacuum_temp_files_after_query;
 
 onlyif http
 statement ok
-unset aggregate_spilling_bytes_threshold_per_proc;
+unset max_query_memory_usage;
+
+onlyif http
+statement ok
+unset query_out_of_memory_behavior;

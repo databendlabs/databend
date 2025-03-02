@@ -5,7 +5,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 $BENDSQL_CLIENT_CONNECT --query="""
 SELECT '==TEST GLOBAL SORT==';
 SET max_vacuum_temp_files_after_query= 0;
-set sort_spilling_bytes_threshold_per_proc = 8;
+set query_out_of_memory_behavior = 'EnableSpill';
+set max_query_memory_usage = 8;
 set enable_experimental_stream_sort_spilling = 0;
 DROP TABLE if EXISTS t;
 DROP TABLE IF EXISTS temp_files_count;
@@ -23,9 +24,9 @@ INSERT INTO temp_files_count SELECT COUNT() as count, 2 as number FROM system.te
 SELECT '==Test if the spill is activated==';
 
 -- Test if the spill is activated.
-set sort_spilling_bytes_threshold_per_proc = 0;
+set max_query_memory_usage = 0;
 SELECT (any_if(count, number = 2) - any_if(count, number = 1)) > 0 FROM temp_files_count;
-set sort_spilling_bytes_threshold_per_proc = 8;
+set max_query_memory_usage = 8;
 
 SELECT '==Enable sort_spilling_bytes_threshold_per_proc==';
 INSERT INTO temp_files_count SELECT COUNT() as count, 3 as number FROM system.temp_files;
@@ -54,9 +55,9 @@ SELECT x, y FROM xy ORDER BY y DESC NULLS FIRST;
 INSERT INTO temp_files_count SELECT COUNT() as count, 4 as number FROM system.temp_files;
 SELECT '==Test a==';
 
-set sort_spilling_bytes_threshold_per_proc = 0;
+set max_query_memory_usage = 0;
 SELECT (any_if(count, number = 4) - any_if(count, number = 3)) > 0 FROM temp_files_count;
-set sort_spilling_bytes_threshold_per_proc = 8;
+set max_query_memory_usage = 8;
 
 SELECT '==Test b==';
 
@@ -84,9 +85,9 @@ SELECT '==Test d==';
 
 INSERT INTO temp_files_count SELECT COUNT() as count, 6 as number FROM system.temp_files;
 
-set sort_spilling_bytes_threshold_per_proc = 0;
+set max_query_memory_usage = 0;
 SELECT (any_if(count, number = 6) - any_if(count, number = 5)) > 0 FROM temp_files_count;
-set sort_spilling_bytes_threshold_per_proc = 60;
+set max_query_memory_usage = 60;
 
 SELECT '==Test e==';
 
@@ -102,7 +103,8 @@ INSERT INTO temp_files_count SELECT COUNT() as count, 8 as number FROM system.te
 
 unset max_vacuum_temp_files_after_query;
 unset enable_experimental_stream_sort_spilling;
-set sort_spilling_bytes_threshold_per_proc = 0;
+unset max_query_memory_usage;
+unset query_out_of_memory_behavior;
 SELECT (any_if(count, number = 8) - any_if(count, number = 7)) > 0 FROM temp_files_count;
 
 SET max_vacuum_temp_files_after_query= 300000;

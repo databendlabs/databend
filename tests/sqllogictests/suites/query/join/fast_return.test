@@ -33,7 +33,10 @@ statement ok
 set join_spilling_memory_ratio = 60;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 1;
+SET query_out_of_memory_behavior = 'EnableSpill';
+
+statement ok
+SET max_query_memory_usage = 1;
 
 query I
 select * from t1 inner join t2 on t1.a = t2.a order by t1.a, t2.a
@@ -54,7 +57,10 @@ statement ok
 set join_spilling_memory_ratio = 0;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 0;
+unset max_query_memory_usage;
+
+statement ok
+unset query_out_of_memory_behavior;
 
 statement ok
 drop table if exists t1

@@ -7,7 +7,10 @@ statement ok
 set disable_join_reorder = 1;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 1;
+SET query_out_of_memory_behavior = 'EnableSpill';
+
+statement ok
+SET max_query_memory_usage = 1;
 
 statement ok
 drop table if exists t1;
@@ -121,7 +124,7 @@ statement ok
 create table t3 as select number as a from numbers(1000000);
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 100;
+set max_query_memory_usage = 100;
 
 query I
 select count() from t3 inner join numbers(1000000) on t3.a = number;
@@ -129,7 +132,7 @@ select count() from t3 inner join numbers(1000000) on t3.a = number;
 1000000
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 1024 * 1024 * 1;
+set max_query_memory_usage = 1024 * 1024 * 1;
 
 # build side doesn't spill actually.
 query I
@@ -147,7 +150,7 @@ statement ok
 set max_block_size = 512;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 200;
+set max_query_memory_usage = 200;
 
 statement ok
 drop table if exists t1;
@@ -179,4 +182,7 @@ statement ok
 set join_spilling_memory_ratio = 0;
 
 statement ok
-set join_spilling_bytes_threshold_per_proc = 0;
+unset max_query_memory_usage;
+
+statement ok
+unset query_out_of_memory_behavior;
