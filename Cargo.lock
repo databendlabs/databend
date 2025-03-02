@@ -1627,16 +1627,6 @@ checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "byte-unit"
-version = "4.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da78b32057b8fdfc352504708feeba7216dcd65a2c9ab02978cbd288d1279b6c"
-dependencies = [
- "serde",
- "utf8-width",
-]
-
-[[package]]
-name = "byte-unit"
 version = "5.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1cd29c3c585209b0cbc7309bfe3ed7efd8c84c21b7af29c8bfae908f8777174"
@@ -5036,7 +5026,6 @@ dependencies = [
  "base64 0.22.1",
  "buf-list",
  "bumpalo",
- "byte-unit 4.0.19",
  "byteorder",
  "bytes",
  "chrono",
@@ -10382,7 +10371,7 @@ version = "0.10.0"
 source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.7#e99cfebbc7a485fe55efe476c083d9decc888ef7"
 dependencies = [
  "anyerror",
- "byte-unit 5.1.6",
+ "byte-unit",
  "chrono",
  "clap",
  "derive_more",
