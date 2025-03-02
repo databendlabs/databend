@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::alloc::Layout;
-use std::cmp::Ordering;
 use std::fmt;
 use std::sync::Arc;
 
@@ -21,16 +20,23 @@ use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::StringColumn;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
+use databend_common_expression::SortColumnDescription;
+use databend_common_expression::Value;
+use itertools::Itertools;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_function_factory::AggregateFunctionSortDesc;
@@ -49,23 +55,45 @@ pub struct StringAggState {
     values: String,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug, Default)]
-pub struct SortStringAggState {
-    inner: ArrayAggState<StringType>,
-    delimiter: String,
-    sort_desc: Option<AggregateFunctionSortDesc>,
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
+struct SortDesc {
+    index: usize,
+    ty: DataType,
+    asc: bool,
+    null_first: bool,
 }
 
-impl ScalarStateFunc<StringType> for SortStringAggState {
+#[derive(BorshSerialize, BorshDeserialize, Debug)]
+pub struct SortStringAggState {
+    inner: ArrayAggState<AnyType>,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
+    delimiter: String,
+}
+
+impl Default for SortStringAggState {
+    fn default() -> Self {
+        SortStringAggState {
+            inner: Default::default(),
+            delimiter: "".to_string(),
+            sort_descs: vec![],
+        }
+    }
+}
+
+impl ScalarStateFunc<AnyType> for SortStringAggState {
     fn new() -> Self {
         Self::default()
     }
 
-    fn add(&mut self, other: Option<&'_ str>) {
+    fn add(&mut self, other: Option<<AnyType as ValueType>::ScalarRef<'_>>) {
         self.inner.add(other);
     }
 
-    fn add_batch(&mut self, column: &StringColumn, validity: Option<&Bitmap>) -> Result<()> {
+    fn add_batch(
+        &mut self,
+        column: &<AnyType as ValueType>::Column,
+        validity: Option<&Bitmap>,
+    ) -> Result<()> {
         self.inner.add_batch(column, validity)
     }
 
@@ -73,20 +101,62 @@ impl ScalarStateFunc<StringType> for SortStringAggState {
         self.inner.merge(&rhs.inner)
     }
 
-    fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()> {
-        if let Some(opts) = self.sort_desc {
-            self.inner.values.sort_by(|a, b| {
-                if opts.asc() {
-                    a.partial_cmp(b).unwrap_or(Ordering::Equal)
-                } else {
-                    b.partial_cmp(a).unwrap_or(Ordering::Equal)
-                }
-            });
-        }
+    fn merge_result(&mut self, result_builder: &mut ColumnBuilder) -> Result<()> {
         let values = &self.inner.values;
-        let builder = StringType::try_downcast_builder(builder).unwrap();
-        if !values.is_empty() {
-            builder.put_and_commit(values.join(self.delimiter.as_str()));
+        let mut builders = Vec::with_capacity(values.len());
+        builders.push(ColumnBuilder::with_capacity(
+            &Box::new(DataType::String),
+            values.len(),
+        ));
+        builders.push(ColumnBuilder::with_capacity(
+            &Box::new(DataType::String),
+            values.len(),
+        ));
+        for desc in self.sort_descs.iter() {
+            builders.push(ColumnBuilder::with_capacity(&desc.data_type, values.len()));
+        }
+        for tuple in values.iter() {
+            if let Some(values) = tuple.as_tuple() {
+                for (i, value) in values.iter().enumerate() {
+                    builders[i].push(value.as_ref());
+                }
+            }
+        }
+        let mut block = DataBlock::new(
+            builders
+                .into_iter()
+                .map(|builder| BlockEntry::new(builder.data_type(), Value::Column(builder.build())))
+                .collect_vec(),
+            values.len(),
+        );
+        if block.columns().len() > 1 {
+            let sort_descs = self
+                .sort_descs
+                .iter()
+                .enumerate()
+                .map(|(i, sort_desc)| SortColumnDescription {
+                    // after string and delimiter column
+                    offset: i + 2,
+                    asc: sort_desc.asc(),
+                    nulls_first: sort_desc.nulls_first(),
+                })
+                .collect_vec();
+
+            block = DataBlock::sort(&block, &sort_descs, None)?;
+        }
+        let builder = StringType::try_downcast_builder(result_builder).unwrap();
+        if !block.is_empty() {
+            let mut string = String::new();
+
+            for i in 0..block.num_rows() {
+                let value = block.value_at(0, i);
+                if let Some(v) = value.as_ref().and_then(|v| v.as_string()) {
+                    string.push_str(v);
+                    string.push_str(&self.delimiter);
+                }
+            }
+            let len = string.len() - self.delimiter.len();
+            builder.put_and_commit(&string[..len]);
         } else {
             builder.put_and_commit("");
         }
@@ -227,7 +297,7 @@ impl fmt::Display for AggregateStringAggFunction {
 pub struct SortAggregateStringAggFunction {
     display_name: String,
     delimiter: String,
-    sort_desc: AggregateFunctionSortDesc,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
 }
 
 impl AggregateFunction for SortAggregateStringAggFunction {
@@ -242,8 +312,8 @@ impl AggregateFunction for SortAggregateStringAggFunction {
     fn init_state(&self, place: AggrState) {
         place.write(|| SortStringAggState {
             inner: Default::default(),
+            sort_descs: self.sort_descs.clone(),
             delimiter: self.delimiter.clone(),
-            sort_desc: Some(self.sort_desc),
         });
     }
 
@@ -258,22 +328,9 @@ impl AggregateFunction for SortAggregateStringAggFunction {
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0]).unwrap();
+        let tuples = self.accumulate_tuple(columns, validity)?;
         let state = place.get::<SortStringAggState>();
-        match validity {
-            Some(validity) => {
-                column.iter().zip(validity.iter()).for_each(|(v, b)| {
-                    if b {
-                        state.add(Some(v));
-                    }
-                });
-            }
-            None => {
-                column.iter().for_each(|v| {
-                    state.add(Some(v));
-                });
-            }
-        }
+        state.add_batch(&Column::Tuple(tuples), validity)?;
 
         Ok(())
     }
@@ -285,22 +342,28 @@ impl AggregateFunction for SortAggregateStringAggFunction {
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0]).unwrap();
-        let column_iter = StringType::iter_column(&column);
-        column_iter.zip(places.iter()).for_each(|(v, place)| {
-            let state = AggrState::new(*place, loc).get::<SortStringAggState>();
-            state.add(Some(v));
-        });
+        let tuples = self.accumulate_tuple(columns, None)?;
+
+        for (i, addr) in places.iter().enumerate().take(tuples.len()) {
+            let mut tuple = Vec::with_capacity(tuples.len());
+            for column in tuples.iter() {
+                tuple.push(column.index(i).unwrap_or_default());
+            }
+
+            let state = AggrState::new(*addr, loc).get::<SortStringAggState>();
+            state.add(Some(ScalarRef::Tuple(tuple)))
+        }
+
         Ok(())
     }
 
     fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0]).unwrap();
-        let v = StringType::index_column(&column, row);
-        if let Some(v) = v {
-            let state = place.get::<SortStringAggState>();
-            state.add(Some(v));
+        let mut tuples = Vec::with_capacity(self.sort_descs.len() + 1);
+        for column in columns.iter() {
+            tuples.push(column.slice(row..row + 1));
         }
+        let state = place.get::<SortStringAggState>();
+        state.add_batch(&Column::Tuple(tuples), None)?;
         Ok(())
     }
 
@@ -338,6 +401,24 @@ impl AggregateFunction for SortAggregateStringAggFunction {
     }
 }
 
+impl SortAggregateStringAggFunction {
+    fn accumulate_tuple(
+        &self,
+        input_columns: InputColumns,
+        validity: Option<&Bitmap>,
+    ) -> Result<Vec<Column>> {
+        let mut tuple = Vec::with_capacity(self.sort_descs.len() + 1);
+        for column in input_columns.iter() {
+            if let Some(validity) = validity {
+                tuple.push(column.filter(validity).clone());
+            } else {
+                tuple.push(column.clone());
+            }
+        }
+        Ok(tuple)
+    }
+}
+
 impl fmt::Display for SortAggregateStringAggFunction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.display_name)
@@ -363,11 +444,11 @@ pub fn try_create_aggregate_string_agg_function(
     } else {
         String::new()
     };
-    if let Some(sort_desc) = sort_descs.first() {
+    if !sort_descs.is_empty() {
         let func = SortAggregateStringAggFunction {
             display_name: display_name.to_string(),
             delimiter,
-            sort_desc: *sort_desc,
+            sort_descs,
         };
         Ok(Arc::new(func))
     } else {

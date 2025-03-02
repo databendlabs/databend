@@ -3589,28 +3589,28 @@ Map {
 
 
 ---------- Input ----------
-LIST_AGG(salary, '|') WITHIN GROUP (ORDER BY salary DESC NULLS LAST)
+LISTAGG(salary, '|') WITHIN GROUP (ORDER BY salary DESC NULLS LAST)
 ---------- Output ---------
-LIST_AGG(salary, '|') WITHIN GROUP ( ORDER BY salary DESC NULLS LAST )
+LISTAGG(salary, '|') WITHIN GROUP ( ORDER BY salary DESC NULLS LAST )
 ---------- AST ------------
 FunctionCall {
     span: Some(
-        0..68,
+        0..67,
     ),
     func: FunctionCall {
         distinct: false,
         name: Identifier {
             span: Some(
-                0..8,
+                0..7,
             ),
-            name: "LIST_AGG",
+            name: "LISTAGG",
             quote: None,
             ident_type: None,
         },
         args: [
             ColumnRef {
                 span: Some(
-                    9..15,
+                    8..14,
                 ),
                 column: ColumnRef {
                     database: None,
@@ -3618,7 +3618,7 @@ FunctionCall {
                     column: Name(
                         Identifier {
                             span: Some(
-                                9..15,
+                                8..14,
                             ),
                             name: "salary",
                             quote: None,
@@ -3629,7 +3629,7 @@ FunctionCall {
             },
             Literal {
                 span: Some(
-                    17..20,
+                    16..19,
                 ),
                 value: String(
                     "|",
@@ -3641,7 +3641,7 @@ FunctionCall {
             OrderByExpr {
                 expr: ColumnRef {
                     span: Some(
-                        45..51,
+                        44..50,
                     ),
                     column: ColumnRef {
                         database: None,
@@ -3649,7 +3649,7 @@ FunctionCall {
                         column: Name(
                             Identifier {
                                 span: Some(
-                                    45..51,
+                                    44..50,
                                 ),
                                 name: "salary",
                                 quote: None,

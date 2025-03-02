@@ -1021,77 +1021,31 @@ fn test_agg_string_agg(file: &mut impl Write, simulator: impl AggregationSimulat
 fn test_agg_list_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
     run_agg_ast(
         file,
-        "list_agg(s)",
+        "listagg(s)",
         get_example().as_slice(),
         simulator,
         vec![],
     );
     run_agg_ast(
         file,
-        "list_agg(s_null)",
+        "listagg(s_null)",
         get_example().as_slice(),
         simulator,
         vec![],
     );
     run_agg_ast(
         file,
-        "list_agg(s, '|')",
+        "listagg(s, '|')",
         get_example().as_slice(),
         simulator,
         vec![],
     );
     run_agg_ast(
         file,
-        "list_agg(s_null, '-')",
+        "listagg(s_null, '-')",
         get_example().as_slice(),
         simulator,
         vec![],
-    );
-
-    // WITHIN GROUP
-    run_agg_ast(
-        file,
-        "list_agg(s)",
-        get_example().as_slice(),
-        simulator,
-        vec![AggregateFunctionSortDesc {
-            column: 0,
-            nulls_first: None,
-            asc: Some(false),
-        }],
-    );
-    run_agg_ast(
-        file,
-        "list_agg(s_null)",
-        get_example().as_slice(),
-        simulator,
-        vec![AggregateFunctionSortDesc {
-            column: 0,
-            nulls_first: None,
-            asc: Some(false),
-        }],
-    );
-    run_agg_ast(
-        file,
-        "list_agg(s, '|')",
-        get_example().as_slice(),
-        simulator,
-        vec![AggregateFunctionSortDesc {
-            column: 0,
-            nulls_first: None,
-            asc: Some(false),
-        }],
-    );
-    run_agg_ast(
-        file,
-        "list_agg(s_null, '-')",
-        get_example().as_slice(),
-        simulator,
-        vec![AggregateFunctionSortDesc {
-            column: 0,
-            nulls_first: None,
-            asc: Some(false),
-        }],
     );
 }
 

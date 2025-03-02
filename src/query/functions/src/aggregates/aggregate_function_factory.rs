@@ -129,19 +129,18 @@ impl AggregateFunctionDescription {
 }
 
 #[derive(
-    BorshSerialize,
-    BorshDeserialize,
-    Copy,
     Clone,
     PartialEq,
     Eq,
     Hash,
     Debug,
+    BorshSerialize,
+    BorshDeserialize,
     serde::Serialize,
     serde::Deserialize,
 )]
 pub struct AggregateFunctionSortDesc {
-    pub column: usize,
+    pub data_type: DataType,
     pub nulls_first: Option<bool>,
     pub asc: Option<bool>,
 }

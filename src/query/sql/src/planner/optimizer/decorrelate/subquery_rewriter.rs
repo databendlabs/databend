@@ -155,7 +155,7 @@ impl SubqueryRewriter {
                 }
 
                 if let WindowFuncType::Aggregate(agg) = &mut plan.function {
-                    for item in agg.args.iter_mut() {
+                    for item in agg.exprs_mut() {
                         let res = self.try_rewrite_subquery(item, &input, false)?;
                         input = res.1;
                         *item = res.0;

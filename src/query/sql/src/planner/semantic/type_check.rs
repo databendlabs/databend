@@ -87,7 +87,6 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
-use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::is_builtin_function;
 use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -133,6 +132,7 @@ use crate::planner::semantic::lowering::TypeCheck;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
+use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::AggregateMode;
 use crate::plans::AsyncFunctionArgument;
 use crate::plans::AsyncFunctionCall;
@@ -1761,18 +1761,9 @@ impl<'a> TypeChecker<'a> {
                      nulls_first,
                  }| {
                     let box (scalar_expr, _) = self.resolve(expr)?;
-                    let pos = arguments
-                        .iter()
-                        .position(|arg_expr| arg_expr == &scalar_expr)
-                        .ok_or(
-                            ErrorCode::SemanticError(
-                                "the expression in order by must be one of the function parameters",
-                            )
-                            .set_span(expr.span()),
-                        )?;
 
-                    Ok(AggregateFunctionSortDesc {
-                        column: pos,
+                    Ok(AggregateFunctionScalarSortDesc {
+                        expr: scalar_expr,
                         nulls_first: *nulls_first,
                         asc: *asc,
                     })
@@ -1782,7 +1773,7 @@ impl<'a> TypeChecker<'a> {
 
         // Convert the delimiter of string_agg to params
         let params = if (func_name.eq_ignore_ascii_case("string_agg")
-            || func_name.eq_ignore_ascii_case("list_agg"))
+            || func_name.eq_ignore_ascii_case("listagg"))
             && arguments.len() == 2
             && params.is_empty()
         {
@@ -1829,7 +1820,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         let agg_func = AggregateFunctionFactory::instance()
-            .get(&func_name, params.clone(), arg_types, sort_descs.clone())
+            .get(&func_name, params.clone(), arg_types, vec![])
             .map_err(|e| e.set_span(span))?;
 
         let args = if optimize_remove_count_args(&func_name, distinct, args) {
