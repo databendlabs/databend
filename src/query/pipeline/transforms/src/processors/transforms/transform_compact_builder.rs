@@ -12,56 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Value;
-use databend_common_pipeline_core::processors::InputPort;
-use databend_common_pipeline_core::processors::OutputPort;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipeline;
 
 use crate::processors::AccumulatingTransform;
 use crate::processors::BlockCompactMeta;
 use crate::processors::TransformCompactBlock;
 use crate::processors::TransformPipelineHelper;
-use crate::Transform;
-use crate::Transformer;
 
 pub fn build_compact_block_pipeline(
     pipeline: &mut Pipeline,
     thresholds: BlockThresholds,
 ) -> Result<()> {
     let output_len = pipeline.output_len();
-    pipeline.add_transform(ConvertToFullTransform::create)?;
     pipeline.try_resize(1)?;
     pipeline.add_accumulating_transformer(|| BlockCompactBuilder::new(thresholds));
     pipeline.try_resize(output_len)?;
     pipeline.add_block_meta_transformer(TransformCompactBlock::default);
     Ok(())
-}
-
-pub(crate) struct ConvertToFullTransform;
-
-impl ConvertToFullTransform {
-    pub(crate) fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> Result<ProcessorPtr> {
-        Ok(ProcessorPtr::create(Transformer::create(
-            input,
-            output,
-            ConvertToFullTransform {},
-        )))
-    }
-}
-
-impl Transform for ConvertToFullTransform {
-    const NAME: &'static str = "ConvertToFullTransform";
-
-    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        Ok(data.consume_convert_to_full())
-    }
 }
 
 pub struct BlockCompactBuilder {
@@ -148,11 +120,7 @@ pub fn memory_size(data_block: &DataBlock) -> usize {
         .columns()
         .iter()
         .map(|entry| match &entry.value {
-            Value::Column(Column::Nullable(col)) if col.validity.true_count() == 0 => {
-                // For `Nullable` columns with no valid values,
-                // only the size of the validity bitmap is counted.
-                col.validity.as_slice().0.len()
-            }
+            Value::Column(Column::Nullable(col)) if col.validity.true_count() == 0 => 0,
             _ => entry.memory_size(),
         })
         .sum()

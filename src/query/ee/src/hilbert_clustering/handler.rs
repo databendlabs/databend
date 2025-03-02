@@ -20,12 +20,13 @@ use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_expression::BlockThresholds;
+use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
 use databend_common_storages_fuse::DEFAULT_BLOCK_PER_SEGMENT;
+use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_enterprise_hilbert_clustering::HilbertClusteringHandler;
 use databend_enterprise_hilbert_clustering::HilbertClusteringHandlerWrapper;
@@ -57,12 +58,16 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
 
         let block_per_seg =
             fuse_table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
-        let block_thresholds = fuse_table.get_block_thresholds();
-        let thresholds = BlockThresholds {
-            max_rows_per_block: block_per_seg * block_thresholds.max_rows_per_block,
-            min_rows_per_block: block_per_seg * block_thresholds.min_rows_per_block,
-            max_bytes_per_block: block_per_seg * block_thresholds.max_bytes_per_block,
-        };
+        let hilbert_clustering_min_bytes =
+            ctx.get_settings().get_hilbert_clustering_min_bytes()? as usize;
+        let max_bytes_per_block = fuse_table.get_option(
+            FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
+            DEFAULT_BLOCK_BUFFER_SIZE,
+        );
+        let hilbert_min_bytes = std::cmp::max(
+            hilbert_clustering_min_bytes,
+            max_bytes_per_block * block_per_seg,
+        );
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
 
@@ -70,7 +75,7 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
         let chunk_size = max_threads * 4;
         let mut checker = ReclusterChecker::new(
             cluster_key_id,
-            thresholds,
+            hilbert_min_bytes,
             push_downs.as_ref().is_none_or(|v| v.filters.is_none()),
         );
         'FOR: for chunk in segment_locations.chunks(chunk_size) {
@@ -130,10 +135,9 @@ impl RealHilbertClusteringHandler {
 struct ReclusterChecker {
     segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
     default_cluster_id: u32,
-    thresholds: BlockThresholds,
 
-    total_rows: usize,
-    total_size: usize,
+    hilbert_min_bytes: usize,
+    total_bytes: usize,
 
     finished: bool,
     // Whether the target segments is at the head of snapshot.
@@ -141,59 +145,30 @@ struct ReclusterChecker {
 }
 
 impl ReclusterChecker {
-    fn new(default_cluster_id: u32, thresholds: BlockThresholds, head_of_snapshot: bool) -> Self {
+    fn new(default_cluster_id: u32, hilbert_min_bytes: usize, head_of_snapshot: bool) -> Self {
         Self {
             segments: vec![],
             default_cluster_id,
-            thresholds,
-            total_rows: 0,
-            total_size: 0,
+            hilbert_min_bytes,
+            total_bytes: 0,
             finished: false,
             head_of_snapshot,
         }
     }
 
     fn add(&mut self, location: SegmentLocation, segment: Arc<CompactSegmentInfo>) -> bool {
-        let row_count = segment.summary.row_count as usize;
-        let byte_size = segment.summary.uncompressed_byte_size as usize;
-        self.total_rows += row_count;
-        self.total_size += byte_size;
-        if !self
-            .thresholds
-            .check_large_enough(self.total_rows, self.total_size)
-        {
-            // totals < N
-            self.segments.push((location, segment));
-            return false;
-        }
-
         let segment_should_recluster = self.should_recluster(&segment, |v| {
             v.cluster_key_id != self.default_cluster_id || v.level != -1
         });
-        let mut retained = false;
-        if !self.head_of_snapshot || segment_should_recluster {
-            if self
-                .thresholds
-                .check_for_compact(self.total_rows, self.total_size)
-            {
-                // N <= totals < 2N
-                self.segments.push((location, segment));
-                retained = true;
-            } else if segment_should_recluster {
-                // totals >= 2N
-                self.segments = vec![(location, segment)];
-                self.total_rows = row_count;
-                self.total_size = byte_size;
-                self.finished = true;
-                return true;
-            }
+
+        if segment_should_recluster || !self.head_of_snapshot {
+            self.total_bytes += segment.summary.uncompressed_byte_size as usize;
+            self.segments.push((location, segment));
         }
 
-        if self.check_for_recluster() {
-            if !retained {
-                self.total_rows -= row_count;
-                self.total_size -= byte_size;
-            }
+        if (!segment_should_recluster || self.total_bytes >= self.hilbert_min_bytes)
+            && self.check_for_recluster()
+        {
             self.finished = true;
             return true;
         }
@@ -225,8 +200,7 @@ impl ReclusterChecker {
     }
 
     fn reset(&mut self) {
-        self.total_rows = 0;
-        self.total_size = 0;
+        self.total_bytes = 0;
         self.head_of_snapshot = false;
         self.segments.clear();
     }

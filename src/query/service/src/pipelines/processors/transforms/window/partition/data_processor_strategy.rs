@@ -17,7 +17,6 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::SortColumnDescription;
-use databend_common_pipeline_transforms::memory_size;
 use databend_common_pipeline_transforms::sort_merge;
 use databend_common_settings::Settings;
 
@@ -56,7 +55,7 @@ impl DataProcessorStrategy for CompactStrategy {
         let mut result = Vec::with_capacity(blocks_num);
         for block in data_blocks {
             accumulated_rows += block.num_rows();
-            accumulated_bytes += memory_size(&block);
+            accumulated_bytes += block.memory_size();
             if !self
                 .thresholds
                 .check_large_enough(accumulated_rows, accumulated_bytes)

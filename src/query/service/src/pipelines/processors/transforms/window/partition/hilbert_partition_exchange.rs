@@ -37,8 +37,7 @@ impl HilbertPartitionExchange {
 impl Exchange for HilbertPartitionExchange {
     const NAME: &'static str = "Hilbert";
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
-        // Extract the columns used for hash computation.
-        let mut data_block = data_block.consume_convert_to_full();
+        let mut data_block = data_block;
         let range_ids = data_block
             .get_last_column()
             .as_number()
