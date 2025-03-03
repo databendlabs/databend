@@ -180,7 +180,7 @@ impl DefaultSettings {
                 }),
                 ("query_out_of_memory_behavior", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("ThrowOOM")),
-                    desc: "The maximum memory usage for query. If set to 0, memory usage is unlimited. This setting is the successor/replacement to the older max_memory_usage setting.",
+                    desc: "If the query memory limit is exceeded, the system will enforce predefined actions (e.g., throw or spilling).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::String(vec![String::from("ThrowOOM"), String::from("EnableSpill")])),
