@@ -18,17 +18,18 @@ use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::IntoResponse;
+use serde::Deserialize;
 use serde::Serialize;
 
 use crate::servers::http::v1::HttpQueryContext;
 
-#[derive(Serialize, Eq, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct ListDatabasesResponse {
     pub databases: Vec<DatabaseInfo>,
     pub warnings: Vec<String>,
 }
 
-#[derive(Serialize, Eq, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct DatabaseInfo {
     pub name: String,
 }

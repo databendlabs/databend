@@ -30,13 +30,13 @@ struct SearchTablesRequest {
     pub keyword: String,
 }
 
-#[derive(Serialize, Eq, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct SearchTablesResponse {
     pub tables: Vec<TableInfo>,
     pub warnings: Vec<String>,
 }
 
-#[derive(Serialize, Eq, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct TableInfo {
     pub name: String,
     pub database: String,

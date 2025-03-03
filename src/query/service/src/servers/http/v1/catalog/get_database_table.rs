@@ -24,19 +24,20 @@ use poem::error::Result as PoemResult;
 use poem::web::Json;
 use poem::web::Path;
 use poem::IntoResponse;
+use serde::Deserialize;
 use serde::Serialize;
 
 use crate::interpreters::ShowCreateQuerySettings;
 use crate::interpreters::ShowCreateTableInterpreter;
 use crate::servers::http::v1::HttpQueryContext;
 
-#[derive(Serialize, Eq, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct GetDatabaseTableResponse {
     pub table: Option<TableDetails>,
     pub warnings: Vec<String>,
 }
 
-#[derive(Serialize, Eq, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Default)]
 pub struct TableDetails {
     pub name: String,
     pub database: String,
