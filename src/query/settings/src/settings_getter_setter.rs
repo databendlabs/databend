@@ -522,6 +522,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
     }
 
+    pub fn get_enable_expand_roles(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_expand_roles")? != 0)
+    }
+
     pub fn get_table_lock_expire_secs(&self) -> Result<u64> {
         self.try_get_u64("table_lock_expire_secs")
     }

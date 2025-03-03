@@ -912,6 +912,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_expand_roles", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable expand roles when execute show grants statement(enable by default).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("create_query_flight_client_with_current_rt", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Turns on (1) or off (0) the use of the current runtime for query operations.",
