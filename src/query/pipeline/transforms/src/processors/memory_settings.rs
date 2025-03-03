@@ -45,7 +45,7 @@ impl MemorySettings {
 
     pub fn check_spill(&self) -> bool {
         if self.enable_global_level_spill
-            && self.global_memory_tracking.get_memory_usage() >= self.max_query_memory_usage
+            && self.global_memory_tracking.get_memory_usage() >= self.max_memory_usage
         {
             return true;
         }
@@ -99,7 +99,7 @@ mod tests {
         let settings = MemorySettings {
             enable_global_level_spill: true,
             global_memory_tracking: global_mem,
-            max_query_memory_usage: 100,
+            max_memory_usage: 100,
             ..Default::default()
         };
         assert!(settings.check_spill());
@@ -116,6 +116,7 @@ mod tests {
             max_query_memory_usage: 100,
             enable_query_level_spill: true,
             query_memory_tracking: Some(query_mem.clone()),
+            max_memory_usage: 100,
             ..Default::default()
         };
         assert!(settings.check_spill());
@@ -143,6 +144,7 @@ mod tests {
             enable_global_level_spill: true,
             global_memory_tracking: global_mem,
             max_query_memory_usage: 100,
+            max_memory_usage: 100,
             enable_query_level_spill: true,
             query_memory_tracking: Some(query_mem.clone()),
             ..Default::default()
@@ -158,6 +160,7 @@ mod tests {
             enable_global_level_spill: false,
             global_memory_tracking: global_mem,
             max_query_memory_usage: 100,
+            max_memory_usage: 100,
             enable_query_level_spill: true,
             query_memory_tracking: None,
             ..Default::default()
@@ -187,6 +190,7 @@ mod tests {
             enable_global_level_spill: true,
             global_memory_tracking: global_mem,
             max_query_memory_usage: 100,
+            max_memory_usage: 100,
             enable_query_level_spill: true,
             query_memory_tracking: Some(query_mem.clone()),
             ..Default::default()
