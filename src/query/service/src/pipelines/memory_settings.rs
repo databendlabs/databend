@@ -266,7 +266,7 @@ mod tests {
         ctx.set_enable_sort_spill(true);
         settings.set_setting("max_memory_usage".into(), "1000".into())?;
         settings.set_setting("sort_spilling_memory_ratio".into(), "50".into())?;
-        settings.set_setting("query_out_of_memory_behavior".into(), "ThrowOOM".into())?;
+        settings.set_setting("query_out_of_memory_behavior".into(), "throw".into())?;
         settings.set_setting("max_query_memory_usage".into(), "0".into())?;
 
         let memory_settings = MemorySettings::from_sort_settings(&ctx)?;
@@ -332,7 +332,7 @@ mod tests {
 
         settings.set_setting("max_memory_usage".into(), "2000".into())?;
         settings.set_setting("window_partition_spilling_memory_ratio".into(), "50".into())?;
-        settings.set_setting("query_out_of_memory_behavior".into(), "ThrowOOM".into())?;
+        settings.set_setting("query_out_of_memory_behavior".into(), "throw".into())?;
         settings.set_setting("max_query_memory_usage".into(), "0".into())?;
 
         let memory_settings = MemorySettings::from_window_settings(&ctx)?;

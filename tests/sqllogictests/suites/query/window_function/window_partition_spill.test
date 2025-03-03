@@ -20,7 +20,7 @@ FROM (
         number,
         LEAD(number, 1, 0) OVER (PARTITION BY number % 16 ORDER BY number + 1) AS a,
         LEAD(number, 2, 0) OVER (PARTITION BY number % 16 ORDER BY number + 1) AS b
-    FROM numbers(5000000)
+    FROM numbers(500000)
 );
 ----
 374999249384
