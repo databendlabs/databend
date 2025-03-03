@@ -166,14 +166,14 @@ impl ReclusterChecker {
             self.segments.push((location, segment));
         }
 
-        if (!segment_should_recluster || self.total_bytes >= self.hilbert_min_bytes)
-            && self.check_for_recluster()
-        {
-            self.finished = true;
-            return true;
+        if !segment_should_recluster || self.total_bytes >= self.hilbert_min_bytes {
+            if self.check_for_recluster() {
+                self.finished = true;
+                return true;
+            }
+            self.reset();
         }
 
-        self.reset();
         false
     }
 
