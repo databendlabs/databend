@@ -259,5 +259,96 @@ Join(Cross)
             ├── testdb.t.a: { min: 0, max: 999, ndv: 1000, null count: 0 }
             └── testdb.t.b: { min: 1, max: 1000, ndv: 1000, null count: 0 }
 
+query T
+explain(decorrelated,verbose) select a, exists(select * from numbers(1000) where number % 10 = t.b) mark from t;
+----
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), 3 (#3) AS (#3)]
+├── output columns: [derived.b, derived.mark, system.numbers.number, testdb.t.a, testdb.t.b]
+├── outer columns: []
+├── used columns: [derived.b, derived.mark, system.numbers.number, testdb.t.a, testdb.t.b]
+├── cardinality: 0.000
+├── precise cardinality: N/A
+├── statistics
+└── Join(RightMark)
+    ├── build keys: [b (#4)]
+    ├── probe keys: [b (#1)]
+    ├── other filters: []
+    ├── output columns: [derived.b, derived.mark, system.numbers.number, testdb.t.a, testdb.t.b]
+    ├── outer columns: []
+    ├── used columns: [derived.b, system.numbers.number, testdb.t.a, testdb.t.b]
+    ├── cardinality: 0.000
+    ├── precise cardinality: N/A
+    ├── statistics
+    ├── Scan
+    │   ├── table: testdb.t
+    │   ├── filters: []
+    │   ├── order by: []
+    │   ├── limit: NONE
+    │   ├── output columns: [testdb.t.a, testdb.t.b]
+    │   ├── outer columns: []
+    │   ├── used columns: [testdb.t.a, testdb.t.b]
+    │   ├── cardinality: 0.000
+    │   ├── precise cardinality: N/A
+    │   └── statistics
+    └── EvalScalar
+        ├── scalars: [numbers.number (#2) AS (#2), b (#4) AS (#4)]
+        ├── output columns: [derived.b, system.numbers.number]
+        ├── outer columns: []
+        ├── used columns: [derived.b, system.numbers.number]
+        ├── cardinality: 0.000
+        ├── precise cardinality: N/A
+        ├── statistics
+        └── Filter
+            ├── filters: [eq(modulo(numbers.number (#2), 10), b (#4))]
+            ├── output columns: [derived.b, system.numbers.number]
+            ├── outer columns: []
+            ├── used columns: [derived.b, system.numbers.number]
+            ├── cardinality: 0.000
+            ├── precise cardinality: N/A
+            ├── statistics
+            └── Join(Cross)
+                ├── build keys: []
+                ├── probe keys: []
+                ├── other filters: []
+                ├── output columns: [derived.b, system.numbers.number]
+                ├── outer columns: []
+                ├── used columns: [derived.b, system.numbers.number]
+                ├── cardinality: 0.000
+                ├── precise cardinality: N/A
+                ├── statistics
+                ├── Aggregate(Initial)
+                │   ├── group items: [ (#4)]
+                │   ├── aggregate functions: []
+                │   ├── output columns: [derived.b]
+                │   ├── outer columns: []
+                │   ├── used columns: [derived.b]
+                │   ├── cardinality: 0.000
+                │   ├── precise cardinality: N/A
+                │   ├── statistics
+                │   └── Scan
+                │       ├── table: testdb.t
+                │       ├── filters: []
+                │       ├── order by: []
+                │       ├── limit: NONE
+                │       ├── output columns: [derived.b]
+                │       ├── outer columns: []
+                │       ├── used columns: [derived.b]
+                │       ├── cardinality: 0.000
+                │       ├── precise cardinality: N/A
+                │       └── statistics
+                └── Scan
+                    ├── table: system.numbers
+                    ├── filters: []
+                    ├── order by: []
+                    ├── limit: NONE
+                    ├── output columns: [system.numbers.number]
+                    ├── outer columns: []
+                    ├── used columns: [system.numbers.number]
+                    ├── cardinality: 0.000
+                    ├── precise cardinality: N/A
+                    └── statistics
+
+
 statement ok
 drop database testdb

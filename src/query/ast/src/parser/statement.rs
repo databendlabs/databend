@@ -40,6 +40,7 @@ use crate::parser::stream::stream_table;
 use crate::parser::token::*;
 use crate::parser::Error;
 use crate::parser::ErrorKind;
+use crate::span::merge_span;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
@@ -78,7 +79,9 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
-                options: options.as_ref().map_or(vec![], |(_, opts, _)| opts.clone()),
+                options: options
+                    .map(|(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts))
+                    .unwrap_or_default(),
                 query: Box::new(statement.stmt),
             })
         },
@@ -314,7 +317,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, show_options)| Statement::ShowVariables { show_options },
     );
-    let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
+    let show_stages = map(
+        rule! {
+            SHOW ~ STAGES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowStages { show_options },
+    );
     let show_process_list = map(
         rule! {
             SHOW ~ PROCESSLIST ~ #show_options?
@@ -1521,7 +1529,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
+    let show_users = map(
+        rule! {
+            SHOW ~ USERS ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowUsers { show_options },
+    );
+
     let describe_user = map(
         rule! {
             ( DESC | DESCRIBE ) ~ USER ~ ^#user_identity
@@ -1589,7 +1603,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             user,
         },
     );
-    let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
+    let show_roles = map(
+        rule! {
+            SHOW ~ ROLES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowRoles { show_options },
+    );
     let create_role = map(
         rule! {
             CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
@@ -3190,11 +3209,33 @@ pub fn create_def(i: Input) -> IResult<CreateDefinition> {
 }
 
 pub fn role_name(i: Input) -> IResult<String> {
-    let role_ident = map(
+    let role_ident = map_res(
         rule! {
             #ident
         },
-        |role_name| role_name.name,
+        |role_name| {
+            let name = role_name.name;
+            let mut chars = name.chars();
+            while let Some(c) = chars.next() {
+                match c {
+                    '\\' => match chars.next() {
+                        Some('f') | Some('b') => {
+                            return Err(nom::Err::Failure(ErrorKind::Other(
+                                "' or \" or \\f or \\b are not allowed in role name",
+                            )));
+                        }
+                        _ => {}
+                    },
+                    '\'' | '"' => {
+                        return Err(nom::Err::Failure(ErrorKind::Other(
+                            "' or \" or \\f or \\b are not allowed in role name",
+                        )));
+                    }
+                    _ => {}
+                }
+            }
+            Ok(name)
+        },
     );
     let role_lit = map(
         rule! {
@@ -4796,12 +4837,13 @@ pub fn alter_password_action(i: Input) -> IResult<AlterPasswordAction> {
 pub fn explain_option(i: Input) -> IResult<ExplainOption> {
     map(
         rule! {
-            VERBOSE | LOGICAL | OPTIMIZED
+            VERBOSE | LOGICAL | OPTIMIZED | DECORRELATED
         },
         |opt| match &opt.kind {
             VERBOSE => ExplainOption::Verbose,
             LOGICAL => ExplainOption::Logical,
             OPTIMIZED => ExplainOption::Optimized,
+            DECORRELATED => ExplainOption::Decorrelated,
             _ => unreachable!(),
         },
     )(i)

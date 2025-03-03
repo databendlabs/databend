@@ -56,6 +56,7 @@ pub struct ParquetRSReaderBuilder<'a> {
 
     push_downs: Option<&'a PushDownInfo>,
     options: ParquetReadOptions,
+    // only for full file reader
     pruner: Option<ParquetRSPruner>,
     topk: Option<&'a TopK>,
     partition_columns: Vec<String>,
@@ -209,10 +210,12 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         Ok(())
     }
 
-    pub fn build_full_reader(&mut self) -> Result<ParquetRSFullReader> {
+    pub fn build_full_reader(&mut self, need_file_row_number: bool) -> Result<ParquetRSFullReader> {
         let batch_size = self.ctx.get_settings().get_parquet_max_block_size()? as usize;
 
-        self.build_predicate()?;
+        if !need_file_row_number {
+            self.build_predicate()?;
+        }
         self.build_output()?;
 
         let predicate = self.built_predicate.as_ref().map(|(pred, _)| pred.clone());
@@ -239,11 +242,16 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         })
     }
 
-    pub fn build_row_group_reader(&mut self) -> Result<ParquetRSRowGroupReader> {
+    pub fn build_row_group_reader(
+        &mut self,
+        need_file_row_number: bool,
+    ) -> Result<ParquetRSRowGroupReader> {
         let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
-        self.build_predicate()?;
-        self.build_topk()?;
+        if !need_file_row_number {
+            self.build_predicate()?;
+            self.build_topk()?;
+        }
         self.build_output()?;
 
         let mut policy_builders = default_policy_builders();

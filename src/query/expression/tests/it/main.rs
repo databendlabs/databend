@@ -24,6 +24,7 @@ use databend_common_expression::DataBlock;
 
 extern crate core;
 
+mod arrow;
 mod block;
 mod common;
 mod decimal;

@@ -6,6 +6,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [number (#1)]
 ├── probe keys: [number (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 100.00
 ├── TableScan(Build)
@@ -35,6 +36,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [number (#0)]
 ├── probe keys: [number (#3)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
@@ -55,6 +57,7 @@ HashJoin
         ├── join type: CROSS
         ├── build keys: []
         ├── probe keys: []
+        ├── keys is null equal: []
         ├── filters: []
         ├── estimated rows: 100.00
         ├── TableScan(Build)
@@ -93,6 +96,7 @@ HashJoin
 ├── join type: RIGHT OUTER
 ├── build keys: [CAST(t.a (#0) AS UInt64 NULL), CAST(number (#0) AS UInt64 NULL)]
 ├── probe keys: [t1.b (#3), number (#4)]
+├── keys is null equal: [false, false]
 ├── filters: []
 ├── estimated rows: 1000.00
 ├── TableScan(Build)
@@ -117,6 +121,7 @@ HashJoin
             ├── join type: INNER
             ├── build keys: [t1.a (#1)]
             ├── probe keys: [number (#4)]
+            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 100.00
             ├── TableScan(Build)

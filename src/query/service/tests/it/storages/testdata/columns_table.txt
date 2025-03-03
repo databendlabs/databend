@@ -348,6 +348,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'parent_plan_id'                  | 'system'             | 'queries_profiling'      | 'Nullable(UInt32)'    | 'INT UNSIGNED'      | ''       | ''       | 'YES'    | ''       |
 | 'partitions_sha'                  | 'system'             | 'query_cache'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'password_policy'                 | 'system'             | 'users'                  | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
+| 'peek_memory_usage'               | 'system'             | 'query_log'              | 'Variant'             | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
 | 'plan_id'                         | 'system'             | 'queries_profiling'      | 'Nullable(UInt32)'    | 'INT UNSIGNED'      | ''       | ''       | 'YES'    | ''       |
 | 'plan_name'                       | 'system'             | 'queries_profiling'      | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'port'                            | 'system'             | 'clusters'               | 'UInt16'              | 'SMALLINT UNSIGNED' | ''       | ''       | 'NO'     | ''       |

@@ -81,7 +81,7 @@ where
         let prev = self.get(&key).await?.clone();
 
         // No such entry at all, no need to create a tombstone for delete
-        if prev.not_found() && value.is_none() {
+        if prev.is_not_found() && value.is_none() {
             return Ok((prev, Marked::new_tombstone(0)));
         }
 

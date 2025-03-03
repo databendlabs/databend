@@ -105,7 +105,7 @@ impl ParquetRSFullReader {
 
         // Prune row groups.
         if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, omits) =
+            let (selected_row_groups, omits, _) =
                 pruner.prune_row_groups(&file_meta, None, partition_values_map.as_ref())?;
             all_pruned = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
@@ -193,7 +193,8 @@ impl ParquetRSFullReader {
 
         let mut full_match = false;
         if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None, None)?;
+            let (selected_row_groups, omits, _) =
+                pruner.prune_row_groups(&file_meta, None, None)?;
 
             full_match = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());

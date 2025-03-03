@@ -26,6 +26,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 0.00
 ├── Filter(Build)
@@ -70,6 +71,7 @@ Filter
     ├── join type: INNER
     ├── build keys: [t2.a (#2)]
     ├── probe keys: [t1.a (#0)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 3.56
     ├── Filter(Build)

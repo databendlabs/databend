@@ -77,6 +77,127 @@ ShowTables(
 
 
 ---------- Input ----------
+show stages like '%a'
+---------- Output ---------
+SHOW STAGES LIKE '%a'
+---------- AST ------------
+ShowStages {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "%a",
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+show users where name='root'
+---------- Output ---------
+SHOW USERS WHERE name = 'root'
+---------- AST ------------
+ShowUsers {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            21..22,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                17..21,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            17..21,
+                                        ),
+                                        name: "name",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                22..28,
+                            ),
+                            value: String(
+                                "root",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+show roles where name='public'
+---------- Output ---------
+SHOW ROLES WHERE name = 'public'
+---------- AST ------------
+ShowRoles {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            21..22,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                17..21,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            17..21,
+                                        ),
+                                        name: "name",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                22..30,
+                            ),
+                            value: String(
+                                "public",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
 show drop tables
 ---------- Output ---------
 SHOW DROP TABLES
@@ -745,7 +866,10 @@ EXPLAIN PIPELINE SELECT a FROM b
 ---------- AST ------------
 Explain {
     kind: Pipeline,
-    options: [],
+    options: (
+        None,
+        [],
+    ),
     query: Query(
         Query {
             span: Some(
@@ -830,7 +954,10 @@ EXPLAIN REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP B
 ---------- AST ------------
 Explain {
     kind: Plan,
-    options: [],
+    options: (
+        None,
+        [],
+    ),
     query: Replace(
         ReplaceStmt {
             hints: None,
@@ -996,7 +1123,10 @@ EXPLAIN PIPELINE SELECT a FROM t1 IGNORE_RESULT
 ---------- AST ------------
 Explain {
     kind: Pipeline,
-    options: [],
+    options: (
+        None,
+        [],
+    ),
     query: Query(
         Query {
             span: Some(
@@ -1081,11 +1211,16 @@ EXPLAIN(VERBOSE, LOGICAL, OPTIMIZED) SELECT * FROM t WHERE a = 1
 ---------- AST ------------
 Explain {
     kind: Plan,
-    options: [
-        Verbose,
-        Logical,
-        Optimized,
-    ],
+    options: (
+        Some(
+            7..36,
+        ),
+        [
+            Verbose,
+            Logical,
+            Optimized,
+        ],
+    ),
     query: Query(
         Query {
             span: Some(
@@ -11868,28 +12003,6 @@ CreateRole {
 
 
 ---------- Input ----------
-create role `a"a`
----------- Output ---------
-CREATE ROLE 'a"a'
----------- AST ------------
-CreateRole {
-    if_not_exists: false,
-    role_name: "a\"a",
-}
-
-
----------- Input ----------
-create role `a'a`
----------- Output ---------
-CREATE ROLE 'a\'a'
----------- AST ------------
-CreateRole {
-    if_not_exists: false,
-    role_name: "a'a",
-}
-
-
----------- Input ----------
 create user `a'a` identified by '123'
 ---------- Output ---------
 CREATE USER 'a\'a'@'%' IDENTIFIED BY '123'
@@ -13373,9 +13486,9 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
+CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';
 ---------- Output ---------
-CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'table comment'
+CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'Comment types type speedily \' \\\\ \'\' Fun!'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -13416,7 +13529,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {
-            "comment": "table comment",
+            "comment": "Comment types type speedily ' \\\\ '' Fun!",
         },
         as_query: None,
         table_type: Normal,

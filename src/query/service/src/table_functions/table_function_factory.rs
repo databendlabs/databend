@@ -56,6 +56,7 @@ use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
 use crate::table_functions::show_grants::ShowGrants;
+use crate::table_functions::show_roles::ShowRoles;
 use crate::table_functions::show_variables::ShowVariables;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
@@ -346,6 +347,11 @@ impl TableFunctionFactory {
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseVacuumDropInvertedIndex>::create),
             ),
+        );
+
+        creators.insert(
+            "show_roles".to_string(),
+            (next_id(), Arc::new(ShowRoles::create)),
         );
 
         TableFunctionFactory {

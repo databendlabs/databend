@@ -24,6 +24,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::physical_plans::CommitSink;
+use crate::executor::physical_plans::CommitType;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MutationKind;
@@ -96,9 +97,11 @@ impl PhysicalPlanBuilder {
             input: Box::new(root),
             table_info,
             snapshot: Some(snapshot),
-            mutation_kind: MutationKind::Compact,
+            commit_type: CommitType::Mutation {
+                kind: MutationKind::Compact,
+                merge_meta,
+            },
             update_stream_meta: vec![],
-            merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
             recluster_info: None,

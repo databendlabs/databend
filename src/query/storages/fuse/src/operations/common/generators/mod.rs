@@ -26,4 +26,3 @@ pub use mutation_generator::MutationGenerator;
 pub use snapshot_generator::decorate_snapshot;
 pub use snapshot_generator::SnapshotGenerator;
 pub use truncate_generator::TruncateGenerator;
-pub use truncate_generator::TruncateMode;

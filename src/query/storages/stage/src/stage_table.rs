@@ -110,6 +110,7 @@ impl StageTable {
 
         let partitions = files
             .into_iter()
+            .filter(|f| f.size > 0)
             .map(|v| {
                 let part = SingleFilePartition {
                     path: v.path.clone(),

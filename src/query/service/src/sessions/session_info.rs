@@ -36,10 +36,7 @@ impl Session {
 
         let shared_query_context = &session_ctx.get_query_context_shared();
         if let Some(shared) = shared_query_context {
-            if let Some(runtime) = shared.get_runtime() {
-                let mem_stat = runtime.get_tracker();
-                memory_usage = mem_stat.get_memory_usage();
-            }
+            memory_usage = shared.get_nodes_memory_usage();
         }
 
         ProcessInfo {
@@ -51,7 +48,7 @@ impl Session {
             settings: self.get_settings(),
             client_address: session_ctx.get_client_host(),
             session_extra_info: self.process_extra_info(session_ctx),
-            memory_usage,
+            memory_usage: memory_usage as i64,
             data_metrics: Self::query_data_metrics(session_ctx),
             scan_progress_value: Self::query_scan_progress_value(session_ctx),
             write_progress_value: Self::query_write_progress_value(session_ctx),
