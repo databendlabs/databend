@@ -27,6 +27,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -356,9 +357,11 @@ impl ReplaceInterpreter {
             input: root,
             snapshot: base_snapshot,
             table_info: table_info.clone(),
-            mutation_kind: MutationKind::Replace,
+            commit_type: CommitType::Mutation {
+                kind: MutationKind::Replace,
+                merge_meta: false,
+            },
             update_stream_meta: update_stream_meta.clone(),
-            merge_meta: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
             recluster_info: None,

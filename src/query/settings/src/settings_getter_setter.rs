@@ -532,6 +532,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
     }
 
+    pub fn get_enable_expand_roles(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_expand_roles")? != 0)
+    }
+
     pub fn get_table_lock_expire_secs(&self) -> Result<u64> {
         self.try_get_u64("table_lock_expire_secs")
     }
@@ -881,5 +885,13 @@ impl Settings {
 
     pub fn get_copy_dedup_full_path_by_default(&self) -> Result<bool> {
         Ok(self.try_get_u64("copy_dedup_full_path_by_default")? == 1)
+    }
+
+    pub fn get_max_query_memory_usage(&self) -> Result<u64> {
+        self.try_get_u64("max_query_memory_usage")
+    }
+
+    pub fn set_max_query_memory_usage(&self, max_memory_usage: u64) -> Result<()> {
+        self.try_set_u64("max_query_memory_usage", max_memory_usage)
     }
 }

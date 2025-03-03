@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::AllocError;
 use std::ptr::addr_of_mut;
 use std::sync::atomic::Ordering;
+#[cfg(test)]
+use std::sync::Arc;
 
 use crate::runtime::memory::mem_stat::OutOfLimit;
 use crate::runtime::memory::MemStat;
@@ -22,23 +25,23 @@ use crate::runtime::ThreadTracker;
 use crate::runtime::GLOBAL_MEM_STAT;
 
 #[thread_local]
-static mut STAT_BUFFER: StatBuffer = StatBuffer::empty(&GLOBAL_MEM_STAT);
+static mut GLOBAL_STAT_BUFFER: GlobalStatBuffer = GlobalStatBuffer::empty(&GLOBAL_MEM_STAT);
 
-static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
+pub static MEM_STAT_BUFFER_SIZE: i64 = 4 * 1024 * 1024;
 
 /// Buffering memory allocation stats.
 ///
 /// A StatBuffer buffers stats changes in local variables, and periodically flush them to other storage such as an `Arc<T>` shared by several threads.
 #[derive(Clone)]
-pub struct StatBuffer {
-    memory_usage: i64,
+pub struct GlobalStatBuffer {
+    pub(crate) memory_usage: i64,
     // Whether to allow unlimited memory. Alloc memory will not panic if it is true.
     unlimited_flag: bool,
-    global_mem_stat: &'static MemStat,
+    pub(crate) global_mem_stat: &'static MemStat,
     destroyed_thread_local_macro: bool,
 }
 
-impl StatBuffer {
+impl GlobalStatBuffer {
     pub const fn empty(global_mem_stat: &'static MemStat) -> Self {
         Self {
             memory_usage: 0,
@@ -48,8 +51,8 @@ impl StatBuffer {
         }
     }
 
-    pub fn current() -> &'static mut StatBuffer {
-        unsafe { &mut *addr_of_mut!(STAT_BUFFER) }
+    pub fn current() -> &'static mut GlobalStatBuffer {
+        unsafe { &mut *addr_of_mut!(GLOBAL_STAT_BUFFER) }
     }
 
     pub fn is_unlimited(&self) -> bool {
@@ -74,28 +77,11 @@ impl StatBuffer {
     ) -> std::result::Result<(), OutOfLimit> {
         match std::mem::take(&mut self.memory_usage) {
             0 => Ok(()),
-            usage => {
-                if let Err(e) = self.global_mem_stat.record_memory::<ROLLBACK>(usage, alloc) {
-                    if !ROLLBACK {
-                        let _ = ThreadTracker::record_memory::<false>(usage, alloc);
-                    }
-
-                    return Err(e);
-                }
-
-                if let Err(e) = ThreadTracker::record_memory::<ROLLBACK>(usage, alloc) {
-                    if ROLLBACK {
-                        self.global_mem_stat.rollback(alloc);
-                        return Err(e);
-                    }
-                }
-
-                Ok(())
-            }
+            usage => self.global_mem_stat.record_memory::<ROLLBACK>(usage, alloc),
         }
     }
 
-    pub fn alloc(&mut self, memory_usage: i64) -> std::result::Result<(), OutOfLimit> {
+    pub fn alloc(&mut self, memory_usage: i64) -> std::result::Result<(), AllocError> {
         // Rust will alloc or dealloc memory after the thread local is destroyed when we using thread_local macro.
         // This is the boundary of thread exit. It may be dangerous to throw mistakes here.
         if self.destroyed_thread_local_macro {
@@ -104,14 +90,49 @@ impl StatBuffer {
                 .used
                 .fetch_add(memory_usage, Ordering::Relaxed);
             self.global_mem_stat
-                .peak_used
+                .peek_used
                 .fetch_max(used + memory_usage, Ordering::Relaxed);
             return Ok(());
         }
 
         match self.incr(memory_usage) <= MEM_STAT_BUFFER_SIZE {
             true => Ok(()),
-            false => self.flush::<true>(memory_usage),
+            false => {
+                match !std::thread::panicking() && !self.unlimited_flag {
+                    true => {
+                        if let Err(out_of_limit) = self.flush::<true>(memory_usage) {
+                            let _guard = LimitMemGuard::enter_unlimited();
+                            ThreadTracker::replace_error_message(Some(format!(
+                                "{:?}",
+                                out_of_limit
+                            )));
+                            return Err(AllocError);
+                        }
+                    }
+                    false => {
+                        let _ = self.flush::<false>(0);
+                    }
+                };
+
+                Ok(())
+            }
+        }
+    }
+
+    pub fn force_alloc(&mut self, memory_usage: i64) {
+        if self.destroyed_thread_local_macro {
+            let used = self
+                .global_mem_stat
+                .used
+                .fetch_add(memory_usage, Ordering::Relaxed);
+            self.global_mem_stat
+                .peek_used
+                .fetch_max(used + memory_usage, Ordering::Relaxed);
+            return;
+        }
+
+        if self.incr(memory_usage) > MEM_STAT_BUFFER_SIZE {
+            let _ = self.flush::<false>(memory_usage);
         }
     }
 
@@ -144,19 +165,61 @@ impl StatBuffer {
 }
 
 #[cfg(test)]
+pub struct MockGuard {
+    _mem_stat: Arc<MemStat>,
+    old_global_stat_buffer: GlobalStatBuffer,
+}
+
+#[cfg(test)]
+impl MockGuard {
+    pub fn flush(&mut self) -> Result<(), OutOfLimit> {
+        GlobalStatBuffer::current().flush::<false>(0)
+    }
+}
+
+#[cfg(test)]
+impl Drop for MockGuard {
+    fn drop(&mut self) {
+        let _ = self.flush();
+        std::mem::swap(
+            GlobalStatBuffer::current(),
+            &mut self.old_global_stat_buffer,
+        );
+    }
+}
+
+#[cfg(test)]
+impl GlobalStatBuffer {
+    pub fn mock(mem_stat: Arc<MemStat>) -> MockGuard {
+        let mut mock_global_stat_buffer = Self {
+            memory_usage: 0,
+            global_mem_stat: unsafe { std::mem::transmute::<&_, &'static _>(mem_stat.as_ref()) },
+            unlimited_flag: false,
+            destroyed_thread_local_macro: false,
+        };
+
+        std::mem::swap(GlobalStatBuffer::current(), &mut mock_global_stat_buffer);
+        MockGuard {
+            _mem_stat: mem_stat,
+            old_global_stat_buffer: mock_global_stat_buffer,
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use std::sync::atomic::Ordering;
 
     use databend_common_exception::Result;
 
-    use crate::runtime::memory::stat_buffer::MEM_STAT_BUFFER_SIZE;
+    use crate::runtime::memory::stat_buffer_global::MEM_STAT_BUFFER_SIZE;
+    use crate::runtime::memory::GlobalStatBuffer;
     use crate::runtime::memory::MemStat;
-    use crate::runtime::memory::StatBuffer;
 
     #[test]
     fn test_alloc() -> Result<()> {
         static TEST_MEM_STATE: MemStat = MemStat::global();
-        let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
+        let mut buffer = GlobalStatBuffer::empty(&TEST_MEM_STATE);
 
         buffer.alloc(1).unwrap();
         assert_eq!(buffer.memory_usage, 1);
@@ -181,7 +244,7 @@ mod tests {
     #[test]
     fn test_dealloc() -> Result<()> {
         static TEST_MEM_STATE: MemStat = MemStat::global();
-        let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
+        let mut buffer = GlobalStatBuffer::empty(&TEST_MEM_STATE);
 
         buffer.dealloc(1);
         assert_eq!(buffer.memory_usage, -1);
@@ -207,7 +270,7 @@ mod tests {
     fn test_mark_destroyed() -> Result<()> {
         static TEST_MEM_STATE: MemStat = MemStat::global();
 
-        let mut buffer = StatBuffer::empty(&TEST_MEM_STATE);
+        let mut buffer = GlobalStatBuffer::empty(&TEST_MEM_STATE);
 
         assert!(!buffer.destroyed_thread_local_macro);
         buffer.alloc(1).unwrap();

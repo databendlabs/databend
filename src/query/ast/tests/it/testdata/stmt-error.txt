@@ -232,6 +232,76 @@ error:
 
 
 ---------- Input ----------
+create role `a"a`
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | create role `a"a`
+  | ------      ^^^^^
+  | |           |
+  | |           ' or " or \f or \b are not allowed in role name
+  | |           while parsing <role_name>
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+
+
+---------- Input ----------
+create role `a'a`
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | create role `a'a`
+  | ------      ^^^^^
+  | |           |
+  | |           ' or " or \f or \b are not allowed in role name
+  | |           while parsing <role_name>
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+
+
+---------- Input ----------
+create role `a\ba`
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | create role `a\ba`
+  | ------      ^^^^^^
+  | |           |
+  | |           ' or " or \f or \b are not allowed in role name
+  | |           while parsing <role_name>
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+
+
+---------- Input ----------
+create role `a\fa`
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | create role `a\fa`
+  | ------      ^^^^^^
+  | |           |
+  | |           ' or " or \f or \b are not allowed in role name
+  | |           while parsing <role_name>
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+
+
+---------- Input ----------
+drop role `a\fa`
+---------- Output ---------
+error: 
+  --> SQL:1:11
+  |
+1 | drop role `a\fa`
+  | ----      ^^^^^^
+  | |         |
+  | |         ' or " or \f or \b are not allowed in role name
+  | |         while parsing <role_name>
+  | while parsing `DROP ROLE [IF EXISTS] <role_name>`
+
+
+---------- Input ----------
 SHOW GRANT FOR ROLE 'role1';
 ---------- Output ---------
 error: 
