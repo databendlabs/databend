@@ -311,6 +311,8 @@ impl ReclusterTableInterpreter {
             settings.set_max_block_size(rows_per_block as u64)?;
         }
         let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
+        warn!("do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}, rows_per_block: {}",
+            total_bytes, total_rows, total_partitions, rows_per_block);
 
         let subquery_executor = Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
             self.ctx.as_ref(),
