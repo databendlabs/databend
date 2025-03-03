@@ -41,14 +41,6 @@ impl MapKey for String {
     type V = Vec<u8>;
 }
 
-impl MapKeyEncode for str {
-    const PREFIX: &'static str = "kv--";
-
-    fn encode<W: fmt::Write>(&self, mut w: W) -> Result<(), fmt::Error> {
-        w.write_str(self)
-    }
-}
-
 impl MapKeyEncode for ExpireKey {
     const PREFIX: &'static str = "exp-";
 
@@ -130,14 +122,6 @@ impl MapKey for ExpireKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_str_encode() {
-        let key = "key";
-        let mut buf: String = String::new();
-        key.encode(&mut buf).unwrap();
-        assert_eq!(key, buf);
-    }
 
     #[test]
     fn test_string_encode_decode() {
