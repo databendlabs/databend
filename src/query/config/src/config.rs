@@ -235,6 +235,34 @@ impl Config {
 
         Ok(conf)
     }
+
+    pub fn load_with_config_file(config_file: &str) -> Result<Self> {
+        let mut builder: serfig::Builder<Self> = serfig::Builder::default();
+
+        // Load from config file first.
+        {
+            let config_file = if !config_file.is_empty() {
+                config_file.to_string()
+            } else if let Ok(path) = env::var("CONFIG_FILE") {
+                path
+            } else {
+                "".to_string()
+            };
+
+            if !config_file.is_empty() {
+                builder = builder.collect(from_file(Toml, &config_file));
+            }
+        }
+
+        // Then, load from env.
+        builder = builder.collect(from_env());
+
+        // Check obsoleted.
+        let conf = builder.build()?;
+        conf.check_obsoleted()?;
+
+        Ok(conf)
+    }
 }
 
 /// Storage config group.

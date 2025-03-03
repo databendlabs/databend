@@ -1,0 +1,53 @@
+name: "Test sqllogic Standalone(minio) with bendsave"
+description: "Running sqllogic tests in standalone mode"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: ./.github/actions/setup_test
+      with:
+        artifacts: sqllogictests,meta,query,bendsave
+
+    - name: Minio Setup for (ubuntu-latest only)
+      shell: bash
+      run: |
+        docker run -d --network host --name minio \
+                -e "MINIO_ACCESS_KEY=minioadmin" \
+                -e "MINIO_SECRET_KEY=minioadmin" \
+                -e "MINIO_ADDRESS=:9900" \
+                -v /tmp/data:/data \
+                -v /tmp/config:/root/.minio \
+                minio/minio server /data
+
+        export AWS_ACCESS_KEY_ID=minioadmin
+        export AWS_SECRET_ACCESS_KEY=minioadmin
+        export AWS_EC2_METADATA_DISABLED=true
+
+        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
+        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://backupbucket
+        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://spillbucket
+
+    - name: Run sqllogic Tests with Standalone mode
+      shell: bash
+      env:
+        TEST_HANDLERS: "http"
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-minio.sh tpch
+
+    - name: Run bendsave
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: minioadmin
+        AWS_SECRET_ACCESS_KEY: minioadmin
+        AWS_EC2_METADATA_DISABLED: true
+        AWS_REGION: us-west-2
+      run:
+        ./target/${{ env.BUILD_PROFILE }}/databend-bendsave backup --config ./scripts/ci/deploy/config/databend-query-node-1.toml --to s3://backupbucket?endpoint=http://127.0.0.1:9900/
+
+        aws --endpoint-url http://127.0.0.1:9900/ s3 ls -r s3://backupbucket
+#    - name: Run sqllogic Tests with Standalone mode
+#      shell: bash
+#      env:
+#        TEST_HANDLERS: "http"
+#        # Disable force load for tpch to verify the correctness of the bendsave
+#        TEST_FORCE_LOAD: false
+#      run: bash ./scripts/ci/ci-run-sqllogic-tests-minio.sh tpch
