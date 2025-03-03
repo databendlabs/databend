@@ -67,7 +67,12 @@ impl BlockThresholds {
     }
 
     #[inline]
-    pub fn calc_rows_per_block(&self, total_bytes: usize, total_rows: usize) -> usize {
+    pub fn calc_rows_per_block(
+        &self,
+        total_bytes: usize,
+        total_rows: usize,
+        block_per_seg: Option<usize>,
+    ) -> usize {
         if self.check_for_compact(total_rows, total_bytes) {
             return total_rows;
         }
@@ -79,6 +84,12 @@ impl BlockThresholds {
         }
 
         let mut rows_per_block = total_rows.div_ceil(block_num_by_size);
+        if let Some(block_per_seg) = block_per_seg {
+            if block_num_by_size >= block_per_seg {
+                return block_num_by_size;
+            }
+        }
+
         let max_bytes_per_block = match rows_per_block {
             v if v < self.max_rows_per_block / 10 => {
                 // If block rows < 100_000, max_bytes_per_block set to 200M

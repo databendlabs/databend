@@ -152,7 +152,7 @@ impl PipelineBuilder {
 
                 // merge sort
                 let sort_block_size =
-                    block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows);
+                    block_thresholds.calc_rows_per_block(task.total_bytes, task.total_rows, None);
 
                 let sort_pipeline_builder =
                     SortPipelineBuilder::create(self.ctx.clone(), schema, Arc::new(sort_descs))?

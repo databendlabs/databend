@@ -46,6 +46,7 @@ use crate::types::GeographyColumn;
 use crate::types::NullableColumn;
 use crate::types::NumberColumn;
 use crate::types::NumberDataType;
+use crate::BlockEntry;
 use crate::Column;
 use crate::DataBlock;
 use crate::DataField;
@@ -229,11 +230,16 @@ impl DataBlock {
         }
 
         let mut columns = Vec::with_capacity(batch.columns().len());
+        let num_rows = batch.num_rows();
         for (array, field) in batch.columns().iter().zip(schema.fields()) {
-            columns.push(Column::from_arrow_rs(array.clone(), field.data_type())?)
+            let data_type = field.data_type();
+            columns.push(BlockEntry::new(
+                data_type.clone(),
+                Value::from_arrow_rs(array.clone(), data_type)?,
+            ))
         }
 
-        Ok((DataBlock::new_from_columns(columns), schema.clone()))
+        Ok((DataBlock::new(columns, num_rows), schema.clone()))
     }
 }
 
