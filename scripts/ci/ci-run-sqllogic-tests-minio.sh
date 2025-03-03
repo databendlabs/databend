@@ -46,4 +46,4 @@ fi
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,explain_native,ee --enable_sandbox --parallel ${TEST_PARALLEL} --force_load ${TEST_FORCE_LOAD:-"true"}
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,explain_native,ee --enable_sandbox --parallel ${TEST_PARALLEL}
