@@ -31,9 +31,9 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: "http"
-      run: bash ./scripts/ci/ci-run-sqllogic-tests-minio.sh tpch
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-minio-with-bendsave.sh tpch
 
-    - name: Run bendsave
+    - name: Run bendsave backup
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: minioadmin
@@ -53,10 +53,44 @@ runs:
 
         aws --endpoint-url http://127.0.0.1:9900/ s3 ls s3://backupbucket --recursive
 
-#    - name: Run sqllogic Tests with Standalone mode
-#      shell: bash
-#      env:
-#        TEST_HANDLERS: "http"
-#        # Disable force load for tpch to verify the correctness of the bendsave
-#        TEST_FORCE_LOAD: false
-#      run: bash ./scripts/ci/ci-run-sqllogic-tests-minio.sh tpch
+    - name: Destory the existing services.
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: minioadmin
+        AWS_SECRET_ACCESS_KEY: minioadmin
+        AWS_EC2_METADATA_DISABLED: true
+        AWS_REGION: us-west-2
+      run: |
+        # kill all services
+        pkill databend-query
+        pkill databend-meta
+        # destory databend query
+        aws --endpoint-url http://127.0.0.1:9900/ s3 rm s3://testbucket --recursive
+        # destory databend meta
+        rm /tmp/databend/meta1
+
+    - name: Run bendsave restore
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: minioadmin
+        AWS_SECRET_ACCESS_KEY: minioadmin
+        AWS_EC2_METADATA_DISABLED: true
+        AWS_REGION: us-west-2
+      run: |
+        export STORAGE_TYPE=s3
+        export STORAGE_S3_BUCKET=testbucket
+        export STORAGE_S3_ROOT=admin
+        export STORAGE_S3_ENDPOINT_URL=http://127.0.0.1:9900
+        export STORAGE_S3_ACCESS_KEY_ID=minioadmin
+        export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
+        export STORAGE_ALLOW_INSECURE=true
+
+        CHECKPOINT=$(aws --endpoint-url http://127.0.0.1:9900/ s3 ls s3://backupbucket/logs/ --recursive | sort -k 1,2 | tail -n 1 | awk -F'[/.]' '{print $(NF-1)}')
+
+        ./target/${{ env.BUILD_PROFILE }}/databend-bendsave restore --from s3://backupbucket?endpoint=http://127.0.0.1:9900/ --to_query ./scripts/ci/deploy/config/databend-query-node-1.toml --to_meta ./scripts/ci/deploy/config/databend-meta-node-for-bendsave.toml --checkpoint=$CHECKPOINT --confirm
+
+    - name: Run sqllogic Tests with Standalone mode again for test
+      shell: bash
+      env:
+        TEST_HANDLERS: "http"
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-minio-with-bendsave.sh tpch
