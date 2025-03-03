@@ -223,15 +223,25 @@ pub async fn build_mutation_info(
     let table_snapshot = fuse_table.read_table_snapshot().await?;
     let table_info = fuse_table.get_table_info().clone();
     let update_stream_meta = dml_build_update_stream_req(ctx.clone()).await?;
-    let (statistics, partitions) =
-        mutation_source_partitions(ctx, mutation, fuse_table, table_snapshot.clone(), dry_run)
-            .await?;
+    let (statistics, partitions) = mutation_source_partitions(
+        ctx.clone(),
+        mutation,
+        fuse_table,
+        table_snapshot.clone(),
+        dry_run,
+    )
+    .await?;
+
+    let table_meta_timestamps =
+        ctx.get_table_meta_timestamps(fuse_table.get_id(), table_snapshot.clone())?;
+
     Ok(MutationBuildInfo {
         table_info,
         table_snapshot,
         update_stream_meta,
         partitions,
         statistics,
+        table_meta_timestamps,
     })
 }
 

@@ -155,6 +155,7 @@ impl PhysicalPlanBuilder {
                 deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 plan_id: u32::MAX,
                 recluster_info: None,
+                table_meta_timestamps: mutation_build_info.table_meta_timestamps,
             }));
             plan.adjust_plan_id(&mut 0);
             return Ok(plan);
