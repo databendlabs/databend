@@ -19,6 +19,7 @@ use std::io;
 use std::io::Error;
 
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::state_machine::ExpireKey;
 
@@ -30,12 +31,14 @@ impl MapKeyEncode for String {
     }
 }
 
-impl MapKey for String {
-    type V = Vec<u8>;
-
+impl MapKeyDecode for String {
     fn decode(buf: &str) -> Result<Self, Error> {
         Ok(buf.to_string())
     }
+}
+
+impl MapKey for String {
+    type V = Vec<u8>;
 }
 
 impl MapKeyEncode for str {
@@ -56,9 +59,7 @@ impl MapKeyEncode for ExpireKey {
     }
 }
 
-impl MapKey for ExpireKey {
-    type V = String;
-
+impl MapKeyDecode for ExpireKey {
     fn decode(buf: &str) -> Result<Self, Error> {
         if buf.len() != 41 {
             return Err(Error::new(
@@ -120,6 +121,10 @@ impl MapKey for ExpireKey {
 
         Ok(Self::new(time_ms, seq))
     }
+}
+
+impl MapKey for ExpireKey {
+    type V = String;
 }
 
 #[cfg(test)]

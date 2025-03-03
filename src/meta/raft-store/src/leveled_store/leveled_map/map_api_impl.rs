@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
@@ -29,6 +28,7 @@ use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::map_api::MarkedOf;
 use crate::leveled_store::map_api::Transition;
@@ -38,16 +38,13 @@ use crate::marked::Marked;
 impl<K> MapApiRO<K> for LeveledMap
 where
     K: MapKey + fmt::Debug,
+    K: MapKeyEncode,
+    K: MapKeyDecode,
     Level: MapApiRO<K>,
     Immutable: MapApiRO<K>,
     DB: MapApiRO<K>,
 {
-    async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: MapKeyEncode,
-    {
+    async fn get(&self, key: &K) -> Result<Marked<K::V>, io::Error> {
         let levels = self.iter_levels();
         let persisted = self.persisted.as_ref().into_iter();
         compacted_get(key, levels, persisted).await
@@ -65,6 +62,8 @@ where
 impl<K> MapApi<K> for LeveledMap
 where
     K: MapKey,
+    K: MapKeyEncode,
+    K: MapKeyDecode,
     Level: MapApi<K>,
     Immutable: MapApiRO<K>,
     DB: MapApiRO<K>,

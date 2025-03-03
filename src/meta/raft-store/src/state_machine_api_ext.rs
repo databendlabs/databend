@@ -198,7 +198,7 @@ pub trait StateMachineApiExt: StateMachineApi {
     /// Get a cloned value by key.
     ///
     /// It does not check expiration of the returned entry.
-    async fn get_maybe_expired_kv(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
+    async fn get_maybe_expired_kv(&self, key: &String) -> Result<Option<SeqV>, io::Error> {
         let got = self.map_ref().str_map().get(key).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)
