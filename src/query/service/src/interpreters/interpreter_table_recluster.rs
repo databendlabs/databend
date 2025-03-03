@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
@@ -26,16 +27,19 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::type_check::check_function;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::bind_table;
-use databend_common_sql::executor::physical_plans::create_push_down_filters;
+use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
@@ -493,9 +497,20 @@ impl ReclusterTableInterpreter {
                     true,
                 )?;
                 let (scalar, _) = *type_checker.resolve(expr)?;
-                let filters = create_push_down_filters(&scalar)?;
+                // prepare the filter expression
+                let filter = cast_expr_to_non_null_boolean(
+                    scalar
+                        .as_expr()?
+                        .project_column_ref(|col| col.column_name.clone()),
+                )?;
+                // prepare the inverse filter expression
+                let inverted_filter =
+                    check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
                 *push_downs = Some(PushDownInfo {
-                    filters: Some(filters),
+                    filters: Some(Filters {
+                        filter: filter.as_remote_expr(),
+                        inverted_filter: inverted_filter.as_remote_expr(),
+                    }),
                     ..PushDownInfo::default()
                 });
             }
@@ -642,7 +657,7 @@ impl ReclusterTableInterpreter {
             input
         };
 
-        let mutation_kind = if recluster_info.is_some() {
+        let kind = if recluster_info.is_some() {
             MutationKind::Recluster
         } else {
             MutationKind::Compact
@@ -651,9 +666,8 @@ impl ReclusterTableInterpreter {
             input: Box::new(plan),
             table_info,
             snapshot: Some(snapshot),
-            mutation_kind,
+            commit_type: CommitType::Mutation { kind, merge_meta },
             update_stream_meta: vec![],
-            merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
             recluster_info,
