@@ -1186,6 +1186,34 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("force_sort_data_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. sort data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_join_data_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. join data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_window_data_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. window data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_aggregate_data_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. aggregate data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

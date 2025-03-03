@@ -189,10 +189,7 @@ DROP TABLE t
 # force using spill
 
 statement ok
-SET query_out_of_memory_behavior = 'EnableSpill';
-
-statement ok
-SET max_query_memory_usage = 1;
+SET force_aggregate_data_spill = 1;
 
 statement ok
 CREATE TABLE t (a int, b int, c int)
@@ -472,7 +469,4 @@ statement ok
 drop database test_index
 
 statement ok
-unset max_query_memory_usage;
-
-statement ok
-unset query_out_of_memory_behavior;
+unset force_aggregate_data_spill;

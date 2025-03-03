@@ -1,16 +1,10 @@
 # Test hash join build spill with empty probe
 # The test mainly to test trigger spill and there is no blocking during spilling.
 statement ok
-set join_spilling_memory_ratio = 60;
+set force_join_data_spill = 1;
 
 statement ok
 set disable_join_reorder = 1;
-
-statement ok
-SET query_out_of_memory_behavior = 'EnableSpill';
-
-statement ok
-SET max_query_memory_usage = 1;
 
 statement ok
 drop table if exists t1;
@@ -123,16 +117,10 @@ drop table t3;
 statement ok
 create table t3 as select number as a from numbers(1000000);
 
-statement ok
-set max_query_memory_usage = 100;
-
 query I
 select count() from t3 inner join numbers(1000000) on t3.a = number;
 ----
 1000000
-
-statement ok
-set max_query_memory_usage = 1024 * 1024 * 1;
 
 # build side doesn't spill actually.
 query I
@@ -148,9 +136,6 @@ set disable_join_reorder = 0;
 
 statement ok
 set max_block_size = 512;
-
-statement ok
-set max_query_memory_usage = 200;
 
 statement ok
 drop table if exists t1;
@@ -179,10 +164,4 @@ statement ok
 set max_block_size = 65536;
 
 statement ok
-set join_spilling_memory_ratio = 0;
-
-statement ok
-unset max_query_memory_usage;
-
-statement ok
-unset query_out_of_memory_behavior;
+unset force_join_data_spill;

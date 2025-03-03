@@ -5,13 +5,7 @@ statement ok
 use tpch_test;
 
 statement ok
-set join_spilling_memory_ratio = 10;
-
-statement ok
-SET query_out_of_memory_behavior = 'EnableSpill';
-
-statement ok
-SET max_query_memory_usage = 4657589;
+set force_join_data_spill = 1;
 
 statement ok
 set disable_join_reorder = 1;
@@ -83,14 +77,7 @@ order by o_comment
 
 
 statement ok
-set join_spilling_memory_ratio = 0;
-
-statement ok
-unset max_query_memory_usage;
-
-statement ok
-unset query_out_of_memory_behavior;
-
+unset force_join_data_spill;
 
 statement ok
 set disable_join_reorder = 0;

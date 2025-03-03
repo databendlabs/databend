@@ -5,10 +5,7 @@ statement ok
 USE test_window_partition_spill
 
 statement ok
-SET query_out_of_memory_behavior = 'EnableSpill';
-
-statement ok
-SET max_query_memory_usage = 1024 * 1024 * 1;
+SET force_window_data_spill = 1;
 
 statement ok
 set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
@@ -189,7 +186,4 @@ statement ok
 DROP DATABASE test_window_partition_spill;
 
 statement ok
-unset max_query_memory_usage;
-
-statement ok
-unset query_out_of_memory_behavior;
+unset force_window_data_spill;

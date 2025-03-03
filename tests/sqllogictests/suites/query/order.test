@@ -54,10 +54,7 @@ statement error
 select number from (select * from numbers(10) as b) as a order by b.number
 
 statement ok
-SET query_out_of_memory_behavior = 'EnableSpill';
-
-statement ok
-SET max_query_memory_usage = 1024 * 1024 * 1;
+SET force_sort_data_spill = 1;
 
 statement ok
 set spilling_file_format = 'arrow';
@@ -70,10 +67,7 @@ select number from numbers(1000) order by number offset 997;
 999
 
 statement ok
-unset max_query_memory_usage;
-
-statement ok
-unset query_out_of_memory_behavior;
+unset force_sort_data_spill;
 
 statement ok
 unset spilling_file_format;

@@ -892,4 +892,20 @@ impl Settings {
             _ => Err(ErrorCode::BadArguments("")),
         }
     }
+
+    pub fn get_force_sort_data_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_sort_data_spill")? == 1)
+    }
+
+    pub fn get_force_join_data_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_join_data_spill")? == 1)
+    }
+
+    pub fn get_force_window_data_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_window_data_spill")? == 1)
+    }
+
+    pub fn get_force_aggregate_data_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_aggregate_data_spill")? == 1)
+    }
 }

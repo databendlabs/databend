@@ -43,6 +43,18 @@ impl MemorySettings {
         }
     }
 
+    pub fn always_spill(spill_unit_size: usize) -> MemorySettings {
+        MemorySettings {
+            spill_unit_size,
+            max_memory_usage: 0,
+            max_query_memory_usage: 0,
+            enable_query_level_spill: true,
+            enable_global_level_spill: true,
+            global_memory_tracking: &GLOBAL_MEM_STAT,
+            query_memory_tracking: None,
+        }
+    }
+
     pub fn check_spill(&self) -> bool {
         if self.enable_global_level_spill
             && self.global_memory_tracking.get_memory_usage() >= self.max_memory_usage

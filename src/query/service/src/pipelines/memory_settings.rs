@@ -33,6 +33,11 @@ pub trait MemorySettingsExt: Sized {
 impl MemorySettingsExt for MemorySettings {
     fn from_join_settings(ctx: &QueryContext) -> Result<Self> {
         let settings = ctx.get_settings();
+
+        if settings.get_force_join_data_spill()? {
+            return Ok(MemorySettings::always_spill(0));
+        }
+
         let mut enable_global_level_spill = false;
         let mut max_memory_usage = settings.get_max_memory_usage()? as usize;
 
@@ -66,6 +71,12 @@ impl MemorySettingsExt for MemorySettings {
         }
 
         let settings = ctx.get_settings();
+
+        if settings.get_force_sort_data_spill()? {
+            let spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
+            return Ok(MemorySettings::always_spill(spilling_batch_bytes));
+        }
+
         let mut enable_global_level_spill = false;
         let mut max_memory_usage = settings.get_max_memory_usage()? as usize;
 
@@ -97,6 +108,12 @@ impl MemorySettingsExt for MemorySettings {
 
     fn from_window_settings(ctx: &QueryContext) -> Result<Self> {
         let settings = ctx.get_settings();
+
+        if settings.get_force_window_data_spill()? {
+            let spill_unit_size = settings.get_window_spill_unit_size_mb()? * 1024 * 1024;
+            return Ok(MemorySettings::always_spill(spill_unit_size));
+        }
+
         let mut enable_global_level_spill = false;
         let mut max_memory_usage = settings.get_max_memory_usage()? as usize;
 
@@ -128,6 +145,11 @@ impl MemorySettingsExt for MemorySettings {
 
     fn from_aggregate_settings(ctx: &QueryContext) -> Result<Self> {
         let settings = ctx.get_settings();
+
+        if settings.get_force_aggregate_data_spill()? {
+            return Ok(MemorySettings::always_spill(0));
+        }
+
         let mut enable_global_level_spill = false;
         let mut max_memory_usage = settings.get_max_memory_usage()? as usize;
 
