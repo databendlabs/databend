@@ -1323,19 +1323,15 @@ fn format_sort_desc(
 ) -> String {
     let mut expr = format_scalar(expr, column_map);
 
-    if let Some(asc) = asc {
-        if *asc {
-            expr.push_str(" asc");
-        } else {
-            expr.push_str(" desc");
-        }
+    if *asc {
+        expr.push_str(" asc");
+    } else {
+        expr.push_str(" desc");
     }
-    if let Some(nulls_first) = nulls_first {
-        if *nulls_first {
-            expr.push_str(" nulls first");
-        } else {
-            expr.push_str(" nulls last");
-        }
+    if *nulls_first {
+        expr.push_str(" nulls first");
+    } else {
+        expr.push_str(" nulls last");
     }
     expr
 }

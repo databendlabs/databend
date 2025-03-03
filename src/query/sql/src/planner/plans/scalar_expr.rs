@@ -647,8 +647,8 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AggregateFunctionScalarSortDesc {
     pub expr: ScalarExpr,
-    pub nulls_first: Option<bool>,
-    pub asc: Option<bool>,
+    pub nulls_first: bool,
+    pub asc: bool,
 }
 
 impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {

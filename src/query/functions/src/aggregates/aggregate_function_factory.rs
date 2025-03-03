@@ -25,6 +25,7 @@ use databend_common_expression::Scalar;
 
 use super::AggregateFunctionCombinatorNull;
 use super::AggregateFunctionOrNullAdaptor;
+use super::AggregateFunctionSortAdaptor;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
@@ -141,18 +142,8 @@ impl AggregateFunctionDescription {
 )]
 pub struct AggregateFunctionSortDesc {
     pub data_type: DataType,
-    pub nulls_first: Option<bool>,
-    pub asc: Option<bool>,
-}
-
-impl AggregateFunctionSortDesc {
-    pub fn nulls_first(&self) -> bool {
-        self.nulls_first.unwrap_or(false)
-    }
-
-    pub fn asc(&self) -> bool {
-        self.asc.unwrap_or(true)
-    }
+    pub nulls_first: bool,
+    pub asc: bool,
 }
 
 pub struct CombinatorDescription {
@@ -222,15 +213,20 @@ impl AggregateFunctionFactory {
         or_null: bool,
     ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
+        let argument_len = arguments.len();
         let mut features = AggregateFunctionFeatures::default();
 
         if NEED_NULL_AGGREGATE_FUNCTIONS.contains(&name) {
-            let agg = self.get_impl(name, params, arguments, sort_descs, &mut features)?;
+            let mut agg =
+                self.get_impl(name, params, arguments, sort_descs.clone(), &mut features)?;
+            if !sort_descs.is_empty() {
+                agg = AggregateFunctionSortAdaptor::create(agg, argument_len, sort_descs)?
+            }
             return Ok(agg);
         }
 
         if arguments.iter().all(|f| !f.is_nullable_or_null()) {
-            let agg = self.get_impl(name, params, arguments, sort_descs, &mut features)?;
+            let agg = self.get_impl(name, params, arguments, sort_descs.clone(), &mut features)?;
             return if or_null {
                 AggregateFunctionOrNullAdaptor::create(agg, features)
             } else {
@@ -243,16 +239,22 @@ impl AggregateFunctionFactory {
                 name,
                 params.clone(),
                 arguments.clone(),
-                sort_descs,
+                sort_descs.clone(),
                 &mut features,
             )?
         } else {
             let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
             let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
-            self.get_impl(name, new_params, new_arguments, sort_descs, &mut features)?
+            self.get_impl(
+                name,
+                new_params,
+                new_arguments,
+                sort_descs.clone(),
+                &mut features,
+            )?
         };
 
-        let agg = AggregateFunctionCombinatorNull::try_create(
+        let mut agg = AggregateFunctionCombinatorNull::try_create(
             name,
             params,
             arguments,
@@ -260,10 +262,12 @@ impl AggregateFunctionFactory {
             features.clone(),
         )?;
         if or_null {
-            AggregateFunctionOrNullAdaptor::create(agg, features)
-        } else {
-            Ok(agg)
+            agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
         }
+        if !sort_descs.is_empty() {
+            agg = AggregateFunctionSortAdaptor::create(agg, argument_len, sort_descs)?
+        }
+        Ok(agg)
     }
 
     fn get_impl(

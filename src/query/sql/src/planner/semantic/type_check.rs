@@ -1764,8 +1764,8 @@ impl<'a> TypeChecker<'a> {
 
                     Ok(AggregateFunctionScalarSortDesc {
                         expr: scalar_expr,
-                        nulls_first: *nulls_first,
-                        asc: *asc,
+                        nulls_first: nulls_first.unwrap_or(false),
+                        asc: asc.unwrap_or(true),
                     })
                 },
             )
