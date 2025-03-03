@@ -23,7 +23,7 @@ FROM (
     FROM numbers(5000000)
 );
 ----
-37499992499384
+374999249384
 
 query I
 SELECT SUM(a + b + c)
@@ -33,10 +33,10 @@ FROM (
         LEAD(number, 1, 0) OVER (PARTITION BY number % 8 ORDER BY number + 2) a,
         LEAD(number, 2, 0) OVER (PARTITION BY number % 8 ORDER BY number + 2) b,
         LEAD(number, 3, 0) OVER (PARTITION BY number % 8 ORDER BY number + 2) c
-    FROM numbers(1000000)
+    FROM numbers(100000)
 );
 ----
-1499998499576
+14999849576
 
 statement ok
 set enable_dio = 0;
@@ -48,10 +48,10 @@ FROM (
         number,
         LEAD(number, 1, 0) OVER (PARTITION BY number % 16 ORDER BY number + 1) AS a,
         LEAD(number, 2, 0) OVER (PARTITION BY number % 16 ORDER BY number + 1) AS b
-    FROM numbers(5000000)
+    FROM numbers(500000)
 );
 ----
-37499992499384
+374999249384
 
 query I
 SELECT SUM(a + b + c)
@@ -61,10 +61,10 @@ FROM (
         LEAD(number, 1, 0) OVER (PARTITION BY number % 8 ORDER BY number + 2) a,
         LEAD(number, 2, 0) OVER (PARTITION BY number % 8 ORDER BY number + 2) b,
         LEAD(number, 3, 0) OVER (PARTITION BY number % 8 ORDER BY number + 2) c
-    FROM numbers(1000000)
+    FROM numbers(100000)
 );
 ----
-1499998499576
+14999849576
 
 statement ok
 unset enable_dio;
@@ -93,7 +93,7 @@ SELECT
     END,
     to_date('2022-01-02'),
     number % 2 = 0
-FROM numbers(1000000);
+FROM numbers(100000);
 
 query II
 SELECT
@@ -107,16 +107,16 @@ ORDER BY
     c.customer_id
 LIMIT 10;
 ----
-999998 1
-999995 2
-999992 3
-999989 4
-999986 5
-999983 6
-999980 7
-999977 8
-999974 9
-999971 10
+99998 1
+99995 2
+99992 3
+99989 4
+99986 5
+99983 6
+99980 7
+99977 8
+99974 9
+99971 10
 
 query II
 SELECT

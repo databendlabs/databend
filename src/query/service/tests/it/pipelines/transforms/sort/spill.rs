@@ -52,12 +52,7 @@ fn create_sort_spill_pipeline(
     let output_order_col = false;
     let enable_loser_tree = true;
 
-    let mut memory_settings = MemorySettings::from_sort_settings(&ctx)?;
-    memory_settings.enable_query_level_spill = true;
-    memory_settings.enable_global_level_spill = true;
-    memory_settings.spill_unit_size = 1000;
-    memory_settings.max_memory_usage = 100;
-    memory_settings.max_query_memory_usage = 1;
+    let memory_settings = MemorySettings::always_spill(1000);
 
     pipeline.try_add_accumulating_transformer(|| {
         TransformSortMergeBase::<
