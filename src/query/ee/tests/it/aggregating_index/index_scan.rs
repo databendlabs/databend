@@ -1039,7 +1039,7 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
             ),
             (
                 "query_out_of_memory_behavior".to_string(),
-                "EnableSpill".to_string(),
+                "spilling".to_string(),
             ),
             (
                 "max_query_memory_usage".to_string(),

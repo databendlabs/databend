@@ -41,9 +41,9 @@ pub enum SpillFileFormat {
 }
 
 #[derive(Clone, Copy)]
-pub enum MemoryExceededBehavior {
-    ThrowOOM,
-    EnableSpill,
+pub enum OutofMemoryBehavior {
+    Throw,
+    Spilling,
 }
 
 impl SpillFileFormat {
@@ -881,14 +881,14 @@ impl Settings {
         self.try_set_u64("max_query_memory_usage", max_memory_usage)
     }
 
-    pub fn get_query_out_of_memory_behavior(&self) -> Result<MemoryExceededBehavior> {
+    pub fn get_query_out_of_memory_behavior(&self) -> Result<OutofMemoryBehavior> {
         match self
             .try_get_string("query_out_of_memory_behavior")?
             .to_lowercase()
             .as_str()
         {
-            "throwoom" => Ok(MemoryExceededBehavior::ThrowOOM),
-            "enablespill" => Ok(MemoryExceededBehavior::EnableSpill),
+            "throw" => Ok(OutofMemoryBehavior::Throw),
+            "spilling" => Ok(OutofMemoryBehavior::Spilling),
             _ => Err(ErrorCode::BadArguments("")),
         }
     }

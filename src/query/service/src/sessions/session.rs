@@ -32,7 +32,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::PlanProfile;
-use databend_common_settings::MemoryExceededBehavior;
+use databend_common_settings::OutofMemoryBehavior;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::TempTblMgrRef;
@@ -170,7 +170,7 @@ impl Session {
             let out_of_memory_behavior = settings.get_query_out_of_memory_behavior()?;
 
             if query_max_memory_usage != 0
-                && matches!(out_of_memory_behavior, MemoryExceededBehavior::ThrowOOM)
+                && matches!(out_of_memory_behavior, OutofMemoryBehavior::Throw)
             {
                 mem_stat.set_limit(query_max_memory_usage as i64);
             }

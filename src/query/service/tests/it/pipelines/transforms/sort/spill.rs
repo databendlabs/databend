@@ -21,7 +21,6 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::TransformSortMerge;
 use databend_common_pipeline_transforms::TransformSortMergeBase;
 use databend_common_storage::DataOperator;
-use databend_query::pipelines::memory_settings::MemorySettingsExt;
 use databend_query::pipelines::processors::transforms::create_transform_sort_spill;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;

@@ -179,11 +179,11 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("query_out_of_memory_behavior", DefaultSettingValue {
-                    value: UserSettingValue::String(String::from("ThrowOOM")),
+                    value: UserSettingValue::String(String::from("throw")),
                     desc: "If the query memory limit is exceeded, the system will enforce predefined actions (e.g., throw or spilling).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::String(vec![String::from("ThrowOOM"), String::from("EnableSpill")])),
+                    range: Some(SettingRange::String(vec![String::from("throw"), String::from("spilling")])),
                 }),
                 ("data_retention_time_in_days", DefaultSettingValue {
                     // unit of retention_period is day
