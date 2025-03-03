@@ -21,7 +21,7 @@ use databend_common_management::RoleApi;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_sql::plans::DropTablePlan;
-use databend_common_storages_fuse::operations::TruncateMode;
+use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::VIEW_ENGINE;
