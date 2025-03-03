@@ -19,6 +19,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::executor::physical_plans::HilbertPartition;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
@@ -28,10 +29,10 @@ use databend_storages_common_cache::TempDirManager;
 use opendal::services::Fs;
 use opendal::Operator;
 
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::CompactStrategy;
 use crate::pipelines::processors::transforms::HilbertPartitionExchange;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
-use crate::pipelines::processors::transforms::WindowSpillSettings;
 use crate::pipelines::PipelineBuilder;
 use crate::spillers::SpillerDiskConfig;
 
@@ -70,8 +71,7 @@ impl PipelineBuilder {
                 None => None,
             };
 
-        let window_spill_settings = WindowSpillSettings::new(&settings, num_processors)?;
-
+        let window_spill_settings = MemorySettings::from_window_settings(&self.ctx)?;
         let processor_id = AtomicUsize::new(0);
         let thresholds = table.get_block_thresholds();
         self.main_pipeline.add_transform(|input, output| {
