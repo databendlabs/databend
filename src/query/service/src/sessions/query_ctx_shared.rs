@@ -725,7 +725,7 @@ impl QueryContextShared {
         let mut memory_usage = {
             match self.mem_stat.read().as_ref() {
                 None => 0,
-                Some(mem_stat) => std::cmp::max(0, mem_stat.get_memory_usage()) as usize,
+                Some(mem_stat) => mem_stat.get_memory_usage(),
             }
         };
 

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_pipeline_transforms::sort::SimpleRowConverter;
 use databend_common_pipeline_transforms::sort::SimpleRowsAsc;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::TransformSortMerge;
 use databend_common_pipeline_transforms::TransformSortMergeBase;
@@ -48,10 +49,9 @@ fn create_sort_spill_pipeline(
 
     let order_col_generated = false;
     let output_order_col = false;
-    let max_memory_usage = 100;
-    let spilling_bytes_threshold_per_core = 1;
-    let spilling_batch_bytes = 1000;
     let enable_loser_tree = true;
+
+    let memory_settings = MemorySettings::always_spill(1000);
 
     pipeline.try_add_accumulating_transformer(|| {
         TransformSortMergeBase::<
@@ -63,9 +63,7 @@ fn create_sort_spill_pipeline(
             sort_desc.clone(),
             order_col_generated,
             output_order_col,
-            max_memory_usage,
-            spilling_bytes_threshold_per_core,
-            spilling_batch_bytes,
+            memory_settings.clone(),
             TransformSortMerge::create(
                 schema.clone(),
                 sort_desc.clone(),

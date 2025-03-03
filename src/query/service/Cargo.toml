@@ -47,7 +47,6 @@ backon = { workspace = true }
 base64 = { workspace = true }
 buf-list = { workspace = true }
 bumpalo = { workspace = true }
-byte-unit = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
