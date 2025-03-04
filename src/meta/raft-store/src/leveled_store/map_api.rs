@@ -16,7 +16,6 @@
 
 mod map_api_ro_impl;
 
-use std::borrow::Borrow;
 use std::fmt;
 use std::fmt::Write;
 use std::io;
@@ -39,15 +38,17 @@ pub trait MapKeyEncode {
     fn encode<W: Write>(&self, w: W) -> Result<(), fmt::Error>;
 }
 
+pub trait MapKeyDecode: Sized {
+    fn decode(buf: &str) -> Result<Self, io::Error>;
+}
+
 /// MapKey defines the behavior of a key in a map.
 ///
 /// It is `Clone` to let MapApi clone a range of key.
 /// It is `Unpin` to let MapApi extract a key from pinned data, such as a stream.
 /// And it only accepts `static` value for simplicity.
-pub trait MapKey: MapKeyEncode + Clone + Ord + fmt::Debug + Send + Sync + Unpin + 'static {
+pub trait MapKey: Clone + Ord + fmt::Debug + Send + Sync + Unpin + 'static {
     type V: MapValue;
-
-    fn decode(buf: &str) -> Result<Self, io::Error>;
 }
 
 /// MapValue defines the behavior of a value in a map.
@@ -90,12 +91,17 @@ impl<V> MapValue for V where V: Clone + Send + Sync + Unpin + 'static {}
 pub trait MapApiRO<K>: Send + Sync
 where K: MapKey
 {
+    // The following does not work, because MapKeyEncode is defined in the application crate,
+    // But using `Q` in the defining crate requires `MapKeyEncode`.
+    // Because the application crate can not add more constraints to `Q`.
+    // async fn get<Q>(&self, key: &Q) -> Result<MarkedOf<K>, io::Error>
+    // where
+    //     K: Borrow<Q>,
+    //     Q: Ord + Send + Sync + ?Sized,
+    //     Q: MapKeyEncode;
+
     /// Get an entry by key.
-    async fn get<Q>(&self, key: &Q) -> Result<MarkedOf<K>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: MapKeyEncode;
+    async fn get(&self, key: &K) -> Result<MarkedOf<K>, io::Error>;
 
     /// Iterate over a range of entries by keys.
     ///
@@ -167,6 +173,7 @@ impl MapApiExt {
     ) -> Result<Transition<MarkedOf<K>>, io::Error>
     where
         K: MapKey,
+        K: MapKeyEncode,
         T: MapApi<K>,
     {
         //
@@ -191,6 +198,7 @@ impl MapApiExt {
     ) -> Result<Transition<MarkedOf<K>>, io::Error>
     where
         K: MapKey,
+        K: MapKeyEncode,
         T: MapApi<K>,
     {
         let got = s.get(&key).await?;
@@ -214,16 +222,15 @@ impl MapApiExt {
 /// - `K`: key type used in a map.
 /// - `L`: type of the several top levels
 /// - `PL`: the bottom persistent level.
-pub(crate) async fn compacted_get<'d, K, Q, L, PL>(
-    key: &Q,
+pub(crate) async fn compacted_get<'d, K, L, PL>(
+    key: &K,
     levels: impl IntoIterator<Item = &'d L>,
     persisted: impl IntoIterator<Item = &'d PL>,
 ) -> Result<MarkedOf<K>, io::Error>
 where
     K: MapKey,
-    K: Borrow<Q>,
-    Q: Ord + Send + Sync + ?Sized,
-    Q: MapKeyEncode,
+    K: MapKeyEncode,
+    K: MapKeyDecode,
     L: MapApiRO<K> + 'static,
     PL: MapApiRO<K> + 'static,
 {
@@ -313,16 +320,16 @@ mod tests {
 
         let l2 = l1.new_level();
 
-        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l0, &l1, &l2], []).await?;
+        let got = compacted_get::<String, _, Level>(&s("a"), [&l0, &l1, &l2], []).await?;
         assert_eq!(got, Marked::new_normal(1, b("a")));
 
-        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2, &l1, &l0], []).await?;
+        let got = compacted_get::<String, _, Level>(&s("a"), [&l2, &l1, &l0], []).await?;
         assert_eq!(got, Marked::new_tombstone(1));
 
-        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l1, &l0], []).await?;
+        let got = compacted_get::<String, _, Level>(&s("a"), [&l1, &l0], []).await?;
         assert_eq!(got, Marked::new_tombstone(1));
 
-        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2, &l0], []).await?;
+        let got = compacted_get::<String, _, Level>(&s("a"), [&l2, &l0], []).await?;
         assert_eq!(got, Marked::new_normal(1, b("a")));
         Ok(())
     }
@@ -340,16 +347,16 @@ mod tests {
         let mut l3 = l2.new_level();
         l3.set(s("a"), Some((b("A"), None))).await?;
 
-        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l0, &l1, &l2], []).await?;
+        let got = compacted_get::<String, _, Level>(&s("a"), [&l0, &l1, &l2], []).await?;
         assert_eq!(got, Marked::new_normal(1, b("a")));
 
-        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2, &l1, &l0], []).await?;
+        let got = compacted_get::<String, _, Level>(&s("a"), [&l2, &l1, &l0], []).await?;
         assert_eq!(got, Marked::new_tombstone(1));
 
-        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2], [&l3]).await?;
+        let got = compacted_get::<String, _, Level>(&s("a"), [&l2], [&l3]).await?;
         assert_eq!(got, Marked::new_normal(2, b("A")));
 
-        let got = compacted_get::<String, _, _, Level>(&s("a"), [&l2], [&l2, &l3]).await?;
+        let got = compacted_get::<String, _, Level>(&s("a"), [&l2], [&l2, &l3]).await?;
         assert_eq!(got, Marked::new_normal(2, b("A")));
         Ok(())
     }

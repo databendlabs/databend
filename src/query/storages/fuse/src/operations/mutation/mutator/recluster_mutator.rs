@@ -199,7 +199,7 @@ impl ReclusterMutator {
         // Compute memory threshold and maximum number of blocks allowed for reclustering.
         let settings = self.ctx.get_settings();
         let avail_memory_usage =
-            settings.get_max_memory_usage()? - GLOBAL_MEM_STAT.get_memory_usage().max(0) as u64;
+            settings.get_max_memory_usage()? - GLOBAL_MEM_STAT.get_memory_usage() as u64;
         let memory_threshold = settings
             .get_recluster_block_size()?
             .min(avail_memory_usage * 30 / 100) as usize;

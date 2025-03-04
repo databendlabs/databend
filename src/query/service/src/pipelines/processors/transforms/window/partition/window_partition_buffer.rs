@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_settings::Settings;
+use databend_common_pipeline_transforms::MemorySettings;
 
 use crate::spillers::MergedPartition;
 use crate::spillers::PartitionBuffer;
@@ -25,7 +24,7 @@ use crate::spillers::Spiller;
 /// The `WindowPartitionBuffer` is used to control memory usage of Window operator.
 pub struct WindowPartitionBuffer {
     spiller: Spiller,
-    spill_settings: WindowSpillSettings,
+    memory_settings: MemorySettings,
     partition_buffer: PartitionBuffer,
     restored_partition_buffer: PartitionBuffer,
     num_partitions: usize,
@@ -41,14 +40,14 @@ impl WindowPartitionBuffer {
         spiller: Spiller,
         num_partitions: usize,
         sort_block_size: usize,
-        spill_settings: WindowSpillSettings,
+        memory_settings: MemorySettings,
     ) -> Result<Self> {
         // Create a `PartitionBuffer` to store partitioned data.
         let partition_buffer = PartitionBuffer::create(num_partitions);
         let restored_partition_buffer = PartitionBuffer::create(num_partitions);
         Ok(Self {
             spiller,
-            spill_settings,
+            memory_settings,
             partition_buffer,
             restored_partition_buffer,
             num_partitions,
@@ -61,23 +60,11 @@ impl WindowPartitionBuffer {
     }
 
     pub fn need_spill(&mut self) -> bool {
-        if !self.spill_settings.enable_spill || !self.can_spill {
-            return false;
-        }
-        self.out_of_memory_limit()
+        self.can_spill && self.memory_settings.check_spill()
     }
 
     pub fn out_of_memory_limit(&mut self) -> bool {
-        // Check if processor memory usage exceeds the threshold.
-        if self.partition_buffer.memory_size() + self.restored_partition_buffer.memory_size()
-            > self.spill_settings.processor_memory_threshold
-        {
-            return true;
-        }
-
-        // Check if global memory usage exceeds the threshold.
-        let global_memory_usage = std::cmp::max(GLOBAL_MEM_STAT.get_memory_usage(), 0) as usize;
-        global_memory_usage > self.spill_settings.global_memory_threshold
+        self.memory_settings.check_spill()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -95,7 +82,7 @@ impl WindowPartitionBuffer {
 
     // Spill data blocks in the buffer.
     pub async fn spill(&mut self) -> Result<()> {
-        let spill_unit_size = self.spill_settings.spill_unit_size;
+        let spill_unit_size = self.memory_settings.spill_unit_size;
 
         // Pick one partition from the last to the first to spill.
         let option = PartitionBufferFetchOption::PickPartitionWithThreshold(0);
@@ -249,54 +236,5 @@ impl WindowPartitionBuffer {
         }
 
         Ok(result)
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct WindowSpillSettings {
-    enable_spill: bool,
-    global_memory_threshold: usize,
-    processor_memory_threshold: usize,
-    spill_unit_size: usize,
-}
-
-impl WindowSpillSettings {
-    pub fn new(settings: &Settings, num_threads: usize) -> Result<Self> {
-        let global_memory_ratio =
-            std::cmp::min(settings.get_window_partition_spilling_memory_ratio()?, 100) as f64
-                / 100_f64;
-
-        if global_memory_ratio == 0.0 {
-            return Ok(WindowSpillSettings {
-                enable_spill: false,
-                global_memory_threshold: usize::MAX,
-                processor_memory_threshold: usize::MAX,
-                spill_unit_size: 0,
-            });
-        }
-
-        let global_memory_threshold = match settings.get_max_memory_usage()? {
-            0 => usize::MAX,
-            max_memory_usage => match global_memory_ratio {
-                mr if mr == 0_f64 => usize::MAX,
-                mr => (max_memory_usage as f64 * mr) as usize,
-            },
-        };
-
-        let processor_memory_threshold =
-            settings.get_window_partition_spilling_bytes_threshold_per_proc()?;
-        let processor_memory_threshold = match processor_memory_threshold {
-            0 => global_memory_threshold / num_threads,
-            bytes => bytes,
-        };
-
-        let spill_unit_size = settings.get_window_spill_unit_size_mb()? * 1024 * 1024;
-
-        Ok(WindowSpillSettings {
-            enable_spill: true,
-            global_memory_threshold,
-            processor_memory_threshold,
-            spill_unit_size,
-        })
     }
 }

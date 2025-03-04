@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::io;
 use std::ops::RangeBounds;
 
@@ -23,6 +22,7 @@ use rotbl::v001::SeqMarked;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::marked::Marked;
@@ -31,14 +31,11 @@ use crate::marked::Marked;
 impl<K> MapApiRO<K> for DB
 where
     K: MapKey,
+    K: MapKeyEncode,
+    K: MapKeyDecode,
     Marked<K::V>: TryFrom<SeqMarked, Error = io::Error>,
 {
-    async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: MapKeyEncode,
-    {
+    async fn get(&self, key: &K) -> Result<Marked<K::V>, io::Error> {
         let key = RotblCodec::encode_key(key)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 

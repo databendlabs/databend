@@ -17,21 +17,21 @@ pub trait Expirable {
     /// Evaluates and returns the absolute expiration time in milliseconds since the Unix epoch (January 1, 1970).
     ///
     /// If there is no expiration time, it returns `u64::MAX`.
-    fn expiry_ms(&self) -> u64;
+    fn expires_at_ms(&self) -> u64;
 }
 
 impl<T> Expirable for &T
 where T: Expirable
 {
-    fn expiry_ms(&self) -> u64 {
-        Expirable::expiry_ms(*self)
+    fn expires_at_ms(&self) -> u64 {
+        Expirable::expires_at_ms(*self)
     }
 }
 
 impl<T> Expirable for Option<T>
 where T: Expirable
 {
-    fn expiry_ms(&self) -> u64 {
-        self.as_ref().map(|m| m.expiry_ms()).unwrap_or(u64::MAX)
+    fn expires_at_ms(&self) -> u64 {
+        self.as_ref().map(|m| m.expires_at_ms()).unwrap_or(u64::MAX)
     }
 }

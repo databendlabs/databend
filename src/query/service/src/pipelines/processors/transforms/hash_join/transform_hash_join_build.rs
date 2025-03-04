@@ -16,14 +16,11 @@ use std::any::Any;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use byte_unit::Byte;
-use byte_unit::ByteUnit;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
-use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
@@ -99,11 +96,7 @@ pub struct TransformHashJoinBuild {
     // Spill related states.
     // The spiller is used to spill/restore data blocks.
     spiller: HashJoinSpiller,
-    enable_spill: bool,
-    // Max memory usage threshold for join.
-    global_memory_threshold: usize,
-    // Max memory usage threshold for each processor.
-    processor_memory_threshold: usize,
+    memory_settings: MemorySettings,
 
     step: Step,
 }
@@ -129,10 +122,7 @@ impl TransformHashJoinBuild {
             true,
         )?;
 
-        // Spill settings.
-        let enable_spill = build_state.hash_join_state.enable_spill;
-        let global_memory_threshold = build_state.global_memory_threshold;
-        let processor_memory_threshold = build_state.processor_memory_threshold;
+        let memory_settings = build_state.memory_settings.clone();
 
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
@@ -147,9 +137,7 @@ impl TransformHashJoinBuild {
             is_finalize_finished: false,
             is_from_restore: false,
             spiller,
-            enable_spill,
-            global_memory_threshold,
-            processor_memory_threshold,
+            memory_settings,
             step: Step::Sync(SyncStep::Collect),
         }))
     }
@@ -440,39 +428,6 @@ impl TransformHashJoinBuild {
     }
 
     fn need_spill(&mut self) -> bool {
-        if !self.enable_spill {
-            return false;
-        }
-
-        if self.data_blocks_memory_size > self.processor_memory_threshold {
-            info!(
-                "BuildSpillHandler DataBlock memory size: {:?} bytes, memory threshold per processor: {:?} bytes",
-                self.data_blocks_memory_size, self.processor_memory_threshold
-            );
-            return true;
-        }
-
-        // Check if global memory usage exceeds the threshold.
-        let mut global_used = GLOBAL_MEM_STAT.get_memory_usage();
-        // `global_used` may be negative at the beginning of starting query.
-        if global_used < 0 {
-            global_used = 0;
-        }
-        let global_memory_threshold = self.global_memory_threshold;
-        if global_used as usize > global_memory_threshold {
-            let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
-            let total_gb = byte.get_appropriate_unit(false).format(3);
-            let spill_threshold_gb = Byte::from_unit(global_memory_threshold as f64, ByteUnit::B)
-                .unwrap()
-                .get_appropriate_unit(false)
-                .format(3);
-            info!(
-                "need to spill due to global memory usage {:?} is greater than spill threshold {:?}",
-                total_gb, spill_threshold_gb
-            );
-            true
-        } else {
-            false
-        }
+        self.memory_settings.check_spill()
     }
 }
