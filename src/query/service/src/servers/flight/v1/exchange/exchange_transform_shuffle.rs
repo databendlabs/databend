@@ -382,6 +382,12 @@ pub fn exchange_shuffle(
     params: &ShuffleExchangeParams,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
+    if let Some(last_pipe) = pipeline.pipes.last() {
+        for item in &last_pipe.items {
+            item.processor.configure_peer_nodes(&params.destination_ids);
+        }
+    }
+
     // append scatter transform
     pipeline.add_transform(|input, output| {
         Ok(ScatterTransform::create(

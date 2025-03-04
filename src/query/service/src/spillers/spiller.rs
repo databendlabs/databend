@@ -35,6 +35,7 @@ use databend_storages_common_cache::TempDir;
 use databend_storages_common_cache::TempPath;
 use opendal::Buffer;
 use opendal::Operator;
+use opendal::Writer;
 use parking_lot::RwLock;
 
 use super::serialize::*;
@@ -185,6 +186,17 @@ impl Spiller {
 
     pub fn create_unique_location(&self) -> String {
         format!("{}/{}", self.location_prefix, GlobalUniqName::unique())
+    }
+
+    pub async fn create_aggregate_writer(&self, location: String) -> Result<SpillWriter> {
+        let writer = self.operator.writer(&location).await?;
+        Ok(SpillWriter {
+            bytes: 0,
+            writer,
+            location,
+            ctx: self.ctx.clone(),
+            private_spilled_files: self.private_spilled_files.clone(),
+        })
     }
 
     pub async fn spill_stream_aggregate_buffer(
@@ -556,5 +568,40 @@ fn record_read_profile(location: &Location, start: &Instant, read_bytes: usize) 
                 start.elapsed().as_millis() as usize,
             );
         }
+    }
+}
+
+pub struct SpillWriter {
+    bytes: usize,
+    writer: Writer,
+    location: String,
+    ctx: Arc<QueryContext>,
+    private_spilled_files: Arc<RwLock<HashMap<Location, Layout>>>,
+}
+
+impl SpillWriter {
+    pub async fn write(&mut self, bytes: Vec<u8>) -> Result<()> {
+        self.bytes += bytes.len();
+        Ok(self.writer.write(bytes).await?)
+    }
+
+    pub fn write_bytes(&self) -> usize {
+        self.bytes
+    }
+
+    pub async fn complete(&mut self) -> Result<()> {
+        self.writer.close().await?;
+
+        self.ctx.add_spill_file(
+            Location::Remote(self.location.clone()),
+            Layout::Aggregate,
+            self.bytes,
+        );
+
+        self.private_spilled_files
+            .write()
+            .insert(Location::Remote(self.location.clone()), Layout::Aggregate);
+
+        Ok(())
     }
 }

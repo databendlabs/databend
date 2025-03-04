@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -27,8 +28,11 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 
+#[async_trait::async_trait]
 pub trait AccumulatingTransform: Send {
     const NAME: &'static str;
+
+    const SUPPORT_SPILL: bool = false;
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>>;
 
@@ -37,6 +41,24 @@ pub trait AccumulatingTransform: Send {
     }
 
     fn interrupt(&self) {}
+
+    fn configure_peer_nodes(&mut self, _nodes: &[String]) {}
+
+    fn need_spill(&self) -> bool {
+        false
+    }
+
+    fn prepare_spill_payload(&mut self) -> Result<bool> {
+        Err(ErrorCode::Unimplemented(
+            "Unimplemented prepare_spill_payload",
+        ))
+    }
+
+    async fn flush_spill_payload(&mut self) -> Result<bool> {
+        Err(ErrorCode::Unimplemented(
+            "Unimplemented flush_spill_payload",
+        ))
+    }
 }
 
 pub struct AccumulatingTransformer<T: AccumulatingTransform + 'static> {
@@ -47,6 +69,9 @@ pub struct AccumulatingTransformer<T: AccumulatingTransform + 'static> {
     called_on_finish: bool,
     input_data: Option<DataBlock>,
     output_data: VecDeque<DataBlock>,
+
+    flush_spill_payload: bool,
+    prepare_spill_payload: bool,
 }
 
 impl<T: AccumulatingTransform + 'static> AccumulatingTransformer<T> {
@@ -58,6 +83,8 @@ impl<T: AccumulatingTransform + 'static> AccumulatingTransformer<T> {
             input_data: None,
             output_data: VecDeque::with_capacity(1),
             called_on_finish: false,
+            flush_spill_payload: false,
+            prepare_spill_payload: false,
         })
     }
 }
@@ -93,6 +120,14 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
             return Ok(Event::Finished);
         }
 
+        if self.prepare_spill_payload {
+            return Ok(Event::Sync);
+        }
+
+        if self.flush_spill_payload {
+            return Ok(Event::Async);
+        }
+
         if !self.output.can_push() {
             self.input.set_not_need_data();
             return Ok(Event::NeedConsume);
@@ -126,9 +161,24 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
         Ok(Event::NeedData)
     }
 
+    fn interrupt(&self) {
+        self.inner.interrupt();
+    }
+
+    fn configure_peer_nodes(&mut self, nodes: &[String]) {
+        self.inner.configure_peer_nodes(nodes)
+    }
+
     fn process(&mut self) -> Result<()> {
+        if self.prepare_spill_payload {
+            self.prepare_spill_payload = false;
+            self.flush_spill_payload = self.prepare_spill_payload()?;
+            return Ok(());
+        }
+
         if let Some(data_block) = self.input_data.take() {
             self.output_data.extend(self.inner.transform(data_block)?);
+            self.prepare_spill_payload = self.inner.need_spill();
             return Ok(());
         }
 
@@ -140,8 +190,21 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
         Ok(())
     }
 
-    fn interrupt(&self) {
-        self.inner.interrupt();
+    async fn async_process(&mut self) -> Result<()> {
+        if self.flush_spill_payload {
+            self.flush_spill_payload = false;
+            self.prepare_spill_payload = self.flush_spill_payload().await?;
+        }
+
+        Ok(())
+    }
+
+    fn prepare_spill_payload(&mut self) -> Result<bool> {
+        self.inner.prepare_spill_payload()
+    }
+
+    async fn flush_spill_payload(&mut self) -> Result<bool> {
+        self.inner.flush_spill_payload().await
     }
 }
 
