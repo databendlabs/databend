@@ -93,6 +93,7 @@ pub enum EndpointKind {
     Verify,
     UploadToStage,
     SystemInfo,
+    Catalog,
 }
 
 impl EndpointKind {
@@ -107,6 +108,7 @@ impl EndpointKind {
                 | EndpointKind::PollQuery
                 | EndpointKind::Logout
                 | EndpointKind::HeartBeat
+                | EndpointKind::Catalog
         )
     }
     pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
@@ -118,7 +120,8 @@ impl EndpointKind {
             | EndpointKind::Logout
             | EndpointKind::SystemInfo
             | EndpointKind::HeartBeat
-            | EndpointKind::UploadToStage => {
+            | EndpointKind::UploadToStage
+            | EndpointKind::Catalog => {
                 if GlobalConfig::instance().query.management_mode {
                     Ok(None)
                 } else {
