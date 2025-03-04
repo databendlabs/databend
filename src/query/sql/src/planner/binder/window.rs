@@ -20,6 +20,7 @@ use databend_common_ast::ast::WindowSpec;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use itertools::Itertools;
 
 use super::select::SelectList;
 use crate::binder::ColumnBinding;
@@ -350,12 +351,15 @@ impl<'a> WindowRewriter<'a> {
                     let name = format!("{window_func_name}_sort_desc_{i}");
                     let replaced_expr = self.replace_expr(&name, &expr)?;
 
+                    let index = replaced_expr.column.index;
+                    let is_reuse_index = window_args.iter().map(|item| item.index).contains(&index);
                     window_args.push(ScalarItem {
-                        index: replaced_expr.column.index,
+                        index,
                         scalar: expr,
                     });
                     replaced_sort_descs.push(AggregateFunctionScalarSortDesc {
                         expr: replaced_expr.into(),
+                        is_reuse_index,
                         nulls_first: desc.nulls_first,
                         asc: desc.asc,
                     });

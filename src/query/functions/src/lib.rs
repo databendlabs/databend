@@ -59,8 +59,10 @@ pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
 
 pub const ASYNC_FUNCTIONS: [Ascii<&str>; 2] = [Ascii::new("nextval"), Ascii::new("dict_get")];
 
-pub const GENERAL_WITHIN_GROUP_FUNCTIONS: [Ascii<&str>; 3] = [
+pub const GENERAL_WITHIN_GROUP_FUNCTIONS: [Ascii<&str>; 5] = [
     Ascii::new("array_agg"),
+    Ascii::new("group_concat"),
+    Ascii::new("list"),
     Ascii::new("listagg"),
     Ascii::new("string_agg"),
 ];

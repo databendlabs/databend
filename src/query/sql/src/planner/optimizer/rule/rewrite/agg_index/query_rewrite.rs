@@ -1318,6 +1318,7 @@ fn format_sort_desc(
         expr,
         nulls_first,
         asc,
+        ..
     }: &AggregateFunctionScalarSortDesc,
     column_map: &HashMap<IndexType, ScalarExpr>,
 ) -> String {

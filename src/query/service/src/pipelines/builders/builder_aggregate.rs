@@ -23,6 +23,7 @@ use databend_common_expression::HashTableConfig;
 use databend_common_expression::LimitType;
 use databend_common_expression::SortColumnDescription;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
@@ -34,6 +35,7 @@ use databend_common_sql::executor::PhysicalPlan;
 use databend_common_sql::plans::UDFType;
 use databend_common_sql::IndexType;
 use databend_common_storage::DataOperator;
+use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
 use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
@@ -247,20 +249,50 @@ impl PipelineBuilder {
         let aggs: Vec<AggregateFunctionRef> = agg_funcs
             .iter()
             .map(|agg_func| {
-                let args = agg_func
-                    .arg_indices
-                    .iter()
-                    .chain(agg_func.sort_desc_indices.iter())
-                    .map(|i| input_schema.index_of(&i.to_string()))
-                    .collect::<Result<Vec<_>>>()?;
+                let input_len = agg_func.arg_indices.len() + agg_func.sort_desc_indices.len();
+                let mut arg_indexes = Vec::with_capacity(input_len);
+                let mut args = Vec::with_capacity(input_len);
+
+                for p in agg_func.arg_indices.iter() {
+                    args.push(input_schema.index_of(&p.to_string())?);
+                    arg_indexes.push(*p);
+                }
+                for (i, desc) in agg_func.sig.sort_descs.iter().enumerate() {
+                    // sort_desc will reuse existing columns, so only need to insert new columns.
+                    if agg_func.sig.sort_descs[i].is_reuse_index && args.contains(&desc.index) {
+                        continue;
+                    }
+                    args.push(input_schema.index_of(&desc.index.to_string())?);
+                    arg_indexes.push(desc.index);
+                }
                 agg_args.push(args);
+
+                let remapping_sort_descs = agg_func
+                    .sig
+                    .sort_descs
+                    .iter()
+                    .map(|desc| {
+                        let index = arg_indexes
+                            .iter()
+                            .find_position(|i| **i == desc.index)
+                            .map(|(i, _)| i)
+                            .unwrap_or(desc.index);
+                        Ok(AggregateFunctionSortDesc {
+                            index,
+                            is_reuse_index: desc.is_reuse_index,
+                            data_type: desc.data_type.clone(),
+                            nulls_first: desc.nulls_first,
+                            asc: desc.asc,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
 
                 match &agg_func.sig.udaf {
                     None => AggregateFunctionFactory::instance().get(
                         agg_func.sig.name.as_str(),
                         agg_func.sig.params.clone(),
                         agg_func.sig.args.clone(),
-                        agg_func.sig.sort_descs.clone(),
+                        remapping_sort_descs,
                     ),
                     Some((UDFType::Script(code), state_fields)) => create_udaf_script_function(
                         code,

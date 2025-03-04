@@ -28,6 +28,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::Scalar;
+use indexmap::Equivalent;
 use itertools::Itertools;
 
 use super::prune_by_children;
@@ -288,18 +289,20 @@ impl<'a> AggregateRewriter<'a> {
                 let name = format!("{}_sort_desc_{}", func_name, i);
                 let expr = &desc.expr;
 
-                let column = if let ScalarExpr::BoundColumnRef(column_ref) = expr {
+                let (is_reuse_index, column) = if let ScalarExpr::BoundColumnRef(column_ref) = expr
+                {
+                    let index = column_ref.column.index;
                     // the columns required for sort describe always come after aggregate_sort_descs
                     aggregate_sort_descs.push(ScalarItem {
-                        index: column_ref.column.index,
+                        index,
                         scalar: expr.clone(),
                     });
-                    column_ref.clone()
+                    (true, column_ref.clone())
                 } else if let Some(item) = aggregate_arguments
                     .iter()
                     .chain(group_items.iter())
                     .chain(aggregate_sort_descs.iter())
-                    .find(|x| &x.scalar == expr)
+                    .find(|x| x.scalar.equivalent(expr))
                 {
                     // check if the arg is in aggregate_sort_descs items
                     // we can reuse the index
@@ -311,10 +314,10 @@ impl<'a> AggregateRewriter<'a> {
                     )
                     .build();
 
-                    BoundColumnRef {
+                    (true, BoundColumnRef {
                         span: expr.span(),
                         column: column_binding,
-                    }
+                    })
                 } else {
                     let data_type = expr.data_type()?;
                     let index = self.metadata.write().add_derived_column(
@@ -337,13 +340,14 @@ impl<'a> AggregateRewriter<'a> {
                         scalar: expr.clone(),
                     });
 
-                    BoundColumnRef {
+                    (false, BoundColumnRef {
                         span: expr.span(),
                         column: column_binding.clone(),
-                    }
+                    })
                 };
                 Ok(AggregateFunctionScalarSortDesc {
                     expr: column.into(),
+                    is_reuse_index,
                     nulls_first: desc.nulls_first,
                     asc: desc.asc,
                 })

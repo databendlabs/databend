@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -48,7 +49,6 @@ pub struct SortAggState {
 
 pub struct AggregateFunctionSortAdaptor {
     inner: AggregateFunctionRef,
-    argument_len: usize,
     sort_descs: Vec<AggregateFunctionSortDesc>,
 }
 
@@ -166,19 +166,25 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
                 .collect_vec(),
             num_rows,
         );
-        let sort_descs = self
-            .sort_descs
-            .iter()
-            .enumerate()
-            .map(|(i, sort_desc)| SortColumnDescription {
-                offset: i + self.argument_len,
-                asc: sort_desc.asc,
-                nulls_first: sort_desc.nulls_first,
-            })
-            .collect_vec();
+        let mut not_arg_indexes = HashSet::with_capacity(self.sort_descs.len());
+        let mut sort_descs = Vec::with_capacity(self.sort_descs.len());
+
+        for desc in self.sort_descs.iter() {
+            if !desc.is_reuse_index {
+                not_arg_indexes.insert(desc.index);
+            }
+
+            sort_descs.push(SortColumnDescription {
+                offset: desc.index,
+                asc: desc.asc,
+                nulls_first: desc.nulls_first,
+            });
+        }
         block = DataBlock::sort(&block, &sort_descs, None)?;
 
-        let args = (0..self.argument_len).collect_vec();
+        let args = (0..block.num_columns())
+            .filter(|i| !not_arg_indexes.contains(i))
+            .collect_vec();
 
         self.inner.init_state(inner_place);
         self.inner.accumulate(
@@ -211,17 +217,12 @@ impl AggregateFunction for AggregateFunctionSortAdaptor {
 impl AggregateFunctionSortAdaptor {
     pub fn create(
         inner: AggregateFunctionRef,
-        argument_len: usize,
         sort_descs: Vec<AggregateFunctionSortDesc>,
     ) -> Result<AggregateFunctionRef> {
         if sort_descs.is_empty() {
             return Ok(inner);
         }
-        Ok(Arc::new(AggregateFunctionSortAdaptor {
-            inner,
-            argument_len,
-            sort_descs,
-        }))
+        Ok(Arc::new(AggregateFunctionSortAdaptor { inner, sort_descs }))
     }
 
     fn get_state(place: AggrState) -> &mut SortAggState {

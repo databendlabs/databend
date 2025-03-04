@@ -418,6 +418,16 @@ select listagg(concat('Hello ', s), '|') within group (order by y + 1 desc, x de
 ----
 Hello xyz|Hello abc|Hello def
 
+query T
+select array_agg(x) within group (order by y + 1 desc, x desc) from t3;
+----
+[1,0,3,2]
+
+query T
+select array_agg(x) within group (order by x desc) from t3;
+----
+[3,2,1,0]
+
 query TT
 select array_agg(s), array_agg(null) from t3;
 ----

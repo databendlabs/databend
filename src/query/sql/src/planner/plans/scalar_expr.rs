@@ -647,6 +647,7 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct AggregateFunctionScalarSortDesc {
     pub expr: ScalarExpr,
+    pub is_reuse_index: bool,
     pub nulls_first: bool,
     pub asc: bool,
 }
@@ -655,10 +656,17 @@ impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
     type Error = ErrorCode;
 
     fn try_into(self) -> std::result::Result<AggregateFunctionSortDesc, Self::Error> {
-        let expr = &self.expr.as_expr()?;
+        let expr = &self.expr;
+        let ScalarExpr::BoundColumnRef(col) = expr else {
+            return Err(ErrorCode::Internal(
+                "Aggregate function sort description must be a BoundColumnRef".to_string(),
+            ));
+        };
 
         Ok(AggregateFunctionSortDesc {
-            data_type: expr.data_type().clone(),
+            index: col.column.index,
+            is_reuse_index: self.is_reuse_index,
+            data_type: expr.data_type()?,
             nulls_first: self.nulls_first,
             asc: self.asc,
         })

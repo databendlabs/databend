@@ -141,6 +141,8 @@ impl AggregateFunctionDescription {
     serde::Deserialize,
 )]
 pub struct AggregateFunctionSortDesc {
+    pub index: usize,
+    pub is_reuse_index: bool,
     pub data_type: DataType,
     pub nulls_first: bool,
     pub asc: bool,
@@ -213,14 +215,13 @@ impl AggregateFunctionFactory {
         or_null: bool,
     ) -> Result<AggregateFunctionRef> {
         let name = name.as_ref();
-        let argument_len = arguments.len();
         let mut features = AggregateFunctionFeatures::default();
 
         if NEED_NULL_AGGREGATE_FUNCTIONS.contains(&name) {
             let mut agg =
                 self.get_impl(name, params, arguments, sort_descs.clone(), &mut features)?;
             if !sort_descs.is_empty() {
-                agg = AggregateFunctionSortAdaptor::create(agg, argument_len, sort_descs)?
+                agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
             }
             return Ok(agg);
         }
@@ -265,7 +266,7 @@ impl AggregateFunctionFactory {
             agg = AggregateFunctionOrNullAdaptor::create(agg, features)?
         }
         if !sort_descs.is_empty() {
-            agg = AggregateFunctionSortAdaptor::create(agg, argument_len, sort_descs)?
+            agg = AggregateFunctionSortAdaptor::create(agg, sort_descs)?
         }
         Ok(agg)
     }

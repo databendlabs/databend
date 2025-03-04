@@ -28,8 +28,10 @@ use databend_common_expression::InputColumns;
 use databend_common_expression::StateAddr;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_sql::executor::physical_plans::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::WindowFunction;
+use itertools::Itertools;
 
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
@@ -181,21 +183,48 @@ impl WindowFunctionInfo {
     pub fn try_create(window: &WindowFunction, schema: &DataSchema) -> Result<Self> {
         Ok(match window {
             WindowFunction::Aggregate(agg) => {
+                let input_len = agg.arg_indices.len() + agg.sort_desc_indices.len();
+                let mut arg_indexes = Vec::with_capacity(input_len);
+                let mut args = Vec::with_capacity(input_len);
+
+                for p in agg.arg_indices.iter() {
+                    args.push(schema.index_of(&p.to_string())?);
+                    arg_indexes.push(*p);
+                }
+                for (i, desc) in agg.sig.sort_descs.iter().enumerate() {
+                    // sort_desc will reuse existing columns, so only need to insert new columns.
+                    if agg.sig.sort_descs[i].is_reuse_index && args.contains(&desc.index) {
+                        continue;
+                    }
+                    args.push(schema.index_of(&desc.index.to_string())?);
+                    arg_indexes.push(desc.index);
+                }
+
+                let remapping_sort_descs = agg
+                    .sig
+                    .sort_descs
+                    .iter()
+                    .map(|desc| {
+                        let index = arg_indexes
+                            .iter()
+                            .find_position(|i| **i == desc.index)
+                            .map(|(i, _)| i)
+                            .unwrap_or(desc.index);
+                        Ok(AggregateFunctionSortDesc {
+                            index,
+                            is_reuse_index: desc.is_reuse_index,
+                            data_type: desc.data_type.clone(),
+                            nulls_first: desc.nulls_first,
+                            asc: desc.asc,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
                 let agg_func = AggregateFunctionFactory::instance().get(
                     agg.sig.name.as_str(),
                     agg.sig.params.clone(),
                     agg.sig.args.clone(),
-                    agg.sig.sort_descs.clone(),
+                    remapping_sort_descs,
                 )?;
-                let args = agg
-                    .arg_indices
-                    .iter()
-                    .chain(agg.sort_desc_indices.iter())
-                    .map(|p| {
-                        let offset = schema.index_of(&p.to_string())?;
-                        Ok(offset)
-                    })
-                    .collect::<Result<Vec<_>>>()?;
                 Self::Aggregate(agg_func, args)
             }
             WindowFunction::RowNumber => Self::RowNumber,

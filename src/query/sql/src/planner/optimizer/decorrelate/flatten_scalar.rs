@@ -63,6 +63,7 @@ impl SubqueryRewriter {
                 for desc in &agg.sort_descs {
                     sort_descs.push(AggregateFunctionScalarSortDesc {
                         expr: self.flatten_scalar(&desc.expr, correlated_columns)?,
+                        is_reuse_index: desc.is_reuse_index,
                         nulls_first: desc.nulls_first,
                         asc: desc.asc,
                     });

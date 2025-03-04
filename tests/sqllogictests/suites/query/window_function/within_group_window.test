@@ -50,6 +50,34 @@ SELECT string_agg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DES
 6000|4200
 
 query T rowsort
+SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY cast(salary as varchar) DESC) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary;
+----
+3900
+3900|3500
+4200
+5000
+5000|4800
+5000|4800|4800
+6000|4200
+6000|4500|4200
+6000|5200|4500|4200
+6000|5200|5200|4500|4200
+
+query T rowsort
+SELECT group_concat(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary;
+----
+3500|3900
+3900
+4200
+4500|6000|4200
+4800|4800|5000
+4800|5000
+5000
+5200|4500|6000|4200
+5200|5200|4500|6000|4200
+6000|4200
+
+query T rowsort
 SELECT array_agg(salary) WITHIN GROUP (ORDER BY salary DESC) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary;
 ----
 [3900,3500]

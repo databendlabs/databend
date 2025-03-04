@@ -814,8 +814,7 @@ impl<'a> TypeChecker<'a> {
 
                 // check within group legal
                 if !order_by.is_empty()
-                    && (!GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&uni_case_func_name)
-                        || !AggregateFunctionFactory::instance().contains(func_name))
+                    && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&uni_case_func_name)
                 {
                     return Err(ErrorCode::SemanticError(
                         "only aggregate functions allowed in within group syntax",
@@ -1764,6 +1763,7 @@ impl<'a> TypeChecker<'a> {
 
                     Ok(AggregateFunctionScalarSortDesc {
                         expr: scalar_expr,
+                        is_reuse_index: false,
                         nulls_first: nulls_first.unwrap_or(false),
                         asc: asc.unwrap_or(true),
                     })
@@ -1773,7 +1773,8 @@ impl<'a> TypeChecker<'a> {
 
         // Convert the delimiter of string_agg to params
         let params = if (func_name.eq_ignore_ascii_case("string_agg")
-            || func_name.eq_ignore_ascii_case("listagg"))
+            || func_name.eq_ignore_ascii_case("listagg")
+            || func_name.eq_ignore_ascii_case("group_concat"))
             && arguments.len() == 2
             && params.is_empty()
         {
@@ -1783,6 +1784,7 @@ impl<'a> TypeChecker<'a> {
                     "The delimiter of `{func_name}` must be a constant string"
                 )));
             }
+            let _ = arguments.pop();
             let delimiter = delimiter_value.unwrap();
             vec![delimiter.value]
         } else {
