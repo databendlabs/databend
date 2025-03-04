@@ -542,7 +542,7 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
             let mut res = Vec::with_capacity(2);
             let mut is_extended = false;
             for (i, v) in [&d.min, &max].iter().enumerate() {
-                let mut d = string_to_date(&v, &ctx.tz);
+                let mut d = string_to_date(v, &ctx.tz);
                 if d.is_err() && i == 1 && v.len() > 10 {
                     d = string_to_date(&v[0..10], &ctx.tz);
                     is_extended = true;
