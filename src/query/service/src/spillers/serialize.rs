@@ -15,26 +15,19 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use arrow_array::Array;
-use arrow_array::ArrayRef;
-use arrow_ipc::reader::FileReaderBuilder;
 use arrow_schema::Schema;
 use buf_list::BufList;
 use buf_list::Cursor;
 use bytes::Buf;
 use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::read_column;
 use databend_common_expression::arrow::write_column;
 use databend_common_expression::infer_table_schema;
-use databend_common_expression::types::DataType;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
-use databend_common_expression::Value;
 use opendal::Buffer;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::ArrowWriter;
@@ -126,38 +119,6 @@ pub(super) fn deserialize_block(columns_layout: &Layout, mut data: Buffer) -> Re
         Layout::Parquet => bare_blocks_from_parquet(Reader(data)),
         Layout::Aggregate => unreachable!(),
     }
-}
-
-#[allow(dead_code)]
-fn bare_blocks_from_arrow_ipc(layout: &[usize], mut data: Buffer) -> Result<DataBlock> {
-    assert!(!layout.is_empty());
-    let mut columns = Vec::with_capacity(layout.len());
-
-    let mut read_array = |layout: usize| -> Result<(ArrayRef, DataType)> {
-        let ls = BufList::from_iter(data.slice(0..layout));
-        data.advance(layout);
-        let mut reader = FileReaderBuilder::new().build(Cursor::new(ls))?;
-        let schema = reader.schema();
-        let f = DataField::try_from(schema.field(0))?;
-        let data_type = f.data_type().clone();
-        let col = reader
-            .next()
-            .ok_or_else(|| ErrorCode::Internal("expected one arrow array"))??
-            .remove_column(0);
-        Ok((col, data_type))
-    };
-
-    let (array, data_type) = read_array(layout[0])?;
-    let num_rows = array.len();
-    let val = Value::from_arrow_rs(array, &data_type)?;
-    columns.push(BlockEntry::new(data_type, val));
-
-    for &layout in layout.iter().skip(1) {
-        let (array, data_type) = read_array(layout)?;
-        let val = Value::from_arrow_rs(array, &data_type)?;
-        columns.push(BlockEntry::new(data_type, val));
-    }
-    Ok(DataBlock::new(columns, num_rows))
 }
 
 fn fake_data_schema(block: &DataBlock) -> DataSchema {
