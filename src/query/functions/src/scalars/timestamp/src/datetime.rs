@@ -39,6 +39,7 @@ use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -222,10 +223,15 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, TimestampType, _, _>(
         "to_timestamp",
         |ctx, d| {
-            let max = d.max.clone().unwrap_or("9999-12-31 23:59:59".to_string());
+            let max = d.max.clone().unwrap_or_default();
             let mut res = Vec::with_capacity(2);
             let mut is_extended = false;
             for (i, v) in [&d.min, &max].iter().enumerate() {
+                if i == 1 && d.max.is_none() {
+                    // the max domain is unbounded
+                    res.push(TIMESTAMP_MAX);
+                    break;
+                }
                 let mut d = string_to_timestamp(v, &ctx.tz);
                 // the string max domain maybe truncated into `"2024-09-02 00:0�"`
                 const MAX_LEN: usize = "1000-01-01".len();
