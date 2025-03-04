@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_meta_app::principal::AvroFileFormatParams;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use fastrace::func_name;
@@ -47,6 +48,24 @@ fn test_decode_v121_avro_file_format_params() -> anyhow::Result<()> {
         121,
         want(),
     )?;
+    common::test_pb_from_to(func_name!(), want())?;
+    Ok(())
+}
+
+#[test]
+fn test_decode_v121_file_format_params() -> anyhow::Result<()> {
+    let file_format_params_v121 = vec![
+        66, 35, 8, 4, 18, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 26, 4, 110, 117,
+        108, 108, 26, 4, 78, 85, 76, 76, 160, 6, 121, 168, 6, 24,
+    ];
+    let want = || {
+        FileFormatParams::Avro(AvroFileFormatParams {
+            compression: StageFileCompression::Zstd,
+            missing_field_as: NullAs::FieldDefault,
+            null_if: vec!["null".to_string(), "NULL".to_string()],
+        })
+    };
+    common::test_load_old(func_name!(), file_format_params_v121.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }
