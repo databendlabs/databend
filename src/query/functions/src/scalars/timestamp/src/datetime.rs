@@ -540,17 +540,27 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
         |ctx, d| {
             let max = d.max.clone().unwrap_or("9999-12-31".to_string());
             let mut res = Vec::with_capacity(2);
-            for v in [&d.min, &max].iter() {
-                let d = string_to_date(&v[0..v.len().min(10)], &ctx.tz);
+            let mut is_extended = false;
+            for (i, v) in [&d.min, &max].iter().enumerate() {
+                let mut d = string_to_date(&v, &ctx.tz);
+                if d.is_err() && i == 1 && v.len() > 10 {
+                    d = string_to_date(&v[0..10], &ctx.tz);
+                    is_extended = true;
+                }
+
                 if d.is_err() {
                     return FunctionDomain::MayThrow;
                 }
-                res.push(
-                    d.unwrap()
-                        .since((Unit::Day, date(1970, 1, 1)))
-                        .unwrap()
-                        .get_days(),
-                );
+                let days = d
+                    .unwrap()
+                    .since((Unit::Day, date(1970, 1, 1)))
+                    .unwrap()
+                    .get_days();
+                if is_extended {
+                    res.push(days + 1);
+                } else {
+                    res.push(days);
+                }
             }
 
             FunctionDomain::Domain(SimpleDomain {
