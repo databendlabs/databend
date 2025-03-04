@@ -227,11 +227,11 @@ impl DataBlock {
         let mut arrays = Vec::with_capacity(self.columns().len());
         for (entry, arrow_field) in self
             .consume_convert_to_full()
-            .columns()
-            .iter()
+            .take_columns()
+            .into_iter()
             .zip(arrow_schema.fields())
         {
-            let column = entry.value.to_owned().into_column().unwrap();
+            let column = entry.value.into_column().unwrap();
             let column = column.maybe_gc();
             let array = column.into_arrow_rs();
 
