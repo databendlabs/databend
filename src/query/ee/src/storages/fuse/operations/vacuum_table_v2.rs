@@ -356,6 +356,9 @@ async fn list_until_prefix(
     let mut lister = fuse_table.get_operator().lister(path).await?;
     let mut paths = vec![];
     while let Some(entry) = lister.try_next().await? {
+        if entry.metadata().is_dir() {
+            continue;
+        }
         if entry.path() >= until {
             info!("entry path: {} >= until: {}", entry.path(), until);
             if need_one_more {
@@ -382,7 +385,9 @@ async fn is_gc_candidate_segment_block(
     op: &Operator,
     gc_root_meta_ts: DateTime<Utc>,
 ) -> Result<bool> {
-    if entry.path().starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
+    let path = entry.path();
+    let last_part = path.rsplit('/').next().unwrap();
+    if last_part.starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
         return Ok(true);
     }
     let last_modified = if let Some(v) = entry.metadata().last_modified() {
@@ -498,12 +503,12 @@ async fn select_gc_root(
     match gc_root {
         Ok(gc_root) => {
             info!("gc_root found: {:?}", gc_root);
-
             let mut gc_candidates = Vec::with_capacity(snapshots_before_lvt.len());
 
             for snapshot in snapshots_before_lvt.iter() {
                 let path = snapshot.path();
-                if path.starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
+                let last_part = path.rsplit('/').next().unwrap();
+                if last_part.starts_with(VACUUM2_OBJECT_KEY_PREFIX) {
                     gc_candidates.push(path.to_owned());
                 } else {
                     // This snapshot is created by a node of the previous version which does not
@@ -524,9 +529,13 @@ async fn select_gc_root(
                 }
             }
 
-            let gc_root_idx = gc_candidates
-                .binary_search(&gc_root_path)
-                .expect("gc root path should be one of the candidates");
+            let gc_root_idx = gc_candidates.binary_search(&gc_root_path).expect(
+                format!(
+                    "gc root path {} should be one of the candidates, candidates: {:?}",
+                    gc_root_path, gc_candidates
+                )
+                .as_str(),
+            );
             let snapshots_to_gc = gc_candidates[..gc_root_idx].to_vec();
 
             Ok(Some((gc_root, snapshots_to_gc, gc_root_meta_ts)))
