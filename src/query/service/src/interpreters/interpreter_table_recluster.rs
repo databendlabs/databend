@@ -319,7 +319,6 @@ impl ReclusterTableInterpreter {
         let rows_per_block =
             block_thresholds.calc_rows_per_block(total_bytes, total_rows, Some(block_per_seg));
         let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
-        settings.set_max_block_size(rows_per_block as u64)?;
         warn!("Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}, rows_per_block: {}",
             total_bytes, total_rows, total_partitions, rows_per_block);
 
