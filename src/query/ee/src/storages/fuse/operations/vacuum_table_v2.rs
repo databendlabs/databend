@@ -84,6 +84,8 @@ pub async fn do_vacuum2(
 ) -> Result<Vec<String>> {
     let start = std::time::Instant::now();
     let retention_period_in_days = ctx.get_settings().get_data_retention_time_in_days()?;
+    let is_vacuum_all = retention_period_in_days == 0;
+
     let Some(lvt) = set_lvt(fuse_table, ctx.as_ref(), retention_period_in_days).await? else {
         return Ok(vec![]);
     };
@@ -96,16 +98,30 @@ pub async fn do_vacuum2(
     ));
 
     let start = std::time::Instant::now();
-    let snapshots_before_lvt = list_until_timestamp(
-        fuse_table,
-        fuse_table
-            .meta_location_generator()
-            .snapshot_location_prefix(),
-        lvt,
-        true,
-        None,
-    )
-    .await?;
+    let snapshots_before_lvt = if is_vacuum_all {
+        list_until_prefix(
+            fuse_table,
+            fuse_table
+                .meta_location_generator()
+                .snapshot_location_prefix(),
+            fuse_table.snapshot_loc().unwrap().as_str(),
+            true,
+            None,
+        )
+        .await?
+    } else {
+        list_until_timestamp(
+            fuse_table,
+            fuse_table
+                .meta_location_generator()
+                .snapshot_location_prefix(),
+            lvt,
+            true,
+            None,
+        )
+        .await?
+    };
+
     let elapsed = start.elapsed();
     ctx.set_status_info(&format!(
         "list snapshots before lvt for table {} takes {:?}, snapshots_dir: {:?}, lvt: {:?}, snapshots: {:?}",
@@ -117,7 +133,6 @@ pub async fn do_vacuum2(
     ));
 
     let start = std::time::Instant::now();
-    let is_vacuum_all = retention_period_in_days == 0;
     let Some((gc_root, snapshots_to_gc, gc_root_meta_ts)) = select_gc_root(
         fuse_table,
         &snapshots_before_lvt,
@@ -323,12 +338,7 @@ async fn set_lvt(
     let cat = ctx.get_default_catalog()?;
     // safe to unwrap, as we have checked the version is v5
     let latest_ts = latest_snapshot.timestamp.unwrap();
-    let lvt_point_candidate = if retention == 0 {
-        // when retention=0, only latest snapshot is reserved
-        latest_ts
-    } else {
-        std::cmp::min(Utc::now() - Days::new(retention), latest_ts)
-    };
+    let lvt_point_candidate = std::cmp::min(Utc::now() - Days::new(retention), latest_ts);
 
     let lvt_point = cat
         .set_table_lvt(
