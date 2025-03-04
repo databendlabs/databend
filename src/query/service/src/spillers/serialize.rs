@@ -107,10 +107,10 @@ impl BlocksEncoder {
     }
 }
 
-pub(super) fn deserialize_block(columns_layout: &Layout, data: Buffer) -> DataBlock {
+pub(super) fn deserialize_block(columns_layout: &Layout, data: Buffer) -> Result<DataBlock> {
     match columns_layout {
-        Layout::ArrowIpc(layout) => bare_blocks_from_arrow_ipc(layout, data).unwrap(),
-        Layout::Parquet => bare_blocks_from_parquet(Reader(data)).unwrap(),
+        Layout::ArrowIpc(layout) => bare_blocks_from_arrow_ipc(layout, data),
+        Layout::Parquet => bare_blocks_from_parquet(Reader(data)),
         Layout::Aggregate => unreachable!(),
     }
 }
