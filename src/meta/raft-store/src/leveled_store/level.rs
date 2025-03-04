@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
@@ -82,11 +81,7 @@ impl Level {
 
 #[async_trait::async_trait]
 impl MapApiRO<String> for Level {
-    async fn get<Q>(&self, key: &Q) -> Result<Marked<<String as MapKey>::V>, io::Error>
-    where
-        String: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-    {
+    async fn get(&self, key: &String) -> Result<Marked<<String as MapKey>::V>, io::Error> {
         let got = self.kv.get(key).cloned().unwrap_or(Marked::empty());
         Ok(got)
     }
@@ -139,11 +134,7 @@ impl MapApi<String> for Level {
 
 #[async_trait::async_trait]
 impl MapApiRO<ExpireKey> for Level {
-    async fn get<Q>(&self, key: &Q) -> Result<MarkedOf<ExpireKey>, io::Error>
-    where
-        ExpireKey: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-    {
+    async fn get(&self, key: &ExpireKey) -> Result<MarkedOf<ExpireKey>, io::Error> {
         let got = self.expire.get(key).cloned().unwrap_or(Marked::empty());
         Ok(got)
     }

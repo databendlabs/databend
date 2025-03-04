@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::io;
 use std::ops::RangeBounds;
 
@@ -23,6 +22,7 @@ use crate::leveled_store::map_api::compacted_range;
 use crate::leveled_store::map_api::KVResultStream;
 use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::marked::Marked;
 
@@ -70,17 +70,14 @@ impl ImmutableLevels {
 impl<K> MapApiRO<K> for ImmutableLevels
 where
     K: MapKey,
+    K: MapKeyEncode,
+    K: MapKeyDecode,
     Level: MapApiRO<K>,
     Immutable: MapApiRO<K>,
 {
-    async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: MapKeyEncode,
-    {
+    async fn get(&self, key: &K) -> Result<Marked<K::V>, io::Error> {
         let levels = self.iter_immutable_levels();
-        compacted_get::<_, _, _, Immutable>(key, levels, []).await
+        compacted_get::<_, _, Immutable>(key, levels, []).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
