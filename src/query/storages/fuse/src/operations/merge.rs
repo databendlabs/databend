@@ -82,6 +82,7 @@ impl FuseTable {
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
+        error_on_nondeterministic_update: bool,
     ) -> Result<PipeItem> {
         let new_schema: TableSchemaRef = self
             .schema_with_stream()
@@ -108,6 +109,7 @@ impl FuseTable {
             io_request_semaphore,
             segment_locations,
             target_build_optimization,
+            error_on_nondeterministic_update,
         )?;
         Ok(aggregator.into_pipe_item())
     }

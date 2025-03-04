@@ -99,12 +99,15 @@ impl PipelineBuilder {
 
         // 3.1 Add rowid_aggregate_mutator for row_id port
         if merge_into.need_match {
+            let error_on_nondeterministic_update =
+                self.settings.get_error_on_nondeterministic_update()?;
             pipe_items.push(table.rowid_aggregate_mutator(
                 self.ctx.clone(),
                 cluster_stats_gen.clone(),
                 io_request_semaphore,
                 merge_into.segments.clone(),
                 false,
+                error_on_nondeterministic_update,
             )?);
         }
 
