@@ -2125,7 +2125,8 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 };
 
                 let func_domain = args_domain.and_then(|domains| {
-                    match ((calc_domain)(self.func_ctx, &domains), is_monotonicity) {
+                    let res = (calc_domain)(self.func_ctx, &domains);
+                    match (res, is_monotonicity) {
                         (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
                             let (min, max) = domains.iter().map(Domain::to_minmax).next().unwrap();
 
@@ -2142,7 +2143,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                     func_ctx: self.func_ctx,
                                     suppress_error: false,
                                 };
-
                                 let mut builder =
                                     ColumnBuilder::with_capacity(args[0].data_type(), 2);
                                 builder.push(min.as_ref());
@@ -2154,21 +2154,35 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                                 if result.is_scalar() {
                                     None
                                 } else {
-                                    let d = result.as_column().unwrap().domain();
-                                    if !ctx.has_error(0) && !ctx.has_error(1) {
-                                        Some(d)
-                                    } else {
-                                        let (mut min, mut max) = d.to_minmax();
+                                    // if error happens, domain maybe incorrect
+                                    // min, max: String("2024-09-02 00:00") String("2024-09-02 00:0�")
+                                    // to_date(s) > to_date('2024-01-1')
+                                    let col = result.as_column().unwrap();
+                                    let d = if ctx.has_error(0) || ctx.has_error(1) {
                                         let (full_min, full_max) =
                                             Domain::full(return_type).to_minmax();
-                                        if ctx.has_error(0) {
-                                            min = full_min;
+                                        if full_min.is_null() || full_max.is_null() {
+                                            return None;
                                         }
-                                        if ctx.has_error(1) {
-                                            max = full_max;
+
+                                        let mut builder =
+                                            ColumnBuilder::with_capacity(return_type, 2);
+
+                                        for (i, (v, f)) in
+                                            col.iter().zip([full_min, full_max].iter()).enumerate()
+                                        {
+                                            if ctx.has_error(i) {
+                                                builder.push(f.as_ref());
+                                            } else {
+                                                builder.push(v);
+                                            }
                                         }
-                                        Some(Domain::from_min_max(min, max, return_type))
-                                    }
+                                        builder.build().domain()
+                                    } else {
+                                        result.as_column().unwrap().domain()
+                                    };
+                                    let (min, max) = d.to_minmax();
+                                    Some(Domain::from_min_max(min, max, return_type))
                                 }
                             }
                         }

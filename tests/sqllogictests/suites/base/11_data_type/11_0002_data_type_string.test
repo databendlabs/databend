@@ -67,3 +67,30 @@ query T
 SELECT NULL::string, COALESCE(NULL::string, 'default') FROM numbers(1);
 ----
 NULL	default
+
+
+## string cast to date/datetime
+
+statement ok
+create or replace table test_to_date( col1 string, col2 string);
+
+statement ok
+insert into test_to_date select '2024-09-02', '2024-09-02 00:00:00' from numbers(10);
+
+statement ok
+insert into test_to_date select '2024-01-02', '2024-01-02 00:00:00' from numbers(10);
+
+query I
+select count() from test_to_date where to_date(col1) between  to_date('2024-01-01') and to_date('2024-10-01');
+----
+20
+
+query I
+select count() from test_to_date where to_timestamp(col2) between  to_timestamp('2024-01-01') and to_timestamp('2024-10-01');
+----
+20
+
+query I
+select count() from test_to_date where to_timestamp(col2) between  to_timestamp('2026-01-01') and to_timestamp('2030-10-01');
+----
+0

@@ -221,7 +221,36 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, TimestampType, _, _>(
         "to_timestamp",
-        |_, _| FunctionDomain::MayThrow,
+        |ctx, d| {
+            let max = d.max.clone().unwrap_or("9999-12-31 23:59:59".to_string());
+            let mut res = Vec::with_capacity(2);
+            let mut is_extended = false;
+            for (i, v) in [&d.min, &max].iter().enumerate() {
+                let mut d = string_to_timestamp(v, &ctx.tz);
+                // the string max domain maybe truncated into `"2024-09-02 00:0�"`
+                const MAX_LEN: usize = "1000-01-01".len();
+                if i == 1 && d.is_err() && v.len() > MAX_LEN {
+                    d = string_to_timestamp(&v[0..MAX_LEN], &ctx.tz);
+                    is_extended = true;
+                }
+                if let Ok(ts) = d {
+                    if !is_extended {
+                        res.push(ts.timestamp().as_microsecond())
+                    } else {
+                        // it's stripped to date, so we need to add 1
+                        res.push(
+                            ts.timestamp().as_microsecond() + 24 * 60 * 60 * MICROS_PER_SEC - 1,
+                        )
+                    }
+                } else {
+                    return FunctionDomain::MayThrow;
+                }
+            }
+            FunctionDomain::Domain(SimpleDomain {
+                min: res[0],
+                max: res[1],
+            })
+        },
         eval_string_to_timestamp,
     );
     registry.register_combine_nullable_1_arg::<StringType, TimestampType, _, _>(
@@ -502,7 +531,27 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
 fn register_string_to_date(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, DateType, _, _>(
         "to_date",
-        |_, _| FunctionDomain::MayThrow,
+        |ctx, d| {
+            let max = d.max.clone().unwrap_or("9999-12-31".to_string());
+            let mut res = Vec::with_capacity(2);
+            for v in [&d.min, &max].iter() {
+                let d = string_to_date(&v[0..v.len().min(10)], &ctx.tz);
+                if d.is_err() {
+                    return FunctionDomain::MayThrow;
+                }
+                res.push(
+                    d.unwrap()
+                        .since((Unit::Day, date(1970, 1, 1)))
+                        .unwrap()
+                        .get_days(),
+                );
+            }
+
+            FunctionDomain::Domain(SimpleDomain {
+                min: res[0],
+                max: res[1],
+            })
+        },
         eval_string_to_date,
     );
     registry.register_combine_nullable_1_arg::<StringType, DateType, _, _>(
