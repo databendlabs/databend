@@ -34,7 +34,6 @@ use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
-use crate::pipelines::processors::transforms::create_transform_sort_spill;
 use crate::pipelines::processors::transforms::create_transform_stream_sort_spill;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
@@ -251,35 +250,19 @@ impl SortPipelineBuilder {
                 disk_spill: None,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
-            let settings = self.ctx.get_settings();
-            let enable_experimental_stream_sort_spilling =
-                settings.get_enable_experimental_stream_sort_spilling()?;
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().spill_operator();
                 let spiller = Spiller::create(self.ctx.clone(), op, config.clone())?;
-                if enable_experimental_stream_sort_spilling {
-                    Ok(ProcessorPtr::create(create_transform_stream_sort_spill(
-                        input,
-                        output,
-                        schema.clone(),
-                        self.sort_desc.clone(),
-                        self.limit,
-                        spiller,
-                        output_order_col,
-                        enable_loser_tree,
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(create_transform_sort_spill(
-                        input,
-                        output,
-                        schema.clone(),
-                        self.sort_desc.clone(),
-                        self.limit,
-                        spiller,
-                        output_order_col,
-                        enable_loser_tree,
-                    )))
-                }
+                Ok(ProcessorPtr::create(create_transform_stream_sort_spill(
+                    input,
+                    output,
+                    schema.clone(),
+                    self.sort_desc.clone(),
+                    self.limit,
+                    spiller,
+                    output_order_col,
+                    enable_loser_tree,
+                )))
             })?;
         }
 
