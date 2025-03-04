@@ -26,6 +26,7 @@ use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::arrow::read_column;
 use databend_common_expression::arrow::write_column;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::DataType;
@@ -107,14 +108,27 @@ impl BlocksEncoder {
     }
 }
 
-pub(super) fn deserialize_block(columns_layout: &Layout, data: Buffer) -> Result<DataBlock> {
+pub(super) fn deserialize_block(columns_layout: &Layout, mut data: Buffer) -> Result<DataBlock> {
     match columns_layout {
-        Layout::ArrowIpc(layout) => bare_blocks_from_arrow_ipc(layout, data),
+        Layout::ArrowIpc(layout) => {
+            let columns = layout
+                .iter()
+                .map(|&layout| {
+                    let ls = BufList::from_iter(data.slice(0..layout));
+                    data.advance(layout);
+                    let mut cursor = Cursor::new(ls);
+                    read_column(&mut cursor)
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(DataBlock::new_from_columns(columns))
+        }
         Layout::Parquet => bare_blocks_from_parquet(Reader(data)),
         Layout::Aggregate => unreachable!(),
     }
 }
 
+#[allow(dead_code)]
 fn bare_blocks_from_arrow_ipc(layout: &[usize], mut data: Buffer) -> Result<DataBlock> {
     assert!(!layout.is_empty());
     let mut columns = Vec::with_capacity(layout.len());

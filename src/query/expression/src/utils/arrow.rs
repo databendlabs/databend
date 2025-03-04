@@ -94,7 +94,7 @@ pub fn deserialize_column(bytes: &[u8]) -> Result<Column> {
     read_column(&mut cursor)
 }
 
-fn read_column<R: Read + Seek>(r: &mut R) -> Result<Column> {
+pub fn read_column<R: Read + Seek>(r: &mut R) -> Result<Column> {
     let mut reader = FileReaderBuilder::new().build(r)?;
     let schema = reader.schema();
     let f = DataField::try_from(schema.field(0))?;

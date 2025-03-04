@@ -18,6 +18,7 @@ use databend_common_exception::Result;
 use databend_common_expression::eval_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Value;
@@ -153,7 +154,7 @@ impl VirtualColumnReader {
                 .and_then(|r| r.column_by_name(&virtual_column_field.name).cloned())
             {
                 let data_type: DataType = virtual_column_field.data_type.as_ref().into();
-                let value = Value::from_arrow_rs(arrow_array, &data_type)?;
+                let value = Value::Column(Column::from_arrow_rs(arrow_array, &data_type)?);
                 data_block.add_column(BlockEntry::new(data_type, value));
                 continue;
             }
