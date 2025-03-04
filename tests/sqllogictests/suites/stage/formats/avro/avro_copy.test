@@ -74,3 +74,17 @@ select info:name from t
 ----
 "yang"
 "wang"
+
+statement ok
+create or replace table t(c_int int32, c_long int64, c_float float, c_double double)
+
+query
+copy into t from @data/avro/number.avro file_format = (type=avro)
+----
+avro/number.avro 2 0 NULL NULL
+
+query
+select * from t
+----
+2147483647 9223372036854775807 3.4028235e38 1.7976931348623157e308
+-2147483648 -9223372036854775808 -3.4028235e38 -1.7976931348623157e308

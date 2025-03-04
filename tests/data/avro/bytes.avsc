@@ -1,0 +1,34 @@
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "user",
+  "fields": [
+    {
+      "name": "c_bool",
+      "type": "boolean"
+    },
+    {
+      "name": "c_bytes",
+      "type": "bytes"
+    },
+    {
+      "name": "c_enum",
+      "type": {
+        "type": "enum",
+        "name": "level",
+        "symbols": [
+          "A",
+          "B",
+          "C"
+        ]
+      }
+    },
+    {
+      "name": "c_fixed",
+      "type": {
+        "type": "fixed",
+        "size": "4",
+      }
+    },
+  ]
+}
