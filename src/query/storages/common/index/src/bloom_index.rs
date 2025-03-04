@@ -343,7 +343,30 @@ impl BloomIndex {
         data_schema: TableSchemaRef,
     ) -> Result<FilterEvalResult> {
         let mut new_col_id = 1;
-        let mut domains = ConstantFolder::full_input_domains(&expr);
+        let mut domains = expr
+            .column_refs()
+            .into_iter()
+            .map(|(id, ty)| {
+                let domain = data_schema
+                    .column_id_of(&id)
+                    .ok()
+                    .and_then(|col_id| {
+                        column_stats.get(&col_id).map(|stat| {
+                            match Domain::from_min_max(stat.min.clone(), stat.max.clone(), &ty) {
+                                Domain::Nullable(NullableDomain { value, .. }) => {
+                                    Domain::Nullable(NullableDomain {
+                                        has_null: stat.null_count > 0,
+                                        value,
+                                    })
+                                }
+                                domain => domain,
+                            }
+                        })
+                    })
+                    .unwrap_or_else(|| Domain::full(&ty));
+                (id, domain)
+            })
+            .collect::<HashMap<_, _>>();
 
         visit_expr_column_eq_constant(
             &mut expr,
