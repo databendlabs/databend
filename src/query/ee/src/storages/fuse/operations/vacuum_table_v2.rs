@@ -539,13 +539,12 @@ async fn select_gc_root(
                 }
             }
 
-            let gc_root_idx = gc_candidates.binary_search(&gc_root_path).expect(
-                format!(
+            let gc_root_idx = gc_candidates.binary_search(&gc_root_path).map_err(|_| {
+                ErrorCode::Internal(format!(
                     "gc root path {} should be one of the candidates, candidates: {:?}",
                     gc_root_path, gc_candidates
-                )
-                .as_str(),
-            );
+                ))
+            })?;
             let snapshots_to_gc = gc_candidates[..gc_root_idx].to_vec();
 
             Ok(Some((gc_root, snapshots_to_gc, gc_root_meta_ts)))
