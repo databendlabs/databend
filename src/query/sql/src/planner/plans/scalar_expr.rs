@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
@@ -643,6 +644,35 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct AggregateFunctionScalarSortDesc {
+    pub expr: ScalarExpr,
+    pub is_reuse_index: bool,
+    pub nulls_first: bool,
+    pub asc: bool,
+}
+
+impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> std::result::Result<AggregateFunctionSortDesc, Self::Error> {
+        let expr = &self.expr;
+        let ScalarExpr::BoundColumnRef(col) = expr else {
+            return Err(ErrorCode::Internal(
+                "Aggregate function sort description must be a BoundColumnRef".to_string(),
+            ));
+        };
+
+        Ok(AggregateFunctionSortDesc {
+            index: col.column.index,
+            is_reuse_index: self.is_reuse_index,
+            data_type: expr.data_type()?,
+            nulls_first: self.nulls_first,
+            asc: self.asc,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct AggregateFunction {
@@ -653,8 +683,23 @@ pub struct AggregateFunction {
     pub params: Vec<Scalar>,
     pub args: Vec<ScalarExpr>,
     pub return_type: Box<DataType>,
+    pub sort_descs: Vec<AggregateFunctionScalarSortDesc>,
 
     pub display_name: String,
+}
+
+impl AggregateFunction {
+    pub fn exprs(&self) -> impl Iterator<Item = &ScalarExpr> {
+        self.args
+            .iter()
+            .chain(self.sort_descs.iter().map(|desc| &desc.expr))
+    }
+
+    pub fn exprs_mut(&mut self) -> impl Iterator<Item = &mut ScalarExpr> {
+        self.args
+            .iter_mut()
+            .chain(self.sort_descs.iter_mut().map(|desc| &mut desc.expr))
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -997,7 +1042,7 @@ pub trait Visitor<'a>: Sized {
         walk_window(self, window)
     }
     fn visit_aggregate_function(&mut self, aggregate: &'a AggregateFunction) -> Result<()> {
-        for expr in &aggregate.args {
+        for expr in aggregate.exprs() {
             self.visit(expr)?;
         }
         Ok(())
@@ -1109,7 +1154,7 @@ pub trait VisitorMut<'a>: Sized {
         walk_window_mut(self, window)
     }
     fn visit_aggregate_function(&mut self, aggregate: &'a mut AggregateFunction) -> Result<()> {
-        for expr in &mut aggregate.args {
+        for expr in aggregate.exprs_mut() {
             self.visit(expr)?;
         }
         Ok(())

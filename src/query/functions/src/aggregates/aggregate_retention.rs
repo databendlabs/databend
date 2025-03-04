@@ -34,6 +34,7 @@ use databend_common_expression::Scalar;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use super::StateAddr;
@@ -214,6 +215,7 @@ pub fn try_create_aggregate_retention_function(
     display_name: &str,
     _params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
 
