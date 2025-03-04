@@ -330,46 +330,49 @@ impl MarkovModel {
 }
 
 pub fn aggregate_markov_train_function_desc() -> AggregateFunctionDescription {
-    AggregateFunctionDescription::creator(Box::new(|display_name, params, arguments| {
-        assert_unary_arguments(display_name, arguments.len())?;
+    AggregateFunctionDescription::creator(Box::new(
+        |display_name, params, arguments, _sort_descs| {
+            assert_unary_arguments(display_name, arguments.len())?;
 
-        let params = match &params[..] {
-            [] => TrainParameters::default(),
-            [order] => {
-                let order = extract_number_param::<u64>(order.clone())? as usize;
-                TrainParameters {
-                    order,
-                    ..Default::default()
+            let params = match &params[..] {
+                [] => TrainParameters::default(),
+                [order] => {
+                    let order = extract_number_param::<u64>(order.clone())? as usize;
+                    TrainParameters {
+                        order,
+                        ..Default::default()
+                    }
                 }
-            }
-            [order, frequency_cutoff, num_buckets_cutoff, frequency_add, frequency_desaturate] => {
-                let order = extract_number_param::<u64>(order.clone())? as usize;
-                let frequency_cutoff = extract_number_param(frequency_cutoff.clone())?;
-                let num_buckets_cutoff =
-                    extract_number_param::<u64>(num_buckets_cutoff.clone())? as usize;
-                let frequency_add = extract_number_param(frequency_add.clone())?;
-                let frequency_desaturate =
-                    extract_number_param::<F64>(frequency_desaturate.clone())?.0;
-                TrainParameters {
-                    order,
-                    frequency_cutoff,
-                    num_buckets_cutoff,
-                    frequency_add,
-                    frequency_desaturate,
+                [order, frequency_cutoff, num_buckets_cutoff, frequency_add, frequency_desaturate] =>
+                {
+                    let order = extract_number_param::<u64>(order.clone())? as usize;
+                    let frequency_cutoff = extract_number_param(frequency_cutoff.clone())?;
+                    let num_buckets_cutoff =
+                        extract_number_param::<u64>(num_buckets_cutoff.clone())? as usize;
+                    let frequency_add = extract_number_param(frequency_add.clone())?;
+                    let frequency_desaturate =
+                        extract_number_param::<F64>(frequency_desaturate.clone())?.0;
+                    TrainParameters {
+                        order,
+                        frequency_cutoff,
+                        num_buckets_cutoff,
+                        frequency_add,
+                        frequency_desaturate,
+                    }
                 }
-            }
-            params => {
-                return Err(ErrorCode::NumberArgumentsNotMatch(format!(
-                    "{} expect to have 0, 1 or 5 params, but got {}",
-                    display_name,
-                    params.len()
-                )))
-            }
-        };
+                params => {
+                    return Err(ErrorCode::NumberArgumentsNotMatch(format!(
+                        "{} expect to have 0, 1 or 5 params, but got {}",
+                        display_name,
+                        params.len()
+                    )))
+                }
+            };
 
-        Ok(Arc::new(MarkovTarin {
-            display_name: display_name.to_string(),
-            params,
-        }))
-    }))
+            Ok(Arc::new(MarkovTarin {
+                display_name: display_name.to_string(),
+                params,
+            }))
+        },
+    ))
 }

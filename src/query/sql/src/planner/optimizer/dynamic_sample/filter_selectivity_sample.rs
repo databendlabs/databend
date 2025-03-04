@@ -130,6 +130,7 @@ fn create_count_aggregate(mode: AggregateMode) -> Aggregate {
                 params: vec![],
                 args: vec![],
                 return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                sort_descs: vec![],
                 display_name: "".to_string(),
             }),
             index: 0,

@@ -33,6 +33,7 @@ use databend_common_expression::Scalar;
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggrState;
@@ -187,6 +188,7 @@ pub fn try_create_aggregate_string_agg_function(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_variadic_arguments(display_name, argument_types.len(), (1, 2))?;
     // TODO:(b41sh) support other data types
