@@ -23,6 +23,7 @@ use std::ops::RangeBounds;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::marked::Marked;
 
@@ -34,6 +35,7 @@ impl RotblCodec {
     pub(crate) fn encode_range<K, R>(range: &R) -> Result<(Bound<String>, Bound<String>), io::Error>
     where
         K: MapKey,
+        K: MapKeyEncode,
         R: RangeBounds<K>,
     {
         let s = range.start_bound();
@@ -50,7 +52,10 @@ impl RotblCodec {
     /// `MapKey::PREFIX` is prepended to the bound value and an open bound is converted to a bound with key-space.
     /// E.g., use the `PREFIX/` as the left side closed bound,
     /// and use the `next(PREFIX/)` as the right side open bound.
-    fn encode_bound<K: MapKey>(v: Bound<&K>, dir: &str) -> Result<Bound<String>, io::Error> {
+    fn encode_bound<K: MapKey + MapKeyEncode>(
+        v: Bound<&K>,
+        dir: &str,
+    ) -> Result<Bound<String>, io::Error> {
         let res = match v {
             Bound::Included(k) => Bound::Included(Self::encode_key(k)?),
             Bound::Excluded(k) => Bound::Excluded(Self::encode_key(k)?),
@@ -73,6 +78,7 @@ impl RotblCodec {
     ) -> Result<(String, SeqMarked), io::Error>
     where
         K: MapKey,
+        K: MapKeyEncode,
         SeqMarked: TryFrom<Marked<K::V>, Error = io::Error>,
     {
         let k = Self::encode_key(key)?;
@@ -95,7 +101,11 @@ impl RotblCodec {
 
     /// Decode a key from a string with key-space prefix into [`MapKey`] implementation.
     pub(crate) fn decode_key<K>(str_key: &str) -> Result<K, io::Error>
-    where K: MapKey {
+    where
+        K: MapKey,
+        K: MapKeyEncode,
+        K: MapKeyDecode,
+    {
         // strip prefix
         let prefix_stripped = str_key.strip_prefix(K::PREFIX).ok_or_else(|| {
             io::Error::new(
