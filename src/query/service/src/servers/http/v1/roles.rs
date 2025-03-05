@@ -36,7 +36,6 @@ pub struct RoleInfo {
 
 #[async_backtrace::framed]
 async fn handle(ctx: &HttpQueryContext) -> Result<ListRolesResponse> {
-    let tenant = ctx.session.get_current_tenant();
     let user = ctx.session.get_current_user()?;
     let current_role = ctx
         .session
