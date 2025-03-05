@@ -60,8 +60,6 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeChecker;
-use databend_common_storages_fuse::DEFAULT_BLOCK_PER_SEGMENT;
-use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
@@ -307,17 +305,10 @@ impl ReclusterTableInterpreter {
         let table_info = tbl.get_table_info().clone();
 
         let block_thresholds = tbl.get_block_thresholds();
-        let block_per_seg = table_info
-            .options()
-            .get(FUSE_OPT_KEY_BLOCK_PER_SEGMENT)
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(DEFAULT_BLOCK_PER_SEGMENT);
-
         let total_bytes = recluster_info.removed_statistics.uncompressed_byte_size as usize;
         let total_rows = recluster_info.removed_statistics.row_count as usize;
 
-        let rows_per_block =
-            block_thresholds.calc_rows_per_block(total_bytes, total_rows, Some(block_per_seg));
+        let rows_per_block = block_thresholds.calc_rows_per_block(total_bytes, total_rows);
         let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
         warn!("Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}, rows_per_block: {}",
             total_bytes, total_rows, total_partitions, rows_per_block);

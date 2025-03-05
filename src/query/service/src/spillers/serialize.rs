@@ -80,13 +80,12 @@ impl BlocksEncoder {
             let block = if blocks.len() == 1 {
                 blocks.remove(0)
             } else {
-                DataBlock::concat(&blocks).unwrap()
+                DataBlock::concat(&std::mem::take(&mut blocks)).unwrap()
             };
+            let num_rows = block.num_rows();
             let columns_layout = std::iter::once(self.size())
-                .chain(block.columns().iter().map(|entry| {
-                    let column = entry
-                        .value
-                        .convert_to_full_column(&entry.data_type, block.num_rows());
+                .chain(block.take_columns().into_iter().map(|entry| {
+                    let column = entry.value.into_full_column(&entry.data_type, num_rows);
                     write_column(&column, &mut self.buf).unwrap();
                     self.size()
                 }))
