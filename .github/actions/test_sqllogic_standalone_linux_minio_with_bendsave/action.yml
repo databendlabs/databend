@@ -25,7 +25,6 @@ runs:
 
         aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
         aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://backupbucket
-        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://spillbucket
 
     - name: Run sqllogic Tests with Standalone mode
       shell: bash
@@ -53,7 +52,7 @@ runs:
 
         aws --endpoint-url http://127.0.0.1:9900/ s3 ls s3://backupbucket --recursive
 
-    - name: Destory the existing services.
+    - name: Destroy the existing services.
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: minioadmin
@@ -89,7 +88,7 @@ runs:
 
         ./target/${{ env.BUILD_PROFILE }}/databend-bendsave restore --from s3://backupbucket?endpoint=http://127.0.0.1:9900/ --to_query ./scripts/ci/deploy/config/databend-query-node-1.toml --to_meta ./scripts/ci/deploy/config/databend-meta-node-for-bendsave.toml --checkpoint=$CHECKPOINT --confirm
 
-    - name: Run sqllogic Tests with Standalone mode again for test
+    - name: Run sqllogic Tests with Standalone mode again for testing
       shell: bash
       env:
         TEST_HANDLERS: "http"
