@@ -100,7 +100,7 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
     let auth_info = AuthInfo::create(&req.auth_type, &req.auth_string)?;
     let mut user_info = UserInfo::new(
         &req.name,
-        req.hostname.map_or("%", |s| s.as_str()),
+        &req.hostname.unwrap_or("%".to_string()),
         auth_info,
     );
     user_info.option = user_info.option.with_default_role(req.default_role);
