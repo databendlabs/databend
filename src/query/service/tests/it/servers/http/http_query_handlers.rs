@@ -1017,22 +1017,7 @@ async fn post_json_to_endpoint(
     headers: HeaderMap,
 ) -> Result<(StatusCode, QueryResponse)> {
     let uri = "/v1/query";
-    let content_type = "application/json";
-    let body = serde_json::to_vec(&json)?;
-    let basic = headers::Authorization::basic("root", "");
-
-    let mut req = Request::builder()
-        .uri(uri.parse().unwrap())
-        .method(Method::POST)
-        .header(header::CONTENT_TYPE, content_type)
-        .typed_header(basic)
-        .body(body);
-    req.headers_mut().extend(headers.into_iter());
-
-    let response = ep
-        .call(req)
-        .await
-        .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+    let response = post_uri(ep, uri, json, headers).await?;
     check_response(response).await
 }
 
