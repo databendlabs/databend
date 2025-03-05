@@ -40,7 +40,6 @@ pub struct CreateUserRequest {
     pub default_role: Option<String>,
     pub roles: Option<Vec<String>>,
     pub grant_all: Option<bool>,
-    pub grant_read: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -112,15 +111,9 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
         }
     }
     if req.grant_all.unwrap_or(false) {
-        user_info.grants.grant_privileges(
-            &GrantObject::Database("default".to_string(), "*".to_string()),
-            UserPrivilegeSet::available_privileges_on_database(false),
-        );
-    } else if req.grant_read.unwrap_or(false) {
-        user_info.grants.grant_privileges(
-            &GrantObject::Database("default".to_string(), "*".to_string()),
-            UserPrivilegeSet::available_privileges_on_database(false),
-        );
+        user_info
+            .grants
+            .grant_privileges(&GrantObject::Global, UserPrivilegeSet::all_privileges());
     }
     let tenant = ctx.session.get_current_tenant();
     user_api
