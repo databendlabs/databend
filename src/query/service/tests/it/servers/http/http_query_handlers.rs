@@ -883,8 +883,8 @@ async fn test_user_apis() -> Result<()> {
         hostname: Some("%".to_string()),
         auth_type: Some("double_sha1_password".to_string()),
         auth_string: Some("test_password".to_string()),
-        default_role: Some("public".to_string()),
-        roles: vec!["public".to_string()],
+        default_role: None,
+        roles: None,
         grant_all: Some(true),
         grant_read: None,
     };

@@ -37,7 +37,7 @@ pub struct CreateUserRequest {
     pub auth_type: Option<String>,
     pub auth_string: Option<String>,
     pub default_role: Option<String>,
-    pub roles: Vec<String>,
+    pub roles: Option<Vec<String>>,
     pub grant_all: Option<bool>,
     pub grant_read: Option<bool>,
 }
@@ -98,10 +98,16 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
     }
     let user_api = UserApiProvider::instance();
     let auth_info = AuthInfo::create(&req.auth_type, &req.auth_string)?;
-    let mut user_info = UserInfo::new(&req.name, "%", auth_info);
+    let mut user_info = UserInfo::new(
+        &req.name,
+        req.hostname.map_or("%", |s| s.as_str()),
+        auth_info,
+    );
     user_info.option = user_info.option.with_default_role(req.default_role);
-    for role in req.roles {
-        user_info.grants.grant_role(role);
+    if let Some(roles) = req.roles {
+        for role in roles {
+            user_info.grants.grant_role(role);
+        }
     }
     if req.grant_all.unwrap_or(false) {
         user_info.grants.grant_privileges(
