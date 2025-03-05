@@ -515,9 +515,6 @@ pub fn query_route() -> Route {
             post(search_databases_handler),
             EndpointKind::Catalog,
         ),
-        ("/users", get(list_users_handler), EndpointKind::Metadata),
-        ("/users", post(create_user_handler), EndpointKind::Metadata),
-        ("/roles", get(list_roles_handler), EndpointKind::Metadata),
     ];
 
     let mut route = Route::new();
@@ -530,6 +527,11 @@ pub fn query_route() -> Route {
                 .with(CookieJarManager::new()),
         );
     }
+    route = route
+        .post("/users", post(create_user_handler), EndpointKind::Metadata)
+        .get("/users", get(list_users_handler), EndpointKind::Metadata)
+        .get("/roles", get(list_roles_handler), EndpointKind::Metadata);
+
     route
 }
 
