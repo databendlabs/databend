@@ -590,10 +590,11 @@ async fn write_segment(
     if set_hilbert_level {
         debug_assert!(new_summary.cluster_stats.is_none());
         let level = if new_summary.block_count >= block_per_seg as u64
-            && (new_summary.row_count as usize >= block_per_seg * thresholds.min_rows_per_block
-                || new_summary.uncompressed_byte_size as usize
-                    >= block_per_seg * thresholds.max_bytes_per_block)
-        {
+            && thresholds.check_perfect_block(
+                new_summary.row_count as usize / block_per_seg,
+                new_summary.uncompressed_byte_size as usize / block_per_seg,
+                new_summary.compressed_byte_size as usize / block_per_seg,
+            ) {
             -1
         } else {
             0
