@@ -41,6 +41,7 @@ use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::aggregate_scalar_state::ScalarStateFunc;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggrState;
@@ -54,7 +55,7 @@ where
     T: ValueType,
     T::Scalar: BorshSerialize + BorshDeserialize,
 {
-    values: Vec<T::Scalar>,
+    pub(crate) values: Vec<T::Scalar>,
 }
 
 impl<T> Default for ArrayAggState<T>
@@ -417,6 +418,7 @@ pub fn try_create_aggregate_array_agg_function(
     display_name: &str,
     _params: Vec<Scalar>,
     argument_types: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_unary_arguments(display_name, argument_types.len())?;
     let data_type = argument_types[0].clone();

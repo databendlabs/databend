@@ -40,6 +40,7 @@ use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::aggregator_common::assert_binary_arguments;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
@@ -288,6 +289,7 @@ pub fn try_create_aggregate_covariance<R: AggregateCovariance>(
     display_name: &str,
     _params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_binary_arguments(display_name, arguments.len())?;
 

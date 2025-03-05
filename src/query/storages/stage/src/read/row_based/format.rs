@@ -21,7 +21,7 @@ use databend_common_storage::FileStatus;
 
 use super::batch::BytesBatch;
 use super::batch::RowBatchWithPosition;
-use super::processors::BlockBuilderState;
+use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::formats::CsvInputFormat;
 use crate::read::row_based::formats::NdJsonInputFormat;

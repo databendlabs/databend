@@ -44,7 +44,7 @@ impl KVMeta {
 }
 
 impl Expirable for KVMeta {
-    fn expiry_ms(&self) -> u64 {
+    fn expires_at_ms(&self) -> u64 {
         match self.expire_at {
             None => u64::MAX,
             Some(exp_at_sec) => exp_at_sec * 1000,

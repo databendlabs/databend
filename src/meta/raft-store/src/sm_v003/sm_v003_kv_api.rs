@@ -49,7 +49,7 @@ impl kvapi::KVApi for SMV003KVApi<'_> {
         let mut items = Vec::with_capacity(keys.len());
 
         for k in keys {
-            let got = self.sm.get_maybe_expired_kv(k.as_str()).await?;
+            let got = self.sm.get_maybe_expired_kv(k).await?;
             let v = Self::non_expired(got, local_now_ms);
             items.push(Ok(StreamItem::from((k.clone(), v))));
         }

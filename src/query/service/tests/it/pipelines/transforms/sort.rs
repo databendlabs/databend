@@ -104,14 +104,6 @@ fn prepare_multi_input_and_result(
     (input, result)
 }
 
-fn prepare_single_input_and_result(
-    data: Vec<Vec<i32>>,
-    limit: Option<usize>,
-) -> (Vec<DataBlock>, DataBlock) {
-    let (mut input, expected) = prepare_multi_input_and_result(vec![data], limit);
-    (input.remove(0), expected)
-}
-
 fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
     use databend_common_expression::block_debug::pretty_format_blocks;
 
@@ -136,4 +128,3 @@ fn check_result(result: Vec<DataBlock>, expected: DataBlock) {
 }
 
 mod k_way;
-mod spill;

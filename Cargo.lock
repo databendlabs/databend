@@ -242,6 +242,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aef82843a0ec9f8b19567445ad2421ceeb1d711514384bdd3d49fe37102ee13"
 dependencies = [
  "bigdecimal",
+ "bzip2",
+ "crc32fast",
  "digest",
  "libflate",
  "log",
@@ -252,11 +254,14 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "snap",
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "thiserror 1.0.65",
  "typed-builder 0.19.1",
  "uuid",
+ "xz2",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -1625,16 +1630,6 @@ name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
-
-[[package]]
-name = "byte-unit"
-version = "4.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da78b32057b8fdfc352504708feeba7216dcd65a2c9ab02978cbd288d1279b6c"
-dependencies = [
- "serde",
- "utf8-width",
-]
 
 [[package]]
 name = "byte-unit"
@@ -4458,6 +4453,7 @@ dependencies = [
 name = "databend-common-storages-stage"
 version = "0.1.0"
 dependencies = [
+ "apache-avro",
  "arrow-schema",
  "async-backtrace",
  "async-trait",
@@ -4466,6 +4462,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-column",
  "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",
@@ -4485,7 +4482,11 @@ dependencies = [
  "databend-storages-common-table-meta",
  "enum-as-inner",
  "futures",
+ "jsonb",
+ "lexical-core",
  "log",
+ "match-template",
+ "num-traits",
  "opendal 0.51.2",
  "parquet",
  "serde",
@@ -5062,7 +5063,6 @@ dependencies = [
  "base64 0.22.1",
  "buf-list",
  "bumpalo",
- "byte-unit 4.0.19",
  "byteorder",
  "bytes",
  "chrono",
@@ -10440,7 +10440,7 @@ version = "0.10.0"
 source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.7#e99cfebbc7a485fe55efe476c083d9decc888ef7"
 dependencies = [
  "anyerror",
- "byte-unit 5.1.6",
+ "byte-unit",
  "chrono",
  "clap",
  "derive_more",

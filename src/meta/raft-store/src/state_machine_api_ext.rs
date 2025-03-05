@@ -69,7 +69,7 @@ pub trait StateMachineApiExt: StateMachineApi {
             }
         };
 
-        let expire_ms = kv_meta.expiry_ms();
+        let expire_ms = kv_meta.expires_at_ms();
         if expire_ms < self.get_expire_cursor().time_ms {
             // The record has expired, delete it at once.
             //
@@ -136,13 +136,13 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         // Remove previous expiration index, add a new one.
 
-        if let Some(exp_ms) = removed.get_expire_at_ms() {
+        if let Some(exp_ms) = removed.expires_at_ms_opt() {
             self.map_mut()
                 .set(ExpireKey::new(exp_ms, removed.order_key().seq()), None)
                 .await?;
         }
 
-        if let Some(exp_ms) = added.get_expire_at_ms() {
+        if let Some(exp_ms) = added.expires_at_ms_opt() {
             let k = ExpireKey::new(exp_ms, added.order_key().seq());
             let v = key.to_string();
             self.map_mut().set(k, Some((v, None))).await?;
@@ -198,7 +198,7 @@ pub trait StateMachineApiExt: StateMachineApi {
     /// Get a cloned value by key.
     ///
     /// It does not check expiration of the returned entry.
-    async fn get_maybe_expired_kv(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
+    async fn get_maybe_expired_kv(&self, key: &String) -> Result<Option<SeqV>, io::Error> {
         let got = self.map_ref().str_map().get(key).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)

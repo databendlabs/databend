@@ -247,6 +247,11 @@ impl FromToProto for mt::principal::FileFormatParams {
                     mt::principal::XmlFileFormatParams::from_pb(p)?,
                 ))
             }
+            Some(pb::file_format_params::Format::Avro(p)) => {
+                Ok(mt::principal::FileFormatParams::Avro(
+                    mt::principal::AvroFileFormatParams::from_pb(p)?,
+                ))
+            }
             None => Err(Incompatible::new(
                 "FileFormatParams.format cannot be None".to_string(),
             )),
@@ -273,6 +278,11 @@ impl FromToProto for mt::principal::FileFormatParams {
             Self::Json(p) => Ok(Self::PB {
                 format: Some(pb::file_format_params::Format::Json(
                     mt::principal::JsonFileFormatParams::to_pb(p)?,
+                )),
+            }),
+            Self::Avro(p) => Ok(Self::PB {
+                format: Some(pb::file_format_params::Format::Avro(
+                    mt::principal::AvroFileFormatParams::to_pb(p)?,
                 )),
             }),
             Self::Tsv(p) => Ok(Self::PB {
@@ -554,6 +564,42 @@ impl FromToProto for mt::principal::TsvFileFormatParams {
             escape: self.escape.clone(),
             quote: self.quote.clone(),
             nan_display: self.nan_display.clone(),
+        })
+    }
+}
+
+impl FromToProto for mt::principal::AvroFileFormatParams {
+    type PB = pb::AvroFileFormatParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::AvroFileFormatParams) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let compression = mt::principal::StageFileCompression::from_pb_enum(
+            FromPrimitive::from_i32(p.compression).ok_or_else(|| {
+                Incompatible::new(format!("invalid StageFileCompression: {}", p.compression))
+            })?,
+        )?;
+
+        mt::principal::AvroFileFormatParams::try_create(
+            compression,
+            p.missing_field_as.as_deref(),
+            p.null_if,
+        )
+        .map_err(|e| Incompatible::new(format!("{e}")))
+    }
+
+    fn to_pb(&self) -> Result<pb::AvroFileFormatParams, Incompatible> {
+        let compression =
+            mt::principal::StageFileCompression::to_pb_enum(&self.compression)? as i32;
+        Ok(pb::AvroFileFormatParams {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            compression,
+            missing_field_as: Some(self.missing_field_as.to_string()),
+            null_if: self.null_if.clone(),
         })
     }
 }

@@ -32,6 +32,7 @@ use databend_common_users::CustomClaims;
 use databend_common_users::EnsureUser;
 use databend_query::servers::http::error::QueryError;
 use databend_query::servers::http::middleware::json_response;
+use databend_query::servers::http::v1::catalog;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::query_route;
 use databend_query::servers::http::v1::ExecuteStateKind;
@@ -819,6 +820,52 @@ async fn test_query_log_killed() -> Result<()> {
         "{:?}",
         result
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_catalog_apis() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+
+    let sql = "create table t1(a int)";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 10).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.error.is_none(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
+
+    let response = get_uri(&ep, "/v1/catalog/databases").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: catalog::list_databases::ListDatabasesResponse = serde_json::from_str(&body).unwrap();
+    assert_eq!(body.databases.len(), 3);
+    assert_eq!(body.databases[0].name, "system");
+    assert_eq!(body.databases[1].name, "information_schema");
+    assert_eq!(body.databases[2].name, "default");
+
+    let response = get_uri(&ep, "/v1/catalog/databases/default/tables").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: catalog::list_database_tables::ListDatabaseTablesResponse =
+        serde_json::from_str(&body).unwrap();
+    assert_eq!(body.tables.len(), 1);
+    assert_eq!(body.tables[0].name, "t1");
+
+    let response = get_uri(&ep, "/v1/catalog/databases/default/tables/t1").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: catalog::get_database_table::GetDatabaseTableResponse =
+        serde_json::from_str(&body).unwrap();
+    assert_eq!(body.table.unwrap().name, "t1");
+
+    let response = get_uri(&ep, "/v1/catalog/databases/default/tables/t1/fields").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: catalog::list_database_table_fields::ListDatabaseTableFieldsResponse =
+        serde_json::from_str(&body).unwrap();
+    assert_eq!(body.fields.len(), 1);
+    assert_eq!(body.fields[0].name, "a");
 
     Ok(())
 }
