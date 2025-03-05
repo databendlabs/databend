@@ -55,6 +55,13 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListRolesResponse> {
             is_default,
         });
     }
+    if roles.is_empty() {
+        roles.push(RoleInfo {
+            name: "public".to_string(),
+            is_current: true,
+            is_default: true,
+        });
+    }
     Ok(ListRolesResponse { roles })
 }
 
