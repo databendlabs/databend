@@ -24,14 +24,14 @@ use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ListRolesResponse {
-    roles: Vec<RoleInfo>,
+    pub roles: Vec<RoleInfo>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RoleInfo {
-    name: String,
-    is_current: bool,
-    is_default: bool,
+    pub name: String,
+    pub is_current: bool,
+    pub is_default: bool,
 }
 
 #[async_backtrace::framed]

@@ -16,11 +16,11 @@ pub mod catalog;
 mod discovery;
 mod http_query_handlers;
 mod query;
-mod roles;
+pub mod roles;
 mod session;
 mod stage;
 mod suggestions;
-mod users;
+pub mod users;
 mod verify;
 
 pub use discovery::discovery_nodes;

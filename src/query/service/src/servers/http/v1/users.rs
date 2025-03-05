@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::UserApiProvider;
+use poem::error::Forbidden;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
@@ -24,21 +29,31 @@ use serde::Serialize;
 use crate::servers::http::v1::HttpQueryContext;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ListUsersResponse {
-    users: Vec<UserInfo>,
+pub struct CreateUserRequest {
+    pub name: String,
+    pub hostname: Option<String>,
+    pub auth_type: Option<String>,
+    pub auth_string: Option<String>,
+    pub default_role: Option<String>,
+    pub roles: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct UserInfo {
-    name: String,
-    hostname: String,
-    auth_type: String,
-    default_role: String,
-    roles: Vec<String>,
-    disabled: bool,
-    network_policy: Option<String>,
-    password_policy: Option<String>,
-    must_change_password: Option<bool>,
+pub struct ListUsersResponse {
+    pub users: Vec<UserItem>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UserItem {
+    pub name: String,
+    pub hostname: String,
+    pub auth_type: String,
+    pub default_role: String,
+    pub roles: Vec<String>,
+    pub disabled: bool,
+    pub network_policy: Option<String>,
+    pub password_policy: Option<String>,
+    pub must_change_password: Option<bool>,
 }
 
 #[async_backtrace::framed]
@@ -47,7 +62,7 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListUsersResponse> {
     let user_api = UserApiProvider::instance();
     let mut users = vec![];
     for user in user_api.get_users(&tenant).await? {
-        users.push(UserInfo {
+        users.push(UserItem {
             name: user.name.clone(),
             hostname: user.hostname.clone(),
             auth_type: user.auth_info.get_type().to_str().to_string(),
@@ -67,4 +82,39 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListUsersResponse> {
 pub async fn list_users_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoResponse> {
     let resp = handle(ctx).await.map_err(InternalServerError)?;
     Ok(Json(resp))
+}
+
+#[async_backtrace::framed]
+async fn upsert_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<()> {
+    let user = ctx.session.get_current_user()?;
+    if !user.is_account_admin() {
+        return Err(ErrorCode::PermissionDenied(
+            "only account admin can create or update user",
+        ));
+    }
+    let user_api = UserApiProvider::instance();
+    let auth_info = AuthInfo::create(&req.auth_type, &req.auth_string)?;
+    let mut user_info = UserInfo::new(&req.name, "%", auth_info);
+    user_info.option = user_info.option.with_default_role(req.default_role);
+    for role in req.roles {
+        user_info.grants.grant_role(role);
+    }
+    let tenant = ctx.session.get_current_tenant();
+    user_api
+        .add_user(&tenant, user_info, &CreateOption::CreateOrReplace)
+        .await?;
+    Ok(())
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn create_user_handler(
+    ctx: &HttpQueryContext,
+    Json(req): Json<CreateUserRequest>,
+) -> PoemResult<impl IntoResponse> {
+    upsert_user(ctx, req).await.map_err(|e| match e.code() {
+        ErrorCode::PERMISSION_DENIED => Forbidden(e),
+        _ => InternalServerError(e),
+    })?;
+    Ok(Json(()))
 }
