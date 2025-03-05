@@ -65,6 +65,7 @@ use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::refresh_handler;
 use crate::servers::http::v1::roles::list_roles_handler;
 use crate::servers::http::v1::upload_to_stage;
+use crate::servers::http::v1::users::create_user_handler;
 use crate::servers::http::v1::users::list_users_handler;
 use crate::servers::http::v1::verify_handler;
 use crate::servers::http::v1::HttpQueryContext;
@@ -514,8 +515,9 @@ pub fn query_route() -> Route {
             post(search_databases_handler),
             EndpointKind::Catalog,
         ),
-        ("/users", post(list_users_handler), EndpointKind::Metadata),
-        ("/roles", post(list_roles_handler), EndpointKind::Metadata),
+        ("/users", get(list_users_handler), EndpointKind::Metadata),
+        ("/users", post(create_user_handler), EndpointKind::Metadata),
+        ("/roles", get(list_roles_handler), EndpointKind::Metadata),
     ];
 
     let mut route = Route::new();

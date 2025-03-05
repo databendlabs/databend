@@ -85,7 +85,7 @@ pub async fn list_users_handler(ctx: &HttpQueryContext) -> PoemResult<impl IntoR
 }
 
 #[async_backtrace::framed]
-async fn upsert_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<()> {
+async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<()> {
     let user = ctx.session.get_current_user()?;
     if !user.is_account_admin() {
         return Err(ErrorCode::PermissionDenied(
@@ -112,7 +112,7 @@ pub async fn create_user_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<CreateUserRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    upsert_user(ctx, req).await.map_err(|e| match e.code() {
+    create_user(ctx, req).await.map_err(|e| match e.code() {
         ErrorCode::PERMISSION_DENIED => Forbidden(e),
         _ => InternalServerError(e),
     })?;
