@@ -41,6 +41,7 @@ use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Entry;
+use opendal::ErrorKind;
 use opendal::Operator;
 use uuid::Version;
 
@@ -499,16 +500,23 @@ async fn select_gc_root(
 
     let dal = fuse_table.get_operator_ref();
     let gc_root = read_snapshot_from_location(fuse_table, &gc_root_path).await;
-    let gc_root_meta_ts = dal
-        .stat(&gc_root_path)
-        .await?
-        .last_modified()
-        .ok_or_else(|| {
+
+    let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
+        Ok(v) => v.last_modified().ok_or_else(|| {
             ErrorCode::StorageOther(format!(
                 "Failed to get `last_modified` metadata of the gc root object '{}'",
                 gc_root_path
             ))
-        })?;
+        })?,
+        Err(e) => {
+            return if e.kind() == ErrorKind::NotFound {
+                // Concurrent vacuum, ignore it
+                Ok(None)
+            } else {
+                Err(e.into())
+            };
+        }
+    };
 
     match gc_root {
         Ok(gc_root) => {
