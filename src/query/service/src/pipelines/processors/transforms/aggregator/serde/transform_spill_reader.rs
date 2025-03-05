@@ -18,6 +18,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use byteorder::BigEndian;
+use byteorder::ReadBytesExt;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_exception::ErrorCode;
@@ -37,6 +39,7 @@ use opendal::Operator;
 use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
+use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 
@@ -48,6 +51,7 @@ pub struct TransformSpillReader {
 
     operator: Operator,
     semaphore: Arc<Semaphore>,
+    params: Arc<AggregatorParams>,
     deserialized_meta: Option<BlockMetaInfoPtr>,
     reading_meta: Option<AggregateMeta>,
     deserializing_meta: Option<DeserializingMeta>,
@@ -141,7 +145,7 @@ impl Processor for TransformSpillReader {
                     debug_assert!(read_data.len() == 1);
                     let data = read_data.pop_front().unwrap();
 
-                    self.deserialized_meta = Some(Box::new(Self::deserialize(payload, data)));
+                    self.deserialized_meta = Some(Box::new(self.deserialize(payload, data)));
                 }
                 AggregateMeta::Partitioned { bucket, data } => {
                     let mut new_data = Vec::with_capacity(data.len());
@@ -150,7 +154,7 @@ impl Processor for TransformSpillReader {
                         if matches!(&meta, AggregateMeta::BucketSpilled(_)) {
                             if let AggregateMeta::BucketSpilled(payload) = meta {
                                 let data = read_data.pop_front().unwrap();
-                                new_data.push(Self::deserialize(payload, data));
+                                new_data.push(self.deserialize(payload, data));
                             }
 
                             continue;
@@ -282,30 +286,44 @@ impl TransformSpillReader {
         output: Arc<OutputPort>,
         operator: Operator,
         semaphore: Arc<Semaphore>,
+        params: Arc<AggregatorParams>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(TransformSpillReader {
             input,
             output,
             operator,
             semaphore,
+            params,
             deserialized_meta: None,
             reading_meta: None,
             deserializing_meta: None,
         })))
     }
 
-    fn deserialize(payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta {
-        let mut begin = 0;
-        let mut columns = Vec::with_capacity(payload.columns_layout.len());
+    fn deserialize(&self, payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta {
+        let columns = self.params.group_data_types.len() + self.params.aggregate_functions.len();
 
-        for column_layout in payload.columns_layout {
-            columns.push(deserialize_column(&data[begin..begin + column_layout as usize]).unwrap());
-            begin += column_layout as usize;
+        let mut blocks = vec![];
+        let mut cursor = data.as_slice();
+
+        while !cursor.is_empty() {
+            let mut block_columns = Vec::with_capacity(columns);
+
+            for _idx in 0..columns {
+                let column_size = cursor.read_u64::<BigEndian>().unwrap();
+                let (left, right) = cursor.split_at(column_size as usize);
+                block_columns.push(deserialize_column(left).unwrap());
+                cursor = right;
+            }
+
+            blocks.push(DataBlock::new_from_columns(block_columns));
         }
+
+        let block = DataBlock::concat(&blocks).unwrap();
 
         AggregateMeta::Serialized(SerializedPayload {
             bucket: payload.bucket,
-            data_block: DataBlock::new_from_columns(columns),
+            data_block: block,
             max_partition_count: payload.max_partition_count,
         })
     }

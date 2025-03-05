@@ -598,7 +598,13 @@ pub fn build_partition_bucket(
     let operator = DataOperator::instance().spill_operator();
     pipeline.add_transform(|input, output| {
         let operator = operator.clone();
-        TransformAggregateSpillReader::create(input, output, operator, semaphore.clone())
+        TransformAggregateSpillReader::create(
+            input,
+            output,
+            operator,
+            semaphore.clone(),
+            params.clone(),
+        )
     })?;
 
     pipeline.add_transform(|input, output| {

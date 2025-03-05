@@ -585,6 +585,10 @@ impl SpillWriter {
         Ok(self.writer.write(bytes).await?)
     }
 
+    pub fn location(&self) -> String {
+        self.location.clone()
+    }
+
     pub fn write_bytes(&self) -> usize {
         self.bytes
     }
