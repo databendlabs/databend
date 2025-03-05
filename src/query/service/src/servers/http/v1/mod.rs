@@ -16,9 +16,11 @@ pub mod catalog;
 mod discovery;
 mod http_query_handlers;
 mod query;
+mod roles;
 mod session;
 mod stage;
 mod suggestions;
+mod users;
 mod verify;
 
 pub use discovery::discovery_nodes;
@@ -35,6 +37,7 @@ pub use query::ExpiringState;
 pub use query::HttpQueryContext;
 pub use query::HttpQueryManager;
 pub use query::HttpSessionConf;
+pub use roles::list_roles_handler;
 pub use session::login_handler::login_handler;
 pub use session::login_handler::LoginResponse;
 pub use session::logout_handler::logout_handler;
@@ -47,6 +50,7 @@ pub use stage::upload_to_stage;
 pub use stage::UploadToStageResponse;
 pub use suggestions::list_suggestions;
 pub use suggestions::SuggestionsResponse;
+pub use users::list_users_handler;
 pub use verify::verify_handler;
 
 pub use crate::servers::http::clickhouse_handler::clickhouse_router;
