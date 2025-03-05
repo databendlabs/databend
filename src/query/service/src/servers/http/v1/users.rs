@@ -111,9 +111,10 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
         }
     }
     if req.grant_all.unwrap_or(false) {
-        user_info
-            .grants
-            .grant_privileges(&GrantObject::Global, UserPrivilegeSet::all_privileges());
+        user_info.grants.grant_privileges(
+            &GrantObject::Global,
+            UserPrivilegeSet::available_privileges_on_global(),
+        );
     }
     let tenant = ctx.session.get_current_tenant();
     user_api
