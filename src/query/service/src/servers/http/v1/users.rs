@@ -20,6 +20,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::UserApiProvider;
+use poem::error::BadRequest;
 use poem::error::Forbidden;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -97,7 +98,8 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
         ));
     }
     let user_api = UserApiProvider::instance();
-    let auth_info = AuthInfo::create(&req.auth_type, &req.auth_string)?;
+    let auth_info = AuthInfo::create(&req.auth_type, &req.auth_string)
+        .map_err(|e| ErrorCode::InvalidArgument(format!("invalid auth info: {}", e)))?;
     let mut user_info = UserInfo::new(
         &req.name,
         &req.hostname.unwrap_or("%".to_string()),
@@ -135,6 +137,7 @@ pub async fn create_user_handler(
 ) -> PoemResult<impl IntoResponse> {
     create_user(ctx, req).await.map_err(|e| match e.code() {
         ErrorCode::PERMISSION_DENIED => Forbidden(e),
+        ErrorCode::INVALID_ARGUMENT => BadRequest(e),
         _ => InternalServerError(e),
     })?;
     Ok(Json(()))
