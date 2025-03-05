@@ -242,6 +242,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aef82843a0ec9f8b19567445ad2421ceeb1d711514384bdd3d49fe37102ee13"
 dependencies = [
  "bigdecimal",
+ "bzip2",
+ "crc32fast",
  "digest",
  "libflate",
  "log",
@@ -252,11 +254,14 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "snap",
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "thiserror",
  "typed-builder 0.19.1",
  "uuid",
+ "xz2",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -4422,6 +4427,7 @@ dependencies = [
 name = "databend-common-storages-stage"
 version = "0.1.0"
 dependencies = [
+ "apache-avro",
  "arrow-schema",
  "async-backtrace",
  "async-trait",
@@ -4430,6 +4436,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-column",
  "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",
@@ -4449,7 +4456,11 @@ dependencies = [
  "databend-storages-common-table-meta",
  "enum-as-inner",
  "futures",
+ "jsonb",
+ "lexical-core",
  "log",
+ "match-template",
+ "num-traits",
  "opendal 0.51.2",
  "parquet",
  "serde",
