@@ -886,7 +886,6 @@ async fn test_user_apis() -> Result<()> {
         default_role: None,
         roles: None,
         grant_all: Some(true),
-        grant_read: None,
     };
     let response = post_uri(
         &ep,
