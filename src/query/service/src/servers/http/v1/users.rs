@@ -15,7 +15,9 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::AuthInfo;
+use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_users::UserApiProvider;
 use poem::error::Forbidden;
@@ -36,6 +38,8 @@ pub struct CreateUserRequest {
     pub auth_string: Option<String>,
     pub default_role: Option<String>,
     pub roles: Vec<String>,
+    pub grant_all: Option<bool>,
+    pub grant_read: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -98,6 +102,17 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
     user_info.option = user_info.option.with_default_role(req.default_role);
     for role in req.roles {
         user_info.grants.grant_role(role);
+    }
+    if req.grant_all.unwrap_or(false) {
+        user_info.grants.grant_privileges(
+            &GrantObject::Database("*".to_string(), "*".to_string()),
+            UserPrivilegeSet::available_privileges_on_database(false),
+        );
+    } else if req.grant_read.unwrap_or(false) {
+        user_info.grants.grant_privileges(
+            &GrantObject::Database("*".to_string(), "*".to_string()),
+            UserPrivilegeSet::available_privileges_on_database(false),
+        );
     }
     let tenant = ctx.session.get_current_tenant();
     user_api

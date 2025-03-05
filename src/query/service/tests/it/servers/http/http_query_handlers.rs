@@ -885,6 +885,8 @@ async fn test_user_apis() -> Result<()> {
         auth_string: Some("test_password".to_string()),
         default_role: Some("public".to_string()),
         roles: vec!["public".to_string()],
+        grant_all: Some(true),
+        grant_read: None,
     };
     let response = post_uri(
         &ep,
