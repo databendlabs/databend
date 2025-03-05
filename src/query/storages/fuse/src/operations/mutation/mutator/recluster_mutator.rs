@@ -221,6 +221,7 @@ impl ReclusterMutator {
 
             let mut total_rows = 0;
             let mut total_bytes = 0;
+            let mut total_compressed = 0;
             let mut small_blocks = IndexSet::new();
             let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
 
@@ -242,6 +243,7 @@ impl ReclusterMutator {
 
                 total_rows += block.row_count;
                 total_bytes += block.block_size;
+                total_compressed += block.file_size;
             }
 
             // If total rows and bytes are too small, compact the blocks into one
@@ -262,6 +264,7 @@ impl ReclusterMutator {
                     &column_nodes,
                     total_rows as usize,
                     total_bytes as usize,
+                    total_compressed as usize,
                     level,
                 ));
                 break;
@@ -280,6 +283,7 @@ impl ReclusterMutator {
             // Process selected blocks into recluster tasks based on memory threshold
             let mut task_bytes = 0;
             let mut task_rows = 0;
+            let mut task_compressed = 0;
             let mut task_indices = Vec::new();
             let mut selected_blocks = Vec::new();
             for idx in selected_idx {
@@ -296,11 +300,13 @@ impl ReclusterMutator {
                         &column_nodes,
                         task_rows,
                         task_bytes,
+                        task_compressed,
                         level,
                     ));
 
                     task_rows = 0;
                     task_bytes = 0;
+                    task_compressed = 0;
                     selected_blocks.clear();
 
                     // Break if maximum task limit is reached
@@ -311,6 +317,7 @@ impl ReclusterMutator {
 
                 task_rows += row_count;
                 task_bytes += block_size;
+                task_compressed += block.file_size as usize;
                 task_indices.push(idx);
                 selected_blocks.push((None, block));
             }
@@ -323,6 +330,7 @@ impl ReclusterMutator {
                     &column_nodes,
                     task_rows,
                     task_bytes,
+                    task_compressed,
                     level,
                 ));
             }
@@ -442,6 +450,7 @@ impl ReclusterMutator {
         column_nodes: &ColumnNodes,
         total_rows: usize,
         total_bytes: usize,
+        task_compressed: usize,
         level: i32,
     ) -> ReclusterTask {
         if log::log_enabled!(log::Level::Debug) {
@@ -462,6 +471,7 @@ impl ReclusterMutator {
             stats,
             total_rows,
             total_bytes,
+            task_compressed,
             level,
         }
     }

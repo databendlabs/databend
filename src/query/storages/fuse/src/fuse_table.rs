@@ -57,6 +57,7 @@ use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::ROW_VERSION_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableInfo;
@@ -122,6 +123,7 @@ use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
+use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 
@@ -1028,7 +1030,13 @@ impl Table for FuseTable {
             FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD,
             DEFAULT_BLOCK_BUFFER_SIZE,
         );
-        BlockThresholds::new(max_rows_per_block, min_rows_per_block, max_bytes_per_block)
+        let max_file_size = self.get_option(FUSE_OPT_KEY_FILE_SIZE, DEFAULT_BLOCK_COMPRESSED_SIZE);
+        BlockThresholds::new(
+            max_rows_per_block,
+            min_rows_per_block,
+            max_bytes_per_block,
+            max_file_size,
+        )
     }
 
     #[async_backtrace::framed]

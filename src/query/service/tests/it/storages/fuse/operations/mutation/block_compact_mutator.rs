@@ -174,6 +174,7 @@ async fn test_safety() -> Result<()> {
         max_rows_per_block: 5,
         min_rows_per_block: 4,
         max_bytes_per_block: 1024,
+        max_bytes_per_file: 100,
     };
 
     let schema = TestFixture::default_table_schema();

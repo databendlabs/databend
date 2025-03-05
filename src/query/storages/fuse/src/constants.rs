@@ -17,6 +17,7 @@ pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
 pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_OPT_KEY_ROW_PER_PAGE: &str = "row_per_page";
 pub const FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD: &str = "row_avg_depth_threshold";
+pub const FUSE_OPT_KEY_FILE_SIZE: &str = "file_size";
 
 pub const FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS: &str = "data_retention_period_in_hours";
 

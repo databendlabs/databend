@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
 
@@ -21,6 +22,7 @@ pub struct BlockThresholds {
     pub max_rows_per_block: usize,
     pub min_rows_per_block: usize,
     pub max_bytes_per_block: usize,
+    pub max_bytes_per_file: usize,
 }
 
 impl Default for BlockThresholds {
@@ -29,6 +31,7 @@ impl Default for BlockThresholds {
             max_rows_per_block: DEFAULT_BLOCK_MAX_ROWS,
             min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
             max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
+            max_bytes_per_file: DEFAULT_BLOCK_COMPRESSED_SIZE,
         }
     }
 }
@@ -38,11 +41,13 @@ impl BlockThresholds {
         max_rows_per_block: usize,
         min_rows_per_block: usize,
         max_bytes_per_block: usize,
+        max_bytes_per_file: usize,
     ) -> Self {
         BlockThresholds {
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,
+            max_bytes_per_file,
         }
     }
 
@@ -67,17 +72,31 @@ impl BlockThresholds {
     }
 
     #[inline]
-    pub fn calc_rows_per_block(&self, total_bytes: usize, total_rows: usize) -> usize {
+    pub fn calc_rows_per_block(
+        &self,
+        total_bytes: usize,
+        total_rows: usize,
+        total_compressed: usize,
+    ) -> usize {
         if self.check_for_compact(total_rows, total_bytes) {
             return total_rows;
         }
 
-        let block_num_by_size = std::cmp::max(total_bytes / self.max_bytes_per_block, 1);
         let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
+        let block_num_by_size = std::cmp::max(
+            total_bytes / self.max_bytes_per_block,
+            total_compressed / self.max_bytes_per_file,
+        );
         if block_num_by_rows >= block_num_by_size {
             return self.max_rows_per_block;
         }
 
-        total_rows.div_ceil(block_num_by_size)
+        let mut rows_per_block = total_rows.div_ceil(block_num_by_size);
+        if rows_per_block < self.max_rows_per_block / 2 {
+            // If block rows < 500_000, max_bytes_per_block set to 125M
+            let block_num_by_size = (4 * block_num_by_size / 5).max(1);
+            rows_per_block = total_rows.div_ceil(block_num_by_size);
+        }
+        rows_per_block
     }
 }
