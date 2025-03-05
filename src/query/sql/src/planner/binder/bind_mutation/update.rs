@@ -105,14 +105,15 @@ impl Binder {
 
         let plan = self.bind_mutation(bind_context, mutation).await?;
 
-        // if true {
-        //     Ok(plan)
-        // } else {
-        self.rewrite_update(plan)
-        // }
+        let settings = self.ctx.get_settings();
+        if settings.get_error_on_nondeterministic_update()? {
+            Ok(plan)
+        } else {
+            self.rewrite_nondeterministic_update(plan)
+        }
     }
 
-    fn rewrite_update(&mut self, plan: Plan) -> Result<Plan> {
+    fn rewrite_nondeterministic_update(&mut self, plan: Plan) -> Result<Plan> {
         let Plan::DataMutation { box s_expr, .. } = &plan else {
             return Ok(plan);
         };
@@ -150,6 +151,7 @@ impl Binder {
                         column: binding.clone(),
                     })],
                     return_type: binding.data_type.clone(),
+                    sort_descs: vec![],
                     display_name: display_name.clone(),
                 });
 
@@ -200,11 +202,6 @@ impl Binder {
                 *column = index.to_string()
             };
         }
-
-        log::info!(
-            "update mutation.field_index_map {:?}",
-            mutation.field_index_map
-        );
 
         mutation.required_columns = Box::new(
             std::iter::once(mutation.row_id_index)

@@ -83,7 +83,6 @@ pub struct MatchedAggregator {
     block_mutation_row_offset: HashMap<u64, (UpdateOffset, DeleteOffset)>,
     aggregation_ctx: Arc<AggregationContext>,
     target_build_optimization: bool,
-    error_on_nondeterministic_update: bool,
     meta_indexes: HashSet<(SegmentIndex, BlockIndex)>,
 }
 
@@ -95,7 +94,6 @@ impl MatchedAggregator {
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
         target_build_optimization: bool,
-        error_on_nondeterministic_update: bool,
     ) -> Result<Self> {
         let target_table_schema =
             Arc::new(table.schema_with_stream().remove_virtual_computed_fields());
@@ -148,7 +146,6 @@ impl MatchedAggregator {
             segment_locations: AHashMap::from_iter(segment_locations),
             ctx,
             target_build_optimization,
-            error_on_nondeterministic_update,
             meta_indexes: HashSet::new(),
         })
     }
@@ -202,7 +199,6 @@ impl MatchedAggregator {
                         .or_insert_with(|| (HashSet::new(), HashSet::new()))
                         .0
                         .insert(offset as usize)
-                        && self.error_on_nondeterministic_update
                     {
                         return Err(ErrorCode::UnresolvableConflict(
                             "multi rows from source match one and the same row in the target_table multi times",

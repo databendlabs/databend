@@ -54,18 +54,12 @@ pub struct MergeIntoState {
     pub(crate) atomic_pointer: MatchedPtr,
     /// chunk_offsets[chunk_idx] stands for the offset of chunk_idx_th chunk in chunks.
     pub(crate) chunk_offsets: Vec<u32>,
-
-    pub(crate) error_on_nondeterministic_update: bool,
 }
 
 impl MergeIntoState {
-    pub(crate) fn create_merge_into_state(
-        is_distributed: bool,
-        error_on_nondeterministic_update: bool,
-    ) -> SyncUnsafeCell<Self> {
+    pub(crate) fn create_merge_into_state(is_distributed: bool) -> SyncUnsafeCell<Self> {
         SyncUnsafeCell::new(MergeIntoState {
             merge_into_is_distributed: is_distributed,
-            error_on_nondeterministic_update,
             block_info_index: Default::default(),
             matched: Vec::new(),
             atomic_pointer: MatchedPtr(std::ptr::null_mut()),
@@ -187,9 +181,7 @@ impl HashJoinProbeState {
                     let mut old_mactehd_counts =
                         unsafe { (*pointer.0.add(offset)).load(Ordering::Relaxed) };
                     loop {
-                        if merge_into_state.error_on_nondeterministic_update
-                            && old_mactehd_counts > 0
-                        {
+                        if old_mactehd_counts > 0 {
                             return Err(ErrorCode::UnresolvableConflict(
                                 "multi rows from source match one and the same row in the target_table multi times in probe phase",
                             ));

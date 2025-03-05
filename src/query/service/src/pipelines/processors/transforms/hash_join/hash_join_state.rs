@@ -154,7 +154,6 @@ impl HashJoinState {
         let settings = ctx.get_settings();
         let spill_partition_bits = settings.get_join_spilling_partition_bits()?;
         let spill_buffer_threshold = settings.get_join_spilling_buffer_threshold_per_proc()?;
-        let error_on_nondeterministic_update = settings.get_error_on_nondeterministic_update()?;
 
         let column_map = if let Some((_, column_map)) = build_side_cache_info {
             column_map
@@ -183,7 +182,6 @@ impl HashJoinState {
                 false => None,
                 true => Some(MergeIntoState::create_merge_into_state(
                     merge_into_is_distributed,
-                    error_on_nondeterministic_update,
                 )),
             },
             column_map,
