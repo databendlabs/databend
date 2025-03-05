@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod block_builder;
-mod decompressor;
-mod reader;
-mod separator;
+mod avro_to_jsonb;
+mod block_builder_processor;
+mod decoder;
+mod pipeline;
 
-pub use block_builder::BlockBuilder;
-pub use decompressor::Decompressor;
-pub use reader::BytesReader;
-pub use separator::Separator;
+pub use pipeline::AvroReadPipelineBuilder;

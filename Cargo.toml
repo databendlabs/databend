@@ -220,6 +220,7 @@ ahash = "0.8"
 aho-corasick = { version = "1.0.1" } #
 anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
+apache-avro = { version = "0.17.0", features = ["snappy", "zstandard", "xz", "snappy", "bzip"] }
 approx = "0.5.1"
 arrow = { version = "53" }
 arrow-array = { version = "53" }
