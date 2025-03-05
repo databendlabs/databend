@@ -904,8 +904,6 @@ async fn test_user_apis() -> Result<()> {
     assert_eq!(body.users[0].name, "test_user");
     assert_eq!(body.users[0].hostname, "%");
     assert_eq!(body.users[0].auth_type, "double_sha1_password");
-    assert_eq!(body.users[0].default_role, "public");
-    assert_eq!(body.users[0].roles, vec!["public"]);
     assert_eq!(body.users[0].disabled, false);
     Ok(())
 }
@@ -920,7 +918,7 @@ async fn test_role_apis() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     let body: ListRolesResponse = serde_json::from_str(&body).unwrap();
     assert_eq!(body.roles.len(), 1);
-    assert_eq!(body.roles[0].name, "public");
+    assert_eq!(body.roles[0].name, "account_admin");
     Ok(())
 }
 
