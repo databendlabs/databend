@@ -113,12 +113,12 @@ async fn create_user(ctx: &HttpQueryContext, req: CreateUserRequest) -> Result<(
     }
     if req.grant_all.unwrap_or(false) {
         user_info.grants.grant_privileges(
-            &GrantObject::Database("*".to_string(), "*".to_string()),
+            &GrantObject::Database("default".to_string(), "*".to_string()),
             UserPrivilegeSet::available_privileges_on_database(false),
         );
     } else if req.grant_read.unwrap_or(false) {
         user_info.grants.grant_privileges(
-            &GrantObject::Database("*".to_string(), "*".to_string()),
+            &GrantObject::Database("default".to_string(), "*".to_string()),
             UserPrivilegeSet::available_privileges_on_database(false),
         );
     }
