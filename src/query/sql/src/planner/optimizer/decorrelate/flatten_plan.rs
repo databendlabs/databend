@@ -786,6 +786,9 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
+        self.derived_columns
+            .retain(|_, derived_column| op.output_indexes.contains(derived_column));
+
         Ok(SExpr::create_binary(
             Arc::new(op.clone().into()),
             Arc::new(left_flatten_plan),
