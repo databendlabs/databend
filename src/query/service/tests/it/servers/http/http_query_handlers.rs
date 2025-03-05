@@ -884,10 +884,11 @@ async fn test_user_apis() -> Result<()> {
         auth_type: Some("double_sha1_password".to_string()),
         auth_string: Some("test_password".to_string()),
         default_role: Some("public".to_string()),
-        roles: Some(vec!["public".to_string()]),
+        roles: vec!["public".to_string()],
     };
-    let response = post_json_to_endpoint(
+    let response = post_uri(
         &ep,
+        "/v1/users",
         &serde_json::to_value(req).unwrap(),
         HeaderMap::default(),
     )
@@ -946,6 +947,31 @@ async fn get_uri(ep: &EndpointType, uri: &str) -> Response {
     )
     .await
     .unwrap_or_else(|err| err.into_response())
+}
+
+async fn post_uri(
+    ep: &EndpointType,
+    uri: &str,
+    json: &serde_json::Value,
+    headers: HeaderMap,
+) -> Result<Response> {
+    let content_type = "application/json";
+    let body = serde_json::to_vec(&json)?;
+    let basic = headers::Authorization::basic("root", "");
+
+    let mut req = Request::builder()
+        .uri(uri.parse().unwrap())
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, content_type)
+        .typed_header(basic)
+        .body(body);
+    req.headers_mut().extend(headers.into_iter());
+
+    let response = ep
+        .call(req)
+        .await
+        .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+    Ok(response)
 }
 
 async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, QueryResponse)> {
