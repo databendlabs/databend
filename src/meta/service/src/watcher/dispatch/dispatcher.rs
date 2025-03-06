@@ -33,43 +33,54 @@ use tonic::Status;
 
 use crate::metrics::network_metrics;
 use crate::metrics::server_metrics;
-use crate::watcher::command::Command;
-use crate::watcher::id::WatcherId;
-use crate::watcher::subscriber_handle::SubscriberHandle;
-use crate::watcher::StreamSender;
+use crate::watcher::dispatch::command::Command;
+use crate::watcher::dispatch::dispatcher_handle::DispatcherHandle;
+use crate::watcher::dispatch::Update;
+use crate::watcher::watch_stream::WatchStreamSender;
 use crate::watcher::WatchDesc;
+use crate::watcher::WatcherId;
 
-/// Receives events from event sources(such as raft state machine),
-/// dispatches them to interested watchers.
-pub struct EventSubscriber {
+/// Receives events from event sources via `rx` and dispatches them to interested watchers.
+///
+/// The [`Dispatcher`] acts as a central hub for the watch system, managing
+/// subscriptions and ensuring that each watcher receives only the events
+/// they have registered interest in. It maintains a mapping of watchers
+/// and their watch descriptors to efficiently route events.
+pub struct Dispatcher {
     rx: mpsc::UnboundedReceiver<Command>,
 
-    watchers: SpanMap<String, Arc<StreamSender>>,
+    watchers: SpanMap<String, Arc<WatchStreamSender>>,
 
     current_watcher_id: WatcherId,
 }
 
-impl EventSubscriber {
+impl Dispatcher {
     /// Spawn a dispatcher loop task.
-    pub(crate) fn spawn() -> SubscriberHandle {
+    ///
+    /// Creates a new [`Dispatcher`] instance and spawns it as an asynchronous task.
+    /// The dispatcher will process incoming commands and route watch events to the
+    /// appropriate subscribers.
+    ///
+    /// Returns a handle that can be used to send commands to the dispatcher.
+    pub(crate) fn spawn() -> DispatcherHandle {
         let (tx, rx) = mpsc::unbounded_channel();
 
-        let subscriber = EventSubscriber {
+        let dispatcher = Dispatcher {
             rx,
             watchers: SpanMap::new(),
             current_watcher_id: 1,
         };
 
-        let _h = databend_common_base::runtime::spawn(subscriber.main());
+        let _h = databend_common_base::runtime::spawn(dispatcher.main());
 
-        SubscriberHandle::new(tx)
+        DispatcherHandle::new(tx)
     }
 
     #[fastrace::trace]
     async fn main(mut self) {
         while let Some(event) = self.rx.recv().await {
             match event {
-                Command::KVChange(kv_change) => {
+                Command::Update(kv_change) => {
                     self.dispatch(kv_change).await;
                 }
                 Command::Request { req } => req(&mut self),
@@ -77,12 +88,20 @@ impl EventSubscriber {
             }
         }
 
-        info!("EventDispatcher: all event senders are closed. quit.");
+        info!("watch-event-Dispatcher: all event senders are closed. quit.");
     }
 
-    /// Send a stream of kv changes to a watcher.
+    /// Creates a future that streams key-value changes to a watcher.
+    ///
+    /// This method constructs a future that will process each item in the stream and
+    /// forward it to the watcher via `tx` as a [`WatchResponse`]. The future terminates
+    /// if the stream ends or if sending to the watcher fails.
+    ///
+    /// # Parameters
+    /// * `to_tx` - The sender channel connected to a watcher client
+    /// * `strm` - A stream of key-value pairs with sequence versions
     pub fn send_stream(
-        tx: mpsc::Sender<Result<WatchResponse, Status>>,
+        to_tx: mpsc::Sender<Result<WatchResponse, Status>>,
         mut strm: BoxStream<'static, Result<(String, SeqV), io::Error>>,
     ) -> BoxFuture<'static, ()> {
         let fu = async move {
@@ -90,8 +109,11 @@ impl EventSubscriber {
                 let (key, seq_v) = match res {
                     Ok((key, seq)) => (key, seq),
                     Err(err) => {
-                        warn!("EventSubscriber: recv error from kv stream: {}", err);
-                        tx.send(Err(Status::internal(err.to_string()))).await.ok();
+                        warn!("watch-event-Dispatcher: recv error from kv stream: {}", err);
+                        to_tx
+                            .send(Err(Status::internal(err.to_string())))
+                            .await
+                            .ok();
                         break;
                     }
                 };
@@ -100,8 +122,8 @@ impl EventSubscriber {
                     WatchResponse::new(&Change::new(None, Some(seq_v)).with_id(key)).unwrap();
                 let resp_size = resp.encoded_len() as u64;
 
-                if let Err(_err) = tx.send(Ok(resp)).await {
-                    warn!("EventSubscriber: fail to send to watcher; close this stream");
+                if let Err(_err) = to_tx.send(Ok(resp)).await {
+                    warn!("watch-event-Dispatcher: fail to send to watcher; close this stream");
                     break;
                 } else {
                     network_metrics::incr_sent_bytes(resp_size);
@@ -112,20 +134,19 @@ impl EventSubscriber {
     }
 
     /// Dispatch a kv change event to interested watchers.
-    async fn dispatch(&mut self, change: Change<Vec<u8>, String>) {
-        let Some(key) = change.ident.clone() else {
-            warn!("EventSubscriber: change event without key; ignore it");
-            return;
-        };
+    async fn dispatch(&mut self, update: Update) {
+        let is_delete = update.after.is_none();
 
-        let is_delete = change.result.is_none();
-
-        let resp = WatchResponse::new(&change).unwrap();
+        let resp = WatchResponse::new3(
+            update.key.clone(),
+            update.before.clone(),
+            update.after.clone(),
+        );
         let resp_size = resp.encoded_len() as u64;
 
         let mut removed = vec![];
 
-        for sender in self.watchers.get(&key) {
+        for sender in self.watchers.get(&update.key) {
             let interested = sender.desc.interested;
 
             match interested {
@@ -144,7 +165,7 @@ impl EventSubscriber {
 
             if let Err(_err) = sender.send(resp.clone()).await {
                 warn!(
-                    "EventSubscriber: fail to send to watcher {}; close this stream",
+                    "watch-event-Dispatcher: fail to send to watcher {}; close this stream",
                     sender.desc.watcher_id
                 );
                 removed.push(sender.clone());
@@ -163,13 +184,13 @@ impl EventSubscriber {
         &mut self,
         req: WatchRequest,
         tx: mpsc::Sender<Result<WatchResponse, Status>>,
-    ) -> Result<Arc<StreamSender>, &'static str> {
-        info!("EventSubscriber::add_watcher: {:?}", req);
+    ) -> Result<Arc<WatchStreamSender>, &'static str> {
+        info!("watch-event-Dispatcher::add_watcher: {:?}", req);
 
         let interested = req.filter_type();
         let desc = self.new_watch_desc(req.key, req.key_end, interested)?;
 
-        let stream_sender = Arc::new(StreamSender::new(desc, tx));
+        let stream_sender = Arc::new(WatchStreamSender::new(desc, tx));
 
         self.watchers
             .insert(stream_sender.desc.key_range.clone(), stream_sender.clone());
@@ -195,15 +216,18 @@ impl EventSubscriber {
     }
 
     #[fastrace::trace]
-    pub fn remove_watcher(&mut self, stream_sender: Arc<StreamSender>) {
-        info!("EventSubscriber::remove_watcher: {:?}", stream_sender);
+    pub fn remove_watcher(&mut self, stream_sender: Arc<WatchStreamSender>) {
+        info!(
+            "watch-event-Dispatcher::remove_watcher: {:?}",
+            stream_sender
+        );
 
         self.watchers.remove(.., stream_sender);
 
         server_metrics::incr_watchers(-1);
     }
 
-    pub fn watch_senders(&self) -> BTreeSet<&Arc<StreamSender>> {
+    pub fn watch_senders(&self) -> BTreeSet<&Arc<WatchStreamSender>> {
         self.watchers.values(..)
     }
 }

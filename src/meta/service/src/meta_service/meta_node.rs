@@ -94,9 +94,9 @@ use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
 use crate::store::RaftStore;
 use crate::version::METASRV_COMMIT_VERSION;
-use crate::watcher::EventSubscriber;
-use crate::watcher::StreamSender;
-use crate::watcher::SubscriberHandle;
+use crate::watcher::dispatch::Dispatcher;
+use crate::watcher::dispatch::DispatcherHandle;
+use crate::watcher::watch_stream::WatchStreamSender;
 
 pub type LogStore = RaftStore;
 pub type SMStore = RaftStore;
@@ -107,7 +107,7 @@ pub type MetaRaft = Raft<TypeConfig>;
 /// MetaNode is the container of metadata related components and threads, such as storage, the raft node and a raft-state monitor.
 pub struct MetaNode {
     pub raft_store: RaftStore,
-    pub subscriber_handle: SubscriberHandle,
+    pub dispatcher_handle: DispatcherHandle,
     pub raft: MetaRaft,
     pub running_tx: watch::Sender<()>,
     pub running_rx: watch::Receiver<()>,
@@ -159,7 +159,7 @@ impl MetaNodeBuilder {
 
         let (tx, rx) = watch::channel::<()>(());
 
-        let handle = EventSubscriber::spawn();
+        let handle = Dispatcher::spawn();
 
         sto.get_state_machine()
             .await
@@ -167,7 +167,7 @@ impl MetaNodeBuilder {
 
         let meta_node = Arc::new(MetaNode {
             raft_store: sto.clone(),
-            subscriber_handle: handle,
+            dispatcher_handle: handle,
             raft: raft.clone(),
             running_tx: tx,
             running_rx: rx,
@@ -1148,12 +1148,12 @@ impl MetaNode {
         &self,
         request: WatchRequest,
         tx: mpsc::Sender<Result<WatchResponse, Status>>,
-    ) -> Result<Arc<StreamSender>, Status> {
+    ) -> Result<Arc<WatchStreamSender>, Status> {
         let stream_sender = self
-            .subscriber_handle
-            .request_blocking(|d: &mut EventSubscriber| d.add_watcher(request, tx))
+            .dispatcher_handle
+            .request_blocking(|d: &mut Dispatcher| d.add_watcher(request, tx))
             .await
-            .map_err(|_e| Status::internal("EventSubscriber closed"))?
+            .map_err(|_e| Status::internal("watch-event-Dispatcher closed"))?
             .map_err(Status::invalid_argument)?;
 
         Ok(stream_sender)
