@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::ast::MatchOperation;
@@ -121,7 +122,7 @@ impl Binder {
             return Ok(plan);
         };
         let filter_expr = &s_expr.children[0];
-        let RelOperator::Filter(filter) = &*filter_expr.plan else {
+        let RelOperator::Filter(_) = &*filter_expr.plan else {
             return Ok(plan);
         };
         let input = &filter_expr.children[0];
@@ -131,16 +132,78 @@ impl Binder {
 
         let mut mutation = mutation.clone();
 
-        let row_id = mutation.bind_context.columns[mutation.row_id_index].clone();
+        let row_id = mutation
+            .bind_context
+            .columns
+            .iter()
+            .find(|binding| binding.index == mutation.row_id_index)
+            .unwrap()
+            .clone();
 
-        let aggr_columns = filter
-            .used_columns()?
-            .union(&mutation.required_columns)
+        let table_schema = mutation
+            .metadata
+            .read()
+            .table(mutation.target_table_index)
+            .table()
+            .schema();
+
+        let fields_bindings = table_schema
+            .fields
+            .iter()
+            .filter(|field| field.computed_expr.is_none())
+            .map(|field| {
+                mutation
+                    .bind_context
+                    .columns
+                    .iter()
+                    .find(|binding| {
+                        BindContext::match_column_binding(
+                            Some(&mutation.database_name),
+                            Some(&mutation.table_name),
+                            &field.name,
+                            binding,
+                        )
+                    })
+                    .cloned()
+            })
+            .collect::<Option<Vec<_>>>()
+            .unwrap();
+
+        let used_columns = mutation
+            .matched_evaluators
+            .iter()
+            .flat_map(|eval| {
+                eval.update.iter().flat_map(|update| {
+                    update
+                        .values()
+                        .flat_map(|expr| expr.used_columns().into_iter())
+                })
+            })
+            .chain(mutation.required_columns.iter().copied())
+            .collect::<HashSet<_>>();
+
+        let used_columns = used_columns
+            .difference(&fields_bindings.iter().map(|column| column.index).collect())
             .copied()
-            .filter(|i| *i != mutation.row_id_index)
-            .map(|i| {
-                let binding = mutation.bind_context.columns[i].clone();
+            .collect::<HashSet<_>>();
+
+        let aggr_columns = used_columns
+            .iter()
+            .copied()
+            .filter_map(|i| {
+                if i == mutation.row_id_index {
+                    return None;
+                }
+
+                let binding = mutation
+                    .bind_context
+                    .columns
+                    .iter()
+                    .find(|binding| binding.index == i)
+                    .cloned()?;
+
                 let display_name = format!("any({})", binding.index);
+                let old = binding.index;
                 let mut aggr_func = ScalarExpr::AggregateFunction(AggregateFunction {
                     span: None,
                     func_name: "any".to_string(),
@@ -159,24 +222,25 @@ impl Binder {
                     AggregateRewriter::new(&mut mutation.bind_context, self.metadata.clone());
                 rewriter.visit(&mut aggr_func).unwrap();
 
-                let index = mutation
+                let new = mutation
                     .bind_context
                     .aggregate_info
                     .get_aggregate_function(&display_name)
                     .unwrap()
                     .index;
 
-                (aggr_func, i, index)
+                Some((aggr_func, old, new))
             })
             .collect::<Vec<_>>();
 
-        mutation.bind_context.aggregate_info.group_items = vec![ScalarItem {
-            index: row_id.index,
-            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: None,
-                column: row_id,
-            }),
-        }];
+        mutation.bind_context.aggregate_info.group_items = fields_bindings
+            .into_iter()
+            .chain(std::iter::once(row_id))
+            .map(|column| ScalarItem {
+                index: column.index,
+                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
+            })
+            .collect();
 
         for eval in &mut mutation.matched_evaluators {
             if let Some(expr) = &mut eval.condition {

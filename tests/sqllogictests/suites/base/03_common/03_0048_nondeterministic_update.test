@@ -1,0 +1,7 @@
+statement ok
+set error_on_nondeterministic_update = 0;
+
+include ./03_0035_update.test
+
+statement ok
+unset error_on_nondeterministic_update;
