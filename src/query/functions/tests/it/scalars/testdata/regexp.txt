@@ -173,16 +173,16 @@ ast            : regexp_instr(source, pat, pos, occur, ro)
 raw expr       : regexp_instr(source::String NULL, pat::String NULL, pos::Int64, occur::Int64, ro::Int64)
 checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL>(source, pat, CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(ro AS Int64 NULL))
 evaluation:
-+--------+-------------------------------+-----------------------+---------+---------+---------+-------------+
-|        | source                        | pat                   | pos     | occur   | ro      | Output      |
-+--------+-------------------------------+-----------------------+---------+---------+---------+-------------+
-| Type   | String NULL                   | String NULL           | Int64   | Int64   | Int64   | UInt64 NULL |
-| Domain | {""..="dog cat dog"} ∪ {NULL} | {""..="dog"} ∪ {NULL} | {1..=2} | {1..=2} | {0..=1} | Unknown     |
-| Row 0  | 'dog cat dog'                 | 'dog'                 | 1       | 2       | 0       | 9           |
-| Row 1  | 'aa aaa aaaa aa aaa aaaa'     | NULL                  | 2       | 2       | 1       | NULL        |
-| Row 2  | NULL                          | NULL                  | 1       | 2       | 1       | NULL        |
-| Row 3  | 'aa aa aa aaaa aaaa aaaa'     | 'A{4}'                | 1       | 1       | 1       | 14          |
-+--------+-------------------------------+-----------------------+---------+---------+---------+-------------+
++--------+------------------------------------------------------+---------------------------+---------+---------+---------+-------------+
+|        | source                                               | pat                       | pos     | occur   | ro      | Output      |
++--------+------------------------------------------------------+---------------------------+---------+---------+---------+-------------+
+| Type   | String NULL                                          | String NULL               | Int64   | Int64   | Int64   | UInt64 NULL |
+| Domain | {"aa aa aa aaaa aaaa aaaa"..="dog cat dog"} ∪ {NULL} | {"A{4}"..="dog"} ∪ {NULL} | {1..=2} | {1..=2} | {0..=1} | Unknown     |
+| Row 0  | 'dog cat dog'                                        | 'dog'                     | 1       | 2       | 0       | 9           |
+| Row 1  | 'aa aaa aaaa aa aaa aaaa'                            | NULL                      | 2       | 2       | 1       | NULL        |
+| Row 2  | NULL                                                 | NULL                      | 1       | 2       | 1       | NULL        |
+| Row 3  | 'aa aa aa aaaa aaaa aaaa'                            | 'A{4}'                    | 1       | 1       | 1       | 14          |
++--------+------------------------------------------------------+---------------------------+---------+---------+---------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                             |
@@ -200,16 +200,16 @@ ast            : regexp_instr(source, pat, pos, occur, ro, mt)
 raw expr       : regexp_instr(source::String NULL, pat::String NULL, pos::Int64, occur::Int64, ro::Int64, mt::String)
 checked expr   : regexp_instr<String NULL, String NULL, Int64 NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(ro AS Int64 NULL), CAST(mt AS String NULL))
 evaluation:
-+--------+-------------------------------+-----------------------+---------+---------+---------+-------------+-------------+
-|        | source                        | pat                   | pos     | occur   | ro      | mt          | Output      |
-+--------+-------------------------------+-----------------------+---------+---------+---------+-------------+-------------+
-| Type   | String NULL                   | String NULL           | Int64   | Int64   | Int64   | String      | UInt64 NULL |
-| Domain | {""..="dog cat dog"} ∪ {NULL} | {""..="dog"} ∪ {NULL} | {1..=2} | {1..=2} | {0..=1} | {"c"..="i"} | Unknown     |
-| Row 0  | 'dog cat dog'                 | 'dog'                 | 1       | 2       | 0       | 'i'         | 9           |
-| Row 1  | 'aa aaa aaaa aa aaa aaaa'     | NULL                  | 2       | 2       | 1       | 'c'         | NULL        |
-| Row 2  | NULL                          | NULL                  | 1       | 2       | 1       | 'i'         | NULL        |
-| Row 3  | 'aa aa aa aaaa aaaa aaaa'     | 'A{4}'                | 1       | 1       | 1       | 'i'         | 14          |
-+--------+-------------------------------+-----------------------+---------+---------+---------+-------------+-------------+
++--------+------------------------------------------------------+---------------------------+---------+---------+---------+-------------+-------------+
+|        | source                                               | pat                       | pos     | occur   | ro      | mt          | Output      |
++--------+------------------------------------------------------+---------------------------+---------+---------+---------+-------------+-------------+
+| Type   | String NULL                                          | String NULL               | Int64   | Int64   | Int64   | String      | UInt64 NULL |
+| Domain | {"aa aa aa aaaa aaaa aaaa"..="dog cat dog"} ∪ {NULL} | {"A{4}"..="dog"} ∪ {NULL} | {1..=2} | {1..=2} | {0..=1} | {"c"..="i"} | Unknown     |
+| Row 0  | 'dog cat dog'                                        | 'dog'                     | 1       | 2       | 0       | 'i'         | 9           |
+| Row 1  | 'aa aaa aaaa aa aaa aaaa'                            | NULL                      | 2       | 2       | 1       | 'c'         | NULL        |
+| Row 2  | NULL                                                 | NULL                      | 1       | 2       | 1       | 'i'         | NULL        |
+| Row 3  | 'aa aa aa aaaa aaaa aaaa'                            | 'A{4}'                    | 1       | 1       | 1       | 'i'         | 14          |
++--------+------------------------------------------------------+---------------------------+---------+---------+---------+-------------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                             |
@@ -395,16 +395,16 @@ ast            : regexp_like(source, pat, mt)
 raw expr       : regexp_like(source::String NULL, pat::String NULL, mt::String NULL)
 checked expr   : regexp_like<String NULL, String NULL, String NULL>(source, pat, mt)
 evaluation:
-+--------+-----------------------+-----------------------+---------------------+--------------+
-|        | source                | pat                   | mt                  | Output       |
-+--------+-----------------------+-----------------------+---------------------+--------------+
-| Type   | String NULL           | String NULL           | String NULL         | Boolean NULL |
-| Domain | {""..="abc"} ∪ {NULL} | {""..="abc"} ∪ {NULL} | {""..="i"} ∪ {NULL} | Unknown      |
-| Row 0  | 'abc'                 | 'abc'                 | ''                  | true         |
-| Row 1  | 'abc'                 | NULL                  | 'i'                 | NULL         |
-| Row 2  | NULL                  | NULL                  | 'i'                 | NULL         |
-| Row 3  | 'abc'                 | 'abc'                 | NULL                | NULL         |
-+--------+-----------------------+-----------------------+---------------------+--------------+
++--------+--------------------------+--------------------------+---------------------+--------------+
+|        | source                   | pat                      | mt                  | Output       |
++--------+--------------------------+--------------------------+---------------------+--------------+
+| Type   | String NULL              | String NULL              | String NULL         | Boolean NULL |
+| Domain | {"abc"..="abc"} ∪ {NULL} | {"abc"..="abc"} ∪ {NULL} | {""..="i"} ∪ {NULL} | Unknown      |
+| Row 0  | 'abc'                    | 'abc'                    | ''                  | true         |
+| Row 1  | 'abc'                    | NULL                     | 'i'                 | NULL         |
+| Row 2  | NULL                     | NULL                     | 'i'                 | NULL         |
+| Row 3  | 'abc'                    | 'abc'                    | NULL                | NULL         |
++--------+--------------------------+--------------------------+---------------------+--------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------+
 | Column | Data                                                                             |
@@ -618,16 +618,16 @@ raw expr       : regexp_replace(source::String NULL, pat::String NULL, repl::Str
 checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(source, pat, CAST(repl AS String NULL), CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL))
 optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL>(source, pat, "X", CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL))
 evaluation:
-+--------+-------------------------------+--------------------------+-------------+---------+---------+-------------+
-|        | source                        | pat                      | repl        | pos     | occur   | Output      |
-+--------+-------------------------------+--------------------------+-------------+---------+---------+-------------+
-| Type   | String NULL                   | String NULL              | String      | Int64   | Int64   | String NULL |
-| Domain | {""..="abc def ghi"} ∪ {NULL} | {""..="[a-z]+"} ∪ {NULL} | {"X"..="X"} | {1..=4} | {0..=2} | Unknown     |
-| Row 0  | 'abc def ghi'                 | '[a-z]+'                 | 'X'         | 1       | 0       | 'X X X'     |
-| Row 1  | 'abc DEF ghi'                 | NULL                     | 'X'         | 1       | 2       | NULL        |
-| Row 2  | NULL                          | NULL                     | 'X'         | 4       | 1       | NULL        |
-| Row 3  | 'abc DEF ghi'                 | '[a-z]+'                 | 'X'         | 4       | 1       | 'abc X ghi' |
-+--------+-------------------------------+--------------------------+-------------+---------+---------+-------------+
++--------+------------------------------------------+--------------------------------+-------------+---------+---------+-------------+
+|        | source                                   | pat                            | repl        | pos     | occur   | Output      |
++--------+------------------------------------------+--------------------------------+-------------+---------+---------+-------------+
+| Type   | String NULL                              | String NULL                    | String      | Int64   | Int64   | String NULL |
+| Domain | {"abc DEF ghi"..="abc def ghi"} ∪ {NULL} | {"[a-z]+"..="[a-z]+"} ∪ {NULL} | {"X"..="X"} | {1..=4} | {0..=2} | Unknown     |
+| Row 0  | 'abc def ghi'                            | '[a-z]+'                       | 'X'         | 1       | 0       | 'X X X'     |
+| Row 1  | 'abc DEF ghi'                            | NULL                           | 'X'         | 1       | 2       | NULL        |
+| Row 2  | NULL                                     | NULL                           | 'X'         | 4       | 1       | NULL        |
+| Row 3  | 'abc DEF ghi'                            | '[a-z]+'                       | 'X'         | 4       | 1       | 'abc X ghi' |
++--------+------------------------------------------+--------------------------------+-------------+---------+---------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                     |
@@ -646,16 +646,16 @@ raw expr       : regexp_replace(source::String NULL, pat::String NULL, repl::Str
 checked expr   : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, CAST(repl AS String NULL), CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(mt AS String NULL))
 optimized expr : regexp_replace<String NULL, String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, "X", CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(mt AS String NULL))
 evaluation:
-+--------+-------------------------------+--------------------------+-------------+---------+---------+------------+-------------+
-|        | source                        | pat                      | repl        | pos     | occur   | mt         | Output      |
-+--------+-------------------------------+--------------------------+-------------+---------+---------+------------+-------------+
-| Type   | String NULL                   | String NULL              | String      | Int64   | Int64   | String     | String NULL |
-| Domain | {""..="abc def ghi"} ∪ {NULL} | {""..="[a-z]+"} ∪ {NULL} | {"X"..="X"} | {1..=4} | {0..=2} | {""..="i"} | Unknown     |
-| Row 0  | 'abc def ghi'                 | '[a-z]+'                 | 'X'         | 1       | 0       | ''         | 'X X X'     |
-| Row 1  | 'abc DEF ghi'                 | NULL                     | 'X'         | 1       | 2       | 'c'        | NULL        |
-| Row 2  | NULL                          | NULL                     | 'X'         | 4       | 1       | 'i'        | NULL        |
-| Row 3  | 'abc DEF ghi'                 | '[a-z]+'                 | 'X'         | 4       | 1       | 'i'        | 'abc X ghi' |
-+--------+-------------------------------+--------------------------+-------------+---------+---------+------------+-------------+
++--------+------------------------------------------+--------------------------------+-------------+---------+---------+------------+-------------+
+|        | source                                   | pat                            | repl        | pos     | occur   | mt         | Output      |
++--------+------------------------------------------+--------------------------------+-------------+---------+---------+------------+-------------+
+| Type   | String NULL                              | String NULL                    | String      | Int64   | Int64   | String     | String NULL |
+| Domain | {"abc DEF ghi"..="abc def ghi"} ∪ {NULL} | {"[a-z]+"..="[a-z]+"} ∪ {NULL} | {"X"..="X"} | {1..=4} | {0..=2} | {""..="i"} | Unknown     |
+| Row 0  | 'abc def ghi'                            | '[a-z]+'                       | 'X'         | 1       | 0       | ''         | 'X X X'     |
+| Row 1  | 'abc DEF ghi'                            | NULL                           | 'X'         | 1       | 2       | 'c'        | NULL        |
+| Row 2  | NULL                                     | NULL                           | 'X'         | 4       | 1       | 'i'        | NULL        |
+| Row 3  | 'abc DEF ghi'                            | '[a-z]+'                       | 'X'         | 4       | 1       | 'i'        | 'abc X ghi' |
++--------+------------------------------------------+--------------------------------+-------------+---------+---------+------------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                     |
@@ -881,16 +881,16 @@ ast            : regexp_substr(source, pat, pos, occur, mt)
 raw expr       : regexp_substr(source::String NULL, pat::String NULL, pos::Int64, occur::Int64, mt::String)
 checked expr   : regexp_substr<String NULL, String NULL, Int64 NULL, Int64 NULL, String NULL>(source, pat, CAST(pos AS Int64 NULL), CAST(occur AS Int64 NULL), CAST(mt AS String NULL))
 evaluation:
-+--------+-------------------------------+--------------------------+---------+---------+------------+-------------+
-|        | source                        | pat                      | pos     | occur   | mt         | Output      |
-+--------+-------------------------------+--------------------------+---------+---------+------------+-------------+
-| Type   | String NULL                   | String NULL              | Int64   | Int64   | String     | String NULL |
-| Domain | {""..="abc def ghi"} ∪ {NULL} | {""..="[a-z]+"} ∪ {NULL} | {1..=4} | {1..=2} | {""..="i"} | Unknown     |
-| Row 0  | 'abc def ghi'                 | '[a-z]+'                 | 1       | 1       | ''         | 'abc'       |
-| Row 1  | 'abc DEF ghi'                 | NULL                     | 1       | 2       | 'c'        | NULL        |
-| Row 2  | NULL                          | NULL                     | 4       | 1       | 'i'        | NULL        |
-| Row 3  | 'abc DEF ghi'                 | '[a-z]+'                 | 4       | 1       | 'i'        | 'DEF'       |
-+--------+-------------------------------+--------------------------+---------+---------+------------+-------------+
++--------+------------------------------------------+--------------------------------+---------+---------+------------+-------------+
+|        | source                                   | pat                            | pos     | occur   | mt         | Output      |
++--------+------------------------------------------+--------------------------------+---------+---------+------------+-------------+
+| Type   | String NULL                              | String NULL                    | Int64   | Int64   | String     | String NULL |
+| Domain | {"abc DEF ghi"..="abc def ghi"} ∪ {NULL} | {"[a-z]+"..="[a-z]+"} ∪ {NULL} | {1..=4} | {1..=2} | {""..="i"} | Unknown     |
+| Row 0  | 'abc def ghi'                            | '[a-z]+'                       | 1       | 1       | ''         | 'abc'       |
+| Row 1  | 'abc DEF ghi'                            | NULL                           | 1       | 2       | 'c'        | NULL        |
+| Row 2  | NULL                                     | NULL                           | 4       | 1       | 'i'        | NULL        |
+| Row 3  | 'abc DEF ghi'                            | '[a-z]+'                       | 4       | 1       | 'i'        | 'DEF'       |
++--------+------------------------------------------+--------------------------------+---------+---------+------------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                     |

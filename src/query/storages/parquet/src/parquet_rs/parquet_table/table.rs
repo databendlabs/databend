@@ -292,14 +292,14 @@ impl Table for ParquetRSTable {
             Some(files) => files
                 .iter()
                 .filter(|f| f.size > 0)
-                .map(|f| (f.path.clone(), f.size))
+                .map(|f| (f.path.clone(), f.size, f.dedup_key()))
                 .collect::<Vec<_>>(),
             None => self
                 .files_info
                 .list(&self.operator, thread_num, None)
                 .await?
                 .into_iter()
-                .map(|f| (f.path, f.size))
+                .map(|f| (f.path.clone(), f.size, f.dedup_key()))
                 .collect::<Vec<_>>(),
         };
 
@@ -314,6 +314,7 @@ impl Table for ParquetRSTable {
             self.leaf_fields.clone(),
             self.max_threads,
             self.max_memory_usage,
+            Some(ctx.get_id()),
         )
         .await?;
         let elapsed = now.elapsed();

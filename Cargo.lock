@@ -3285,7 +3285,7 @@ dependencies = [
  "hex",
  "hyper-util",
  "itertools 0.13.0",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "lexical-core",
  "log",
@@ -3332,7 +3332,7 @@ dependencies = [
  "geozero",
  "goldenfile",
  "hex",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -3386,7 +3386,7 @@ dependencies = [
  "jaq-interpret",
  "jaq-parse",
  "jaq-std",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "lexical-core",
  "libm",
@@ -3479,7 +3479,7 @@ dependencies = [
  "geo",
  "geozero",
  "hex",
- "jiff",
+ "jiff 0.2.1",
  "lexical-core",
  "micromarshal",
  "rmp-serde",
@@ -4548,7 +4548,7 @@ dependencies = [
  "databend-storages-common-cache",
  "futures",
  "itertools 0.13.0",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "log",
  "once_cell",
@@ -4886,7 +4886,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "dtparse",
- "jiff",
+ "jiff 0.2.1",
  "num-traits",
 ]
 
@@ -5149,7 +5149,7 @@ dependencies = [
  "hyper-util",
  "indicatif",
  "itertools 0.13.0",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "jwt-simple",
  "log",
@@ -5252,7 +5252,7 @@ dependencies = [
  "derive-visitor",
  "ethnum",
  "itertools 0.13.0",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "rand",
  "reqwest",
@@ -8955,6 +8955,20 @@ version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c607c728e28764fecde611a2764a3a5db19ae21dcec46f292244f5cc5c085a81"
 dependencies = [
+ "jiff-tzdb-platform",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "jiff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3590fea8e9e22d449600c9bbd481a8163bef223e4ff938e5f55899f8cf1adb93"
+dependencies = [
  "jiff-tzdb",
  "jiff-tzdb-platform",
  "log",
@@ -9422,7 +9436,7 @@ dependencies = [
  "crossbeam-channel",
  "env_filter",
  "fastrace",
- "jiff",
+ "jiff 0.1.28",
  "log",
  "opentelemetry",
  "opentelemetry-otlp",
