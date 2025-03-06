@@ -59,6 +59,7 @@ use databend_common_expression::SEARCH_SCORE_COLUMN_ID;
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -116,7 +117,6 @@ use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::DEFAULT_ROW_PER_PAGE;
 use crate::DEFAULT_ROW_PER_PAGE_FOR_BLOCKING;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
@@ -1031,11 +1031,14 @@ impl Table for FuseTable {
             DEFAULT_BLOCK_BUFFER_SIZE,
         );
         let max_file_size = self.get_option(FUSE_OPT_KEY_FILE_SIZE, DEFAULT_BLOCK_COMPRESSED_SIZE);
+        let block_per_segment =
+            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
         BlockThresholds::new(
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,
             max_file_size,
+            block_per_segment,
         )
     }
 

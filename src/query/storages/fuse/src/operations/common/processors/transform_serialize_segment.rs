@@ -21,6 +21,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -40,7 +41,6 @@ use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::statistics::StatisticsAccumulator;
 use crate::FuseTable;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 enum State {

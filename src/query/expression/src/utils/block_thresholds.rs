@@ -16,6 +16,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BlockThresholds {
@@ -23,6 +24,7 @@ pub struct BlockThresholds {
     pub min_rows_per_block: usize,
     pub max_bytes_per_block: usize,
     pub max_bytes_per_file: usize,
+    pub block_per_segment: usize,
 }
 
 impl Default for BlockThresholds {
@@ -32,6 +34,7 @@ impl Default for BlockThresholds {
             min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
             max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
             max_bytes_per_file: DEFAULT_BLOCK_COMPRESSED_SIZE,
+            block_per_segment: DEFAULT_BLOCK_PER_SEGMENT,
         }
     }
 }
@@ -42,12 +45,14 @@ impl BlockThresholds {
         min_rows_per_block: usize,
         max_bytes_per_block: usize,
         max_bytes_per_file: usize,
+        block_per_segment: usize,
     ) -> Self {
         BlockThresholds {
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,
             max_bytes_per_file,
+            block_per_segment,
         }
     }
 
@@ -61,6 +66,18 @@ impl BlockThresholds {
         row_count >= self.min_rows_per_block
             || block_size >= self.max_bytes_per_block
             || file_size >= self.max_bytes_per_file
+    }
+
+    #[inline]
+    pub fn check_perfect_segment(
+        &self,
+        total_rows: usize,
+        total_bytes: usize,
+        total_compressed: usize,
+    ) -> bool {
+        total_rows >= self.min_rows_per_block * self.block_per_segment
+            || total_bytes >= self.max_bytes_per_block * self.block_per_segment
+            || total_compressed >= self.max_bytes_per_file * self.block_per_segment
     }
 
     #[inline]

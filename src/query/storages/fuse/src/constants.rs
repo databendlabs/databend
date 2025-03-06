@@ -35,7 +35,6 @@ pub const FUSE_TBL_VIRTUAL_BLOCK_PREFIX: &str = "_vb";
 pub const FUSE_TBL_AGG_INDEX_PREFIX: &str = "_i_a";
 pub const FUSE_TBL_INVERTED_INDEX_PREFIX: &str = "_i_i";
 
-pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
 pub const DEFAULT_ROW_PER_PAGE: usize = 131072;
 pub const DEFAULT_ROW_PER_PAGE_FOR_BLOCKING: usize = 2048;
 pub const DEFAULT_ROW_PER_INDEX: usize = 100000;

@@ -34,6 +34,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -55,7 +56,6 @@ use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 

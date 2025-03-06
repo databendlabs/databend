@@ -26,6 +26,7 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -57,7 +58,6 @@ use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 pub struct TableMutationAggregator {
@@ -590,10 +590,10 @@ async fn write_segment(
     if set_hilbert_level {
         debug_assert!(new_summary.cluster_stats.is_none());
         let level = if new_summary.block_count >= block_per_seg as u64
-            && thresholds.check_perfect_block(
-                new_summary.row_count as usize / block_per_seg,
-                new_summary.uncompressed_byte_size as usize / block_per_seg,
-                new_summary.compressed_byte_size as usize / block_per_seg,
+            && thresholds.check_perfect_segment(
+                new_summary.row_count as usize,
+                new_summary.uncompressed_byte_size as usize,
+                new_summary.compressed_byte_size as usize,
             ) {
             -1
         } else {

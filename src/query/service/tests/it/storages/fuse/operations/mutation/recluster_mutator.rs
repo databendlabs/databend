@@ -183,12 +183,12 @@ async fn test_safety_for_recluster() -> Result<()> {
         .set_recluster_block_size(recluster_block_size as u64)?;
 
     let cluster_key_id = 0;
-    let block_per_seg = 5;
     let threshold = BlockThresholds {
         max_rows_per_block: 5,
         min_rows_per_block: 4,
         max_bytes_per_block: 1024,
         max_bytes_per_file: 100,
+        block_per_segment: 5,
     };
 
     let data_accessor = operator.clone();
@@ -236,7 +236,6 @@ async fn test_safety_for_recluster() -> Result<()> {
             rows_per_blocks,
             threshold,
             Some(cluster_key_id),
-            block_per_seg,
             unclustered,
         )
         .await?;
@@ -289,7 +288,7 @@ async fn test_safety_for_recluster() -> Result<()> {
             threshold,
             cluster_key_id,
             max_tasks,
-            block_per_seg,
+            threshold.block_per_segment,
             column_ids,
         ));
         let (mode, selected_segs) = mutator.select_segments(&compact_segments, 8)?;

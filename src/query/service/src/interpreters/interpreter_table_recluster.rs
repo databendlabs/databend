@@ -311,9 +311,16 @@ impl ReclusterTableInterpreter {
 
         let rows_per_block =
             block_thresholds.calc_rows_per_block(total_bytes, total_rows, total_compressed);
-        let total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
-        warn!("Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}, rows_per_block: {}",
-            total_bytes, total_rows, total_partitions, rows_per_block);
+        let mut total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
+        if total_partitions < block_thresholds.block_per_segment
+            && block_thresholds.check_perfect_segment(total_rows, total_bytes, total_compressed)
+        {
+            total_partitions = block_thresholds.block_per_segment;
+        }
+        warn!(
+            "Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}",
+            total_bytes, total_rows, total_partitions
+        );
 
         let subquery_executor = Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
             self.ctx.as_ref(),
