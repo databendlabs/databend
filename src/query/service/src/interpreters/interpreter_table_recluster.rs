@@ -303,6 +303,7 @@ impl ReclusterTableInterpreter {
 
         let settings = self.ctx.get_settings();
         let table_info = tbl.get_table_info().clone();
+        let scan_progress_value = self.ctx.get_scan_progress_value();
 
         let block_thresholds = tbl.get_block_thresholds();
         let total_bytes = recluster_info.removed_statistics.uncompressed_byte_size as usize;
@@ -368,7 +369,7 @@ impl ReclusterTableInterpreter {
         variables.push_front(val);
 
         // reset the scan progress.
-        self.ctx.get_scan_progress().set(&Default::default());
+        self.ctx.get_scan_progress().set(&scan_progress_value);
         let Plan::Query {
             s_expr,
             metadata,

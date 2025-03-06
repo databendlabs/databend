@@ -134,6 +134,7 @@ impl RealHilbertClusteringHandler {
 
 struct ReclusterChecker {
     segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+    last_segment: Option<(SegmentLocation, Arc<CompactSegmentInfo>)>,
     default_cluster_id: u32,
 
     hilbert_min_bytes: usize,
@@ -148,6 +149,7 @@ impl ReclusterChecker {
     fn new(default_cluster_id: u32, hilbert_min_bytes: usize, head_of_snapshot: bool) -> Self {
         Self {
             segments: vec![],
+            last_segment: None,
             default_cluster_id,
             hilbert_min_bytes,
             total_bytes: 0,
@@ -163,7 +165,7 @@ impl ReclusterChecker {
 
         if segment_should_recluster || !self.head_of_snapshot {
             self.total_bytes += segment.summary.uncompressed_byte_size as usize;
-            self.segments.push((location, segment));
+            self.segments.push((location.clone(), segment.clone()));
         }
 
         if !segment_should_recluster || self.total_bytes >= self.hilbert_min_bytes {
@@ -171,6 +173,7 @@ impl ReclusterChecker {
                 self.finished = true;
                 return true;
             }
+            self.last_segment = Some((location, segment));
             self.reset();
         }
 
@@ -178,8 +181,13 @@ impl ReclusterChecker {
     }
 
     fn finalize(&mut self) -> Vec<(SegmentLocation, Arc<CompactSegmentInfo>)> {
-        if !self.finished && !self.check_for_recluster() {
-            return vec![];
+        if !self.finished {
+            if let Some((location, segment)) = self.last_segment.take() {
+                self.segments.push((location, segment));
+            }
+            if !self.check_for_recluster() {
+                return vec![];
+            }
         }
         std::mem::take(&mut self.segments)
     }
