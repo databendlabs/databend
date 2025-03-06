@@ -386,8 +386,11 @@ impl FuseTable {
             |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
             max_threads,
         )?;
-        let segment_pruner =
-            SegmentPruner::create(pruner.pruning_ctx.clone(), pruner.table_schema.clone())?;
+        let segment_pruner = SegmentPruner::create(
+            pruner.pruning_ctx.clone(),
+            pruner.table_schema.clone(),
+            Default::default(),
+        )?;
 
         prune_pipeline.add_transform(|input, output| {
             SegmentPruneTransform::<PrunedCompactSegmentMeta>::create(
@@ -494,13 +497,39 @@ impl FuseTable {
         _derterministic_cache_key: Option<String>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let push_down = &pruner.push_down;
+        let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+
+        // Only the columns that are used in the push down will be read, cached and passed to the next pipeline.
+        let column_ids = {
+            let arrow_schema = self.schema().as_ref().into();
+            let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema()));
+            let column_nodes = match push_down.as_ref().and_then(|p| p.projection.as_ref()) {
+                Some(projection) => {
+                    match push_down.as_ref().and_then(|p| p.output_columns.as_ref()) {
+                        Some(output_columns) => {
+                            output_columns.project_column_nodes(&column_nodes)?
+                        }
+                        None => projection.project_column_nodes(&column_nodes)?,
+                    }
+                }
+                None => column_nodes.column_nodes.iter().collect(),
+            };
+            column_nodes
+                .iter()
+                .flat_map(|c| c.leaf_column_ids.clone())
+                .collect::<Vec<_>>()
+        };
+        let segment_pruner = SegmentPruner::create(
+            pruner.pruning_ctx.clone(),
+            pruner.table_schema.clone(),
+            column_ids.clone(),
+        )?;
+
         prune_pipeline.add_source(
             |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
             max_threads,
         )?;
-        let segment_pruner =
-            SegmentPruner::create(pruner.pruning_ctx.clone(), pruner.table_schema.clone())?;
-
         prune_pipeline.add_transform(|input, output| {
             SegmentPruneTransform::<PrunedColumnOrientedSegmentMeta>::create(
                 input,
@@ -509,24 +538,7 @@ impl FuseTable {
                 pruner.pruning_ctx.clone(),
             )
         })?;
-
         // TODO(Sky): deal with sample
-
-        let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
-        let push_down = pruner.push_down.clone();
-        let arrow_schema = self.schema().as_ref().into();
-        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema()));
-        let column_nodes = match push_down.as_ref().and_then(|p| p.projection.as_ref()) {
-            Some(projection) => match push_down.as_ref().and_then(|p| p.output_columns.as_ref()) {
-                Some(output_columns) => output_columns.project_column_nodes(&column_nodes)?,
-                None => projection.project_column_nodes(&column_nodes)?,
-            },
-            None => column_nodes.column_nodes.iter().collect(),
-        };
-        let column_ids: Vec<_> = column_nodes
-            .iter()
-            .flat_map(|c| c.leaf_column_ids.clone())
-            .collect();
         prune_pipeline.add_sink(|input| {
             ColumnOrientedBlockPruneSink::create(
                 input,
@@ -535,9 +547,7 @@ impl FuseTable {
                 column_ids.clone(),
             )
         })?;
-
         // TODO(Sky): populate prune cache , deal with topn prune
-
         Ok(())
     }
 

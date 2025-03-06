@@ -17,8 +17,8 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_storages_common_table_meta::meta::supported_stat_type;
 
+use crate::meta::supported_stat_type;
 pub const ROW_COUNT: &str = "row_count";
 pub const BLOCK_SIZE: &str = "block_size";
 pub const FILE_SIZE: &str = "file_size";
@@ -61,7 +61,7 @@ fn nullable_location_type() -> TableDataType {
     }))
 }
 
-fn col_stats_type(col_type: &TableDataType) -> TableDataType {
+pub fn col_stats_type(col_type: &TableDataType) -> TableDataType {
     TableDataType::Tuple {
         fields_name: vec![
             "min".to_string(),
@@ -81,7 +81,7 @@ fn col_stats_type(col_type: &TableDataType) -> TableDataType {
     }
 }
 
-fn col_meta_type() -> TableDataType {
+pub fn col_meta_type() -> TableDataType {
     TableDataType::Tuple {
         fields_name: vec![
             "offset".to_string(),
@@ -131,10 +131,14 @@ pub fn segment_schema(table_schema: &TableSchema) -> TableSchema {
     TableSchema::new(fields)
 }
 
+// TODO(Sky): stat and meta are always read as a whole, maybe merge them into a single field.
+pub const STAT_PREFIX: &str = "stat_";
+pub const META_PREFIX: &str = "meta_";
+
 pub fn stat_name(col_id: ColumnId) -> String {
-    format!("stat_{}", col_id)
+    format!("{}{}", STAT_PREFIX, col_id)
 }
 
 pub fn meta_name(col_id: ColumnId) -> String {
-    format!("meta_{}", col_id)
+    format!("{}{}", META_PREFIX, col_id)
 }

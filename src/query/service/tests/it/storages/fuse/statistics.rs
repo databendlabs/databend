@@ -43,13 +43,13 @@ use databend_common_storages_fuse::statistics::Trim;
 use databend_common_storages_fuse::statistics::STATS_REPLACEMENT_CHAR;
 use databend_common_storages_fuse::statistics::STATS_STRING_PREFIX_LEN;
 use databend_common_storages_fuse::FuseStorageFormat;
-use databend_common_storages_fuse::SegmentBuilder;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::RowOrientedSegmentBuilder;
 use databend_query::test_kits::*;
+use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -57,7 +57,6 @@ use databend_storages_common_table_meta::meta::Compression;
 use databend_storages_common_table_meta::meta::Statistics;
 use opendal::Operator;
 use rand::Rng;
-
 #[test]
 fn test_ft_stats_block_stats() -> databend_common_exception::Result<()> {
     let schema = Arc::new(TableSchema::new(vec![

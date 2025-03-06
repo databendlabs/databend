@@ -31,6 +31,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_sinks::AsyncSink;
 use databend_common_pipeline_sinks::AsyncSinker;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnMetaV0;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -39,11 +40,6 @@ use databend_storages_common_table_meta::meta::Compression;
 use super::PrunedColumnOrientedSegmentMeta;
 use crate::pruning::BlockPruner;
 use crate::FuseBlockPartInfo;
-use crate::COMPRESSION;
-use crate::CREATE_ON;
-use crate::LOCATION;
-use crate::LOCATION_PATH;
-use crate::ROW_COUNT;
 
 pub struct ColumnOrientedBlockPruneSink {
     block_pruner: Arc<BlockPruner>,

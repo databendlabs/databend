@@ -16,7 +16,10 @@ mod schema;
 mod segment;
 mod segment_builder;
 
+pub use schema::col_meta_type;
+pub use schema::col_stats_type;
 pub use schema::meta_name;
+pub use schema::segment_schema;
 pub use schema::stat_name;
 pub use schema::BLOCK_SIZE;
 pub use schema::BLOOM_FILTER_INDEX_LOCATION;
@@ -30,6 +33,7 @@ pub use schema::LOCATION;
 pub use schema::LOCATION_FORMAT_VERSION;
 pub use schema::LOCATION_PATH;
 pub use schema::ROW_COUNT;
+pub use segment::deserialize_column_oriented_segment;
 pub use segment::AbstractSegment;
 pub use segment::ColumnOrientedSegment;
 pub use segment_builder::ColumnOrientedSegmentBuilder;

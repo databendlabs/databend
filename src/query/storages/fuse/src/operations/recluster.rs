@@ -257,7 +257,8 @@ impl FuseTable {
             storage_format,
         )?;
 
-        let segment_pruner = SegmentPruner::create(pruning_ctx.clone(), schema)?;
+        let segment_pruner =
+            SegmentPruner::create(pruning_ctx.clone(), schema, Default::default())?;
         let mut remain = segment_locs.len() % max_concurrency;
         let batch_size = segment_locs.len() / max_concurrency;
         let mut works = Vec::with_capacity(max_concurrency);

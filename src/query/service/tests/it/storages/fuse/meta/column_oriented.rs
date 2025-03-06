@@ -25,33 +25,26 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::TableSchemaRef;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
+use databend_common_storages_fuse::read_column_oriented_segment;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reduce_block_metas;
-use databend_common_storages_fuse::ColumnOrientedSegmentBuilder;
 use databend_common_storages_fuse::FuseStorageFormat;
-use databend_common_storages_fuse::SegmentBuilder;
-use databend_common_storages_fuse::BLOCK_SIZE;
-use databend_common_storages_fuse::BLOOM_FILTER_INDEX_LOCATION;
-use databend_common_storages_fuse::BLOOM_FILTER_INDEX_SIZE;
-use databend_common_storages_fuse::CLUSTER_STATS;
-use databend_common_storages_fuse::COMPRESSION;
-use databend_common_storages_fuse::CREATE_ON;
-use databend_common_storages_fuse::FILE_SIZE;
-use databend_common_storages_fuse::INVERTED_INDEX_SIZE;
-use databend_common_storages_fuse::LOCATION;
-use databend_common_storages_fuse::LOCATION_FORMAT_VERSION;
-use databend_common_storages_fuse::LOCATION_PATH;
-use databend_common_storages_fuse::ROW_COUNT;
 use databend_query::test_kits::BlockWriter;
+use databend_query::test_kits::TestFixture;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
+use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::decode;
 use databend_storages_common_table_meta::meta::testing::MetaEncoding;
+use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Compression;
 use opendal::Operator;
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_column_oriented_segment_builder() -> Result<()> {
+async fn generate_column_oriented_segment(
+) -> Result<(ColumnOrientedSegment, Vec<BlockMeta>, TableSchemaRef)> {
     let field_1 = TableField::new("u64", TableDataType::Number(NumberDataType::UInt64));
     let field_2 = TableField::new(
         "nullable_u64",
@@ -110,7 +103,7 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     }
 
     let column_oriented_segment = {
-        let mut segment_builder = ColumnOrientedSegmentBuilder::new(table_schema, 100);
+        let mut segment_builder = ColumnOrientedSegmentBuilder::new(table_schema.clone(), 100);
         for block_meta in block_metas.iter() {
             segment_builder.add_block(block_meta.clone()).unwrap();
         }
@@ -122,6 +115,67 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
         block_metas.len()
     );
 
+    Ok((column_oriented_segment, block_metas, table_schema))
+}
+
+fn check_column_stats_and_meta(
+    block_metas: &[BlockMeta],
+    column_oriented_segment: &ColumnOrientedSegment,
+    projection: &[u32],
+) {
+    for (i, block_meta) in block_metas.iter().enumerate() {
+        for (col_id, col_stat) in block_meta.col_stats.iter() {
+            if !projection.contains(&col_id) {
+                continue;
+            }
+            let stat = column_oriented_segment.stat_col(*col_id).unwrap();
+            let stat = stat.as_tuple().unwrap();
+            let min = stat[0].index(i).unwrap();
+            let max = stat[1].index(i).unwrap();
+            let null_count = stat[2].index(i).unwrap();
+            let null_count = null_count.as_number().unwrap().as_u_int64().unwrap();
+            let in_memory_size = stat[3].index(i).unwrap();
+            let in_memory_size = in_memory_size.as_number().unwrap().as_u_int64().unwrap();
+            let distinct_of_values = stat[4].index(i).unwrap();
+            let distinct_of_values = distinct_of_values
+                .as_number()
+                .unwrap()
+                .as_u_int64()
+                .unwrap();
+            assert_eq!(min, col_stat.min.as_ref());
+            assert_eq!(max, col_stat.max.as_ref());
+            assert_eq!(null_count, &col_stat.null_count);
+            assert_eq!(in_memory_size, &col_stat.in_memory_size);
+            assert_eq!(distinct_of_values, &col_stat.distinct_of_values.unwrap());
+        }
+    }
+
+    // check column meta
+    for (i, block_meta) in block_metas.iter().enumerate() {
+        for (col_id, col_meta) in block_meta.col_metas.iter() {
+            if !projection.contains(&col_id) {
+                continue;
+            }
+            let col_meta = col_meta.as_parquet().unwrap();
+            let meta = column_oriented_segment.meta_col(*col_id).unwrap();
+            let meta = meta.as_tuple().unwrap();
+            let offset = meta[0].index(i).unwrap();
+            let offset = offset.as_number().unwrap().as_u_int64().unwrap();
+            let len = meta[1].index(i).unwrap();
+            let len = len.as_number().unwrap().as_u_int64().unwrap();
+            let num_values = meta[2].index(i).unwrap();
+            let num_values = num_values.as_number().unwrap().as_u_int64().unwrap();
+            assert_eq!(offset, &col_meta.offset);
+            assert_eq!(len, &col_meta.len);
+            assert_eq!(num_values, &col_meta.num_values);
+        }
+    }
+}
+
+fn check_block_level_meta(
+    block_metas: &[BlockMeta],
+    column_oriented_segment: &ColumnOrientedSegment,
+) {
     // check row count
     let row_count = column_oriented_segment.col_by_name(&[ROW_COUNT]).unwrap();
     for (row_count, block_meta) in row_count.iter().zip(block_metas.iter()) {
@@ -238,51 +292,9 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
         let create_on = create_on.as_number().unwrap().as_int64().unwrap();
         assert_eq!(create_on, &block_meta.create_on.unwrap().timestamp());
     }
+}
 
-    // check column stats
-    for (i, block_meta) in block_metas.iter().enumerate() {
-        for (col_id, col_stat) in block_meta.col_stats.iter() {
-            let stat = column_oriented_segment.stat_col(*col_id).unwrap();
-            let stat = stat.as_tuple().unwrap();
-            let min = stat[0].index(i).unwrap();
-            let max = stat[1].index(i).unwrap();
-            let null_count = stat[2].index(i).unwrap();
-            let null_count = null_count.as_number().unwrap().as_u_int64().unwrap();
-            let in_memory_size = stat[3].index(i).unwrap();
-            let in_memory_size = in_memory_size.as_number().unwrap().as_u_int64().unwrap();
-            let distinct_of_values = stat[4].index(i).unwrap();
-            let distinct_of_values = distinct_of_values
-                .as_number()
-                .unwrap()
-                .as_u_int64()
-                .unwrap();
-            assert_eq!(min, col_stat.min.as_ref());
-            assert_eq!(max, col_stat.max.as_ref());
-            assert_eq!(null_count, &col_stat.null_count);
-            assert_eq!(in_memory_size, &col_stat.in_memory_size);
-            assert_eq!(distinct_of_values, &col_stat.distinct_of_values.unwrap());
-        }
-    }
-
-    // check column meta
-    for (i, block_meta) in block_metas.iter().enumerate() {
-        for (col_id, col_meta) in block_meta.col_metas.iter() {
-            let col_meta = col_meta.as_parquet().unwrap();
-            let meta = column_oriented_segment.meta_col(*col_id).unwrap();
-            let meta = meta.as_tuple().unwrap();
-            let offset = meta[0].index(i).unwrap();
-            let offset = offset.as_number().unwrap().as_u_int64().unwrap();
-            let len = meta[1].index(i).unwrap();
-            let len = len.as_number().unwrap().as_u_int64().unwrap();
-            let num_values = meta[2].index(i).unwrap();
-            let num_values = num_values.as_number().unwrap().as_u_int64().unwrap();
-            assert_eq!(offset, &col_meta.offset);
-            assert_eq!(len, &col_meta.len);
-            assert_eq!(num_values, &col_meta.num_values);
-        }
-    }
-
-    // check summary
+fn check_summary(block_metas: &[BlockMeta], column_oriented_segment: &ColumnOrientedSegment) {
     let summary = reduce_block_metas(&block_metas, Default::default(), Some(0));
     assert_eq!(summary.row_count, column_oriented_segment.summary.row_count);
     assert_eq!(
@@ -309,6 +321,92 @@ async fn test_column_oriented_segment_builder() -> Result<()> {
     assert_eq!(
         summary.cluster_stats,
         column_oriented_segment.summary.cluster_stats
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_segment_builder() -> Result<()> {
+    let (column_oriented_segment, block_metas, _) = generate_column_oriented_segment().await?;
+
+    check_block_level_meta(&block_metas, &column_oriented_segment);
+    check_column_stats_and_meta(&block_metas, &column_oriented_segment, &[]);
+    check_summary(&block_metas, &column_oriented_segment);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_segment_cache() -> Result<()> {
+    let _fixture = TestFixture::setup_with_segment_cache_bytes(1024 * 1024 * 10).await?;
+    let operator = Operator::new(opendal::services::Memory::default())
+        .unwrap()
+        .finish();
+    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
+    let location = loc_generator.gen_segment_info_location();
+    let (column_oriented_segment, block_metas, table_schema) =
+        generate_column_oriented_segment().await?;
+    operator
+        .write(&location, column_oriented_segment.serialize().unwrap())
+        .await?;
+    let cache = CacheManager::instance()
+        .get_column_oriented_segment_info_cache()
+        .unwrap();
+    assert!(cache.get(&location).is_none());
+
+    // 1. only read and cache block level meta
+    let _column_oriented_segment =
+        read_column_oriented_segment(operator.clone(), &location, vec![]).await?;
+    let cached = cache.get(&location).unwrap();
+    assert_eq!(cached.segment_schema.fields.len(), 10);
+    assert_eq!(cached.segment_schema, segment_schema(&TableSchema::empty()));
+    check_summary(&block_metas, &cached);
+    check_block_level_meta(&block_metas, &cached);
+
+    // 2. read and cache meta and stats of column 1
+    let col_id = 1;
+    let _column_oriented_segment =
+        read_column_oriented_segment(operator.clone(), &location, vec![col_id]).await?;
+    let cached = cache.get(&location).unwrap();
+    assert_eq!(cached.segment_schema.fields.len(), 12);
+
+    let column_1 = table_schema.field_of_column_id(col_id).unwrap();
+    let stat_1 = column_oriented_segment
+        .segment_schema
+        .field_with_name(&stat_name(col_id))?;
+    assert_eq!(col_stats_type(&column_1.data_type), stat_1.data_type);
+    let meta_1 = column_oriented_segment
+        .segment_schema
+        .field_with_name(&meta_name(col_id))?;
+    assert_eq!(col_meta_type(), meta_1.data_type);
+    check_summary(&block_metas, &cached);
+    check_block_level_meta(&block_metas, &cached);
+    check_column_stats_and_meta(&block_metas, &cached, &[col_id]);
+
+    // 3. read and cache meta and stats of column 2
+    let col_id = 2;
+    let _column_oriented_segment =
+        read_column_oriented_segment(operator.clone(), &location, vec![col_id]).await?;
+    let cached = cache.get(&location).unwrap();
+    // column 2 does not have stats
+    assert_eq!(cached.segment_schema.fields.len(), 13);
+    check_summary(&block_metas, &cached);
+    check_block_level_meta(&block_metas, &cached);
+    check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);
+
+    // 4. read column 1 again, should hit cache
+    let col_id = 1;
+    let column_oriented_segment =
+        read_column_oriented_segment(operator.clone(), &location, vec![col_id]).await?;
+    let cached = cache.get(&location).unwrap();
+    // column 2 does not have stats
+    assert_eq!(cached.segment_schema.fields.len(), 13);
+    check_summary(&block_metas, &cached);
+    check_block_level_meta(&block_metas, &cached);
+    check_column_stats_and_meta(&block_metas, &cached, &[1, 2]);
+    assert_eq!(column_oriented_segment.summary, cached.summary);
+    assert_eq!(
+        column_oriented_segment.segment_schema,
+        cached.segment_schema
     );
     Ok(())
 }

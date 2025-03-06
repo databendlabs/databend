@@ -15,11 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::*;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
-use crate::column_oriented_segment::AbstractSegment;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentLocation;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
@@ -28,16 +29,19 @@ use crate::pruning_pipeline::PrunedSegmentMeta;
 pub struct SegmentPruner {
     pub pruning_ctx: Arc<PruningContext>,
     pub table_schema: TableSchemaRef,
+    pub column_ids: Vec<ColumnId>,
 }
 
 impl SegmentPruner {
     pub fn create(
         pruning_ctx: Arc<PruningContext>,
         table_schema: TableSchemaRef,
+        column_ids: Vec<ColumnId>,
     ) -> Result<Arc<SegmentPruner>> {
         Ok(Arc::new(SegmentPruner {
             pruning_ctx,
             table_schema,
+            column_ids,
         }))
     }
 
@@ -56,11 +60,11 @@ impl SegmentPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
 
         for segment_location in segment_locs {
-            let info = T::Segment::read_and_deserialize(
+            let info = T::read_segment_through_cache(
                 self.pruning_ctx.dal.clone(),
                 segment_location.location.clone(),
+                self.column_ids.clone(),
                 self.table_schema.clone(),
-                true,
             )
             .await?;
 

@@ -14,6 +14,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
+pub mod column_oriented_segment;
 pub mod compression;
 mod current;
 pub mod format;
