@@ -32,6 +32,8 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::FuseTable;
+use databend_storages_common_cache::CacheAccessor;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
@@ -41,6 +43,7 @@ use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use futures_util::TryStreamExt;
 use log::info;
 use opendal::Entry;
+use opendal::ErrorKind;
 use opendal::Operator;
 use uuid::Version;
 
@@ -297,6 +300,23 @@ pub async fn do_vacuum2(
     // subject_files should be removed before snapshots, because gc of subject_files depend on gc root
     op.remove_file_in_batch(&indexes_to_gc).await?;
     op.remove_file_in_batch(&subject_files_to_gc).await?;
+
+    // Evict snapshot caches from the local node.
+    //
+    // Note:
+    // - Cached snapshots may also exist on other nodes in a multi-node cluster. If these remote
+    //   caches are not synchronized, it could lead to incorrect results in operations like
+    //   `fuse_snapshot(...)`. However, this does not compromise the safety of the table data.
+    // - TODO: To ensure correctness in such cases, the table's Least Visible Timestamp (LVT),
+    //   stored in the meta-server, should be utilized to determine snapshot visibility and
+    //   resolve potential issues.
+
+    if let Some(snapshot_cache) = CacheManager::instance().get_table_snapshot_cache() {
+        for path in &snapshots_to_gc {
+            snapshot_cache.evict(path);
+        }
+    }
+
     op.remove_file_in_batch(&snapshots_to_gc).await?;
 
     let files_to_gc: Vec<_> = subject_files_to_gc
@@ -499,16 +519,23 @@ async fn select_gc_root(
 
     let dal = fuse_table.get_operator_ref();
     let gc_root = read_snapshot_from_location(fuse_table, &gc_root_path).await;
-    let gc_root_meta_ts = dal
-        .stat(&gc_root_path)
-        .await?
-        .last_modified()
-        .ok_or_else(|| {
+
+    let gc_root_meta_ts = match dal.stat(&gc_root_path).await {
+        Ok(v) => v.last_modified().ok_or_else(|| {
             ErrorCode::StorageOther(format!(
                 "Failed to get `last_modified` metadata of the gc root object '{}'",
                 gc_root_path
             ))
-        })?;
+        })?,
+        Err(e) => {
+            return if e.kind() == ErrorKind::NotFound {
+                // Concurrent vacuum, ignore it
+                Ok(None)
+            } else {
+                Err(e.into())
+            };
+        }
+    };
 
     match gc_root {
         Ok(gc_root) => {
