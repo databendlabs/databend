@@ -66,7 +66,7 @@ runs:
         # destory databend query
         aws --endpoint-url http://127.0.0.1:9900/ s3 rm s3://testbucket --recursive
         # destory databend meta
-        rm /tmp/databend/meta1
+        rm -rf /tmp/databend/meta1
 
     - name: Run bendsave restore
       shell: bash
