@@ -150,24 +150,21 @@ impl Binder {
         let fields_bindings = table_schema
             .fields
             .iter()
-            .filter(|field| field.computed_expr.is_none())
-            .map(|field| {
+            .filter_map(|field| {
+                if field.computed_expr.is_some() {
+                    return None;
+                }
                 mutation
                     .bind_context
                     .columns
                     .iter()
                     .find(|binding| {
-                        BindContext::match_column_binding(
-                            Some(&mutation.database_name),
-                            Some(&mutation.table_name),
-                            &field.name,
-                            binding,
-                        )
+                        binding.table_index == Some(mutation.target_table_index)
+                            && binding.column_name == field.name
                     })
                     .cloned()
             })
-            .collect::<Option<Vec<_>>>()
-            .unwrap();
+            .collect::<Vec<_>>();
 
         let used_columns = mutation
             .matched_evaluators
