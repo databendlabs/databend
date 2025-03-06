@@ -21,7 +21,6 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
-use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
@@ -41,7 +40,6 @@ use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::statistics::StatisticsAccumulator;
 use crate::FuseTable;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 enum State {
     None,
@@ -66,7 +64,6 @@ pub struct TransformSerializeSegment {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
-    block_per_seg: u64,
 
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
@@ -88,9 +85,6 @@ impl TransformSerializeSegment {
             meta_locations: table.meta_location_generator().clone(),
             state: State::None,
             accumulator: Default::default(),
-            block_per_seg: table
-                .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT)
-                as u64,
             thresholds,
             default_cluster_key_id,
         }
@@ -166,7 +160,7 @@ impl Processor for TransformSerializeSegment {
                 .clone();
 
             self.accumulator.add_with_block_meta(block_meta);
-            if self.accumulator.summary_block_count >= self.block_per_seg {
+            if self.accumulator.summary_block_count >= self.thresholds.block_per_segment as u64 {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
             }

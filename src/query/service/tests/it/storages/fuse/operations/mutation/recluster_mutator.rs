@@ -154,7 +154,6 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         BlockThresholds::default(),
         cluster_key_id,
         1,
-        1000,
         column_ids,
     );
     let (_, parts) = mutator
@@ -288,7 +287,6 @@ async fn test_safety_for_recluster() -> Result<()> {
             threshold,
             cluster_key_id,
             max_tasks,
-            threshold.block_per_segment,
             column_ids,
         ));
         let (mode, selected_segs) = mutator.select_segments(&compact_segments, 8)?;

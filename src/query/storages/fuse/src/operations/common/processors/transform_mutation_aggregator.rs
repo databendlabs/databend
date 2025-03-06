@@ -26,7 +26,6 @@ use databend_common_expression::BlockMetaInfoPtr;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
-use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -58,7 +57,6 @@ use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 pub struct TableMutationAggregator {
     ctx: Arc<dyn TableContext>,
@@ -67,7 +65,6 @@ pub struct TableMutationAggregator {
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
     thresholds: BlockThresholds,
-    block_per_seg: usize,
 
     default_cluster_key_id: Option<u32>,
     base_segments: Vec<Location>,
@@ -155,8 +152,6 @@ impl TableMutationAggregator {
             thresholds: table.get_block_thresholds(),
             default_cluster_key_id: table.cluster_key_id(),
             set_hilbert_level,
-            block_per_seg: table
-                .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT),
             mutations: HashMap::new(),
             appended_segments: vec![],
             base_segments,
@@ -268,11 +263,10 @@ impl TableMutationAggregator {
 
         let mut tasks = Vec::new();
         let merged_blocks = std::mem::take(&mut self.recluster_merged_blocks);
-        let segments_num = (merged_blocks.len() / self.block_per_seg).max(1);
+        let segments_num = (merged_blocks.len() / self.thresholds.block_per_segment).max(1);
         let chunk_size = merged_blocks.len().div_ceil(segments_num);
         let default_cluster_key = Some(default_cluster_key_id);
         let thresholds = self.thresholds;
-        let block_per_seg = self.block_per_seg;
         let set_hilbert_level = self.set_hilbert_level;
         let kind = self.kind;
         for chunk in &merged_blocks.into_iter().chunks(chunk_size) {
@@ -289,7 +283,6 @@ impl TableMutationAggregator {
                     thresholds,
                     default_cluster_key,
                     all_perfect,
-                    block_per_seg,
                     kind,
                     set_hilbert_level,
                 )
@@ -425,7 +418,6 @@ impl TableMutationAggregator {
     ) -> Result<Vec<SegmentLite>> {
         let thresholds = self.thresholds;
         let default_cluster_key_id = self.default_cluster_key_id;
-        let block_per_seg = self.block_per_seg;
         let kind = self.kind;
         let set_hilbert_level = self.set_hilbert_level;
         let mut tasks = Vec::with_capacity(segment_indices.len());
@@ -497,7 +489,6 @@ impl TableMutationAggregator {
                     thresholds,
                     default_cluster_key_id,
                     all_perfect,
-                    block_per_seg,
                     kind,
                     set_level,
                 )
@@ -571,7 +562,6 @@ async fn write_segment(
     thresholds: BlockThresholds,
     default_cluster_key: Option<u32>,
     all_perfect: bool,
-    block_per_seg: usize,
     kind: MutationKind,
     set_hilbert_level: bool,
 ) -> Result<(String, Statistics)> {
@@ -589,12 +579,12 @@ async fn write_segment(
     }
     if set_hilbert_level {
         debug_assert!(new_summary.cluster_stats.is_none());
-        let level = if new_summary.block_count >= block_per_seg as u64
-            && thresholds.check_perfect_segment(
-                new_summary.row_count as usize,
-                new_summary.uncompressed_byte_size as usize,
-                new_summary.compressed_byte_size as usize,
-            ) {
+        let level = if thresholds.check_perfect_segment(
+            new_summary.block_count as usize,
+            new_summary.row_count as usize,
+            new_summary.uncompressed_byte_size as usize,
+            new_summary.compressed_byte_size as usize,
+        ) {
             -1
         } else {
             0

@@ -34,7 +34,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
-use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -56,7 +55,6 @@ use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 pub enum ReclusterMode {
@@ -72,7 +70,6 @@ pub struct ReclusterMutator {
     pub(crate) cluster_key_id: u32,
     pub(crate) schema: TableSchemaRef,
     pub(crate) max_tasks: usize,
-    pub(crate) block_per_seg: usize,
     pub(crate) cluster_key_types: Vec<DataType>,
     pub(crate) column_ids: HashSet<u32>,
 }
@@ -86,8 +83,6 @@ impl ReclusterMutator {
         let schema = table.schema_with_stream();
         let cluster_key_id = table.cluster_key_meta.clone().unwrap().0;
         let block_thresholds = table.get_block_thresholds();
-        let block_per_seg =
-            table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
 
         let avg_depth_threshold = table.get_option(
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
@@ -114,7 +109,6 @@ impl ReclusterMutator {
             block_thresholds,
             cluster_key_id,
             max_tasks,
-            block_per_seg,
             cluster_key_types,
             column_ids,
         })
@@ -130,7 +124,6 @@ impl ReclusterMutator {
         block_thresholds: BlockThresholds,
         cluster_key_id: u32,
         max_tasks: usize,
-        block_per_seg: usize,
         column_ids: HashSet<u32>,
     ) -> Self {
         Self {
@@ -140,7 +133,6 @@ impl ReclusterMutator {
             block_thresholds,
             cluster_key_id,
             max_tasks,
-            block_per_seg,
             cluster_key_types,
             column_ids,
         }
@@ -348,7 +340,8 @@ impl ReclusterMutator {
                     ) == Ordering::Greater
                 })
             };
-            (selected_segs_idx.len() > 1 && blocks.len() <= self.block_per_seg) || unordered()
+            (selected_segs_idx.len() > 1 && blocks.len() <= self.block_thresholds.block_per_segment)
+                || unordered()
         } else {
             true
         };
@@ -393,8 +386,10 @@ impl ReclusterMutator {
         let mut recluster_blocks_count = 0;
 
         let mut parts = Vec::new();
-        let mut checker =
-            SegmentCompactChecker::new(self.block_per_seg as u64, Some(self.cluster_key_id));
+        let mut checker = SegmentCompactChecker::new(
+            self.block_thresholds.block_per_segment as u64,
+            Some(self.cluster_key_id),
+        );
 
         for (loc, compact_segment) in compact_segments.into_iter() {
             recluster_blocks_count += compact_segment.summary.block_count;
@@ -511,7 +506,10 @@ impl ReclusterMutator {
             }
 
             // Skip if segment has more blocks than required and no reclustering is needed
-            if level < 0 && compact_segment.summary.block_count as usize >= self.block_per_seg {
+            if level < 0
+                && compact_segment.summary.block_count as usize
+                    >= self.block_thresholds.block_per_segment
+            {
                 continue;
             }
 
@@ -519,7 +517,7 @@ impl ReclusterMutator {
             if let Some(stats) = &compact_segment.summary.cluster_stats {
                 blocks_num += compact_segment.summary.block_count as usize;
                 // Track small segments for special handling later
-                if blocks_num < self.block_per_seg {
+                if blocks_num < self.block_thresholds.block_per_segment {
                     small_segments.insert(i);
                 }
                 // Add to indices for potential reclustering
@@ -541,17 +539,18 @@ impl ReclusterMutator {
             return Ok((ReclusterMode::Compact, unclustered_segments));
         }
 
-        let selected_segments = if indices.len() > 1 && blocks_num > self.block_per_seg {
-            let selected = self.fetch_max_depth(points_map, 1.0, max_len)?;
-            if selected.is_empty() && small_segments.len() > 1 {
-                // If no segments were selected but small segments exist, use those.
-                small_segments
+        let selected_segments =
+            if indices.len() > 1 && blocks_num > self.block_thresholds.block_per_segment {
+                let selected = self.fetch_max_depth(points_map, 1.0, max_len)?;
+                if selected.is_empty() && small_segments.len() > 1 {
+                    // If no segments were selected but small segments exist, use those.
+                    small_segments
+                } else {
+                    selected
+                }
             } else {
-                selected
-            }
-        } else {
-            indices
-        };
+                indices
+            };
 
         Ok((ReclusterMode::Recluster, selected_segments))
     }
@@ -559,7 +558,8 @@ impl ReclusterMutator {
     pub fn segment_can_recluster(&self, summary: &Statistics) -> bool {
         if let Some(stats) = &summary.cluster_stats {
             stats.cluster_key_id == self.cluster_key_id
-                && (stats.level >= 0 || (summary.block_count as usize) < self.block_per_seg)
+                && (stats.level >= 0
+                    || (summary.block_count as usize) < self.block_thresholds.block_per_segment)
         } else {
             false
         }

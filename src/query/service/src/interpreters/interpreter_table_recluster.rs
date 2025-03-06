@@ -313,7 +313,12 @@ impl ReclusterTableInterpreter {
             block_thresholds.calc_rows_per_block(total_bytes, total_rows, total_compressed);
         let mut total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
         if total_partitions < block_thresholds.block_per_segment
-            && block_thresholds.check_perfect_segment(total_rows, total_bytes, total_compressed)
+            && block_thresholds.check_perfect_segment(
+                block_thresholds.block_per_segment,
+                total_rows,
+                total_bytes,
+                total_compressed,
+            )
         {
             total_partitions = block_thresholds.block_per_segment;
         }

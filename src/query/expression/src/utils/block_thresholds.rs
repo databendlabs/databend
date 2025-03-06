@@ -71,13 +71,15 @@ impl BlockThresholds {
     #[inline]
     pub fn check_perfect_segment(
         &self,
+        total_blocks: usize,
         total_rows: usize,
         total_bytes: usize,
         total_compressed: usize,
     ) -> bool {
-        total_rows >= self.min_rows_per_block * self.block_per_segment
-            || total_bytes >= self.max_bytes_per_block * self.block_per_segment
-            || total_compressed >= self.max_bytes_per_file * self.block_per_segment
+        total_blocks >= self.block_per_segment
+            && (total_rows >= self.min_rows_per_block * self.block_per_segment
+                || total_bytes >= self.max_bytes_per_block * self.block_per_segment
+                || total_compressed >= self.max_bytes_per_file * self.block_per_segment)
     }
 
     #[inline]
