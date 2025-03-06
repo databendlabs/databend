@@ -39,6 +39,8 @@ use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
+use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
+use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -221,7 +223,42 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, TimestampType, _, _>(
         "to_timestamp",
-        |_, _| FunctionDomain::MayThrow,
+        |ctx, d| {
+            let max = d.max.clone().unwrap_or_default();
+            let mut res = Vec::with_capacity(2);
+            for (i, v) in [&d.min, &max].iter().enumerate() {
+                let mut extend_num = 0;
+                if i == 1 && d.max.is_none() {
+                    // the max domain is unbounded
+                    res.push(TIMESTAMP_MAX);
+                    break;
+                }
+                let mut d = string_to_timestamp(v, &ctx.tz);
+                // the string max domain maybe truncated into `"2024-09-02 00:0�"`
+                const MAX_LEN: usize = "1000-01-01".len();
+                if d.is_err() && v.len() > MAX_LEN {
+                    d = string_to_timestamp(&v[0..MAX_LEN], &ctx.tz);
+                    if i == 0 {
+                        extend_num = -1;
+                    } else {
+                        extend_num = 1;
+                    }
+                }
+
+                if let Ok(ts) = d {
+                    res.push(
+                        ts.timestamp().as_microsecond()
+                            + extend_num * (24 * 60 * 60 * MICROS_PER_SEC - 1),
+                    );
+                } else {
+                    return FunctionDomain::MayThrow;
+                }
+            }
+            FunctionDomain::Domain(SimpleDomain {
+                min: res[0].clamp(TIMESTAMP_MIN, TIMESTAMP_MAX),
+                max: res[1].clamp(TIMESTAMP_MIN, TIMESTAMP_MAX),
+            })
+        },
         eval_string_to_timestamp,
     );
     registry.register_combine_nullable_1_arg::<StringType, TimestampType, _, _>(
@@ -502,7 +539,43 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
 fn register_string_to_date(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, DateType, _, _>(
         "to_date",
-        |_, _| FunctionDomain::MayThrow,
+        |ctx, d| {
+            let max = d.max.clone().unwrap_or_default();
+            let mut res = Vec::with_capacity(2);
+            for (i, v) in [&d.min, &max].iter().enumerate() {
+                if i == 1 && d.max.is_none() {
+                    // the max domain is unbounded
+                    res.push(DATE_MAX);
+                    break;
+                }
+
+                let mut extend_num = 0;
+                let mut d = string_to_date(v, &ctx.tz);
+                if d.is_err() && v.len() > 10 {
+                    d = string_to_date(&v[0..10], &ctx.tz);
+                    if i == 0 {
+                        extend_num = -1;
+                    } else {
+                        extend_num = 1;
+                    }
+                }
+
+                if d.is_err() {
+                    return FunctionDomain::MayThrow;
+                }
+                let days = d
+                    .unwrap()
+                    .since((Unit::Day, date(1970, 1, 1)))
+                    .unwrap()
+                    .get_days();
+                res.push(days + extend_num);
+            }
+
+            FunctionDomain::Domain(SimpleDomain {
+                min: res[0].clamp(DATE_MIN, DATE_MAX),
+                max: res[1].clamp(DATE_MIN, DATE_MAX),
+            })
+        },
         eval_string_to_date,
     );
     registry.register_combine_nullable_1_arg::<StringType, DateType, _, _>(

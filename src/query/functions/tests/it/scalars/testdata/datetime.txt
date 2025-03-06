@@ -1,10 +1,10 @@
 ast            : to_timestamp(-30610224000000001)
 raw expr       : to_timestamp(minus(30610224000000001))
 checked expr   : to_timestamp<Int64>(minus<UInt64>(30610224000000001_u64))
-optimized expr : -30610224000000000
+optimized expr : -30610224000000001
 output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+output domain  : {-30610224000000001..=-30610224000000001}
+output         : '0999-12-31 23:59:59.999999'
 
 
 ast            : to_timestamp(-315360000000000)
@@ -100,10 +100,10 @@ output         : '1979-12-30 00:00:00.000000'
 ast            : to_timestamp(253402300800000000)
 raw expr       : to_timestamp(253402300800000000)
 checked expr   : to_timestamp<Int64>(to_int64<UInt64>(253402300800000000_u64))
-optimized expr : -30610224000000000
+optimized expr : -62135596800000000
 output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+output domain  : {-62135596800000000..=-62135596800000000}
+output         : '0001-01-01 00:00:00.000000'
 
 
 ast            : to_timestamp(a)
@@ -158,10 +158,10 @@ evaluation (internal):
 ast            : to_date(-354286)
 raw expr       : to_date(minus(354286))
 checked expr   : to_date<Int64>(minus<UInt32>(354286_u32))
-optimized expr : -354285
+optimized expr : -354286
 output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+output domain  : {-354286..=-354286}
+output         : '0999-12-31'
 
 
 ast            : to_date(-354285)
@@ -239,10 +239,10 @@ output         : '9999-12-31'
 ast            : to_date(2932897)
 raw expr       : to_date(2932897)
 checked expr   : to_date<Int64>(to_int64<UInt32>(2932897_u32))
-optimized expr : -354285
+optimized expr : -719162
 output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+output domain  : {-719162..=-719162}
+output         : '0001-01-01'
 
 
 ast            : to_date(a)
@@ -339,10 +339,10 @@ output         : '1970-04-11'
 ast            : add(to_date(0), 10000000)
 raw expr       : add(to_date(0), 10000000)
 checked expr   : plus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt32>(10000000_u32))
-optimized expr : -354285
+optimized expr : -719162
 output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+output domain  : {-719162..=-719162}
+output         : '0001-01-01'
 
 
 ast            : subtract_years(to_date(0), 100)
@@ -393,10 +393,10 @@ output         : '1969-09-23'
 ast            : subtract(to_date(0), 10000000)
 raw expr       : subtract(to_date(0), 10000000)
 checked expr   : minus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt32>(10000000_u32))
-optimized expr : -354285
+optimized expr : -719162
 output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+output domain  : {-719162..=-719162}
+output         : '0001-01-01'
 
 
 ast            : add_years(a, b)
@@ -666,10 +666,10 @@ output         : '1973-03-03 09:46:40.000000'
 ast            : add(to_timestamp(0), 1000000000000000000)
 raw expr       : add(to_timestamp(0), 1000000000000000000)
 checked expr   : plus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(1000000000000000000_u64))
-optimized expr : -30610224000000000
+optimized expr : -62135596800000000
 output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+output domain  : {-62135596800000000..=-62135596800000000}
+output         : '0001-01-01 00:00:00.000000'
 
 
 ast            : subtract_years(to_timestamp(0), 100)
@@ -747,10 +747,10 @@ output         : '1966-10-31 14:13:20.000000'
 ast            : subtract(to_timestamp(0), 1000000000000000000)
 raw expr       : subtract(to_timestamp(0), 1000000000000000000)
 checked expr   : minus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(1000000000000000000_u64))
-optimized expr : -30610224000000000
+optimized expr : -62135596800000000
 output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+output domain  : {-62135596800000000..=-62135596800000000}
+output         : '0001-01-01 00:00:00.000000'
 
 
 ast            : add_years(a, b)
