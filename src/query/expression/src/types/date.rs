@@ -42,8 +42,10 @@ use crate::ScalarRef;
 
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
 /// Minimum valid date, represented by the day offset from 1970-01-01.
-pub const DATE_MIN: i32 = -354285;
+/// 0001-01-01
+pub const DATE_MIN: i32 = -719162;
 /// Maximum valid date, represented by the day offset from 1970-01-01.
+/// 9999-12-31
 pub const DATE_MAX: i32 = 2932896;
 
 /// Check if date is within range.

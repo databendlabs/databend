@@ -1103,9 +1103,16 @@ impl Column {
     }
 
     pub fn domain(&self) -> Domain {
-        if !matches!(self, Column::Array(_) | Column::Map(_)) {
-            assert!(self.len() > 0);
+        if self.len() == 0 {
+            if matches!(self, Column::Array(_)) {
+                return Domain::Array(None);
+            }
+            if matches!(self, Column::Map(_)) {
+                return Domain::Map(None);
+            }
+            return Domain::full(&self.data_type());
         }
+
         match self {
             Column::Null { .. } => Domain::Nullable(NullableDomain {
                 has_null: true,
@@ -1113,6 +1120,7 @@ impl Column {
             }),
             Column::EmptyArray { .. } => Domain::Array(None),
             Column::EmptyMap { .. } => Domain::Map(None),
+
             Column::Number(col) => Domain::Number(col.domain()),
             Column::Decimal(col) => Domain::Decimal(col.domain()),
             Column::Boolean(col) => Domain::Boolean(BooleanDomain {
@@ -1164,7 +1172,13 @@ impl Column {
                 }
             }
             Column::Nullable(col) => {
-                let inner_domain = col.column.domain();
+                let inner_domain = if col.validity.null_count() > 0 {
+                    // goes into the slower path, we will create a new column without nulls
+                    let inner = col.column.clone().filter(&col.validity);
+                    inner.domain()
+                } else {
+                    col.column.domain()
+                };
                 Domain::Nullable(NullableDomain {
                     has_null: col.validity.null_count() > 0,
                     value: Some(Box::new(inner_domain)),

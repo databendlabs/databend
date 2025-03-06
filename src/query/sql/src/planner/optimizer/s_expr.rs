@@ -264,7 +264,7 @@ impl SExpr {
             RelOperator::Window(op) => {
                 match &op.function {
                     WindowFuncType::Aggregate(agg) => {
-                        for arg in &agg.args {
+                        for arg in agg.exprs() {
                             get_udf_names(arg)?.iter().for_each(|udf| {
                                 udfs.insert(*udf);
                             });
@@ -470,7 +470,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
                     .iter()
                     .any(|expr| find_subquery_in_expr(&expr.scalar))
                 || match &op.function {
-                    WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),
+                    WindowFuncType::Aggregate(agg) => agg.exprs().any(find_subquery_in_expr),
                     _ => false,
                 }
         }

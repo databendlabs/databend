@@ -290,7 +290,7 @@ async fn create_memory_table_for_cte_scan(
             let schema = TableSchemaRefExt::create(table_fields);
 
             let create_table_plan = CreateTablePlan {
-                create_option: CreateOption::Create,
+                create_option: CreateOption::CreateIfNotExists,
                 tenant: Tenant {
                     tenant: ctx.get_tenant().tenant,
                 },

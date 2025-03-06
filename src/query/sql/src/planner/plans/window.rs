@@ -258,7 +258,7 @@ impl WindowFuncType {
     pub fn used_columns(&self) -> ColumnSet {
         match self {
             WindowFuncType::Aggregate(agg) => {
-                agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
+                agg.exprs().flat_map(|expr| expr.used_columns()).collect()
             }
             WindowFuncType::LagLead(func) => match &func.default {
                 None => func.arg.used_columns(),

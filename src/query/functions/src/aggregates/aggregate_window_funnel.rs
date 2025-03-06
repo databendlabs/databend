@@ -51,6 +51,7 @@ use super::AggregateFunctionRef;
 use super::AggregateNullVariadicAdaptor;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::assert_unary_params;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggrState;
@@ -419,6 +420,7 @@ pub fn try_create_aggregate_window_funnel_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_params(display_name, params.len())?;
     assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;

@@ -1,0 +1,11 @@
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "user",
+  "fields": [
+    {"name":  "c_int", "type": "int"},
+    {"name":  "c_long", "type": "long"},
+    {"name":  "c_float", "type": "float"},
+    {"name":  "c_double", "type": "double"}
+  ]
+}
