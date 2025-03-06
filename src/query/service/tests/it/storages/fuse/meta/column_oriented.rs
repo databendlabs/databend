@@ -125,7 +125,7 @@ fn check_column_stats_and_meta(
 ) {
     for (i, block_meta) in block_metas.iter().enumerate() {
         for (col_id, col_stat) in block_meta.col_stats.iter() {
-            if !projection.contains(&col_id) {
+            if !projection.contains(col_id) {
                 continue;
             }
             let stat = column_oriented_segment.stat_col(*col_id).unwrap();
@@ -153,7 +153,7 @@ fn check_column_stats_and_meta(
     // check column meta
     for (i, block_meta) in block_metas.iter().enumerate() {
         for (col_id, col_meta) in block_meta.col_metas.iter() {
-            if !projection.contains(&col_id) {
+            if !projection.contains(col_id) {
                 continue;
             }
             let col_meta = col_meta.as_parquet().unwrap();
@@ -295,7 +295,7 @@ fn check_block_level_meta(
 }
 
 fn check_summary(block_metas: &[BlockMeta], column_oriented_segment: &ColumnOrientedSegment) {
-    let summary = reduce_block_metas(&block_metas, Default::default(), Some(0));
+    let summary = reduce_block_metas(block_metas, Default::default(), Some(0));
     assert_eq!(summary.row_count, column_oriented_segment.summary.row_count);
     assert_eq!(
         summary.block_count,
