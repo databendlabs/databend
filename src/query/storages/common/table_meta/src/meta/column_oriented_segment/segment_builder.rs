@@ -311,13 +311,13 @@ impl ColumnOrientedSegmentBuilder {
             let mins = col_stat.min.build();
             let maxs = col_stat.max.build();
             let (mins_of_mins, _) =
-                eval_aggr("min", vec![], &[mins.clone()], block_count as usize)?;
+                eval_aggr("min", vec![], &[mins.clone()], block_count as usize, vec![])?;
             let min = mins_of_mins
                 .index(0)
                 .map(|x| x.to_owned())
                 .unwrap_or(Scalar::Null);
             let (maxs_of_maxs, _) =
-                eval_aggr("max", vec![], &[maxs.clone()], block_count as usize)?;
+                eval_aggr("max", vec![], &[maxs.clone()], block_count as usize, vec![])?;
             let max = maxs_of_maxs
                 .index(0)
                 .map(|x| x.to_owned())
