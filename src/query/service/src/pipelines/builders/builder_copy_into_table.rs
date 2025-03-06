@@ -214,7 +214,7 @@ impl PipelineBuilder {
             copied_file_tree.insert(path, TableCopiedFileInfo {
                 etag: short_etag,
                 content_length: file.size,
-                last_modified: Some(file.last_modified),
+                last_modified: file.last_modified,
             });
         }
 
