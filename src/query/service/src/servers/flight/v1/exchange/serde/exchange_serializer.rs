@@ -190,8 +190,9 @@ pub fn serialize_block(
 
     let mut meta = vec![];
     meta.write_scalar_own(data_block.num_rows() as u32)?;
-    bincode_serialize_into_buf(&mut meta, &data_block.get_meta())
-        .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
+    serde_json::to_writer(&mut meta, &data_block.get_meta())?;
+    // bincode_serialize_into_buf(&mut meta, &data_block.get_meta()).map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
+    // .map_err(|_| ErrorCode::BadBytes("block meta serialize error when exchange"))?;
 
     let (_, dict, values) = match data_block.is_empty() {
         true => batches_to_flight_data_with_options(

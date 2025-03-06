@@ -137,9 +137,7 @@ impl Processor for TransformSpillReader {
     fn process(&mut self) -> Result<()> {
         if let Some((meta, mut read_data)) = self.deserializing_meta.take() {
             match meta {
-                AggregateMeta::Spilled(_) => unreachable!(),
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
-                AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
                     debug_assert!(read_data.len() == 1);
@@ -176,9 +174,7 @@ impl Processor for TransformSpillReader {
     async fn async_process(&mut self) -> Result<()> {
         if let Some(block_meta) = self.reading_meta.take() {
             match &block_meta {
-                AggregateMeta::Spilled(_) => unreachable!(),
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
-                AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(payload) => {
                     let _guard = self.semaphore.acquire().await;

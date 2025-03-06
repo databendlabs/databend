@@ -211,13 +211,13 @@ impl NewTransformPartitionBucket {
 
     #[allow(unused_assignments)]
     fn add_bucket(&mut self, mut data_block: DataBlock) -> Result<(isize, usize)> {
+        eprintln!("recv bucket {:?} {:?}", data_block, serde_json::to_string(&data_block.get_meta()));
         let (mut bucket, mut partition_count) = (0, 0);
         let mut is_empty_block = false;
         if let Some(block_meta) = data_block.get_meta() {
             if let Some(block_meta) = AggregateMeta::downcast_ref_from(block_meta) {
                 (bucket, partition_count) = match block_meta {
                     AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
                     AggregateMeta::BucketSpilled(_) => {
                         let meta = data_block.take_meta().unwrap();
 
@@ -245,39 +245,6 @@ impl NewTransformPartitionBucket {
                         }
                         unreachable!()
                     }
-                    AggregateMeta::Spilled(_) => {
-                        let meta = data_block.take_meta().unwrap();
-
-                        if let Some(AggregateMeta::Spilled(buckets_payload)) =
-                            AggregateMeta::downcast_from(meta)
-                        {
-                            let partition_count = if !buckets_payload.is_empty() {
-                                buckets_payload[0].max_partition_count
-                            } else {
-                                MAX_PARTITION_COUNT
-                            };
-                            self.max_partition_count =
-                                self.max_partition_count.max(partition_count);
-
-                            for bucket_payload in buckets_payload {
-                                let bucket = bucket_payload.bucket;
-                                let data_block = DataBlock::empty_with_meta(
-                                    AggregateMeta::create_bucket_spilled(bucket_payload),
-                                );
-                                match self.buckets_blocks.entry(bucket) {
-                                    Entry::Vacant(v) => {
-                                        v.insert(vec![data_block]);
-                                    }
-                                    Entry::Occupied(mut v) => {
-                                        v.get_mut().push(data_block);
-                                    }
-                                };
-                            }
-
-                            return Ok((SINGLE_LEVEL_BUCKET_NUM, partition_count));
-                        }
-                        unreachable!()
-                    }
                     AggregateMeta::Serialized(payload) => {
                         is_empty_block = payload.data_block.is_empty();
                         self.max_partition_count =
@@ -290,7 +257,7 @@ impl NewTransformPartitionBucket {
                         self.max_partition_count =
                             self.max_partition_count.max(payload.max_partition_count);
 
-                        (payload.bucket, payload.max_partition_count)
+                        (payload.partition, payload.max_partition_count)
                     }
                 };
             } else {
@@ -309,9 +276,9 @@ impl NewTransformPartitionBucket {
             if self.all_inputs_init {
                 if partition_count != self.max_partition_count {
                     return Err(ErrorCode::Internal(
-                    "Internal, the partition count does not equal the max partition count on TransformPartitionBucket.
+                        "Internal, the partition count does not equal the max partition count on TransformPartitionBucket.
                     ",
-                ));
+                    ));
                 }
                 match self.buckets_blocks.entry(bucket) {
                     Entry::Vacant(v) => {
@@ -382,8 +349,8 @@ impl NewTransformPartitionBucket {
         for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
             blocks.push(Some(DataBlock::empty_with_meta(
                 AggregateMeta::create_agg_payload(
-                    bucket as isize,
                     payload,
+                    bucket as isize,
                     self.max_partition_count,
                 ),
             )));
@@ -395,7 +362,7 @@ impl NewTransformPartitionBucket {
     fn partition_payload(&mut self, payload: AggregatePayload) -> Result<Vec<Option<DataBlock>>> {
         // already is max partition
         if payload.max_partition_count == self.max_partition_count {
-            let bucket = payload.bucket;
+            let bucket = payload.partition;
             let data_block =
                 DataBlock::empty_with_meta(Box::new(AggregateMeta::AggregatePayload(payload)));
             match self.buckets_blocks.entry(bucket) {
@@ -423,8 +390,8 @@ impl NewTransformPartitionBucket {
         for (bucket, payload) in partitioned_payload.payloads.into_iter().enumerate() {
             blocks.push(Some(DataBlock::empty_with_meta(
                 AggregateMeta::create_agg_payload(
-                    bucket as isize,
                     payload,
+                    bucket as isize,
                     self.max_partition_count,
                 ),
             )));
@@ -550,9 +517,7 @@ impl Processor for NewTransformPartitionBucket {
 
         if let Some(agg_block_meta) = block_meta {
             let data_blocks = match agg_block_meta {
-                AggregateMeta::Spilled(_) => unreachable!(),
                 AggregateMeta::Partitioned { .. } => unreachable!(),
-                AggregateMeta::AggregateSpilling(_) => unreachable!(),
                 AggregateMeta::BucketSpilled(_) => unreachable!(),
                 AggregateMeta::Serialized(payload) => self.partition_block(payload)?,
                 AggregateMeta::AggregatePayload(payload) => self.partition_payload(payload)?,

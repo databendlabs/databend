@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -30,6 +31,8 @@ use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
+use crate::pipelines::processors::transforms::aggregator::FlightExchange;
+use crate::servers::flight::v1::scatter::MergeFlightScatter;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -60,7 +63,16 @@ impl ExchangeSink {
                 if !params.ignore_exchange {
                     let settings = ctx.get_settings();
                     let compression = settings.get_query_flight_compression()?;
-                    exchange_injector.apply_merge_serializer(params, compression, pipeline)?;
+
+                    let nodes = vec![GlobalConfig::instance().query.node_id.clone()];
+                    pipeline.exchange(
+                        nodes.len(),
+                        FlightExchange::create(
+                            nodes,
+                            compression,
+                            Arc::new(Box::new(MergeFlightScatter)),
+                        ),
+                    );
                 }
 
                 if !params.ignore_exchange && exchange_injector.exchange_sorting().is_some() {

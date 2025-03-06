@@ -23,6 +23,7 @@ use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::write_column;
@@ -133,7 +134,7 @@ impl TransformPartialAggregate {
                 first_block_start: None,
                 processed_bytes: 0,
                 processed_rows: 0,
-                configure_peer_nodes: vec![],
+                configure_peer_nodes: vec![GlobalConfig::instance().query.node_id.clone()],
                 spilling_state: None,
                 spiller: Arc::new(spiller),
                 spill_blocks: vec![],
@@ -282,12 +283,12 @@ impl AccumulatingTransform for TransformPartialAggregate {
                     convert_byte_size(self.processed_bytes as f64),
                 );
 
-                for (bucket, payload) in hashtable.payload.payloads.into_iter().enumerate() {
+                for (partition, payload) in hashtable.payload.payloads.into_iter().enumerate() {
                     if payload.len() != 0 {
                         blocks.push(DataBlock::empty_with_meta(
                             AggregateMeta::create_agg_payload(
-                                bucket as isize,
                                 payload,
+                                partition as isize,
                                 partition_count,
                             ),
                         ));
@@ -335,63 +336,64 @@ impl AccumulatingTransform for TransformPartialAggregate {
     }
 
     async fn flush_spill_payload(&mut self) -> Result<bool> {
-        let hashtable_spilling_state = self.spilling_state.as_mut().unwrap();
+        let spilling_state = self.spilling_state.as_mut().unwrap();
 
-        let max_bucket = hashtable_spilling_state.max_bucket;
-        let max_partition = 1 << hashtable_spilling_state.ht.config.max_radix_bits;
+        let max_bucket = spilling_state.max_bucket;
+        let max_partition = 1 << spilling_state.ht.config.max_radix_bits;
 
-        if !hashtable_spilling_state.data_payload.is_empty() {
-            if hashtable_spilling_state.writer.is_none() {
+        if !spilling_state.data_payload.is_empty() {
+            if spilling_state.writer.is_none() {
                 let location = self.spiller.create_unique_location();
-                hashtable_spilling_state.writer =
-                    Some(self.spiller.create_aggregate_writer(location).await?);
+                spilling_state.writer = Some(self.spiller.create_aggregate_writer(location).await?);
             }
 
-            let writer = hashtable_spilling_state.writer.as_mut().unwrap();
+            let writer = spilling_state.writer.as_mut().unwrap();
 
             let mut flush_data = Vec::with_capacity(4 * 1024 * 1024);
-            std::mem::swap(&mut flush_data, &mut hashtable_spilling_state.data_payload);
+            std::mem::swap(&mut flush_data, &mut spilling_state.data_payload);
             writer.write(flush_data).await?;
         }
 
-        if hashtable_spilling_state.last_prepare_payload {
-            if let Some(writer) = hashtable_spilling_state.writer.as_mut() {
-                let last_offset = hashtable_spilling_state.last_flush_partition_offset;
+        if spilling_state.last_prepare_payload {
+            if let Some(writer) = spilling_state.writer.as_mut() {
+                let last_offset = spilling_state.last_flush_partition_offset;
                 if writer.write_bytes() > last_offset {
                     self.spill_blocks.push(DataBlock::empty_with_meta(
                         AggregateMeta::create_bucket_spilled(BucketSpilledPayload {
-                            bucket: hashtable_spilling_state.working_partition as isize,
+                            bucket: spilling_state.working_partition as isize,
                             location: writer.location(),
                             data_range: last_offset as u64..writer.write_bytes() as u64,
-                            columns_layout: vec![],
+                            destination_node: self.configure_peer_nodes
+                                [spilling_state.working_bucket]
+                                .clone(),
                             max_partition_count: max_partition,
                         }),
                     ));
 
-                    hashtable_spilling_state.last_flush_partition_offset = writer.write_bytes();
+                    spilling_state.last_flush_partition_offset = writer.write_bytes();
                 }
             }
 
-            hashtable_spilling_state.payload_idx = 0;
-            hashtable_spilling_state.working_partition += 1;
-            if hashtable_spilling_state.working_partition < max_partition {
+            spilling_state.payload_idx = 0;
+            spilling_state.working_partition += 1;
+            if spilling_state.working_partition < max_partition {
                 return Ok(true);
             }
 
-            if let Some(writer) = hashtable_spilling_state.writer.as_mut() {
+            if let Some(writer) = spilling_state.writer.as_mut() {
                 writer.complete().await?;
-                hashtable_spilling_state.writer = None;
+                spilling_state.writer = None;
             }
 
-            hashtable_spilling_state.payload_idx = 0;
-            hashtable_spilling_state.working_partition = 0;
-            hashtable_spilling_state.working_bucket += 1;
+            spilling_state.payload_idx = 0;
+            spilling_state.working_bucket += 1;
+            spilling_state.working_partition = 0;
 
-            if hashtable_spilling_state.working_bucket < max_bucket {
+            if spilling_state.working_bucket < max_bucket {
                 return Ok(true);
             }
 
-            hashtable_spilling_state.finished = true;
+            spilling_state.finished = true;
             self.reset_hashtable();
 
             return Ok(false);
@@ -584,11 +586,12 @@ impl HashtableSpillingState {
                 let address = &flush_state.addresses;
                 let selector = &flush_state.probe_state.partition_entries[working_partition];
 
+                let working_payload = &self.ht.payload.payloads[idx];
                 let mut working_partition_payload = Payload::new(
-                    self.ht.payload.payloads[idx].arena.clone(),
-                    self.ht.payload.payloads[idx].group_types.clone(),
-                    self.ht.payload.payloads[idx].aggrs.clone(),
-                    self.ht.payload.payloads[idx].states_layout.clone(),
+                    working_payload.arena.clone(),
+                    working_payload.group_types.clone(),
+                    working_payload.aggrs.clone(),
+                    working_payload.states_layout.clone(),
                 );
 
                 working_partition_payload.copy_rows(selector, rows, address);
