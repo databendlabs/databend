@@ -86,7 +86,7 @@ runs:
 
         CHECKPOINT=$(aws --endpoint-url http://127.0.0.1:9900/ s3 ls s3://backupbucket/logs/ --recursive | sort -k 1,2 | tail -n 1 | awk -F'[/.]' '{print $(NF-1)}')
 
-        ./target/${{ env.BUILD_PROFILE }}/databend-bendsave restore --from s3://backupbucket?endpoint=http://127.0.0.1:9900/ --to_query ./scripts/ci/deploy/config/databend-query-node-1.toml --to_meta ./scripts/ci/deploy/config/databend-meta-node-for-bendsave.toml --checkpoint=$CHECKPOINT --confirm
+        ./target/${{ env.BUILD_PROFILE }}/databend-bendsave restore --from s3://backupbucket?endpoint=http://127.0.0.1:9900/ --to-query ./scripts/ci/deploy/config/databend-query-node-1.toml --to-meta ./scripts/ci/deploy/config/databend-meta-node-for-bendsave.toml --checkpoint=$CHECKPOINT --confirm
 
     - name: Run sqllogic Tests with Standalone mode again for testing
       shell: bash
