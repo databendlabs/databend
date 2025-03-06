@@ -17,7 +17,7 @@
 
 mod entry;
 
-use databend_common_base::mem_allocator::GlobalAllocator;
+use databend_common_base::mem_allocator::TrackingGlobalAllocator;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::InnerConfig;
@@ -34,7 +34,7 @@ use crate::entry::run_cmd;
 use crate::entry::start_services;
 
 #[global_allocator]
-pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
+pub static GLOBAL_ALLOCATOR: TrackingGlobalAllocator = TrackingGlobalAllocator::create();
 
 fn main() {
     let binary_version = (*databend_common_config::DATABEND_COMMIT_VERSION).clone();

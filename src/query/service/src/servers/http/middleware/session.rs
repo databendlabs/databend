@@ -23,6 +23,8 @@ use databend_common_base::headers::HEADER_STICKY;
 use databend_common_base::headers::HEADER_TENANT;
 use databend_common_base::headers::HEADER_VERSION;
 use databend_common_base::headers::HEADER_WAREHOUSE;
+use databend_common_base::runtime::defer;
+use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_config::DATABEND_SEMVER;
@@ -91,6 +93,7 @@ pub enum EndpointKind {
     Verify,
     UploadToStage,
     SystemInfo,
+    Catalog,
 }
 
 impl EndpointKind {
@@ -105,6 +108,7 @@ impl EndpointKind {
                 | EndpointKind::PollQuery
                 | EndpointKind::Logout
                 | EndpointKind::HeartBeat
+                | EndpointKind::Catalog
         )
     }
     pub fn require_databend_token_type(&self) -> Result<Option<TokenType>> {
@@ -116,7 +120,8 @@ impl EndpointKind {
             | EndpointKind::Logout
             | EndpointKind::SystemInfo
             | EndpointKind::HeartBeat
-            | EndpointKind::UploadToStage => {
+            | EndpointKind::UploadToStage
+            | EndpointKind::Catalog => {
                 if GlobalConfig::instance().query.management_mode {
                     Ok(None)
                 } else {
@@ -599,9 +604,15 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             .map(|id| id.to_str().unwrap().to_string())
             .unwrap_or_else(|| Uuid::new_v4().to_string());
 
+        let query_mem_stat = MemStat::create(format!("Query-{}", query_id));
         let mut tracking_payload = ThreadTracker::new_tracking_payload();
         tracking_payload.query_id = Some(query_id.clone());
+        tracking_payload.mem_stat = Some(query_mem_stat.clone());
+
         let _guard = ThreadTracker::tracking(tracking_payload);
+        let _guard2 = defer(move || {
+            query_mem_stat.set_limit(0);
+        });
 
         ThreadTracker::tracking_future(async move {
             match self.auth(&req, query_id).await {

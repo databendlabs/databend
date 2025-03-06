@@ -55,7 +55,7 @@ impl Binder {
 
         // Bind query body.
         let (mut s_expr, mut bind_context) =
-            self.bind_set_expr(bind_context, &query.body, &query.order_by, limit)?;
+            self.bind_set_expr(bind_context, &query.body, &query.order_by, limit, None)?;
 
         // Bind order by for `SetOperation` and `Values`.
         s_expr = self.bind_query_order_by(&mut bind_context, query, s_expr)?;

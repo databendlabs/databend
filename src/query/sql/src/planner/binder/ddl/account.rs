@@ -265,7 +265,7 @@ impl Binder {
         } = stmt;
         if illegal_ident_name(&user.username) {
             return Err(ErrorCode::IllegalUser(format!(
-                "Illegal Username: Illegal user name [{}], not support username contain ' or \"",
+                "Illegal Username: Illegal user name [{}], not support username contain ' or \" \\b or \\f",
                 user.username
             )));
         }
@@ -468,7 +468,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         let query = format!("SELECT * FROM show_roles() {} {}", show_limit, limit_str);
-        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowGrants)
+        self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowRoles)
             .await
     }
 }

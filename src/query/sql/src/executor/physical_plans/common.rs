@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 
 use databend_common_expression::types::DataType;
 use databend_common_expression::Scalar;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 
 use crate::plans::UDFField;
 use crate::plans::UDFType;
@@ -29,6 +30,7 @@ pub struct AggregateFunctionSignature {
     pub return_type: DataType,
     pub params: Vec<Scalar>,
     pub args: Vec<DataType>,
+    pub sort_descs: Vec<AggregateFunctionSortDesc>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -37,6 +39,8 @@ pub struct AggregateFunctionDesc {
     pub output_column: IndexType,
     /// Bound indices of arguments. Only used in partial aggregation.
     pub arg_indices: Vec<IndexType>,
+    /// Bound indices of sort description. Only used in partial aggregation.
+    pub sort_desc_indices: Vec<IndexType>,
     pub display: String,
 }
 

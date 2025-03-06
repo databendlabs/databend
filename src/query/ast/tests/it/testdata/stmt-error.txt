@@ -232,6 +232,76 @@ error:
 
 
 ---------- Input ----------
+create role `a"a`
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | create role `a"a`
+  | ------      ^^^^^
+  | |           |
+  | |           ' or " or \f or \b are not allowed in role name
+  | |           while parsing <role_name>
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+
+
+---------- Input ----------
+create role `a'a`
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | create role `a'a`
+  | ------      ^^^^^
+  | |           |
+  | |           ' or " or \f or \b are not allowed in role name
+  | |           while parsing <role_name>
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+
+
+---------- Input ----------
+create role `a\ba`
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | create role `a\ba`
+  | ------      ^^^^^^
+  | |           |
+  | |           ' or " or \f or \b are not allowed in role name
+  | |           while parsing <role_name>
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+
+
+---------- Input ----------
+create role `a\fa`
+---------- Output ---------
+error: 
+  --> SQL:1:13
+  |
+1 | create role `a\fa`
+  | ------      ^^^^^^
+  | |           |
+  | |           ' or " or \f or \b are not allowed in role name
+  | |           while parsing <role_name>
+  | while parsing `CREATE ROLE [IF NOT EXISTS] <role_name>`
+
+
+---------- Input ----------
+drop role `a\fa`
+---------- Output ---------
+error: 
+  --> SQL:1:11
+  |
+1 | drop role `a\fa`
+  | ----      ^^^^^^
+  | |         |
+  | |         ' or " or \f or \b are not allowed in role name
+  | |         while parsing <role_name>
+  | while parsing `DROP ROLE [IF EXISTS] <role_name>`
+
+
+---------- Input ----------
 SHOW GRANT FOR ROLE 'role1';
 ---------- Output ---------
 error: 
@@ -580,7 +650,7 @@ error:
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { internalStage | externalStage | externalLocation | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
@@ -611,7 +681,7 @@ error:
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { internalStage | externalStage | externalLocation | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
@@ -630,7 +700,7 @@ error:
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { internalStage | externalStage | externalLocation | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
@@ -649,7 +719,7 @@ error:
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { internalStage | externalStage | externalLocation | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
@@ -668,7 +738,7 @@ error:
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { internalStage | externalStage | externalLocation | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
@@ -687,7 +757,7 @@ error:
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { internalStage | externalStage | externalLocation | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
@@ -706,7 +776,7 @@ error:
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { internalStage | externalStage | externalLocation | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
@@ -725,7 +795,7 @@ error:
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { internalStage | externalStage | externalLocation | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
@@ -747,7 +817,7 @@ error:
   | ---- while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
                 FROM { internalStage | externalStage | externalLocation | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET | TSV } [ formatTypeOptions ] } ) ]
+                [ FILE_FORMAT = ( { TYPE = { CSV | NDJSON | PARQUET | TSV | AVRO } [ formatTypeOptions ] } ) ]
                 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
@@ -865,7 +935,7 @@ error:
   --> SQL:1:65
   |
 1 | CREATE FUNCTION IF NOT EXISTS isnotempty AS(p) -> not(is_null(p)
-  | ------                                   --       ----          ^ unexpected end of input, expecting `)`, `IGNORE`, `RESPECT`, `OVER`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, `POSITION`, or 39 more ...
+  | ------                                   --       ----          ^ unexpected end of input, expecting `)`, `IGNORE`, `RESPECT`, `OVER`, `WITHIN`, `(`, `IS`, `NOT`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, `?`, `?|`, `?&`, `@>`, `<@`, `@?`, `@@`, `#-`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `::`, or 40 more ...
   | |                                        |        |  |          
   | |                                        |        |  while parsing `(<expr> [, ...])`
   | |                                        |        while parsing expression

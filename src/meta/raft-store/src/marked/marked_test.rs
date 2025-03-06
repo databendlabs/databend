@@ -16,8 +16,8 @@ use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 
-use crate::marked::InternalSeq;
 use crate::marked::Marked;
+use crate::marked::SeqTombstone;
 use crate::state_machine::ExpireValue;
 
 #[test]
@@ -62,10 +62,10 @@ fn test_empty() -> anyhow::Result<()> {
 #[test]
 fn test_order_key() -> anyhow::Result<()> {
     let m = Marked::new_with_meta(1, 2, None);
-    assert_eq!(m.order_key(), InternalSeq::normal(1));
+    assert_eq!(m.order_key(), SeqTombstone::normal(1));
 
     let m: Marked<u64> = Marked::new_tombstone(1);
-    assert_eq!(m.order_key(), InternalSeq::tombstone(1));
+    assert_eq!(m.order_key(), SeqTombstone::tombstone(1));
 
     Ok(())
 }

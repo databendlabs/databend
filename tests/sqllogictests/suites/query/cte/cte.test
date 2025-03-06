@@ -575,3 +575,19 @@ with t(tt) as (select number as tt from numbers(10)),  t2(tt) AS MATERIALIZED (S
 7
 8
 9
+
+# https://github.com/databendlabs/databend/issues/17295
+statement ok
+create table t1(a int);
+
+statement ok
+create table t2(a int);
+
+query I
+WITH RECURSIVE
+closure(x) AS (VALUES(1)
+UNION all SELECT a from t1, closure where t1.a = closure.x
+UNION all SELECT a from t2, closure where t2.a = closure.x
+) SELECT x FROM closure;
+----
+1

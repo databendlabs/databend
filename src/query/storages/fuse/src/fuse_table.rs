@@ -25,7 +25,6 @@ use std::time::Instant;
 use async_channel::Receiver;
 use chrono::Duration;
 use chrono::TimeDelta;
-use databend_common_base::base::tokio;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -66,6 +65,7 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::binder::STREAM_COLUMN_FACTORY;
 use databend_common_sql::parse_cluster_keys;
+use databend_common_sql::plans::TruncateMode;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storage::init_operator;
 use databend_common_storage::DataOperator;
@@ -110,7 +110,6 @@ use crate::io::WriteSettings;
 use crate::operations::load_last_snapshot_hint;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
-use crate::operations::TruncateMode;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::Trim;
 use crate::FuseSegmentFormat;
@@ -153,8 +152,6 @@ pub struct FuseTable {
 type PartInfoReceiver = Option<Receiver<Result<PartInfoPtr>>>;
 
 // default schema refreshing timeout is 5 seconds.
-const DEFAULT_SCHEMA_REFRESHING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-
 impl FuseTable {
     pub fn try_create(table_info: TableInfo) -> Result<Box<dyn Table>> {
         Ok(Self::do_create_table_ext(table_info, false)?)
@@ -495,7 +492,6 @@ impl FuseTable {
     fn refresh_schema_from_hint(
         operator: &Operator,
         storage_prefix: &str,
-        table_description: &str,
     ) -> Result<Option<(SnapshotHint, TableSchema)>> {
         let refresh_task = async {
             let begin_load_hint = Instant::now();
@@ -539,24 +535,7 @@ impl FuseTable {
             }
         };
 
-        let refresh_task_with_timeout = async {
-            tokio::time::timeout(DEFAULT_SCHEMA_REFRESHING_TIMEOUT, refresh_task)
-                .await
-                .map_err(|_e| {
-                    ErrorCode::RefreshTableInfoFailure(format!(
-                        "failed to refresh table info {} in time",
-                        table_description
-                    ))
-                })
-                .map_err(|e| {
-                    ErrorCode::RefreshTableInfoFailure(format!(
-                        "failed to refresh table info {} : {}",
-                        table_description, e
-                    ))
-                })?
-        };
-
-        GlobalIORuntime::instance().block_on(refresh_task_with_timeout)
+        GlobalIORuntime::instance().block_on(refresh_task)
     }
 
     fn refresh_table_info(
@@ -581,8 +560,7 @@ impl FuseTable {
             table_info.ident
         );
 
-        let snapshot_hint =
-            Self::refresh_schema_from_hint(operator, storage_prefix, &table_info.desc)?;
+        let snapshot_hint = Self::refresh_schema_from_hint(operator, storage_prefix)?;
 
         info!(
             "extracted snapshot location [{:?}] of table {}, with id {:?} from the last snapshot hint file.",

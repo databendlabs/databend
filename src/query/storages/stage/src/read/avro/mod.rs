@@ -12,4 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod mem_stat;
+mod avro_to_jsonb;
+mod block_builder_processor;
+mod decoder;
+mod pipeline;
+
+pub use pipeline::AvroReadPipelineBuilder;

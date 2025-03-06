@@ -778,6 +778,7 @@ Replace(
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },
@@ -1034,6 +1035,7 @@ Explain {
                                                 },
                                             ],
                                             params: [],
+                                            order_by: [],
                                             window: None,
                                             lambda: None,
                                         },
@@ -1434,6 +1436,7 @@ CreateIndex(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -1629,6 +1632,7 @@ CreateIndex(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -2543,6 +2547,7 @@ CreateTable(
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },
@@ -3160,6 +3165,7 @@ Query(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -11469,6 +11475,7 @@ Query(
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },
@@ -11592,6 +11599,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -11999,28 +12007,6 @@ CREATE ROLE 'test'
 CreateRole {
     if_not_exists: false,
     role_name: "test",
-}
-
-
----------- Input ----------
-create role `a"a`
----------- Output ---------
-CREATE ROLE 'a"a'
----------- AST ------------
-CreateRole {
-    if_not_exists: false,
-    role_name: "a\"a",
-}
-
-
----------- Input ----------
-create role `a'a`
----------- Output ---------
-CREATE ROLE 'a\'a'
----------- AST ------------
-CreateRole {
-    if_not_exists: false,
-    role_name: "a'a",
 }
 
 
@@ -16835,6 +16821,7 @@ Query(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -17401,6 +17388,7 @@ SetStmt {
                                                     },
                                                 ],
                                                 params: [],
+                                                order_by: [],
                                                 window: None,
                                                 lambda: None,
                                             },
@@ -19472,6 +19460,7 @@ CreateDatamaskPolicy(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -19572,6 +19561,7 @@ CreateDatamaskPolicy(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -20825,6 +20815,7 @@ CreateDynamicTable(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -21058,6 +21049,7 @@ CreateDynamicTable(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -21424,6 +21416,7 @@ CreateTask(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -21924,6 +21917,7 @@ AlterTask(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -22719,6 +22713,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -22842,6 +22837,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -22965,6 +22961,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -23090,6 +23087,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -23215,6 +23213,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -23340,6 +23339,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -23524,6 +23524,7 @@ Query(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -23976,6 +23977,7 @@ CreateUDF(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -24057,6 +24059,7 @@ CreateUDF(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -24863,6 +24866,7 @@ Query(
                                                     },
                                                     args: [],
                                                     params: [],
+                                                    order_by: [],
                                                     window: Some(
                                                         WindowDesc {
                                                             ignore_nulls: None,

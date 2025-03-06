@@ -5,10 +5,7 @@ statement ok
 use tpch_test;
 
 statement ok
-set join_spilling_memory_ratio = 10;
-
-statement ok
-set join_spilling_bytes_threshold_per_proc = 1024;
+set force_join_data_spill = 1;
 
 query 
 SELECT * FROM orders as o1 INNER JOIN orders AS o ON (o1.o_orderkey = o.o_orderkey) order by o1.o_orderkey limit 5;
@@ -620,7 +617,4 @@ order by
 8449 Supplier#000008449 5BXWsJERA2mP5OyO4 20-469-856-8873 1772627.20
 
 statement ok
-set join_spilling_memory_ratio = 0;
-
-statement ok
-set join_spilling_bytes_threshold_per_proc = 0;
+unset force_join_data_spill;

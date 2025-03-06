@@ -26,13 +26,14 @@ use databend_common_pipeline_transforms::processors::try_add_multi_sort_merge;
 use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::TransformSortMergeBuilder;
 use databend_common_pipeline_transforms::processors::TransformSortPartial;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::Sort;
 use databend_common_storage::DataOperator;
 use databend_common_storages_fuse::TableContext;
 
-use crate::pipelines::processors::transforms::create_transform_sort_spill;
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::create_transform_stream_sort_spill;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
@@ -195,35 +196,6 @@ impl SortPipelineBuilder {
         self.build_merge_sort_pipeline(pipeline, false)
     }
 
-    fn get_memory_settings(&self, num_threads: usize) -> Result<(usize, usize)> {
-        let enable_sort_spill = self.ctx.get_enable_sort_spill();
-        if !enable_sort_spill {
-            return Ok((0, 0));
-        }
-
-        let settings = self.ctx.get_settings();
-        let memory_ratio = settings.get_sort_spilling_memory_ratio()?;
-        let bytes_limit_per_proc = settings.get_sort_spilling_bytes_threshold_per_proc()?;
-        if memory_ratio == 0 && bytes_limit_per_proc == 0 {
-            // If these two settings are not set, do not enable sort spill.
-            return Ok((0, 0));
-        }
-
-        let max_memory_usage = match (
-            settings.get_max_memory_usage()?,
-            (memory_ratio as f64 / 100_f64).min(1_f64),
-        ) {
-            (0, _) | (_, 0.0) => usize::MAX,
-            (memory, ratio) => (memory as f64 * ratio) as usize,
-        };
-        let spill_threshold_per_core = match bytes_limit_per_proc {
-            0 => max_memory_usage / num_threads,
-            bytes => bytes,
-        };
-
-        Ok((max_memory_usage, spill_threshold_per_core))
-    }
-
     pub fn build_merge_sort_pipeline(
         self,
         pipeline: &mut Pipeline,
@@ -239,21 +211,17 @@ impl SortPipelineBuilder {
             true
         });
 
-        let (max_memory_usage, bytes_limit_per_proc) =
-            self.get_memory_settings(pipeline.output_len())?;
+        let memory_settings = MemorySettings::from_sort_settings(&self.ctx)?;
+        let enable_spill =
+            memory_settings.enable_query_level_spill || memory_settings.enable_global_level_spill;
 
-        let may_spill = max_memory_usage != 0 && bytes_limit_per_proc != 0;
-
-        let sort_merge_output_schema = if output_order_col || may_spill {
-            add_order_field(self.schema.clone(), &self.sort_desc)
-        } else {
-            self.schema.clone()
+        let sort_merge_output_schema = match output_order_col || enable_spill {
+            true => add_order_field(self.schema.clone(), &self.sort_desc),
+            false => self.schema.clone(),
         };
 
         let settings = self.ctx.get_settings();
-
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
-        let spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
 
         pipeline.add_transform(|input, output| {
             let builder = TransformSortMergeBuilder::create(
@@ -265,16 +233,14 @@ impl SortPipelineBuilder {
             )
             .with_limit(self.limit)
             .with_order_col_generated(order_col_generated)
-            .with_output_order_col(output_order_col || may_spill)
-            .with_max_memory_usage(max_memory_usage)
-            .with_spilling_bytes_threshold_per_core(bytes_limit_per_proc)
-            .with_spilling_batch_bytes(spilling_batch_bytes)
+            .with_output_order_col(output_order_col || enable_spill)
+            .with_memory_settings(memory_settings.clone())
             .with_enable_loser_tree(enable_loser_tree);
 
             Ok(ProcessorPtr::create(builder.build()?))
         })?;
 
-        if may_spill {
+        if enable_spill {
             let schema = add_order_field(sort_merge_output_schema.clone(), &self.sort_desc);
             let location_prefix = self.ctx.query_id_spill_prefix();
 
@@ -284,35 +250,19 @@ impl SortPipelineBuilder {
                 disk_spill: None,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
             };
-            let settings = self.ctx.get_settings();
-            let enable_experimental_stream_sort_spilling =
-                settings.get_enable_experimental_stream_sort_spilling()?;
             pipeline.add_transform(|input, output| {
                 let op = DataOperator::instance().spill_operator();
                 let spiller = Spiller::create(self.ctx.clone(), op, config.clone())?;
-                if enable_experimental_stream_sort_spilling {
-                    Ok(ProcessorPtr::create(create_transform_stream_sort_spill(
-                        input,
-                        output,
-                        schema.clone(),
-                        self.sort_desc.clone(),
-                        self.limit,
-                        spiller,
-                        output_order_col,
-                        enable_loser_tree,
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(create_transform_sort_spill(
-                        input,
-                        output,
-                        schema.clone(),
-                        self.sort_desc.clone(),
-                        self.limit,
-                        spiller,
-                        output_order_col,
-                        enable_loser_tree,
-                    )))
-                }
+                Ok(ProcessorPtr::create(create_transform_stream_sort_spill(
+                    input,
+                    output,
+                    schema.clone(),
+                    self.sort_desc.clone(),
+                    self.limit,
+                    spiller,
+                    output_order_col,
+                    enable_loser_tree,
+                )))
             })?;
         }
 

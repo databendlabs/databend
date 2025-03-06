@@ -107,7 +107,7 @@ impl StripeDecoderForCopy {
             } = expr
             {
                 if let Some(display_name) = display_name.strip_prefix("#!") {
-                    let typs = match field.data_type() {
+                    let types = match field.data_type() {
                         DataType::Nullable(box DataType::Array(box DataType::Nullable(
                             box DataType::Tuple(v),
                         ))) => v,
@@ -138,7 +138,7 @@ impl StripeDecoderForCopy {
                             let mut v2 = vec![];
                             for (i, p) in positions.iter().enumerate() {
                                 if *p < 0 {
-                                    v2.push(ColumnBuilder::repeat_default(&typs[i], len).build());
+                                    v2.push(ColumnBuilder::repeat_default(&types[i], len).build());
                                 } else {
                                     v2.push(v[*p as usize].clone());
                                 }
