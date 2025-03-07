@@ -67,12 +67,12 @@ impl TablesTable {
             NULL AS table_collation,
             NULL AS data_free,
             comment AS table_comment
-        FROM system.tables ORDER BY table_schema;";
+        FROM default.system.tables ORDER BY table_schema;";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'tables'".to_string(),
+            desc: "'default'.'information_schema'.'tables'".to_string(),
             name: "tables".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {
