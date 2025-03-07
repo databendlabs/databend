@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use borsh::BorshDeserialize;
 use borsh::BorshSerialize;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
@@ -217,16 +218,29 @@ pub fn try_create_aggregate_string_agg_function(
     _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_variadic_arguments(display_name, argument_types.len(), (1, 2))?;
+    let value_type = argument_types[0].remove_nullable();
+    if !matches!(
+        value_type,
+        DataType::Boolean
+            | DataType::String
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Variant
+            | DataType::Interval
+    ) {
+        return Err(ErrorCode::BadDataValueType(format!(
+            "{} does not support type '{:?}'",
+            display_name, value_type
+        )));
+    }
     let delimiter = if params.len() == 1 {
         params[0].as_string().unwrap().clone()
     } else {
         String::new()
     };
-    AggregateStringAggFunction::try_create(
-        display_name,
-        delimiter,
-        argument_types[0].remove_nullable(),
-    )
+    AggregateStringAggFunction::try_create(display_name, delimiter, value_type)
 }
 
 pub fn aggregate_string_agg_function_desc() -> AggregateFunctionDescription {
