@@ -14,9 +14,9 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::map::KvColumn;
@@ -41,19 +41,27 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::filters::BlockFilter as LatestBloom;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndex;
-use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
+use goldenfile::Mint;
 
 #[test]
-fn test_bloom_filter() -> Result<()> {
+fn test_bloom_filter() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("test_bloom_filter.txt").unwrap();
+
+    test_base(file);
+    test_specify(file);
+    test_long_string(file);
+}
+
+fn test_base(file: &mut impl Write) {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("0", TableDataType::Number(NumberDataType::UInt8)),
         TableField::new("1", TableDataType::String),
@@ -145,169 +153,70 @@ fn test_bloom_filter() -> Result<()> {
             )),
         ]),
     ];
-    let block = DataBlock::concat(&blocks)?;
+    let block = DataBlock::concat(&blocks).unwrap();
+    let bloom_columns = bloom_columns_map(&schema, &[0, 1, 2, 3]);
 
-    let bloom_columns = bloom_columns_map(schema.clone(), vec![0, 1, 2, 3]);
-    let bloom_fields = bloom_columns.values().cloned().collect::<Vec<_>>();
-    let index = BloomIndex::try_create(
-        FunctionContext::default(),
-        LatestBloom::VERSION,
-        &block,
-        bloom_columns,
-    )?
-    .unwrap();
+    for v in [0, 1, 2] {
+        eval_index(
+            file,
+            "0",
+            Scalar::Number(NumberScalar::UInt8(v)),
+            DataType::Number(NumberDataType::UInt8),
+            &block,
+            &bloom_columns,
+            schema.clone(),
+        );
+    }
 
-    assert_eq!(
-        FilterEvalResult::MustFalse,
+    for v in ["a", "b", "d"] {
         eval_index(
-            &index,
-            "0",
-            bloom_fields.clone(),
-            schema.clone(),
-            Scalar::Number(NumberScalar::UInt8(0)),
-            DataType::Number(NumberDataType::UInt8)
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::Uncertain,
-        eval_index(
-            &index,
-            "0",
-            bloom_fields.clone(),
-            schema.clone(),
-            Scalar::Number(NumberScalar::UInt8(1)),
-            DataType::Number(NumberDataType::UInt8)
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::Uncertain,
-        eval_index(
-            &index,
-            "0",
-            bloom_fields.clone(),
-            schema.clone(),
-            Scalar::Number(NumberScalar::UInt8(2)),
-            DataType::Number(NumberDataType::UInt8)
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::Uncertain,
-        eval_index(
-            &index,
+            file,
             "1",
-            bloom_fields.clone(),
+            Scalar::String(v.to_string()),
+            DataType::String,
+            &block,
+            &bloom_columns,
             schema.clone(),
-            Scalar::String("a".to_string()),
-            DataType::String
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::Uncertain,
-        eval_index(
-            &index,
-            "1",
-            bloom_fields.clone(),
-            schema.clone(),
-            Scalar::String("b".to_string()),
-            DataType::String
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::MustFalse,
-        eval_index(
-            &index,
-            "1",
-            bloom_fields,
-            schema.clone(),
-            Scalar::String("d".to_string()),
-            DataType::String
-        )
-    );
+        );
+    }
 
-    assert_eq!(
-        FilterEvalResult::Uncertain,
+    for (k, v) in [(1, "a"), (2, "b"), (3, "x")] {
         eval_map_index(
-            &index,
+            file,
             2,
-            schema.clone(),
             map_ty1.clone(),
-            Scalar::Number(NumberScalar::UInt8(1)),
+            Scalar::Number(NumberScalar::UInt8(k)),
             DataType::Number(NumberDataType::UInt8),
-            Scalar::String("a".to_string()),
-            DataType::String
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::Uncertain,
-        eval_map_index(
-            &index,
-            2,
-            schema.clone(),
-            map_ty1.clone(),
-            Scalar::Number(NumberScalar::UInt8(2)),
-            DataType::Number(NumberDataType::UInt8),
-            Scalar::String("b".to_string()),
-            DataType::String
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::MustFalse,
-        eval_map_index(
-            &index,
-            2,
-            schema.clone(),
-            map_ty1,
-            Scalar::Number(NumberScalar::UInt8(3)),
-            DataType::Number(NumberDataType::UInt8),
-            Scalar::String("x".to_string()),
-            DataType::String
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::Uncertain,
-        eval_map_index(
-            &index,
-            3,
-            schema.clone(),
-            map_ty2.clone(),
-            Scalar::String("b".to_string()),
+            Scalar::String(v.to_string()),
             DataType::String,
-            Scalar::String("def".to_string()),
-            DataType::String
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::MustFalse,
-        eval_map_index(
-            &index,
-            3,
+            &block,
+            &bloom_columns,
             schema.clone(),
-            map_ty2.clone(),
-            Scalar::String("d".to_string()),
-            DataType::String,
-            Scalar::String("xxx".to_string()),
-            DataType::String
-        )
-    );
-    assert_eq!(
-        FilterEvalResult::Uncertain,
-        eval_map_index(
-            &index,
-            3,
-            schema,
-            map_ty2,
-            Scalar::String("c".to_string()),
-            DataType::String,
-            Scalar::Boolean(true),
-            DataType::Boolean,
-        )
-    );
+        );
+    }
 
-    Ok(())
+    for (k, v) in [
+        ("b", Scalar::String("def".to_string())),
+        ("d", Scalar::String("xxx".to_string())),
+        ("c", Scalar::Boolean(true)),
+    ] {
+        let v_type = v.as_ref().infer_data_type();
+        eval_map_index(
+            file,
+            3,
+            map_ty2.clone(),
+            Scalar::String(k.to_string()),
+            DataType::String,
+            v,
+            v_type,
+            &block,
+            &bloom_columns,
+            schema.clone(),
+        );
+    }
 }
 
-#[test]
-fn test_specify_bloom_filter() -> Result<()> {
+fn test_specify(file: &mut impl Write) {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("0", TableDataType::Number(NumberDataType::UInt8)),
         TableField::new("1", TableDataType::String),
@@ -317,35 +226,21 @@ fn test_specify_bloom_filter() -> Result<()> {
         UInt8Type::from_data(vec![1, 2]),
         StringType::from_data(vec!["a", "b"]),
     ])];
-    let block = DataBlock::concat(&blocks)?;
+    let block = DataBlock::concat(&blocks).unwrap();
+    let bloom_columns = bloom_columns_map(&schema, &[0]);
 
-    let bloom_columns = bloom_columns_map(schema.clone(), vec![0]);
-    let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
-    let specify_index = BloomIndex::try_create(
-        FunctionContext::default(),
-        LatestBloom::VERSION,
+    eval_index(
+        file,
+        "1",
+        Scalar::String("d".to_string()),
+        DataType::String,
         &block,
-        bloom_columns,
-    )?
-    .unwrap();
-
-    assert_eq!(
-        FilterEvalResult::Uncertain,
-        eval_index(
-            &specify_index,
-            "1",
-            fields,
-            schema,
-            Scalar::String("d".to_string()),
-            DataType::String
-        )
+        &bloom_columns,
+        schema,
     );
-
-    Ok(())
 }
 
-#[test]
-fn test_string_bloom_filter() -> Result<()> {
+fn test_long_string(file: &mut impl Write) {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("0", TableDataType::Number(NumberDataType::UInt8)),
         TableField::new("1", TableDataType::String),
@@ -356,42 +251,74 @@ fn test_string_bloom_filter() -> Result<()> {
         UInt8Type::from_data(vec![1, 2]),
         StringType::from_data(vec![&val, "bc"]),
     ])];
-    let block = DataBlock::concat(&blocks)?;
+    let block = DataBlock::concat(&blocks).unwrap();
 
     // The average length of the string column exceeds 256 bytes.
-    let bloom_columns = bloom_columns_map(schema.clone(), vec![0, 1]);
-    let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
-    let index = BloomIndex::try_create(
-        FunctionContext::default(),
-        LatestBloom::VERSION,
+    let bloom_columns = bloom_columns_map(&schema, &[0, 1]);
+
+    eval_index(
+        file,
+        "1",
+        Scalar::String("d".to_string()),
+        DataType::String,
         &block,
-        bloom_columns,
-    )?
-    .unwrap();
-
-    assert_eq!(
-        FilterEvalResult::Uncertain,
-        eval_index(
-            &index,
-            "1",
-            fields,
-            schema,
-            Scalar::String("d".to_string()),
-            DataType::String
-        )
+        &bloom_columns,
+        schema,
     );
+}
 
-    Ok(())
+fn eval_index_expr(
+    file: &mut impl Write,
+    block: &DataBlock,
+    bloom_columns: &BTreeMap<usize, TableField>,
+    schema: Arc<TableSchema>,
+    expr: Expr<String>,
+) {
+    writeln!(file, "{block:?}").unwrap();
+    writeln!(file, "expr     : {expr}").unwrap();
+
+    let func_ctx = FunctionContext::default();
+    let (fold_expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
+    let expr = if fold_expr != expr {
+        writeln!(file, "fold_expr: {fold_expr}").unwrap();
+        fold_expr
+    } else {
+        expr
+    };
+
+    let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
+    let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
+
+    let mut scalar_map = HashMap::<Scalar, u64>::new();
+    for (_, scalar, ty) in point_query_cols.iter() {
+        if !scalar_map.contains_key(scalar) {
+            let digest = BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty).unwrap();
+            scalar_map.insert(scalar.clone(), digest);
+        }
+    }
+    let column_stats = StatisticsOfColumns::new();
+    let index =
+        BloomIndex::try_create(func_ctx, LatestBloom::VERSION, block, bloom_columns.clone())
+            .unwrap()
+            .unwrap();
+
+    let result = index
+        .apply(expr, &scalar_map, &column_stats, schema)
+        .unwrap();
+
+    writeln!(file, "result   : {result:?}").unwrap();
+    write!(file, "\n\n").unwrap();
 }
 
 fn eval_index(
-    index: &BloomIndex,
+    file: &mut impl Write,
     col_name: &str,
-    fields: Vec<TableField>,
-    schema: Arc<TableSchema>,
     val: Scalar,
     ty: DataType,
-) -> FilterEvalResult {
+    block: &DataBlock,
+    bloom_columns: &BTreeMap<usize, TableField>,
+    schema: Arc<TableSchema>,
+) {
     let expr = check_function(
         None,
         "eq",
@@ -413,36 +340,24 @@ fn eval_index(
     )
     .unwrap();
 
-    let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
-
-    let mut scalar_map = HashMap::<Scalar, u64>::new();
-    let func_ctx = FunctionContext::default();
-    for (_, scalar, ty) in point_query_cols.iter() {
-        if !scalar_map.contains_key(scalar) {
-            let digest = BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty).unwrap();
-            scalar_map.insert(scalar.clone(), digest);
-        }
-    }
-    let column_stats = StatisticsOfColumns::new();
-    index
-        .apply(expr, &scalar_map, &column_stats, schema)
-        .unwrap()
+    eval_index_expr(file, block, bloom_columns, schema, expr)
 }
 
 #[allow(clippy::too_many_arguments)]
 fn eval_map_index(
-    index: &BloomIndex,
+    file: &mut impl Write,
     i: FieldIndex,
-    schema: Arc<TableSchema>,
     map_ty: DataType,
     key: Scalar,
     key_ty: DataType,
     val: Scalar,
     ty: DataType,
-) -> FilterEvalResult {
+    block: &DataBlock,
+    bloom_columns: &BTreeMap<usize, TableField>,
+    schema: Arc<TableSchema>,
+) {
     let fields = schema.fields.clone();
     let col_name = &fields[i].name;
-    let func_ctx = FunctionContext::default();
     let get_expr = check_function(
         None,
         "get",
@@ -474,28 +389,15 @@ fn eval_map_index(
         check_function(None, "eq", &[], &[get_expr, const_expr], &BUILTIN_FUNCTIONS).unwrap();
     let expr = check_function(None, "is_true", &[], &[eq_expr], &BUILTIN_FUNCTIONS).unwrap();
 
-    let (expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
-    let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
-
-    let mut scalar_map = HashMap::<Scalar, u64>::new();
-    for (_, scalar, ty) in point_query_cols.iter() {
-        if !scalar_map.contains_key(scalar) {
-            let digest = BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty).unwrap();
-            scalar_map.insert(scalar.clone(), digest);
-        }
-    }
-    let column_stats = StatisticsOfColumns::new();
-    index
-        .apply(expr, &scalar_map, &column_stats, schema)
-        .unwrap()
+    eval_index_expr(file, block, bloom_columns, schema, expr);
 }
 
 fn bloom_columns_map(
-    schema: TableSchemaRef,
-    cols: Vec<FieldIndex>,
+    schema: &TableSchema,
+    cols: &[FieldIndex],
 ) -> BTreeMap<FieldIndex, TableField> {
     let mut bloom_columns_map = BTreeMap::new();
-    for i in cols {
+    for &i in cols {
         let field_type = schema.field(i).data_type();
         let data_type = DataType::from(field_type);
         if Xor8Filter::supported_type(&data_type) {
