@@ -497,24 +497,21 @@ impl BloomIndex {
         Ok(digest)
     }
 
-    /// Find all columns that match the pattern of `col = <constant>` in the expression.
-    pub fn find_eq_columns(
-        expr: &Expr<String>,
-        fields: Vec<TableField>,
-    ) -> Result<Vec<(TableField, Scalar, DataType)>> {
-        let mut cols = Vec::new();
-        visit_expr_column_eq_constant(
-            &mut expr.clone(),
-            &mut LambdaEqVisitor(|_, col_name, scalar, ty, _| {
-                if let Some(v) = fields.iter().find(|f: &&TableField| f.name() == col_name) {
-                    if Xor8Filter::supported_type(ty) && !scalar.is_null() {
-                        cols.push((v.clone(), scalar.clone(), ty.clone()));
-                    }
-                }
-                Ok(None)
-            }),
-        )?;
-        Ok(cols)
+    /// Find all columns that can be use for index in the expression.
+    pub fn filter_index_field(
+        mut expr: Expr<String>,
+        fields: &[TableField],
+    ) -> Result<(Vec<TableField>, Vec<(Scalar, DataType)>)> {
+        let mut visitor = ShortListVisitor {
+            fields: fields.to_vec(),
+            founds: Vec::new(),
+            scalars: Vec::new(),
+        };
+        visit_expr_column_eq_constant(&mut expr, &mut visitor)?;
+        let ShortListVisitor {
+            founds, scalars, ..
+        } = visitor;
+        Ok((founds, scalars))
     }
 
     /// For every applicable column, we will create a filter.
@@ -638,14 +635,14 @@ fn visit_expr_column_eq_constant(
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, Expr::FunctionCall { id, args, .. }] => {
-                if id.name() == "get" {
-                    if let Some(new_expr) =
-                        visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
-                    {
-                        *expr = new_expr;
-                        return Ok(());
-                    }
+            }, Expr::FunctionCall { id, args, .. }]
+                if id.name() == "get" =>
+            {
+                if let Some(new_expr) =
+                    visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
+                {
+                    *expr = new_expr;
+                    return Ok(());
                 }
             }
             // patterns like `CAST(MapColumn[<key>] as X) = <constant>`, `<constant> = CAST(MapColumn[<key>] as X)`
@@ -701,11 +698,11 @@ fn visit_expr_column_eq_constant(
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, cast @ Expr::Cast { .. }]
-                if cast.contains_column_ref() =>
-            {
-                // todo!()
-                ()
+            }, cast @ Expr::Cast { .. }] => {
+                if let Some(new_expr) = visitor.enter_cast(cast, scalar, scalar_type)? {
+                    *expr = new_expr;
+                    return Ok(());
+                }
             }
 
             [func @ Expr::FunctionCall { .. }, Expr::Constant {
@@ -720,10 +717,11 @@ fn visit_expr_column_eq_constant(
             }, func @ Expr::FunctionCall { .. }]
                 if func.contains_column_ref() =>
             {
-                // todo!()
-                ()
+                if let Some(new_expr) = visitor.enter_function(func, scalar, scalar_type)? {
+                    *expr = new_expr;
+                    return Ok(());
+                }
             }
-
             _ => (),
         },
         _ => (),
@@ -789,6 +787,24 @@ trait EqVisitor {
         }
         Ok(None)
     }
+
+    fn enter_cast(
+        &mut self,
+        _cast: &Expr<String>,
+        _scalar: &Scalar,
+        _scalar_type: &DataType,
+    ) -> Result<Option<Expr<String>>> {
+        Ok(None)
+    }
+
+    fn enter_function(
+        &mut self,
+        _func: &Expr<String>,
+        _scalar: &Scalar,
+        _scalar_type: &DataType,
+    ) -> Result<Option<Expr<String>>> {
+        Ok(None)
+    }
 }
 
 struct LambdaEqVisitor<F>(F)
@@ -806,5 +822,132 @@ where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<
         return_type: &DataType,
     ) -> Result<Option<Expr<String>>> {
         self.0(span, col_name, scalar, ty, return_type)
+    }
+}
+
+//
+struct ShortListVisitor {
+    fields: Vec<TableField>,
+    founds: Vec<TableField>,
+    scalars: Vec<(Scalar, DataType)>,
+}
+
+impl ShortListVisitor {
+    fn found_field(&self, name: &str) -> Option<&TableField> {
+        self.fields.iter().find(|field| field.name == name)
+    }
+}
+
+impl EqVisitor for ShortListVisitor {
+    fn enter_target(
+        &mut self,
+        _: Span,
+        col_name: &str,
+        scalar: &Scalar,
+        ty: &DataType,
+        _: &DataType,
+    ) -> Result<Option<Expr<String>>> {
+        if let Some(v) = self.found_field(col_name) {
+            if !scalar.is_null() && Xor8Filter::supported_type(ty) {
+                self.founds.push(v.clone());
+                self.scalars.push((scalar.clone(), ty.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    fn enter_cast(
+        &mut self,
+        cast: &Expr<String>,
+        scalar: &Scalar,
+        scalar_type: &DataType,
+    ) -> Result<Option<Expr<String>>> {
+        let Expr::Cast {
+            is_try: false,
+            expr:
+                box Expr::ColumnRef {
+                    id,
+                    data_type: src_type,
+                    ..
+                },
+            dest_type,
+            ..
+        } = cast
+        else {
+            return Ok(None);
+        };
+
+        let Some(field) = self.found_field(id) else {
+            return Ok(None);
+        };
+        if !is_injective_cast(&src_type, dest_type) {
+            return Ok(None);
+        }
+        let (expr, Some(domain)) = ConstantFolder::fold(
+            &Expr::Cast {
+                span: None,
+                is_try: false,
+                expr: Box::new(Expr::Constant {
+                    span: None,
+                    scalar: scalar.to_owned(),
+                    data_type: scalar_type.to_owned(),
+                }),
+                dest_type: src_type.to_owned(),
+            },
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        ) else {
+            return Ok(None);
+        };
+
+        let Some(s) = domain.as_singleton() else {
+            return Ok(None);
+        };
+
+        self.founds.push(field.to_owned());
+        self.scalars.push((s, src_type.to_owned()));
+        Ok(Some(expr)) // break walk
+    }
+
+    fn enter_function(
+        &mut self,
+        _func: &Expr<String>,
+        _scalar: &Scalar,
+        _scalar_type: &DataType,
+    ) -> Result<Option<Expr<String>>> {
+        Ok(None)
+    }
+}
+
+fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
+    if src == dest {
+        return true;
+    }
+
+    // Ignore FunctionDomain::MayThrow
+    match (src, dest) {
+        (DataType::Boolean, DataType::String | DataType::Number(_) | DataType::Decimal(_)) => true,
+
+        (DataType::Number(src), DataType::Number(dest))
+            if src.is_integer() && dest.is_integer() =>
+        {
+            true
+        }
+        (DataType::Number(src), DataType::Decimal(_)) if src.is_integer() => true,
+        (DataType::Number(_), DataType::String) => true,
+        (DataType::Decimal(_), DataType::String) => true,
+
+        (DataType::Date, DataType::Timestamp) => true,
+
+        // (_, DataType::Boolean) => false,
+        // (DataType::String, _) => false,
+        // (DataType::Decimal(_), DataType::Number(_)) => false,
+        // (DataType::Number(src), DataType::Number(dest))
+        //     if src.is_float() && dest.is_integer() =>
+        // {
+        //     false
+        // }
+        (DataType::Nullable(src), DataType::Nullable(dest)) => is_injective_cast(src, dest),
+        _ => false,
     }
 }

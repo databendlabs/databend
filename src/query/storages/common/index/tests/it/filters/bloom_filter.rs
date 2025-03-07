@@ -287,13 +287,13 @@ fn eval_index_expr(
     };
 
     let fields = bloom_columns.values().cloned().collect::<Vec<_>>();
-    let point_query_cols = BloomIndex::find_eq_columns(&expr, fields).unwrap();
+    let (_, scalars) = BloomIndex::filter_index_field(expr.clone(), &fields).unwrap();
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
-    for (_, scalar, ty) in point_query_cols.iter() {
-        if !scalar_map.contains_key(scalar) {
-            let digest = BloomIndex::calculate_scalar_digest(&func_ctx, scalar, ty).unwrap();
-            scalar_map.insert(scalar.clone(), digest);
+    for (scalar, ty) in scalars.into_iter() {
+        if !scalar_map.contains_key(&scalar) {
+            let digest = BloomIndex::calculate_scalar_digest(&func_ctx, &scalar, &ty).unwrap();
+            scalar_map.insert(scalar, digest);
         }
     }
     let column_stats = StatisticsOfColumns::new();
