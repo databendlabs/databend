@@ -354,14 +354,14 @@ select group_array_moving_sum(k), group_array_moving_sum(2)(v) from aggr;
 [1,3,5,7,9,11,13,15,17,19,21] [10,20,20,20,30,40,45,55,60,60,60]
 
 statement ok
-create table t3(s string null, x int null, y int null, z int null);
+create table t3(s string null, x int null, y int null, z int null, b boolean null);
 
 statement ok
 insert into t3 values
-    ('abc', 3, 1, 2),
-    ('def', 2, 1, null),
-    (null, 1, 2, 1),
-    ('xyz', 0, 2, 0);
+    ('abc', 3, 1, 2, true),
+    ('def', 2, 1, null, false),
+    (null, 1, 2, 1, null),
+    ('xyz', 0, 2, 0, true);
 
 query T
 select string_agg(s) from t3;
@@ -377,6 +377,16 @@ query T
 select string_agg(s, '|') from t3;
 ----
 abc|def|xyz
+
+query T
+select string_agg(x + 1, '|') from t3;
+----
+4|3|2|1
+
+query T
+select string_agg(b, '|') from t3;
+----
+true|false|true
 
 query T
 select listagg(s) from t3;
