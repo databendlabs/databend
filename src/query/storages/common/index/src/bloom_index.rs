@@ -370,7 +370,7 @@ impl BloomIndex {
 
         visit_expr_column_eq_constant(
             &mut expr,
-            &mut |span, col_name, scalar, ty, return_type| {
+            &mut LambdaEqVisitor(|span, col_name, scalar, ty, return_type| {
                 let filter_column = &Self::build_filter_column_name(
                     self.version,
                     data_schema.field_with_name(col_name)?,
@@ -414,7 +414,7 @@ impl BloomIndex {
                 } else {
                     Ok(None)
                 }
-            },
+            }),
         )?;
 
         let (new_expr, _) =
@@ -503,14 +503,17 @@ impl BloomIndex {
         fields: Vec<TableField>,
     ) -> Result<Vec<(TableField, Scalar, DataType)>> {
         let mut cols = Vec::new();
-        visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, scalar, ty, _| {
-            if let Some(v) = fields.iter().find(|f: &&TableField| f.name() == col_name) {
-                if Xor8Filter::supported_type(ty) && !scalar.is_null() {
-                    cols.push((v.clone(), scalar.clone(), ty.clone()));
+        visit_expr_column_eq_constant(
+            &mut expr.clone(),
+            &mut LambdaEqVisitor(|_, col_name, scalar, ty, _| {
+                if let Some(v) = fields.iter().find(|f: &&TableField| f.name() == col_name) {
+                    if Xor8Filter::supported_type(ty) && !scalar.is_null() {
+                        cols.push((v.clone(), scalar.clone(), ty.clone()));
+                    }
                 }
-            }
-            Ok(None)
-        })?;
+                Ok(None)
+            }),
+        )?;
         Ok(cols)
     }
 
@@ -583,10 +586,8 @@ impl BloomIndex {
 
 fn visit_expr_column_eq_constant(
     expr: &mut Expr<String>,
-    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
+    visitor: &mut impl EqVisitor,
 ) -> Result<()> {
-    // Find patterns like `Column = <constant>`, `<constant> = Column`,
-    // or `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
     match expr {
         Expr::FunctionCall {
             span,
@@ -595,6 +596,7 @@ fn visit_expr_column_eq_constant(
             return_type,
             ..
         } if id.name() == "eq" => match args.as_slice() {
+            // patterns like `Column = <constant>`, `<constant> = Column`
             [Expr::ColumnRef {
                 id,
                 data_type: column_type,
@@ -617,13 +619,16 @@ fn visit_expr_column_eq_constant(
                 // debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
                 if scalar_type == column_type {
-                    if let Some(new_expr) = visitor(*span, id, scalar, column_type, return_type)? {
+                    if let Some(new_expr) =
+                        visitor.enter_target(*span, id, scalar, column_type, return_type)?
+                    {
                         *expr = new_expr;
 
                         return Ok(());
                     }
                 }
             }
+            // patterns like `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
             [Expr::FunctionCall { id, args, .. }, Expr::Constant {
                 scalar,
                 data_type: scalar_type,
@@ -636,13 +641,14 @@ fn visit_expr_column_eq_constant(
             }, Expr::FunctionCall { id, args, .. }] => {
                 if id.name() == "get" {
                     if let Some(new_expr) =
-                        visit_map_column(*span, args, scalar, scalar_type, return_type, visitor)?
+                        visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
                     {
                         *expr = new_expr;
                         return Ok(());
                     }
                 }
             }
+            // patterns like `CAST(MapColumn[<key>] as X) = <constant>`, `<constant> = CAST(MapColumn[<key>] as X)`
             [Expr::Cast {
                 expr:
                     box Expr::FunctionCall {
@@ -672,22 +678,52 @@ fn visit_expr_column_eq_constant(
                     },
                 dest_type,
                 ..
-            }] => {
-                if id.name() == "get" {
-                    // Only support cast variant value in map to string value
-                    if return_type.remove_nullable() != DataType::Variant
-                        || dest_type.remove_nullable() != DataType::String
-                    {
-                        return Ok(());
-                    }
-                    if let Some(new_expr) =
-                        visit_map_column(*span, args, scalar, scalar_type, return_type, visitor)?
-                    {
-                        *expr = new_expr;
-                        return Ok(());
-                    }
+            }] if id.name() == "get" => {
+                // Only support cast variant value in map to string value
+                if return_type.remove_nullable() != DataType::Variant
+                    || dest_type.remove_nullable() != DataType::String
+                {
+                    return Ok(());
+                }
+                if let Some(new_expr) =
+                    visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
+                {
+                    *expr = new_expr;
+                    return Ok(());
                 }
             }
+            [cast @ Expr::Cast { .. }, Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }]
+            | [Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }, cast @ Expr::Cast { .. }]
+                if cast.contains_column_ref() =>
+            {
+                // todo!()
+                ()
+            }
+
+            [func @ Expr::FunctionCall { .. }, Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }]
+            | [Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }, func @ Expr::FunctionCall { .. }]
+                if func.contains_column_ref() =>
+            {
+                // todo!()
+                ()
+            }
+
             _ => (),
         },
         _ => (),
@@ -709,37 +745,66 @@ fn visit_expr_column_eq_constant(
     Ok(())
 }
 
-fn visit_map_column(
-    span: Span,
-    args: &[Expr<String>],
-    scalar: &Scalar,
-    scalar_type: &DataType,
-    return_type: &DataType,
-    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
-) -> Result<Option<Expr<String>>> {
-    match &args[0] {
-        Expr::ColumnRef { id, data_type, .. }
-        | Expr::Cast {
-            expr: box Expr::ColumnRef { id, data_type, .. },
-            ..
-        } => {
-            if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
-                let val_type = match inner_ty {
-                    DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                    _ => unreachable!(),
-                };
-                // Only JSON value of string type have bloom index.
-                if val_type.remove_nullable() == DataType::Variant {
-                    if scalar_type.remove_nullable() != DataType::String {
+trait EqVisitor {
+    fn enter_target(
+        &mut self,
+        span: Span,
+        col_name: &str,
+        scalar: &Scalar,
+        ty: &DataType,
+        return_type: &DataType,
+    ) -> Result<Option<Expr<String>>>;
+
+    fn enter_map_column(
+        &mut self,
+        span: Span,
+        args: &[Expr<String>],
+        scalar: &Scalar,
+        scalar_type: &DataType,
+        return_type: &DataType,
+    ) -> Result<Option<Expr<String>>> {
+        match &args[0] {
+            Expr::ColumnRef { id, data_type, .. }
+            | Expr::Cast {
+                expr: box Expr::ColumnRef { id, data_type, .. },
+                ..
+            } => {
+                if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
+                    let val_type = match inner_ty {
+                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                        _ => unreachable!(),
+                    };
+                    // Only JSON value of string type have bloom index.
+                    if val_type.remove_nullable() == DataType::Variant {
+                        if scalar_type.remove_nullable() != DataType::String {
+                            return Ok(None);
+                        }
+                    } else if val_type.remove_nullable() != scalar_type.remove_nullable() {
                         return Ok(None);
                     }
-                } else if val_type.remove_nullable() != scalar_type.remove_nullable() {
-                    return Ok(None);
+                    return self.enter_target(span, id, scalar, scalar_type, return_type);
                 }
-                return visitor(span, id, scalar, scalar_type, return_type);
             }
+            _ => {}
         }
-        _ => {}
+        Ok(None)
     }
-    Ok(None)
+}
+
+struct LambdaEqVisitor<F>(F)
+where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>;
+
+impl<F> EqVisitor for LambdaEqVisitor<F>
+where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>
+{
+    fn enter_target(
+        &mut self,
+        span: Span,
+        col_name: &str,
+        scalar: &Scalar,
+        ty: &DataType,
+        return_type: &DataType,
+    ) -> Result<Option<Expr<String>>> {
+        self.0(span, col_name, scalar, ty, return_type)
+    }
 }
