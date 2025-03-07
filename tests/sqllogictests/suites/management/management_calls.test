@@ -18,6 +18,53 @@ onlyif todo
 statement ok
 call system$search_tables('call_t')
 
+statement ok
+show roles;
+
+statement ok
+show databases;
+
+statement ok
+SHOW DROP DATABASES
+
+statement ok
+show tables;
+
+statement ok
+show columns from v_call_t
+
+statement ok
+show engines;
+
+statement ok
+show settings;
+
+statement ok
+show variables;
+
+statement ok
+show functions;
+
+statement ok
+SHOW USER FUNCTIONS;
+
+statement ok
+show users;
+
+statement ok
+SHOW TABLE_FUNCTIONS;
+
+statement ok
+show stages;
+
+statement ok
+list @~;
+
+statement ok
+DESC STAGE @~;
+
+statement ok
+SHOW LOCKS
 
 query T
 call admin$tenant_quota('admin')

@@ -961,6 +961,7 @@ pub struct FunctionCall {
     pub name: Identifier,
     pub args: Vec<Expr>,
     pub params: Vec<Expr>,
+    pub order_by: Vec<OrderByExpr>,
     pub window: Option<WindowDesc>,
     pub lambda: Option<Lambda>,
 }
@@ -972,6 +973,7 @@ impl Display for FunctionCall {
             name,
             args,
             params,
+            order_by,
             window,
             lambda,
         } = self;
@@ -991,6 +993,11 @@ impl Display for FunctionCall {
         }
         write!(f, ")")?;
 
+        if !order_by.is_empty() {
+            write!(f, " WITHIN GROUP ( ORDER BY ")?;
+            write_comma_separated_list(f, &self.order_by)?;
+            write!(f, " )")?;
+        }
         if let Some(window) = window {
             if let Some(ignore_null) = window.ignore_nulls {
                 if ignore_null {

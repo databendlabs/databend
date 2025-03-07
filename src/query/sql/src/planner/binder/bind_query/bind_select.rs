@@ -341,6 +341,7 @@ impl SelectRewriter<'_> {
                     name,
                     args,
                     params: vec![],
+                    order_by: vec![],
                     window: None,
                     lambda: None,
                 },

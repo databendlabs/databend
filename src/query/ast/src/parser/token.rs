@@ -381,6 +381,8 @@ pub enum TokenKind {
     ASYNC,
     #[token("ATTACH", ignore(ascii_case))]
     ATTACH,
+    #[token("AVRO", ignore(ascii_case))]
+    AVRO,
     #[token("BEFORE", ignore(ascii_case))]
     BEFORE,
     #[token("BETWEEN", ignore(ascii_case))]
@@ -1256,6 +1258,8 @@ pub enum TokenKind {
     WINDOW,
     #[token("WITH", ignore(ascii_case))]
     WITH,
+    #[token("WITHIN", ignore(ascii_case))]
+    WITHIN,
     #[token("XML", ignore(ascii_case))]
     XML,
     #[token("XOR", ignore(ascii_case))]

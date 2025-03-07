@@ -57,21 +57,21 @@ impl ParquetRSTable {
                 Some(files) => files
                     .iter()
                     .filter(|f| f.size > 0)
-                    .map(|f| (f.path.clone(), f.size))
+                    .map(|f| (f.path.clone(), f.size, f.dedup_key()))
                     .collect::<Vec<_>>(),
                 None => self
                     .files_info
                     .list(&self.operator, thread_num, None)
                     .await?
                     .into_iter()
-                    .map(|f| (f.path, f.size))
+                    .map(|f| (f.path.clone(), f.size, f.dedup_key()))
                     .collect::<Vec<_>>(),
             }
         } else {
             // Already fetched the parquet metas when creating column statistics provider.
             parquet_metas
                 .iter()
-                .map(|p| (p.location.clone(), p.size))
+                .map(|p| (p.location.clone(), p.size, None))
                 .collect()
         };
 
@@ -82,9 +82,9 @@ impl ParquetRSTable {
         let mut large_file_indices = vec![];
         let mut small_file_indices = vec![];
         let mut small_files = vec![];
-        for (index, (location, size)) in file_locations.into_iter().enumerate() {
+        for (index, (location, size, dedup_key)) in file_locations.into_iter().enumerate() {
             if size > fast_read_bytes {
-                large_files.push((location, size));
+                large_files.push((location, size, dedup_key));
                 large_file_indices.push(index);
             } else if size > 0 {
                 small_files.push((location, size));
@@ -209,7 +209,7 @@ impl ParquetRSTable {
     async fn read_and_prune_metas_in_parallel(
         &self,
         ctx: Arc<dyn TableContext>,
-        file_infos: Vec<(String, u64)>,
+        file_infos: Vec<(String, u64, Option<String>)>,
         pruner: Arc<ParquetRSPruner>,
         columns_to_read: Vec<usize>,
         topk: Arc<Option<TopK>>,
@@ -221,6 +221,11 @@ impl ParquetRSTable {
         let max_memory_usage = settings.get_max_memory_usage()?;
 
         let mut tasks = Vec::with_capacity(num_threads);
+        let use_cache = if copy_status.is_some() {
+            None
+        } else {
+            Some(ctx.get_id())
+        };
 
         // Equally distribute the tasks
         for i in 0..num_threads {
@@ -238,6 +243,7 @@ impl ParquetRSTable {
             let copy_status = copy_status.clone();
             let leaf_fields = self.leaf_fields.clone();
             let topk = topk.clone();
+            let use_cache = use_cache.clone();
 
             tasks.push(async move {
                 let metas = read_parquet_metas_batch(
@@ -247,6 +253,7 @@ impl ParquetRSTable {
                     leaf_fields,
                     schema_from,
                     max_memory_usage,
+                    use_cache.clone(),
                 )
                 .await?;
                 prune_and_generate_partitions(&pruner, metas, columns_to_read, &topk, copy_status)

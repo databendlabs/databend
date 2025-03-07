@@ -25,10 +25,10 @@ use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::ROW_ID_COL_NAME;
 
+use crate::binder::split_conjunctions;
 use crate::binder::util::TableIdentifier;
 use crate::binder::Binder;
 use crate::binder::Finder;
@@ -180,9 +180,6 @@ impl MutationExpression {
                     all_source_columns,
                     target_table_index,
                     target_table_row_id_index,
-                    truncate_table: false,
-                    predicate_column_index: None,
-                    direct_filter: None,
                 })
             }
             MutationExpression::Update {
@@ -225,7 +222,7 @@ impl MutationExpression {
                     .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
 
                 // If the filter is a simple expression, change the mutation strategy to MutationStrategy::Direct.
-                let (mut mutation_strategy, filter) =
+                let (mut mutation_strategy, predicates) =
                     binder.process_filter(&mut bind_context, filter)?;
 
                 if from_s_expr.is_some() {
@@ -234,31 +231,6 @@ impl MutationExpression {
 
                 // Build bind result according to mutation strategy.
                 if mutation_strategy == MutationStrategy::Direct {
-                    let mut truncate_table = false;
-                    let mut predicate_column_index = None;
-                    let mut read_partition_columns = HashSet::new();
-
-                    if let Some(filter) = &filter {
-                        read_partition_columns.extend(filter.used_columns());
-                        if mutation_type == MutationType::Update {
-                            let column_index = binder.metadata.write().add_derived_column(
-                                "_predicate".to_string(),
-                                DataType::Boolean,
-                                None,
-                            );
-                            required_columns.insert(column_index);
-                            predicate_column_index = Some(column_index);
-                        }
-                    } else if mutation_type == MutationType::Delete {
-                        // There is no filter and the mutation type is delete,
-                        // we can truncate the table directly.
-                        truncate_table = true;
-                    }
-
-                    for column_index in bind_context.column_set().iter() {
-                        required_columns.insert(*column_index);
-                    }
-
                     let table_schema = target_table
                         .schema_with_stream()
                         .remove_virtual_computed_fields();
@@ -267,14 +239,24 @@ impl MutationExpression {
                         columns: bind_context.column_set(),
                         table_index: target_table_index,
                         mutation_type: mutation_type.clone(),
-                        filter: filter.clone(),
-                        predicate_column_index,
-                        read_partition_columns,
-                        update_stream_columns,
+                        predicates: vec![],
+                        predicate_column_index: None,
+                        read_partition_columns: HashSet::new(),
                     };
 
                     s_expr =
                         SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation_source)));
+
+                    if !predicates.is_empty() {
+                        s_expr = SExpr::create_unary(
+                            Arc::new(Filter { predicates }.into()),
+                            Arc::new(s_expr),
+                        );
+                    }
+
+                    for column_index in bind_context.column_set().iter() {
+                        required_columns.insert(*column_index);
+                    }
 
                     Ok(MutationExpressionBindResult {
                         input: s_expr,
@@ -285,9 +267,6 @@ impl MutationExpression {
                         all_source_columns: None,
                         target_table_index,
                         target_table_row_id_index: DUMMY_COLUMN_INDEX,
-                        truncate_table,
-                        predicate_column_index,
-                        direct_filter: filter,
                     })
                 } else {
                     let is_lazy_table = mutation_type != MutationType::Delete;
@@ -305,8 +284,6 @@ impl MutationExpression {
 
                     // Add target table row_id column to required columns.
                     required_columns.insert(target_table_row_id_index);
-
-                    let predicates = Binder::flatten_and_scalar_expr(filter.as_ref().unwrap());
 
                     if let Some(from_s_expr) = from_s_expr {
                         let join_plan = Join {
@@ -345,9 +322,6 @@ impl MutationExpression {
                         all_source_columns: None,
                         target_table_index,
                         target_table_row_id_index,
-                        truncate_table: false,
-                        predicate_column_index: None,
-                        direct_filter: None,
                     })
                 }
             }
@@ -492,25 +466,11 @@ impl Binder {
         Ok(row_id_index)
     }
 
-    // Recursively flatten the AND expressions.
-    pub fn flatten_and_scalar_expr(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
-        if let ScalarExpr::FunctionCall(func) = scalar
-            && func.func_name == "and"
-        {
-            func.arguments
-                .iter()
-                .flat_map(Self::flatten_and_scalar_expr)
-                .collect()
-        } else {
-            vec![scalar.clone()]
-        }
-    }
-
     pub(in crate::planner::binder) fn process_filter(
         &self,
         bind_context: &mut BindContext,
         filter: &Option<Expr>,
-    ) -> Result<(MutationStrategy, Option<ScalarExpr>)> {
+    ) -> Result<(MutationStrategy, Vec<ScalarExpr>)> {
         if let Some(expr) = filter {
             let mut scalar_binder = ScalarBinder::new(
                 bind_context,
@@ -527,13 +487,15 @@ impl Binder {
                 )
                 .set_span(scalar.span()));
             }
-            if !self.has_subquery(&scalar)? {
-                Ok((MutationStrategy::Direct, Some(scalar)))
+            let strategy = if !self.has_subquery(&scalar)? {
+                MutationStrategy::Direct
             } else {
-                Ok((MutationStrategy::MatchedOnly, Some(scalar)))
-            }
+                MutationStrategy::MatchedOnly
+            };
+            let predicates = split_conjunctions(&scalar);
+            Ok((strategy, predicates))
         } else {
-            Ok((MutationStrategy::Direct, None))
+            Ok((MutationStrategy::Direct, vec![]))
         }
     }
 
@@ -586,11 +548,6 @@ pub struct MutationExpressionBindResult {
     pub target_table_row_id_index: usize,
     pub required_columns: ColumnSet,
     pub all_source_columns: Option<HashMap<usize, ScalarExpr>>,
-
-    // MutationStrategy::Direct related variables.
-    pub truncate_table: bool,
-    pub predicate_column_index: Option<usize>,
-    pub direct_filter: Option<ScalarExpr>,
 }
 
 pub fn target_probe(s_expr: &SExpr, target_table_index: usize) -> Result<bool> {

@@ -64,6 +64,7 @@ pub use aggregate_count::AggregateCountFunction;
 pub use aggregate_covariance::AggregateCovarianceFunction;
 pub use aggregate_function::*;
 pub use aggregate_function_factory::AggregateFunctionFactory;
+pub use aggregate_function_factory::AggregateFunctionSortDesc;
 pub use aggregate_histogram::*;
 pub use aggregate_json_array_agg::*;
 pub use aggregate_json_object_agg::*;

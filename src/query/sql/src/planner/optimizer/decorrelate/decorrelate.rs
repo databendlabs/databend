@@ -286,7 +286,7 @@ impl SubqueryRewriter {
                 )?;
 
                 let mut join_type = JoinType::LeftSingle;
-                if subquery.contain_agg.unwrap() {
+                if matches!(subquery.contain_agg, Some(true)) {
                     let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                     let card = rel_expr
                         .derive_cardinality()?
@@ -473,7 +473,9 @@ impl SubqueryRewriter {
                 .table_index(column_entry.table_index())
                 .build(),
             });
-            let derive_column = self.derived_columns.get(correlated_column).unwrap();
+            let Some(derive_column) = self.derived_columns.get(correlated_column) else {
+                continue;
+            };
             let column_entry = metadata.column(*derive_column);
             let left_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,

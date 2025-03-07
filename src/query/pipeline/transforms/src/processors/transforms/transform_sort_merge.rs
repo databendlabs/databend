@@ -36,6 +36,7 @@ use super::transform_sort_merge_base::MergeSort;
 use super::transform_sort_merge_base::TransformSortMergeBase;
 use super::AccumulatingTransform;
 use crate::processors::sort::Merger;
+use crate::MemorySettings;
 
 /// Merge sort blocks without limit.
 ///
@@ -213,14 +214,15 @@ pub fn sort_merge(
     have_order_col: bool,
 ) -> Result<Vec<DataBlock>> {
     let sort_desc = Arc::new(sort_desc);
+    let mut memory_settings = MemorySettings::disable_spill();
+    memory_settings.spill_unit_size = sort_spilling_batch_bytes;
+
     let mut processor = MergeSortCommon::try_create(
         schema.clone(),
         sort_desc.clone(),
         have_order_col,
         false,
-        0,
-        0,
-        sort_spilling_batch_bytes,
+        memory_settings,
         MergeSortCommonImpl::create(schema, sort_desc, block_size, enable_loser_tree, None),
     )?;
     for block in data_blocks {

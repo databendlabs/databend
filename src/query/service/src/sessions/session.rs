@@ -32,6 +32,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::PlanProfile;
+use databend_common_settings::OutofMemoryBehavior;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::TempTblMgrRef;
@@ -164,7 +165,16 @@ impl Session {
         let shared = QueryContextShared::try_create(session, cluster)?;
 
         if let Some(mem_stat) = mem_stat {
-            mem_stat.set_limit(self.get_settings().get_max_query_memory_usage()? as i64);
+            let settings = self.get_settings();
+            let query_max_memory_usage = settings.get_max_query_memory_usage()?;
+            let out_of_memory_behavior = settings.get_query_out_of_memory_behavior()?;
+
+            if query_max_memory_usage != 0
+                && matches!(out_of_memory_behavior, OutofMemoryBehavior::Throw)
+            {
+                mem_stat.set_limit(query_max_memory_usage as i64);
+            }
+
             shared.set_query_memory_tracking(Some(mem_stat));
         }
 

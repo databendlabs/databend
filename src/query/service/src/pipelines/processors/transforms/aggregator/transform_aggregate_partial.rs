@@ -19,10 +19,7 @@ use std::vec;
 use bumpalo::Bump;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::plan::AggIndexMeta;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -36,7 +33,9 @@ use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
+use databend_common_pipeline_transforms::MemorySettings;
 
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::sessions::QueryContext;
@@ -52,46 +51,8 @@ impl Default for HashTable {
     }
 }
 
-struct AggregateSettings {
-    max_memory_usage: usize,
-    spilling_bytes_threshold_per_proc: usize,
-}
-
-impl TryFrom<Arc<QueryContext>> for AggregateSettings {
-    type Error = ErrorCode;
-
-    fn try_from(ctx: Arc<QueryContext>) -> std::result::Result<Self, Self::Error> {
-        let settings = ctx.get_settings();
-        let max_threads = settings.get_max_threads()? as usize;
-        let mut memory_ratio = settings.get_aggregate_spilling_memory_ratio()? as f64 / 100_f64;
-
-        if memory_ratio > 1_f64 {
-            memory_ratio = 1_f64;
-        }
-
-        let max_memory_usage = match settings.get_max_memory_usage()? {
-            0 => usize::MAX,
-            max_memory_usage => match memory_ratio {
-                x if x == 0_f64 => usize::MAX,
-                memory_ratio => (max_memory_usage as f64 * memory_ratio) as usize,
-            },
-        };
-
-        Ok(AggregateSettings {
-            max_memory_usage,
-            spilling_bytes_threshold_per_proc: match settings
-                .get_aggregate_spilling_bytes_threshold_per_proc()?
-            {
-                0 => max_memory_usage / max_threads,
-                spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
-            },
-        })
-    }
-}
-
 // SELECT column_name, agg(xxx) FROM table_name GROUP BY column_name
 pub struct TransformPartialAggregate {
-    settings: AggregateSettings,
     hash_table: HashTable,
     probe_state: ProbeState,
     params: Arc<AggregatorParams>,
@@ -99,6 +60,7 @@ pub struct TransformPartialAggregate {
     first_block_start: Option<Instant>,
     processed_bytes: usize,
     processed_rows: usize,
+    settings: MemorySettings,
 }
 
 impl TransformPartialAggregate {
@@ -137,7 +99,7 @@ impl TransformPartialAggregate {
                 params,
                 hash_table,
                 probe_state: ProbeState::default(),
-                settings: AggregateSettings::try_from(ctx)?,
+                settings: MemorySettings::from_aggregate_settings(&ctx)?,
                 start: Instant::now(),
                 first_block_start: None,
                 processed_bytes: 0,
@@ -228,9 +190,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         self.execute_one_block(block)?;
 
-        if matches!(&self.hash_table, HashTable::AggregateHashTable(cell) if cell.allocated_bytes() > self.settings.spilling_bytes_threshold_per_proc
-            || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.settings.max_memory_usage)
-        {
+        if self.settings.check_spill() {
             if let HashTable::AggregateHashTable(v) = std::mem::take(&mut self.hash_table) {
                 let group_types = v.payload.group_types.clone();
                 let aggrs = v.payload.aggrs.clone();

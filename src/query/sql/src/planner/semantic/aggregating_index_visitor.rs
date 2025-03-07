@@ -220,6 +220,7 @@ impl AggregatingIndexChecker {
             name,
             params: _,
             args: _,
+            order_by: _,
             window,
             lambda: _,
         } = func;
@@ -331,6 +332,7 @@ impl RefreshAggregatingIndexRewriter {
                         name: Identifier::from_name(*span, "COUNT_STATE"),
                         args: vec![],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },

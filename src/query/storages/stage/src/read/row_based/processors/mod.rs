@@ -18,7 +18,6 @@ mod reader;
 mod separator;
 
 pub use block_builder::BlockBuilder;
-pub use block_builder::BlockBuilderState;
 pub use decompressor::Decompressor;
 pub use reader::BytesReader;
 pub use separator::Separator;

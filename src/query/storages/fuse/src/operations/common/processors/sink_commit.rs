@@ -34,6 +34,7 @@ use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
+use databend_common_sql::plans::TruncateMode;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -50,7 +51,6 @@ use crate::operations::AppendGenerator;
 use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
 use crate::operations::TruncateGenerator;
-use crate::operations::TruncateMode;
 use crate::FuseTable;
 
 enum State {
@@ -334,7 +334,15 @@ where F: SnapshotGenerator + Send + 'static
                 let schema = self.table.schema().as_ref().clone();
 
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
-                let previous = fuse_table.read_table_snapshot().await?;
+                let previous = fuse_table.read_table_snapshot().await.map_err(|e| {
+                    if e.code() == ErrorCode::STORAGE_NOT_FOUND {
+                        e.add_message(
+                            "Previous table snapshot not found. This could indicate the table is currently being vacuumed. Please check the settings for `data_retention_time_in_days` and the table option `data_retention_period_in_hours` to ensure they are not set too low.",
+                        )
+                    } else {
+                        e
+                    }
+                })?;
                 // save current table info when commit to meta server
                 // if table_id not match, update table meta will fail
                 let table_info = fuse_table.table_info.clone();

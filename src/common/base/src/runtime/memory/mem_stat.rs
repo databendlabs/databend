@@ -165,8 +165,8 @@ impl MemStat {
     }
 
     #[inline]
-    pub fn get_memory_usage(&self) -> i64 {
-        self.used.load(Ordering::Relaxed)
+    pub fn get_memory_usage(&self) -> usize {
+        std::cmp::max(self.used.load(Ordering::Relaxed), 0) as usize
     }
 
     #[inline]
