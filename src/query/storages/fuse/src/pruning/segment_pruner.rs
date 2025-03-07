@@ -21,6 +21,7 @@ use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
+use crate::io::read::SegmentReader;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentLocation;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
@@ -60,7 +61,7 @@ impl SegmentPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
 
         for segment_location in segment_locs {
-            let info = T::read_segment_through_cache(
+            let info = T::SegmentReader::read_segment_through_cache(
                 self.pruning_ctx.dal.clone(),
                 segment_location.location.clone(),
                 self.column_ids.clone(),

@@ -36,6 +36,7 @@ use databend_storages_common_table_meta::meta::Statistics;
 use log::info;
 use opendal::Operator;
 
+use crate::io::read::SegmentReader;
 use crate::io::SegmentsIO;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
@@ -51,7 +52,7 @@ use crate::statistics::sort_by_cluster_stats;
 use crate::TableContext;
 
 #[derive(Clone)]
-pub struct BlockCompactMutator {
+pub struct BlockCompactMutator<S: SegmentReader> {
     pub ctx: Arc<dyn TableContext>,
     pub operator: Operator,
 
@@ -60,7 +61,7 @@ pub struct BlockCompactMutator {
     pub cluster_key_id: Option<u32>,
 }
 
-impl BlockCompactMutator {
+impl<S: SegmentReader> BlockCompactMutator<S> {
     pub fn new(
         ctx: Arc<dyn TableContext>,
         thresholds: BlockThresholds,

@@ -132,9 +132,7 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                let is_column_oriented = matches!(self.segment_format, FuseSegmentFormat::Column);
-
-                if is_column_oriented
+                if self.is_column_oriented()
                     || (!dry_run && segment_len > nodes_num && distributed_pruning)
                 {
                     let mut segments = Vec::with_capacity(segment_locs.len());

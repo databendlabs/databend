@@ -31,7 +31,6 @@ pub use column_oriented_block_prune::ColumnOrientedBlockPruneSink;
 pub use extract_segment_transform::ExtractSegmentTransform;
 pub use lazy_segment_meta::LazySegmentMeta;
 pub use lazy_segment_receiver_source::LazySegmentReceiverSource;
-pub use pruned_segment_meta::read_column_oriented_segment;
 pub use pruned_segment_meta::PrunedColumnOrientedSegmentMeta;
 pub use pruned_segment_meta::PrunedCompactSegmentMeta;
 pub use pruned_segment_meta::PrunedSegmentMeta;

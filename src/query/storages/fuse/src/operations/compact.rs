@@ -21,6 +21,7 @@ use databend_common_expression::ComputedExpr;
 use databend_common_expression::FieldIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
+use crate::io::read::ColumnOrientedSegmentReader;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::FuseTable;
@@ -85,13 +86,22 @@ impl FuseTable {
         };
 
         let thresholds = self.get_block_thresholds();
-        let mut mutator = BlockCompactMutator::new(
-            ctx.clone(),
-            thresholds,
-            compact_options,
-            self.operator.clone(),
-            self.cluster_key_id(),
-        );
+        let mut mutator = match self.is_column_oriented() {
+            true => BlockCompactMutator::<ColumnOrientedSegmentReader>::new(
+                ctx.clone(),
+                thresholds,
+                compact_options,
+                self.operator.clone(),
+                self.cluster_key_id(),
+            ),
+            false => BlockCompactMutator::<ColumnOrientedSegmentReader>::new(
+                ctx.clone(),
+                thresholds,
+                compact_options,
+                self.operator.clone(),
+                self.cluster_key_id(),
+            ),
+        };
 
         let partitions = mutator.target_select().await?;
         if partitions.is_empty() {
