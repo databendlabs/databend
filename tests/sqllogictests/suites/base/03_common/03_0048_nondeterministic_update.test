@@ -1,0 +1,73 @@
+statement ok
+CREATE OR REPLACE TABLE old_products (
+    product_id INT,
+    category_code VARCHAR(50),
+    price DECIMAL(10, 2),
+    stock INT
+);
+
+statement ok
+INSERT INTO old_products (product_id, category_code, price, stock) VALUES
+(1, 'ELEC', 299.99, 50),
+(2, 'ELEC', 399.99, 30),
+(3, 'FURN', 199.99, 20),
+(4, 'FURN', 89.99, 100);
+
+statement ok
+CREATE OR REPLACE TABLE new_products (
+    product_id INT,
+    category_code VARCHAR(50),
+    new_price DECIMAL(10, 2),
+    new_stock INT
+);
+
+statement ok
+INSERT INTO new_products (product_id, category_code, new_price, new_stock) VALUES
+(1, 'ELEC', 279.99, 55),
+(2, 'ELEC', 399.99, 25),
+(3, 'FURN', 189.99, 22),
+(4, 'FURN', 99.99, 50),
+(4, 'FURN', 39.99, 60);
+
+statement ok
+set error_on_nondeterministic_update = 1;
+
+statement error (?s)4001.*multi rows from source match one and the same row in the target_table multi times
+UPDATE old_products o
+SET o.price = n.new_price,
+    o.stock = n.new_stock
+FROM new_products n
+WHERE o.product_id = n.product_id
+AND o.category_code = n.category_code;
+
+statement ok
+set error_on_nondeterministic_update = 0;
+
+statement ok
+UPDATE old_products o
+SET o.price = n.new_price,
+    o.stock = n.new_stock
+FROM new_products n
+WHERE o.product_id = n.product_id
+AND o.category_code = n.category_code;
+
+query ITRI
+select * from old_products order by product_id;
+----
+1 ELEC 279.99 55
+2 ELEC 399.99 25
+3 FURN 189.99 22
+4 FURN 99.99 50
+
+statement ok
+drop table old_products
+
+statement ok
+drop table new_products
+
+include ../issues/issue_15278.test
+
+include ./03_0035_update.test
+
+statement ok
+unset error_on_nondeterministic_update;
