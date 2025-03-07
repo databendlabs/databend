@@ -216,6 +216,10 @@ impl Interpreter for ExplainInterpreter {
                 let _ = pipeline.main_pipeline.take_on_init();
                 let _ = pipeline.main_pipeline.take_on_finished();
 
+                self.ctx
+                    .get_exchange_manager()
+                    .on_finished_query(&self.ctx.get_id(), None);
+
                 for pipeline in &mut pipeline.sources_pipelines {
                     let _ = pipeline.take_on_init();
                     let _ = pipeline.take_on_finished();
