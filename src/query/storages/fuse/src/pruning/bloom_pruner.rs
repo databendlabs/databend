@@ -94,7 +94,7 @@ impl BloomPrunerCreator {
         let (index_fields, scalars) =
             BloomIndex::filter_index_field(expr.clone(), &bloom_column_fields)?;
 
-        if query_fields.is_empty() {
+        if index_fields.is_empty() {
             return Ok(None);
         }
 
