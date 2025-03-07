@@ -1,7 +1,4 @@
 statement ok
-set error_on_nondeterministic_update = 0;
-
-statement ok
 CREATE OR REPLACE TABLE old_products (
     product_id INT,
     category_code VARCHAR(50),
@@ -31,6 +28,20 @@ INSERT INTO new_products (product_id, category_code, new_price, new_stock) VALUE
 (3, 'FURN', 189.99, 22),
 (4, 'FURN', 99.99, 50),
 (4, 'FURN', 39.99, 60);
+
+statement ok
+set error_on_nondeterministic_update = 1;
+
+statement error (?s)4001.*multi rows from source match one and the same row in the target_table multi times
+UPDATE old_products o
+SET o.price = n.new_price,
+    o.stock = n.new_stock
+FROM new_products n
+WHERE o.product_id = n.product_id
+AND o.category_code = n.category_code;
+
+statement ok
+set error_on_nondeterministic_update = 0;
 
 statement ok
 UPDATE old_products o
