@@ -395,7 +395,7 @@ impl BloomIndex {
         )?;
 
         let (new_expr, _) =
-            ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            ConstantFolder::fold_for_prune(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         match new_expr {
             Expr::Constant {

@@ -1,0 +1,124 @@
+ast            : to_int8(x) = 2
+raw expr       : eq(to_int8(x::Boolean), 2)
+checked expr   : eq<Int8, Int8>(to_int8<Boolean>(x), 2_i8)
+input domain  : {0: Boolean(BooleanDomain { has_false: true, has_true: true })}
+optimized expr : eq<Boolean, Boolean>(x, true)
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: true }))
+
+
+ast            : x::decimal(1,0) = 2
+raw expr       : eq(CAST(x::Boolean AS Decimal(1, 0)), 2)
+checked expr   : eq<Decimal(1, 0), Decimal(3, 0)>(to_decimal<Boolean>(1, 0)(x), to_decimal<UInt8>(3, 0)(2_u8))
+input domain  : {0: Boolean(BooleanDomain { has_false: true, has_true: true })}
+optimized expr : eq<Boolean, Boolean>(x, true)
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: true }))
+
+
+ast            : x::int8 = 1::int8
+raw expr       : eq(CAST(x::Boolean AS Int8), CAST(1 AS Int8))
+checked expr   : eq<Int8, Int8>(to_int8<Boolean>(x), to_int8<UInt8>(1_u8))
+input domain  : {0: Boolean(BooleanDomain { has_false: true, has_true: true })}
+optimized expr : eq<Boolean, Boolean>(x, true)
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: true }))
+
+
+ast            : x::decimal(5,0) = 1.2
+raw expr       : eq(CAST(x::Int8 AS Decimal(5, 0)), 1.2)
+checked expr   : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int8>(5, 0)(x), 1.2_d128(2,1))
+input domain  : {0: Number(Int8(SimpleDomain { min: 0, max: 2 }))}
+optimized expr : eq<Int8, Int8>(x, 1_i8)
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: true }))
+
+
+ast            : x = 1.2
+raw expr       : eq(x::Int16, 1.2)
+checked expr   : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int16>(5, 0)(x), 1.2_d128(2,1))
+input domain  : {0: Number(Int16(SimpleDomain { min: 0, max: 2 }))}
+optimized expr : eq<Int16, Int16>(x, 1_i16)
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: true }))
+
+
+ast            : x::string = '+1'
+raw expr       : eq(CAST(x::Int16 AS String), '+1')
+checked expr   : eq<String, String>(to_string<Int16>(x), "+1")
+input domain  : {0: Number(Int16(SimpleDomain { min: 1, max: 100 }))}
+optimized expr : eq<Int16, Int16>(x, 1_i16)
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: true }))
+
+
+ast            : x::string = '+1'
+raw expr       : eq(CAST(x::Int16 AS String), '+1')
+checked expr   : eq<String, String>(to_string<Int16>(x), "+1")
+input domain  : {0: Number(Int16(SimpleDomain { min: 100, max: 200 }))}
+optimized expr : false
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: false }))
+
+
+ast            : to_int32(to_int16(x)) = 1.2
+raw expr       : eq(to_int32(to_int16(x::Int8)), 1.2)
+checked expr   : eq<Decimal(10, 0), Decimal(2, 1)>(to_decimal<Int32>(10, 0)(to_int32<Int16>(to_int16<Int8>(x))), 1.2_d128(2,1))
+input domain  : {0: Number(Int8(SimpleDomain { min: 0, max: 2 }))}
+optimized expr : eq<Int8, Int8>(x, 1_i8)
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: true }))
+
+
+ast            : x::int8 = 10
+raw expr       : eq(CAST(x::Int32 AS Int8), 10)
+checked expr   : eq<Int8, Int8>(to_int8<Int32>(x), 10_i8)
+input domain  : {0: Number(Int32(SimpleDomain { min: 0, max: 6000 }))}
+output type    : Boolean
+output domain  : None
+
+
+ast            : x::datetime = '2021-03-05 01:01:01'
+raw expr       : eq(CAST(x::String AS Timestamp), '2021-03-05 01:01:01')
+checked expr   : eq<Timestamp, Timestamp>(to_timestamp<String>(x), to_timestamp<String>("2021-03-05 01:01:01"))
+input domain  : {0: String(StringDomain { min: "2021-03-05 01:01:01", max: Some("2021-03-05 01:01:02") })}
+optimized expr : eq<Timestamp, Timestamp>(to_timestamp<String>(x), 1614906061000000)
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: true }))
+
+
+ast            : x::datetime = '2021-03-05 01:01:03'
+raw expr       : eq(CAST(x::Date AS Timestamp), '2021-03-05 01:01:03')
+checked expr   : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), to_timestamp<String>("2021-03-05 01:01:03"))
+input domain  : {0: Date(SimpleDomain { min: 18600, max: 19000 })}
+optimized expr : eq<Date, Date>(x, 18691)
+output type    : Boolean
+output domain  : Some(Boolean(BooleanDomain { has_false: true, has_true: true }))
+
+
+ast            : to_int8(x) = 1.2
+raw expr       : eq(to_int8(x::Int16), 1.2)
+checked expr   : eq<Decimal(3, 0), Decimal(2, 1)>(to_decimal<Int8>(3, 0)(to_int8<Int16>(x)), 1.2_d128(2,1))
+input domain  : {0: Number(Int16(SimpleDomain { min: 0, max: 300 }))}
+output type    : Boolean
+output domain  : None
+
+
+ast            : x = 1::int8
+raw expr       : eq(x::Int16 NULL, CAST(1 AS Int8))
+checked expr   : eq<Int16 NULL, Int16 NULL>(x, CAST(to_int8<UInt8>(1_u8) AS Int16 NULL))
+input domain  : {0: Nullable(NullableDomain { has_null: false, value: Some(Number(Int16(SimpleDomain { min: 0, max: 100 }))) })}
+optimized expr : eq<Int16 NULL, Int16 NULL>(x, 1_i16)
+output type    : Boolean NULL
+output domain  : Some(Nullable(NullableDomain { has_null: false, value: Some(Boolean(BooleanDomain { has_false: true, has_true: true })) }))
+
+
+ast            : x::int8 null = 1::int8
+raw expr       : eq(CAST(x::Int16 NULL AS Int8 NULL), CAST(1 AS Int8))
+checked expr   : eq<Int8 NULL, Int8 NULL>(CAST(x AS Int8 NULL), CAST(to_int8<UInt8>(1_u8) AS Int8 NULL))
+input domain  : {0: Nullable(NullableDomain { has_null: false, value: Some(Number(Int16(SimpleDomain { min: 0, max: 100 }))) })}
+optimized expr : eq<Int16 NULL, Int16 NULL>(x, 1_i16)
+output type    : Boolean NULL
+output domain  : Some(Nullable(NullableDomain { has_null: false, value: Some(Boolean(BooleanDomain { has_false: true, has_true: true })) }))
+
+
