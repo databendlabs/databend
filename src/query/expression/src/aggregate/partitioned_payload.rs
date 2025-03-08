@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use itertools::Itertools;
+use serde::Deserializer;
+use serde::Serializer;
 
 use super::payload::Payload;
 use super::probe_state::ProbeState;
@@ -49,6 +51,20 @@ pub struct PartitionedPayload {
 
 unsafe impl Send for PartitionedPayload {}
 unsafe impl Sync for PartitionedPayload {}
+
+impl serde::Serialize for PartitionedPayload {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where S: Serializer {
+        todo!()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PartitionedPayload {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        todo!()
+    }
+}
 
 impl PartitionedPayload {
     pub fn new(

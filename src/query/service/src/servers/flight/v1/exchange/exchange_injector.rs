@@ -40,31 +40,31 @@ pub trait ExchangeInjector: Send + Sync + 'static {
 
     fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>>;
 
-    fn apply_merge_serializer(
-        &self,
-        params: &MergeExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()>;
-
-    fn apply_shuffle_serializer(
-        &self,
-        params: &ShuffleExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()>;
-
-    fn apply_merge_deserializer(
-        &self,
-        params: &MergeExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()>;
-
-    fn apply_shuffle_deserializer(
-        &self,
-        params: &ShuffleExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()>;
+    // fn apply_merge_serializer(
+    //     &self,
+    //     params: &MergeExchangeParams,
+    //     compression: Option<FlightCompression>,
+    //     pipeline: &mut Pipeline,
+    // ) -> Result<()>;
+    //
+    // fn apply_shuffle_serializer(
+    //     &self,
+    //     params: &ShuffleExchangeParams,
+    //     compression: Option<FlightCompression>,
+    //     pipeline: &mut Pipeline,
+    // ) -> Result<()>;
+    //
+    // fn apply_merge_deserializer(
+    //     &self,
+    //     params: &MergeExchangeParams,
+    //     pipeline: &mut Pipeline,
+    // ) -> Result<()>;
+    //
+    // fn apply_shuffle_deserializer(
+    //     &self,
+    //     params: &ShuffleExchangeParams,
+    //     pipeline: &mut Pipeline,
+    // ) -> Result<()>;
 }
 
 pub struct DefaultExchangeInjector;
@@ -107,53 +107,53 @@ impl ExchangeInjector for DefaultExchangeInjector {
         None
     }
 
-    fn apply_merge_serializer(
-        &self,
-        params: &MergeExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            TransformExchangeSerializer::create(input, output, params, compression)
-        })
-    }
-
-    fn apply_shuffle_serializer(
-        &self,
-        params: &ShuffleExchangeParams,
-        compression: Option<FlightCompression>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            TransformScatterExchangeSerializer::create(input, output, compression, params)
-        })
-    }
-
-    fn apply_merge_deserializer(
-        &self,
-        params: &MergeExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            Ok(TransformExchangeDeserializer::create(
-                input,
-                output,
-                &params.schema,
-            ))
-        })
-    }
-
-    fn apply_shuffle_deserializer(
-        &self,
-        params: &ShuffleExchangeParams,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        pipeline.add_transform(|input, output| {
-            Ok(TransformExchangeDeserializer::create(
-                input,
-                output,
-                &params.schema,
-            ))
-        })
-    }
+    // fn apply_merge_serializer(
+    //     &self,
+    //     params: &MergeExchangeParams,
+    //     compression: Option<FlightCompression>,
+    //     pipeline: &mut Pipeline,
+    // ) -> Result<()> {
+    //     pipeline.add_transform(|input, output| {
+    //         TransformExchangeSerializer::create(input, output, params, compression)
+    //     })
+    // }
+    //
+    // fn apply_shuffle_serializer(
+    //     &self,
+    //     params: &ShuffleExchangeParams,
+    //     compression: Option<FlightCompression>,
+    //     pipeline: &mut Pipeline,
+    // ) -> Result<()> {
+    //     pipeline.add_transform(|input, output| {
+    //         TransformScatterExchangeSerializer::create(input, output, compression, params)
+    //     })
+    // }
+    //
+    // fn apply_merge_deserializer(
+    //     &self,
+    //     params: &MergeExchangeParams,
+    //     pipeline: &mut Pipeline,
+    // ) -> Result<()> {
+    //     pipeline.add_transform(|input, output| {
+    //         Ok(TransformExchangeDeserializer::create(
+    //             input,
+    //             output,
+    //             &params.schema,
+    //         ))
+    //     })
+    // }
+    //
+    // fn apply_shuffle_deserializer(
+    //     &self,
+    //     params: &ShuffleExchangeParams,
+    //     pipeline: &mut Pipeline,
+    // ) -> Result<()> {
+    //     pipeline.add_transform(|input, output| {
+    //         Ok(TransformExchangeDeserializer::create(
+    //             input,
+    //             output,
+    //             &params.schema,
+    //         ))
+    //     })
+    // }
 }

@@ -80,6 +80,22 @@ pub trait Processor: Send {
         Err(ErrorCode::Unimplemented("Unimplemented async_process."))
     }
 
+    fn prepare_spill_payload(&mut self) -> Result<bool> {
+        Err(ErrorCode::Unimplemented(
+            "Unimplemented prepare_spill_payload",
+        ))
+    }
+
+    async fn flush_spill_payload(&mut self) -> Result<bool> {
+        Err(ErrorCode::Unimplemented(
+            "Unimplemented flush_spill_payload",
+        ))
+    }
+
+    fn configure_peer_nodes(&mut self, nodes: &[String]) {
+        // do nothing by default
+    }
+
     fn details_status(&self) -> Option<String> {
         None
     }
@@ -196,6 +212,10 @@ impl ProcessorPtr {
             Ok(())
         }
         .boxed()
+    }
+
+    pub fn configure_peer_nodes(&self, nodes: &[String]) {
+        unsafe { (*self.inner.get()).configure_peer_nodes(nodes) }
     }
 
     /// # Safety

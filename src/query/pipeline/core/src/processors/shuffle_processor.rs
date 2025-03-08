@@ -35,7 +35,7 @@ pub trait Exchange: Send + Sync + 'static {
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
     const STRATEGY: MultiwayStrategy = MultiwayStrategy::Random;
 
-    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>>;
+    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<(usize, DataBlock)>>;
 
     fn multiway_pick(&self, _partitions: &[Option<DataBlock>]) -> Result<usize> {
         unimplemented!()
@@ -254,7 +254,7 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
 
             let partitioned = self.exchange.partition(block, self.outputs.len())?;
 
-            for (index, block) in partitioned.into_iter().enumerate() {
+            for (index, block) in partitioned.into_iter() {
                 if block.is_empty() && block.get_meta().is_none() {
                     continue;
                 }

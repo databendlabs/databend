@@ -31,12 +31,28 @@ use databend_common_expression::InputColumns;
 use databend_common_expression::PartitionedPayload;
 use databend_common_expression::Payload;
 use databend_common_expression::ProbeState;
+use serde::Deserializer;
+use serde::Serializer;
 
 pub struct SerializedPayload {
     pub bucket: isize,
     pub data_block: DataBlock,
     // use for new agg_hashtable
     pub max_partition_count: usize,
+}
+
+impl serde::Serialize for SerializedPayload {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where S: Serializer {
+        todo!()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SerializedPayload {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        todo!()
+    }
 }
 
 impl SerializedPayload {
@@ -106,46 +122,56 @@ impl SerializedPayload {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BucketSpilledPayload {
     pub bucket: isize,
     pub location: String,
     pub data_range: Range<u64>,
-    pub columns_layout: Vec<u64>,
+    pub destination_node: String,
     pub max_partition_count: usize,
 }
 
 pub struct AggregatePayload {
-    pub bucket: isize,
+    pub partition: isize,
     pub payload: Payload,
     // use for new agg_hashtable
     pub max_partition_count: usize,
 }
 
+impl serde::Serialize for AggregatePayload {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where S: Serializer {
+        todo!()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for AggregatePayload {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where D: Deserializer<'de> {
+        todo!()
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum AggregateMeta {
     Serialized(SerializedPayload),
     AggregatePayload(AggregatePayload),
-    AggregateSpilling(PartitionedPayload),
     BucketSpilled(BucketSpilledPayload),
-    Spilled(Vec<BucketSpilledPayload>),
 
     Partitioned { bucket: isize, data: Vec<Self> },
 }
 
 impl AggregateMeta {
     pub fn create_agg_payload(
-        bucket: isize,
         payload: Payload,
+        partition: isize,
         max_partition_count: usize,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::AggregatePayload(AggregatePayload {
-            bucket,
             payload,
+            partition,
             max_partition_count,
         }))
-    }
-
-    pub fn create_agg_spilling(payload: PartitionedPayload) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::AggregateSpilling(payload))
     }
 
     pub fn create_serialized(
@@ -160,10 +186,6 @@ impl AggregateMeta {
         }))
     }
 
-    pub fn create_spilled(buckets_payload: Vec<BucketSpilledPayload>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::Spilled(buckets_payload))
-    }
-
     pub fn create_bucket_spilled(payload: BucketSpilledPayload) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::BucketSpilled(payload))
     }
@@ -173,19 +195,23 @@ impl AggregateMeta {
     }
 }
 
-impl serde::Serialize for AggregateMeta {
-    fn serialize<S>(&self, _: S) -> std::result::Result<S::Ok, S::Error>
-    where S: serde::Serializer {
-        unreachable!("AggregateMeta does not support exchanging between multiple nodes")
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for AggregateMeta {
-    fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
-    where D: serde::Deserializer<'de> {
-        unreachable!("AggregateMeta does not support exchanging between multiple nodes")
-    }
-}
+// impl serde::Serialize for AggregateMeta {
+//     fn serialize<S>(&self, s: S) -> std::result::Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
+//     }
+// }
+//
+// impl<'de> serde::Deserialize<'de> for AggregateMeta {
+//     fn deserialize<D>(_: D) -> std::result::Result<Self, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         unreachable!("AggregateMeta does not support exchanging between multiple nodes")
+//     }
+// }
 
 impl Debug for AggregateMeta {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
@@ -196,24 +222,13 @@ impl Debug for AggregateMeta {
             AggregateMeta::Serialized { .. } => {
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }
-            AggregateMeta::Spilled(_) => f.debug_struct("Aggregate::Spilled").finish(),
             AggregateMeta::BucketSpilled(_) => f.debug_struct("Aggregate::BucketSpilled").finish(),
             AggregateMeta::AggregatePayload(_) => {
                 f.debug_struct("AggregateMeta:AggregatePayload").finish()
-            }
-            AggregateMeta::AggregateSpilling(_) => {
-                f.debug_struct("AggregateMeta:AggregateSpilling").finish()
             }
         }
     }
 }
 
-impl BlockMetaInfo for AggregateMeta {
-    fn typetag_deserialize(&self) {
-        unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
-    }
-
-    fn typetag_name(&self) -> &'static str {
-        unimplemented!("AggregateMeta does not support exchanging between multiple nodes")
-    }
-}
+#[typetag::serde(name = "AggregateMeta")]
+impl BlockMetaInfo for AggregateMeta {}

@@ -83,11 +83,11 @@ impl TransformFinalAggregate {
                     },
                     AggregateMeta::AggregatePayload(payload) => match agg_hashtable.as_mut() {
                         Some(ht) => {
-                            debug_assert!(bucket == payload.bucket);
+                            debug_assert!(bucket == payload.partition);
                             ht.combine_payload(&payload.payload, &mut self.flush_state)?;
                         }
                         None => {
-                            debug_assert!(bucket == payload.bucket);
+                            debug_assert!(bucket == payload.partition);
                             let capacity =
                                 AggregateHashTable::get_capacity_for_count(payload.payload.len());
                             let mut hashtable = AggregateHashTable::new_with_capacity(
