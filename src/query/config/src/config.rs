@@ -60,7 +60,6 @@ use serde_with::with_prefix;
 use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
-use serfig::parsers::Toml;
 
 use super::inner;
 use super::inner::CatalogConfig as InnerCatalogConfig;
@@ -73,6 +72,7 @@ use crate::background_config::BackgroundConfig;
 use crate::builtin::BuiltInConfig;
 use crate::builtin::UDFConfig;
 use crate::builtin::UserConfig;
+use crate::toml::TomlIgnored;
 use crate::DATABEND_COMMIT_VERSION;
 
 const CATALOG_HIVE: &str = "hive";
@@ -185,7 +185,7 @@ impl Config {
     /// We should set this to false during tests because we don't want
     /// our test binary to parse cargo's args.
     #[no_sanitize(address)]
-    pub fn load(with_args: bool) -> Result<Self> {
+    pub fn load(config_file: Option<String>, with_args: bool) -> Result<Self> {
         let mut arg_conf = Self::default();
 
         if with_args {
@@ -204,7 +204,9 @@ impl Config {
 
         // Load from config file first.
         {
-            let config_file = if !arg_conf.config_file.is_empty() {
+            let final_config_file = if let Some(config_file) = config_file {
+                config_file
+            } else if !arg_conf.config_file.is_empty() {
                 // TODO: remove this `allow(clippy::redundant_clone)`
                 // as soon as this issue is fixed:
                 // https://github.com/rust-lang/rust-clippy/issues/10940
@@ -216,8 +218,11 @@ impl Config {
                 "".to_string()
             };
 
-            if !config_file.is_empty() {
-                builder = builder.collect(from_file(Toml, &config_file));
+            if !final_config_file.is_empty() {
+                let toml = TomlIgnored::new(Box::new(|path| {
+                    log::warn!("unknown field in config: {}", &path);
+                }));
+                builder = builder.collect(from_file(toml, &final_config_file));
             }
         }
 
@@ -1394,7 +1399,7 @@ impl serde::de::Visitor<'_> for SettingVisitor {
 
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
     #[clap(long, value_name = "VALUE", default_value = "admin")]
@@ -2521,10 +2526,9 @@ impl From<InnerOTLPEndpointConfig> for OTLPEndpointConfig {
 }
 
 /// Meta config group.
-/// deny_unknown_fields to check unknown field, like the deprecated `address`.
 /// TODO(xuanwo): All meta_xxx should be rename to xxx.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     #[clap(long = "meta-embedded-dir", value_name = "VALUE", default_value_t)]
@@ -2730,7 +2734,7 @@ impl TryInto<InnerLocalConfig> for LocalConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct CacheConfig {
     /// Enable table meta cache. Default is enabled. Set it to false to disable all the table meta caches
     #[clap(long = "cache-enable-table-meta-cache", default_value = "true")]
@@ -2968,7 +2972,7 @@ impl Default for DiskCacheKeyReloadPolicy {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
     #[clap(
@@ -3006,7 +3010,7 @@ impl Default for DiskCacheConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct SpillConfig {
     /// Path of spill to local disk. disable if it's empty.
     #[clap(long, value_name = "VALUE", default_value = "")]
@@ -3032,7 +3036,7 @@ impl Default for SpillConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args, Default)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct ResourcesManagementConfig {
     #[clap(long = "type", value_name = "VALUE", default_value = "self_managed")]
     #[serde(rename = "type")]
