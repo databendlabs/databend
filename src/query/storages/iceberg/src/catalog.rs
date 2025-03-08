@@ -247,7 +247,22 @@ impl Catalog for IcebergCatalog {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
-        Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
+        let db_names = self
+            .iceberg_catalog()
+            .list_namespaces(None)
+            .await
+            .map_err(|err| {
+                ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
+            })?;
+
+        if db_names.iter().any(|name| name.to_url_string() == db_name) {
+            Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
+        } else {
+            Err(ErrorCode::UnknownDatabase(format!(
+                "Unknown database '{}'",
+                db_name
+            )))
+        }
     }
 
     async fn list_databases_history(&self, _tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>> {
