@@ -9,13 +9,12 @@ excludes = [
     "tools",
     "benchmark",
     "src/common/compress/tests",
-
     # licensed under Elastic License 2.0
     "src/binaries/query/ee_main.rs",
     "src/meta/binaries/meta/ee_main.rs",
     "src/meta/ee",
     "src/query/ee",
-
+    "src/bendsave",
     # hidden files
     ".cargo",
     ".databend",
@@ -25,10 +24,8 @@ excludes = [
     ".gitignore",
     ".gitattributes",
     ".editorconfig",
-
     "LICENSE",
     "Makefile",
-
     # docs and generated files
     "**/*.md",
     "**/*.hbs",
