@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Datelike;
+use chrono::Duration;
 use chrono::TimeZone;
 use chrono::Timelike;
 use chrono::Utc;
@@ -65,7 +66,7 @@ pub fn monotonically_increased_timestamp(
     let prev = trim_timestamp_to_milli_second(*prev);
 
     if prev >= timestamp {
-        prev.add(chrono::Duration::milliseconds(1))
+        prev.add(Duration::milliseconds(1))
     } else {
         timestamp
     }
@@ -78,11 +79,9 @@ pub struct TableMetaTimestamps {
 }
 
 impl TableMetaTimestamps {
-    pub fn new(previous_snapshot: Option<Arc<TableSnapshot>>, delta: i64) -> Self {
+    pub fn new(previous_snapshot: Option<Arc<TableSnapshot>>, delta: Duration) -> Self {
         let snapshot_timestamp =
-            monotonically_increased_timestamp(chrono::Utc::now(), &previous_snapshot.timestamp());
-
-        let delta = chrono::Duration::hours(delta);
+            monotonically_increased_timestamp(Utc::now(), &previous_snapshot.timestamp());
 
         let segment_block_timestamp = snapshot_timestamp + delta;
 
@@ -96,7 +95,8 @@ impl TableMetaTimestamps {
 /// used in ut
 impl Default for TableMetaTimestamps {
     fn default() -> Self {
-        Self::new(None, 1)
+        // for unit test, set delta to 1 hour
+        Self::new(None, Duration::hours(1))
     }
 }
 
@@ -168,7 +168,7 @@ pub fn trim_object_prefix(key: &str) -> &str {
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod tests {
-
+    use chrono::Duration;
     use databend_common_base::base::uuid::Uuid;
 
     use crate::meta::trim_object_prefix;
@@ -214,13 +214,13 @@ mod tests {
     #[test]
     fn test_uuid_from_date_time() {
         let now = chrono::Utc::now();
-        assert_order_preserved(now, now + chrono::Duration::milliseconds(1));
-        assert_order_preserved(now, now - chrono::Duration::milliseconds(1));
+        assert_order_preserved(now, now + Duration::milliseconds(1));
+        assert_order_preserved(now, now - Duration::milliseconds(1));
         assert_order_preserved(now, chrono::DateTime::default());
 
         let ms = 0xFFFF_FFFF_FFFF;
         let ts = chrono::DateTime::from_timestamp_millis(ms).unwrap();
         assert_order_preserved(now, ts);
-        assert_order_preserved(ts - chrono::Duration::milliseconds(1), ts);
+        assert_order_preserved(ts - Duration::milliseconds(1), ts);
     }
 }

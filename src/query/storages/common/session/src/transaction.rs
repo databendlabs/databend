@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use chrono::Duration;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableIdent;
@@ -358,7 +359,7 @@ impl TxnManager {
         &mut self,
         table_id: u64,
         previous_snapshot: Option<Arc<TableSnapshot>>,
-        delta: i64,
+        delta: Duration,
     ) -> TableMetaTimestamps {
         if !self.is_active() {
             return TableMetaTimestamps::new(previous_snapshot, delta);
