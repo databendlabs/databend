@@ -193,8 +193,10 @@ impl<'a> InferFilterOptimizer<'a> {
         match self.expr_index.get(expr) {
             Some(index) => {
                 let predicates = &mut self.expr_predicates[*index];
-                for predicate in predicates.iter_mut() {
-                    match Self::merge_predicate(predicate.clone(), new_predicate.clone())? {
+                if let Some(predicate) = predicates.iter_mut().next() {
+                    let (merge_result, modified_right) =
+                        Self::merge_predicate(predicate.clone(), new_predicate.clone())?;
+                    match merge_result {
                         MergeResult::None => {
                             self.is_falsy = true;
                             return Ok(());
@@ -203,13 +205,17 @@ impl<'a> InferFilterOptimizer<'a> {
                             return Ok(());
                         }
                         MergeResult::Right => {
-                            *predicate = new_predicate;
+                            // The right may modified.
+                            *predicate = modified_right;
                             return Ok(());
                         }
-                        MergeResult::All => (),
+                        MergeResult::All => {
+                            // Append the new_predicate(right predicate).
+                            predicates.push(new_predicate);
+                            return Ok(());
+                        }
                     }
                 }
-                predicates.push(new_predicate);
             }
             None => {
                 self.add_expr(expr, vec![new_predicate], vec![]);
@@ -218,7 +224,11 @@ impl<'a> InferFilterOptimizer<'a> {
         Ok(())
     }
 
-    fn merge_predicate(mut left: Predicate, mut right: Predicate) -> Result<MergeResult> {
+    fn merge_predicate(
+        mut left: Predicate,
+        mut right: Predicate,
+    ) -> Result<(MergeResult, Predicate)> {
+        // Handle data type compatibility
         let left_data_type = ScalarExpr::ConstantExpr(left.constant.clone()).data_type()?;
         let right_data_type = ScalarExpr::ConstantExpr(right.constant.clone()).data_type()?;
         if left_data_type != right_data_type {
@@ -237,152 +247,369 @@ impl<'a> InferFilterOptimizer<'a> {
                     right.constant = right_constant;
                 }
             } else {
-                return Ok(MergeResult::All);
+                return Ok((MergeResult::All, right));
             }
         }
-        let merge_result = match left.op {
-            ComparisonOp::Equal => match right.op {
-                ComparisonOp::Equal => match left.constant == right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::None,
-                },
-                ComparisonOp::NotEqual => match left.constant == right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::Left,
-                },
-                ComparisonOp::LT => match left.constant < right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::None,
-                },
-                ComparisonOp::LTE => match left.constant <= right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::None,
-                },
-                ComparisonOp::GT => match left.constant > right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::None,
-                },
-                ComparisonOp::GTE => match left.constant >= right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::None,
-                },
+
+        // Pre-compute comparison result to avoid repeated comparisons
+        let cmp = left.constant.value.cmp(&right.constant.value);
+
+        // Determine merge result based on operator types and constant comparison
+        let merge_result = match (left.op, right.op) {
+            // ===== Equal (=) with other operators =====
+
+            // Equal with Equal
+            (ComparisonOp::Equal, ComparisonOp::Equal) => match cmp {
+                // A = X AND A = X => A = X
+                std::cmp::Ordering::Equal => MergeResult::Left,
+                // A = X AND A = Y => false (contradiction)
+                _ => MergeResult::None,
             },
-            ComparisonOp::NotEqual => match right.op {
-                ComparisonOp::Equal => match left.constant == right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::Right,
-                },
-                ComparisonOp::NotEqual => match left.constant == right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::LT => match left.constant >= right.constant {
-                    true => MergeResult::Right,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::LTE => match left.constant > right.constant {
-                    true => MergeResult::Right,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::GT => match left.constant <= right.constant {
-                    true => MergeResult::Right,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::GTE => match left.constant < right.constant {
-                    true => MergeResult::Right,
-                    false => MergeResult::All,
-                },
+
+            // Equal with NotEqual
+            (ComparisonOp::Equal, ComparisonOp::NotEqual) => match cmp {
+                // A = X AND A != X => false (contradiction)
+                std::cmp::Ordering::Equal => MergeResult::None,
+                // A = X AND A != Y => A = X
+                _ => MergeResult::Left,
             },
-            ComparisonOp::LT => match right.op {
-                ComparisonOp::Equal => match left.constant <= right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::Right,
-                },
-                ComparisonOp::NotEqual => match left.constant <= right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::LT | ComparisonOp::LTE => match left.constant <= right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::Right,
-                },
-                ComparisonOp::GT | ComparisonOp::GTE => match left.constant <= right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::All,
-                },
+
+            // Equal with LT
+            (ComparisonOp::Equal, ComparisonOp::LT) => match cmp {
+                // A = X AND A < Y => A = X (X < Y)
+                std::cmp::Ordering::Less => MergeResult::Left,
+                // A = X AND A < Y => false (X >= Y)
+                _ => MergeResult::None,
             },
-            ComparisonOp::LTE => match right.op {
-                ComparisonOp::Equal => match left.constant < right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::Right,
-                },
-                ComparisonOp::NotEqual => match left.constant < right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::LT => match left.constant < right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::Right,
-                },
-                ComparisonOp::LTE => match left.constant <= right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::Right,
-                },
-                ComparisonOp::GT => match left.constant <= right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::GTE => match left.constant < right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::All,
-                },
+
+            // Equal with LTE
+            (ComparisonOp::Equal, ComparisonOp::LTE) => match cmp {
+                // A = X AND A <= Y => A = X (X < Y)
+                std::cmp::Ordering::Less => MergeResult::Left,
+                // A = X AND A <= Y => A = X (X = Y)
+                std::cmp::Ordering::Equal => MergeResult::Left,
+                // A = X AND A <= Y => false (X > Y)
+                std::cmp::Ordering::Greater => MergeResult::None,
             },
-            ComparisonOp::GT => match right.op {
-                ComparisonOp::Equal => match left.constant >= right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::Right,
-                },
-                ComparisonOp::NotEqual => match left.constant >= right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::LT | ComparisonOp::LTE => match left.constant >= right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::GT | ComparisonOp::GTE => match left.constant >= right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::Right,
-                },
+
+            // Equal with GT
+            (ComparisonOp::Equal, ComparisonOp::GT) => match cmp {
+                // A = X AND A > Y => A = X (X > Y)
+                std::cmp::Ordering::Greater => MergeResult::Left,
+                // A = X AND A > Y => false (X <= Y)
+                _ => MergeResult::None,
             },
-            ComparisonOp::GTE => match right.op {
-                ComparisonOp::Equal => match left.constant > right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::Right,
-                },
-                ComparisonOp::NotEqual => match left.constant > right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::LT => match left.constant >= right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::LTE => match left.constant > right.constant {
-                    true => MergeResult::None,
-                    false => MergeResult::All,
-                },
-                ComparisonOp::GT => match left.constant > right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::Right,
-                },
-                ComparisonOp::GTE => match left.constant >= right.constant {
-                    true => MergeResult::Left,
-                    false => MergeResult::Right,
-                },
+
+            // Equal with GTE
+            (ComparisonOp::Equal, ComparisonOp::GTE) => match cmp {
+                // A = X AND A >= Y => A = X (X > Y)
+                std::cmp::Ordering::Greater => MergeResult::Left,
+                // A = X AND A >= Y => A = X (X = Y)
+                std::cmp::Ordering::Equal => MergeResult::Left,
+                // A = X AND A >= Y => false (X < Y)
+                std::cmp::Ordering::Less => MergeResult::None,
+            },
+
+            // ===== NotEqual (!=) with other operators =====
+
+            // NotEqual with Equal
+            (ComparisonOp::NotEqual, ComparisonOp::Equal) => match cmp {
+                // A != X AND A = X => false (contradiction)
+                std::cmp::Ordering::Equal => MergeResult::None,
+                // A != X AND A = Y => A = Y
+                _ => MergeResult::Right,
+            },
+
+            // NotEqual with NotEqual
+            (ComparisonOp::NotEqual, ComparisonOp::NotEqual) => match cmp {
+                // A != X AND A != X => A != X
+                std::cmp::Ordering::Equal => MergeResult::Left,
+                // A != X AND A != Y => keep both
+                _ => MergeResult::All,
+            },
+
+            // NotEqual with LT
+            (ComparisonOp::NotEqual, ComparisonOp::LT) => match cmp {
+                // A != X AND A < Y (X < Y) => keep both
+                std::cmp::Ordering::Less => MergeResult::All,
+                // A != X AND A < X => A < X
+                std::cmp::Ordering::Equal => MergeResult::Right,
+                // A != X AND A < Y (X > Y) => A < Y
+                std::cmp::Ordering::Greater => MergeResult::Right,
+            },
+
+            // NotEqual with LTE
+            (ComparisonOp::NotEqual, ComparisonOp::LTE) => match cmp {
+                // A != X AND A <= Y (X < Y) => keep both
+                std::cmp::Ordering::Less => MergeResult::All,
+                // A != X AND A <= X => A < X
+                std::cmp::Ordering::Equal => {
+                    right.op = ComparisonOp::LT;
+                    MergeResult::Right
+                }
+                // A != X AND A <= Y (X > Y) => A <= Y
+                std::cmp::Ordering::Greater => MergeResult::Right,
+            },
+
+            // NotEqual with GT
+            (ComparisonOp::NotEqual, ComparisonOp::GT) => match cmp {
+                // A != X AND A > Y (X < Y) => A > Y
+                std::cmp::Ordering::Less => MergeResult::Right,
+                // A != X AND A > X => A > X
+                std::cmp::Ordering::Equal => MergeResult::Right,
+                // A != X AND A > Y (X > Y) => keep both
+                std::cmp::Ordering::Greater => MergeResult::All,
+            },
+
+            // NotEqual with GTE
+            (ComparisonOp::NotEqual, ComparisonOp::GTE) => match cmp {
+                // A != X AND A >= Y (X < Y) => A >= Y
+                std::cmp::Ordering::Less => MergeResult::Right,
+                // A != X AND A >= X => A > X
+                std::cmp::Ordering::Equal => {
+                    right.op = ComparisonOp::GT;
+                    MergeResult::Right
+                }
+                // A != X AND A >= Y (X > Y) => keep both
+                std::cmp::Ordering::Greater => MergeResult::All,
+            },
+
+            // ===== LT (<) with other operators =====
+
+            // LT with Equal
+            (ComparisonOp::LT, ComparisonOp::Equal) => match cmp {
+                // A < X AND A = Y (Y < X) => A = Y
+                std::cmp::Ordering::Greater => MergeResult::Right,
+                // A < X AND A = Y (Y >= X) => false (contradiction)
+                _ => MergeResult::None,
+            },
+
+            // LT with NotEqual
+            (ComparisonOp::LT, ComparisonOp::NotEqual) => match cmp {
+                // A < X AND A != X => A < X
+                std::cmp::Ordering::Equal => MergeResult::Left,
+                // A < X AND A != Y (Y < X) => keep both
+                std::cmp::Ordering::Greater => MergeResult::All,
+                // A < X AND A != Y (Y > X) => A < X
+                std::cmp::Ordering::Less => MergeResult::Left,
+            },
+
+            // LT with LT
+            (ComparisonOp::LT, ComparisonOp::LT) => match cmp {
+                // A < X AND A < Y (X < Y) => A < X
+                std::cmp::Ordering::Less => MergeResult::Left,
+                // A < X AND A < X => A < X
+                std::cmp::Ordering::Equal => MergeResult::Left,
+                // A < X AND A < Y (X > Y) => A < Y
+                std::cmp::Ordering::Greater => MergeResult::Right,
+            },
+
+            // LT with LTE
+            (ComparisonOp::LT, ComparisonOp::LTE) => match cmp {
+                // A < X AND A <= Y (X < Y) => A < X
+                std::cmp::Ordering::Less => MergeResult::Left,
+                // A < X AND A <= X => A < X
+                std::cmp::Ordering::Equal => MergeResult::Left,
+                // A < X AND A <= Y (X > Y) => A <= Y
+                std::cmp::Ordering::Greater => MergeResult::Right,
+            },
+
+            // LT with GT
+            (ComparisonOp::LT, ComparisonOp::GT) => match cmp {
+                // A < X AND A > Y (X <= Y) => false (contradiction)
+                std::cmp::Ordering::Less | std::cmp::Ordering::Equal => MergeResult::None,
+                // A < X AND A > Y (X > Y) => Y < A < X
+                std::cmp::Ordering::Greater => MergeResult::All,
+            },
+
+            // LT with GTE
+            (ComparisonOp::LT, ComparisonOp::GTE) => match cmp {
+                // A < X AND A >= Y (X <= Y) => false (contradiction)
+                std::cmp::Ordering::Less | std::cmp::Ordering::Equal => MergeResult::None,
+                // A < X AND A >= Y (X > Y) => Y <= A < X
+                std::cmp::Ordering::Greater => MergeResult::All,
+            },
+
+            // ===== LTE (<=) with other operators =====
+
+            // LTE with Equal
+            (ComparisonOp::LTE, ComparisonOp::Equal) => match cmp {
+                // A <= X AND A = Y (Y <= X) => A = Y
+                std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => MergeResult::Right,
+                // A <= X AND A = Y (Y > X) => false (contradiction)
+                std::cmp::Ordering::Less => MergeResult::None,
+            },
+
+            // LTE with NotEqual
+            (ComparisonOp::LTE, ComparisonOp::NotEqual) => match cmp {
+                // A <= X AND A != X => A < X
+                std::cmp::Ordering::Equal => {
+                    right.op = ComparisonOp::LT;
+                    MergeResult::Right
+                }
+                // A <= X AND A != Y (Y < X) => keep both
+                std::cmp::Ordering::Greater => MergeResult::All,
+                // A <= X AND A != Y (Y > X) => A <= X
+                std::cmp::Ordering::Less => MergeResult::Left,
+            },
+
+            // LTE with LT
+            (ComparisonOp::LTE, ComparisonOp::LT) => match cmp {
+                // A <= X AND A < Y (X < Y) => A <= X
+                std::cmp::Ordering::Less => MergeResult::Left,
+                // A <= X AND A < Y (X >= Y) => A < Y
+                _ => MergeResult::Right,
+            },
+
+            // LTE with LTE
+            (ComparisonOp::LTE, ComparisonOp::LTE) => match cmp {
+                // A <= X AND A <= Y (X <= Y) => A <= X
+                std::cmp::Ordering::Less | std::cmp::Ordering::Equal => MergeResult::Left,
+                // A <= X AND A <= Y (X > Y) => A <= Y
+                std::cmp::Ordering::Greater => MergeResult::Right,
+            },
+
+            // LTE with GT
+            (ComparisonOp::LTE, ComparisonOp::GT) => match cmp {
+                // A <= X AND A > Y (X <= Y) => false (contradiction)
+                std::cmp::Ordering::Less | std::cmp::Ordering::Equal => MergeResult::None,
+                // A <= X AND A > Y (X > Y) => Y < A <= X
+                std::cmp::Ordering::Greater => MergeResult::All,
+            },
+
+            // LTE with GTE
+            (ComparisonOp::LTE, ComparisonOp::GTE) => match cmp {
+                // A <= X AND A >= Y (X < Y) => false (contradiction)
+                std::cmp::Ordering::Less => MergeResult::None,
+                // A <= X AND A >= X => A = X
+                std::cmp::Ordering::Equal => {
+                    right.op = ComparisonOp::Equal;
+                    MergeResult::Right
+                }
+                // A <= X AND A >= Y (X > Y) => Y <= A <= X
+                std::cmp::Ordering::Greater => MergeResult::All,
+            },
+
+            // ===== GT (>) with other operators =====
+
+            // GT with Equal
+            (ComparisonOp::GT, ComparisonOp::Equal) => match cmp {
+                // A > X AND A = Y (Y > X) => A = Y
+                std::cmp::Ordering::Less => MergeResult::Right,
+                // A > X AND A = Y (Y <= X) => false (contradiction)
+                _ => MergeResult::None,
+            },
+
+            // GT with NotEqual
+            (ComparisonOp::GT, ComparisonOp::NotEqual) => match cmp {
+                // A > X AND A != X => A > X
+                std::cmp::Ordering::Equal => MergeResult::Left,
+                // A > X AND A != Y (Y > X) => keep both
+                std::cmp::Ordering::Less => MergeResult::All,
+                // A > X AND A != Y (Y < X) => A > X
+                std::cmp::Ordering::Greater => MergeResult::Left,
+            },
+
+            // GT with LT
+            (ComparisonOp::GT, ComparisonOp::LT) => match cmp {
+                // A > X AND A < Y (X >= Y) => false (contradiction)
+                std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => MergeResult::None,
+                // A > X AND A < Y (X < Y) => X < A < Y
+                std::cmp::Ordering::Less => MergeResult::All,
+            },
+
+            // GT with LTE
+            (ComparisonOp::GT, ComparisonOp::LTE) => match cmp {
+                // A > X AND A <= Y (X > Y) => false (contradiction)
+                std::cmp::Ordering::Greater => MergeResult::None,
+                // A > X AND A <= X => false (contradiction)
+                std::cmp::Ordering::Equal => MergeResult::None,
+                // A > X AND A <= Y (X < Y) => X < A <= Y
+                std::cmp::Ordering::Less => MergeResult::All,
+            },
+
+            // GT with GT
+            (ComparisonOp::GT, ComparisonOp::GT) => match cmp {
+                // A > X AND A > Y (X >= Y) => A > X
+                std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => MergeResult::Left,
+                // A > X AND A > Y (X < Y) => A > Y
+                std::cmp::Ordering::Less => MergeResult::Right,
+            },
+
+            // GT with GTE
+            (ComparisonOp::GT, ComparisonOp::GTE) => match cmp {
+                // A > X AND A >= Y (X > Y) => A > X
+                std::cmp::Ordering::Greater => MergeResult::Left,
+                // A > X AND A >= X => A > X
+                std::cmp::Ordering::Equal => MergeResult::Left,
+                // A > X AND A >= Y (X < Y) => A >= Y
+                std::cmp::Ordering::Less => MergeResult::Right,
+            },
+
+            // ===== GTE (>=) with other operators =====
+
+            // GTE with Equal
+            (ComparisonOp::GTE, ComparisonOp::Equal) => match cmp {
+                // A >= X AND A = Y (Y >= X) => A = Y
+                std::cmp::Ordering::Less | std::cmp::Ordering::Equal => MergeResult::Right,
+                // A >= X AND A = Y (Y < X) => false (contradiction)
+                std::cmp::Ordering::Greater => MergeResult::None,
+            },
+
+            // GTE with NotEqual
+            (ComparisonOp::GTE, ComparisonOp::NotEqual) => match cmp {
+                // A >= X AND A != X => A > X
+                std::cmp::Ordering::Equal => {
+                    right.op = ComparisonOp::GT;
+                    MergeResult::Right
+                }
+                // A >= X AND A != Y (Y > X) => keep both
+                std::cmp::Ordering::Less => MergeResult::All,
+                // A >= X AND A != Y (Y < X) => A >= X
+                std::cmp::Ordering::Greater => MergeResult::Left,
+            },
+
+            // GTE with LT
+            (ComparisonOp::GTE, ComparisonOp::LT) => match cmp {
+                // A >= X AND A < Y (X > Y) => false (contradiction)
+                std::cmp::Ordering::Greater => MergeResult::None,
+                // A >= X AND A < X => false (contradiction)
+                std::cmp::Ordering::Equal => MergeResult::None,
+                // A >= X AND A < Y (X < Y) => X <= A < Y
+                std::cmp::Ordering::Less => MergeResult::All,
+            },
+
+            // GTE with LTE
+            (ComparisonOp::GTE, ComparisonOp::LTE) => match cmp {
+                // A >= X AND A <= Y (X > Y) => false (contradiction)
+                std::cmp::Ordering::Greater => MergeResult::None,
+                // A >= X AND A <= X => A = X
+                std::cmp::Ordering::Equal => {
+                    right.op = ComparisonOp::Equal;
+                    MergeResult::Right
+                }
+                // A >= X AND A <= Y (X < Y) => X <= A <= Y
+                std::cmp::Ordering::Less => MergeResult::All,
+            },
+
+            // GTE with GT
+            (ComparisonOp::GTE, ComparisonOp::GT) => match cmp {
+                // A >= X AND A > Y (X > Y) => A >= X
+                std::cmp::Ordering::Greater => MergeResult::Left,
+                // A >= X AND A > Y (X <= Y) => A > Y
+                _ => MergeResult::Right,
+            },
+
+            // GTE with GTE
+            (ComparisonOp::GTE, ComparisonOp::GTE) => match cmp {
+                // A >= X AND A >= Y (X >= Y) => A >= X
+                std::cmp::Ordering::Greater | std::cmp::Ordering::Equal => MergeResult::Left,
+                // A >= X AND A >= Y (X < Y) => A >= Y
+                std::cmp::Ordering::Less => MergeResult::Right,
             },
         };
-        Ok(merge_result)
+
+        Ok((merge_result, right))
     }
 
     fn find(parent: &mut [usize], x: usize) -> usize {
