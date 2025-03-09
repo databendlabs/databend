@@ -162,12 +162,13 @@ impl Binder {
             with_history,
         } = stmt;
 
+        let default_catalog = self.ctx.get_default_catalog()?.name();
         let database = self.check_database_exist(catalog, database).await?;
 
         let mut select_builder = if stmt.with_history {
-            SelectBuilder::from("default.system.tables_with_history")
+            SelectBuilder::from(&format!("{}.system.tables_with_history", default_catalog))
         } else {
-            SelectBuilder::from("default.system.tables")
+            SelectBuilder::from(&format!("{}.system.tables", default_catalog))
         };
 
         if *full {
@@ -299,6 +300,7 @@ impl Binder {
     ) -> Result<Plan> {
         let ShowTablesStatusStmt { database, limit } = stmt;
 
+        let default_catalog = self.ctx.get_default_catalog()?.name();
         let database = self.check_database_exist(&None, database).await?;
 
         let select_cols = "name AS Name, engine AS Engine, 0 AS Version, \
@@ -316,18 +318,18 @@ impl Binder {
         // (unlike mysql, alias of derived table is not required in databend).
         let query = match limit {
             None => format!(
-                "SELECT {} FROM default.system.tables WHERE database = '{}' ORDER BY Name",
-                select_cols, database
+                "SELECT {} FROM {}.system.tables WHERE database = '{}' ORDER BY Name",
+                select_cols, default_catalog, database
             ),
             Some(ShowLimit::Like { pattern }) => format!(
-                "SELECT * from (SELECT {} FROM default.system.tables WHERE database = '{}') \
+                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = '{}') \
             WHERE Name LIKE '{}' ORDER BY Name",
-                select_cols, database, pattern
+                select_cols, default_catalog, database, pattern
             ),
             Some(ShowLimit::Where { selection }) => format!(
-                "SELECT * from (SELECT {} FROM default.system.tables WHERE database = '{}') \
+                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = '{}') \
             WHERE ({}) ORDER BY Name",
-                select_cols, database, selection
+                select_cols, default_catalog, database, selection
             ),
         };
 
@@ -344,9 +346,11 @@ impl Binder {
     ) -> Result<Plan> {
         let ShowDropTablesStmt { database, limit } = stmt;
 
+        let default_catalog = self.ctx.get_default_catalog()?.name();
         let database = self.check_database_exist(&None, database).await?;
 
-        let mut select_builder = SelectBuilder::from("default.system.tables_with_history");
+        let mut select_builder =
+            SelectBuilder::from(&format!("{}.system.tables_with_history", default_catalog));
 
         select_builder
             .with_column("name AS Tables")

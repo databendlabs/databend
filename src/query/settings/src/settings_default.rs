@@ -1221,6 +1221,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("error_on_nondeterministic_update", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Whether to return an error when updating a multi-joined row.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

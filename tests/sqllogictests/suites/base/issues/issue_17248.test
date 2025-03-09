@@ -1,0 +1,24 @@
+statement ok
+create or replace table t17248(a integer, b integer, c integer, d integer, e integer)
+
+statement ok
+EXPLAIN PIPELINE SELECT (SELECT COUNT(*) FROM t17248 AS x WHERE x.b < t17248.b) AS col1 FROM t17248 WHERE a > b - 2 AND a < b + 2 OR c > d ORDER BY col1;
+
+statement ok
+EXPLAIN PIPELINE SELECT * FROM t17248 ORDER BY a;
+
+statement ok
+select avg(number) from numbers(10000000);
+
+query T
+select count(*) from system.processes where extra_info like 'EXPLAIN PIPELINE SELECT (SELECT COUNT(*) FROM t17248%';
+----
+0
+
+query T
+select count(*) from system.processes where extra_info like 'EXPLAIN PIPELINE SELECT * FROM t17248 ORDER BY a%';
+----
+0
+
+statement ok
+drop table t17248;

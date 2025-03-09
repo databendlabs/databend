@@ -511,6 +511,8 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                         )
                     })
                     .collect::<Vec<_>>();
+                // Now we get the final dbs, need to clear dbs vec.
+                dbs.clear();
 
                 let ownership = if get_ownership {
                     user_api.get_ownerships(&tenant).await.unwrap_or_default()
