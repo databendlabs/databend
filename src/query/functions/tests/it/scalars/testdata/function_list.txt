@@ -1986,6 +1986,7 @@ Functions overloads:
 19 hilbert_key(Float32 NULL) :: Binary NULL
 20 hilbert_key(Float64) :: Binary
 21 hilbert_key(Float64 NULL) :: Binary NULL
+0 hilbert_range_index FACTORY
 0 humanize_number(Float64) :: String
 1 humanize_number(Float64 NULL) :: String NULL
 0 humanize_size(Float64) :: String
