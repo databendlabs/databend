@@ -89,7 +89,7 @@ impl PhysicalPlanBuilder {
 
             let table_meta_timestamps = self
                 .ctx
-                .get_table_meta_timestamps(tbl.get_id(), Some(snapshot.clone()))?;
+                .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
 
             let plan = self.build(s_expr.child(0)?, required).await?;
             let plan = PhysicalPlan::HilbertSerialize(Box::new(HilbertSerialize {
@@ -120,7 +120,7 @@ impl PhysicalPlanBuilder {
 
             let table_meta_timestamps = self
                 .ctx
-                .get_table_meta_timestamps(tbl.get_id(), Some(snapshot.clone()))?;
+                .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
 
             if parts.is_empty() {
                 return Err(ErrorCode::NoNeedToRecluster(format!(

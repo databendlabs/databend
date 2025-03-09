@@ -233,7 +233,7 @@ pub async fn build_mutation_info(
     .await?;
 
     let table_meta_timestamps =
-        ctx.get_table_meta_timestamps(fuse_table.get_id(), table_snapshot.clone())?;
+        ctx.get_table_meta_timestamps(table.as_ref(), table_snapshot.clone())?;
 
     Ok(MutationBuildInfo {
         table_info,

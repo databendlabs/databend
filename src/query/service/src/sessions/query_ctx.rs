@@ -102,6 +102,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_delta::DeltaTable;
+use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
@@ -1481,20 +1482,43 @@ impl TableContext for QueryContext {
 
     fn get_table_meta_timestamps(
         &self,
-        table_id: u64,
+        table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
+        let table_id = table.get_id();
         let cache = self.shared.get_table_meta_timestamps();
         let cached_item = cache.lock().get(&table_id).copied();
+
         match cached_item {
             Some(ts) => Ok(ts),
             None => {
+                let delta = {
+                    let settings = &self.query_settings;
+                    let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
+                    let duration = if max_exec_time_secs != 0 {
+                        Duration::from_secs(max_exec_time_secs)
+                    } else {
+                        // no limit, use retention period as delta
+                        let fuse_table = FuseTable::try_from_table(table)?;
+                        // prefer table-level retention setting.
+                        match fuse_table.get_table_retention_period() {
+                            None => {
+                                Duration::from_days(settings.get_data_retention_time_in_days()?)
+                            }
+                            Some(v) => v,
+                        }
+                    };
+
+                    chrono::Duration::from_std(duration).map_err(|e| {
+                        ErrorCode::Internal(format!(
+                            "Unable to construct delta duration of table meta timestamp, {e}",
+                        ))
+                    })?
+                };
                 let ts = self.txn_mgr().lock().get_table_meta_timestamps(
                     table_id,
                     previous_snapshot,
-                    self.get_settings()
-                        .get_max_retryable_transaction_duration_in_hours()?
-                        as i64,
+                    delta,
                 );
                 cache.lock().insert(table_id, ts);
                 Ok(ts)
@@ -1510,11 +1534,11 @@ impl TableContext for QueryContext {
         *self.block_threshold.write() = thresholds;
     }
 
-    fn get_query_queued_duration(&self) -> Duration {
+    fn get_query_queued_duration(&self) -> std::time::Duration {
         *self.shared.query_queued_duration.read()
     }
 
-    fn set_query_queued_duration(&self, queued_duration: Duration) {
+    fn set_query_queued_duration(&self, queued_duration: std::time::Duration) {
         *self.shared.query_queued_duration.write() = queued_duration;
     }
 

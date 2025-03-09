@@ -125,7 +125,7 @@ impl Interpreter for AddTableColumnInterpreter {
             let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
             let table_meta_timestamps = self
                 .ctx
-                .get_table_meta_timestamps(fuse_table.get_id(), base_snapshot)?;
+                .get_table_meta_timestamps(tbl.as_ref(), base_snapshot)?;
 
             // computed columns will generated from other columns.
             let new_schema = table_info.meta.schema.remove_computed_fields();
@@ -243,7 +243,7 @@ pub(crate) async fn generate_new_snapshot(
         let mut new_snapshot = TableSnapshot::try_from_previous(
             snapshot.clone(),
             Some(fuse_table.get_table_info().ident.seq),
-            ctx.get_table_meta_timestamps(fuse_table.get_id(), Some(snapshot))?,
+            ctx.get_table_meta_timestamps(fuse_table, Some(snapshot))?,
         )?;
 
         // replace schema

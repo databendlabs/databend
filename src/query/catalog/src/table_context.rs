@@ -349,7 +349,7 @@ pub trait TableContext: Send + Sync {
     fn txn_mgr(&self) -> TxnManagerRef;
     fn get_table_meta_timestamps(
         &self,
-        table_id: u64,
+        table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps>;
 

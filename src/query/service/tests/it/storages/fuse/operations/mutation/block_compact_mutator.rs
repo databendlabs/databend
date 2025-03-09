@@ -122,7 +122,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
     let table_info = table.get_table_info().clone();
     if let Some((parts, snapshot)) = res {
         let table_meta_timestamps =
-            ctx.get_table_meta_timestamps(table_info.ident.table_id, Some(snapshot.clone()))?;
+            ctx.get_table_meta_timestamps(table.as_ref(), Some(snapshot.clone()))?;
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,

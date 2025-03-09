@@ -61,7 +61,7 @@ fn snapshot_timestamp_time_skew_tolerance() {
 
     // simulating a stalled clock
     prev.timestamp = Some(prev.timestamp.unwrap().add(chrono::Duration::days(1)));
-    let table_meta_timestamps = TableMetaTimestamps::new(None, 72);
+    let table_meta_timestamps = TableMetaTimestamps::new(None, chrono::Duration::hours(72));
 
     let current = TableSnapshot::try_new(
         None,

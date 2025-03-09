@@ -69,7 +69,7 @@ impl PhysicalPlanBuilder {
 
         let table_meta_timestamps = self
             .ctx
-            .get_table_meta_timestamps(table_info.ident.table_id, Some(snapshot.clone()))?;
+            .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
 
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {

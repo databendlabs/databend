@@ -175,7 +175,7 @@ impl ReplaceInterpreter {
 
         let table_meta_timestamps = self
             .ctx
-            .get_table_meta_timestamps(table_info.ident.table_id, base_snapshot.clone())?;
+            .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));

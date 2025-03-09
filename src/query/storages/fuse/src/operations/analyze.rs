@@ -265,7 +265,7 @@ impl SinkAnalyzeState {
             snapshot.clone(),
             Some(table.get_table_info().ident.seq),
             self.ctx
-                .get_table_meta_timestamps(table.get_id(), Some(snapshot.clone()))?,
+                .get_table_meta_timestamps(table, Some(snapshot.clone()))?,
         )?;
         new_snapshot.summary.col_stats = col_stats;
         new_snapshot.summary.cluster_stats = cluster_stats;

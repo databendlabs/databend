@@ -328,7 +328,7 @@ impl FuseTable {
         // Status
         ctx.set_status_info("mutation: begin try to commit");
         let table_meta_timestamps =
-            ctx.get_table_meta_timestamps(self.get_id(), Some(base_snapshot.clone()))?;
+            ctx.get_table_meta_timestamps(self, Some(base_snapshot.clone()))?;
 
         loop {
             let mut snapshot_tobe_committed = TableSnapshot::try_from_previous(
