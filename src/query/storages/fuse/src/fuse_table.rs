@@ -638,6 +638,20 @@ impl FuseTable {
         );
         Ok(())
     }
+
+    pub fn get_table_retention_period(&self) -> Option<std::time::Duration> {
+        self.table_info
+            .options()
+            .get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS)
+            .map(|val| {
+                std::time::Duration::from_secs(
+                    // Data retention period should be positive, parse it to unsigned value first
+                    3600 * val
+                        .parse::<u64>()
+                        .expect("Internal error, parsing table level data retention period failed"),
+                )
+            })
+    }
 }
 
 #[async_trait::async_trait]

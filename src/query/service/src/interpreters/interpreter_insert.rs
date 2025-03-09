@@ -112,7 +112,7 @@ impl Interpreter for InsertInterpreter {
                 databend_common_storages_fuse::FuseTable::try_from_table(table.as_ref())?;
             let snapshot = fuse_table.read_table_snapshot().await?;
             self.ctx
-                .get_table_meta_timestamps(table.get_id(), snapshot)?
+                .get_table_meta_timestamps(table.as_ref(), snapshot)?
         } else {
             Default::default()
         };

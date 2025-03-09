@@ -73,8 +73,7 @@ impl FuseTable {
         )?;
 
         let snapshot_gen = TruncateGenerator::new(mode);
-        let table_meta_timestamps =
-            ctx.get_table_meta_timestamps(self.get_id(), Some(prev_snapshot))?;
+        let table_meta_timestamps = ctx.get_table_meta_timestamps(self, Some(prev_snapshot))?;
         pipeline.add_sink(|input| {
             CommitSink::try_create(
                 self,

@@ -893,11 +893,10 @@ impl TableContext for CtxDelegation {
     }
     fn get_table_meta_timestamps(
         &self,
-        table_id: u64,
+        table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps> {
-        self.ctx
-            .get_table_meta_timestamps(table_id, previous_snapshot)
+        self.ctx.get_table_meta_timestamps(table, previous_snapshot)
     }
 }
 

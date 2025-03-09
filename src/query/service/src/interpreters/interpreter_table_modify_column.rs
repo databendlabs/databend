@@ -196,7 +196,7 @@ impl ModifyTableColumnInterpreter {
         let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);
         let table_meta_timestamps = self
             .ctx
-            .get_table_meta_timestamps(fuse_table.get_id(), base_snapshot.clone())?;
+            .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
 
         let mut bloom_index_cols = vec![];
         if let Some(v) = table_info.options().get(OPT_KEY_BLOOM_INDEX_COLUMNS) {

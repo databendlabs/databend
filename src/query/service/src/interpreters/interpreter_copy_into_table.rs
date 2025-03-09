@@ -114,7 +114,7 @@ impl CopyIntoTableInterpreter {
             .await?;
         let table_meta_timestamps = self
             .ctx
-            .get_table_meta_timestamps(to_table.get_id(), snapshot)?;
+            .get_table_meta_timestamps(to_table.as_ref(), snapshot)?;
         let mut update_stream_meta_reqs = vec![];
         let (source, project_columns) = if let Some(ref query) = plan.query {
             let query = if plan.enable_distributed {
@@ -266,7 +266,7 @@ impl CopyIntoTableInterpreter {
 
             let fuse_table = FuseTable::try_from_table(to_table.as_ref())?;
             let table_meta_timestamps = ctx.get_table_meta_timestamps(
-                to_table.get_id(),
+                to_table.as_ref(),
                 fuse_table.read_table_snapshot().await?,
             )?;
             to_table.commit_insertion(
