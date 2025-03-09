@@ -96,23 +96,25 @@ pub async fn plan_hilbert_sql(
 pub fn replace_with_constant(expr: &SExpr, variables: &VecDeque<Scalar>, partitions: u16) -> SExpr {
     #[recursive::recursive]
     fn visit_expr_column(expr: &mut ScalarExpr, variables: &mut VecDeque<Scalar>) {
-        match expr {
-            ScalarExpr::CastExpr(cast) => {
-                visit_expr_column(&mut cast.argument, variables);
-            }
-            ScalarExpr::FunctionCall(call) => {
-                if call.func_name == "range_partition_id" {
-                    debug_assert_eq!(call.arguments.len(), 2);
+        if let ScalarExpr::FunctionCall(call) = expr {
+            match call.func_name.as_str() {
+                "range_partition_id" => {
                     let last = call.arguments.last_mut().unwrap();
                     let value = variables.pop_front().unwrap();
                     *last = ScalarExpr::ConstantExpr(ConstantExpr { span: None, value });
-                }
 
-                for arg in &mut call.arguments {
-                    visit_expr_column(arg, variables);
+                    let first = call.arguments.first_mut().unwrap();
+                    visit_expr_column(first, variables);
                 }
+                "hilbert_range_index" => {
+                    for idx in (1..call.arguments.len()).step_by(2) {
+                        let val = call.arguments.get_mut(idx).unwrap();
+                        let value = variables.pop_front().unwrap();
+                        *val = ScalarExpr::ConstantExpr(ConstantExpr { span: None, value });
+                    }
+                }
+                _ => (),
             }
-            _ => (),
         }
     }
 

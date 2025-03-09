@@ -32,7 +32,7 @@ use crate::hilbert::LUT;
 /// The function assumes that the dimension is between 2 and 5 and the points are correctly aligned according to the width.
 pub fn hilbert_index(point: &[&[u8]], width: usize) -> Vec<u8> {
     let n = point.len();
-    assert!((2..=5).contains(&n));
+    debug_assert!((2..=5).contains(&n));
 
     let num_bits = width * 8;
     let total_bits = num_bits * n;

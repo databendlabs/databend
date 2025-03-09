@@ -548,29 +548,15 @@ impl ReclusterTableInterpreter {
         let sample_size = settings.get_hilbert_sample_size_per_block()?;
 
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let (mut expr_bind_context, expr_metadata) = bind_table(tbl.clone())?;
-        let mut type_checker = TypeChecker::try_create(
-            &mut expr_bind_context,
-            self.ctx.clone(),
-            &name_resolution_ctx,
-            expr_metadata,
-            &[],
-            true,
-        )?;
-
         let ast_exprs = tbl.resolve_cluster_keys(self.ctx.clone()).unwrap();
         let cluster_keys_len = ast_exprs.len();
         let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
-        let mut cluster_key_types = Vec::with_capacity(cluster_keys_len);
         for mut ast in ast_exprs {
             let mut normalizer = IdentifierNormalizer {
                 ctx: &name_resolution_ctx,
             };
             ast.drive_mut(&mut normalizer);
             cluster_key_strs.push(format!("{:#}", &ast));
-
-            let (scalar, _) = *type_checker.resolve(&ast)?;
-            cluster_key_types.push(scalar.data_type()?);
         }
 
         let mut keys_bounds = Vec::with_capacity(cluster_key_strs.len());
@@ -580,9 +566,7 @@ impl ReclusterTableInterpreter {
                 "range_bound(1000, {sample_size})({cluster_key_str})"
             ));
 
-            hilbert_keys.push(format!(
-                "hilbert_key(cast(range_partition_id({table}.{cluster_key_str}, []) as uint16))"
-            ));
+            hilbert_keys.push(format!("{table}.{cluster_key_str}, []"));
         }
         let hilbert_keys_str = hilbert_keys.join(", ");
 
@@ -593,7 +577,7 @@ impl ReclusterTableInterpreter {
 
         let index_bound_query = format!(
             "SELECT \
-                range_bound(1000, {sample_size})(hilbert_index([{hilbert_keys_str}], 2)) \
+                range_bound(1000, {sample_size})(hilbert_range_index({hilbert_keys_str})) \
             FROM {database}.{table}"
         );
         let index_bound =
@@ -612,7 +596,7 @@ impl ReclusterTableInterpreter {
         let query = format!(
             "SELECT \
                 {output_with_table_str}, \
-                range_partition_id(hilbert_index([{hilbert_keys_str}], 2), [])AS _predicate \
+                range_partition_id(hilbert_range_index({hilbert_keys_str}), [])AS _predicate \
             FROM {database}.{table}"
         );
         let query = plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &query).await?;
