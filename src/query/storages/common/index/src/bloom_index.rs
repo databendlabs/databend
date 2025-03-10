@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::ops::ControlFlow;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -585,7 +586,7 @@ fn visit_expr_column_eq_constant(
     expr: &mut Expr<String>,
     visitor: &mut impl EqVisitor,
 ) -> Result<()> {
-    match expr {
+    match match expr {
         Expr::FunctionCall {
             span,
             id,
@@ -616,13 +617,9 @@ fn visit_expr_column_eq_constant(
                 // debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
                 if scalar_type == column_type {
-                    if let Some(new_expr) =
-                        visitor.enter_target(*span, id, scalar, column_type, return_type)?
-                    {
-                        *expr = new_expr;
-
-                        return Ok(());
-                    }
+                    visitor.enter_target(*span, id, scalar, column_type, return_type)?
+                } else {
+                    ControlFlow::Continue(None)
                 }
             }
             // patterns like `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
@@ -638,12 +635,7 @@ fn visit_expr_column_eq_constant(
             }, Expr::FunctionCall { id, args, .. }]
                 if id.name() == "get" =>
             {
-                if let Some(new_expr) =
-                    visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
-                {
-                    *expr = new_expr;
-                    return Ok(());
-                }
+                visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
             }
             // patterns like `CAST(MapColumn[<key>] as X) = <constant>`, `<constant> = CAST(MapColumn[<key>] as X)`
             [Expr::Cast {
@@ -680,13 +672,9 @@ fn visit_expr_column_eq_constant(
                 if return_type.remove_nullable() != DataType::Variant
                     || dest_type.remove_nullable() != DataType::String
                 {
-                    return Ok(());
-                }
-                if let Some(new_expr) =
+                    ControlFlow::Break(None)
+                } else {
                     visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
-                {
-                    *expr = new_expr;
-                    return Ok(());
                 }
             }
             [cast @ Expr::Cast { .. }, Expr::Constant {
@@ -698,12 +686,7 @@ fn visit_expr_column_eq_constant(
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, cast @ Expr::Cast { .. }] => {
-                if let Some(new_expr) = visitor.enter_cast(cast, scalar, scalar_type)? {
-                    *expr = new_expr;
-                    return Ok(());
-                }
-            }
+            }, cast @ Expr::Cast { .. }] => visitor.enter_cast(cast, scalar, scalar_type)?,
 
             [func @ Expr::FunctionCall { .. }, Expr::Constant {
                 scalar,
@@ -717,29 +700,34 @@ fn visit_expr_column_eq_constant(
             }, func @ Expr::FunctionCall { .. }]
                 if func.contains_column_ref() =>
             {
-                if let Some(new_expr) = visitor.enter_function(func, scalar, scalar_type)? {
-                    *expr = new_expr;
-                    return Ok(());
-                }
+                visitor.enter_function(func, scalar, scalar_type)?
             }
-            _ => (),
+            _ => ControlFlow::Continue(None),
         },
-        _ => (),
-    }
-
-    // Otherwise, rewrite sub expressions.
-    match expr {
-        Expr::Cast { expr, .. } => {
-            visit_expr_column_eq_constant(expr, visitor)?;
-        }
-        Expr::FunctionCall { args, .. } => {
-            for arg in args.iter_mut() {
-                visit_expr_column_eq_constant(arg, visitor)?;
+        _ => ControlFlow::Continue(None),
+    } {
+        ControlFlow::Continue(new_expr) => {
+            if let Some(new_expr) = new_expr {
+                *expr = new_expr;
+            }
+            // Otherwise, rewrite sub expressions.
+            match expr {
+                Expr::Cast { expr, .. } => {
+                    visit_expr_column_eq_constant(expr, visitor)?;
+                }
+                Expr::FunctionCall { args, .. } => {
+                    for arg in args.iter_mut() {
+                        visit_expr_column_eq_constant(arg, visitor)?;
+                    }
+                }
+                _ => (),
             }
         }
-        _ => (),
+        ControlFlow::Break(Some(new_expr)) => {
+            *expr = new_expr;
+        }
+        ControlFlow::Break(None) => (),
     }
-
     Ok(())
 }
 
@@ -751,7 +739,7 @@ trait EqVisitor {
         scalar: &Scalar,
         ty: &DataType,
         return_type: &DataType,
-    ) -> Result<Option<Expr<String>>>;
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>>;
 
     fn enter_map_column(
         &mut self,
@@ -760,7 +748,7 @@ trait EqVisitor {
         scalar: &Scalar,
         scalar_type: &DataType,
         return_type: &DataType,
-    ) -> Result<Option<Expr<String>>> {
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
         match &args[0] {
             Expr::ColumnRef { id, data_type, .. }
             | Expr::Cast {
@@ -775,17 +763,17 @@ trait EqVisitor {
                     // Only JSON value of string type have bloom index.
                     if val_type.remove_nullable() == DataType::Variant {
                         if scalar_type.remove_nullable() != DataType::String {
-                            return Ok(None);
+                            return Ok(ControlFlow::Continue(None));
                         }
                     } else if val_type.remove_nullable() != scalar_type.remove_nullable() {
-                        return Ok(None);
+                        return Ok(ControlFlow::Continue(None));
                     }
                     return self.enter_target(span, id, scalar, scalar_type, return_type);
                 }
             }
             _ => {}
         }
-        Ok(None)
+        Ok(ControlFlow::Continue(None))
     }
 
     fn enter_cast(
@@ -793,8 +781,8 @@ trait EqVisitor {
         _cast: &Expr<String>,
         _scalar: &Scalar,
         _scalar_type: &DataType,
-    ) -> Result<Option<Expr<String>>> {
-        Ok(None)
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+        Ok(ControlFlow::Continue(None))
     }
 
     fn enter_function(
@@ -802,8 +790,8 @@ trait EqVisitor {
         _func: &Expr<String>,
         _scalar: &Scalar,
         _scalar_type: &DataType,
-    ) -> Result<Option<Expr<String>>> {
-        Ok(None)
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+        Ok(ControlFlow::Continue(None))
     }
 }
 
@@ -820,8 +808,11 @@ where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<
         scalar: &Scalar,
         ty: &DataType,
         return_type: &DataType,
-    ) -> Result<Option<Expr<String>>> {
-        self.0(span, col_name, scalar, ty, return_type)
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+        match self.0(span, col_name, scalar, ty, return_type)? {
+            Some(new) => Ok(ControlFlow::Break(Some(new))),
+            None => Ok(ControlFlow::Continue(None)),
+        }
     }
 }
 
@@ -846,14 +837,14 @@ impl EqVisitor for ShortListVisitor {
         scalar: &Scalar,
         ty: &DataType,
         _: &DataType,
-    ) -> Result<Option<Expr<String>>> {
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
         if let Some(v) = self.found_field(col_name) {
             if !scalar.is_null() && Xor8Filter::supported_type(ty) {
                 self.founds.push(v.clone());
                 self.scalars.push((scalar.clone(), ty.clone()));
             }
         }
-        Ok(None)
+        Ok(ControlFlow::Break(None))
     }
 
     fn enter_cast(
@@ -861,7 +852,7 @@ impl EqVisitor for ShortListVisitor {
         cast: &Expr<String>,
         scalar: &Scalar,
         scalar_type: &DataType,
-    ) -> Result<Option<Expr<String>>> {
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
         let Expr::Cast {
             is_try: false,
             expr:
@@ -874,16 +865,16 @@ impl EqVisitor for ShortListVisitor {
             ..
         } = cast
         else {
-            return Ok(None);
+            return Ok(ControlFlow::Continue(None));
         };
 
         let Some(field) = self.found_field(id) else {
-            return Ok(None);
+            return Ok(ControlFlow::Continue(None));
         };
         if !is_injective_cast(&src_type, dest_type) {
-            return Ok(None);
+            return Ok(ControlFlow::Continue(None));
         }
-        let (expr, Some(domain)) = ConstantFolder::fold(
+        let (_, Some(domain)) = ConstantFolder::<String>::fold(
             &Expr::Cast {
                 span: None,
                 is_try: false,
@@ -897,16 +888,16 @@ impl EqVisitor for ShortListVisitor {
             &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,
         ) else {
-            return Ok(None);
+            return Ok(ControlFlow::Continue(None));
         };
 
         let Some(s) = domain.as_singleton() else {
-            return Ok(None);
+            return Ok(ControlFlow::Continue(None));
         };
 
         self.founds.push(field.to_owned());
         self.scalars.push((s, src_type.to_owned()));
-        Ok(Some(expr)) // break walk
+        Ok(ControlFlow::Break(None))
     }
 
     fn enter_function(
@@ -914,8 +905,8 @@ impl EqVisitor for ShortListVisitor {
         _func: &Expr<String>,
         _scalar: &Scalar,
         _scalar_type: &DataType,
-    ) -> Result<Option<Expr<String>>> {
-        Ok(None)
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+        Ok(ControlFlow::Continue(None))
     }
 }
 
