@@ -62,10 +62,13 @@ impl PhysicalPlanBuilder {
         // 1. Prune unused Columns.
         let metadata = self.metadata.read().clone();
         let lazy_columns = metadata.lazy_columns();
-        required.extend(lazy_columns.clone());
+        required.extend(lazy_columns);
 
         let indices: Vec<usize> = (0..union_all.left_outputs.len())
-            .filter(|index| required.contains(&union_all.output_indexes[*index]))
+            .filter(|index| {
+                !union_all.cte_scan_names.is_empty()
+                    || required.contains(&union_all.output_indexes[*index])
+            })
             .collect();
 
         let (left_required, right_required) = if indices.is_empty() {
