@@ -31,6 +31,7 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
@@ -67,6 +68,7 @@ pub struct TransformSerializeSegment {
 
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl TransformSerializeSegment {
@@ -75,6 +77,7 @@ impl TransformSerializeSegment {
         output: Arc<OutputPort>,
         table: &FuseTable,
         thresholds: BlockThresholds,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         let default_cluster_key_id = table.cluster_key_id();
         TransformSerializeSegment {
@@ -87,6 +90,7 @@ impl TransformSerializeSegment {
             accumulator: Default::default(),
             thresholds,
             default_cluster_key_id,
+            table_meta_timestamps,
         }
     }
 
@@ -180,7 +184,9 @@ impl Processor for TransformSerializeSegment {
 
                 self.state = State::SerializedSegment {
                     data: segment_info.to_bytes()?,
-                    location: self.meta_locations.gen_segment_info_location(),
+                    location: self
+                        .meta_locations
+                        .gen_segment_info_location(self.table_meta_timestamps),
                     segment: Arc::new(segment_info),
                 }
             }

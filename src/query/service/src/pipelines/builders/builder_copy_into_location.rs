@@ -42,6 +42,7 @@ impl PipelineBuilder {
             vec![],
             false,
             unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+            Default::default(),
         )
     }
 }
