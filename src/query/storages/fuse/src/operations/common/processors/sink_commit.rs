@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
+use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -35,6 +36,7 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::plans::TruncateMode;
+use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -410,34 +412,19 @@ where F: SnapshotGenerator + Send + 'static
                         }
 
                         if self.purge {
-                            // Removes historical data, if purge is true
                             let latest = self.table.refresh(self.ctx.as_ref()).await?;
                             let tbl = FuseTable::try_from_table(latest.as_ref())?;
-
                             warn!(
-                                "purging historical data. table: {}, ident: {}",
+                                "Vacuuming table: {}, ident: {}",
                                 tbl.table_info.name, tbl.table_info.ident
                             );
 
-                            let keep_last_snapshot = true;
-                            let snapshot_files = tbl.list_snapshot_files().await?;
-                            if let Err(e) = tbl
-                                .do_purge(
-                                    &self.ctx,
-                                    snapshot_files,
-                                    None,
-                                    keep_last_snapshot,
-                                    false,
-                                )
-                                .await
-                            {
-                                // Errors of GC, if any, are ignored, since GC task can be picked up
-                                warn!(
-                                    "GC of table not success (this is not a permanent error). the error : {}",
-                                    e
-                                );
+                            let handler: Arc<VacuumHandlerWrapper> = GlobalInstance::get();
+                            if let Err(e) = handler.do_vacuum2(tbl, self.ctx.clone(), false).await {
+                                // Vacuum in a best-effort manner, errors are ignored
+                                warn!("Vacuum table {} failed : {}", tbl.table_info.name, e);
                             } else {
-                                info!("GC of table done");
+                                info!("vacuum table {} done", tbl.table_info.name);
                             }
                         }
                         metrics_inc_commit_mutation_success();
