@@ -427,7 +427,7 @@ impl ReclusterTableInterpreter {
             input: plan,
             table_info: table_info.clone(),
             num_partitions: total_partitions,
-            table_meta_timestamps: table_meta_timestamps.clone(),
+            table_meta_timestamps,
         }));
         Ok(Some(Self::add_commit_sink(
             plan,
