@@ -14,10 +14,11 @@
 
 use std::io::Cursor;
 use std::io::Read;
+use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use databend_common_base::base::uuid::Uuid;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::BinaryRead;
@@ -29,7 +30,7 @@ use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
 use crate::meta::format::MetaCompression;
 use crate::meta::monotonically_increased_timestamp;
-use crate::meta::trim_timestamp_to_micro_second;
+use crate::meta::uuid_from_date_time;
 use crate::meta::v2;
 use crate::meta::v3;
 use crate::meta::ClusterKey;
@@ -38,9 +39,10 @@ use crate::meta::Location;
 use crate::meta::MetaEncoding;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
+use crate::meta::TableMetaTimestamps;
 use crate::meta::Versioned;
+use crate::readers::snapshot_reader::TableSnapshotAccessor;
 
-/// The structure of the TableSnapshot is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot metadata
@@ -88,70 +90,76 @@ pub struct TableSnapshot {
     /// **This field is deprecated and will be removed in the next version.**
     pub cluster_key_meta: Option<ClusterKey>,
     pub table_statistics_location: Option<String>,
-
-    pub least_visible_timestamp: Option<DateTime<Utc>>,
 }
 
 impl TableSnapshot {
-    pub fn new(
-        snapshot_id: SnapshotId,
+    /// Note that table_meta_timestamps is not always equal to prev_timestamp.
+    pub fn try_new(
         prev_table_seq: Option<u64>,
-        prev_timestamp: &Option<DateTime<Utc>>,
-        prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
+        prev_snapshot: Option<Arc<TableSnapshot>>,
         schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
         table_statistics_location: Option<String>,
-    ) -> Self {
-        let now = Utc::now();
-        // make snapshot timestamp monotonically increased
-        let adjusted_timestamp = monotonically_increased_timestamp(now, prev_timestamp);
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<Self> {
+        let TableMetaTimestamps {
+            segment_block_timestamp,
+            snapshot_timestamp,
+        } = table_meta_timestamps;
 
-        // trim timestamp to micro seconds
-        let trimmed_timestamp = trim_timestamp_to_micro_second(adjusted_timestamp);
-        let timestamp = Some(trimmed_timestamp);
+        let snapshot_timestamp =
+            monotonically_increased_timestamp(snapshot_timestamp, &prev_snapshot.timestamp());
 
-        Self {
+        if segment_block_timestamp < snapshot_timestamp {
+            return Err(ErrorCode::TransactionTimeout(format!(
+                "Snapshot is generated too late, segment_block_timestamp: {:?}, snapshot_timestamp: {:?}",
+                segment_block_timestamp, snapshot_timestamp
+            )));
+        }
+
+        Ok(Self {
             format_version: TableSnapshot::VERSION,
-            snapshot_id,
-            timestamp,
+            snapshot_id: uuid_from_date_time(snapshot_timestamp),
+            timestamp: Some(snapshot_timestamp),
             prev_table_seq,
-            prev_snapshot_id,
+            prev_snapshot_id: prev_snapshot.snapshot_id(),
             schema,
             summary,
             segments,
             cluster_key_meta: None,
             table_statistics_location,
-            least_visible_timestamp: None,
-        }
+        })
     }
 
+    /// used in ut
     pub fn new_empty_snapshot(schema: TableSchema, prev_table_seq: Option<u64>) -> Self {
-        Self::new(
-            Uuid::new_v4(),
+        Self::try_new(
             prev_table_seq,
-            &None,
             None,
             schema,
             Statistics::default(),
             vec![],
             None,
+            Default::default(),
         )
+        .unwrap()
     }
 
-    pub fn from_previous(previous: &TableSnapshot, prev_table_seq: Option<u64>) -> Self {
-        let id = Uuid::new_v4();
-        let clone = previous.clone();
+    pub fn try_from_previous(
+        previous: Arc<TableSnapshot>,
+        prev_table_seq: Option<u64>,
+        table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<Self> {
         // the timestamp of the new snapshot will be adjusted by the `new` method
-        Self::new(
-            id,
+        Self::try_new(
             prev_table_seq,
-            &clone.timestamp,
-            Some((clone.snapshot_id, clone.format_version)),
-            clone.schema,
-            clone.summary,
-            clone.segments,
-            clone.table_statistics_location,
+            Some(previous.clone()),
+            previous.schema.clone(),
+            previous.summary.clone(),
+            previous.segments.clone(),
+            previous.table_statistics_location.clone(),
+            table_meta_timestamps,
         )
     }
 
@@ -235,7 +243,6 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            least_visible_timestamp: None,
         }
     }
 }
@@ -258,7 +265,6 @@ where T: Into<v3::TableSnapshot>
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
-            least_visible_timestamp: None,
         }
     }
 }
