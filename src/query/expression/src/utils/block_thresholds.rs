@@ -13,14 +13,18 @@
 // limitations under the License.
 
 use databend_common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use databend_common_io::constants::DEFAULT_BLOCK_MIN_ROWS;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BlockThresholds {
     pub max_rows_per_block: usize,
     pub min_rows_per_block: usize,
     pub max_bytes_per_block: usize,
+    pub max_bytes_per_file: usize,
+    pub block_per_segment: usize,
 }
 
 impl Default for BlockThresholds {
@@ -29,6 +33,8 @@ impl Default for BlockThresholds {
             max_rows_per_block: DEFAULT_BLOCK_MAX_ROWS,
             min_rows_per_block: DEFAULT_BLOCK_MIN_ROWS,
             max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE,
+            max_bytes_per_file: DEFAULT_BLOCK_COMPRESSED_SIZE,
+            block_per_segment: DEFAULT_BLOCK_PER_SEGMENT,
         }
     }
 }
@@ -38,17 +44,42 @@ impl BlockThresholds {
         max_rows_per_block: usize,
         min_rows_per_block: usize,
         max_bytes_per_block: usize,
+        max_bytes_per_file: usize,
+        block_per_segment: usize,
     ) -> Self {
         BlockThresholds {
             max_rows_per_block,
             min_rows_per_block,
             max_bytes_per_block,
+            max_bytes_per_file,
+            block_per_segment,
         }
     }
 
     #[inline]
-    pub fn check_perfect_block(&self, row_count: usize, block_size: usize) -> bool {
-        row_count <= self.max_rows_per_block && self.check_large_enough(row_count, block_size)
+    pub fn check_perfect_block(
+        &self,
+        row_count: usize,
+        block_size: usize,
+        file_size: usize,
+    ) -> bool {
+        row_count >= self.min_rows_per_block
+            || block_size >= self.max_bytes_per_block
+            || file_size >= self.max_bytes_per_file
+    }
+
+    #[inline]
+    pub fn check_perfect_segment(
+        &self,
+        total_blocks: usize,
+        total_rows: usize,
+        total_bytes: usize,
+        total_compressed: usize,
+    ) -> bool {
+        total_blocks >= self.block_per_segment
+            && (total_rows >= self.min_rows_per_block * self.block_per_segment
+                || total_bytes >= self.max_bytes_per_block * self.block_per_segment
+                || total_compressed >= self.max_bytes_per_file * self.block_per_segment)
     }
 
     #[inline]
@@ -67,39 +98,30 @@ impl BlockThresholds {
     }
 
     #[inline]
-    pub fn calc_rows_per_block(&self, total_bytes: usize, total_rows: usize) -> usize {
+    pub fn calc_rows_per_block(
+        &self,
+        total_bytes: usize,
+        total_rows: usize,
+        total_compressed: usize,
+    ) -> usize {
         if self.check_for_compact(total_rows, total_bytes) {
             return total_rows;
         }
 
-        let block_num_by_size = std::cmp::max(total_bytes / self.max_bytes_per_block, 1);
         let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
+        let block_num_by_size = std::cmp::max(
+            total_bytes / self.max_bytes_per_block,
+            total_compressed / self.max_bytes_per_file,
+        );
         if block_num_by_rows >= block_num_by_size {
             return self.max_rows_per_block;
         }
 
         let mut rows_per_block = total_rows.div_ceil(block_num_by_size);
-        let max_bytes_per_block = match rows_per_block {
-            v if v < self.max_rows_per_block / 10 => {
-                // If block rows < 100_000, max_bytes_per_block set to 200M
-                2 * self.max_bytes_per_block
-            }
-            v if v < self.max_rows_per_block / 2 => {
-                // If block rows < 500_000, max_bytes_per_block set to 150M
-                3 * self.max_bytes_per_block / 2
-            }
-            v if v < self.min_rows_per_block => {
-                // If block rows < 800_000, max_bytes_per_block set to 125M
-                5 * self.max_bytes_per_block / 4
-            }
-            _ => self.max_bytes_per_block,
-        };
-
-        if max_bytes_per_block > self.max_bytes_per_block {
-            rows_per_block = std::cmp::max(
-                total_rows / (std::cmp::max(total_bytes / max_bytes_per_block, 1)),
-                1,
-            );
+        if rows_per_block < self.max_rows_per_block / 2 {
+            // If block rows < 500_000, max_bytes_per_block set to 125M
+            let block_num_by_size = (4 * block_num_by_size / 5).max(1);
+            rows_per_block = total_rows.div_ceil(block_num_by_size);
         }
         rows_per_block
     }

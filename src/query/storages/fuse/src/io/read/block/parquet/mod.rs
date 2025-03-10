@@ -20,7 +20,6 @@ use arrow_array::StructArray;
 use databend_common_catalog::plan::Projection;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
@@ -104,7 +103,7 @@ impl BlockReader {
                             cache.insert(key.into(), (arrow_array.clone(), data.len()));
                         }
                     }
-                    Value::Column(Column::from_arrow_rs(arrow_array, &data_type)?)
+                    Value::from_arrow_rs(arrow_array, &data_type)?
                 }
                 Some(DataItem::ColumnArray(cached)) => {
                     if column_node.is_nested {
@@ -113,7 +112,7 @@ impl BlockReader {
                             "unexpected nested field: nested leaf field hits cached",
                         ));
                     }
-                    Value::Column(Column::from_arrow_rs(cached.0.clone(), &data_type)?)
+                    Value::from_arrow_rs(cached.0.clone(), &data_type)?
                 }
                 None => Value::Scalar(self.default_vals[i].clone()),
             };

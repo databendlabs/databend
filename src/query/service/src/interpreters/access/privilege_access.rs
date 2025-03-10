@@ -40,7 +40,6 @@ use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::PresignAction;
-use databend_common_sql::plans::Recluster;
 use databend_common_sql::plans::RewriteKind;
 use databend_common_sql::Planner;
 use databend_common_users::RoleCacheManager;
@@ -1023,9 +1022,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropTableClusterKey(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Drop, false, false).await?
             }
-            Plan::ReclusterTable{s_expr, ..} => {
-                let plan: Recluster = s_expr.plan().clone().try_into()?;
-                // UDF has been disabled in recluster, no need to check udf privilege access.
+            Plan::ReclusterTable(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::TruncateTable(plan) => {

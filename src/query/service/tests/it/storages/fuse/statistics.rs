@@ -351,7 +351,13 @@ async fn test_ft_cluster_stats_with_stats() -> databend_common_exception::Result
         None,
     ));
 
-    let block_compactor = BlockThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
+    let block_compactor = BlockThresholds::new(
+        1_000_000,
+        800_000,
+        100 * 1024 * 1024,
+        10 * 1024 * 1024,
+        1000,
+    );
     let stats_gen = ClusterStatsGenerator::new(
         0,
         vec![0],

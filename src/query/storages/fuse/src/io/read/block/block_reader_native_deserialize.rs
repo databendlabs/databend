@@ -17,11 +17,13 @@ use std::time::Instant;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::Value;
 use databend_common_metrics::storage::*;
 use databend_common_native::read::reader::NativeReader;
 use databend_common_native::read::ColumnIter;
@@ -147,10 +149,14 @@ impl BlockReader {
             let cols = chunk_arrays
                 .into_iter()
                 .zip(self.data_schema().fields())
-                .map(|(arr, f)| Column::from_arrow_rs(arr, f.data_type()))
+                .map(|(arr, f)| {
+                    let data_type = f.data_type();
+                    Value::from_arrow_rs(arr, data_type)
+                        .map(|val| BlockEntry::new(data_type.clone(), val))
+                })
                 .collect::<Result<Vec<_>>>()?;
 
-            DataBlock::new_from_columns(cols)
+            DataBlock::new(cols, num_rows)
         };
 
         // populate cache if necessary

@@ -19,6 +19,7 @@ use databend_common_catalog::table::CompactionLimits;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::FieldIndex;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::operations::mutation::BlockCompactMutator;
@@ -26,7 +27,6 @@ use crate::operations::mutation::SegmentCompactMutator;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 #[derive(Clone)]

@@ -349,7 +349,7 @@ impl Spiller {
 
         record_read_profile(location, &instant, data.len());
 
-        Ok(deserialize_block(columns_layout, data))
+        deserialize_block(columns_layout, data)
     }
 
     #[async_backtrace::framed]
@@ -407,14 +407,11 @@ impl Spiller {
         record_read_profile(location, &instant, data.len());
 
         // Deserialize partitioned data block.
-        let partitioned_data = partitions
-            .iter()
-            .map(|(partition_id, Chunk { range, layout })| {
-                let block = deserialize_block(layout, data.slice(range.clone()));
-                (*partition_id, block)
-            })
-            .collect();
-
+        let mut partitioned_data = Vec::with_capacity(partitions.len());
+        for (partition_id, Chunk { range, layout }) in partitions {
+            let block = deserialize_block(layout, data.slice(range.clone()))?;
+            partitioned_data.push((*partition_id, block));
+        }
         Ok(partitioned_data)
     }
 
@@ -442,7 +439,7 @@ impl Spiller {
 
         record_read_profile(location, &instant, data.len());
 
-        Ok(deserialize_block(layout, data))
+        deserialize_block(layout, data)
     }
 
     async fn write_encodes(&self, size: usize, buf: DmaWriteBuf) -> Result<Location> {

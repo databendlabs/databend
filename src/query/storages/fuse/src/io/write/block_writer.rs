@@ -41,6 +41,7 @@ use databend_common_metrics::storage::metrics_inc_block_inverted_index_write_num
 use databend_common_metrics::storage::metrics_inc_block_write_milliseconds;
 use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
+use databend_common_pipeline_transforms::memory_size;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_io::ReadSettings;
@@ -96,9 +97,9 @@ pub fn serialize_block(
 
             let block = block.consume_convert_to_full();
             let batch: Vec<Column> = block
-                .columns()
-                .iter()
-                .map(|x| x.value.as_column().unwrap().clone())
+                .take_columns()
+                .into_iter()
+                .map(|x| x.value.into_column().unwrap())
                 .collect();
 
             writer.start()?;
@@ -375,10 +376,11 @@ impl BlockBuilder {
         }
 
         let row_count = data_block.num_rows() as u64;
-        let block_size = data_block.memory_size() as u64;
         let col_stats =
             gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?;
 
+        let data_block = data_block.consume_convert_to_full();
+        let block_size = memory_size(&data_block) as u64;
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let col_metas = serialize_block(
             &self.write_settings,

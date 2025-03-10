@@ -106,6 +106,7 @@ databend-enterprise-aggregating-index = { workspace = true }
 databend-enterprise-attach-table = { workspace = true }
 databend-enterprise-background-service = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
+databend-enterprise-hilbert-clustering = { workspace = true }
 databend-enterprise-inverted-index = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }

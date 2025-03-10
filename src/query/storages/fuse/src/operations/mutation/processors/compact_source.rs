@@ -182,11 +182,7 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                     .collect::<Result<Vec<_>>>()?;
 
                 // concat blocks.
-                let block = if blocks.len() == 1 {
-                    blocks[0].convert_to_full()
-                } else {
-                    DataBlock::concat(&blocks)?
-                };
+                let block = DataBlock::concat(&blocks)?;
 
                 let meta = Box::new(SerializeDataMeta::SerializeBlock(SerializeBlock::create(
                     index,

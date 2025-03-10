@@ -23,19 +23,17 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::DataSchemaRef;
-use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline_core::processors::Event;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
-use databend_common_pipeline_transforms::processors::sort_merge;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
+use crate::pipelines::processors::transforms::DataProcessorStrategy;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
@@ -52,7 +50,7 @@ pub enum Step {
 #[derive(Debug, Clone, Copy)]
 pub enum SyncStep {
     Collect,
-    Sort,
+    Process,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -61,7 +59,7 @@ pub enum AsyncStep {
     Restore,
 }
 
-pub struct TransformWindowPartitionCollect {
+pub struct TransformWindowPartitionCollect<S: DataProcessorStrategy> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
 
@@ -73,21 +71,14 @@ pub struct TransformWindowPartitionCollect {
     // The buffer is used to control the memory usage of the window operator.
     buffer: WindowPartitionBuffer,
 
-    // Sort variables.
-    sort_desc: Vec<SortColumnDescription>,
-    schema: DataSchemaRef,
-    max_block_size: usize,
-    sort_spilling_batch_bytes: usize,
-    enable_loser_tree: bool,
-    have_order_col: bool,
+    strategy: S,
 
     // Event variables.
     step: Step,
     is_collect_finished: bool,
 }
 
-impl TransformWindowPartitionCollect {
-    #[expect(clippy::too_many_arguments)]
+impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
     pub fn new(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
@@ -98,9 +89,7 @@ impl TransformWindowPartitionCollect {
         num_partitions: usize,
         memory_settings: MemorySettings,
         disk_spill: Option<SpillerDiskConfig>,
-        sort_desc: Vec<SortColumnDescription>,
-        schema: DataSchemaRef,
-        have_order_col: bool,
+        strategy: S,
     ) -> Result<Self> {
         // Calculate the partition ids collected by the processor.
         let partitions: Vec<usize> = (0..num_partitions)
@@ -134,21 +123,12 @@ impl TransformWindowPartitionCollect {
             memory_settings,
         )?;
 
-        let max_block_size = settings.get_max_block_size()? as usize;
-        let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;
-        let sort_spilling_batch_bytes = settings.get_sort_spilling_batch_bytes()?;
-
         Ok(Self {
             input,
             output,
             partition_id,
             buffer,
-            sort_desc,
-            schema,
-            max_block_size,
-            have_order_col,
-            enable_loser_tree,
-            sort_spilling_batch_bytes,
+            strategy,
             is_collect_finished: false,
             output_data_blocks: VecDeque::new(),
             restored_data_blocks: Vec::new(),
@@ -229,9 +209,9 @@ impl TransformWindowPartitionCollect {
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformWindowPartitionCollect {
+impl<S: DataProcessorStrategy> Processor for TransformWindowPartitionCollect<S> {
     fn name(&self) -> String {
-        "TransformWindowPartitionCollect".to_string()
+        format!("TransformWindowPartitionCollect({})", S::NAME)
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -239,16 +219,16 @@ impl Processor for TransformWindowPartitionCollect {
     }
 
     fn event(&mut self) -> Result<Event> {
-        // (collect <--> spill) -> (sort <--> restore) -> finish
+        // (collect <--> spill) -> (process <--> restore) -> finish
         match self.step {
             Step::Sync(sync_step) => match sync_step {
                 SyncStep::Collect => self.collect(),
-                SyncStep::Sort => self.output(),
+                SyncStep::Process => self.output(),
             },
             Step::Async(async_step) => match async_step {
                 AsyncStep::Spill => match self.is_collect_finished {
                     true => {
-                        self.step = Step::Sync(SyncStep::Sort);
+                        self.step = Step::Sync(SyncStep::Process);
                         self.output()
                     }
                     false => {
@@ -259,7 +239,7 @@ impl Processor for TransformWindowPartitionCollect {
                 },
                 AsyncStep::Restore => match self.restored_data_blocks.is_empty() {
                     true => self.next_step(Step::Finish),
-                    false => self.next_step(Step::Sync(SyncStep::Sort)),
+                    false => self.next_step(Step::Sync(SyncStep::Process)),
                 },
             },
             Step::Finish => Ok(Event::Finished),
@@ -268,25 +248,10 @@ impl Processor for TransformWindowPartitionCollect {
 
     fn process(&mut self) -> Result<()> {
         match self.step {
-            Step::Sync(SyncStep::Sort) => {
+            Step::Sync(SyncStep::Process) => {
                 let restored_data_blocks = std::mem::take(&mut self.restored_data_blocks);
-
-                let data_blocks = restored_data_blocks
-                    .into_iter()
-                    .map(|data_block| DataBlock::sort(&data_block, &self.sort_desc, None))
-                    .collect::<Result<Vec<_>>>()?;
-
-                let sorted_data_blocks = sort_merge(
-                    self.schema.clone(),
-                    self.max_block_size,
-                    self.sort_desc.clone(),
-                    data_blocks,
-                    self.sort_spilling_batch_bytes,
-                    self.enable_loser_tree,
-                    self.have_order_col,
-                )?;
-
-                self.output_data_blocks.extend(sorted_data_blocks);
+                let processed_blocks = self.strategy.process_data_blocks(restored_data_blocks)?;
+                self.output_data_blocks.extend(processed_blocks);
             }
             _ => unreachable!(),
         }
@@ -306,7 +271,7 @@ impl Processor for TransformWindowPartitionCollect {
     }
 }
 
-impl TransformWindowPartitionCollect {
+impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
     fn collect_data_block(
         data_block: DataBlock,
         partition_ids: &[usize],
