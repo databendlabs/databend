@@ -587,7 +587,7 @@ impl CompactTaskBuilder {
                     blocks.extend(tail);
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                 } else {
-                    // blocks > 2N
+                    // blocks >= 2N
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx + 1, tail);
                 }
