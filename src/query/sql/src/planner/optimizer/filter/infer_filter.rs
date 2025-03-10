@@ -202,15 +202,21 @@ impl<'a> InferFilterOptimizer<'a> {
                             return Ok(());
                         }
                         MergeResult::Left => {
+                            // Keep existing predicate, discard new one
                             return Ok(());
                         }
                         MergeResult::Right => {
-                            // The right may modified.
+                            // Replace existing with modified right
                             *predicate = modified_right;
                             return Ok(());
                         }
-                        MergeResult::All => (),
+                        MergeResult::All => {
+                            // Keep both predicates
+                            predicates.push(new_predicate);
+                        }
                     }
+                } else {
+                    // No existing predicates, just add the new one
                     predicates.push(new_predicate);
                 }
             }
@@ -221,6 +227,7 @@ impl<'a> InferFilterOptimizer<'a> {
         Ok(())
     }
 
+   
     fn merge_predicate(
         mut left: Predicate,
         mut right: Predicate,
