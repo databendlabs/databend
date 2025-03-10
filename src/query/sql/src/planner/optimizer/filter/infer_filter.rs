@@ -209,12 +209,9 @@ impl<'a> InferFilterOptimizer<'a> {
                             *predicate = modified_right;
                             return Ok(());
                         }
-                        MergeResult::All => {
-                            // Append the new_predicate(right predicate).
-                            predicates.push(new_predicate);
-                            return Ok(());
-                        }
+                        MergeResult::All => (),
                     }
+                    predicates.push(new_predicate);
                 }
             }
             None => {
