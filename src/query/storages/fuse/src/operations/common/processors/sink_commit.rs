@@ -37,6 +37,7 @@ use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_sql::plans::TruncateMode;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::debug;
@@ -52,7 +53,6 @@ use crate::operations::CommitMeta;
 use crate::operations::SnapshotGenerator;
 use crate::operations::TruncateGenerator;
 use crate::FuseTable;
-
 enum State {
     None,
     FillDefault,
@@ -96,6 +96,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     change_tracking: bool,
     update_stream_meta: Vec<UpdateStreamMetaReq>,
     deduplicated_label: Option<String>,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl<F> CommitSink<F>
@@ -112,6 +113,7 @@ where F: SnapshotGenerator + Send + 'static
         max_retry_elapsed: Option<Duration>,
         prev_snapshot_id: Option<SnapshotId>,
         deduplicated_label: Option<String>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ProcessorPtr> {
         let purge = Self::do_purge(table, &snapshot_gen);
         Ok(ProcessorPtr::create(Box::new(CommitSink {
@@ -133,6 +135,7 @@ where F: SnapshotGenerator + Send + 'static
             change_tracking: table.change_tracking_enabled(),
             update_stream_meta,
             deduplicated_label,
+            table_meta_timestamps,
         })))
     }
 
@@ -296,6 +299,7 @@ where F: SnapshotGenerator + Send + 'static
                     Some(table_info.ident.seq),
                     self.ctx.txn_mgr(),
                     table_info.ident.table_id,
+                    self.table_meta_timestamps,
                     table_info.name.as_str(),
                 ) {
                     Ok(snapshot) => {

@@ -18,8 +18,8 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_sql::plans::TruncateMode;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use uuid::Uuid;
 
 use crate::operations::common::SnapshotGenerator;
 
@@ -50,27 +50,17 @@ impl SnapshotGenerator for TruncateGenerator {
         _cluster_key_id: Option<u32>,
         previous: &Option<Arc<TableSnapshot>>,
         prev_table_seq: Option<u64>,
+        table_meta_timestamps: TableMetaTimestamps,
         _table_name: &str,
     ) -> Result<TableSnapshot> {
-        let (prev_timestamp, prev_snapshot_id) = if let Some(prev_snapshot) = previous {
-            (
-                prev_snapshot.timestamp,
-                Some((prev_snapshot.snapshot_id, prev_snapshot.format_version)),
-            )
-        } else {
-            (None, None)
-        };
-
-        let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
+        TableSnapshot::try_new(
             prev_table_seq,
-            &prev_timestamp,
-            prev_snapshot_id,
+            previous.clone(),
             schema,
             Default::default(),
             vec![],
             None,
-        );
-        Ok(new_snapshot)
+            table_meta_timestamps,
+        )
     }
 }

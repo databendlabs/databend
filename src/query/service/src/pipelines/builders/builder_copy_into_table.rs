@@ -179,6 +179,7 @@ impl PipelineBuilder {
                     main_pipeline,
                     to_table.clone(),
                     plan_required_values_schema.clone(),
+                    plan.table_meta_timestamps,
                 )?
             }
             CopyIntoTableMode::Replace => {}
@@ -187,6 +188,7 @@ impl PipelineBuilder {
                 main_pipeline,
                 to_table.clone(),
                 plan_required_values_schema.clone(),
+                plan.table_meta_timestamps,
             )?,
         }
         Ok(())
