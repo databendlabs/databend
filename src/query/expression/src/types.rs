@@ -76,7 +76,7 @@ pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::property::Domain;
 use crate::values::Column;
-use crate::values::Scalar;
+pub use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
