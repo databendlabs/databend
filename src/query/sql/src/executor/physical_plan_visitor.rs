@@ -130,10 +130,8 @@ pub trait PhysicalPlanReplacer {
     fn replace_hilbert_serialize(&mut self, plan: &HilbertPartition) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
-            plan_id: plan.plan_id,
             input: Box::new(input),
-            table_info: plan.table_info.clone(),
-            num_partitions: plan.num_partitions,
+            ..plan.clone()
         })))
     }
 

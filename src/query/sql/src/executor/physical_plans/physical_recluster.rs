@@ -14,6 +14,7 @@
 
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::PhysicalPlan;
 
@@ -22,6 +23,7 @@ pub struct Recluster {
     pub plan_id: u32,
     pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -30,4 +32,5 @@ pub struct HilbertPartition {
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
     pub num_partitions: usize,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }

@@ -61,6 +61,7 @@ use databend_common_sql::NameResolutionContext;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::TypeChecker;
 use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use derive_visitor::DriveMut;
@@ -418,11 +419,15 @@ impl ReclusterTableInterpreter {
             }));
         }
 
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
         let plan = PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
             plan_id: 0,
             input: plan,
             table_info: table_info.clone(),
             num_partitions: total_partitions,
+            table_meta_timestamps: table_meta_timestamps.clone(),
         }));
         Ok(Some(Self::add_commit_sink(
             plan,
@@ -431,6 +436,7 @@ impl ReclusterTableInterpreter {
             snapshot,
             false,
             Some(recluster_info),
+            table_meta_timestamps,
         )))
     }
 
@@ -449,6 +455,9 @@ impl ReclusterTableInterpreter {
         if parts.is_empty() {
             return Ok(None);
         }
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
 
         let table_info = tbl.get_table_info().clone();
         let is_distributed = parts.is_distributed(self.ctx.clone());
@@ -463,6 +472,7 @@ impl ReclusterTableInterpreter {
                     tasks,
                     table_info: table_info.clone(),
                     plan_id: u32::MAX,
+                    table_meta_timestamps,
                 }));
 
                 Self::add_commit_sink(
@@ -476,6 +486,7 @@ impl ReclusterTableInterpreter {
                         removed_segment_indexes,
                         removed_statistics: removed_segment_summary,
                     }),
+                    table_meta_timestamps,
                 )
             }
             ReclusterParts::Compact(parts) => {
@@ -485,9 +496,18 @@ impl ReclusterTableInterpreter {
                     table_info: table_info.clone(),
                     column_ids: snapshot.schema.to_leaf_column_id_set(),
                     plan_id: u32::MAX,
+                    table_meta_timestamps,
                 }));
 
-                Self::add_commit_sink(root, is_distributed, table_info, snapshot, merge_meta, None)
+                Self::add_commit_sink(
+                    root,
+                    is_distributed,
+                    table_info,
+                    snapshot,
+                    merge_meta,
+                    None,
+                    table_meta_timestamps,
+                )
             }
         };
         Ok(Some(plan))
@@ -642,6 +662,7 @@ impl ReclusterTableInterpreter {
         snapshot: Arc<TableSnapshot>,
         merge_meta: bool,
         recluster_info: Option<ReclusterInfoSideCar>,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> PhysicalPlan {
         let plan = if is_distributed {
             PhysicalPlan::Exchange(Exchange {
@@ -668,6 +689,7 @@ impl ReclusterTableInterpreter {
             commit_type: CommitType::Mutation { kind, merge_meta },
             update_stream_meta: vec![],
             deduplicated_label: None,
+            table_meta_timestamps,
             plan_id: u32::MAX,
             recluster_info,
         }))

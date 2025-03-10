@@ -100,6 +100,7 @@ impl PipelineBuilder {
                     table,
                     ClusterStatsGenerator::default(),
                     MutationKind::Recluster,
+                    partition.table_meta_timestamps,
                 )?;
                 proc.into_processor()
             })
