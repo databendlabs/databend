@@ -1100,24 +1100,6 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes_by_table_id(
-        &self,
-        _req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
     async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
         unimplemented!()
     }

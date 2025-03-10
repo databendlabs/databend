@@ -54,5 +54,38 @@ partsupp
 region
 supplier
 
+## test database
+statement ok
+create database abc;
+
+statement ok
+create database ef123;
+
+statement ok
+create or replace database ef123;
+
+statement ok
+create database if not exists ef123;
+
+query T rowsort
+show databases;
+----
+abc
+ef123
+tpch
+
+statement ok
+drop database if exists ef123;
+
+query T rowsort
+show databases;
+----
+abc
+tpch
+
+statement error
+drop database ef123;
+
+
 statement ok
 drop database default.tpch;
