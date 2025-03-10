@@ -1177,7 +1177,7 @@ impl DefaultSettings {
                     desc: "Sets the minimum byte size of blocks for Hilbert Clustering.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(1..=3200 * 1024 * 1024 * 1024)),
                 }),
                 ("enable_prune_cache", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),

@@ -21,14 +21,9 @@ use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::GenericType;
 use databend_common_expression::types::NullableType;
-use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
-use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
-use databend_common_expression::types::ALL_NUMERICS_TYPES;
-use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
-use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::Column;
 use databend_common_expression::FixedLengthEncoding;
 use databend_common_expression::Function;
@@ -48,8 +43,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         let sig_args_type = (0..args_num / 2)
             .flat_map(|idx| {
                 [
-                    DataType::Generic(idx),
-                    DataType::Array(Box::new(DataType::Generic(idx))),
+                    DataType::Nullable(Box::new(DataType::Generic(idx))),
+                    DataType::Nullable(Box::new(DataType::Array(Box::new(DataType::Generic(idx))))),
                 ]
             })
             .collect();
@@ -73,8 +68,10 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                             let val = unsafe { arg1.index_unchecked(index) };
                             let arr = unsafe { arg2.index_unchecked(index) };
-                            let arr = arr.as_array().unwrap();
-                            let id = calc_range_partition_id(val, arr).min(65535) as u16;
+                            let id = arr
+                                .as_array()
+                                .map(|arr| calc_range_partition_id(val, arr).min(65535) as u16)
+                                .unwrap_or(0);
                             let key = id.encode();
                             points.push(key);
                         }
@@ -96,64 +93,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
-
-    registry.register_passthrough_nullable_1_arg::<StringType, BinaryType, _, _>(
-        "hilbert_key",
-        |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<StringType, BinaryType>(|val, builder, _| {
-            let bytes = val.as_bytes();
-            builder.put_slice(bytes);
-            builder.commit_row();
-        }),
-    );
-
-    for ty in ALL_NUMERICS_TYPES {
-        with_number_mapped_type!(|NUM_TYPE| match ty {
-            NumberDataType::NUM_TYPE => {
-                registry
-                    .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, BinaryType, _, _>(
-                        "hilbert_key",
-                        |_, _| FunctionDomain::Full,
-                        vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, BinaryType>(
-                            |val, builder, _| {
-                                let encoded = val.encode();
-                                builder.put_slice(&encoded);
-                                builder.commit_row();
-                            },
-                        ),
-                    );
-            }
-        })
-    }
-
-    registry.register_combine_nullable_2_arg::<ArrayType<NullableType<BinaryType>>, NumberType<u64>, BinaryType, _, _>(
-        "hilbert_index",
-        |_, _, _| FunctionDomain::Full,
-        vectorize_with_builder_2_arg::<ArrayType<NullableType<BinaryType>>, NumberType<u64>, NullableType<BinaryType>>(
-            |val, len, builder, ctx| {
-                let mut points = Vec::with_capacity(val.len());
-                for a in val.iter() {
-                    if a.is_none() {
-                        builder.push_null();
-                        return;
-                    }
-                    points.push(a.unwrap());
-                }
-                let dimension = points.len();
-
-                if std::intrinsics::unlikely(len > 64) {
-                    ctx.set_error(builder.len(), "Width must be less than or equal to 64");
-                    builder.push_null();
-                } else if std::intrinsics::unlikely(!(2..=5).contains(&dimension)) {
-                    ctx.set_error(builder.len(), "Dimension must between 2 and 5");
-                    builder.push_null();
-                } else {
-                    let slice = hilbert_index(&points, len as usize);
-                    builder.push(&slice);
-                }
-            },
-        ),
-    );
 
     // This `range_partition_id(col, range_bounds)` function calculates the partition ID for each value
     // in the column based on the specified partition boundaries.
