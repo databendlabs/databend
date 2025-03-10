@@ -371,7 +371,7 @@ impl BloomIndex {
 
         visit_expr_column_eq_constant(
             &mut expr,
-            &mut LambdaEqVisitor(|span, col_name, scalar, ty, return_type| {
+            &mut RewriteVisitor(|span, col_name, scalar, ty, return_type| {
                 let filter_column = &Self::build_filter_column_name(
                     self.version,
                     data_schema.field_with_name(col_name)?,
@@ -419,7 +419,7 @@ impl BloomIndex {
         )?;
 
         let (new_expr, _) =
-            ConstantFolder::fold_for_prune(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
         match new_expr {
             Expr::Constant {
@@ -795,10 +795,10 @@ trait EqVisitor {
     }
 }
 
-struct LambdaEqVisitor<F>(F)
+struct RewriteVisitor<F>(F)
 where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>;
 
-impl<F> EqVisitor for LambdaEqVisitor<F>
+impl<F> EqVisitor for RewriteVisitor<F>
 where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>
 {
     fn enter_target(
@@ -811,8 +811,86 @@ where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<
     ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
         match self.0(span, col_name, scalar, ty, return_type)? {
             Some(new) => Ok(ControlFlow::Break(Some(new))),
-            None => Ok(ControlFlow::Continue(None)),
+            None => Ok(ControlFlow::Break(None)),
         }
+    }
+
+    fn enter_cast(
+        &mut self,
+        cast: &Expr<String>,
+        scalar: &Scalar,
+        scalar_type: &DataType,
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+        let Expr::Cast {
+            is_try: false,
+            expr:
+                box Expr::ColumnRef {
+                    id,
+                    data_type: src_type,
+                    ..
+                },
+            dest_type,
+            ..
+        } = cast
+        else {
+            return Ok(ControlFlow::Continue(None));
+        };
+
+        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(&src_type, dest_type) {
+            return Ok(ControlFlow::Break(None));
+        }
+        let Some(s) = reverse_cast(src_type, scalar_type, scalar) else {
+            return Ok(ControlFlow::Break(None));
+        };
+
+        if s.is_null() {
+            Ok(ControlFlow::Break(None))
+        } else {
+            self.enter_target(
+                None,
+                &id,
+                &s,
+                src_type,
+                &if dest_type.is_nullable() {
+                    DataType::Boolean.wrap_nullable()
+                } else {
+                    DataType::Boolean
+                },
+            )
+        }
+    }
+
+    fn enter_function(
+        &mut self,
+        func: &Expr<String>,
+        scalar: &Scalar,
+        scalar_type: &DataType,
+    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+        let Expr::FunctionCall {
+            span,
+            id,
+            args,
+            return_type,
+            ..
+        } = func
+        else {
+            return Ok(ControlFlow::Continue(None));
+        };
+
+        if !id.name().starts_with("to_") || args.len() != 1 {
+            return Ok(ControlFlow::Continue(None));
+        }
+
+        self.enter_cast(
+            &Expr::Cast {
+                span: span.clone(),
+                is_try: false,
+                expr: Box::new(args[0].clone()),
+                dest_type: return_type.clone(),
+            },
+            scalar,
+            scalar_type,
+        )
     }
 }
 
@@ -869,53 +947,64 @@ impl EqVisitor for ShortListVisitor {
         };
 
         let Some(field) = self.found_field(id) else {
-            return Ok(ControlFlow::Continue(None));
+            return Ok(ControlFlow::Break(None));
         };
-        if !is_injective_cast(&src_type, dest_type) {
-            return Ok(ControlFlow::Continue(None));
+        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(&src_type, dest_type) {
+            return Ok(ControlFlow::Break(None));
         }
-        let (_, Some(domain)) = ConstantFolder::<String>::fold(
-            &Expr::Cast {
-                span: None,
-                is_try: false,
-                expr: Box::new(Expr::Constant {
-                    span: None,
-                    scalar: scalar.to_owned(),
-                    data_type: scalar_type.to_owned(),
-                }),
-                dest_type: src_type.to_owned(),
-            },
-            &FunctionContext::default(),
-            &BUILTIN_FUNCTIONS,
-        ) else {
-            return Ok(ControlFlow::Continue(None));
+
+        let Some(s) = reverse_cast(src_type, scalar_type, scalar) else {
+            return Ok(ControlFlow::Break(None));
         };
 
-        let Some(s) = domain.as_singleton() else {
-            return Ok(ControlFlow::Continue(None));
-        };
+        if !s.is_null() {
+            self.founds.push(field.to_owned());
+            self.scalars.push((s, src_type.to_owned()));
+        }
 
-        self.founds.push(field.to_owned());
-        self.scalars.push((s, src_type.to_owned()));
         Ok(ControlFlow::Break(None))
     }
 
     fn enter_function(
         &mut self,
-        _func: &Expr<String>,
-        _scalar: &Scalar,
-        _scalar_type: &DataType,
+        func: &Expr<String>,
+        scalar: &Scalar,
+        scalar_type: &DataType,
     ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
-        Ok(ControlFlow::Continue(None))
+        let Expr::FunctionCall {
+            span,
+            id,
+            args,
+            return_type,
+            ..
+        } = func
+        else {
+            return Ok(ControlFlow::Continue(None));
+        };
+
+        if !id.name().starts_with("to_") || args.len() != 1 {
+            return Ok(ControlFlow::Continue(None));
+        }
+
+        self.enter_cast(
+            &Expr::Cast {
+                span: span.clone(),
+                is_try: false,
+                expr: Box::new(args[0].clone()),
+                dest_type: return_type.clone(),
+            },
+            scalar,
+            scalar_type,
+        )
     }
 }
 
+// Ignore FunctionDomain::MayThrow
 fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
     if src == dest {
         return true;
     }
 
-    // Ignore FunctionDomain::MayThrow
     match (src, dest) {
         (DataType::Boolean, DataType::String | DataType::Number(_) | DataType::Decimal(_)) => true,
 
@@ -941,4 +1030,30 @@ fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
         (DataType::Nullable(src), DataType::Nullable(dest)) => is_injective_cast(src, dest),
         _ => false,
     }
+}
+
+fn reverse_cast(src_type: &DataType, dest_type: &DataType, scalar: &Scalar) -> Option<Scalar> {
+    let (_, Some(domain)) = ConstantFolder::<String>::fold(
+        &Expr::Cast {
+            span: None,
+            is_try: false,
+            expr: Box::new(Expr::Constant {
+                span: None,
+                scalar: scalar.to_owned(),
+                data_type: dest_type.to_owned(),
+            }),
+            dest_type: src_type.to_owned(),
+        },
+        &FunctionContext::default(),
+        &BUILTIN_FUNCTIONS,
+    ) else {
+        return None;
+    };
+
+    domain.as_singleton()
+}
+
+#[test]
+fn test_xxx() {
+    println!("xxx")
 }

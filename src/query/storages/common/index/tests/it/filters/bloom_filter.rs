@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
 
+use databend_common_expression::type_check;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::map::KvColumn;
@@ -42,6 +43,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::Value;
+use databend_common_functions::test_utils::parse_raw_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::filters::BlockFilter as LatestBloom;
 use databend_storages_common_index::filters::Xor8Filter;
@@ -267,6 +269,52 @@ fn test_long_string(file: &mut impl Write) {
     );
 }
 
+// file: &mut impl Write
+#[test]
+fn test_cast() {
+    let mut mint = Mint::new("tests/it/testdata");
+    let file = &mut mint.new_goldenfile("test_bloom_filterxxx.txt").unwrap();
+
+    eval_text(
+        file,
+        "a::string = '5'",
+        &[(
+            "a",
+            TableDataType::Number(NumberDataType::UInt8),
+            UInt8Type::from_data(vec![1, 2]),
+        )],
+        &[0],
+    );
+}
+
+fn eval_text(
+    file: &mut impl Write,
+    text: &str,
+    columns: &[(&str, TableDataType, Column)],
+    cols: &[usize],
+) {
+    let fields: Vec<_> = columns
+        .iter()
+        .map(|(name, data_type, _)| TableField::new(name, data_type.to_owned()))
+        .collect();
+    let schema = Arc::new(TableSchema::new(fields));
+    let bloom_columns = bloom_columns_map(&schema, cols);
+    let block =
+        DataBlock::new_from_columns(columns.iter().map(|(_, _, col)| col.clone()).collect());
+
+    let columns = schema
+        .fields
+        .iter()
+        .map(|f| (f.name.as_str(), f.data_type().into()))
+        .collect::<Vec<(&str, DataType)>>();
+
+    let raw_expr = parse_raw_expr(text, &columns);
+    let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS).unwrap();
+    let expr = expr.project_column_ref(|i| columns[*i].0.to_string());
+
+    eval_index_expr(file, &block, &bloom_columns, schema, expr);
+}
+
 fn eval_index_expr(
     file: &mut impl Write,
     block: &DataBlock,
@@ -297,6 +345,7 @@ fn eval_index_expr(
         }
     }
     let column_stats = StatisticsOfColumns::new();
+    // todo
     let index =
         BloomIndex::try_create(func_ctx, LatestBloom::VERSION, block, bloom_columns.clone())
             .unwrap()

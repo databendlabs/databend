@@ -37,7 +37,8 @@ use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
-use databend_common_functions::BUILTIN_FUNCTIONS;
+
+use crate::BUILTIN_FUNCTIONS;
 
 pub fn parse_raw_expr(text: &str, columns: &[(&str, DataType)]) -> RawExpr {
     let tokens = tokenize_sql(text).unwrap();
@@ -107,7 +108,7 @@ macro_rules! transform_interval_add_sub {
     };
 }
 
-pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
+fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
     match ast {
         AExpr::Literal { span, value } => RawExpr::Constant {
             span,
@@ -631,7 +632,7 @@ fn transform_data_type(target_type: databend_common_ast::ast::TypeName) -> DataT
     }
 }
 
-pub fn transform_literal(lit: ASTLiteral) -> Scalar {
+fn transform_literal(lit: ASTLiteral) -> Scalar {
     let scalar = match lit {
         ASTLiteral::UInt64(u) => Scalar::Number(NumberScalar::UInt64(u)),
         ASTLiteral::Decimal256 {
