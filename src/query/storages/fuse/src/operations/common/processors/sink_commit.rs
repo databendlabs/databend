@@ -117,7 +117,9 @@ where F: SnapshotGenerator + Send + 'static
         deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ProcessorPtr> {
-        let purge = Self::need_purge(table, &snapshot_gen);
+        let purge = Self::need_purge(table, &snapshot_gen)
+            || ctx.get_settings().get_enable_auto_vacuum()?;
+
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
             ctx,
