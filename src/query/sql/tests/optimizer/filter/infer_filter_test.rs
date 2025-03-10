@@ -182,6 +182,27 @@ fn is_boolean_constant(result: &[ScalarExpr], value: bool) -> bool {
     get_bool_value(&result[0]) == Some(value)
 }
 
+// Helper function to count predicates of a specific type
+fn count_predicates(
+    predicates: &[ScalarExpr],
+    func_name: &str,
+    col_index: IndexType,
+    value: Option<i64>,
+) -> usize {
+    predicates
+        .iter()
+        .filter(|expr| {
+            if let ScalarExpr::FunctionCall(func) = expr {
+                func.func_name == func_name
+                    && get_column_index(&func.arguments[0]) == Some(col_index)
+                    && (value.is_none() || get_int_value(&func.arguments[1]) == value)
+            } else {
+                false
+            }
+        })
+        .count()
+}
+
 /// Runs the optimizer with the given predicates and returns the result
 fn run_optimizer(predicates: Vec<ScalarExpr>) -> Result<Vec<ScalarExpr>> {
     let optimizer = InferFilterOptimizer::new(None);
@@ -1515,6 +1536,269 @@ fn test_different_data_types() -> Result<()> {
     // "Should detect contradiction and return false"
     // );
     // }
+
+    Ok(())
+}
+
+#[test]
+fn test_predicate_merging_and_duplication() -> Result<()> {
+    // Setup columns and constants
+    let col_a = create_column_ref(0, "A", DataType::Number(NumberDataType::Int64));
+    let col_b = create_column_ref(1, "B", DataType::Number(NumberDataType::Int64));
+    let const_3 = create_int_constant(3);
+    let const_5 = create_int_constant(5);
+    let const_7 = create_int_constant(7);
+    let const_10 = create_int_constant(10);
+
+    // Case 1: NotEqual with NotEqual (different values) - MergeResult::All
+    // Derivation: A != 3 AND A != 7 => A != 3 AND A != 7
+    // Explanation: Two inequalities with different values, both should be preserved without duplication
+    {
+        let pred_a_ne_3 =
+            create_comparison(col_a.clone(), const_3.clone(), ComparisonOp::NotEqual)?;
+        let pred_a_ne_7 =
+            create_comparison(col_a.clone(), const_7.clone(), ComparisonOp::NotEqual)?;
+
+        let result = run_optimizer(vec![pred_a_ne_3, pred_a_ne_7])?;
+
+        // Check that we have exactly two predicates
+        assert_eq!(
+            result.len(),
+            2,
+            "Case 1: Should have exactly two predicates"
+        );
+
+        // Count occurrences of each predicate to ensure no duplicates
+        let ne_3_count = count_predicates(&result, "noteq", 0, Some(3));
+        let ne_7_count = count_predicates(&result, "noteq", 0, Some(7));
+
+        assert_eq!(
+            ne_3_count, 1,
+            "Case 1: Should have exactly one A != 3 predicate"
+        );
+        assert_eq!(
+            ne_7_count, 1,
+            "Case 1: Should have exactly one A != 7 predicate"
+        );
+    }
+
+    // Case 2: NotEqual with LT (X < Y) - MergeResult::All
+    // Derivation: A != 3 AND A < 7 => A != 3 AND A < 7
+    // Explanation: Inequality and less-than cannot be merged (since 3 < 7), both should be preserved
+    {
+        let pred_a_ne_3 =
+            create_comparison(col_a.clone(), const_3.clone(), ComparisonOp::NotEqual)?;
+        let pred_a_lt_7 = create_comparison(col_a.clone(), const_7.clone(), ComparisonOp::LT)?;
+
+        let result = run_optimizer(vec![pred_a_ne_3, pred_a_lt_7])?;
+
+        // Check that we have exactly two predicates
+        assert_eq!(
+            result.len(),
+            2,
+            "Case 2: Should have exactly two predicates"
+        );
+
+        // Count occurrences of each predicate
+        let ne_3_count = count_predicates(&result, "noteq", 0, Some(3));
+        let lt_7_count = count_predicates(&result, "lt", 0, Some(7));
+
+        assert_eq!(
+            ne_3_count, 1,
+            "Case 2: Should have exactly one A != 3 predicate"
+        );
+        assert_eq!(
+            lt_7_count, 1,
+            "Case 2: Should have exactly one A < 7 predicate"
+        );
+    }
+
+    // Case 3: LT with GT (X > Y) - MergeResult::All (range)
+    // Derivation: A < 10 AND A > 3 => 3 < A < 10
+    // Explanation: This forms a range, both predicates should be preserved to represent this range
+    {
+        let pred_a_lt_10 = create_comparison(col_a.clone(), const_10.clone(), ComparisonOp::LT)?;
+        let pred_a_gt_3 = create_comparison(col_a.clone(), const_3.clone(), ComparisonOp::GT)?;
+
+        let result = run_optimizer(vec![pred_a_lt_10, pred_a_gt_3])?;
+
+        // Check that we have exactly two predicates (range: 3 < A < 10)
+        assert_eq!(
+            result.len(),
+            2,
+            "Case 3: Should have exactly two predicates for range"
+        );
+
+        // Count occurrences of each predicate
+        let lt_10_count = count_predicates(&result, "lt", 0, Some(10));
+        let gt_3_count = count_predicates(&result, "gt", 0, Some(3));
+
+        assert_eq!(
+            lt_10_count, 1,
+            "Case 3: Should have exactly one A < 10 predicate"
+        );
+        assert_eq!(
+            gt_3_count, 1,
+            "Case 3: Should have exactly one A > 3 predicate"
+        );
+    }
+
+    // Case 4: Multiple predicates on different columns - should all be preserved
+    // Derivation: A != 3 AND A < 10 AND B > 5 AND B != 7 => keep all predicates
+    // Explanation: Predicates involve different columns, all should be preserved
+    {
+        let pred_a_ne_3 =
+            create_comparison(col_a.clone(), const_3.clone(), ComparisonOp::NotEqual)?;
+        let pred_a_lt_10 = create_comparison(col_a.clone(), const_10.clone(), ComparisonOp::LT)?;
+        let pred_b_gt_5 = create_comparison(col_b.clone(), const_5.clone(), ComparisonOp::GT)?;
+        let pred_b_ne_7 =
+            create_comparison(col_b.clone(), const_7.clone(), ComparisonOp::NotEqual)?;
+
+        let result = run_optimizer(vec![pred_a_ne_3, pred_a_lt_10, pred_b_gt_5, pred_b_ne_7])?;
+
+        // Check that we have the right number of predicates
+        // Note: The optimizer might simplify some predicates, so we check for specific predicates
+        assert!(
+            result.len() >= 4,
+            "Case 4: Should have at least 4 predicates"
+        );
+
+        // Verify each predicate appears exactly once
+        let ne_3_count = count_predicates(&result, "noteq", 0, Some(3));
+        let lt_10_count = count_predicates(&result, "lt", 0, Some(10));
+        let gt_5_count = count_predicates(&result, "gt", 1, Some(5));
+        let ne_7_count = count_predicates(&result, "noteq", 1, Some(7));
+
+        assert_eq!(
+            ne_3_count, 1,
+            "Case 4: Should have exactly one A != 3 predicate"
+        );
+        assert_eq!(
+            lt_10_count, 1,
+            "Case 4: Should have exactly one A < 10 predicate"
+        );
+        assert_eq!(
+            gt_5_count, 1,
+            "Case 4: Should have exactly one B > 5 predicate"
+        );
+        assert_eq!(
+            ne_7_count, 1,
+            "Case 4: Should have exactly one B != 7 predicate"
+        );
+    }
+
+    // Case 5: Edge case - NotEqual with LTE (X = Y) - should convert to LT
+    // Derivation: A != 5 AND A <= 5 => A < 5
+    // Explanation: If A is not equal to 5 and A is less than or equal to 5, then A must be less than 5
+    {
+        let pred_a_ne_5 =
+            create_comparison(col_a.clone(), const_5.clone(), ComparisonOp::NotEqual)?;
+        let pred_a_lte_5 = create_comparison(col_a.clone(), const_5.clone(), ComparisonOp::LTE)?;
+
+        let result = run_optimizer(vec![pred_a_ne_5, pred_a_lte_5])?;
+
+        // Should simplify to A < 5
+        assert_eq!(result.len(), 1, "Case 5: Should simplify to one predicate");
+
+        // Verify it's A < 5, not A <= 5
+        let lt_5_count = count_predicates(&result, "lt", 0, Some(5));
+        let lte_5_count = count_predicates(&result, "lte", 0, Some(5));
+
+        assert_eq!(
+            lt_5_count, 1,
+            "Case 5: Should have exactly one A < 5 predicate"
+        );
+        assert_eq!(lte_5_count, 0, "Case 5: Should not have A <= 5 predicate");
+    }
+
+    // Case 6: Edge case - GTE with LTE (X = Y) - should convert to Equal
+    // Derivation: A >= 5 AND A <= 5 => A = 5
+    // Explanation: If A is greater than or equal to 5 and A is less than or equal to 5, then A must equal 5
+    {
+        let pred_a_gte_5 = create_comparison(col_a.clone(), const_5.clone(), ComparisonOp::GTE)?;
+        let pred_a_lte_5 = create_comparison(col_a.clone(), const_5.clone(), ComparisonOp::LTE)?;
+
+        let result = run_optimizer(vec![pred_a_gte_5, pred_a_lte_5])?;
+
+        // Should simplify to A = 5
+        assert_eq!(result.len(), 1, "Case 6: Should simplify to one predicate");
+
+        // Verify it's A = 5, not A >= 5 or A <= 5
+        let eq_5_count = count_predicates(&result, "eq", 0, Some(5));
+        let gte_5_count = count_predicates(&result, "gte", 0, Some(5));
+        let lte_5_count = count_predicates(&result, "lte", 0, Some(5));
+
+        assert_eq!(
+            eq_5_count, 1,
+            "Case 6: Should have exactly one A = 5 predicate"
+        );
+        assert_eq!(gte_5_count, 0, "Case 6: Should not have A >= 5 predicate");
+        assert_eq!(lte_5_count, 0, "Case 6: Should not have A <= 5 predicate");
+    }
+
+    // Case 7: Complex case - multiple predicates that should be merged and simplified
+    // Derivation: A > 3 AND A < 10 AND A != 5 AND A != 7 => 3 < A < 10 AND A != 5 AND A != 7
+    // Explanation: These predicates together define a range with specific values excluded
+    {
+        let pred_a_gt_3 = create_comparison(col_a.clone(), const_3.clone(), ComparisonOp::GT)?;
+        let pred_a_lt_10 = create_comparison(col_a.clone(), const_10.clone(), ComparisonOp::LT)?;
+        let pred_a_ne_5 =
+            create_comparison(col_a.clone(), const_5.clone(), ComparisonOp::NotEqual)?;
+        let pred_a_ne_7 =
+            create_comparison(col_a.clone(), const_7.clone(), ComparisonOp::NotEqual)?;
+
+        let result = run_optimizer(vec![pred_a_gt_3, pred_a_lt_10, pred_a_ne_5, pred_a_ne_7])?;
+
+        // Should keep all predicates (3 < A < 10, A != 5, A != 7)
+        assert_eq!(result.len(), 4, "Case 7: Should have 4 predicates");
+
+        // Verify each predicate appears exactly once
+        let gt_3_count = count_predicates(&result, "gt", 0, Some(3));
+        let lt_10_count = count_predicates(&result, "lt", 0, Some(10));
+        let ne_5_count = count_predicates(&result, "noteq", 0, Some(5));
+        let ne_7_count = count_predicates(&result, "noteq", 0, Some(7));
+
+        assert_eq!(
+            gt_3_count, 1,
+            "Case 7: Should have exactly one A > 3 predicate"
+        );
+        assert_eq!(
+            lt_10_count, 1,
+            "Case 7: Should have exactly one A < 10 predicate"
+        );
+        assert_eq!(
+            ne_5_count, 1,
+            "Case 7: Should have exactly one A != 5 predicate"
+        );
+        assert_eq!(
+            ne_7_count, 1,
+            "Case 7: Should have exactly one A != 7 predicate"
+        );
+    }
+
+    // Case 8: NotEqual with GTE (X = Y) - should convert to GT
+    // Derivation: A != 5 AND A >= 5 => A > 5
+    // Explanation: If A is not equal to 5 and A is greater than or equal to 5, then A must be greater than 5
+    {
+        let pred_a_ne_5 =
+            create_comparison(col_a.clone(), const_5.clone(), ComparisonOp::NotEqual)?;
+        let pred_a_gte_5 = create_comparison(col_a.clone(), const_5.clone(), ComparisonOp::GTE)?;
+
+        let result = run_optimizer(vec![pred_a_ne_5, pred_a_gte_5])?;
+
+        // Should simplify to A > 5
+        assert_eq!(result.len(), 1, "Case 8: Should simplify to one predicate");
+
+        // Verify it's A > 5, not A >= 5
+        let gt_5_count = count_predicates(&result, "gt", 0, Some(5));
+        let gte_5_count = count_predicates(&result, "gte", 0, Some(5));
+
+        assert_eq!(
+            gt_5_count, 1,
+            "Case 8: Should have exactly one A > 5 predicate"
+        );
+        assert_eq!(gte_5_count, 0, "Case 8: Should not have A >= 5 predicate");
+    }
 
     Ok(())
 }

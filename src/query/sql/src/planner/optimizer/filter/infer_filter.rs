@@ -227,7 +227,6 @@ impl<'a> InferFilterOptimizer<'a> {
         Ok(())
     }
 
-   
     fn merge_predicate(
         mut left: Predicate,
         mut right: Predicate,
