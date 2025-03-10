@@ -338,11 +338,30 @@ impl BloomIndex {
     #[fastrace::trace]
     pub fn apply(
         &self,
-        mut expr: Expr<String>,
+        expr: Expr<String>,
         scalar_map: &HashMap<Scalar, u64>,
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
     ) -> Result<FilterEvalResult> {
+        let (expr, domains) = self.rewrite_expr(expr, scalar_map, column_stats, data_schema)?;
+        match ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+        {
+            Expr::Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            } => Ok(FilterEvalResult::MustFalse),
+            _ => Ok(FilterEvalResult::Uncertain),
+        }
+    }
+
+    pub fn rewrite_expr(
+        &self,
+        mut expr: Expr<String>,
+        scalar_map: &HashMap<Scalar, u64>,
+        column_stats: &StatisticsOfColumns,
+        data_schema: TableSchemaRef,
+    ) -> Result<(Expr<String>, HashMap<String, Domain>)> {
         let mut new_col_id = 1;
         let mut domains = expr
             .column_refs()
@@ -418,16 +437,7 @@ impl BloomIndex {
             }),
         )?;
 
-        let (new_expr, _) =
-            ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-        match new_expr {
-            Expr::Constant {
-                scalar: Scalar::Boolean(false),
-                ..
-            } => Ok(FilterEvalResult::MustFalse),
-            _ => Ok(FilterEvalResult::Uncertain),
-        }
+        Ok((expr, domains))
     }
 
     /// calculate digest for column

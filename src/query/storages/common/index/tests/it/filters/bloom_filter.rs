@@ -48,6 +48,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::filters::BlockFilter as LatestBloom;
 use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndex;
+use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
@@ -61,6 +62,7 @@ fn test_bloom_filter() {
     test_base(file);
     test_specify(file);
     test_long_string(file);
+    test_cast(file);
 }
 
 fn test_base(file: &mut impl Write) {
@@ -269,12 +271,7 @@ fn test_long_string(file: &mut impl Write) {
     );
 }
 
-// file: &mut impl Write
-#[test]
-fn test_cast() {
-    let mut mint = Mint::new("tests/it/testdata");
-    let file = &mut mint.new_goldenfile("test_bloom_filterxxx.txt").unwrap();
-
+fn test_cast(file: &mut impl Write) {
     eval_text(
         file,
         "a::string = '5'",
@@ -346,14 +343,30 @@ fn eval_index_expr(
     }
     let column_stats = StatisticsOfColumns::new();
     // todo
-    let index =
-        BloomIndex::try_create(func_ctx, LatestBloom::VERSION, block, bloom_columns.clone())
-            .unwrap()
-            .unwrap();
+    let index = BloomIndex::try_create(
+        func_ctx.clone(),
+        LatestBloom::VERSION,
+        block,
+        bloom_columns.clone(),
+    )
+    .unwrap()
+    .unwrap();
 
-    let result = index
-        .apply(expr, &scalar_map, &column_stats, schema)
+    let (expr, domains) = index
+        .rewrite_expr(expr, &scalar_map, &column_stats, schema)
         .unwrap();
+
+    writeln!(file, "filter   : {expr}").unwrap();
+    writeln!(file, "domains  : {domains:?}").unwrap();
+
+    let result =
+        match ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0 {
+            Expr::Constant {
+                scalar: Scalar::Boolean(false),
+                ..
+            } => FilterEvalResult::MustFalse,
+            _ => FilterEvalResult::Uncertain,
+        };
 
     writeln!(file, "result   : {result:?}").unwrap();
     write!(file, "\n\n").unwrap();
