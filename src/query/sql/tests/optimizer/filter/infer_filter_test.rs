@@ -1381,13 +1381,13 @@ fn test_transitivity_and_constant_propagation() -> Result<()> {
 }
 
 // ===== Test Cases for Different Data Types =====
-
 #[test]
 fn test_different_data_types() -> Result<()> {
     // Test with different data types
     let col_int8 = create_column_ref(0, "int8", DataType::Number(NumberDataType::Int8));
     let col_uint8 = create_column_ref(1, "uint8", DataType::Number(NumberDataType::UInt8));
     let col_float = create_column_ref(2, "float", DataType::Number(NumberDataType::Float64));
+    let _col_a = create_column_ref(3, "A", DataType::Number(NumberDataType::Int64));
 
     // Test: int8 column with values at type boundaries
     {
@@ -1444,6 +1444,77 @@ fn test_different_data_types() -> Result<()> {
             "Should infer float = 5.0 predicate"
         );
     }
+
+    // Different data type not work yet, need fix.
+    // Test: mixing integer and float types
+    // {
+    // let const_5_int = create_int_constant(5);
+    // let const_5_float = create_float_constant(5.0);
+    //
+    // Test: A > 5 AND A > 5.0 => A > 5 (or A > 5.0, depending on type conversion)
+    // let pred_gt_5_int = create_comparison(col_a.clone(), const_5_int.clone(), ComparisonOp::GT)?;
+    // let pred_gt_5_float = create_comparison(col_a.clone(), const_5_float.clone(), ComparisonOp::GT)?;
+    //
+    // let result = run_optimizer(vec![pred_gt_5_int, pred_gt_5_float])?;
+    //
+    // assert_eq!(result.len(), 1, "Should simplify to one predicate");
+    // assert!(
+    // get_function_name(&result[0]) == Some("gt"),
+    // "Function should be gt (greater than)"
+    // );
+    // }
+    //
+    // Test: mixing integer and float types with different values
+    // {
+    // let const_5_int = create_int_constant(5);
+    // let const_7_float = create_float_constant(7.0);
+    //
+    // Test: A > 5 AND A > 7.0 => A > 7.0
+    // let pred_gt_5_int = create_comparison(col_a.clone(), const_5_int.clone(), ComparisonOp::GT)?;
+    // let pred_gt_7_float = create_comparison(col_a.clone(), const_7_float.clone(), ComparisonOp::GT)?;
+    //
+    // let result = run_optimizer(vec![pred_gt_5_int, pred_gt_7_float])?;
+    //
+    // assert_eq!(result.len(), 1, "Should simplify to one predicate");
+    // assert!(
+    // get_function_name(&result[0]) == Some("gt"),
+    // "Function should be gt (greater than)"
+    // );
+    //
+    // The value should be the larger one (7.0)
+    // if let ScalarExpr::FunctionCall(func) = &result[0] {
+    // if let ScalarExpr::ConstantExpr(constant) = &func.arguments[1] {
+    // if let Scalar::Number(NumberScalar::Float64(value)) = &constant.value {
+    // assert_eq!(value.0, 7.0, "Value should be 7.0");
+    // } else if let Scalar::Number(NumberScalar::Int64(value)) = &constant.value {
+    // assert_eq!(*value, 7, "Value should be 7");
+    // } else {
+    // panic!("Unexpected constant type");
+    // }
+    // } else {
+    // panic!("Expected constant expression");
+    // }
+    // } else {
+    // panic!("Expected function call");
+    // }
+    // }
+    //
+    // Test: mixing integer and float types with contradictions
+    // {
+    // let const_5_int = create_int_constant(5);
+    // let const_3_float = create_float_constant(3.0);
+    //
+    // Test: A < 3.0 AND A >= 5 => false (contradiction)
+    // let pred_lt_3_float = create_comparison(col_a.clone(), const_3_float.clone(), ComparisonOp::LT)?;
+    // let pred_gte_5_int = create_comparison(col_a.clone(), const_5_int.clone(), ComparisonOp::GTE)?;
+    //
+    // let result = run_optimizer(vec![pred_lt_3_float, pred_gte_5_int])?;
+    //
+    // assert!(
+    // is_boolean_constant(&result, false),
+    // "Should detect contradiction and return false"
+    // );
+    // }
 
     Ok(())
 }
