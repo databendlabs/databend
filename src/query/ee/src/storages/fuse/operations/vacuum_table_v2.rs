@@ -45,6 +45,7 @@ use log::info;
 use opendal::Entry;
 use opendal::ErrorKind;
 use opendal::Operator;
+use opendal::Scheme;
 use uuid::Version;
 
 /// An assumption of the maximum duration from the time the first block is written to the time the
@@ -383,7 +384,27 @@ async fn list_until_prefix(
     gc_root_meta_ts: Option<DateTime<Utc>>,
 ) -> Result<Vec<Entry>> {
     info!("list until prefix: {}", until);
-    let mut lister = fuse_table.get_operator().lister(path).await?;
+    let dal = fuse_table.get_operator_ref();
+
+    match dal.info().scheme() {
+        Scheme::Fs => fs_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
+        _ => general_list_until_prefix(dal, path, until, need_one_more, gc_root_meta_ts).await,
+    }
+}
+
+/// Object storage supported by Databend is expected to return entries sorted in ascending lexicographical
+/// order by object key. Databend leverages this property to enhance the efficiency and thoroughness
+/// of the vacuum process.
+///
+/// The safety of the vacuum algorithm does not depend on this ordering.
+async fn general_list_until_prefix(
+    dal: &Operator,
+    path: &str,
+    until: &str,
+    need_one_more: bool,
+    gc_root_meta_ts: Option<DateTime<Utc>>,
+) -> Result<Vec<Entry>> {
+    let mut lister = dal.lister(path).await?;
     let mut paths = vec![];
     while let Some(entry) = lister.try_next().await? {
         if entry.metadata().is_dir() {
@@ -397,17 +418,52 @@ async fn list_until_prefix(
             break;
         }
         if gc_root_meta_ts.is_none()
-            || is_gc_candidate_segment_block(
-                &entry,
-                &fuse_table.get_operator(),
-                gc_root_meta_ts.unwrap(),
-            )
-            .await?
+            || is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts.unwrap()).await?
         {
             paths.push(entry);
         }
     }
     Ok(paths)
+}
+
+/// If storage is backed by FS, we prioritize thoroughness over efficiency (though efficiency loss
+/// is usually no significant). All entries are fetched and sorted before extracting the prefix entries.
+async fn fs_list_until_prefix(
+    dal: &Operator,
+    path: &str,
+    until: &str,
+    need_one_more: bool,
+    gc_root_meta_ts: Option<DateTime<Utc>>,
+) -> Result<Vec<Entry>> {
+    // Fetch ALL entries from the path and sort them by path in lexicographical order.
+    let lister = dal.blocking().lister(path)?;
+    let mut entries = Vec::new();
+    for item in lister {
+        let entry = item?;
+        if entry.metadata().is_file() {
+            entries.push(entry);
+        }
+    }
+    entries.sort_by(|l, r| l.path().cmp(r.path()));
+
+    // Extract entries up to the `until` path, respecting lexicographical order.
+    let mut res = Vec::new();
+    for entry in entries {
+        if entry.path() >= until {
+            info!("entry path: {} >= until: {}", entry.path(), until);
+            if need_one_more {
+                res.push(entry);
+            }
+            break;
+        }
+        if gc_root_meta_ts.is_none()
+            || is_gc_candidate_segment_block(&entry, dal, gc_root_meta_ts.unwrap()).await?
+        {
+            res.push(entry);
+        }
+    }
+
+    Ok(res)
 }
 
 async fn is_gc_candidate_segment_block(
