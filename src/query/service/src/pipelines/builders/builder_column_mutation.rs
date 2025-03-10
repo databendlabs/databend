@@ -65,6 +65,7 @@ impl PipelineBuilder {
                 table,
                 cluster_stats_gen.clone(),
                 column_mutation.mutation_kind,
+                column_mutation.table_meta_timestamps,
             )?;
             proc.into_processor()
         })?;
