@@ -847,7 +847,6 @@ impl<'a> JoinProperty<'a> {
 }
 
 pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr) {
-    print!("{}", data_type);
     match data_type {
         DataType::Number(NumberDataType::UInt8)
         | DataType::Nullable(box DataType::Number(NumberDataType::UInt8)) => {
