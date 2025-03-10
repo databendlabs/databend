@@ -287,7 +287,7 @@ explain select * from t1 where a != 1 and a <= 1;
 ----
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1)]
-├── filters: [t1.a (#0) <> 1, t1.a (#0) <= 1]
+├── filters: [t1.a (#0) < 1]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
@@ -296,7 +296,7 @@ Filter
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) <= 1)], limit: NONE]
+    ├── push downs: [filters: [t1.a (#0) < 1], limit: NONE]
     └── estimated rows: 0.00
 
 # a != 1 and a <= 2
@@ -359,7 +359,7 @@ explain select * from t1 where a != 1 and a >= 1;
 ----
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1)]
-├── filters: [t1.a (#0) <> 1, t1.a (#0) >= 1]
+├── filters: [t1.a (#0) > 1]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
@@ -368,7 +368,7 @@ Filter
     ├── read size: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) >= 1)], limit: NONE]
+    ├── push downs: [filters: [t1.a (#0) > 1], limit: NONE]
     └── estimated rows: 0.00
 
 # a != 1 and a >= 0
