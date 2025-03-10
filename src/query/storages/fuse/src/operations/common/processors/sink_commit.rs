@@ -115,7 +115,7 @@ where F: SnapshotGenerator + Send + 'static
         deduplicated_label: Option<String>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<ProcessorPtr> {
-        let purge = Self::do_purge(table, &snapshot_gen);
+        let purge = Self::need_purge(table, &snapshot_gen);
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
             ctx,
@@ -187,7 +187,7 @@ where F: SnapshotGenerator + Send + 'static
         Ok(Event::Async)
     }
 
-    fn do_purge(table: &FuseTable, snapshot_gen: &F) -> bool {
+    fn need_purge(table: &FuseTable, snapshot_gen: &F) -> bool {
         if table.is_transient() {
             return true;
         }

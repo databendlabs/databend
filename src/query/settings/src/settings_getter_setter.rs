@@ -912,4 +912,8 @@ impl Settings {
     pub fn get_force_aggregate_data_spill(&self) -> Result<bool> {
         Ok(self.try_get_u64("force_aggregate_data_spill")? == 1)
     }
+
+    pub fn get_enable_auto_vacuum(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_vacuum")? == 1)
+    }
 }
