@@ -34,7 +34,7 @@ impl KeywordsTable {
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query);
         let table_info = TableInfo {
-            desc: "'information_schema'.'keywords'".to_string(),
+            desc: "'default'.'information_schema'.'keywords'".to_string(),
             name: "keywords".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

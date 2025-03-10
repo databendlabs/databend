@@ -177,7 +177,7 @@ pub async fn do_gc_orphan_files(
     let location_gen = fuse_table.meta_location_generator();
     let segment_locations_to_be_purged = get_orphan_files_to_be_purged(
         fuse_table,
-        location_gen.segment_info_prefix(),
+        location_gen.segment_location_prefix(),
         referenced_files.segments,
         retention_time,
     )
@@ -298,7 +298,7 @@ pub async fn do_dry_run_orphan_files(
     // 2. Get purge orphan segment files.
     let segment_locations_to_be_purged = get_orphan_files_to_be_purged(
         fuse_table,
-        location_gen.segment_info_prefix(),
+        location_gen.segment_location_prefix(),
         referenced_files.segments,
         retention_time,
     )
