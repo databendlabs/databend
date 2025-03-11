@@ -839,7 +839,7 @@ select cluster_key, type, average_overlaps, average_depth from clustering_inform
 (abs(a)) linear 0.0 1.0
 
 statement ok
-create table t16(a int, b int) file_size = 500;
+create table t16(a int, b int) file_size = 100;
 
 statement ok
 insert into t16 values(1, 1), (3, 3);
