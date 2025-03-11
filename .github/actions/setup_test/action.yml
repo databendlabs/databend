@@ -30,6 +30,7 @@ runs:
         path: ${{ inputs.path }}
 
     - name: Set pip index
+      shell: bash
       run: echo "PIP_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" >> $GITHUB_ENV
 
     - uses: actions/setup-python@v5
