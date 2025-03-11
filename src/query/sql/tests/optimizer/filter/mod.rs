@@ -12,4 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod deduplicate_join_condition_test;
 mod infer_filter_test;

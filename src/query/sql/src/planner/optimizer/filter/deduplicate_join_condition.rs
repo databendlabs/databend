@@ -41,6 +41,12 @@ pub struct DeduplicateJoinConditionOptimizer {
     pub num_scalar_expr: usize,
 }
 
+impl Default for DeduplicateJoinConditionOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DeduplicateJoinConditionOptimizer {
     pub fn new() -> Self {
         DeduplicateJoinConditionOptimizer {
