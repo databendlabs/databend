@@ -146,6 +146,25 @@ fn new_table_meta() -> mt::TableMeta {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
         field_comments: vec!["c".to_string(); 21],
+        virtual_schema: Some(ce::VirtualDataSchema {
+            fields: vec![ce::VirtualDataField {
+                name: "field_0".to_string(),
+                data_types: vec![
+                    ce::VariantType::Jsonb,
+                    ce::VariantType::Boolean,
+                    ce::VariantType::UInt64,
+                    ce::VariantType::Int64,
+                    ce::VariantType::Float64,
+                    ce::VariantType::String,
+                    ce::VariantType::Array(Box::new(ce::VariantType::Jsonb)),
+                ],
+                source_column_id: 1,
+                column_id: 0,
+            }],
+            metadata: btreemap! {s("a") => s("b")},
+            next_column_id: ce::VIRTUAL_COLUMN_ID_START,
+            number_of_blocks: 10,
+        }),
         drop_on: None,
         statistics: Default::default(),
         shared_by: btreeset! {1},
@@ -257,6 +276,45 @@ fn new_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
             },
         )),
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+    }
+}
+
+fn new_virtual_data_schema() -> ce::VirtualDataSchema {
+    ce::VirtualDataSchema {
+        fields: vec![ce::VirtualDataField {
+            name: "field_0".to_string(),
+            data_types: vec![
+                ce::VariantType::Jsonb,
+                ce::VariantType::Boolean,
+                ce::VariantType::UInt64,
+                ce::VariantType::Int64,
+                ce::VariantType::Float64,
+                ce::VariantType::String,
+                ce::VariantType::Array(Box::new(ce::VariantType::Jsonb)),
+            ],
+            source_column_id: 1,
+            column_id: ce::VIRTUAL_COLUMN_ID_START,
+        }],
+        metadata: Default::default(),
+        next_column_id: ce::VIRTUAL_COLUMN_ID_START + 1,
+        number_of_blocks: 9,
+    }
+}
+
+fn new_virtual_data_field() -> ce::VirtualDataField {
+    ce::VirtualDataField {
+        name: "field_0".to_string(),
+        data_types: vec![
+            ce::VariantType::Jsonb,
+            ce::VariantType::Boolean,
+            ce::VariantType::UInt64,
+            ce::VariantType::Int64,
+            ce::VariantType::Float64,
+            ce::VariantType::String,
+            ce::VariantType::Array(Box::new(ce::VariantType::Jsonb)),
+        ],
+        source_column_id: 1,
+        column_id: ce::VIRTUAL_COLUMN_ID_START,
     }
 }
 
@@ -457,6 +515,26 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("sequence:{:?}", buf);
+    }
+
+    // virtual data schema
+    {
+        let virtual_data_schema = new_virtual_data_schema();
+        let p = virtual_data_schema.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("virtual data schema:{:?}", buf);
+    }
+
+    // virtual data field
+    {
+        let virtual_data_field = new_virtual_data_field();
+        let p = virtual_data_field.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("virtual data field:{:?}", buf);
     }
 
     Ok(())

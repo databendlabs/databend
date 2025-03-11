@@ -187,9 +187,10 @@ impl FromToProto for mt::TableMeta {
         let schema = p
             .schema
             .ok_or_else(|| Incompatible::new("TableMeta.schema can not be None".to_string()))?;
-        let virtual_schema = p.virtual_schema.ok_or_else(|| {
-            Incompatible::new("TableMeta.virtual_schema can not be None".to_string())
-        })?;
+        let virtual_schema = p
+            .virtual_schema
+            .map(|schema| VirtualDataSchema::from_pb(schema))
+            .transpose()?;
 
         let mut indexes = BTreeMap::new();
         for (name, index) in p.indexes {
@@ -236,7 +237,7 @@ impl FromToProto for mt::TableMeta {
                 Some(p.column_mask_policy)
             },
             indexes,
-            virtual_schema: VirtualDataSchema::from_pb(virtual_schema)?,
+            virtual_schema,
         };
         Ok(v)
     }
@@ -278,7 +279,11 @@ impl FromToProto for mt::TableMeta {
             shared_by: Vec::from_iter(self.shared_by.clone()),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
             indexes,
-            virtual_schema: Some(self.virtual_schema.to_pb()?),
+            virtual_schema: self
+                .virtual_schema
+                .as_ref()
+                .map(VirtualDataSchema::to_pb)
+                .transpose()?,
         };
         Ok(p)
     }

@@ -523,6 +523,19 @@ impl UnknownTableId {
     }
 }
 
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[error("VirtualColumnTooMany: the number of virtual columns in `{table_id}` exceeds `{limit}`")]
+pub struct VirtualColumnTooMany {
+    table_id: u64,
+    limit: usize,
+}
+
+impl VirtualColumnTooMany {
+    pub fn new(table_id: u64, limit: usize) -> VirtualColumnTooMany {
+        Self { table_id, limit }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("ShareAlreadyExists: {share_name} while {context}")]
 pub struct ShareAlreadyExists {
@@ -1066,6 +1079,9 @@ pub enum AppError {
     VirtualColumnAlreadyExists(#[from] ExistError<virtual_column_ident::Resource, u64>),
 
     #[error(transparent)]
+    VirtualColumnTooMany(#[from] VirtualColumnTooMany),
+
+    #[error(transparent)]
     StreamAlreadyExists(#[from] StreamAlreadyExists),
 
     #[error(transparent)]
@@ -1479,6 +1495,8 @@ impl AppErrorMessage for SequenceError {
     }
 }
 
+impl AppErrorMessage for VirtualColumnTooMany {}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1597,6 +1615,7 @@ impl From<AppError> for ErrorCode {
             AppError::ProcedureAlreadyExists(err) => {
                 ErrorCode::ProcedureAlreadyExists(err.message())
             }
+            AppError::VirtualColumnTooMany(err) => ErrorCode::VirtualColumnTooMany(err.message()),
         }
     }
 }
