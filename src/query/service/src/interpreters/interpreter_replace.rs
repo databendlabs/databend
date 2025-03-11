@@ -173,6 +173,10 @@ impl ReplaceInterpreter {
         let table_info = fuse_table.get_table_info();
         let base_snapshot = fuse_table.read_table_snapshot().await?;
 
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
+
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
         let is_distributed = is_multi_node
@@ -340,6 +344,7 @@ impl ReplaceInterpreter {
             block_slots: None,
             need_insert: true,
             plan_id: u32::MAX,
+            table_meta_timestamps,
         })));
 
         if is_distributed {
@@ -364,6 +369,7 @@ impl ReplaceInterpreter {
             update_stream_meta: update_stream_meta.clone(),
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            table_meta_timestamps,
             recluster_info: None,
         })));
         root.adjust_plan_id(&mut 0);

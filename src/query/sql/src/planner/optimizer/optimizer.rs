@@ -47,6 +47,7 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::planner::query_executor::QueryExecutor;
+use crate::plans::ConstantTableScan;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -558,20 +559,28 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     if !mutation.matched_evaluators.is_empty() {
         match inner_rel_op {
             RelOp::ConstantTableScan => {
-                mutation.no_effect = true;
+                let constant_table_scan = ConstantTableScan::try_from(input_s_expr.plan().clone())?;
+                if constant_table_scan.num_rows == 0 {
+                    mutation.no_effect = true;
+                }
             }
             RelOp::Join => {
-                let right_child = input_s_expr.child(1)?;
+                let mut right_child = input_s_expr.child(1)?;
                 let mut right_child_rel = right_child.plan.rel_op();
                 if right_child_rel == RelOp::Exchange {
                     right_child_rel = right_child.child(0)?.plan.rel_op();
+                    right_child = right_child.child(0)?;
                 }
                 if right_child_rel == RelOp::ConstantTableScan {
-                    mutation.matched_evaluators = vec![MatchedEvaluator {
-                        condition: None,
-                        update: None,
-                    }];
-                    mutation.can_try_update_column_only = false;
+                    let constant_table_scan =
+                        ConstantTableScan::try_from(right_child.plan().clone())?;
+                    if constant_table_scan.num_rows == 0 {
+                        mutation.matched_evaluators = vec![MatchedEvaluator {
+                            condition: None,
+                            update: None,
+                        }];
+                        mutation.can_try_update_column_only = false;
+                    }
                 }
             }
             _ => (),

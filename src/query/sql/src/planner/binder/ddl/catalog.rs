@@ -59,7 +59,13 @@ impl Binder {
     ) -> Result<Plan> {
         let ShowCatalogsStmt { limit } = stmt;
         let mut query = String::new();
-        write!(query, "SELECT name AS Catalogs FROM system.catalogs").unwrap();
+        let default_catalog = self.ctx.get_default_catalog()?.name();
+        write!(
+            query,
+            "SELECT name AS Catalogs FROM {}.system.catalogs",
+            default_catalog
+        )
+        .unwrap();
         match limit {
             Some(ShowLimit::Like { pattern }) => {
                 write!(query, " WHERE name LIKE '{pattern}'").unwrap();
