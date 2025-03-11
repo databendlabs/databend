@@ -33,10 +33,25 @@ runs:
       with:
         python-version: "3.12"
 
+    - name: Configure pip to use alternative mirror
+      shell: bash
+      run: |
+        # Create pip config directory
+        mkdir -p ~/.config/pip
+        # Configure pip to use Google's PyPI mirror exclusively
+        echo "[global]
+        index-url = https://us-python.pkg.dev/pypi/pypi/simple/
+        trusted-host = us-python.pkg.dev" > ~/.config/pip/pip.conf
+        # Apply the configuration immediately for the setup-python action
+        export PIP_INDEX_URL=https://us-python.pkg.dev/pypi/pypi/simple/
+        export PIP_TRUSTED_HOST=us-python.pkg.dev
+        
+        # Upgrade pip using the configured mirror
+        python -m pip install --upgrade pip --no-cache-dir
+
     - name: Install Python packages
       shell: bash
       run: |
-        pip cache purge
         pip install rich
         pip install databend_driver
         pip install duckdb
