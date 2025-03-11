@@ -24,12 +24,7 @@ use databend_common_expression::types::map::KvColumn;
 use databend_common_expression::types::map::KvPair;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::number::UInt8Type;
-use databend_common_expression::types::AnyType;
-use databend_common_expression::types::Buffer;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::StringType;
-use databend_common_expression::types::VariantType;
+use databend_common_expression::types::*;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::ConstantFolder;
@@ -50,7 +45,7 @@ use databend_storages_common_index::filters::Xor8Filter;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
-use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use goldenfile::Mint;
 
@@ -263,7 +258,7 @@ fn test_long_string(file: &mut impl Write) {
     eval_index(
         file,
         "1",
-        Scalar::String("d".to_string()),
+        Scalar::String("ab".to_string()),
         DataType::String,
         &block,
         &bloom_columns,
@@ -274,11 +269,121 @@ fn test_long_string(file: &mut impl Write) {
 fn test_cast(file: &mut impl Write) {
     eval_text(
         file,
-        "a::string = '5'",
+        "x::string = '5'",
         &[(
-            "a",
+            "x",
             TableDataType::Number(NumberDataType::UInt8),
             UInt8Type::from_data(vec![1, 2]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::decimal(5,0) = 1.2",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int8),
+            Int8Type::from_data(vec![0, 2]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x = 1.2",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int16),
+            Int16Type::from_data(vec![0, 2]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::string = '+3'",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int16),
+            Int16Type::from_data(vec![1, 3, 100]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::string = '+3'",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int16),
+            Int16Type::from_data(vec![100, 200]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "to_int32(to_int16(x)) = 1.2",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int8),
+            Int8Type::from_data(vec![0, 2]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::int8 = 10",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int32),
+            Int32Type::from_data(vec![0, 6000]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::datetime = '2021-03-05 01:01:01'",
+        &[(
+            "x",
+            TableDataType::String,
+            StringType::from_data(vec!["2021-03-05 01:01:01", "2021-03-05 01:01:02"]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::datetime = '2021-03-05 01:01:03'",
+        &[(
+            "x",
+            TableDataType::Date,
+            DateType::from_data(vec![18600, 19000]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "to_int8(x) = 1.2",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int16),
+            Int16Type::from_data(vec![0, 300]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x = 1::int8",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int16),
+            Int16Type::from_data(vec![0, 100]).wrap_nullable(None),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::int8 null = 1::int8",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int16),
+            Int16Type::from_data(vec![0, 100]).wrap_nullable(None),
         )],
         &[0],
     );
@@ -341,8 +446,6 @@ fn eval_index_expr(
             scalar_map.insert(scalar, digest);
         }
     }
-    let column_stats = StatisticsOfColumns::new();
-    // todo
     let index = BloomIndex::try_create(
         func_ctx.clone(),
         LatestBloom::VERSION,
@@ -352,13 +455,31 @@ fn eval_index_expr(
     .unwrap()
     .unwrap();
 
+    let column_stats = block
+        .columns()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, entry)| {
+            let field = bloom_columns.get(&i)?;
+            let column = entry.value.as_column().unwrap();
+            let null_count = column
+                .as_nullable()
+                .map(|nullable| nullable.validity.null_count())
+                .unwrap_or_default() as u64;
+            let (min, max) = column.domain().to_minmax();
+            Some((field.column_id, ColumnStatistics {
+                min,
+                max,
+                null_count,
+                in_memory_size: 0,
+                distinct_of_values: None,
+            }))
+        })
+        .collect();
+
     let (expr, domains) = index
         .rewrite_expr(expr, &scalar_map, &column_stats, schema)
         .unwrap();
-
-    writeln!(file, "filter   : {expr}").unwrap();
-    writeln!(file, "domains  : {domains:?}").unwrap();
-
     let result =
         match ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0 {
             Expr::Constant {
@@ -367,7 +488,10 @@ fn eval_index_expr(
             } => FilterEvalResult::MustFalse,
             _ => FilterEvalResult::Uncertain,
         };
+    let domains = BTreeMap::from_iter(domains.into_iter());
 
+    writeln!(file, "filter   : {expr}").unwrap();
+    writeln!(file, "domains  : {domains:?}").unwrap();
     writeln!(file, "result   : {result:?}").unwrap();
     write!(file, "\n\n").unwrap();
 }

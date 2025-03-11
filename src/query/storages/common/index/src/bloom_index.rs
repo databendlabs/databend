@@ -362,11 +362,23 @@ impl BloomIndex {
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
     ) -> Result<(Expr<String>, HashMap<String, Domain>)> {
-        let mut new_col_id = 1;
         let mut domains = expr
             .column_refs()
             .into_iter()
             .map(|(id, ty)| {
+                match ty {
+                    DataType::Binary
+                    | DataType::String
+                    | DataType::Number(_)
+                    | DataType::Decimal(_)
+                    | DataType::Timestamp
+                    | DataType::Date
+                    | DataType::Nullable(_) => (),
+                    _ => {
+                        let domain = Domain::full(&ty);
+                        return (id, domain);
+                    }
+                };
                 let domain = data_schema
                     .column_id_of(&id)
                     .ok()
@@ -388,54 +400,16 @@ impl BloomIndex {
             })
             .collect::<HashMap<_, _>>();
 
-        visit_expr_column_eq_constant(
-            &mut expr,
-            &mut RewriteVisitor(|span, col_name, scalar, ty, return_type| {
-                let filter_column = &Self::build_filter_column_name(
-                    self.version,
-                    data_schema.field_with_name(col_name)?,
-                )?;
+        let mut visitor = RewriteVisitor {
+            new_col_id: 1,
+            index: self,
+            data_schema,
+            scalar_map,
+            column_stats,
+            domains: &mut domains,
+        };
 
-                // If the column doesn't contain the constant,
-                // we rewrite the expression to a new column with `false` domain.
-                if self.find(filter_column, scalar, ty, scalar_map)? == FilterEvalResult::MustFalse
-                {
-                    let new_col_name = format!("__bloom_column_{}_{}", col_name, new_col_id);
-                    new_col_id += 1;
-
-                    let bool_domain = Domain::Boolean(BooleanDomain {
-                        has_false: true,
-                        has_true: false,
-                    });
-                    let new_domain = if return_type.is_nullable() {
-                        // generate `has_null` based on the `null_count` in column statistics.
-                        let has_null = match data_schema.column_id_of(col_name) {
-                            Ok(col_id) => match column_stats.get(&col_id) {
-                                Some(stat) => stat.null_count > 0,
-                                None => true,
-                            },
-                            Err(_) => true,
-                        };
-                        Domain::Nullable(NullableDomain {
-                            has_null,
-                            value: Some(Box::new(bool_domain)),
-                        })
-                    } else {
-                        bool_domain
-                    };
-                    domains.insert(new_col_name.clone(), new_domain);
-
-                    Ok(Some(Expr::ColumnRef {
-                        span,
-                        id: new_col_name.clone(),
-                        data_type: return_type.clone(),
-                        display_name: new_col_name,
-                    }))
-                } else {
-                    Ok(None)
-                }
-            }),
-        )?;
+        visit_expr_column_eq_constant(&mut expr, &mut visitor)?;
 
         Ok((expr, domains))
     }
@@ -805,12 +779,16 @@ trait EqVisitor {
     }
 }
 
-struct RewriteVisitor<F>(F)
-where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>;
+struct RewriteVisitor<'a> {
+    new_col_id: usize,
+    index: &'a BloomIndex,
+    data_schema: TableSchemaRef,
+    scalar_map: &'a HashMap<Scalar, u64>,
+    column_stats: &'a StatisticsOfColumns,
+    domains: &'a mut HashMap<String, Domain>,
+}
 
-impl<F> EqVisitor for RewriteVisitor<F>
-where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>
-{
+impl<'a> EqVisitor for RewriteVisitor<'a> {
     fn enter_target(
         &mut self,
         span: Span,
@@ -819,10 +797,51 @@ where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<
         ty: &DataType,
         return_type: &DataType,
     ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
-        match self.0(span, col_name, scalar, ty, return_type)? {
-            Some(new) => Ok(ControlFlow::Break(Some(new))),
-            None => Ok(ControlFlow::Break(None)),
+        let filter_column = &BloomIndex::build_filter_column_name(
+            self.index.version,
+            self.data_schema.field_with_name(col_name)?,
+        )?;
+
+        // If the column doesn't contain the constant,
+        // we rewrite the expression to a new column with `false` domain.
+        if self
+            .index
+            .find(filter_column, scalar, ty, self.scalar_map)?
+            != FilterEvalResult::MustFalse
+        {
+            return Ok(ControlFlow::Break(None));
         }
+        let new_col_name = format!("__bloom_column_{}_{}", col_name, self.new_col_id);
+        self.new_col_id += 1;
+
+        let bool_domain = Domain::Boolean(BooleanDomain {
+            has_false: true,
+            has_true: false,
+        });
+        let new_domain = if return_type.is_nullable() {
+            // generate `has_null` based on the `null_count` in column statistics.
+            let has_null = match self.data_schema.column_id_of(col_name) {
+                Ok(col_id) => match self.column_stats.get(&col_id) {
+                    Some(stat) => stat.null_count > 0,
+                    None => true,
+                },
+                Err(_) => true,
+            };
+            Domain::Nullable(NullableDomain {
+                has_null,
+                value: Some(Box::new(bool_domain)),
+            })
+        } else {
+            bool_domain
+        };
+        self.domains.insert(new_col_name.clone(), new_domain);
+
+        Ok(ControlFlow::Break(Some(Expr::ColumnRef {
+            span,
+            id: new_col_name.clone(),
+            data_type: return_type.clone(),
+            display_name: new_col_name,
+        })))
     }
 
     fn enter_cast(
@@ -849,7 +868,21 @@ where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<
         if !Xor8Filter::supported_type(src_type) || !is_injective_cast(&src_type, dest_type) {
             return Ok(ControlFlow::Break(None));
         }
-        let Some(s) = reverse_cast(src_type, scalar_type, scalar) else {
+
+        // check domain for may overflow
+        if ConstantFolder::<String>::fold_with_domain(
+            cast,
+            &self.domains,
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        )
+        .1
+        .is_none()
+        {
+            return Ok(ControlFlow::Break(None));
+        }
+
+        let Some(s) = cast_const(src_type.to_owned(), scalar_type.to_owned(), scalar) else {
             return Ok(ControlFlow::Break(None));
         };
 
@@ -904,7 +937,6 @@ where F: FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<
     }
 }
 
-//
 struct ShortListVisitor {
     fields: Vec<TableField>,
     founds: Vec<TableField>,
@@ -963,7 +995,7 @@ impl EqVisitor for ShortListVisitor {
             return Ok(ControlFlow::Break(None));
         }
 
-        let Some(s) = reverse_cast(src_type, scalar_type, scalar) else {
+        let Some(s) = cast_const(src_type.to_owned(), scalar_type.to_owned(), scalar) else {
             return Ok(ControlFlow::Break(None));
         };
 
@@ -1042,7 +1074,7 @@ fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
     }
 }
 
-fn reverse_cast(src_type: &DataType, dest_type: &DataType, scalar: &Scalar) -> Option<Scalar> {
+fn cast_const(dest_type: DataType, src_type: DataType, scalar: &Scalar) -> Option<Scalar> {
     let (_, Some(domain)) = ConstantFolder::<String>::fold(
         &Expr::Cast {
             span: None,
@@ -1050,9 +1082,9 @@ fn reverse_cast(src_type: &DataType, dest_type: &DataType, scalar: &Scalar) -> O
             expr: Box::new(Expr::Constant {
                 span: None,
                 scalar: scalar.to_owned(),
-                data_type: dest_type.to_owned(),
+                data_type: src_type,
             }),
-            dest_type: src_type.to_owned(),
+            dest_type,
         },
         &FunctionContext::default(),
         &BUILTIN_FUNCTIONS,
@@ -1061,9 +1093,4 @@ fn reverse_cast(src_type: &DataType, dest_type: &DataType, scalar: &Scalar) -> O
     };
 
     domain.as_singleton()
-}
-
-#[test]
-fn test_xxx() {
-    println!("xxx")
 }
