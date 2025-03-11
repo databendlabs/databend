@@ -18,10 +18,12 @@
 use databend_common_expression as ex;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
+use databend_common_expression::VariantType;
 use databend_common_protos::pb;
 use databend_common_protos::pb::data_type::Dt;
 use databend_common_protos::pb::data_type::Dt24;
 use databend_common_protos::pb::number::Num;
+use databend_common_protos::pb::variant_type;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -448,6 +450,133 @@ impl FromToProto for ex::types::decimal::DecimalSize {
             min_reader_ver: MIN_READER_VER,
             precision: self.precision as i32,
             scale: self.scale as i32,
+        })
+    }
+}
+
+impl FromToProto for ex::VariantType {
+    type PB = pb::VariantType;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::VariantType) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let Some(dt) = p.dt else {
+            return Err(Incompatible::new(
+                "Invalid VariantType: .dt must be Some".to_string(),
+            ));
+        };
+        Ok(match dt {
+            variant_type::Dt::JsonbT(_) => ex::VariantType::Jsonb,
+            variant_type::Dt::BoolT(_) => ex::VariantType::Boolean,
+            variant_type::Dt::Uint64T(_) => ex::VariantType::UInt64,
+            variant_type::Dt::Int64T(_) => ex::VariantType::Int64,
+            variant_type::Dt::Float64T(_) => ex::VariantType::Float64,
+            variant_type::Dt::StringT(_) => ex::VariantType::String,
+            variant_type::Dt::ArrayT(dt) => {
+                ex::VariantType::Array(Box::new(ex::VariantType::from_pb(*dt)?))
+            }
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let dt = match self {
+            VariantType::Jsonb => pb::variant_type::Dt::JsonbT(pb::Empty {}),
+            VariantType::Boolean => pb::variant_type::Dt::BoolT(pb::Empty {}),
+            VariantType::UInt64 => pb::variant_type::Dt::Uint64T(pb::Empty {}),
+            VariantType::Int64 => pb::variant_type::Dt::Int64T(pb::Empty {}),
+            VariantType::Float64 => pb::variant_type::Dt::Float64T(pb::Empty {}),
+            VariantType::String => pb::variant_type::Dt::StringT(pb::Empty {}),
+            VariantType::Array(dt) => pb::variant_type::Dt::ArrayT(Box::new(dt.to_pb()?)),
+        };
+
+        Ok(pb::VariantType {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            dt: Some(dt),
+        })
+    }
+}
+
+impl FromToProto for ex::VirtualDataField {
+    type PB = pb::VirtualDataField;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let data_types = p
+            .data_types
+            .into_iter()
+            .map(ex::VariantType::from_pb)
+            .collect::<Result<Vec<ex::VariantType>, Incompatible>>()?;
+        Ok(Self {
+            name: p.name,
+            data_types,
+            source_column_id: p.source_column_id,
+            column_id: p.column_id,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let data_types = self
+            .data_types
+            .iter()
+            .map(ex::VariantType::to_pb)
+            .collect::<Result<Vec<pb::VariantType>, Incompatible>>()?;
+        Ok(pb::VirtualDataField {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            name: self.name.clone(),
+            data_types,
+            source_column_id: self.source_column_id,
+            column_id: self.column_id,
+        })
+    }
+}
+
+impl FromToProto for ex::VirtualDataSchema {
+    type PB = pb::VirtualDataSchema;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        let fields = p
+            .fields
+            .into_iter()
+            .map(ex::VirtualDataField::from_pb)
+            .collect::<Result<Vec<ex::VirtualDataField>, Incompatible>>()?;
+
+        Ok(ex::VirtualDataSchema {
+            fields,
+            metadata: p.metadata,
+            next_column_id: p.next_column_id,
+            number_of_blocks: p.number_of_blocks,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let fields = self
+            .fields
+            .iter()
+            .map(ex::VirtualDataField::to_pb)
+            .collect::<Result<Vec<pb::VirtualDataField>, Incompatible>>()?;
+        Ok(pb::VirtualDataSchema {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+            number_of_blocks: self.number_of_blocks,
         })
     }
 }

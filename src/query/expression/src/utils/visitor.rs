@@ -105,7 +105,7 @@ pub trait ValueVisitor {
     }
 
     fn visit_variant(&mut self, column: BinaryColumn) -> Result<()> {
-        self.visit_typed_column::<VariantType>(column)
+        self.visit_typed_column::<variant::VariantType>(column)
     }
 
     fn visit_geometry(&mut self, column: BinaryColumn) -> Result<()> {
