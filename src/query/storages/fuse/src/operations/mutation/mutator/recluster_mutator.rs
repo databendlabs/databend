@@ -227,10 +227,11 @@ impl ReclusterMutator {
                 }
 
                 // Track small blocks for potential compaction
-                if self
-                    .block_thresholds
-                    .check_too_small(block.row_count as usize, block.block_size as usize)
-                {
+                if self.block_thresholds.check_too_small(
+                    block.row_count as usize,
+                    block.block_size as usize,
+                    block.file_size as usize,
+                ) {
                     small_blocks.insert(i);
                 }
 

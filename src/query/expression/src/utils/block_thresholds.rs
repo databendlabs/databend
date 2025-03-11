@@ -93,8 +93,10 @@ impl BlockThresholds {
     }
 
     #[inline]
-    pub fn check_too_small(&self, row_count: usize, block_size: usize) -> bool {
-        row_count < self.min_rows_per_block / 2 && block_size < self.max_bytes_per_block / 2
+    pub fn check_too_small(&self, row_count: usize, block_size: usize, file_size: usize) -> bool {
+        row_count < self.min_rows_per_block / 2
+            && block_size < self.max_bytes_per_block / 2
+            && file_size <= self.max_bytes_per_file / 2
     }
 
     #[inline]

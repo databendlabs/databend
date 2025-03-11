@@ -838,6 +838,38 @@ select cluster_key, type, average_overlaps, average_depth from clustering_inform
 ----
 (abs(a)) linear 0.0 1.0
 
+statement ok
+create table t16(a int, b int) file_size = 500;
+
+statement ok
+insert into t16 values(1, 1), (3, 3);
+
+statement ok
+insert into t16 values(2, 2), (4, 4);
+
+statement ok
+optimize table t16 compact;
+
+statement ok
+alter table t16 set options(file_size = 10485760);
+
+statement ok
+insert into t16 values(5, 5);
+
+statement ok
+optimize table t16 compact;
+
+query III
+select segment_count, block_count, row_count from fuse_snapshot('db_09_0008','t16');
+----
+1 1 5
+2 3 5
+1 2 4
+2 2 4
+1 1 2
+
+statement ok
+drop table t16 all;
 
 statement ok
 DROP DATABASE db_09_0008
