@@ -6067,9 +6067,9 @@ dependencies = [
 
 [[package]]
 name = "epochfs"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0e9311881841e631697cc7f7d3816d4773ff23fe9bbcff7505b19328107cf1e"
+checksum = "bfd641407066de625d604af613024fe22af3ba6b594b52915bd471a9322d5275"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
