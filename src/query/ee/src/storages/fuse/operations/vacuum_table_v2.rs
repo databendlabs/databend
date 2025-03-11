@@ -88,7 +88,13 @@ pub async fn do_vacuum2(
 ) -> Result<Vec<String>> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let start = std::time::Instant::now();
-    let retention_period_in_days = ctx.get_settings().get_data_retention_time_in_days()?;
+
+    let retention_period_in_days = if fuse_table.is_transient() {
+        0
+    } else {
+        ctx.get_settings().get_data_retention_time_in_days()?
+    };
+
     let is_vacuum_all = retention_period_in_days == 0;
 
     let Some(lvt) = set_lvt(fuse_table, ctx.as_ref(), retention_period_in_days).await? else {
