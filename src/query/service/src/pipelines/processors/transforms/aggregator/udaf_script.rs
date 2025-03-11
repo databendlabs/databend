@@ -494,6 +494,7 @@ mod tests {
     use databend_common_expression::types::Float32Type;
 
     use super::*;
+    use crate::test_kits::TestFixture;
 
     #[test]
     fn test_serialize() {
@@ -518,8 +519,9 @@ mod tests {
         assert_eq!(&want, &state.0);
     }
 
-    #[test]
-    fn test_js_pool() -> Result<()> {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_js_pool() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
         let agg_name = "weighted_avg".to_string();
         let fields = vec![
             Field::new("sum", ArrowType::Int64, false),
