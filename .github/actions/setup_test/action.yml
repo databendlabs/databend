@@ -29,6 +29,9 @@ runs:
         artifacts: ${{ inputs.artifacts }}
         path: ${{ inputs.path }}
 
+    - name: Set pip index
+      run: echo "PIP_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" >> $GITHUB_ENV
+
     - uses: actions/setup-python@v5
       with:
         python-version: "3.12"
@@ -37,8 +40,6 @@ runs:
       shell: bash
       run: |
         pip cache purge
-        # TODO: remove this after this get resolved: https://github.com/pypi/support/issues/5879
-        pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
         pip install rich
         pip install databend_driver
         pip install duckdb
