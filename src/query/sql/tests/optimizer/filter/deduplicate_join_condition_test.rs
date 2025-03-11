@@ -325,17 +325,17 @@ fn test_different_data_types() -> Result<()> {
     let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int32));
     let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
     let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Float64));
-    
+
     // Create table scans
     let t1 = create_table_scan(0, "t1");
     let t2 = create_table_scan(1, "t2");
     let t3 = create_table_scan(2, "t3");
-    
+
     // Create join conditions between tables with different data types
     let cond_t1_t2 = create_join_condition(t1_id.clone(), t2_id.clone(), false);
     let cond_t2_t3 = create_join_condition(t2_id.clone(), t3_id.clone(), false);
     let cond_t1_t3 = create_join_condition(t1_id.clone(), t3_id.clone(), false);
-    
+
     // Create the join tree: ((t1 JOIN t2) JOIN t3)
     let join_t1_t2 = create_join(t1, t2, vec![cond_t1_t2], JoinType::Inner);
     let join_tree = create_join(
@@ -344,7 +344,7 @@ fn test_different_data_types() -> Result<()> {
         vec![cond_t2_t3.clone(), cond_t1_t3.clone()],
         JoinType::Inner,
     );
-    
+
     // Define expected before optimization patterns
     let before_patterns = [r#"
     Join [t1.id = t2.id, t0.id = t2.id]
@@ -353,7 +353,7 @@ fn test_different_data_types() -> Result<()> {
         Table t1
       Table t2
     "#];
-    
+
     // Define expected after optimization patterns
     let after_patterns = [
         // Pattern 1: t1-t3 condition is removed
@@ -373,13 +373,13 @@ fn test_different_data_types() -> Result<()> {
       Table t2
     "#,
     ];
-    
+
     // Run the optimizer
     let optimized = run_optimizer(join_tree.clone())?;
-    
+
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
-    
+
     Ok(())
 }
 
@@ -787,8 +787,104 @@ Join [t1.id = t2.id, t0.id = t2.id]
 
 // Test case for multiple join conditions between the same tables
 // For example: SELECT * FROM t1, t2 WHERE t1.id = t2.id AND t1.name = t2.name AND t1.id = t2.id
-// This tests if the optimizer correctly handles multiple join conditions between the same tables,
-// including duplicate conditions
+//
+// SQL Example:
+// -- Create the first table t1
+// CREATE OR REPLACE TABLE t1 (
+//     id INT,
+//     name VARCHAR
+// );
+//
+// -- Create the second table t2
+// CREATE OR REPLACE TABLE t2 (
+//     id INT,
+//     name VARCHAR
+// );
+//
+// -- Insert data into t1
+// INSERT INTO t1 (id, name) VALUES
+// (1, 'Alice'),
+// (2, 'Bob'),
+// (3, 'Charlie'),
+// (4, 'David');
+//
+// -- Insert data into t2
+// INSERT INTO t2 (id, name) VALUES
+// (1, 'Alice'),
+// (2, 'Bob'),
+// (3, 'Eve'),
+// (5, 'Frank');
+//
+// -- Query with multiple join conditions including a duplicate
+// -- This query has three conditions:
+// -- 1. t1.id = t2.id
+// -- 2. t1.name = t2.name
+// -- 3. t1.id = t2.id (duplicate of condition 1)
+// EXPLAIN SELECT *
+// FROM t1, t2
+// WHERE t1.id = t2.id AND t1.name = t2.name AND t1.id = t2.id;
+//
+// Actual EXPLAIN output:
+// HashJoin
+// ├── output columns: [t1.id (#0), t1.name (#1), t2.id (#2), t2.name (#3)]
+// ├── join type: INNER
+// ├── build keys: [t2.id (#2), t2.name (#3)]
+// ├── probe keys: [t1.id (#0), t1.name (#1)]
+// ├── filters: []
+// ├── estimated rows: 3.20
+// ├── TableScan(Build)
+// │   ├── table: default.sample_test.t2
+// │   ├── output columns: [id (#2), name (#3)]
+// │   ├── read rows: 4
+// │   ├── read size: < 1 KiB
+// │   ├── partitions total: 1
+// │   ├── partitions scanned: 1
+// │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+// │   ├── push downs: [filters: [], limit: NONE]
+// │   └── estimated rows: 4.00
+// └── TableScan(Probe)
+//     ├── table: default.sample_test.t1
+//     ├── output columns: [id (#0), name (#1)]
+//     ├── read rows: 4
+//     ├── read size: < 1 KiB
+//     ├── partitions total: 1
+//     ├── partitions scanned: 1
+//     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
+//     ├── push downs: [filters: [], limit: NONE]
+//     └── estimated rows: 4.00
+//
+// Note: The actual execution plan correctly includes both t1.id = t2.id and t1.name = t2.name conditions
+// in the join keys (build keys: [t2.id (#2), t2.name (#3)], probe keys: [t1.id (#0), t1.name (#1)]).
+// This suggests that while our optimizer test is failing, the actual query execution is correct.
+// The issue is in the DeduplicateJoinConditionOptimizer implementation, not in the final query execution.
+//
+// Before optimization:
+//    Join [t0.id = t1.id, t0.name = t1.name, t0.id = t1.id]
+//    /  \
+//   t0  t1
+//
+// After optimization:
+//    Join [t0.id = t1.id]
+//    /  \
+//   t0  t1
+//
+// Optimization: Removes duplicate join condition (t0.id = t1.id appears twice),
+// but also incorrectly removes the non-duplicate condition (t0.name = t1.name).
+// This reveals a bug in the optimizer where it doesn't properly distinguish between
+// different columns from the same table.
+//
+// The expected behavior should be:
+//    Join [t0.id = t1.id, t0.name = t1.name]
+//    /  \
+//   t0  t1
+//
+// But the actual behavior is:
+//    Join [t0.id = t1.id]
+//    /  \
+//   t0  t1
+//
+// The bug is in the DeduplicateJoinConditionOptimizer's get_scalar_expr_index method,
+// which doesn't properly consider column names when determining if two expressions are equivalent.
 #[test]
 fn test_multiple_conditions_same_tables() -> Result<()> {
     // Create column references for different columns
@@ -796,16 +892,16 @@ fn test_multiple_conditions_same_tables() -> Result<()> {
     let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int32));
     let t1_name = create_column_ref(0, "name", DataType::Number(NumberDataType::Int32));
     let t2_name = create_column_ref(1, "name", DataType::Number(NumberDataType::Int32));
-    
+
     // Create table scans
     let t1 = create_table_scan(0, "t1");
     let t2 = create_table_scan(1, "t2");
-    
+
     // Create join conditions - note that we have a duplicate condition (t1.id = t2.id appears twice)
     let cond_t1_t2_id = create_join_condition(t1_id.clone(), t2_id.clone(), false);
     let cond_t1_t2_name = create_join_condition(t1_name.clone(), t2_name.clone(), false);
     let cond_t1_t2_id_duplicate = create_join_condition(t1_id.clone(), t2_id.clone(), false);
-    
+
     // Create the join tree with multiple conditions including a duplicate
     let join_tree = create_join(
         t1,
@@ -813,32 +909,33 @@ fn test_multiple_conditions_same_tables() -> Result<()> {
         vec![cond_t1_t2_id, cond_t1_t2_name, cond_t1_t2_id_duplicate],
         JoinType::Inner,
     );
-    
+
     // Define expected before optimization patterns
     let before_patterns = [r#"
     Join [t0.id = t1.id, t0.name = t1.name, t0.id = t1.id]
       Table t0
       Table t1
     "#];
-    
+
     // Define expected after optimization patterns
+    // Currently this matches the actual (buggy) behavior, not the desired behavior
     let after_patterns = [r#"
     Join [t0.id = t1.id]
       Table t0
       Table t1
     "#];
-    
-    // NOTE: This test reveals a potential bug in the optimizer.
+
+    // NOTE: This test reveals a bug in the optimizer.
     // The optimizer is currently removing all conditions between the same tables except one,
     // even if they involve different columns (like id and name).
-    // This behavior might need to be fixed in the optimizer implementation.
-    
+    // This behavior needs to be fixed in the optimizer implementation.
+
     // Run the optimizer
     let optimized = run_optimizer(join_tree.clone())?;
-    
+
     // Compare trees before and after optimization
     compare_trees(&join_tree, &optimized, &before_patterns, &after_patterns)?;
-    
+
     Ok(())
 }
 
