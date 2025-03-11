@@ -558,7 +558,8 @@ export function finish(state) {
 
         let state = pool.call(|runtime| {
             GlobalIORuntime::instance()
-                .block_on(async move { runtime.create_state(&agg_name).await })
+                .block_on(async move { Ok(runtime.create_state(&agg_name).await?) })
+                .map_err(|e| anyhow::anyhow!(e))
         })?;
 
         let want: Arc<dyn arrow_array::Array> = Arc::new(StructArray::new(
