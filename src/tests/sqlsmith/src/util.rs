@@ -137,7 +137,7 @@ fn read_sqllogict_test_sqls(lines: Vec<&str>, sqls: &mut Vec<String>) {
     }
 }
 
-// Read and parse Sqlite test files
+// Read and parse Sqlite test files.
 fn read_sqlite_test_sqls(lines: Vec<&str>, sqls: &mut Vec<String>) {
     let mut in_sql = false;
     let mut current_sql = String::new();
@@ -213,4 +213,3 @@ fn read_test_sqls(lines: Vec<&str>, sqls: &mut Vec<String>) {
         sqls.push(current_sql);
     }
 }
-
