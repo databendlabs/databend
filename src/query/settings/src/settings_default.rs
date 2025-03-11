@@ -1228,6 +1228,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("use_vacuum2_to_purge_transient_table_data", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Experimental flag which indicates if use vacuum2 to purge transient table data",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

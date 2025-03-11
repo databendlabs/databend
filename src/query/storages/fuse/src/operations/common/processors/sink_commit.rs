@@ -26,6 +26,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
+use databend_common_license::license::Feature::Vacuum;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
@@ -99,10 +101,12 @@ pub struct CommitSink<F: SnapshotGenerator> {
     update_stream_meta: Vec<UpdateStreamMetaReq>,
     deduplicated_label: Option<String>,
     table_meta_timestamps: TableMetaTimestamps,
+    prefer_vacuum2: bool,
+    vacuum_handler: Option<Arc<VacuumHandlerWrapper>>,
 }
 
 impl<F> CommitSink<F>
-where F: SnapshotGenerator + Send + 'static
+where F: SnapshotGenerator + Send + Sync + 'static
 {
     #[allow(clippy::too_many_arguments)]
     pub fn try_create(
@@ -119,6 +123,20 @@ where F: SnapshotGenerator + Send + 'static
     ) -> Result<ProcessorPtr> {
         let purge = Self::need_purge(table, &snapshot_gen)
             || ctx.get_settings().get_enable_auto_vacuum()?;
+
+        let prefer_vacuum2 = ctx
+            .get_settings()
+            .get_enable_use_vacuum2_to_purge_transient_table_data()?;
+
+        let vacuum_handler = if LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(ctx.get_license_key(), Vacuum)
+            .is_ok()
+        {
+            let handler: Arc<VacuumHandlerWrapper> = GlobalInstance::get();
+            Some(handler)
+        } else {
+            None
+        };
 
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
@@ -140,6 +158,8 @@ where F: SnapshotGenerator + Send + 'static
             update_stream_meta,
             deduplicated_label,
             table_meta_timestamps,
+            prefer_vacuum2,
+            vacuum_handler,
         })))
     }
 
@@ -202,7 +222,7 @@ where F: SnapshotGenerator + Send + 'static
             .is_some_and(|gen| matches!(gen.mode(), TruncateMode::Purge))
     }
 
-    fn do_truncate(&self) -> bool {
+    fn need_truncate(&self) -> bool {
         self.snapshot_gen
             .as_any()
             .downcast_ref::<TruncateGenerator>()
@@ -215,11 +235,70 @@ where F: SnapshotGenerator + Send + 'static
             .downcast_ref::<AppendGenerator>()
             .is_some()
     }
+
+    async fn purge(&self, tbl: &FuseTable) -> Result<()> {
+        let keep_last_snapshot = true;
+        let snapshot_files = tbl.list_snapshot_files().await?;
+        if let Err(e) = tbl
+            .do_purge(&self.ctx, snapshot_files, None, keep_last_snapshot, false)
+            .await
+        {
+            // Errors of GC, if any, are ignored, since GC task can be picked up
+            warn!(
+                "GC of table not success (this is not a permanent error). the error : {}",
+                e
+            );
+        } else {
+            info!("GC of table done");
+        }
+        Ok(())
+    }
+
+    async fn vacuum2(&self, tbl: &FuseTable, vacuum_handler: &VacuumHandlerWrapper) {
+        warn!(
+            "Vacuuming table: {}, ident: {}",
+            tbl.table_info.name, tbl.table_info.ident
+        );
+
+        if let Err(e) = vacuum_handler
+            .do_vacuum2(tbl, self.ctx.clone(), false)
+            .await
+        {
+            // Vacuum in a best-effort manner, errors are ignored
+            warn!("Vacuum table {} failed : {}", tbl.table_info.name, e);
+        } else {
+            info!("vacuum table {} done", tbl.table_info.name);
+        }
+    }
+
+    async fn clean_history(&self) -> Result<()> {
+        {
+            let table_info = self.table.get_table_info();
+            info!(
+                "cleaning historical data. table: {}, ident: {}",
+                table_info.desc, table_info.ident
+            );
+        }
+
+        let latest = self.table.refresh(self.ctx.as_ref()).await?;
+        let tbl = FuseTable::try_from_table(latest.as_ref())?;
+
+        if self.prefer_vacuum2 {
+            if let Some(vacuum_handler) = &self.vacuum_handler {
+                self.vacuum2(tbl, vacuum_handler.as_ref()).await;
+                return Ok(());
+            }
+        }
+
+        self.purge(tbl).await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
 impl<F> Processor for CommitSink<F>
-where F: SnapshotGenerator + Send + 'static
+where F: SnapshotGenerator + Send + Sync + 'static
 {
     fn name(&self) -> String {
         "CommitSink".to_string()
@@ -404,7 +483,7 @@ where F: SnapshotGenerator + Send + 'static
                 .await
                 {
                     Ok(_) => {
-                        if self.do_truncate() {
+                        if self.need_truncate() {
                             catalog
                                 .truncate_table(&table_info, TruncateTableReq {
                                     table_id: table_info.ident.table_id,
@@ -414,21 +493,9 @@ where F: SnapshotGenerator + Send + 'static
                         }
 
                         if self.purge {
-                            let latest = self.table.refresh(self.ctx.as_ref()).await?;
-                            let tbl = FuseTable::try_from_table(latest.as_ref())?;
-                            warn!(
-                                "Vacuuming table: {}, ident: {}",
-                                tbl.table_info.name, tbl.table_info.ident
-                            );
-
-                            let handler: Arc<VacuumHandlerWrapper> = GlobalInstance::get();
-                            if let Err(e) = handler.do_vacuum2(tbl, self.ctx.clone(), false).await {
-                                // Vacuum in a best-effort manner, errors are ignored
-                                warn!("Vacuum table {} failed : {}", tbl.table_info.name, e);
-                            } else {
-                                info!("vacuum table {} done", tbl.table_info.name);
-                            }
+                            self.clean_history().await?;
                         }
+
                         metrics_inc_commit_mutation_success();
                         {
                             let elapsed_time = self.start_time.elapsed();
