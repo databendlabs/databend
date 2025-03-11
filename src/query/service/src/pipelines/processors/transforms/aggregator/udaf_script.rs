@@ -23,6 +23,7 @@ use arrow_array::RecordBatch;
 use arrow_schema::ArrowError;
 use arrow_schema::DataType as ArrowType;
 use arrow_udf_js::AggregateOptions;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
@@ -316,7 +317,7 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
     type Error = ErrorCode;
 
     fn build(&self) -> std::result::Result<arrow_udf_js::Runtime, Self::Error> {
-        let mut runtime = databend_common_base::runtime::block_on(async move {
+        let mut runtime = GlobalIORuntime::instance().block_on(async move {
             arrow_udf_js::Runtime::new()
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
@@ -325,7 +326,7 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
-        databend_common_base::runtime::block_on(async move {
+        GlobalIORuntime::instance().block_on(async move {
             runtime
                 .add_aggregate(
                     &self.name,
@@ -414,9 +415,9 @@ impl UDAFRuntime {
     fn create_state(&self) -> anyhow::Result<UdfAggState> {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
-                databend_common_base::runtime::block_on(async move {
-                    runtime.create_state(&pool.builder.name).await
-                })
+                GlobalIORuntime::instance()
+                    .block_on(async move { Ok(runtime.create_state(&pool.builder.name).await?) })
+                    .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
@@ -430,11 +431,13 @@ impl UDAFRuntime {
     fn accumulate(&self, state: &UdfAggState, input: &RecordBatch) -> anyhow::Result<UdfAggState> {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
-                databend_common_base::runtime::block_on(async move {
-                    runtime
-                        .accumulate(&pool.builder.name, &state.0, input)
-                        .await
-                })
+                GlobalIORuntime::instance()
+                    .block_on(async move {
+                        Ok(runtime
+                            .accumulate(&pool.builder.name, &state.0, input)
+                            .await?)
+                    })
+                    .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
@@ -448,9 +451,9 @@ impl UDAFRuntime {
     fn merge(&self, states: &Arc<dyn Array>) -> anyhow::Result<UdfAggState> {
         let state = match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
-                databend_common_base::runtime::block_on(async move {
-                    runtime.merge(&pool.builder.name, states).await
-                })
+                GlobalIORuntime::instance()
+                    .block_on(async move { Ok(runtime.merge(&pool.builder.name, states).await?) })
+                    .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
@@ -464,9 +467,11 @@ impl UDAFRuntime {
     fn finish(&self, state: &UdfAggState) -> anyhow::Result<Arc<dyn Array>> {
         match self {
             UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
-                databend_common_base::runtime::block_on(async move {
-                    runtime.finish(&pool.builder.name, &state.0).await
-                })
+                GlobalIORuntime::instance()
+                    .block_on(
+                        async move { Ok(runtime.finish(&pool.builder.name, &state.0).await?) },
+                    )
+                    .map_err(|err| anyhow::anyhow!(err))
             }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
@@ -552,9 +557,8 @@ export function finish(state) {
         let pool = JsRuntimePool::new(builder);
 
         let state = pool.call(|runtime| {
-            databend_common_base::runtime::block_on(
-                async move { runtime.create_state(&agg_name).await },
-            )
+            GlobalIORuntime::instance()
+                .block_on(async move { runtime.create_state(&agg_name).await })
         })?;
 
         let want: Arc<dyn arrow_array::Array> = Arc::new(StructArray::new(

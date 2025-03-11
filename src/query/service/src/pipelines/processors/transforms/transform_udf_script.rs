@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use arrow_udf_js::FunctionOptions;
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
@@ -56,6 +57,7 @@ impl ScriptRuntime {
             UDFLanguage::JavaScript => {
                 let builder = JsRuntimeBuilder {
                     name: func.name.clone(),
+                    handler: func.func_name.clone(),
                     code: String::from_utf8(code.to_vec())?,
                     output_type: func.data_type.as_ref().clone(),
                     counter: Default::default(),
@@ -101,7 +103,7 @@ impl ScriptRuntime {
     ) -> Result<RecordBatch> {
         let result_batch = match self {
             ScriptRuntime::JavaScript(pool) => pool.call(|runtime| {
-                databend_common_base::runtime::block_on(async move {
+                GlobalIORuntime::instance().block_on(async move {
                     runtime.call(&func.name, input_batch).await.map_err(|err| {
                         ErrorCode::UDFRuntimeError(format!(
                             "JavaScript UDF {:?} execution failed: {err}",
@@ -153,6 +155,7 @@ impl ScriptRuntime {
 
 pub struct JsRuntimeBuilder {
     name: String,
+    handler: String,
     code: String,
     output_type: DataType,
 
@@ -164,7 +167,7 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
 
     fn build(&self) -> Result<arrow_udf_js::Runtime> {
         let start = std::time::Instant::now();
-        let mut runtime = databend_common_base::runtime::block_on(async move {
+        let mut runtime = GlobalIORuntime::instance().block_on(async move {
             arrow_udf_js::Runtime::new()
                 .await
                 .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
@@ -174,7 +177,7 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
-        let rt = databend_common_base::runtime::block_on(async move {
+        let rt = GlobalIORuntime::instance().block_on(async move {
             runtime
                 .add_function(
                     &self.name,
@@ -183,7 +186,9 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
                     // metadata associated with the field
                     arrow_field_from_data_type(&self.name, self.output_type.clone()),
                     &self.code,
-                    FunctionOptions::default().return_null_on_null_input(),
+                    FunctionOptions::default()
+                        .return_null_on_null_input()
+                        .handler(self.handler.clone()),
                 )
                 .await?;
 
