@@ -213,3 +213,4 @@ fn read_test_sqls(lines: Vec<&str>, sqls: &mut Vec<String>) {
         sqls.push(current_sql);
     }
 }
+
