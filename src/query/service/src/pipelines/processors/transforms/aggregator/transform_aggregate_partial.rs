@@ -24,7 +24,6 @@ use databend_common_base::base::convert_number_size;
 use databend_common_catalog::plan::AggIndexMeta;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::arrow::write_column;
 use databend_common_expression::AggregateHashTable;
@@ -47,7 +46,7 @@ use opendal::Operator;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
+use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 use crate::sessions::QueryContext;
 use crate::spillers::SpillWriter;
 use crate::spillers::Spiller;
@@ -358,16 +357,17 @@ impl AccumulatingTransform for TransformPartialAggregate {
             if let Some(writer) = spilling_state.writer.as_mut() {
                 let last_offset = spilling_state.last_flush_partition_offset;
                 if writer.write_bytes() > last_offset {
+                    let spilled_payload = SpilledPayload {
+                        partition: spilling_state.working_partition as isize,
+                        location: writer.location(),
+                        data_range: last_offset as u64..writer.write_bytes() as u64,
+                        destination_node: self.configure_peer_nodes[spilling_state.working_bucket]
+                            .clone(),
+                        max_partition_count: max_partition,
+                    };
+
                     self.spill_blocks.push(DataBlock::empty_with_meta(
-                        AggregateMeta::create_bucket_spilled(BucketSpilledPayload {
-                            bucket: spilling_state.working_partition as isize,
-                            location: writer.location(),
-                            data_range: last_offset as u64..writer.write_bytes() as u64,
-                            destination_node: self.configure_peer_nodes
-                                [spilling_state.working_bucket]
-                                .clone(),
-                            max_partition_count: max_partition,
-                        }),
+                        AggregateMeta::create_spilled_payload(spilled_payload),
                     ));
 
                     spilling_state.last_flush_partition_offset = writer.write_bytes();
@@ -383,6 +383,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
             if let Some(writer) = spilling_state.writer.as_mut() {
                 writer.complete().await?;
                 spilling_state.writer = None;
+                spilling_state.last_flush_partition_offset = 0;
             }
 
             spilling_state.payload_idx = 0;

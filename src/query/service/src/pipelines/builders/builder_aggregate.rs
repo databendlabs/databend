@@ -166,26 +166,7 @@ impl PipelineBuilder {
             )?))
         })?;
 
-        // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        // if !self.is_exchange_neighbor {
-        //     let operator = DataOperator::instance().spill_operator();
-        //     let location_prefix = self.ctx.query_id_spill_prefix();
-        //
-        //     self.main_pipeline.add_transform(|input, output| {
-        //         Ok(ProcessorPtr::create(
-        //             TransformAggregateSpillWriter::try_create(
-        //                 self.ctx.clone(),
-        //                 input,
-        //                 output,
-        //                 operator.clone(),
-        //                 params.clone(),
-        //                 location_prefix.clone(),
-        //             )?,
-        //         ))
-        //     })?;
-        // }
-
-        self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
+        self.exchange_injector = AggregateInjector::create();
         Ok(())
     }
 
@@ -222,7 +203,7 @@ impl PipelineBuilder {
 
         let input: &PhysicalPlan = &aggregate.input;
         if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-            self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
+            self.exchange_injector = AggregateInjector::create();
         }
         self.build_pipeline(&aggregate.input)?;
         self.exchange_injector = old_inject;

@@ -92,7 +92,7 @@ pub trait Processor: Send {
         ))
     }
 
-    fn configure_peer_nodes(&mut self, nodes: &[String]) {
+    fn configure_peer_nodes(&mut self, _nodes: &[String]) {
         // do nothing by default
     }
 

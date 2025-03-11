@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -64,9 +63,9 @@ impl ExchangeSink {
                     let settings = ctx.get_settings();
                     let compression = settings.get_query_flight_compression()?;
 
-                    let nodes = vec![GlobalConfig::instance().query.node_id.clone()];
+                    let nodes = vec![];
                     pipeline.exchange(
-                        nodes.len(),
+                        1,
                         FlightExchange::create(
                             nodes,
                             compression,

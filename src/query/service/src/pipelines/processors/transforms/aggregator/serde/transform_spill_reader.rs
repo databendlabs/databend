@@ -40,8 +40,8 @@ use tokio::sync::Semaphore;
 
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-use crate::pipelines::processors::transforms::aggregator::BucketSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
+use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
 
 type DeserializingMeta = (AggregateMeta, VecDeque<Vec<u8>>);
 
@@ -101,17 +101,18 @@ impl Processor for TransformSpillReader {
                 .get_meta()
                 .and_then(AggregateMeta::downcast_ref_from)
             {
-                if matches!(block_meta, AggregateMeta::BucketSpilled(_)) {
+                if matches!(block_meta, AggregateMeta::SpilledPayload(_)) {
                     self.input.set_not_need_data();
                     let block_meta = data_block.take_meta().unwrap();
                     self.reading_meta = AggregateMeta::downcast_from(block_meta);
                     return Ok(Event::Async);
                 }
 
-                if let AggregateMeta::Partitioned { data, .. } = block_meta {
-                    if data
+                if let AggregateMeta::FinalPayload(payload) = block_meta {
+                    if payload
+                        .data
                         .iter()
-                        .any(|meta| matches!(meta, AggregateMeta::BucketSpilled(_)))
+                        .any(|(meta, _)| matches!(meta, AggregateMeta::SpilledPayload(_)))
                     {
                         self.input.set_not_need_data();
                         let block_meta = data_block.take_meta().unwrap();
@@ -139,30 +140,30 @@ impl Processor for TransformSpillReader {
             match meta {
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
-                AggregateMeta::BucketSpilled(payload) => {
+                AggregateMeta::InFlightPayload(_) => unreachable!(),
+                AggregateMeta::SpilledPayload(payload) => {
                     debug_assert!(read_data.len() == 1);
                     let data = read_data.pop_front().unwrap();
 
                     self.deserialized_meta = Some(Box::new(self.deserialize(payload, data)));
                 }
-                AggregateMeta::Partitioned { bucket, data } => {
-                    let mut new_data = Vec::with_capacity(data.len());
+                AggregateMeta::FinalPayload(payload) => {
+                    let mut new_data = Vec::with_capacity(payload.data.len());
 
-                    for meta in data {
-                        if matches!(&meta, AggregateMeta::BucketSpilled(_)) {
-                            if let AggregateMeta::BucketSpilled(payload) = meta {
+                    for (meta, block) in payload.data {
+                        if matches!(&meta, AggregateMeta::SpilledPayload(_)) {
+                            if let AggregateMeta::SpilledPayload(payload) = meta {
                                 let data = read_data.pop_front().unwrap();
-                                new_data.push(self.deserialize(payload, data));
+                                new_data.push((self.deserialize(payload, data), block));
                             }
 
                             continue;
                         }
 
-                        new_data.push(meta);
+                        new_data.push((meta, block));
                     }
 
-                    self.deserialized_meta =
-                        Some(AggregateMeta::create_partitioned(bucket, new_data));
+                    self.deserialized_meta = Some(AggregateMeta::create_final(new_data));
                 }
             }
         }
@@ -176,7 +177,8 @@ impl Processor for TransformSpillReader {
             match &block_meta {
                 AggregateMeta::AggregatePayload(_) => unreachable!(),
                 AggregateMeta::Serialized(_) => unreachable!(),
-                AggregateMeta::BucketSpilled(payload) => {
+                AggregateMeta::InFlightPayload(_) => unreachable!(),
+                AggregateMeta::SpilledPayload(payload) => {
                     let _guard = self.semaphore.acquire().await;
                     let instant = Instant::now();
                     let data = self
@@ -194,15 +196,16 @@ impl Processor for TransformSpillReader {
 
                     self.deserializing_meta = Some((block_meta, VecDeque::from(vec![data])));
                 }
-                AggregateMeta::Partitioned { data, .. } => {
+                AggregateMeta::FinalPayload(payload) => {
                     // For log progress.
                     let mut total_elapsed = Duration::default();
                     let log_interval = 100;
                     let mut processed_count = 0;
 
-                    let mut read_data = Vec::with_capacity(data.len());
-                    for meta in data {
-                        if let AggregateMeta::BucketSpilled(payload) = meta {
+                    let mut read_data = Vec::with_capacity(payload.data.len());
+                    for (meta, _block) in &payload.data {
+                        if let AggregateMeta::SpilledPayload(payload) = meta {
+                            eprintln!("recv spill payload {:?}", payload);
                             let location = payload.location.clone();
                             let operator = self.operator.clone();
                             let data_range = payload.data_range.clone();
@@ -296,7 +299,7 @@ impl TransformSpillReader {
         })))
     }
 
-    fn deserialize(&self, payload: BucketSpilledPayload, data: Vec<u8>) -> AggregateMeta {
+    fn deserialize(&self, payload: SpilledPayload, data: Vec<u8>) -> AggregateMeta {
         let columns = self.params.group_data_types.len() + self.params.aggregate_functions.len();
 
         let mut blocks = vec![];
@@ -312,13 +315,14 @@ impl TransformSpillReader {
                 cursor = right;
             }
 
-            blocks.push(DataBlock::new_from_columns(block_columns));
+            let block1 = DataBlock::new_from_columns(block_columns);
+            blocks.push(block1);
         }
 
         let block = DataBlock::concat(&blocks).unwrap();
 
         AggregateMeta::Serialized(SerializedPayload {
-            bucket: payload.bucket,
+            bucket: payload.partition,
             data_block: block,
             max_partition_count: payload.max_partition_count,
         })

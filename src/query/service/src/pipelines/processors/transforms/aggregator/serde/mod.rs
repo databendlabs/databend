@@ -14,18 +14,12 @@
 
 mod serde_meta;
 mod transform_aggregate_serializer;
-mod transform_aggregate_spill_writer;
 mod transform_deserializer;
-mod transform_exchange_aggregate_serializer;
-mod transform_exchange_async_barrier;
 mod transform_spill_reader;
 
 pub use serde_meta::*;
 pub use transform_aggregate_serializer::*;
-pub use transform_aggregate_spill_writer::*;
 pub use transform_deserializer::*;
-pub use transform_exchange_aggregate_serializer::*;
-pub use transform_exchange_async_barrier::*;
 pub use transform_spill_reader::*;
 
 pub mod exchange_defines {

@@ -22,7 +22,6 @@ mod exchange_sorting;
 mod exchange_source;
 mod exchange_source_reader;
 mod exchange_transform;
-mod exchange_transform_scatter;
 mod exchange_transform_shuffle;
 mod statistics_receiver;
 mod statistics_sender;

@@ -53,16 +53,14 @@ unsafe impl Send for PartitionedPayload {}
 unsafe impl Sync for PartitionedPayload {}
 
 impl serde::Serialize for PartitionedPayload {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
-        todo!()
+    fn serialize<S: Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
+        unreachable!("PartitionedPayload must not be exchanged between multiple nodes.")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for PartitionedPayload {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
-        todo!()
+    fn deserialize<D: Deserializer<'de>>(_: D) -> Result<Self, D::Error> {
+        unreachable!("PartitionedPayload must not be exchanged between multiple nodes.")
     }
 }
 
