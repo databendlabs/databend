@@ -37,6 +37,8 @@ runs:
       shell: bash
       run: |
         pip cache purge
+        # TODO: remove this after this get resolved: https://github.com/pypi/support/issues/5879
+        pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
         pip install rich
         pip install databend_driver
         pip install duckdb
