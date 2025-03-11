@@ -366,14 +366,13 @@ impl BloomIndex {
             .column_refs()
             .into_iter()
             .map(|(id, ty)| {
-                match ty {
+                match ty.remove_nullable() {
                     DataType::Binary
                     | DataType::String
                     | DataType::Number(_)
                     | DataType::Decimal(_)
                     | DataType::Timestamp
-                    | DataType::Date
-                    | DataType::Nullable(_) => (),
+                    | DataType::Date => (),
                     _ => {
                         let domain = Domain::full(&ty);
                         return (id, domain);
@@ -673,7 +672,12 @@ fn visit_expr_column_eq_constant(
                 ..
             }, cast @ Expr::Cast { .. }] => visitor.enter_cast(cast, scalar, scalar_type)?,
 
-            [func @ Expr::FunctionCall { .. }, Expr::Constant {
+            [func @ Expr::FunctionCall {
+                id,
+                args,
+                return_type: dest_type,
+                ..
+            }, Expr::Constant {
                 scalar,
                 data_type: scalar_type,
                 ..
@@ -682,10 +686,22 @@ fn visit_expr_column_eq_constant(
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, func @ Expr::FunctionCall { .. }]
-                if func.contains_column_ref() =>
-            {
-                visitor.enter_function(func, scalar, scalar_type)?
+            }, func @ Expr::FunctionCall {
+                id,
+                args,
+                return_type: dest_type,
+                ..
+            }] if id.name().starts_with("to_") && args.len() == 1 && func.contains_column_ref() => {
+                visitor.enter_cast(
+                    &Expr::Cast {
+                        span: *span,
+                        is_try: false,
+                        expr: Box::new(args[0].clone()),
+                        dest_type: dest_type.clone(),
+                    },
+                    scalar,
+                    scalar_type,
+                )?
             }
             _ => ControlFlow::Continue(None),
         },
@@ -771,15 +787,6 @@ trait EqVisitor {
     ) -> ResultRewrite {
         Ok(ControlFlow::Continue(None))
     }
-
-    fn enter_function(
-        &mut self,
-        _func: &Expr<String>,
-        _scalar: &Scalar,
-        _scalar_type: &DataType,
-    ) -> ResultRewrite {
-        Ok(ControlFlow::Continue(None))
-    }
 }
 
 struct RewriteVisitor<'a> {
@@ -854,6 +861,7 @@ impl EqVisitor for RewriteVisitor<'_> {
         scalar_type: &DataType,
     ) -> ResultRewrite {
         let Expr::Cast {
+            span,
             is_try: false,
             expr:
                 box Expr::ColumnRef {
@@ -868,11 +876,13 @@ impl EqVisitor for RewriteVisitor<'_> {
             return Ok(ControlFlow::Continue(None));
         };
 
+        // For any injective function y = f(x), the eq(column, inverse_f(const)) is a necessary condition for eq(f(column), const).
+        // For example, the result of col = '+1'::int contains col::string = '+1'.
         if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
             return Ok(ControlFlow::Break(None));
         }
 
-        // check domain for may overflow
+        // check domain for possible overflow
         if ConstantFolder::<String>::fold_with_domain(
             cast,
             self.domains,
@@ -888,54 +898,20 @@ impl EqVisitor for RewriteVisitor<'_> {
         let Some(s) = cast_const(src_type.to_owned(), scalar_type.to_owned(), scalar) else {
             return Ok(ControlFlow::Break(None));
         };
-
         if s.is_null() {
-            Ok(ControlFlow::Break(None))
-        } else {
-            self.enter_target(
-                None,
-                id,
-                &s,
-                src_type,
-                &if dest_type.is_nullable() {
-                    DataType::Boolean.wrap_nullable()
-                } else {
-                    DataType::Boolean
-                },
-            )
+            return Ok(ControlFlow::Break(None));
         }
-    }
 
-    fn enter_function(
-        &mut self,
-        func: &Expr<String>,
-        scalar: &Scalar,
-        scalar_type: &DataType,
-    ) -> ResultRewrite {
-        let Expr::FunctionCall {
-            span,
+        self.enter_target(
+            *span,
             id,
-            args,
-            return_type,
-            ..
-        } = func
-        else {
-            return Ok(ControlFlow::Continue(None));
-        };
-
-        if !id.name().starts_with("to_") || args.len() != 1 {
-            return Ok(ControlFlow::Continue(None));
-        }
-
-        self.enter_cast(
-            &Expr::Cast {
-                span: *span,
-                is_try: false,
-                expr: Box::new(args[0].clone()),
-                dest_type: return_type.clone(),
+            &s,
+            src_type,
+            &if dest_type.is_nullable() {
+                DataType::Boolean.wrap_nullable()
+            } else {
+                DataType::Boolean
             },
-            scalar,
-            scalar_type,
         )
     }
 }
@@ -1009,42 +985,8 @@ impl EqVisitor for ShortListVisitor {
 
         Ok(ControlFlow::Break(None))
     }
-
-    fn enter_function(
-        &mut self,
-        func: &Expr<String>,
-        scalar: &Scalar,
-        scalar_type: &DataType,
-    ) -> ResultRewrite {
-        let Expr::FunctionCall {
-            span,
-            id,
-            args,
-            return_type,
-            ..
-        } = func
-        else {
-            return Ok(ControlFlow::Continue(None));
-        };
-
-        if !id.name().starts_with("to_") || args.len() != 1 {
-            return Ok(ControlFlow::Continue(None));
-        }
-
-        self.enter_cast(
-            &Expr::Cast {
-                span: *span,
-                is_try: false,
-                expr: Box::new(args[0].clone()),
-                dest_type: return_type.clone(),
-            },
-            scalar,
-            scalar_type,
-        )
-    }
 }
 
-// Ignore FunctionDomain::MayThrow
 fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
     if src == dest {
         return true;

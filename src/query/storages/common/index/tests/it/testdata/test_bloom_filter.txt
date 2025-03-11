@@ -207,26 +207,37 @@ domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_t
 result   : MustFalse
 
 
++-----------+------+-------------------------+
+| Column ID | Type | Column Data             |
++-----------+------+-------------------------+
+| 0         | Int8 | Column(Int8([0, 1, 2])) |
++-----------+------+-------------------------+
+expr     : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int8>(5, 0)(x), 1.2_d128(2,1))
+filter   : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int8>(5, 0)(x), 1.2_d128(2,1))
+domains  : {"x": Number(Int8(SimpleDomain { min: 0, max: 2 }))}
+result   : Uncertain
+
+
 +-----------+------+----------------------+
 | Column ID | Type | Column Data          |
 +-----------+------+----------------------+
-| 0         | Int8 | Column(Int8([0, 2])) |
+| 0         | Int8 | Column(Int8([0, 1])) |
 +-----------+------+----------------------+
-expr     : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int8>(5, 0)(x), 1.2_d128(2,1))
+expr     : eq<Decimal(5, 0), Decimal(3, 2)>(to_decimal<Int8>(5, 0)(x), 2.00_d128(3,2))
 filter   : __bloom_column_x_1
-domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int8(SimpleDomain { min: 0, max: 2 }))}
+domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int8(SimpleDomain { min: 0, max: 1 }))}
 result   : MustFalse
 
 
-+-----------+-------+-----------------------+
-| Column ID | Type  | Column Data           |
-+-----------+-------+-----------------------+
-| 0         | Int16 | Column(Int16([0, 2])) |
-+-----------+-------+-----------------------+
++-----------+-------+--------------------------+
+| Column ID | Type  | Column Data              |
++-----------+-------+--------------------------+
+| 0         | Int16 | Column(Int16([0, 1, 2])) |
++-----------+-------+--------------------------+
 expr     : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int16>(5, 0)(x), 1.2_d128(2,1))
-filter   : __bloom_column_x_1
-domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Number(Int16(SimpleDomain { min: 0, max: 2 }))}
-result   : MustFalse
+filter   : eq<Decimal(5, 0), Decimal(2, 1)>(to_decimal<Int16>(5, 0)(x), 1.2_d128(2,1))
+domains  : {"x": Number(Int16(SimpleDomain { min: 0, max: 2 }))}
+result   : Uncertain
 
 
 +-----------+-------+----------------------------+
@@ -285,13 +296,37 @@ domains  : {"x": String(StringDomain { min: "2021-03-05 01:01:01", max: Some("20
 result   : Uncertain
 
 
-+-----------+------+------------------------+
-| Column ID | Type | Column Data            |
-+-----------+------+------------------------+
-| 0         | Date | Column([18600, 19000]) |
-+-----------+------+------------------------+
++-----------+------+-------------------------------+
+| Column ID | Type | Column Data                   |
++-----------+------+-------------------------------+
+| 0         | Date | Column([18600, 18691, 19000]) |
++-----------+------+-------------------------------+
 expr     : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), to_timestamp<String>("2021-03-05 01:01:03"))
 fold_expr: eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1614906063000000)
+filter   : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1614906063000000)
+domains  : {"x": Date(SimpleDomain { min: 18600, max: 19000 })}
+result   : Uncertain
+
+
++-----------+------+-------------------------------+
+| Column ID | Type | Column Data                   |
++-----------+------+-------------------------------+
+| 0         | Date | Column([18600, 18691, 19000]) |
++-----------+------+-------------------------------+
+expr     : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), to_timestamp<String>("2021-03-05 00:00:00"))
+fold_expr: eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1614902400000000)
+filter   : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1614902400000000)
+domains  : {"x": Date(SimpleDomain { min: 18600, max: 19000 })}
+result   : Uncertain
+
+
++-----------+------+-------------------------------+
+| Column ID | Type | Column Data                   |
++-----------+------+-------------------------------+
+| 0         | Date | Column([18600, 18691, 19000]) |
++-----------+------+-------------------------------+
+expr     : eq<Timestamp, Timestamp>(to_timestamp<Date>(x), to_timestamp<String>("2030-03-05 00:00:00"))
+fold_expr: eq<Timestamp, Timestamp>(to_timestamp<Date>(x), 1898899200000000)
 filter   : __bloom_column_x_1
 domains  : {"__bloom_column_x_1": Boolean(BooleanDomain { has_false: true, has_true: false }), "x": Date(SimpleDomain { min: 18600, max: 19000 })}
 result   : MustFalse

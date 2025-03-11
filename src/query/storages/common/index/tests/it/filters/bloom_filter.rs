@@ -283,7 +283,17 @@ fn test_cast(file: &mut impl Write) {
         &[(
             "x",
             TableDataType::Number(NumberDataType::Int8),
-            Int8Type::from_data(vec![0, 2]),
+            Int8Type::from_data(vec![0, 1, 2]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::decimal(5,0) = 2.00",
+        &[(
+            "x",
+            TableDataType::Number(NumberDataType::Int8),
+            Int8Type::from_data(vec![0, 1]),
         )],
         &[0],
     );
@@ -293,7 +303,7 @@ fn test_cast(file: &mut impl Write) {
         &[(
             "x",
             TableDataType::Number(NumberDataType::Int16),
-            Int16Type::from_data(vec![0, 2]),
+            Int16Type::from_data(vec![0, 1, 2]),
         )],
         &[0],
     );
@@ -353,7 +363,27 @@ fn test_cast(file: &mut impl Write) {
         &[(
             "x",
             TableDataType::Date,
-            DateType::from_data(vec![18600, 19000]),
+            DateType::from_data(vec![18600, 18691, 19000]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::datetime = '2021-03-05 00:00:00'",
+        &[(
+            "x",
+            TableDataType::Date,
+            DateType::from_data(vec![18600, 18691, 19000]),
+        )],
+        &[0],
+    );
+    eval_text(
+        file,
+        "x::datetime = '2030-03-05 00:00:00'",
+        &[(
+            "x",
+            TableDataType::Date,
+            DateType::from_data(vec![18600, 18691, 19000]),
         )],
         &[0],
     );
