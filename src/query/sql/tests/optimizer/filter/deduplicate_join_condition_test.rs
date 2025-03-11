@@ -32,16 +32,22 @@ use databend_common_sql::IndexType;
 
 // ===== Helper Functions =====
 
-/// Creates a column reference with the given index, name, and data type
-fn create_column_ref(index: IndexType, name: &str, data_type: DataType) -> ScalarExpr {
+/// Creates a column reference with the given index, name, data type, table name and table index
+fn create_column_ref1(
+    index: IndexType,
+    name: &str,
+    data_type: DataType,
+    table_name: Option<&str>,
+    table_index: Option<IndexType>,
+) -> ScalarExpr {
     let column = ColumnBinding {
         index,
         column_name: name.to_string(),
         data_type: Box::new(data_type),
         database_name: None,
-        table_name: None,
+        table_name: table_name.map(|s| s.to_string()),
         column_position: None,
-        table_index: None,
+        table_index,
         visibility: Visibility::Visible,
         virtual_expr: None,
     };
@@ -100,13 +106,25 @@ fn sexpr_to_string(s_expr: &SExpr) -> String {
                 .iter()
                 .map(|cond| {
                     let left = if let ScalarExpr::BoundColumnRef(left) = &cond.left {
-                        format!("t{}.{}", left.column.index, left.column.column_name)
+                        // Only use the explicitly provided table_name
+                        if let Some(table_name) = &left.column.table_name {
+                            format!("{}.{}", table_name, left.column.column_name)
+                        } else {
+                            // If no table_name is provided, use a placeholder
+                            format!("unknown.{}", left.column.column_name)
+                        }
                     } else {
                         "?".to_string()
                     };
 
                     let right = if let ScalarExpr::BoundColumnRef(right) = &cond.right {
-                        format!("t{}.{}", right.column.index, right.column.column_name)
+                        // Only use the explicitly provided table_name
+                        if let Some(table_name) = &right.column.table_name {
+                            format!("{}.{}", table_name, right.column.column_name)
+                        } else {
+                            // If no table_name is provided, use a placeholder
+                            format!("unknown.{}", right.column.column_name)
+                        }
                     } else {
                         "?".to_string()
                     };
@@ -197,7 +215,7 @@ fn compare_trees(
 
     if !before_matched && !before_patterns.is_empty() {
         return Err(ErrorCode::from_string(format!(
-            "Before tree does not match expected pattern.\nExpected one of:\n{}\nBut got:\n{}",
+            "Input tree does not match expected pattern. Please update the before_patterns in the test.\nExpected one of:\n{}\nBut got:\n{}",
             before_patterns.join("\n"),
             before_str
         )));
@@ -254,9 +272,27 @@ fn compare_trees(
 #[test]
 fn test_basic_deduplication() -> Result<()> {
     // Create column references for t1.id, t2.id, and t3.id
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Int64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t3_id = create_column_ref1(
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t3"),
+        Some(2),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -279,28 +315,28 @@ fn test_basic_deduplication() -> Result<()> {
 
     // Define expected before optimization patterns
     let before_patterns = [r#"
-Join [t0.id = t2.id, t1.id = t2.id]
+Join [t1.id = t3.id, t2.id = t3.id]
   Table t2
-  Join [t0.id = t1.id]
+  Join [t1.id = t2.id]
     Table t0
     Table t1
 "#];
 
     // Define expected after optimization patterns
     let after_patterns = [
-        // Pattern 1: t0-t2 condition remains
+        // Pattern 1: t1-t3 condition remains
         r#"
-Join [t0.id = t2.id]
+Join [t1.id = t3.id]
   Table t2
-  Join [t0.id = t1.id]
+  Join [t1.id = t2.id]
     Table t0
     Table t1
 "#,
-        // Pattern 2: t1-t2 condition remains
+        // Pattern 2: t2-t3 condition remains
         r#"
-Join [t1.id = t2.id]
+Join [t2.id = t3.id]
   Table t2
-  Join [t0.id = t1.id]
+  Join [t1.id = t2.id]
     Table t0
     Table t1
 "#,
@@ -322,9 +358,27 @@ Join [t1.id = t2.id]
 #[test]
 fn test_different_data_types() -> Result<()> {
     // Create column references with different data types
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int32));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Float64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int32),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t3_id = create_column_ref1(
+        2,
+        "id",
+        DataType::Number(NumberDataType::Float64),
+        Some("t3"),
+        Some(2),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -347,8 +401,8 @@ fn test_different_data_types() -> Result<()> {
 
     // Define expected before optimization patterns
     let before_patterns = [r#"
-    Join [t1.id = t2.id, t0.id = t2.id]
-      Join [t0.id = t1.id]
+    Join [t2.id = t3.id, t1.id = t3.id]
+      Join [t1.id = t2.id]
         Table t0
         Table t1
       Table t2
@@ -358,16 +412,16 @@ fn test_different_data_types() -> Result<()> {
     let after_patterns = [
         // Pattern 1: t1-t3 condition is removed
         r#"
-    Join [t1.id = t2.id]
-      Join [t0.id = t1.id]
+    Join [t2.id = t3.id]
+      Join [t1.id = t2.id]
         Table t0
         Table t1
       Table t2
     "#,
         // Pattern 2: t2-t3 condition is removed
         r#"
-    Join [t0.id = t2.id]
-      Join [t0.id = t1.id]
+    Join [t1.id = t3.id]
+      Join [t1.id = t2.id]
         Table t0
         Table t1
       Table t2
@@ -400,10 +454,22 @@ fn test_different_data_types() -> Result<()> {
 #[test]
 fn test_no_redundant_conditions() -> Result<()> {
     // Create column references for different columns
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t1_name = create_column_ref(2, "name", DataType::String);
-    let t2_name = create_column_ref(3, "name", DataType::String);
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t1_name = create_column_ref1(2, "name", DataType::String, Some("t1"), Some(0));
+    let t2_name = create_column_ref1(3, "name", DataType::String, Some("t2"), Some(1));
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -420,7 +486,7 @@ fn test_no_redundant_conditions() -> Result<()> {
     let before_patterns = [
         // The tree with both non-redundant conditions
         r#"
-Join [t0.id = t1.id, t2.name = t3.name]
+Join [t1.id = t2.id, t1.name = t2.name]
   Table t0
   Table t1
 "#,
@@ -430,7 +496,7 @@ Join [t0.id = t1.id, t2.name = t3.name]
     let after_patterns = [
         // The tree should remain unchanged with both conditions
         r#"
-Join [t0.id = t1.id, t2.name = t3.name]
+Join [t1.id = t2.id, t1.name = t2.name]
   Table t0
   Table t1
 "#,
@@ -478,10 +544,34 @@ Join [t0.id = t1.id, t2.name = t3.name]
 #[test]
 fn test_complex_transitive_conditions() -> Result<()> {
     // Create column references for multiple tables
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Int64));
-    let t4_id = create_column_ref(3, "id", DataType::Number(NumberDataType::Int64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t3_id = create_column_ref1(
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t3"),
+        Some(2),
+    );
+    let t4_id = create_column_ref1(
+        3,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t4"),
+        Some(3),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -516,9 +606,9 @@ fn test_complex_transitive_conditions() -> Result<()> {
     let before_patterns = [
         // Before optimization, we have all 6 conditions
         r#"
-Join [t2.id = t3.id, t1.id = t3.id, t0.id = t3.id]
-  Join [t1.id = t2.id, t0.id = t2.id]
-    Join [t0.id = t1.id]
+Join [t3.id = t4.id, t2.id = t4.id, t1.id = t4.id]
+  Join [t2.id = t3.id, t1.id = t3.id]
+    Join [t1.id = t2.id]
       Table t0
       Table t1
     Table t2
@@ -530,9 +620,9 @@ Join [t2.id = t3.id, t1.id = t3.id, t0.id = t3.id]
     let after_patterns = [
         // After optimization, we should have only 3 non-redundant conditions
         r#"
-Join [t2.id = t3.id]
-  Join [t1.id = t2.id]
-    Join [t0.id = t1.id]
+Join [t3.id = t4.id]
+  Join [t2.id = t3.id]
+    Join [t1.id = t2.id]
       Table t0
       Table t1
     Table t2
@@ -574,9 +664,27 @@ Join [t2.id = t3.id]
 #[test]
 fn test_null_equal_conditions() -> Result<()> {
     // Create column references
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Int64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t3_id = create_column_ref1(
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t3"),
+        Some(2),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -601,8 +709,8 @@ fn test_null_equal_conditions() -> Result<()> {
     let before_patterns = [
         // Before optimization, we have both conditions
         r#"
-Join [t1.id IS NOT DISTINCT FROM t2.id, t0.id IS NOT DISTINCT FROM t2.id]
-  Join [t0.id IS NOT DISTINCT FROM t1.id]
+Join [t2.id IS NOT DISTINCT FROM t3.id, t1.id IS NOT DISTINCT FROM t3.id]
+  Join [t1.id IS NOT DISTINCT FROM t2.id]
     Table t0
     Table t1
   Table t2
@@ -613,8 +721,8 @@ Join [t1.id IS NOT DISTINCT FROM t2.id, t0.id IS NOT DISTINCT FROM t2.id]
     let after_patterns = [
         // After optimization, we should have only the non-redundant condition
         r#"
-Join [t1.id IS NOT DISTINCT FROM t2.id]
-  Join [t0.id IS NOT DISTINCT FROM t1.id]
+Join [t2.id IS NOT DISTINCT FROM t3.id]
+  Join [t1.id IS NOT DISTINCT FROM t2.id]
     Table t0
     Table t1
   Table t2
@@ -654,9 +762,27 @@ Join [t1.id IS NOT DISTINCT FROM t2.id]
 #[test]
 fn test_mixed_null_equal_conditions() -> Result<()> {
     // Create column references
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Int64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t3_id = create_column_ref1(
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t3"),
+        Some(2),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -681,8 +807,8 @@ fn test_mixed_null_equal_conditions() -> Result<()> {
     let before_patterns = [
         // Before optimization, we have both conditions
         r#"
-Join [t1.id = t2.id, t0.id IS NOT DISTINCT FROM t2.id]
-  Join [t0.id IS NOT DISTINCT FROM t1.id]
+Join [t2.id = t3.id, t1.id IS NOT DISTINCT FROM t3.id]
+  Join [t1.id IS NOT DISTINCT FROM t2.id]
     Table t0
     Table t1
   Table t2
@@ -693,8 +819,8 @@ Join [t1.id = t2.id, t0.id IS NOT DISTINCT FROM t2.id]
     let after_patterns = [
         // After optimization, we should have only the non-redundant condition
         r#"
-Join [t1.id = t2.id]
-  Join [t0.id IS NOT DISTINCT FROM t1.id]
+Join [t2.id = t3.id]
+  Join [t1.id IS NOT DISTINCT FROM t2.id]
     Table t0
     Table t1
   Table t2
@@ -734,9 +860,27 @@ Join [t1.id = t2.id]
 #[test]
 fn test_non_inner_join_types() -> Result<()> {
     // Create column references
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Int64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t3_id = create_column_ref1(
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t3"),
+        Some(2),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -756,8 +900,8 @@ fn test_non_inner_join_types() -> Result<()> {
     let before_patterns = [
         // Before optimization, we have both conditions
         r#"
-Join [t1.id = t2.id, t0.id = t2.id]
-  Join [t0.id = t1.id]
+Join [t2.id = t3.id, t1.id = t3.id]
+  Join [t1.id = t2.id]
     Table t0
     Table t1
   Table t2
@@ -768,8 +912,8 @@ Join [t1.id = t2.id, t0.id = t2.id]
     let after_patterns = [
         // After optimization, we should still have both conditions for non-inner joins
         r#"
-Join [t1.id = t2.id, t0.id = t2.id]
-  Join [t0.id = t1.id]
+Join [t2.id = t3.id, t1.id = t3.id]
+  Join [t1.id = t2.id]
     Table t0
     Table t1
   Table t2
@@ -786,112 +930,49 @@ Join [t1.id = t2.id, t0.id = t2.id]
 }
 
 // Test case for multiple join conditions between the same tables
-// For example: SELECT * FROM t1, t2 WHERE t1.id = t2.id AND t1.name = t2.name AND t1.id = t2.id
-//
-// SQL Example:
-// -- Create the first table t1
-// CREATE OR REPLACE TABLE t1 (
-//     id INT,
-//     name VARCHAR
-// );
-//
-// -- Create the second table t2
-// CREATE OR REPLACE TABLE t2 (
-//     id INT,
-//     name VARCHAR
-// );
-//
-// -- Insert data into t1
-// INSERT INTO t1 (id, name) VALUES
-// (1, 'Alice'),
-// (2, 'Bob'),
-// (3, 'Charlie'),
-// (4, 'David');
-//
-// -- Insert data into t2
-// INSERT INTO t2 (id, name) VALUES
-// (1, 'Alice'),
-// (2, 'Bob'),
-// (3, 'Eve'),
-// (5, 'Frank');
-//
-// -- Query with multiple join conditions including a duplicate
-// -- This query has three conditions:
-// -- 1. t1.id = t2.id
-// -- 2. t1.name = t2.name
-// -- 3. t1.id = t2.id (duplicate of condition 1)
-// EXPLAIN SELECT *
-// FROM t1, t2
-// WHERE t1.id = t2.id AND t1.name = t2.name AND t1.id = t2.id;
-//
-// Actual EXPLAIN output:
-// HashJoin
-// ├── output columns: [t1.id (#0), t1.name (#1), t2.id (#2), t2.name (#3)]
-// ├── join type: INNER
-// ├── build keys: [t2.id (#2), t2.name (#3)]
-// ├── probe keys: [t1.id (#0), t1.name (#1)]
-// ├── filters: []
-// ├── estimated rows: 3.20
-// ├── TableScan(Build)
-// │   ├── table: default.sample_test.t2
-// │   ├── output columns: [id (#2), name (#3)]
-// │   ├── read rows: 4
-// │   ├── read size: < 1 KiB
-// │   ├── partitions total: 1
-// │   ├── partitions scanned: 1
-// │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-// │   ├── push downs: [filters: [], limit: NONE]
-// │   └── estimated rows: 4.00
-// └── TableScan(Probe)
-//     ├── table: default.sample_test.t1
-//     ├── output columns: [id (#0), name (#1)]
-//     ├── read rows: 4
-//     ├── read size: < 1 KiB
-//     ├── partitions total: 1
-//     ├── partitions scanned: 1
-//     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
-//     ├── push downs: [filters: [], limit: NONE]
-//     └── estimated rows: 4.00
-//
-// Note: The actual execution plan correctly includes both t1.id = t2.id and t1.name = t2.name conditions
-// in the join keys (build keys: [t2.id (#2), t2.name (#3)], probe keys: [t1.id (#0), t1.name (#1)]).
-// This suggests that while our optimizer test is failing, the actual query execution is correct.
-// The issue is in the DeduplicateJoinConditionOptimizer implementation, not in the final query execution.
-//
 // Before optimization:
-//    Join [t0.id = t1.id, t0.name = t1.name, t0.id = t1.id]
+//    Join [t1.id = t2.id, t1.name = t2.name, t1.id = t2.id]
 //    /  \
-//   t0  t1
+//   t1  t2
 //
 // After optimization:
-//    Join [t0.id = t1.id]
+//    Join [t1.id = t2.id, t1.name = t2.name]
 //    /  \
-//   t0  t1
+//   t1  t2
 //
-// Optimization: Removes duplicate join condition (t0.id = t1.id appears twice),
-// but also incorrectly removes the non-duplicate condition (t0.name = t1.name).
-// This reveals a bug in the optimizer where it doesn't properly distinguish between
-// different columns from the same table.
-//
-// The expected behavior should be:
-//    Join [t0.id = t1.id, t0.name = t1.name]
-//    /  \
-//   t0  t1
-//
-// But the actual behavior is:
-//    Join [t0.id = t1.id]
-//    /  \
-//   t0  t1
-//
-// The bug is in the DeduplicateJoinConditionOptimizer's get_scalar_expr_index method,
-// which doesn't properly consider column names when determining if two expressions are equivalent.
+// Optimization: Removes duplicate join condition (t1.id = t2.id appears twice),
+// but keeps the non-duplicate condition (t1.name = t2.name).
 #[test]
 fn test_multiple_conditions_same_tables() -> Result<()> {
     // Create column references for different columns
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int32));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int32));
-    let t1_name = create_column_ref(0, "name", DataType::Number(NumberDataType::Int32));
-    let t2_name = create_column_ref(1, "name", DataType::Number(NumberDataType::Int32));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int32),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int32),
+        Some("t2"),
+        Some(1),
+    );
+    let t1_name = create_column_ref1(
+        1,
+        "name",
+        DataType::Number(NumberDataType::Int32),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_name = create_column_ref1(
+        1,
+        "name",
+        DataType::Number(NumberDataType::Int32),
+        Some("t2"),
+        Some(1),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -912,23 +993,17 @@ fn test_multiple_conditions_same_tables() -> Result<()> {
 
     // Define expected before optimization patterns
     let before_patterns = [r#"
-    Join [t0.id = t1.id, t0.name = t1.name, t0.id = t1.id]
+    Join [t1.id = t2.id, t1.name = t2.name, t1.id = t2.id]
       Table t0
       Table t1
     "#];
 
     // Define expected after optimization patterns
-    // Currently this matches the actual (buggy) behavior, not the desired behavior
     let after_patterns = [r#"
-    Join [t0.id = t1.id]
+    Join [t1.id = t2.id, t1.name = t2.name]
       Table t0
       Table t1
     "#];
-
-    // NOTE: This test reveals a bug in the optimizer.
-    // The optimizer is currently removing all conditions between the same tables except one,
-    // even if they involve different columns (like id and name).
-    // This behavior needs to be fixed in the optimizer implementation.
 
     // Run the optimizer
     let optimized = run_optimizer(join_tree.clone())?;
@@ -1008,8 +1083,20 @@ Join []
 #[test]
 fn test_duplicate_identical_conditions() -> Result<()> {
     // Create column references
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -1026,7 +1113,7 @@ fn test_duplicate_identical_conditions() -> Result<()> {
     let before_patterns = [
         // Before optimization, join has duplicate conditions
         r#"
-Join [t0.id = t1.id, t0.id = t1.id]
+Join [t1.id = t2.id, t1.id = t2.id]
   Table t0
   Table t1
 "#,
@@ -1036,7 +1123,7 @@ Join [t0.id = t1.id, t0.id = t1.id]
     let after_patterns = [
         // After optimization, duplicate conditions are removed
         r#"
-Join [t0.id = t1.id]
+Join [t1.id = t2.id]
   Table t0
   Table t1
 "#,
@@ -1076,9 +1163,27 @@ Join [t0.id = t1.id]
 #[test]
 fn test_commutative_and_circular_conditions() -> Result<()> {
     // Create column references
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Int64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t3_id = create_column_ref1(
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t3"),
+        Some(2),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -1101,8 +1206,8 @@ fn test_commutative_and_circular_conditions() -> Result<()> {
 
     // Define expected before optimization patterns
     let before_patterns = [r#"
-Join [t1.id = t2.id, t2.id = t0.id]
-  Join [t0.id = t1.id]
+Join [t2.id = t3.id, t3.id = t1.id]
+  Join [t1.id = t2.id]
     Table t0
     Table t1
   Table t2
@@ -1111,8 +1216,8 @@ Join [t1.id = t2.id, t2.id = t0.id]
     // Define expected after optimization patterns
     // The optimizer correctly recognizes commutative conditions and removes redundant ones
     let after_patterns = [r#"
-Join [t1.id = t2.id]
-  Join [t0.id = t1.id]
+Join [t2.id = t3.id]
+  Join [t1.id = t2.id]
     Table t0
     Table t1
   Table t2
@@ -1167,11 +1272,41 @@ Join [t1.id = t2.id]
 #[test]
 fn test_deep_nested_join_tree() -> Result<()> {
     // Create column references for 5 tables
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Int64));
-    let t4_id = create_column_ref(3, "id", DataType::Number(NumberDataType::Int64));
-    let t5_id = create_column_ref(4, "id", DataType::Number(NumberDataType::Int64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t3_id = create_column_ref1(
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t3"),
+        Some(2),
+    );
+    let t4_id = create_column_ref1(
+        3,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t4"),
+        Some(3),
+    );
+    let t5_id = create_column_ref1(
+        4,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t5"),
+        Some(4),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -1200,10 +1335,10 @@ fn test_deep_nested_join_tree() -> Result<()> {
 
     // Define expected before optimization patterns
     let before_patterns = [r#"
-Join [t3.id = t4.id, t0.id = t4.id]
-  Join [t2.id = t3.id]
-    Join [t1.id = t2.id]
-      Join [t0.id = t1.id]
+Join [t4.id = t5.id, t1.id = t5.id]
+  Join [t3.id = t4.id]
+    Join [t2.id = t3.id]
+      Join [t1.id = t2.id]
         Table t0
         Table t1
       Table t2
@@ -1213,10 +1348,10 @@ Join [t3.id = t4.id, t0.id = t4.id]
 
     // Define expected after optimization patterns
     let after_patterns = [r#"
-Join [t3.id = t4.id]
-  Join [t2.id = t3.id]
-    Join [t1.id = t2.id]
-      Join [t0.id = t1.id]
+Join [t4.id = t5.id]
+  Join [t3.id = t4.id]
+    Join [t2.id = t3.id]
+      Join [t1.id = t2.id]
         Table t0
         Table t1
       Table t2
@@ -1258,9 +1393,27 @@ Join [t3.id = t4.id]
 #[test]
 fn test_mixed_join_types() -> Result<()> {
     // Create column references
-    let t1_id = create_column_ref(0, "id", DataType::Number(NumberDataType::Int64));
-    let t2_id = create_column_ref(1, "id", DataType::Number(NumberDataType::Int64));
-    let t3_id = create_column_ref(2, "id", DataType::Number(NumberDataType::Int64));
+    let t1_id = create_column_ref1(
+        0,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t1"),
+        Some(0),
+    );
+    let t2_id = create_column_ref1(
+        1,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t2"),
+        Some(1),
+    );
+    let t3_id = create_column_ref1(
+        2,
+        "id",
+        DataType::Number(NumberDataType::Int64),
+        Some("t3"),
+        Some(2),
+    );
 
     // Create table scans
     let t1 = create_table_scan(0, "t1");
@@ -1280,8 +1433,8 @@ fn test_mixed_join_types() -> Result<()> {
     let before_patterns = [
         // Before optimization, we have both conditions in the LEFT JOIN
         r#"
-Join [t1.id = t2.id, t0.id = t2.id]
-  Join [t0.id = t1.id]
+Join [t2.id = t3.id, t1.id = t3.id]
+  Join [t1.id = t2.id]
     Table t0
     Table t1
   Table t2
@@ -1292,8 +1445,8 @@ Join [t1.id = t2.id, t0.id = t2.id]
     let after_patterns = [
         // After optimization, conditions in LEFT JOIN should be preserved
         r#"
-Join [t1.id = t2.id, t0.id = t2.id]
-  Join [t0.id = t1.id]
+Join [t2.id = t3.id, t1.id = t3.id]
+  Join [t1.id = t2.id]
     Table t0
     Table t1
   Table t2
