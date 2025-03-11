@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
+use arrow_udf_js::FunctionOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
@@ -55,7 +56,6 @@ impl ScriptRuntime {
             UDFLanguage::JavaScript => {
                 let builder = JsRuntimeBuilder {
                     name: func.name.clone(),
-                    handler: func.func_name.clone(),
                     code: String::from_utf8(code.to_vec())?,
                     output_type: func.data_type.as_ref().clone(),
                     counter: Default::default(),
@@ -100,14 +100,16 @@ impl ScriptRuntime {
         input_batch: &RecordBatch,
     ) -> Result<RecordBatch> {
         let result_batch = match self {
-            ScriptRuntime::JavaScript(pool) => pool
-                .call(|runtime| runtime.call(&func.name, input_batch))
-                .map_err(|err| {
-                    ErrorCode::UDFRuntimeError(format!(
-                        "JavaScript UDF {:?} execution failed: {err}",
-                        func.name
-                    ))
-                })?,
+            ScriptRuntime::JavaScript(pool) => pool.call(|runtime| {
+                databend_common_base::runtime::block_on(async move {
+                    runtime.call(&func.name, input_batch).await.map_err(|err| {
+                        ErrorCode::UDFRuntimeError(format!(
+                            "JavaScript UDF {:?} execution failed: {err}",
+                            func.name
+                        ))
+                    })
+                })
+            })?,
             #[cfg(feature = "python-udf")]
             ScriptRuntime::Python(pool) => pool
                 .call(|runtime| runtime.call(&func.name, input_batch))
@@ -118,7 +120,26 @@ impl ScriptRuntime {
                     ))
                 })?,
             ScriptRuntime::WebAssembly(runtime) => {
-                runtime.call(&func.func_name, input_batch).map_err(|err| {
+                let args_types: Vec<_> = input_batch
+                    .schema()
+                    .fields()
+                    .iter()
+                    .map(|f| f.as_ref().clone())
+                    .collect();
+                let return_type = func.data_type.as_ref().clone();
+                let f = DataField::new(&func.func_name, return_type);
+                let return_f = arrow_schema::Field::from(&f);
+
+                let handle = runtime
+                    .find_function(&func.func_name, args_types, return_f)
+                    .map_err(|err| {
+                        ErrorCode::UDFRuntimeError(format!(
+                            "WASM UDF {:?} execution failed: {err}",
+                            func.func_name
+                        ))
+                    })?;
+
+                runtime.call(&handle, input_batch).map_err(|err| {
                     ErrorCode::UDFRuntimeError(format!(
                         "WASM UDF {:?} execution failed: {err}",
                         func.func_name
@@ -132,7 +153,6 @@ impl ScriptRuntime {
 
 pub struct JsRuntimeBuilder {
     name: String,
-    handler: String,
     code: String,
     output_type: DataType,
 
@@ -144,23 +164,31 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
 
     fn build(&self) -> Result<arrow_udf_js::Runtime> {
         let start = std::time::Instant::now();
-        let mut runtime = arrow_udf_js::Runtime::new()
-            .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))?;
+        let mut runtime = databend_common_base::runtime::block_on(async move {
+            arrow_udf_js::Runtime::new()
+                .await
+                .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
+        })?;
 
         let converter = runtime.converter_mut();
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
-        runtime.add_function_with_handler(
-            &self.name,
-            // we pass the field instead of the data type because arrow-udf-js
-            // now takes the field as an argument here so that it can get any
-            // metadata associated with the field
-            arrow_field_from_data_type(&self.name, self.output_type.clone()),
-            arrow_udf_js::CallMode::ReturnNullOnNullInput,
-            &self.code,
-            &self.handler,
-        )?;
+        let rt = databend_common_base::runtime::block_on(async move {
+            runtime
+                .add_function(
+                    &self.name,
+                    // we pass the field instead of the data type because arrow-udf-js
+                    // now takes the field as an argument here so that it can get any
+                    // metadata associated with the field
+                    arrow_field_from_data_type(&self.name, self.output_type.clone()),
+                    &self.code,
+                    FunctionOptions::default().return_null_on_null_input(),
+                )
+                .await?;
+
+            Ok(runtime)
+        });
 
         log::info!(
             "Init JavaScript UDF runtime for {:?} #{} took: {:?}",
@@ -169,8 +197,7 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
             start.elapsed()
         );
-
-        Ok(runtime)
+        rt
     }
 }
 

@@ -22,6 +22,7 @@ use arrow_array::Array;
 use arrow_array::RecordBatch;
 use arrow_schema::ArrowError;
 use arrow_schema::DataType as ArrowType;
+use arrow_udf_js::AggregateOptions;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
@@ -315,33 +316,32 @@ impl RuntimeBuilder<arrow_udf_js::Runtime> for JsRuntimeBuilder {
     type Error = ErrorCode;
 
     fn build(&self) -> std::result::Result<arrow_udf_js::Runtime, Self::Error> {
-        let mut runtime = match arrow_udf_js::Runtime::new() {
-            Ok(runtime) => runtime,
-            Err(e) => {
-                return Err(ErrorCode::UDFDataError(format!(
-                    "Cannot create js runtime: {e}"
-                )))
-            }
-        };
-
+        let mut runtime = databend_common_base::runtime::block_on(async move {
+            arrow_udf_js::Runtime::new()
+                .await
+                .map_err(|e| ErrorCode::UDFDataError(format!("Cannot create js runtime: {e}")))
+        })?;
         let converter = runtime.converter_mut();
         converter.set_arrow_extension_key(EXTENSION_KEY);
         converter.set_json_extension_name(ARROW_EXT_TYPE_VARIANT);
 
-        runtime
-            .add_aggregate(
-                &self.name,
-                self.state_type.clone(),
-                // we pass the field instead of the data type because arrow-udf-js
-                // now takes the field as an argument here so that it can get any
-                // metadata associated with the field
-                arrow_field_from_data_type(&self.name, self.output_type.clone()),
-                arrow_udf_js::CallMode::CalledOnNullInput,
-                &self.code,
-            )
-            .map_err(|e| ErrorCode::UDFDataError(format!("Cannot add aggregate: {e}")))?;
+        databend_common_base::runtime::block_on(async move {
+            runtime
+                .add_aggregate(
+                    &self.name,
+                    self.state_type.clone(),
+                    // we pass the field instead of the data type because arrow-udf-js
+                    // now takes the field as an argument here so that it can get any
+                    // metadata associated with the field
+                    arrow_field_from_data_type(&self.name, self.output_type.clone()),
+                    &self.code,
+                    AggregateOptions::default().return_null_on_null_input(),
+                )
+                .await
+                .map_err(|e| ErrorCode::UDFDataError(format!("Cannot add aggregate: {e}")))?;
 
-        Ok(runtime)
+            Ok(runtime)
+        })
     }
 }
 
@@ -413,9 +413,11 @@ impl UDAFRuntime {
 
     fn create_state(&self) -> anyhow::Result<UdfAggState> {
         let state = match self {
-            UDAFRuntime::JavaScript(pool) => {
-                pool.call(|runtime| runtime.create_state(&pool.builder.name))
-            }
+            UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
+                databend_common_base::runtime::block_on(async move {
+                    runtime.create_state(&pool.builder.name).await
+                })
+            }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
                 pool.call(|runtime| runtime.create_state(&pool.builder.name))
@@ -427,9 +429,13 @@ impl UDAFRuntime {
 
     fn accumulate(&self, state: &UdfAggState, input: &RecordBatch) -> anyhow::Result<UdfAggState> {
         let state = match self {
-            UDAFRuntime::JavaScript(pool) => {
-                pool.call(|runtime| runtime.accumulate(&pool.builder.name, &state.0, input))
-            }
+            UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
+                databend_common_base::runtime::block_on(async move {
+                    runtime
+                        .accumulate(&pool.builder.name, &state.0, input)
+                        .await
+                })
+            }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
                 pool.call(|runtime| runtime.accumulate(&pool.builder.name, &state.0, input))
@@ -441,9 +447,11 @@ impl UDAFRuntime {
 
     fn merge(&self, states: &Arc<dyn Array>) -> anyhow::Result<UdfAggState> {
         let state = match self {
-            UDAFRuntime::JavaScript(pool) => {
-                pool.call(|runtime| runtime.merge(&pool.builder.name, states))
-            }
+            UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
+                databend_common_base::runtime::block_on(async move {
+                    runtime.merge(&pool.builder.name, states).await
+                })
+            }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
                 pool.call(|runtime| runtime.merge(&pool.builder.name, states))
@@ -455,9 +463,11 @@ impl UDAFRuntime {
 
     fn finish(&self, state: &UdfAggState) -> anyhow::Result<Arc<dyn Array>> {
         match self {
-            UDAFRuntime::JavaScript(pool) => {
-                pool.call(|runtime| runtime.finish(&pool.builder.name, &state.0))
-            }
+            UDAFRuntime::JavaScript(pool) => pool.call(|runtime| {
+                databend_common_base::runtime::block_on(async move {
+                    runtime.finish(&pool.builder.name, &state.0).await
+                })
+            }),
             #[cfg(feature = "python-udf")]
             UDAFRuntime::Python(pool) => {
                 pool.call(|runtime| runtime.finish(&pool.builder.name, &state.0))
@@ -541,7 +551,11 @@ export function finish(state) {
         };
         let pool = JsRuntimePool::new(builder);
 
-        let state = pool.call(|runtime| runtime.create_state(&agg_name))?;
+        let state = pool.call(|runtime| {
+            databend_common_base::runtime::block_on(
+                async move { runtime.create_state(&agg_name).await },
+            )
+        })?;
 
         let want: Arc<dyn arrow_array::Array> = Arc::new(StructArray::new(
             fields.into(),

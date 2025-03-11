@@ -321,30 +321,24 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn exists_database(&self, _tenant: &Tenant, db_name: &str) -> Result<bool> {
-        let db_names = self
-            .iceberg_catalog()
-            .list_namespaces(None)
+        let ns = NamespaceIdent::new(db_name.to_owned());
+        self.iceberg_catalog()
+            .namespace_exists(&ns)
             .await
             .map_err(|err| {
                 ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
-            })?;
-
-        Ok(db_names
-            .iter()
-            .find(|name| name.to_url_string() == db_name)
-            .is_some())
+            })
     }
 
     #[async_backtrace::framed]
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply> {
         let ns = NamespaceIdent::new(req.name_ident.name().to_owned());
-        if req.if_exists {
-            if !self
+        if req.if_exists
+            && !self
                 .exists_database(req.name_ident.tenant(), req.name_ident.name())
                 .await?
-            {
-                return Ok(DropDatabaseReply { db_id: 0 });
-            }
+        {
+            return Ok(DropDatabaseReply { db_id: 0 });
         }
 
         let _ = self
@@ -483,13 +477,12 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
-        if req.if_exists {
-            if !self
+        if req.if_exists
+            && !self
                 .exists_table(req.tenant(), req.db_name(), req.table_name())
                 .await?
-            {
-                return Ok(RenameTableReply { table_id: 0 });
-            }
+        {
+            return Ok(RenameTableReply { table_id: 0 });
         }
 
         let src = NamespaceIdent::new(req.db_name().to_owned());
