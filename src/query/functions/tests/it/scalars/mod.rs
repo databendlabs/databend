@@ -36,7 +36,6 @@ mod bitmap;
 mod boolean;
 mod cast;
 mod comparison;
-mod constant_folder;
 mod control;
 mod datetime;
 mod geo;

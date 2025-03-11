@@ -483,6 +483,7 @@ impl BloomIndex {
     }
 
     /// Find all columns that can be use for index in the expression.
+    #[expect(clippy::type_complexity)]
     pub fn filter_index_field(
         mut expr: Expr<String>,
         fields: &[TableField],
@@ -715,6 +716,8 @@ fn visit_expr_column_eq_constant(
     Ok(())
 }
 
+type ResultRewrite = Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>>;
+
 trait EqVisitor {
     fn enter_target(
         &mut self,
@@ -723,7 +726,7 @@ trait EqVisitor {
         scalar: &Scalar,
         ty: &DataType,
         return_type: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>>;
+    ) -> ResultRewrite;
 
     fn enter_map_column(
         &mut self,
@@ -732,7 +735,7 @@ trait EqVisitor {
         scalar: &Scalar,
         scalar_type: &DataType,
         return_type: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+    ) -> ResultRewrite {
         match &args[0] {
             Expr::ColumnRef { id, data_type, .. }
             | Expr::Cast {
@@ -765,7 +768,7 @@ trait EqVisitor {
         _cast: &Expr<String>,
         _scalar: &Scalar,
         _scalar_type: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+    ) -> ResultRewrite {
         Ok(ControlFlow::Continue(None))
     }
 
@@ -774,7 +777,7 @@ trait EqVisitor {
         _func: &Expr<String>,
         _scalar: &Scalar,
         _scalar_type: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+    ) -> ResultRewrite {
         Ok(ControlFlow::Continue(None))
     }
 }
@@ -788,7 +791,7 @@ struct RewriteVisitor<'a> {
     domains: &'a mut HashMap<String, Domain>,
 }
 
-impl<'a> EqVisitor for RewriteVisitor<'a> {
+impl EqVisitor for RewriteVisitor<'_> {
     fn enter_target(
         &mut self,
         span: Span,
@@ -796,7 +799,7 @@ impl<'a> EqVisitor for RewriteVisitor<'a> {
         scalar: &Scalar,
         ty: &DataType,
         return_type: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+    ) -> ResultRewrite {
         let filter_column = &BloomIndex::build_filter_column_name(
             self.index.version,
             self.data_schema.field_with_name(col_name)?,
@@ -849,7 +852,7 @@ impl<'a> EqVisitor for RewriteVisitor<'a> {
         cast: &Expr<String>,
         scalar: &Scalar,
         scalar_type: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+    ) -> ResultRewrite {
         let Expr::Cast {
             is_try: false,
             expr:
@@ -865,14 +868,14 @@ impl<'a> EqVisitor for RewriteVisitor<'a> {
             return Ok(ControlFlow::Continue(None));
         };
 
-        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(&src_type, dest_type) {
+        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
             return Ok(ControlFlow::Break(None));
         }
 
         // check domain for may overflow
         if ConstantFolder::<String>::fold_with_domain(
             cast,
-            &self.domains,
+            self.domains,
             &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,
         )
@@ -891,7 +894,7 @@ impl<'a> EqVisitor for RewriteVisitor<'a> {
         } else {
             self.enter_target(
                 None,
-                &id,
+                id,
                 &s,
                 src_type,
                 &if dest_type.is_nullable() {
@@ -908,7 +911,7 @@ impl<'a> EqVisitor for RewriteVisitor<'a> {
         func: &Expr<String>,
         scalar: &Scalar,
         scalar_type: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+    ) -> ResultRewrite {
         let Expr::FunctionCall {
             span,
             id,
@@ -926,7 +929,7 @@ impl<'a> EqVisitor for RewriteVisitor<'a> {
 
         self.enter_cast(
             &Expr::Cast {
-                span: span.clone(),
+                span: *span,
                 is_try: false,
                 expr: Box::new(args[0].clone()),
                 dest_type: return_type.clone(),
@@ -957,7 +960,7 @@ impl EqVisitor for ShortListVisitor {
         scalar: &Scalar,
         ty: &DataType,
         _: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+    ) -> ResultRewrite {
         if let Some(v) = self.found_field(col_name) {
             if !scalar.is_null() && Xor8Filter::supported_type(ty) {
                 self.founds.push(v.clone());
@@ -972,7 +975,7 @@ impl EqVisitor for ShortListVisitor {
         cast: &Expr<String>,
         scalar: &Scalar,
         scalar_type: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+    ) -> ResultRewrite {
         let Expr::Cast {
             is_try: false,
             expr:
@@ -991,7 +994,7 @@ impl EqVisitor for ShortListVisitor {
         let Some(field) = self.found_field(id) else {
             return Ok(ControlFlow::Break(None));
         };
-        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(&src_type, dest_type) {
+        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
             return Ok(ControlFlow::Break(None));
         }
 
@@ -1012,7 +1015,7 @@ impl EqVisitor for ShortListVisitor {
         func: &Expr<String>,
         scalar: &Scalar,
         scalar_type: &DataType,
-    ) -> Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>> {
+    ) -> ResultRewrite {
         let Expr::FunctionCall {
             span,
             id,
@@ -1030,7 +1033,7 @@ impl EqVisitor for ShortListVisitor {
 
         self.enter_cast(
             &Expr::Cast {
-                span: span.clone(),
+                span: *span,
                 is_try: false,
                 expr: Box::new(args[0].clone()),
                 dest_type: return_type.clone(),

@@ -441,10 +441,9 @@ fn eval_index_expr(
 
     let mut scalar_map = HashMap::<Scalar, u64>::new();
     for (scalar, ty) in scalars.into_iter() {
-        if !scalar_map.contains_key(&scalar) {
-            let digest = BloomIndex::calculate_scalar_digest(&func_ctx, &scalar, &ty).unwrap();
-            scalar_map.insert(scalar, digest);
-        }
+        scalar_map.entry(scalar).or_insert_with_key(|scalar| {
+            BloomIndex::calculate_scalar_digest(&func_ctx, scalar, &ty).unwrap()
+        });
     }
     let index = BloomIndex::try_create(
         func_ctx.clone(),
@@ -488,7 +487,7 @@ fn eval_index_expr(
             } => FilterEvalResult::MustFalse,
             _ => FilterEvalResult::Uncertain,
         };
-    let domains = BTreeMap::from_iter(domains.into_iter());
+    let domains = BTreeMap::from_iter(domains);
 
     writeln!(file, "filter   : {expr}").unwrap();
     writeln!(file, "domains  : {domains:?}").unwrap();
