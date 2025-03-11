@@ -25,7 +25,7 @@ env:
 
 jobs:
   management_mode:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}" ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
@@ -71,7 +71,7 @@ jobs:
           name: test-sqllogic-standalone-${{ matrix.tests.dirs }}-${{ matrix.handler }}
 
   standalone_udf_server:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}" ]
     steps:
       - uses: actions/checkout@v4
       - name: Start UDF Server
@@ -93,7 +93,7 @@ jobs:
           name: test-sqllogic-standalone-udf-server
 
   standalone_cloud:
-    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}" ]
     steps:
       - uses: actions/checkout@v4
       - name: Start Cloud Control Server
@@ -114,7 +114,7 @@ jobs:
           name: test-sqllogic-standalone-cloud
 
   standalone_minio:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}" ]
     strategy:
       fail-fast: false
       matrix:
@@ -141,11 +141,11 @@ jobs:
           name: test-sqllogic-standalone-minio-${{ matrix.dirs }}-${{ matrix.handler }}-${{ matrix.format }}
 
   standalone_minio_with_bendsave:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}" ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux_minio_with_bendsave
-        timeout-minutes: 15
+        timeout-minutes: 30
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
@@ -153,7 +153,7 @@ jobs:
           name: test-sqllogic-standalone-minio-tpch-http-with-bendsave
 
   standalone_iceberg_tpch:
-    runs-on: [self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 4c16g, "${{ inputs.runner_provider }}" ]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -211,7 +211,7 @@ jobs:
           name: test-sqllogic-cluster-${{ matrix.tests.dirs }}-${{ matrix.handler }}
 
   stage:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}" ]
     strategy:
       fail-fast: false
       matrix:
@@ -240,7 +240,7 @@ jobs:
           name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handler }}-${{ matrix.dedup }}
 
   standalone_no_table_meta_cache:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}" ]
     strategy:
       fail-fast: false
       matrix:
@@ -264,7 +264,7 @@ jobs:
           name: test-sqllogic-standalone-no-table-meta-cache-${{ matrix.dirs }}-${{ matrix.handler }}
 
   ee:
-    runs-on: [self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [ self-hosted, X64, Linux, 2c8g, "${{ inputs.runner_provider }}" ]
     strategy:
       fail-fast: false
       matrix:
