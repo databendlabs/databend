@@ -22,6 +22,7 @@ on:
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
   RUNNER_PROVIDER: ${{ inputs.runner_provider }}
+  PIP_INDEX_URL: "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
 
 jobs:
   check:
