@@ -30,10 +30,11 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use databend_common_expression::VariantType;
+use databend_common_expression::VariantDataType;
 use databend_common_expression::VirtualDataField;
 use databend_common_expression::VirtualDataSchema;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
+use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskIdIdent;
@@ -2794,9 +2795,9 @@ impl SchemaApiTestSuite {
                 for i in 0..VIRTUAL_COLUMNS_LIMIT + 1 {
                     virtual_schema.fields.push(VirtualDataField {
                         name: i.to_string(),
-                        data_types: vec![VariantType::Jsonb],
+                        data_types: vec![VariantDataType::Jsonb],
                         source_column_id: 0,
-                        column_id: i as u32,
+                        column_id: VIRTUAL_COLUMN_ID_START + i as u32,
                     });
                 }
 
@@ -2837,14 +2838,14 @@ impl SchemaApiTestSuite {
                 virtual_schema.fields.push(VirtualDataField {
                     name: "field_0".to_string(),
                     data_types: vec![
-                        VariantType::Int64,
-                        VariantType::Jsonb,
-                        VariantType::Jsonb,
-                        VariantType::Jsonb,
-                        VariantType::String,
+                        VariantDataType::Int64,
+                        VariantDataType::Jsonb,
+                        VariantDataType::Jsonb,
+                        VariantDataType::Jsonb,
+                        VariantDataType::String,
                     ],
                     source_column_id: 0,
-                    column_id: 0,
+                    column_id: VIRTUAL_COLUMN_ID_START,
                 });
 
                 let mut new_table_meta = table.meta.clone();
@@ -2870,8 +2871,59 @@ impl SchemaApiTestSuite {
                     .unwrap();
                 assert_eq!(
                     table.meta.virtual_schema.as_ref().unwrap().fields[0].data_types,
-                    vec![VariantType::Int64, VariantType::Jsonb, VariantType::String]
+                    vec![
+                        VariantDataType::Int64,
+                        VariantDataType::Jsonb,
+                        VariantDataType::String
+                    ]
                 );
+            }
+
+            info!("--- update table meta: virtual column id out bound");
+            {
+                let table = mt
+                    .get_table((tenant_name, "db1", "tb2").into())
+                    .await
+                    .unwrap();
+
+                let mut virtual_schema = VirtualDataSchema {
+                    fields: vec![],
+                    metadata: Default::default(),
+                    next_column_id: 0,
+                    number_of_blocks: 0,
+                };
+                virtual_schema.fields.push(VirtualDataField {
+                    name: "field_0".to_string(),
+                    data_types: vec![
+                        VariantDataType::Int64,
+                        VariantDataType::Jsonb,
+                        VariantDataType::Jsonb,
+                        VariantDataType::Jsonb,
+                        VariantDataType::String,
+                    ],
+                    source_column_id: 0,
+                    column_id: VIRTUAL_COLUMN_ID_START - 1,
+                });
+
+                let mut new_table_meta = table.meta.clone();
+                new_table_meta.virtual_schema = Some(virtual_schema);
+
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                };
+                let err = mt
+                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap_err();
+                let err = ErrorCode::from(err);
+                assert_eq!(ErrorCode::VIRTUAL_COLUMN_ID_OUT_BOUND, err.code());
             }
         }
         Ok(())

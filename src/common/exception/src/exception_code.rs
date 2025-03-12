@@ -159,6 +159,7 @@ build_exceptions! {
     UnknownQuery(1127),
     // virtual column
     VirtualColumnTooMany(1128),
+    VirtualColumnIdOutBound(1129),
 
     // Data Related Errors
 

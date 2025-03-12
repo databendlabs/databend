@@ -22,8 +22,8 @@ package databend_proto;
 
 import "datatype.proto";
 
-// VariantType is used to represent the data type that may be contained in VirtualDataField
-message VariantType {
+// VariantDataType is used to represent the data type that may be contained in VirtualDataField
+message VariantDataType {
   oneof dt {
       Empty jsonb_t = 1;
       Empty bool_t = 2;
@@ -31,7 +31,7 @@ message VariantType {
       Empty int64_t = 4;
       Empty float64_t = 5;
       Empty string_t = 6;
-      VariantType array_t = 7;
+      VariantDataType array_t = 7;
   }
 }
 
@@ -40,7 +40,7 @@ message VirtualDataField {
   // The name of this virtual column.
   string name = 1;
   // Virtual column data type, may have different data type in different block
-  repeated VariantType data_types = 2;
+  repeated VariantDataType data_types = 2;
   // The column id of source column
   uint32 source_column_id = 3;
   // The column id of this virtual column

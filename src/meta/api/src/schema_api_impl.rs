@@ -28,7 +28,9 @@ use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_base::vec_ext::VecExt;
+use databend_common_expression::VIRTUAL_COLUMNS_ID_UPPER;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
+use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
@@ -55,6 +57,7 @@ use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
+use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
 use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
@@ -2269,6 +2272,18 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     )));
                 }
                 for virtual_field in virtual_schema.fields.iter_mut() {
+                    if !matches!(
+                        virtual_field.column_id,
+                        VIRTUAL_COLUMN_ID_START..=VIRTUAL_COLUMNS_ID_UPPER
+                    ) {
+                        return Err(KVAppError::AppError(AppError::VirtualColumnIdOutBound(
+                            VirtualColumnIdOutBound::new(
+                                virtual_field.column_id,
+                                VIRTUAL_COLUMN_ID_START,
+                                VIRTUAL_COLUMNS_ID_UPPER,
+                            ),
+                        )));
+                    }
                     virtual_field.data_types.dedup();
                 }
             }

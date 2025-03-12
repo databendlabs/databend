@@ -50,6 +50,7 @@ pub const SEARCH_MATCHED_COLUMN_ID: u32 = u32::MAX - 7;
 pub const SEARCH_SCORE_COLUMN_ID: u32 = u32::MAX - 8;
 
 pub const VIRTUAL_COLUMN_ID_START: u32 = 3_000_000_001;
+pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 4_294_967_295;
 pub const VIRTUAL_COLUMNS_LIMIT: usize = 1000;
 
 // internal column name.
@@ -177,20 +178,20 @@ pub struct DataField {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-pub enum VariantType {
+pub enum VariantDataType {
     Jsonb,
     Boolean,
     UInt64,
     Int64,
     Float64,
     String,
-    Array(Box<VariantType>),
+    Array(Box<VariantDataType>),
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct VirtualDataField {
     pub name: String,
-    pub data_types: Vec<VariantType>,
+    pub data_types: Vec<VariantDataType>,
     pub source_column_id: u32,
     pub column_id: u32,
 }

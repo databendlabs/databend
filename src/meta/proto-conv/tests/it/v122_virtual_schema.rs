@@ -86,12 +86,9 @@ fn test_decode_v122_table_meta() -> anyhow::Result<()> {
         202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
         202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99,
         202, 1, 1, 99, 202, 1, 1, 99, 202, 1, 1, 99, 226, 1, 1, 1, 234, 1, 6, 10, 1, 97, 18, 1, 98,
-        130, 2, 119, 10, 95, 10, 7, 102, 105, 101, 108, 100, 95, 48, 18, 8, 10, 0, 160, 6, 122,
-        168, 6, 24, 18, 8, 18, 0, 160, 6, 122, 168, 6, 24, 18, 8, 26, 0, 160, 6, 122, 168, 6, 24,
-        18, 8, 34, 0, 160, 6, 122, 168, 6, 24, 18, 8, 42, 0, 160, 6, 122, 168, 6, 24, 18, 8, 50, 0,
-        160, 6, 122, 168, 6, 24, 18, 16, 58, 8, 10, 0, 160, 6, 122, 168, 6, 24, 160, 6, 122, 168,
-        6, 24, 24, 1, 160, 6, 122, 168, 6, 24, 18, 6, 10, 1, 97, 18, 1, 98, 24, 129, 188, 193, 150,
-        11, 32, 10, 160, 6, 122, 168, 6, 24, 160, 6, 122, 168, 6, 24,
+        130, 2, 55, 10, 31, 10, 7, 102, 105, 101, 108, 100, 95, 48, 18, 2, 10, 0, 18, 2, 50, 0, 18,
+        4, 58, 2, 10, 0, 24, 19, 32, 129, 188, 193, 150, 11, 18, 6, 10, 1, 97, 18, 1, 98, 24, 130,
+        188, 193, 150, 11, 32, 10, 160, 6, 122, 168, 6, 24, 160, 6, 122, 168, 6, 24,
     ];
 
     let want = || TableMeta {
@@ -157,19 +154,15 @@ fn test_decode_v122_table_meta() -> anyhow::Result<()> {
             fields: vec![ce::VirtualDataField {
                 name: "field_0".to_string(),
                 data_types: vec![
-                    ce::VariantType::Jsonb,
-                    ce::VariantType::Boolean,
-                    ce::VariantType::UInt64,
-                    ce::VariantType::Int64,
-                    ce::VariantType::Float64,
-                    ce::VariantType::String,
-                    ce::VariantType::Array(Box::new(ce::VariantType::Jsonb)),
+                    ce::VariantDataType::Jsonb,
+                    ce::VariantDataType::String,
+                    ce::VariantDataType::Array(Box::new(ce::VariantDataType::Jsonb)),
                 ],
-                source_column_id: 1,
-                column_id: 0,
+                source_column_id: 19,
+                column_id: ce::VIRTUAL_COLUMN_ID_START,
             }],
             metadata: btreemap! {s("a") => s("b")},
-            next_column_id: ce::VIRTUAL_COLUMN_ID_START,
+            next_column_id: ce::VIRTUAL_COLUMN_ID_START + 1,
             number_of_blocks: 10,
         }),
         drop_on: None,
@@ -191,29 +184,25 @@ fn s(ss: impl ToString) -> String {
 #[test]
 fn test_decode_v122_virtual_data_schema() -> anyhow::Result<()> {
     let virtual_data_schema = vec![
-        10, 47, 10, 7, 102, 105, 101, 108, 100, 95, 48, 18, 2, 10, 0, 18, 2, 18, 0, 18, 2, 26, 0,
-        18, 2, 34, 0, 18, 2, 42, 0, 18, 2, 50, 0, 18, 4, 58, 2, 10, 0, 24, 1, 32, 129, 188, 193,
-        150, 11, 24, 130, 188, 193, 150, 11, 32, 9, 160, 6, 122, 168, 6, 24,
+        10, 31, 10, 7, 102, 105, 101, 108, 100, 95, 48, 18, 2, 10, 0, 18, 2, 50, 0, 18, 4, 58, 2,
+        10, 0, 24, 19, 32, 129, 188, 193, 150, 11, 18, 6, 10, 1, 97, 18, 1, 98, 24, 130, 188, 193,
+        150, 11, 32, 10, 160, 6, 122, 168, 6, 24,
     ];
 
     let want = || ce::VirtualDataSchema {
         fields: vec![ce::VirtualDataField {
             name: "field_0".to_string(),
             data_types: vec![
-                ce::VariantType::Jsonb,
-                ce::VariantType::Boolean,
-                ce::VariantType::UInt64,
-                ce::VariantType::Int64,
-                ce::VariantType::Float64,
-                ce::VariantType::String,
-                ce::VariantType::Array(Box::new(ce::VariantType::Jsonb)),
+                ce::VariantDataType::Jsonb,
+                ce::VariantDataType::String,
+                ce::VariantDataType::Array(Box::new(ce::VariantDataType::Jsonb)),
             ],
-            source_column_id: 1,
+            source_column_id: 19,
             column_id: ce::VIRTUAL_COLUMN_ID_START,
         }],
-        metadata: Default::default(),
+        metadata: btreemap! {s("a") => s("b")},
         next_column_id: ce::VIRTUAL_COLUMN_ID_START + 1,
-        number_of_blocks: 9,
+        number_of_blocks: 10,
     };
     common::test_load_old(func_name!(), virtual_data_schema.as_slice(), 122, want())?;
     common::test_pb_from_to(func_name!(), want())?;

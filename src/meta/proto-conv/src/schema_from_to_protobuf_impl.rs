@@ -18,12 +18,12 @@
 use databend_common_expression as ex;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
-use databend_common_expression::VariantType;
+use databend_common_expression::VariantDataType;
 use databend_common_protos::pb;
 use databend_common_protos::pb::data_type::Dt;
 use databend_common_protos::pb::data_type::Dt24;
 use databend_common_protos::pb::number::Num;
-use databend_common_protos::pb::variant_type;
+use databend_common_protos::pb::variant_data_type;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -455,40 +455,42 @@ impl FromToProto for ex::types::decimal::DecimalSize {
     }
 }
 
-impl FromToProtoEnum for ex::VariantType {
-    type PBEnum = pb::VariantType;
+impl FromToProtoEnum for ex::VariantDataType {
+    type PBEnum = pb::VariantDataType;
 
-    fn from_pb_enum(p: pb::VariantType) -> Result<Self, Incompatible> {
+    fn from_pb_enum(p: pb::VariantDataType) -> Result<Self, Incompatible> {
         let Some(dt) = p.dt else {
             return Err(Incompatible::new(
-                "Invalid VariantType: .dt must be Some".to_string(),
+                "Invalid VariantDataType: .dt must be Some".to_string(),
             ));
         };
         Ok(match dt {
-            variant_type::Dt::JsonbT(_) => ex::VariantType::Jsonb,
-            variant_type::Dt::BoolT(_) => ex::VariantType::Boolean,
-            variant_type::Dt::Uint64T(_) => ex::VariantType::UInt64,
-            variant_type::Dt::Int64T(_) => ex::VariantType::Int64,
-            variant_type::Dt::Float64T(_) => ex::VariantType::Float64,
-            variant_type::Dt::StringT(_) => ex::VariantType::String,
-            variant_type::Dt::ArrayT(dt) => {
-                ex::VariantType::Array(Box::new(ex::VariantType::from_pb_enum(*dt)?))
+            variant_data_type::Dt::JsonbT(_) => ex::VariantDataType::Jsonb,
+            variant_data_type::Dt::BoolT(_) => ex::VariantDataType::Boolean,
+            variant_data_type::Dt::Uint64T(_) => ex::VariantDataType::UInt64,
+            variant_data_type::Dt::Int64T(_) => ex::VariantDataType::Int64,
+            variant_data_type::Dt::Float64T(_) => ex::VariantDataType::Float64,
+            variant_data_type::Dt::StringT(_) => ex::VariantDataType::String,
+            variant_data_type::Dt::ArrayT(dt) => {
+                ex::VariantDataType::Array(Box::new(ex::VariantDataType::from_pb_enum(*dt)?))
             }
         })
     }
 
-    fn to_pb_enum(&self) -> Result<pb::VariantType, Incompatible> {
+    fn to_pb_enum(&self) -> Result<pb::VariantDataType, Incompatible> {
         let dt = match self {
-            VariantType::Jsonb => pb::variant_type::Dt::JsonbT(pb::Empty {}),
-            VariantType::Boolean => pb::variant_type::Dt::BoolT(pb::Empty {}),
-            VariantType::UInt64 => pb::variant_type::Dt::Uint64T(pb::Empty {}),
-            VariantType::Int64 => pb::variant_type::Dt::Int64T(pb::Empty {}),
-            VariantType::Float64 => pb::variant_type::Dt::Float64T(pb::Empty {}),
-            VariantType::String => pb::variant_type::Dt::StringT(pb::Empty {}),
-            VariantType::Array(dt) => pb::variant_type::Dt::ArrayT(Box::new(dt.to_pb_enum()?)),
+            VariantDataType::Jsonb => pb::variant_data_type::Dt::JsonbT(pb::Empty {}),
+            VariantDataType::Boolean => pb::variant_data_type::Dt::BoolT(pb::Empty {}),
+            VariantDataType::UInt64 => pb::variant_data_type::Dt::Uint64T(pb::Empty {}),
+            VariantDataType::Int64 => pb::variant_data_type::Dt::Int64T(pb::Empty {}),
+            VariantDataType::Float64 => pb::variant_data_type::Dt::Float64T(pb::Empty {}),
+            VariantDataType::String => pb::variant_data_type::Dt::StringT(pb::Empty {}),
+            VariantDataType::Array(dt) => {
+                pb::variant_data_type::Dt::ArrayT(Box::new(dt.to_pb_enum()?))
+            }
         };
 
-        Ok(pb::VariantType { dt: Some(dt) })
+        Ok(pb::VariantDataType { dt: Some(dt) })
     }
 }
 
@@ -510,8 +512,8 @@ impl FromToProto for ex::VirtualDataSchema {
                 let data_types = field
                     .data_types
                     .into_iter()
-                    .map(ex::VariantType::from_pb_enum)
-                    .collect::<Result<Vec<ex::VariantType>, Incompatible>>()?;
+                    .map(ex::VariantDataType::from_pb_enum)
+                    .collect::<Result<Vec<ex::VariantDataType>, Incompatible>>()?;
 
                 Ok(ex::VirtualDataField {
                     name: field.name,
@@ -538,8 +540,8 @@ impl FromToProto for ex::VirtualDataSchema {
                 let data_types = field
                     .data_types
                     .iter()
-                    .map(ex::VariantType::to_pb_enum)
-                    .collect::<Result<Vec<pb::VariantType>, Incompatible>>()?;
+                    .map(ex::VariantDataType::to_pb_enum)
+                    .collect::<Result<Vec<pb::VariantDataType>, Incompatible>>()?;
 
                 Ok(pb::VirtualDataField {
                     name: field.name.clone(),
