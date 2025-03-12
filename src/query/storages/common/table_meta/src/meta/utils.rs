@@ -74,8 +74,8 @@ pub fn monotonically_increased_timestamp(
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy)]
 pub struct TableMetaTimestamps {
-    pub segment_block_timestamp: chrono::DateTime<chrono::Utc>,
-    pub snapshot_timestamp: chrono::DateTime<chrono::Utc>,
+    pub segment_block_timestamp: DateTime<Utc>,
+    pub snapshot_timestamp: DateTime<Utc>,
 }
 
 impl TableMetaTimestamps {

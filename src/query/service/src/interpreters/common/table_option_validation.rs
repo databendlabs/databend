@@ -26,6 +26,7 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
+use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
@@ -55,6 +56,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
     r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
+    r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
 
@@ -109,6 +111,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
     r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
     r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
+    r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r
