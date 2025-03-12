@@ -44,18 +44,21 @@ statement ok
 create or replace stage stage_av url = 'fs:///tmp/auto_vacuum/';
 
 # expect there are 3 segments/blocks/snapshots
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_sg%';
 ----
 3
 
 # expect 3 block
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%\/_b\/%';
 ----
 3
 
 # expect 1 snapshot, since historical snapshots are removed immediately
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
 ----
@@ -69,21 +72,25 @@ optimize table t compact;
 
 # expects that historical data will be vacuumed immediately
 
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_sg%';
 ----
 1
 
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%\/_b\/%';
 ----
 1
 
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
 ----
 1
 
+onlyif http
 query I
 select c from t order by c;
 ----
@@ -120,16 +127,19 @@ insert into t values(3);
 statement ok
 optimize table t compact;
 
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_sg%';
 ----
 1
 
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%\/_b\/%';
 ----
 1
 
+onlyif http
 query I
 select count() from list_stage(location=> '@stage_av') where name like '%_ss%';
 ----
