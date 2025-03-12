@@ -19,13 +19,9 @@ use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::TrySpawn;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
@@ -37,15 +33,11 @@ use databend_common_meta_types::TxnRequest;
 use databend_common_sql::Planner;
 use databend_common_storage::DataOperator;
 use databend_common_tracing::GlobalLogger;
-use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use log::error;
 use log::info;
-use tokio::time::interval;
 
 use crate::interpreters::InterpreterFactory;
-use crate::persistent_log::session::get_persistent_log_user;
-use crate::sessions::SessionManager;
-use crate::sessions::SessionType;
+use crate::persistent_log::session::create_session;
 
 pub struct GlobalPersistentLog {
     meta_store: MetaStore,
@@ -148,13 +140,7 @@ impl GlobalPersistentLog {
     }
 
     async fn execute_sql(&self, sql: &str) -> Result<()> {
-        let session_manager = SessionManager::instance();
-        let dummy_session = session_manager.create_session(SessionType::Dummy).await?;
-        let session = session_manager.register_session(dummy_session)?;
-        let user = get_persistent_log_user(&self.tenant_id, &self.cluster_id);
-        session
-            .set_authed_user(user.clone(), Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()))
-            .await?;
+        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
         let context = session.create_query_context().await?;
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;

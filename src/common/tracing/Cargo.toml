@@ -33,7 +33,7 @@ tonic = { workspace = true }
 parquet = { workspace = true }
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
-tokio = "1.41.0"
+tokio = { workspace = true}
 
 [dev-dependencies]
 
