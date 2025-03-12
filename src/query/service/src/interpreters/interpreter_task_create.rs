@@ -60,7 +60,7 @@ impl CreateTaskInterpreter {
             owner,
             comment: plan.comment,
             schedule_options: plan.schedule_opts.map(make_schedule_options),
-            warehouse_options: Some(make_warehouse_options(plan.warehouse_opts)),
+            warehouse_options: Some(make_warehouse_options(plan.warehouse)),
             error_integration: plan.error_integration,
             task_sql_type: 0,
             suspend_task_after_num_failures: plan.suspend_task_after_num_failures.map(|x| x as i32),

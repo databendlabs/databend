@@ -126,49 +126,29 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ #task_warehouse_option
-            ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
-            ~ ( AFTER ~ #comma_separated_list0(literal_string) )?
-            ~ ( WHEN ~ #expr )?
-            ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
-            ~ ( ERROR_INTEGRATION ~  ^"=" ~ ^#literal_string )?
-            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ #create_task_option*
             ~ #set_table_option?
             ~ AS ~ #task_sql_block
         },
-        |(
-            _,
-            _,
-            opt_if_not_exists,
-            task,
-            warehouse_opts,
-            schedule_opts,
-            after_tasks,
-            when_conditions,
-            suspend_opt,
-            error_integration,
-            comment_opt,
-            session_opts,
-            _,
-            sql,
-        )| {
+        |(_, _, opt_if_not_exists, task, create_task_opts, session_opts, _, sql)| {
             let session_opts = session_opts.unwrap_or_default();
-            Statement::CreateTask(CreateTaskStmt {
+            let mut stmt = CreateTaskStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 name: task.to_string(),
-                warehouse_opts,
-                schedule_opts: schedule_opts.map(|(_, _, opt)| opt),
-                suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
-                comments: comment_opt.map(|(_, _, comment)| comment),
-                after: match after_tasks {
-                    Some((_, tasks)) => tasks,
-                    None => Vec::new(),
-                },
-                error_integration: error_integration.map(|(_, _, name)| name.to_string()),
-                when_condition: when_conditions.map(|(_, cond)| cond),
+                warehouse: None,
+                schedule_opts: None,
+                suspend_task_after_num_failures: None,
+                comments: None,
+                after: vec![],
+                error_integration: None,
+                when_condition: None,
                 sql,
                 session_parameters: session_opts,
-            })
+            };
+            for opt in create_task_opts {
+                stmt.apply_opt(opt);
+            }
+            Statement::CreateTask(stmt)
         },
     );
 
@@ -4095,30 +4075,22 @@ pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
     let set = map(
         rule! {
              SET
-             ~ ( WAREHOUSE  ~ ^"=" ~ ^#literal_string )?
-             ~ ( SCHEDULE ~ ^"=" ~ ^#task_schedule_option )?
-             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ ^"=" ~ ^#literal_u64 )?
-             ~ ( COMMENT ~ ^"=" ~ ^#literal_string )?
-             ~ ( ERROR_INTEGRATION  ~ ^"=" ~ ^#literal_string )?
+             ~ #alter_task_set_option*
              ~ #set_table_option?
         },
-        |(
-            _,
-            warehouse_opts,
-            schedule_opts,
-            suspend_opts,
-            comment,
-            err_integration,
-            session_opts,
-        )| {
-            AlterTaskOptions::Set {
-                warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
-                schedule: schedule_opts.map(|(_, _, schedule)| schedule),
-                suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
-                comments: comment.map(|(_, _, comment)| comment),
-                error_integration: err_integration.map(|(_, _, integration)| integration),
+        |(_, task_set_options, session_opts)| {
+            let mut set = AlterTaskOptions::Set {
                 session_parameters: session_opts,
+                warehouse: None,
+                schedule: None,
+                suspend_task_after_num_failures: None,
+                comments: None,
+                error_integration: None,
+            };
+            for opt in task_set_options {
+                set.apply_opt(opt);
             }
+            set
         },
     );
     let unset = map(
@@ -4846,6 +4818,108 @@ pub fn explain_option(i: Input) -> IResult<ExplainOption> {
             DECORRELATED => ExplainOption::Decorrelated,
             _ => unreachable!(),
         },
+    )(i)
+}
+
+pub fn create_task_option(i: Input) -> IResult<CreateTaskOption> {
+    let warehouse_opt = map(
+        rule! {
+            (WAREHOUSE  ~ "=" ~ #literal_string)
+        },
+        |(_, _, warehouse)| CreateTaskOption::Warehouse(warehouse),
+    );
+    let schedule_opt = map(
+        rule! {
+            SCHEDULE ~ "=" ~ #task_schedule_option
+        },
+        |(_, _, schedule)| CreateTaskOption::Schedule(schedule),
+    );
+    let after_opt = map(
+        rule! {
+            AFTER ~ #comma_separated_list0(literal_string)
+        },
+        |(_, after)| CreateTaskOption::After(after),
+    );
+    let when_opt = map(
+        rule! {
+            WHEN ~ #expr
+        },
+        |(_, expr)| CreateTaskOption::When(expr),
+    );
+    let suspend_task_after_num_failures_opt = map(
+        rule! {
+            SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64
+        },
+        |(_, _, num)| CreateTaskOption::SuspendTaskAfterNumFailures(num),
+    );
+    let error_integration_opt = map(
+        rule! {
+            ERROR_INTEGRATION ~ "=" ~ #literal_string
+        },
+        |(_, _, integration)| CreateTaskOption::ErrorIntegration(integration),
+    );
+    let comment_opt = map(
+        rule! {
+            (COMMENT | COMMENTS) ~ "=" ~ #literal_string
+        },
+        |(_, _, comment)| CreateTaskOption::Comment(comment),
+    );
+
+    map(
+        rule! {
+            #warehouse_opt
+            | #schedule_opt
+            | #after_opt
+            | #when_opt
+            | #suspend_task_after_num_failures_opt
+            | #error_integration_opt
+            | #comment_opt
+        },
+        |opt| opt,
+    )(i)
+}
+
+fn alter_task_set_option(i: Input) -> IResult<AlterTaskSetOption> {
+    let warehouse_opt = map(
+        rule! {
+            (WAREHOUSE  ~ "=" ~ #literal_string)
+        },
+        |(_, _, warehouse)| AlterTaskSetOption::Warehouse(warehouse),
+    );
+    let schedule_opt = map(
+        rule! {
+            SCHEDULE ~ "=" ~ #task_schedule_option
+        },
+        |(_, _, schedule)| AlterTaskSetOption::Schedule(schedule),
+    );
+    let suspend_task_after_num_failures_opt = map(
+        rule! {
+            SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64
+        },
+        |(_, _, num)| AlterTaskSetOption::SuspendTaskAfterNumFailures(num),
+    );
+    let error_integration_opt = map(
+        rule! {
+            ERROR_INTEGRATION ~ "=" ~ #literal_string
+        },
+        |(_, _, integration)| AlterTaskSetOption::ErrorIntegration(integration),
+    );
+    let comment_opt = map(
+        rule! {
+            (COMMENT | COMMENTS) ~ "=" ~ #literal_string
+        },
+        |(_, _, comment)| AlterTaskSetOption::Comment(comment),
+    );
+
+    map(
+        rule! {
+            #warehouse_opt
+            | #schedule_opt
+            | #suspend_task_after_num_failures_opt
+            | #error_integration_opt
+            | #comment_opt
+        },
+        |opt| opt,
     )(i)
 }
 
