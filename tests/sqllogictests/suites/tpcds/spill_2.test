@@ -1,0 +1,69 @@
+# TPC-DS spill test
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpcds;
+
+statement ok
+set force_join_data_spill = 1;
+
+statement ok
+SET force_sort_data_spill = 1;
+
+statement ok
+SET force_window_data_spill = 1;
+
+statement ok
+SET force_aggregate_data_spill = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 5;
+
+statement ok
+set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
+
+# TPC-DS TEST
+include ./Q26
+include ./Q27
+include ./Q28
+include ./Q29
+include ./Q30
+include ./Q31
+include ./Q32
+include ./Q33
+include ./Q34
+include ./Q35
+include ./Q36
+include ./Q37
+include ./Q38
+include ./Q39
+include ./Q40
+include ./Q41
+include ./Q42
+include ./Q43
+include ./Q44
+include ./Q45
+include ./Q46
+include ./Q47
+include ./Q48
+include ./Q49
+include ./Q50
+
+statement ok
+UNSET force_sort_data_spill;
+
+statement ok
+UNSET force_join_data_spill;
+
+statement ok
+UNSET force_window_data_spill;
+
+statement ok
+UNSET force_aggregate_data_spill;
+
+statement ok
+unset join_spilling_buffer_threshold_per_proc_mb;
+
+statement ok
+unset window_partition_spilling_to_disk_bytes_limit;

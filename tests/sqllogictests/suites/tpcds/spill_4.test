@@ -24,89 +24,6 @@ statement ok
 set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
 
 # TPC-DS TEST
-include ./Q1
-include ./Q2
-include ./Q3
-include ./Q4
-include ./Q5
-include ./Q6
-include ./Q7
-include ./Q8
-include ./Q9
-include ./Q10
-include ./Q11
-include ./Q12
-include ./Q13
-include ./Q14
-include ./Q15
-include ./Q16
-include ./Q17
-include ./Q18
-include ./Q19
-include ./Q20
-include ./Q21
-include ./Q22
-
-statement ok
-SET force_join_data_spill = 0;
-
-include ./Q23
-
-statement ok
-SET force_join_data_spill = 1;
-
-include ./Q24
-include ./Q25
-include ./Q26
-include ./Q27
-include ./Q28
-include ./Q29
-include ./Q30
-include ./Q31
-include ./Q32
-include ./Q33
-include ./Q34
-include ./Q35
-include ./Q36
-include ./Q37
-include ./Q38
-include ./Q39
-include ./Q40
-include ./Q41
-include ./Q42
-include ./Q43
-include ./Q44
-include ./Q45
-include ./Q46
-include ./Q47
-include ./Q48
-include ./Q49
-include ./Q50
-include ./Q51
-include ./Q52
-include ./Q53
-include ./Q54
-include ./Q55
-include ./Q56
-include ./Q57
-include ./Q58
-include ./Q59
-include ./Q60
-include ./Q61
-include ./Q62
-include ./Q63
-include ./Q64
-include ./Q65
-include ./Q66
-include ./Q67
-include ./Q68
-include ./Q69
-include ./Q70
-include ./Q71
-include ./Q72
-include ./Q73
-include ./Q74
-include ./Q75
 include ./Q76
 include ./Q77
 include ./Q78
@@ -147,6 +64,9 @@ statement ok
 drop table if exists t;
 
 statement ok
+unset max_block_size;
+
+statement ok
 UNSET force_sort_data_spill;
 
 statement ok
@@ -159,7 +79,7 @@ statement ok
 UNSET force_aggregate_data_spill;
 
 statement ok
-unset max_block_size;
+unset join_spilling_buffer_threshold_per_proc_mb;
 
 statement ok
-unset join_spilling_buffer_threshold_per_proc_mb;
+unset window_partition_spilling_to_disk_bytes_limit;
