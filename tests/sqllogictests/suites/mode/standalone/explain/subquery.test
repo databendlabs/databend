@@ -645,8 +645,8 @@ explain select t.number from numbers(10) as t where t.number = (select 1);
 ----
 Filter
 ├── output columns: [t.number (#0)]
-├── filters: [t.number (#0) = 1]
-├── estimated rows: 0.00
+├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = 1)]
+├── estimated rows: 2.00
 └── TableScan
     ├── table: default.system.numbers
     ├── output columns: [number (#0)]
@@ -654,7 +654,7 @@ Filter
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [numbers.number (#0) = 1], limit: NONE]
+    ├── push downs: [filters: [is_true(CAST(numbers.number (#0) AS UInt64 NULL) = 1)], limit: NONE]
     └── estimated rows: 10.00
 
 query T
