@@ -120,7 +120,7 @@ The `--to-query` flag specifies the path to the Databend query configuration fil
 
 The `--checkpoint` flag indicates the checkpoint ID to restore, and the `--confirm` flag confirms the restore operation.
 
-NOTE: the backup list is still under developement, so we need to get the checkpoint by hand from the backup storage. Take S3 as an example, we can get the checkpoint like this:
+NOTE: the backup list is still under development, so we need to get the checkpoint by hand from the backup storage. Take S3 as an example, we can get the checkpoint like this:
 
 ```shell
 CHECKPOINT=$(aws --endpoint-url http://127.0.0.1:9900/ s3 ls s3://backup/logs/ --recursive | sort -k 1,2 | tail -n 1 | awk -F'[/.]' '{print $(NF-1)}')
