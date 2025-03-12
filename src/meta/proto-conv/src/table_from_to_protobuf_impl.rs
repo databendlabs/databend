@@ -189,7 +189,7 @@ impl FromToProto for mt::TableMeta {
             .ok_or_else(|| Incompatible::new("TableMeta.schema can not be None".to_string()))?;
         let virtual_schema = p
             .virtual_schema
-            .map(|schema| VirtualDataSchema::from_pb(schema))
+            .map(VirtualDataSchema::from_pb)
             .transpose()?;
 
         let mut indexes = BTreeMap::new();
