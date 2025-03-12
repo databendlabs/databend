@@ -268,12 +268,12 @@ impl Catalog for IcebergCatalog {
             .map_err(|err| {
                 ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
             })?;
-        log::info!("list iceberg catalog got result {:?}", db_names);
         let mut dbs = Vec::new();
         for db_name in db_names {
-            let db = self
-                .get_database(&Tenant::new_literal("dummy"), &db_name.to_url_string())
-                .await?;
+            let db = Arc::new(IcebergDatabase::create(
+                self.clone(),
+                &db_name.to_url_string(),
+            )) as Arc<dyn Database>;
             dbs.push(db);
         }
         Ok(dbs)
@@ -321,13 +321,22 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn exists_database(&self, _tenant: &Tenant, db_name: &str) -> Result<bool> {
-        let ns = NamespaceIdent::new(db_name.to_owned());
-        self.iceberg_catalog()
-            .namespace_exists(&ns)
+        // let ns = NamespaceIdent::new(db_name.to_owned());
+        // self.iceberg_catalog()
+        //     .namespace_exists(&ns)
+        //     .await
+        //     .map_err(|err| {
+        //         ErrorCode::Internal(format!("Iceberg catalog exists database failed: {err:?}"))
+        //     })
+
+        let db_names = self
+            .iceberg_catalog()
+            .list_namespaces(None)
             .await
             .map_err(|err| {
-                ErrorCode::Internal(format!("Iceberg catalog exists database failed: {err:?}"))
-            })
+                ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
+            })?;
+        Ok(db_names.iter().any(|name| name.to_url_string() == db_name))
     }
 
     #[async_backtrace::framed]
