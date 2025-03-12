@@ -224,6 +224,11 @@ impl DataBlock {
     }
 
     #[inline]
+    pub fn take_columns(self) -> Vec<BlockEntry> {
+        self.columns
+    }
+
+    #[inline]
     pub fn get_by_offset(&self, offset: usize) -> &BlockEntry {
         &self.columns[offset]
     }

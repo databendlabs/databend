@@ -412,6 +412,7 @@ impl Spiller {
             let block = deserialize_block(layout, data.slice(range.clone()))?;
             partitioned_data.push((*partition_id, block));
         }
+
         Ok(partitioned_data)
     }
 

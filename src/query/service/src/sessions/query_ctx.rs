@@ -1495,19 +1495,23 @@ impl TableContext for QueryContext {
             Some(ts) => Ok(ts),
             None => {
                 let delta = {
-                    let settings = &self.query_settings;
-                    let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
-                    let duration = if max_exec_time_secs != 0 {
-                        Duration::from_secs(max_exec_time_secs)
+                    let fuse_table = FuseTable::try_from_table(table)?;
+                    let duration = if fuse_table.is_transient() {
+                        Duration::from_secs(0)
                     } else {
-                        // no limit, use retention period as delta
-                        let fuse_table = FuseTable::try_from_table(table)?;
-                        // prefer table-level retention setting.
-                        match fuse_table.get_table_retention_period() {
-                            None => {
-                                Duration::from_days(settings.get_data_retention_time_in_days()?)
+                        let settings = &self.query_settings;
+                        let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
+                        if max_exec_time_secs != 0 {
+                            Duration::from_secs(max_exec_time_secs)
+                        } else {
+                            // no limit, use retention period as delta
+                            // prefer table-level retention setting.
+                            match fuse_table.get_table_retention_period() {
+                                None => {
+                                    Duration::from_days(settings.get_data_retention_time_in_days()?)
+                                }
+                                Some(v) => v,
                             }
-                            Some(v) => v,
                         }
                     };
 

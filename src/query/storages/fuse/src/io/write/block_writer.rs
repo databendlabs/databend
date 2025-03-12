@@ -386,6 +386,8 @@ impl BlockBuilder {
         let data_block = data_block.consume_convert_to_full();
         let block_size = memory_size(&data_block) as u64;
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
+        let data_block = data_block.consume_convert_to_full();
+        let block_size = memory_size(&data_block) as u64;
         let col_metas = serialize_block(
             &self.write_settings,
             &self.source_schema,

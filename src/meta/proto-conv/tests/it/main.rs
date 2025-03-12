@@ -119,3 +119,4 @@ mod v118_webhdfs_add_user_name;
 mod v119_virtual_column;
 mod v120_warehouse_ownershipobject;
 mod v121_avro_format_params;
+mod v122_virtual_schema;

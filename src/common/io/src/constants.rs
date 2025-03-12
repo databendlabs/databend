@@ -39,4 +39,4 @@ pub const DEFAULT_BLOCK_COMPRESSED_SIZE: usize = 10 * 1024 * 1024;
 pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
 
 // The min values of table option data_retention_period_in_hours
-pub const DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS: u64 = 1;
+pub const DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS: u64 = 0;

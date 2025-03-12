@@ -375,7 +375,12 @@ impl SubqueryRewriter {
                         span: subquery.span,
                         func_name: "not".to_string(),
                         params: vec![],
-                        arguments: vec![column_ref],
+                        arguments: vec![ScalarExpr::FunctionCall(FunctionCall {
+                            span: subquery.span,
+                            func_name: "is_true".to_string(),
+                            params: vec![],
+                            arguments: vec![column_ref],
+                        })],
                     })
                 } else {
                     column_ref
