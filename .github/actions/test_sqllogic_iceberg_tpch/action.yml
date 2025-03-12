@@ -34,8 +34,8 @@ runs:
 
         ## TODO REMOVE DEBUG
         echo "namespaces"
-        curl -v   http://localhost:8181/v1/namespaces
-        curl -v   http://localhost:8181/v1/namespaces/tpch
+        curl -v   http://localhost:8181/v1/namespaces | tee ns.json
+        curl -v   http://localhost:8181/v1/namespaces/tpch | tee tpch.json
 
 
     - name: Run sqllogic Tests with Standalone lib
