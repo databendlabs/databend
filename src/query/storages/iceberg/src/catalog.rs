@@ -268,7 +268,7 @@ impl Catalog for IcebergCatalog {
             .map_err(|err| {
                 ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
             })?;
-
+        log::info!("list iceberg catalog got result {:?}", db_names);
         let mut dbs = Vec::new();
         for db_name in db_names {
             let db = self
@@ -326,7 +326,7 @@ impl Catalog for IcebergCatalog {
             .namespace_exists(&ns)
             .await
             .map_err(|err| {
-                ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
+                ErrorCode::Internal(format!("Iceberg catalog exists database failed: {err:?}"))
             })
     }
 

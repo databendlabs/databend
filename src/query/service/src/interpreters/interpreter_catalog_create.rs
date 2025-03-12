@@ -27,7 +27,6 @@ use log::debug;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
-use crate::servers::http::v1::catalog;
 use crate::sessions::QueryContext;
 
 #[derive(Debug)]
