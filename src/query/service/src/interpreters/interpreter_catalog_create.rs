@@ -74,7 +74,6 @@ impl Interpreter for CreateCatalogInterpreter {
         // list databases to check if the catalog is valid.
         let _ = ctl.list_databases(&self.plan.tenant).await.map_err(|err| {
             err.add_message("Catalog creation failed. Check your parameter values.");
-            err.add_message(format!("catalogs: {:?}", ctl_info))
         });
 
         catalog_manager
