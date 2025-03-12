@@ -300,11 +300,13 @@ pub async fn run_ttc_container(
                 if err.to_string().to_ascii_lowercase().contains("timeout")
                     || err.to_string().to_ascii_lowercase().contains("conflict")
                 {
+                    println!("start to stop container {container_name}");
                     stop_container(docker, &container_name).await;
                 }
                 if i == CONTAINER_RETRY_TIMES || duration >= CONTAINER_TIMEOUT_SECONDS {
                     break;
                 } else {
+                    println!("retry start container {container_name} after {duration}");
                     i += 1;
                 }
             }
