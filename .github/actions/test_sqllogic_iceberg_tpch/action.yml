@@ -37,6 +37,10 @@ runs:
         curl -v   http://localhost:8181/v1/namespaces | tee ns.json
         curl -v   http://localhost:8181/v1/namespaces/tpch | tee tpch.json
 
+        echo "show res"
+        cat ns.json
+        cat tpch.json
+
 
     - name: Run sqllogic Tests with Standalone lib
       shell: bash
