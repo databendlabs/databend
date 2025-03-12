@@ -22,6 +22,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
@@ -124,6 +125,8 @@ impl RuleStatsAggregateOptimizer {
                     for (need_rewrite_agg, agg) in
                         need_rewrite_aggs.iter().zip(agg.aggregate_functions.iter())
                     {
+                        let agg_func = AggregateFunction::try_from(agg.scalar.clone())?;
+
                         if let Some((col_id, name)) = need_rewrite_agg {
                             if let Some(stat) = stats.get(col_id) {
                                 let value_bound = if name.eq_ignore_ascii_case("min") {
@@ -132,13 +135,32 @@ impl RuleStatsAggregateOptimizer {
                                     &stat.max
                                 };
                                 if !value_bound.may_be_truncated {
-                                    eval_scalar_results.push(ScalarItem {
-                                        index: agg.index,
-                                        scalar: ScalarExpr::ConstantExpr(ConstantExpr {
-                                            span: agg.scalar.span(),
-                                            value: value_bound.value.clone(),
-                                        }),
+                                    let scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                                        span: agg.scalar.span(),
+                                        value: value_bound.value.clone(),
                                     });
+
+                                    //
+                                    if agg_func.return_type.as_ref()
+                                        != &value_bound.value.as_ref().infer_data_type()
+                                    {
+                                        let cast_expr = CastExpr {
+                                            span: None,
+                                            is_try: false,
+                                            argument: Box::new(scalar),
+                                            target_type: agg_func.return_type,
+                                        };
+                                        eval_scalar_results.push(ScalarItem {
+                                            index: agg.index,
+                                            scalar: ScalarExpr::CastExpr(cast_expr),
+                                        });
+                                    } else {
+                                        eval_scalar_results.push(ScalarItem {
+                                            index: agg.index,
+                                            scalar,
+                                        });
+                                    }
+
                                     continue;
                                 }
                             }
@@ -146,7 +168,6 @@ impl RuleStatsAggregateOptimizer {
 
                         // Add other aggregate functions as derived column,
                         // this will be used in aggregating index rewrite.
-                        let agg_func = AggregateFunction::try_from(agg.scalar.clone())?;
                         eval_scalar_results.push(ScalarItem {
                             index: agg.index,
                             scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {

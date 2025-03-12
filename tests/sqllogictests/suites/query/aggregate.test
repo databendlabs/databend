@@ -22,10 +22,14 @@ select (count(1) > 1)::int from numbers(10)
 1
 
 statement ok
-drop table if exists t
+create or replace database sample_test;
 
 statement ok
-create table t(a int not null, b int not null)
+use sample_test;
+
+
+statement ok
+create or replace table t(a int not null, b int not null)
 
 statement ok
 insert into t values(1, 1), (1, 2), (2, 1), (2, 2)
@@ -39,8 +43,6 @@ select a, sum(sum) as sum from (select a, sum(a) as sum from t group by a, b) as
 statement error must appear in the GROUP BY clause or be used in an aggregate function
 SELECT max(a) FROM t GROUP BY a HAVING b NOT IN(SELECT 3 AS c);
 
-statement ok
-drop table t
 
 statement error 1065
 select * from numbers(10) order by sum(number)
@@ -103,5 +105,118 @@ SELECT AVG(1 + a), sum(1 + a), count(1 + a) FROM tc;
 ----
 3.0 9 3
 
+## Create dimension tables with generic names
 statement ok
-drop table tc
+CREATE or replace TABLE date_ranges (
+    entity_code VARCHAR,
+    start_date DATE,
+    end_date DATE
+);
+
+statement ok
+CREATE or replace TABLE entity_mapping (
+    entity_id INT,
+    entity_code VARCHAR
+);
+
+statement ok
+CREATE or replace TABLE category_types (
+    category_id INT,
+    category_group VARCHAR,
+    category_name VARCHAR
+);
+
+statement ok
+CREATE or replace TABLE time_periods (
+    record_id INT,
+    valid_from DATE,
+    valid_to DATE,
+    current_category VARCHAR,
+    previous_category VARCHAR,
+    flag1 VARCHAR,
+    flag2 VARCHAR
+);
+
+## Insert sample data
+statement ok
+INSERT INTO date_ranges VALUES
+('X1', '2020-01-01', '2022-12-31');
+
+statement ok
+INSERT INTO entity_mapping VALUES
+(101, 'X1'),
+(102, 'X1');
+
+statement ok
+INSERT INTO sample_test.category_types VALUES
+(501, 'GROUP_A', 'TYPE_1'),
+(502, 'GROUP_B', 'TYPE_2');
+
+statement ok
+INSERT INTO time_periods VALUES
+(101, '2021-01-01', '2021-06-30', 'TYPE_1', 'TYPE_2', null, null),
+(102, '2021-07-01', '2021-12-31', 'TYPE_2', 'TYPE_1', null, null);
+
+## Query that reproduces the issue
+query ??????? rowsort
+with date_sequence as (
+    select min(start_date) as min_date, max(end_date) as max_date,
+    ((YEAR(max(end_date)) - YEAR(min(start_date)))*12) + (MONTH(max(end_date)) - MONTH(min(start_date))) as total_months
+    from date_ranges
+),
+month_series as (
+    select row_number() over (order by null) - 1 as month_offset
+    from GENERATE_SERIES(0, 199)
+),
+all_months as (
+    select
+    DATE_ADD(month, month_offset, min_date) as month_date
+    from date_sequence r join month_series d on month_offset <= r.total_months
+    order by month_offset
+),
+time_dimension as (
+    select
+    year(month_date) as year_val,
+    month(month_date) as month_val,
+    quarter(month_date) as quarter_val,
+    month_date as date_val
+    from all_months
+)
+select
+    e.entity_code,
+    p.record_id,
+    t.year_val,
+    t.month_val,
+    t.quarter_val,
+    t.date_val,
+    IFNULL(cat_curr.category_id::bigint, 0) as current_category_id,
+    cat_curr.category_group as current_group,
+    cat_curr.category_name as current_type,
+    IFNULL(cat_prev.category_id::bigint, 0) as previous_category_id,
+    cat_prev.category_group as previous_group,
+    cat_prev.category_name as previous_type
+from time_dimension t
+join time_periods p on t.date_val between p.valid_from and p.valid_to
+left join category_types cat_curr on cat_curr.category_name = p.current_category
+left join category_types cat_prev on cat_prev.category_name = p.previous_category
+join entity_mapping e on e.entity_id = p.record_id
+join date_ranges dr on dr.entity_code = e.entity_code
+where p.flag2 is null and p.flag1 is null
+and t.date_val between dr.start_date and dr.end_date;
+----
+X1 101 2021 1 1 2021-01-01 501 GROUP_A TYPE_1 502 GROUP_B TYPE_2
+X1 101 2021 2 1 2021-02-01 501 GROUP_A TYPE_1 502 GROUP_B TYPE_2
+X1 101 2021 3 1 2021-03-01 501 GROUP_A TYPE_1 502 GROUP_B TYPE_2
+X1 101 2021 4 2 2021-04-01 501 GROUP_A TYPE_1 502 GROUP_B TYPE_2
+X1 101 2021 5 2 2021-05-01 501 GROUP_A TYPE_1 502 GROUP_B TYPE_2
+X1 101 2021 6 2 2021-06-01 501 GROUP_A TYPE_1 502 GROUP_B TYPE_2
+X1 102 2021 10 4 2021-10-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
+X1 102 2021 11 4 2021-11-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
+X1 102 2021 12 4 2021-12-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
+X1 102 2021 7 3 2021-07-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
+X1 102 2021 8 3 2021-08-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
+X1 102 2021 9 3 2021-09-01 502 GROUP_B TYPE_2 501 GROUP_A TYPE_1
+
+
+statement ok
+drop database sample_test
