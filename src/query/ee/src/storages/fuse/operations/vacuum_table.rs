@@ -356,11 +356,12 @@ pub async fn do_dry_run_orphan_files(
 
 #[async_backtrace::framed]
 pub async fn do_vacuum(
-    fuse_table: &FuseTable,
+    table: &dyn Table,
     ctx: Arc<dyn TableContext>,
     retention_time: DateTime<Utc>,
     dry_run: bool,
 ) -> Result<Option<Vec<String>>> {
+    let fuse_table = FuseTable::try_from_table(table)?;
     let start = Instant::now();
     // First, do purge
     let instant = Some(NavigationPoint::TimePoint(retention_time));
