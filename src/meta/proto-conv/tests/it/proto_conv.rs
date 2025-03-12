@@ -301,23 +301,6 @@ fn new_virtual_data_schema() -> ce::VirtualDataSchema {
     }
 }
 
-fn new_virtual_data_field() -> ce::VirtualDataField {
-    ce::VirtualDataField {
-        name: "field_0".to_string(),
-        data_types: vec![
-            ce::VariantType::Jsonb,
-            ce::VariantType::Boolean,
-            ce::VariantType::UInt64,
-            ce::VariantType::Int64,
-            ce::VariantType::Float64,
-            ce::VariantType::String,
-            ce::VariantType::Array(Box::new(ce::VariantType::Jsonb)),
-        ],
-        source_column_id: 1,
-        column_id: ce::VIRTUAL_COLUMN_ID_START,
-    }
-}
-
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -525,16 +508,6 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("virtual data schema:{:?}", buf);
-    }
-
-    // virtual data field
-    {
-        let virtual_data_field = new_virtual_data_field();
-        let p = virtual_data_field.to_pb()?;
-
-        let mut buf = vec![];
-        prost::Message::encode(&p, &mut buf)?;
-        println!("virtual data field:{:?}", buf);
     }
 
     Ok(())

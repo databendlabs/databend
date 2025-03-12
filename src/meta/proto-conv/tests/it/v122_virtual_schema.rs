@@ -191,12 +191,9 @@ fn s(ss: impl ToString) -> String {
 #[test]
 fn test_decode_v122_virtual_data_schema() -> anyhow::Result<()> {
     let virtual_data_schema = vec![
-        10, 101, 10, 7, 102, 105, 101, 108, 100, 95, 48, 18, 8, 10, 0, 160, 6, 122, 168, 6, 24, 18,
-        8, 18, 0, 160, 6, 122, 168, 6, 24, 18, 8, 26, 0, 160, 6, 122, 168, 6, 24, 18, 8, 34, 0,
-        160, 6, 122, 168, 6, 24, 18, 8, 42, 0, 160, 6, 122, 168, 6, 24, 18, 8, 50, 0, 160, 6, 122,
-        168, 6, 24, 18, 16, 58, 8, 10, 0, 160, 6, 122, 168, 6, 24, 160, 6, 122, 168, 6, 24, 24, 1,
-        32, 129, 188, 193, 150, 11, 160, 6, 122, 168, 6, 24, 24, 130, 188, 193, 150, 11, 32, 9,
-        160, 6, 122, 168, 6, 24,
+        10, 47, 10, 7, 102, 105, 101, 108, 100, 95, 48, 18, 2, 10, 0, 18, 2, 18, 0, 18, 2, 26, 0,
+        18, 2, 34, 0, 18, 2, 42, 0, 18, 2, 50, 0, 18, 4, 58, 2, 10, 0, 24, 1, 32, 129, 188, 193,
+        150, 11, 24, 130, 188, 193, 150, 11, 32, 9, 160, 6, 122, 168, 6, 24,
     ];
 
     let want = || ce::VirtualDataSchema {
@@ -219,41 +216,6 @@ fn test_decode_v122_virtual_data_schema() -> anyhow::Result<()> {
         number_of_blocks: 9,
     };
     common::test_load_old(func_name!(), virtual_data_schema.as_slice(), 122, want())?;
-    common::test_pb_from_to(func_name!(), want())?;
-
-    Ok(())
-}
-
-#[test]
-fn test_decode_v122_virtual_data_field() -> anyhow::Result<()> {
-    let virtual_data_field_v122 = vec![
-        10, 7, 102, 105, 101, 108, 100, 95, 48, 18, 8, 10, 0, 160, 6, 122, 168, 6, 24, 18, 8, 18,
-        0, 160, 6, 122, 168, 6, 24, 18, 8, 26, 0, 160, 6, 122, 168, 6, 24, 18, 8, 34, 0, 160, 6,
-        122, 168, 6, 24, 18, 8, 42, 0, 160, 6, 122, 168, 6, 24, 18, 8, 50, 0, 160, 6, 122, 168, 6,
-        24, 18, 16, 58, 8, 10, 0, 160, 6, 122, 168, 6, 24, 160, 6, 122, 168, 6, 24, 24, 1, 32, 129,
-        188, 193, 150, 11, 160, 6, 122, 168, 6, 24,
-    ];
-
-    let want = || ce::VirtualDataField {
-        name: "field_0".to_string(),
-        data_types: vec![
-            ce::VariantType::Jsonb,
-            ce::VariantType::Boolean,
-            ce::VariantType::UInt64,
-            ce::VariantType::Int64,
-            ce::VariantType::Float64,
-            ce::VariantType::String,
-            ce::VariantType::Array(Box::new(ce::VariantType::Jsonb)),
-        ],
-        source_column_id: 1,
-        column_id: ce::VIRTUAL_COLUMN_ID_START,
-    };
-    common::test_load_old(
-        func_name!(),
-        virtual_data_field_v122.as_slice(),
-        122,
-        want(),
-    )?;
     common::test_pb_from_to(func_name!(), want())?;
 
     Ok(())

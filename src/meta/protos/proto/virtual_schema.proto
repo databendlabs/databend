@@ -22,10 +22,8 @@ package databend_proto;
 
 import "datatype.proto";
 
+// VariantType is used to represent the data type that may be contained in VirtualDataField
 message VariantType {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
   oneof dt {
       Empty jsonb_t = 1;
       Empty bool_t = 2;
@@ -37,10 +35,8 @@ message VariantType {
   }
 }
 
+// VirtualDataField a single column type inferred from a Variant type Column
 message VirtualDataField {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
   // The name of this virtual column.
   string name = 1;
   // Virtual column data type, may have different data type in different block
@@ -51,6 +47,7 @@ message VirtualDataField {
   uint32 column_id = 4;
 }
 
+// VirtualDataSchema records all single columns inferred from the Variant type Column contained in the table
 message VirtualDataSchema {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
