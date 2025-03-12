@@ -87,4 +87,7 @@ statement error
 drop database ef123;
 
 statement ok
+drop database abc;
+
+statement ok
 drop database default.tpch;
