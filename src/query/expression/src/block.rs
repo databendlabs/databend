@@ -214,11 +214,6 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn take_columns(self) -> Vec<BlockEntry> {
-        self.columns
-    }
-
-    #[inline]
     pub fn columns_mut(&mut self) -> &mut [BlockEntry] {
         &mut self.columns
     }

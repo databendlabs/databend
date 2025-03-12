@@ -383,8 +383,6 @@ impl BlockBuilder {
         let col_stats =
             gen_columns_statistics(&data_block, column_distinct_count, &self.source_schema)?;
 
-        let data_block = data_block.consume_convert_to_full();
-        let block_size = memory_size(&data_block) as u64;
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let data_block = data_block.consume_convert_to_full();
         let block_size = memory_size(&data_block) as u64;
