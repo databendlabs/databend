@@ -242,7 +242,7 @@ docker run --net=host  datafuselabs/databend
 <summary>Accessing Data Lake</summary>
 
 - [Apache Hive](https://docs.databend.com/guides/access-data-lake/hive)
-- [Apache Iceberg](https://docs.databend.com/guides/access-data-lake/iceberg/iceberg-engine)
+- [Apache Iceberg](https://docs.databend.com/guides/access-data-lake/iceberg/)
 - [Delta Lake](https://docs.databend.com/guides/access-data-lake/delta)
 
 </details>

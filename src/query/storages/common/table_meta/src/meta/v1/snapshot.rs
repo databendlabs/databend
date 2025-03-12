@@ -21,7 +21,7 @@ use serde::Serialize;
 
 use super::super::v0::statistics::Statistics;
 use crate::meta::monotonically_increased_timestamp;
-use crate::meta::trim_timestamp_to_micro_second;
+use crate::meta::trim_timestamp_to_milli_second;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
@@ -77,7 +77,7 @@ impl TableSnapshot {
         let adjusted_timestamp = monotonically_increased_timestamp(now, prev_timestamp);
 
         // trim timestamp to micro seconds
-        let trimmed_timestamp = trim_timestamp_to_micro_second(adjusted_timestamp);
+        let trimmed_timestamp = trim_timestamp_to_milli_second(adjusted_timestamp);
         let timestamp = Some(trimmed_timestamp);
 
         Self {
