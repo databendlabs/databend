@@ -14,3 +14,4 @@
 
 mod deduplicate_join_condition_test;
 mod infer_filter_test;
+mod normalize_disjunctive_filter_test;

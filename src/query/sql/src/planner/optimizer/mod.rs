@@ -41,6 +41,7 @@ pub use decorrelate::SubqueryRewriter;
 pub use extract::PatternExtractor;
 pub use filter::DeduplicateJoinConditionOptimizer;
 pub use filter::InferFilterOptimizer;
+pub use filter::NormalizeDisjunctiveFilterOptimizer;
 pub use hyper_dp::DPhpy;
 pub use m_expr::MExpr;
 pub use memo::Memo;
