@@ -11,10 +11,12 @@ doctest = false
 test = true
 
 [dependencies]
+anyhow = { workspace = true }
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
+opendal = {workspace = true}
 defer = { workspace = true }
 fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }
@@ -28,6 +30,10 @@ opentelemetry_sdk = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }
+parquet = { workspace = true }
+arrow-array = { workspace = true }
+arrow-schema = { workspace = true }
+tokio = "1.41.0"
 
 [dev-dependencies]
 

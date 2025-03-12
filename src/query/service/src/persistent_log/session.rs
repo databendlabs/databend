@@ -12,29 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(thread_local)]
-#![feature(int_roundings)]
-#![allow(clippy::diverging_sub_expression)]
-#![feature(assert_matches)]
-#![recursion_limit = "256"]
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 
-extern crate core;
-mod auth;
-mod catalogs;
-mod clusters;
-mod configs;
-mod databases;
-mod distributed;
-mod frame;
-mod metrics;
-mod parquet_rs;
-mod persistent_log;
-mod pipelines;
-mod servers;
-mod sessions;
-mod spillers;
-mod sql;
-mod storages;
-mod table_functions;
-mod tests;
+pub fn get_persistent_log_user(tenant_id: &str, cluster_id: &str) -> UserInfo {
+    let mut user = UserInfo::new_no_auth(
+        format!("{}-{}-persistent-log", tenant_id, cluster_id).as_str(),
+        "0.0.0.0",
+    );
+    user.grants.grant_privileges(
+        &GrantObject::Global,
+        UserPrivilegeType::CreateDatabase.into(),
+    );
+    user
+}
