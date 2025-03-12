@@ -19,6 +19,12 @@ RUN_DIR=""
 if [ $# -gt 0 ]; then
 	RUN_DIR="--run_dir $*"
 fi
+
+if [ "$1" = "tpcds" ]; then
+    TEST_PARALLEL=1
+fi
+
+
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
