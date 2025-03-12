@@ -21,7 +21,6 @@ use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::TableSchemaRef;
 use databend_common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
-use databend_common_io::constants::DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_settings::Settings;
 use databend_common_sql::BloomIndexColumns;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
@@ -165,16 +164,9 @@ pub fn is_valid_data_retention_period(
     if let Some(value) = options.get(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS) {
         let new_duration_in_hours = value.parse::<u64>()?;
 
-        if new_duration_in_hours < DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS {
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "Invalid data_retention_period_in_hours {:?}, it should not be lesser than {:?}",
-                new_duration_in_hours, DEFAULT_MIN_TABLE_LEVEL_DATA_RETENTION_PERIOD_IN_HOURS
-            )));
-        }
-
         let default_max_period_in_days = Settings::get_max_data_retention_period_in_days();
-
         let default_max_duration = Duration::days(default_max_period_in_days as i64);
+
         let new_duration = Duration::hours(new_duration_in_hours as i64);
 
         if new_duration > default_max_duration {
