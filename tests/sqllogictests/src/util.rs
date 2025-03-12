@@ -58,6 +58,8 @@ pub struct ServerInfo {
 pub struct HttpSessionConf {
     pub database: Option<String>,
     pub role: Option<String>,
+    pub catalog: Option<String>,
+
     pub secondary_roles: Option<Vec<String>>,
     pub settings: Option<BTreeMap<String, String>>,
     pub txn_state: Option<String>,

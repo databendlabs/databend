@@ -68,7 +68,7 @@ statement ok
 create database if not exists ef123;
 
 query T rowsort
-show databases from ctl;
+show databases;
 ----
 abc
 ef123
