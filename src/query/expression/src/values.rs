@@ -329,6 +329,16 @@ impl Value<AnyType> {
         }
     }
 
+    pub fn into_full_column(self, ty: &DataType, num_rows: usize) -> Column {
+        match self {
+            Value::Scalar(s) => {
+                let builder = ColumnBuilder::repeat(&s.as_ref(), num_rows, ty);
+                builder.build()
+            }
+            Value::Column(c) => c,
+        }
+    }
+
     pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
         Some(match self {
             Value::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(T::try_downcast_scalar(
