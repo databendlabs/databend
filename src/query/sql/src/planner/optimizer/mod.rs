@@ -39,6 +39,7 @@ pub use cascades::CascadesOptimizer;
 pub use decorrelate::FlattenInfo;
 pub use decorrelate::SubqueryRewriter;
 pub use extract::PatternExtractor;
+pub use filter::DeduplicateJoinConditionOptimizer;
 pub use filter::InferFilterOptimizer;
 pub use hyper_dp::DPhpy;
 pub use m_expr::MExpr;
