@@ -1,9 +1,29 @@
+# TPC-DS spill test
 statement ok
 set sandbox_tenant = 'test_tenant';
 
 statement ok
 use tpcds;
 
+statement ok
+set force_join_data_spill = 1;
+
+statement ok
+SET force_sort_data_spill = 1;
+
+statement ok
+SET force_window_data_spill = 1;
+
+statement ok
+SET force_aggregate_data_spill = 1;
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 5;
+
+statement ok
+set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
+
+# TPC-DS TEST
 include ./Q1
 include ./Q2
 include ./Q3
@@ -13,7 +33,7 @@ include ./Q6
 include ./Q7
 include ./Q8
 include ./Q9
-include ./Q10
+# include ./Q10
 include ./Q11
 include ./Q12
 include ./Q13
@@ -26,7 +46,7 @@ include ./Q19
 include ./Q20
 include ./Q21
 include ./Q22
-include ./Q23
+# include ./Q23
 include ./Q24
 include ./Q25
 include ./Q26
@@ -38,10 +58,10 @@ include ./Q31
 include ./Q32
 include ./Q33
 include ./Q34
-include ./Q35
+# include ./Q35
 include ./Q36
 include ./Q37
-include ./Q38
+# include ./Q38
 include ./Q39
 include ./Q40
 include ./Q41
@@ -90,7 +110,7 @@ include ./Q83
 include ./Q84
 include ./Q85
 include ./Q86
-include ./Q87
+# include ./Q87
 include ./Q88
 include ./Q89
 include ./Q90
@@ -103,3 +123,47 @@ include ./Q96
 include ./Q97
 include ./Q98
 include ./Q99
+
+statement ok
+SET force_join_data_spill = 0;
+
+include ./Q10
+include ./Q23
+include ./Q35
+include ./Q38
+include ./Q87
+
+statement ok
+SET force_join_data_spill = 1;
+
+statement ok
+set max_block_size = 2;
+
+statement ok
+create or replace table t as select 0 AS c1, i_category as c2 from (select i_category, i_class from item group by i_category, i_class) limit 60;
+
+query T
+select sum(rank) from (select rank() over (partition by c1, c2) as rank FROM t);
+----
+60
+
+statement ok
+drop table if exists t;
+
+statement ok
+UNSET force_sort_data_spill;
+
+statement ok
+UNSET force_join_data_spill;
+
+statement ok
+UNSET force_window_data_spill;
+
+statement ok
+UNSET force_aggregate_data_spill;
+
+statement ok
+unset max_block_size;
+
+statement ok
+unset join_spilling_buffer_threshold_per_proc_mb;
