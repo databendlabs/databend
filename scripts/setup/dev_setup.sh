@@ -480,7 +480,7 @@ EOF
 		cat <<EOF
 Development tools (since -d was provided):
   * mysql client
-  * python3 (boto3, black, yamllint, ...)
+  * python3 (boto3, ruff, yamllint, ...)
   * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
 EOF
 	fi
@@ -685,7 +685,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 		install_pkg graphviz "$PACKAGE_MANAGER"
 		install_pkg graphviz-dev "$PACKAGE_MANAGER"
 	fi
-	python3 -m pip install --quiet boto3 "moto[all]" black shfmt-py toml yamllint
+	python3 -m pip install --quiet boto3 "moto[all]" shfmt-py toml yamllint ruff
 	# drivers
 	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
 	# sqllogic dependencies
