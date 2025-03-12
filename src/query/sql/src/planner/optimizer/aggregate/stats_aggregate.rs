@@ -22,7 +22,6 @@ use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
@@ -140,27 +139,13 @@ impl RuleStatsAggregateOptimizer {
                                         value: value_bound.value.clone(),
                                     });
 
-                                    //
-                                    if agg_func.return_type.as_ref()
-                                        != &value_bound.value.as_ref().infer_data_type()
-                                    {
-                                        let cast_expr = CastExpr {
-                                            span: None,
-                                            is_try: false,
-                                            argument: Box::new(scalar),
-                                            target_type: agg_func.return_type,
-                                        };
-                                        eval_scalar_results.push(ScalarItem {
-                                            index: agg.index,
-                                            scalar: ScalarExpr::CastExpr(cast_expr),
-                                        });
-                                    } else {
-                                        eval_scalar_results.push(ScalarItem {
-                                            index: agg.index,
-                                            scalar,
-                                        });
-                                    }
+                                    let scalar =
+                                        scalar.unify_to_data_type(agg_func.return_type.as_ref());
 
+                                    eval_scalar_results.push(ScalarItem {
+                                        index: agg.index,
+                                        scalar,
+                                    });
                                     continue;
                                 }
                             }

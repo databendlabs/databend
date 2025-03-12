@@ -259,7 +259,10 @@ impl SubqueryRewriter {
                 subquery.subquery = Box::new(self.rewrite(&subquery.subquery)?);
 
                 if let Some(constant_subquery) = self.try_fold_constant_subquery(&subquery)? {
-                    return Ok((constant_subquery, s_expr.clone()));
+                    return Ok((
+                        constant_subquery.unify_to_data_type(&subquery.data_type()),
+                        s_expr.clone(),
+                    ));
                 }
 
                 // Check if the subquery is a correlated subquery.
