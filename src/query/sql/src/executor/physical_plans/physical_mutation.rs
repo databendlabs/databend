@@ -696,6 +696,9 @@ pub fn generate_update_list(
 
                 // Convert left to nullable type
                 let left = wrap_cast(&scalar, &nullable_type);
+                let right = wrap_cast(&right, &nullable_type);
+                let nullable_bool_type = DataType::Boolean.wrap_nullable();
+                let predicate = wrap_cast(&predicate, &nullable_bool_type);
                 // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
                 // change into nullable, so we need to cast this. but we will do cast after all matched clauses,please
                 // see `cast_data_type_for_merge()`.
