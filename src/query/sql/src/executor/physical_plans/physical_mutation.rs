@@ -656,14 +656,26 @@ pub fn generate_update_list(
         Vec::with_capacity(update_list.len()),
         |mut acc, (index, scalar)| {
             let field = schema.field(*index);
+            let data_type = scalar.data_type()?;
             let target_type = field.data_type();
-            let nullable_type = target_type.wrap_nullable();
+            let left = if data_type != *target_type {
+                // change scalar's column datatype
+                let mut tmp_scalar = scalar.clone();
+                if data_type.wrap_nullable() == *target_type {
+                    if let ScalarExpr::BoundColumnRef(ref mut bound_ref) = tmp_scalar {
+                        bound_ref.column.data_type = Box::new(target_type.clone());
+                    }
+                }
+                wrap_cast(&tmp_scalar, target_type)
+            } else {
+                scalar.clone()
+            };
 
             let scalar = if col_indices.is_empty() {
                 // The condition is always true.
                 // Replace column to the result of the following expression:
                 // CAST(expression, type)
-                wrap_cast(scalar, &nullable_type)
+                left
             } else {
                 // Replace column to the result of the following expression:
                 // if(condition, CAST(expression, type), column)
@@ -675,12 +687,9 @@ pub fn generate_update_list(
                         field.name(),
                         column_binding,
                     ) {
-                        // Create a new column_binding, ensuring its type is nullable
-                        let mut column = column_binding.clone();
-                        column.data_type = Box::new(nullable_type.clone());
                         right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
                             span: None,
-                            column,
+                            column: column_binding.clone(),
                         }));
                         break;
                     }
@@ -688,17 +697,6 @@ pub fn generate_update_list(
 
                 let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
 
-                // Ensure the scalar type is also nullable
-                let mut scalar = scalar.clone();
-                if let ScalarExpr::BoundColumnRef(ref mut bound_ref) = scalar {
-                    bound_ref.column.data_type = Box::new(nullable_type.clone());
-                }
-
-                // Convert left to nullable type
-                let left = wrap_cast(&scalar, &nullable_type);
-                let right = wrap_cast(&right, &nullable_type);
-                let nullable_bool_type = DataType::Boolean.wrap_nullable();
-                let predicate = wrap_cast(&predicate, &nullable_bool_type);
                 // corner case: for merge into, if target_table's fields are not null, when after bind_join, it will
                 // change into nullable, so we need to cast this. but we will do cast after all matched clauses,please
                 // see `cast_data_type_for_merge()`.
