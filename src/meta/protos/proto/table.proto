@@ -19,6 +19,7 @@ package databend_proto;
 import "config.proto";
 import "user.proto";
 import "metadata.proto";
+import "virtual_schema.proto";
 
 message DbIdTableName {
   uint64 ver = 100;
@@ -122,6 +123,8 @@ message TableMeta {
   reserved 30;
 
   map<string, TableIndex> indexes = 31;
+  // The schema of virtual columns.
+  VirtualDataSchema virtual_schema = 32;
 }
 
 message TableIndex {

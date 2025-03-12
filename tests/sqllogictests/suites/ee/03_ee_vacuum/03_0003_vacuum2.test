@@ -80,6 +80,7 @@ select count() from list_stage(location=> '@stage_v') where name like '%_ss%';
 4
 
 # vacuum historical data
+# `call system$fuse_vacuum2(...)` also works, but we need to ignore the result
 statement ok
 select * from fuse_vacuum2('vacuum2', 't') ignore_result;
 

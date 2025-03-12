@@ -6,7 +6,7 @@ statement ok
 use tpcds;
 
 # Q1
-query I
+query T
 WITH customer_total_return AS
   (SELECT sr_customer_sk AS ctr_customer_sk,
           sr_store_sk AS ctr_store_sk,
@@ -134,7 +134,7 @@ AAAAAAAAACFABAAA
 
 
 # Q2
-query I
+query IRRRRRRR
 WITH wscs AS
   (SELECT sold_date_sk,
           sales_price
@@ -2731,7 +2731,7 @@ ORDER BY d_week_seq1 NULLS FIRST;
 
 
 # Q3
-query I
+query IITR
 SELECT dt.d_year,
        item.i_brand_id brand_id,
        item.i_brand brand,
@@ -2843,7 +2843,7 @@ LIMIT 100;
 
 
 # Q4
-query I
+query TTTT
 WITH year_total AS
   (SELECT c_customer_id customer_id,
           c_first_name customer_first_name,
@@ -2973,7 +2973,7 @@ AAAAAAAAPFCLAAAA Felicia Neville N
 
 
 # Q5
-query I
+query TTRRR
 WITH ssr AS
   (SELECT s_store_id,
           sum(sales_price) AS sales,
@@ -3190,7 +3190,7 @@ catalog channel catalog_pageAAAAAAAACDPAAAAA 0.00 1279.25 -3731.50
 
 
 # Q6
-query I
+query TI
 SELECT a.ca_state state,
        count(*) cnt
 FROM customer_address a ,
@@ -3266,7 +3266,7 @@ TX 228
 
 
 # Q7
-query I
+query TRRRR
 SELECT i_item_id,
        avg(ss_quantity) agg1,
        avg(ss_list_price) agg2,
@@ -3394,7 +3394,7 @@ AAAAAAAAADGCAAAA 16.0 75.18000000 0.00000000 23.30000000
 
 
 # Q8
-query I
+query TR
 SELECT s_store_name,
        sum(ss_net_profit)
 FROM store_sales,
@@ -3831,8 +3831,7 @@ ought -10994052.78
 
 
 # Q9
-query I
-
+query RRRRR
 SELECT CASE
            WHEN
                   (SELECT count(*)
@@ -3905,7 +3904,7 @@ WHERE r_reason_sk = 1 ;
 
 
 # Q10
-query I
+query TTTIIITIIIIIII
 SELECT cd_gender,
        cd_marital_status,
        cd_education_status,
@@ -3981,7 +3980,7 @@ M W Unknown 1 4500 1 Good 1 5 1 0 1 1 1
 
 
 # Q11
-query I
+query TTTT
 WITH year_total AS
   (SELECT c_customer_id customer_id,
           c_first_name customer_first_name,
@@ -4156,7 +4155,7 @@ AAAAAAAAPKIKAAAA Wendy Horvath N
 
 
 # Q12
-query I
+query TTTTRRR
 SELECT i_item_id,
        i_item_desc,
        i_category,
@@ -4288,8 +4287,7 @@ AAAAAAAADGKAAAAA Again general shoes operate at least in the units. Also previou
 
 
 # Q13
-query I
-
+query RRRR
 SELECT avg(ss_quantity) avg1,
        avg(ss_ext_sales_price) avg2,
        avg(ss_ext_wholesale_cost) avg3,
@@ -11306,8 +11304,7 @@ Adams John Marion Oak Ridge 206733 32377.89 1224.72 72590.31
 
 
 # Q69
-onlyif todo
-query I
+query TTTIIITI
 SELECT cd_gender,
        cd_marital_status,
        cd_education_status,
@@ -11360,6 +11357,107 @@ ORDER BY cd_gender,
          cd_credit_rating
 LIMIT 100;
 ----
+F D 2 yr Degree 1 2500 1 Low Risk 1
+F D 2 yr Degree 1 4500 1 Good 1
+F D 2 yr Degree 2 4500 2 Low Risk 2
+F D 2 yr Degree 1 9000 1 Good 1
+F D 2 yr Degree 1 9500 1 Good 1
+F D 4 yr Degree 1 1000 1 Low Risk 1
+F D 4 yr Degree 1 1500 1 Low Risk 1
+F D 4 yr Degree 1 1500 1 Unknown 1
+F D 4 yr Degree 1 2000 1 Good 1
+F D 4 yr Degree 1 2500 1 Unknown 1
+F D 4 yr Degree 1 4000 1 Unknown 1
+F D 4 yr Degree 1 5500 1 Good 1
+F D 4 yr Degree 1 7000 1 Good 1
+F D 4 yr Degree 1 7000 1 High Risk 1
+F D 4 yr Degree 1 8000 1 High Risk 1
+F D 4 yr Degree 1 8500 1 Unknown 1
+F D Advanced Degree 1 1000 1 Good 1
+F D Advanced Degree 1 3500 1 Good 1
+F D Advanced Degree 1 3500 1 High Risk 1
+F D Advanced Degree 1 4000 1 Good 1
+F D Advanced Degree 1 4000 1 High Risk 1
+F D Advanced Degree 1 5000 1 High Risk 1
+F D Advanced Degree 1 5500 1 Good 1
+F D Advanced Degree 1 5500 1 Low Risk 1
+F D Advanced Degree 1 6500 1 Low Risk 1
+F D Advanced Degree 1 7000 1 High Risk 1
+F D Advanced Degree 1 8000 1 Low Risk 1
+F D Advanced Degree 1 8500 1 High Risk 1
+F D Advanced Degree 1 9500 1 Low Risk 1
+F D Advanced Degree 1 9500 1 Unknown 1
+F D Advanced Degree 1 10000 1 Low Risk 1
+F D College 1 1500 1 Low Risk 1
+F D College 1 2500 1 Good 1
+F D College 1 4000 1 High Risk 1
+F D College 1 6000 1 Good 1
+F D College 1 6000 1 High Risk 1
+F D College 1 9000 1 High Risk 1
+F D Primary 1 3000 1 High Risk 1
+F D Primary 1 4000 1 Low Risk 1
+F D Primary 1 4000 1 Unknown 1
+F D Primary 1 4500 1 Unknown 1
+F D Primary 1 5000 1 High Risk 1
+F D Primary 1 5000 1 Unknown 1
+F D Primary 1 6000 1 Good 1
+F D Primary 1 6000 1 Unknown 1
+F D Primary 1 8500 1 Unknown 1
+F D Primary 1 9000 1 Unknown 1
+F D Primary 1 9500 1 High Risk 1
+F D Primary 1 9500 1 Unknown 1
+F D Primary 1 10000 1 Good 1
+F D Primary 2 10000 2 Low Risk 2
+F D Secondary 1 500 1 Low Risk 1
+F D Secondary 1 1000 1 High Risk 1
+F D Secondary 1 3000 1 Good 1
+F D Secondary 1 3500 1 Good 1
+F D Secondary 1 6000 1 Low Risk 1
+F D Secondary 1 6500 1 Unknown 1
+F D Secondary 1 8500 1 High Risk 1
+F D Secondary 1 10000 1 Low Risk 1
+F D Unknown 1 1500 1 High Risk 1
+F D Unknown 1 3000 1 Good 1
+F D Unknown 1 3000 1 High Risk 1
+F D Unknown 1 6000 1 Good 1
+F D Unknown 1 6500 1 High Risk 1
+F D Unknown 2 8000 2 Low Risk 2
+F D Unknown 1 10000 1 Unknown 1
+F M 2 yr Degree 1 2500 1 Low Risk 1
+F M 2 yr Degree 3 4000 3 Unknown 3
+F M 2 yr Degree 1 4500 1 Low Risk 1
+F M 2 yr Degree 1 8500 1 High Risk 1
+F M 4 yr Degree 1 1000 1 Good 1
+F M 4 yr Degree 1 1500 1 Good 1
+F M 4 yr Degree 1 4000 1 Low Risk 1
+F M 4 yr Degree 1 4000 1 Unknown 1
+F M 4 yr Degree 1 5000 1 Unknown 1
+F M 4 yr Degree 1 5500 1 Low Risk 1
+F M 4 yr Degree 1 6000 1 Good 1
+F M 4 yr Degree 1 8000 1 High Risk 1
+F M Advanced Degree 1 500 1 Low Risk 1
+F M Advanced Degree 1 500 1 Unknown 1
+F M Advanced Degree 1 2500 1 Good 1
+F M Advanced Degree 1 3500 1 High Risk 1
+F M Advanced Degree 2 5500 2 Unknown 2
+F M Advanced Degree 1 6500 1 Good 1
+F M Advanced Degree 1 6500 1 Unknown 1
+F M Advanced Degree 1 8000 1 Low Risk 1
+F M Advanced Degree 1 9500 1 Good 1
+F M Advanced Degree 1 10000 1 Low Risk 1
+F M College 1 1000 1 Unknown 1
+F M College 1 3000 1 Good 1
+F M College 2 5000 2 High Risk 2
+F M College 1 6000 1 Low Risk 1
+F M College 1 7000 1 High Risk 1
+F M College 1 8000 1 Good 1
+F M College 1 9000 1 Good 1
+F M College 2 9000 2 High Risk 2
+F M College 1 10000 1 High Risk 1
+F M Primary 1 1000 1 Low Risk 1
+F M Primary 1 1500 1 High Risk 1
+F M Primary 1 7000 1 Good 1
+
 
 
 # Q70

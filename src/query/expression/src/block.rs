@@ -77,6 +77,10 @@ impl BlockEntry {
     pub fn to_column(&self, num_rows: usize) -> Column {
         self.value.convert_to_full_column(&self.data_type, num_rows)
     }
+
+    pub fn into_column(self, num_rows: usize) -> Column {
+        self.value.into_full_column(&self.data_type, num_rows)
+    }
 }
 
 #[typetag::serde(tag = "type")]
@@ -212,6 +216,11 @@ impl DataBlock {
     #[inline]
     pub fn columns_mut(&mut self) -> &mut [BlockEntry] {
         &mut self.columns
+    }
+
+    #[inline]
+    pub fn take_columns(self) -> Vec<BlockEntry> {
+        self.columns
     }
 
     #[inline]
@@ -480,9 +489,9 @@ impl DataBlock {
                     BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()))
                 }
                 None => {
-                    let col = Column::from_arrow_rs(arrays[chunk_idx].clone(), data_type)?;
+                    let value = Value::from_arrow_rs(arrays[chunk_idx].clone(), data_type)?;
                     chunk_idx += 1;
-                    BlockEntry::new(data_type.clone(), Value::Column(col))
+                    BlockEntry::new(data_type.clone(), value)
                 }
             };
 

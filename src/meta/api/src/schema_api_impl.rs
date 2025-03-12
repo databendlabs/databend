@@ -28,6 +28,9 @@ use chrono::Utc;
 use databend_common_base::base::uuid::Uuid;
 use databend_common_base::display::display_slice::DisplaySliceExt;
 use databend_common_base::vec_ext::VecExt;
+use databend_common_expression::VIRTUAL_COLUMNS_ID_UPPER;
+use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
+use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::app_error::CommitTableMetaError;
 use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
@@ -54,6 +57,8 @@ use databend_common_meta_app::app_error::UnknownStreamId;
 use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
+use databend_common_meta_app::app_error::VirtualColumnIdOutBound;
+use databend_common_meta_app::app_error::VirtualColumnTooMany;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdListIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
@@ -2207,7 +2212,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateMultiTableMetaResult, KVAppError> {
         let UpdateMultiTableMetaReq {
-            update_table_metas,
+            mut update_table_metas,
             copied_files,
             update_stream_metas,
             deduplicated_labels,
@@ -2251,12 +2256,37 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         }
 
         let mut new_table_meta_map: BTreeMap<u64, TableMeta> = BTreeMap::new();
-        for (req, (tb_meta_seq, table_meta)) in update_table_metas.iter().zip(tb_meta_vec.iter()) {
+        for (req, (tb_meta_seq, table_meta)) in
+            update_table_metas.iter_mut().zip(tb_meta_vec.iter())
+        {
             let tbid = TableId {
                 table_id: req.0.table_id,
             };
             // `update_table_meta` MUST NOT modify `shared_by` field
             let table_meta = table_meta.as_ref().unwrap();
+
+            if let Some(virtual_schema) = &mut req.0.new_table_meta.virtual_schema {
+                if virtual_schema.fields.len() > VIRTUAL_COLUMNS_LIMIT {
+                    return Err(KVAppError::AppError(AppError::VirtualColumnTooMany(
+                        VirtualColumnTooMany::new(req.0.table_id, VIRTUAL_COLUMNS_LIMIT),
+                    )));
+                }
+                for virtual_field in virtual_schema.fields.iter_mut() {
+                    if !matches!(
+                        virtual_field.column_id,
+                        VIRTUAL_COLUMN_ID_START..=VIRTUAL_COLUMNS_ID_UPPER
+                    ) {
+                        return Err(KVAppError::AppError(AppError::VirtualColumnIdOutBound(
+                            VirtualColumnIdOutBound::new(
+                                virtual_field.column_id,
+                                VIRTUAL_COLUMN_ID_START,
+                                VIRTUAL_COLUMNS_ID_UPPER,
+                            ),
+                        )));
+                    }
+                    virtual_field.data_types.dedup();
+                }
+            }
             let mut new_table_meta = req.0.new_table_meta.clone();
             new_table_meta.shared_by = table_meta.shared_by.clone();
 

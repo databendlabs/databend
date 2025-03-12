@@ -4158,6 +4158,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-users",
  "databend-enterprise-fail-safe",
+ "databend-enterprise-vacuum-handler",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-index",
@@ -4824,7 +4825,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-storages-fuse",
 ]
 
 [[package]]
