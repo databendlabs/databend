@@ -48,6 +48,10 @@ use serde_json::Map;
 use crate::Config;
 use crate::GlobalLogger;
 
+// buffer size limit for preventing log records flooding
+// if the limit is reached, the log records will be dropped
+const MAX_BUFFER_SIZE: usize = 10000;
+
 /// An appender that sends log records to persistent storage
 pub struct RemoteLog {
     sender: mpsc::Sender<Message>,
@@ -82,7 +86,6 @@ impl Drop for RemoteLogGuard {
     fn drop(&mut self) {
         if self.sender.try_send(Message::Shutdown).is_ok() {
             // wait for the log to be flushed
-            // TODO: use blocking sleep here, may have better wayn
             std::thread::sleep(Duration::from_secs(3));
         }
     }
@@ -126,10 +129,13 @@ impl RemoteLog {
     }
 
     pub async fn work(mut receiver: mpsc::Receiver<Message>, stage_name: &str) {
-        let mut buffer = vec![];
+        let mut buffer = Vec::with_capacity(MAX_BUFFER_SIZE);
         while let Some(msg) = receiver.recv().await {
             match msg {
                 Message::LogElement(log_element) => {
+                    if buffer.len() >= MAX_BUFFER_SIZE {
+                        continue;
+                    }
                     buffer.push(log_element);
                 }
                 Message::Shutdown => {

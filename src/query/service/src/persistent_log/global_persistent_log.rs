@@ -20,8 +20,11 @@ use std::time::Duration;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::TrySpawn;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_kvapi::kvapi::KVApi;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
@@ -113,7 +116,7 @@ impl GlobalPersistentLog {
                     }
                     copy_into_count += 1;
                     if copy_into_count > 50 {
-                        if let Err(e) = self.do_delete().await {
+                        if let Err(e) = self.clean().await {
                             error!("Persistent log delete failed: {:?}", e);
                         }
                         copy_into_count = 0;
@@ -185,12 +188,22 @@ impl GlobalPersistentLog {
         self.execute_sql(&sql).await
     }
 
-    async fn do_delete(&self) -> Result<()> {
+    async fn clean(&self) -> Result<()> {
         let delete = format!(
             "DELETE FROM persistent_system.text_log WHERE timestamp < subtract_hours(NOW(), {})",
             self.retention
         );
-        self.execute_sql(&delete).await
+        self.execute_sql(&delete).await?;
+
+        let session = create_session(&self.tenant_id, &self.cluster_id).await?;
+        let context = session.create_query_context().await?;
+        if let Ok(_) = LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
+        {
+            let vacuum = "VACUUM persistent_system.text_log";
+            self.execute_sql(vacuum).await?
+        }
+        Ok(())
     }
 }
 

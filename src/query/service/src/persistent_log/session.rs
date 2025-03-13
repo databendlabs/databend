@@ -40,7 +40,7 @@ pub async fn create_session(tenant_id: &str, cluster_id: &str) -> Result<Arc<Ses
     let session_manager = SessionManager::instance();
     let dummy_session = session_manager.create_session(SessionType::Dummy).await?;
     let session = session_manager.register_session(dummy_session)?;
-    let user = get_persistent_log_user(&tenant_id, &cluster_id);
+    let user = get_persistent_log_user(tenant_id, cluster_id);
     session
         .set_authed_user(user.clone(), Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()))
         .await?;
