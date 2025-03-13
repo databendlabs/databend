@@ -30,13 +30,13 @@ use crate::ast::TableReference;
 use crate::ast::WithOptions;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub struct MergeUpdateExpr {
+pub struct MutationUpdateExpr {
     pub table: Option<Identifier>,
     pub name: Identifier,
     pub expr: Expr,
 }
 
-impl Display for MergeUpdateExpr {
+impl Display for MutationUpdateExpr {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.table.is_some() {
             write!(f, "{}.", self.table.clone().unwrap())?;
@@ -49,7 +49,7 @@ impl Display for MergeUpdateExpr {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum MatchOperation {
     Update {
-        update_list: Vec<MergeUpdateExpr>,
+        update_list: Vec<MutationUpdateExpr>,
         is_star: bool,
     },
     Delete,
@@ -86,7 +86,7 @@ pub struct MergeIntoStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table_ident: Identifier,
-    pub source: MergeSource,
+    pub source: MutationSource,
     // target_alias is belong to target
     pub target_alias: Option<TableAlias>,
     pub join_expr: Expr,
@@ -167,7 +167,7 @@ impl Display for MergeIntoStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
-pub enum MergeSource {
+pub enum MutationSource {
     StreamingV2 {
         settings: FileFormatOptions,
         on_error_mode: Option<String>,
@@ -187,7 +187,7 @@ pub enum MergeSource {
     },
 }
 
-impl MergeSource {
+impl MutationSource {
     pub fn transform_table_reference(&self) -> TableReference {
         match self {
             Self::StreamingV2 {
@@ -229,10 +229,10 @@ impl MergeSource {
     }
 }
 
-impl Display for MergeSource {
+impl Display for MutationSource {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            MergeSource::StreamingV2 {
+            MutationSource::StreamingV2 {
                 settings,
                 on_error_mode,
                 start: _,
@@ -245,12 +245,12 @@ impl Display for MergeSource {
                 )
             }
 
-            MergeSource::Select {
+            MutationSource::Select {
                 query,
                 source_alias,
             } => write!(f, "({query}) AS {source_alias}"),
 
-            MergeSource::Table {
+            MutationSource::Table {
                 catalog,
                 database,
                 table,

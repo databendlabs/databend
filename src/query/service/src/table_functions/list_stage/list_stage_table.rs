@@ -225,6 +225,7 @@ fn make_block(files: &[StageFileInfo]) -> DataBlock {
         .iter()
         .map(|file| {
             file.last_modified
+                .unwrap_or_default()
                 .format("%Y-%m-%d %H:%M:%S.%3f %z")
                 .to_string()
         })

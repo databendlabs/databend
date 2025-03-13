@@ -20,7 +20,6 @@ use crate::binder::Visibility;
 use crate::plans::walk_expr_mut;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
-use crate::plans::SubqueryExpr;
 use crate::plans::VisitorMut;
 use crate::BindContext;
 
@@ -176,6 +175,11 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
                     return Ok(());
                 }
             }
+            ScalarExpr::SubqueryExpr(q) => {
+                if let Some(c) = q.child_expr.as_mut() {
+                    self.visit(c.as_mut())?;
+                }
+            }
             _ => {}
         }
 
@@ -199,10 +203,5 @@ impl VisitorMut<'_> for GroupingChecker<'_> {
             &column.column.column_name
         ))
         .set_span(column.span))
-    }
-
-    fn visit_subquery_expr(&mut self, _: &mut SubqueryExpr) -> Result<()> {
-        // TODO(leiysky): check subquery in the future
-        Ok(())
     }
 }

@@ -39,6 +39,8 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ops::Range;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -74,13 +76,24 @@ pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::property::Domain;
 use crate::values::Column;
-use crate::values::Scalar;
+pub use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+    EnumAsInner,
+)]
 pub enum DataType {
     Null,
     EmptyArray,
@@ -110,6 +123,31 @@ impl DataType {
     pub fn wrap_nullable(&self) -> Self {
         match self {
             DataType::Null | DataType::Nullable(_) => self.clone(),
+            _ => Self::Nullable(Box::new(self.clone())),
+        }
+    }
+
+    pub fn nest_wrap_nullable(&self) -> Self {
+        match self {
+            DataType::Null => self.clone(),
+            DataType::Nullable(box inner_ty) => inner_ty.nest_wrap_nullable(),
+            DataType::Array(box inner_ty) => Self::Nullable(Box::new(Self::Array(Box::new(
+                inner_ty.nest_wrap_nullable(),
+            )))),
+            DataType::Map(box DataType::Tuple(inner_tys)) if inner_tys.len() == 2 => {
+                let key_ty = inner_tys[0].clone();
+                let val_ty = inner_tys[1].nest_wrap_nullable();
+                Self::Nullable(Box::new(Self::Map(Box::new(Self::Tuple(vec![
+                    key_ty, val_ty,
+                ])))))
+            }
+            DataType::Tuple(inner_tys) => {
+                let new_inner_tys = inner_tys
+                    .iter()
+                    .map(|inner_ty| inner_ty.nest_wrap_nullable())
+                    .collect();
+                Self::Nullable(Box::new(Self::Tuple(new_inner_tys)))
+            }
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }

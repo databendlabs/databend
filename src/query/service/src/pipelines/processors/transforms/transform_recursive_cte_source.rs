@@ -290,7 +290,7 @@ async fn create_memory_table_for_cte_scan(
             let schema = TableSchemaRefExt::create(table_fields);
 
             let create_table_plan = CreateTablePlan {
-                create_option: CreateOption::Create,
+                create_option: CreateOption::CreateIfNotExists,
                 tenant: Tenant {
                     tenant: ctx.get_tenant().tenant,
                 },
@@ -306,6 +306,7 @@ async fn create_memory_table_for_cte_scan(
                 cluster_key: None,
                 as_select: None,
                 inverted_indexes: None,
+                attached_columns: None,
             };
             let create_table_interpreter =
                 CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
@@ -339,6 +340,7 @@ async fn create_memory_table_for_cte_scan(
         | PhysicalPlan::CompactSource(_)
         | PhysicalPlan::CommitSink(_)
         | PhysicalPlan::Recluster(_)
+        | PhysicalPlan::HilbertSerialize(_)
         | PhysicalPlan::Duplicate(_)
         | PhysicalPlan::ChunkFilter(_)
         | PhysicalPlan::ChunkEvalScalar(_)

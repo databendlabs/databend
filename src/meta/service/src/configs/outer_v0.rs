@@ -28,6 +28,7 @@ use databend_common_tracing::QueryLogConfig;
 use databend_common_tracing::StderrConfig as InnerStderrLogConfig;
 use databend_common_tracing::StructLogConfig;
 use databend_common_tracing::TracingConfig;
+use databend_common_tracing::CONFIG_DEFAULT_LOG_LEVEL;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -39,7 +40,7 @@ use super::inner::Config as InnerConfig;
 use crate::version::METASRV_COMMIT_VERSION;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
-#[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
+#[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
 #[serde(default)]
 pub struct Config {
     /// Run a command
@@ -90,7 +91,7 @@ pub struct Config {
     pub config_file: String,
 
     /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-level", default_value = "INFO")]
+    #[clap(long = "log-level", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     pub log_level: String,
 
     /// Log file dir
@@ -141,7 +142,7 @@ impl Default for Config {
 impl From<Config> for InnerConfig {
     fn from(outer: Config) -> Self {
         let mut log: InnerLogConfig = outer.log.into();
-        if outer.log_level != "INFO" {
+        if outer.log_level != CONFIG_DEFAULT_LOG_LEVEL {
             log.file.level = outer.log_level.to_string();
         }
         if outer.log_dir != "./.databend/logs" {
@@ -268,6 +269,7 @@ pub struct ConfigViaEnv {
     pub metasrv_log_file_dir: String,
     pub metasrv_log_file_format: String,
     pub metasrv_log_file_limit: usize,
+    pub metasrv_log_file_max_size: usize,
     pub metasrv_log_stderr_on: bool,
     pub metasrv_log_stderr_level: String,
     pub metasrv_log_stderr_format: String,
@@ -325,6 +327,7 @@ impl From<Config> for ConfigViaEnv {
             metasrv_log_file_dir: cfg.log.file.file_dir,
             metasrv_log_file_format: cfg.log.file.file_format,
             metasrv_log_file_limit: cfg.log.file.file_limit,
+            metasrv_log_file_max_size: cfg.log.file.file_max_size,
             metasrv_log_stderr_on: cfg.log.stderr.stderr_on,
             metasrv_log_stderr_level: cfg.log.stderr.stderr_level,
             metasrv_log_stderr_format: cfg.log.stderr.stderr_format,
@@ -410,7 +413,8 @@ impl Into<Config> for ConfigViaEnv {
                 file_dir: self.metasrv_log_file_dir,
                 file_format: self.metasrv_log_file_format,
                 file_limit: self.metasrv_log_file_limit,
-                file_prefix_filter: "databend_,openraft".to_string(),
+                file_max_size: self.metasrv_log_file_max_size,
+                file_prefix_filter: None,
             },
             stderr: StderrLogConfig {
                 stderr_on: self.metasrv_log_stderr_on,
@@ -701,12 +705,14 @@ impl From<InnerLogConfig> for LogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
-    #[clap(long = "log-file-on", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-file-on", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub file_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-file-level", default_value = "INFO")]
+    #[clap(long = "log-file-level", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub file_level: String,
 
@@ -725,12 +731,15 @@ pub struct FileLogConfig {
     #[serde(rename = "limit")]
     pub file_limit: usize,
 
-    /// Log prefix filter, separated by comma.
-    /// For example, `"databend_,openraft"` enables logging for `databend_*` crates and `openraft` crate.
-    /// This filter does not affect `WARNING` and `ERROR` log.
-    #[clap(long = "log-file-prefix-filter", default_value = "databend_,openraft")]
+    /// Log file max size, default is 4GB
+    #[clap(long = "log-file-max-size", default_value = "4294967296")]
+    #[serde(rename = "max-size")]
+    pub file_max_size: usize,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
     #[serde(rename = "prefix_filter")]
-    pub file_prefix_filter: String,
+    pub file_prefix_filter: Option<String>,
 }
 
 impl Default for FileLogConfig {
@@ -748,7 +757,7 @@ impl Into<InnerFileLogConfig> for FileLogConfig {
             dir: self.file_dir,
             format: self.file_format,
             limit: self.file_limit,
-            prefix_filter: self.file_prefix_filter,
+            max_size: self.file_max_size,
         }
     }
 }
@@ -761,7 +770,10 @@ impl From<InnerFileLogConfig> for FileLogConfig {
             file_dir: inner.dir,
             file_format: inner.format,
             file_limit: inner.limit,
-            file_prefix_filter: inner.prefix_filter,
+            file_max_size: inner.max_size,
+
+            // Deprecated Fields
+            file_prefix_filter: None,
         }
     }
 }
@@ -769,12 +781,14 @@ impl From<InnerFileLogConfig> for FileLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StderrLogConfig {
-    #[clap(long = "log-stderr-on", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(
+        long = "log-stderr-on", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true"
+    )]
     #[serde(rename = "on")]
     pub stderr_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-stderr-level", default_value = "INFO")]
+    #[clap(long = "log-stderr-level", default_value = CONFIG_DEFAULT_LOG_LEVEL)]
     #[serde(rename = "level")]
     pub stderr_level: String,
 

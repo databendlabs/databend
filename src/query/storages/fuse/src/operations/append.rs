@@ -33,6 +33,8 @@ use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::operations::common::TransformSerializeBlock;
 use crate::statistics::ClusterStatsGenerator;
@@ -43,6 +45,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
         build_compact_block_pipeline(pipeline, block_thresholds)?;
@@ -58,6 +61,7 @@ impl FuseTable {
                 self,
                 cluster_stats_gen.clone(),
                 MutationKind::Insert,
+                table_meta_timestamps,
             )?;
             proc.into_processor()
         })?;
@@ -169,8 +173,8 @@ impl FuseTable {
         block_thresholds: BlockThresholds,
         modified_schema: Option<Arc<DataSchema>>,
     ) -> Result<ClusterStatsGenerator> {
-        let cluster_keys = self.cluster_keys(ctx.clone());
-        if cluster_keys.is_empty() {
+        let cluster_type = self.cluster_type();
+        if cluster_type.is_none_or(|v| v == ClusterType::Hilbert) {
             return Ok(ClusterStatsGenerator::default());
         }
 
@@ -178,6 +182,7 @@ impl FuseTable {
             modified_schema.unwrap_or(DataSchema::from(self.schema_with_stream()).into());
         let mut merged = input_schema.fields().clone();
 
+        let cluster_keys = self.linear_cluster_keys(ctx.clone());
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
 

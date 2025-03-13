@@ -10,7 +10,7 @@ echo "insert into t1 (id, age) values(1,3), (4, 6);" | $BENDSQL_CLIENT_CONNECT
 DATADIR_PATH="/tmp/08_00_06"
 rm -rf ${DATADIR_PATH}
 DATADIR="fs://$DATADIR_PATH/"
-echo "copy into '${DATADIR}' from t1 FILE_FORMAT = (type = PARQUET);" | $BENDSQL_CLIENT_CONNECT
+echo "copy into '${DATADIR}' from t1 FILE_FORMAT = (type = PARQUET);" | $BENDSQL_CLIENT_CONNECT | cut -d$'\t' -f1,2
 touch ${DATADIR_PATH}/transform.csv
 
 

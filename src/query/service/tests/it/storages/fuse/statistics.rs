@@ -317,11 +317,11 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
     let mut stats_acc = StatisticsAccumulator::default();
 
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
-    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
+    let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     for item in blocks {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None, &schema)?;
-        let block_writer = BlockWriter::new(&operator, &loc_generator);
+        let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default(), true);
         let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
@@ -351,7 +351,13 @@ async fn test_ft_cluster_stats_with_stats() -> databend_common_exception::Result
         None,
     ));
 
-    let block_compactor = BlockThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
+    let block_compactor = BlockThresholds::new(
+        1_000_000,
+        800_000,
+        100 * 1024 * 1024,
+        10 * 1024 * 1024,
+        1000,
+    );
     let stats_gen = ClusterStatsGenerator::new(
         0,
         vec![0],
@@ -521,8 +527,8 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval(
         );
         let block = DataBlock::new_from_columns(vec![data_col.clone()]);
 
-        let min_col = eval_aggr("min", vec![], &[data_col.clone()], rows)?;
-        let max_col = eval_aggr("max", vec![], &[data_col], rows)?;
+        let min_col = eval_aggr("min", vec![], &[data_col.clone()], rows, vec![])?;
+        let max_col = eval_aggr("max", vec![], &[data_col], rows, vec![])?;
 
         let min_expr = min_col.0.index(0).unwrap();
         let max_expr = max_col.0.index(0).unwrap();

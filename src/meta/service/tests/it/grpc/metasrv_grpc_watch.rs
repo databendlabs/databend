@@ -570,7 +570,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
     info!("one watcher");
     {
         let got = mn
-            .subscriber_handle
+            .dispatcher_handle
             .request_blocking(move |d| d.watch_senders().len())
             .await?;
 
@@ -583,7 +583,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
         let _watch_stream2 = client2.request(watch_req()).await?;
 
         let got = mn
-            .subscriber_handle
+            .dispatcher_handle
             .request_blocking(move |d| d.watch_senders().len())
             .await?;
 
@@ -596,7 +596,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
     info!("second watcher is removed");
     {
         let got = mn
-            .subscriber_handle
+            .dispatcher_handle
             .request_blocking(move |d| d.watch_senders().len())
             .await?;
 

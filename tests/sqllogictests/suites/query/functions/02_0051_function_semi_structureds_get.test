@@ -92,10 +92,15 @@ NULL
 query T
 select parse_json('{"aa": null, "aA": 2, "Aa": 3}')->>'aa'
 ----
-null
+NULL
 
 query T
 select parse_json(null)->>'aa'
+----
+NULL
+
+query T
+select parse_json('{"key1":null}')->>'key1'
 ----
 NULL
 
@@ -201,6 +206,10 @@ select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras"
 ----
 {"customer":{"extras":["ext","test"],"id":1,"name":"databend"}}
 
+query T
+select json_extract_path_text('{"attr":null}', 'attr')
+----
+NULL
 
 query T
 select NULL#>'{0}'

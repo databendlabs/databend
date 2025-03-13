@@ -23,6 +23,7 @@ mod catalog;
 mod database;
 mod partition;
 mod predicate;
+mod statistics;
 mod table;
 mod table_source;
 

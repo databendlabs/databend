@@ -1,8 +1,5 @@
 statement ok
-set join_spilling_memory_ratio = 1;
-
-statement ok
-set join_spilling_bytes_threshold_per_proc = 1;
+set force_join_data_spill = 1;
 
 statement ok
 set join_spilling_buffer_threshold_per_proc_mb = 1;
@@ -70,6 +67,9 @@ NULL 16
 NULL 17
 NULL 18
 NULL 19
+
+statement ok
+unset force_join_data_spill;
 
 statement ok
 drop table if exists t1;

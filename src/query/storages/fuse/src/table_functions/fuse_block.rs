@@ -90,7 +90,6 @@ impl TableMetaFunc for FuseBlock {
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
 
         let mut row_num = 0;
-        let mut end_flag = false;
         let chunk_size =
             std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
@@ -117,13 +116,8 @@ impl TableMetaFunc for FuseBlock {
 
                     row_num += 1;
                     if row_num >= limit {
-                        end_flag = true;
-                        break;
+                        break 'FOR;
                     }
-                }
-
-                if end_flag {
-                    break 'FOR;
                 }
             }
         }

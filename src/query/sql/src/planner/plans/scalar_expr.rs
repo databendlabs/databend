@@ -31,6 +31,7 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_expression::FunctionKind;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::SequenceIdent;
@@ -562,7 +563,7 @@ impl TryFrom<ScalarExpr> for AsyncFunctionCall {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct BoundColumnRef {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub column: ColumnBinding,
 }
@@ -570,7 +571,7 @@ pub struct BoundColumnRef {
 #[derive(Clone, Debug, Educe, Ord, PartialOrd)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct ConstantExpr {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub value: Scalar,
 }
@@ -643,18 +644,62 @@ impl<'a> TryFrom<&'a BinaryOperator> for ComparisonOp {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct AggregateFunctionScalarSortDesc {
+    pub expr: ScalarExpr,
+    pub is_reuse_index: bool,
+    pub nulls_first: bool,
+    pub asc: bool,
+}
+
+impl TryInto<AggregateFunctionSortDesc> for &AggregateFunctionScalarSortDesc {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> std::result::Result<AggregateFunctionSortDesc, Self::Error> {
+        let expr = &self.expr;
+        let ScalarExpr::BoundColumnRef(col) = expr else {
+            return Err(ErrorCode::Internal(
+                "Aggregate function sort description must be a BoundColumnRef".to_string(),
+            ));
+        };
+
+        Ok(AggregateFunctionSortDesc {
+            index: col.column.index,
+            is_reuse_index: self.is_reuse_index,
+            data_type: expr.data_type()?,
+            nulls_first: self.nulls_first,
+            asc: self.asc,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct AggregateFunction {
-    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    #[educe(PartialEq(ignore), Hash(ignore))]
     pub span: Span,
     pub func_name: String,
     pub distinct: bool,
     pub params: Vec<Scalar>,
     pub args: Vec<ScalarExpr>,
     pub return_type: Box<DataType>,
+    pub sort_descs: Vec<AggregateFunctionScalarSortDesc>,
 
     pub display_name: String,
+}
+
+impl AggregateFunction {
+    pub fn exprs(&self) -> impl Iterator<Item = &ScalarExpr> {
+        self.args
+            .iter()
+            .chain(self.sort_descs.iter().map(|desc| &desc.expr))
+    }
+
+    pub fn exprs_mut(&mut self) -> impl Iterator<Item = &mut ScalarExpr> {
+        self.args
+            .iter_mut()
+            .chain(self.sort_descs.iter_mut().map(|desc| &mut desc.expr))
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -689,7 +734,7 @@ pub struct NtileFunction {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct WindowFunc {
-    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    #[educe(PartialEq(ignore), Hash(ignore))]
     pub span: Span,
     pub display_name: String,
     pub partition_by: Vec<ScalarExpr>,
@@ -710,7 +755,7 @@ pub struct WindowOrderBy {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct LambdaFunc {
-    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    #[educe(PartialEq(ignore), Hash(ignore))]
     pub span: Span,
     pub func_name: String,
     pub args: Vec<ScalarExpr>,
@@ -722,7 +767,7 @@ pub struct LambdaFunc {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct FunctionCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub func_name: String,
     pub params: Vec<Scalar>,
@@ -732,7 +777,7 @@ pub struct FunctionCall {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct CastExpr {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub is_try: bool,
     pub argument: Box<ScalarExpr>,
@@ -751,7 +796,7 @@ pub enum SubqueryType {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct SubqueryExpr {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub typ: SubqueryType,
     pub subquery: Box<SExpr>,
@@ -789,7 +834,7 @@ fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDFCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     // name in meta
     pub name: String,
@@ -805,7 +850,7 @@ pub struct UDFCall {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDAFCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub name: String, // name in meta
     pub display_name: String,
@@ -880,7 +925,7 @@ impl UDFType {
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct UDFLambdaCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub func_name: String,
     pub scalar: Box<ScalarExpr>,
@@ -952,9 +997,9 @@ pub struct DictGetFunctionArgument {
 
 // Asynchronous functions are functions that need to call remote interfaces.
 #[derive(Clone, Debug, Educe)]
-#[educe(PartialEq, Eq, Hash)]
+#[educe(PartialEq(bound(false)), Eq, Hash(bound(false)))]
 pub struct AsyncFunctionCall {
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub span: Span,
     pub func_name: String,
     pub display_name: String,
@@ -997,7 +1042,7 @@ pub trait Visitor<'a>: Sized {
         walk_window(self, window)
     }
     fn visit_aggregate_function(&mut self, aggregate: &'a AggregateFunction) -> Result<()> {
-        for expr in &aggregate.args {
+        for expr in aggregate.exprs() {
             self.visit(expr)?;
         }
         Ok(())
@@ -1050,6 +1095,7 @@ pub trait Visitor<'a>: Sized {
     }
 }
 
+#[recursive::recursive]
 pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> Result<()> {
     match expr {
         ScalarExpr::BoundColumnRef(expr) => visitor.visit_bound_column_ref(expr),
@@ -1067,6 +1113,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a ScalarExpr) -> R
     }
 }
 
+#[recursive::recursive]
 pub fn walk_window<'a, V: Visitor<'a>>(visitor: &mut V, window: &'a WindowFunc) -> Result<()> {
     for expr in &window.partition_by {
         visitor.visit(expr)?;
@@ -1107,7 +1154,7 @@ pub trait VisitorMut<'a>: Sized {
         walk_window_mut(self, window)
     }
     fn visit_aggregate_function(&mut self, aggregate: &'a mut AggregateFunction) -> Result<()> {
-        for expr in &mut aggregate.args {
+        for expr in aggregate.exprs_mut() {
             self.visit(expr)?;
         }
         Ok(())
@@ -1160,6 +1207,7 @@ pub trait VisitorMut<'a>: Sized {
     }
 }
 
+#[recursive::recursive]
 pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
     visitor: &mut V,
     expr: &'a mut ScalarExpr,
@@ -1180,6 +1228,7 @@ pub fn walk_expr_mut<'a, V: VisitorMut<'a>>(
     }
 }
 
+#[recursive::recursive]
 pub fn walk_window_mut<'a, V: VisitorMut<'a>>(
     visitor: &mut V,
     window: &'a mut WindowFunc,

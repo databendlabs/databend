@@ -152,6 +152,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         name: Identifier::from_name(None, "to_date".to_string()),
                         args: vec![arg],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },
@@ -169,6 +170,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         name: Identifier::from_name(None, "to_timestamp".to_string()),
                         args: vec![arg],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },
@@ -226,6 +228,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         name: Identifier::from_name(None, "to_bitmap".to_string()),
                         args: vec![arg],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },
@@ -244,6 +247,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         name: Identifier::from_name(None, "parse_json".to_string()),
                         args: vec![arg],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },
@@ -261,6 +265,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         name: Identifier::from_name(None, "to_binary".to_string()),
                         args: vec![arg],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },
@@ -279,6 +284,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         name: Identifier::from_name(None, "to_geometry".to_string()),
                         args: vec![arg],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },
@@ -298,6 +304,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         name: Identifier::from_name(None, "st_geographyfromewkt".to_string()),
                         args: vec![arg],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },
@@ -495,7 +502,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         DataType::Timestamp
                     };
                     let expr = self.gen_expr(&expr_ty);
-                    let kind = match self.rng.gen_range(0..=9) {
+                    let kind = match self.rng.gen_range(0..=10) {
                         0 => IntervalKind::Year,
                         1 => IntervalKind::Quarter,
                         2 => IntervalKind::Month,
@@ -506,6 +513,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         7 => IntervalKind::Doy,
                         8 => IntervalKind::Dow,
                         9 => IntervalKind::Week,
+                        10 => IntervalKind::Epoch,
                         _ => unreachable!(),
                     };
                     Expr::Extract {
@@ -627,6 +635,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         name: Identifier::from_name(None, "to_binary"),
                         args: vec![arg],
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },
@@ -663,6 +672,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                         name: Identifier::from_name(None, func_name),
                         args,
                         params: vec![],
+                        order_by: vec![],
                         window: None,
                         lambda: None,
                     },

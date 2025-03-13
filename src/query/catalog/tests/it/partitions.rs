@@ -239,7 +239,7 @@ fn test_partition_reshuffle() {
 
     // Broadcast.
     {
-        let partitions = gen_parts(PartitionsShuffleKind::Broadcast, 3);
+        let partitions = gen_parts(PartitionsShuffleKind::BroadcastCluster, 3);
         let shuffle = partitions.reshuffle(executors_2.clone()).unwrap();
 
         writeln!(

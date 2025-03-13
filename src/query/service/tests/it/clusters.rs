@@ -20,6 +20,25 @@ use databend_query::test_kits::*;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_empty_cluster_discovery() -> Result<()> {
+    let _guard = TestFixture::setup().await?;
+
+    let config = ConfigBuilder::create().build();
+
+    let metastore = ClusterDiscovery::create_meta_client(&config).await?;
+    let cluster_discovery = ClusterDiscovery::try_create(&config, metastore.clone()).await?;
+
+    let discover_cluster = cluster_discovery.discover(&config).await?;
+
+    let discover_cluster_nodes = discover_cluster.get_nodes();
+    assert_eq!(discover_cluster_nodes.len(), 0);
+    assert!(discover_cluster.is_empty());
+    assert!(!discover_cluster.unassign);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _fixture = TestFixture::setup_with_config(&config).await?;

@@ -71,7 +71,8 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
         "cluster_name".to_string(),
         conf.raft_config.cluster_name.clone(),
     );
-    let _guards = init_logging(&app_name_shuffle, &conf.log, log_labels);
+    let guards = init_logging(&app_name_shuffle, &conf.log, log_labels);
+    Box::new(guards).leak();
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(

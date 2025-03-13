@@ -119,16 +119,16 @@ ast            : parse_json(s)
 raw expr       : parse_json(s::String NULL)
 checked expr   : parse_json<String NULL>(s)
 evaluation:
-+--------+------------------------+--------------+
-|        | s                      | Output       |
-+--------+------------------------+--------------+
-| Type   | String NULL            | Variant NULL |
-| Domain | {""..="true"} ∪ {NULL} | Unknown      |
-| Row 0  | 'true'                 | 'true'       |
-| Row 1  | 'false'                | 'false'      |
-| Row 2  | NULL                   | NULL         |
-| Row 3  | '1234'                 | '1234'       |
-+--------+------------------------+--------------+
++--------+----------------------------+--------------+
+|        | s                          | Output       |
++--------+----------------------------+--------------+
+| Type   | String NULL                | Variant NULL |
+| Domain | {"1234"..="true"} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                     | 'true'       |
+| Row 1  | 'false'                    | 'false'      |
+| Row 2  | NULL                       | NULL         |
+| Row 3  | '1234'                     | '1234'       |
++--------+----------------------------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                            |
@@ -252,16 +252,16 @@ ast            : try_parse_json(s)
 raw expr       : try_parse_json(s::String NULL)
 checked expr   : try_parse_json<String NULL>(s)
 evaluation:
-+--------+-----------------------+--------------------+
-|        | s                     | Output             |
-+--------+-----------------------+--------------------+
-| Type   | String NULL           | Variant NULL       |
-| Domain | {""..="ttt"} ∪ {NULL} | Undefined ∪ {NULL} |
-| Row 0  | 'true'                | 'true'             |
-| Row 1  | 'ttt'                 | NULL               |
-| Row 2  | NULL                  | NULL               |
-| Row 3  | '1234'                | '1234'             |
-+--------+-----------------------+--------------------+
++--------+---------------------------+--------------------+
+|        | s                         | Output             |
++--------+---------------------------+--------------------+
+| Type   | String NULL               | Variant NULL       |
+| Domain | {"1234"..="ttt"} ∪ {NULL} | Undefined ∪ {NULL} |
+| Row 0  | 'true'                    | 'true'             |
+| Row 1  | 'ttt'                     | NULL               |
+| Row 2  | NULL                      | NULL               |
+| Row 3  | '1234'                    | '1234'             |
++--------+---------------------------+--------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                          |
@@ -324,16 +324,16 @@ ast            : check_json(s)
 raw expr       : check_json(s::String NULL)
 checked expr   : check_json<String NULL>(s)
 evaluation:
-+--------+-----------------------+-------------------------+
-|        | s                     | Output                  |
-+--------+-----------------------+-------------------------+
-| Type   | String NULL           | String NULL             |
-| Domain | {""..="ttt"} ∪ {NULL} | {""..} ∪ {NULL}         |
-| Row 0  | 'true'                | NULL                    |
-| Row 1  | 'ttt'                 | 'expected ident, pos 2' |
-| Row 2  | NULL                  | NULL                    |
-| Row 3  | '1234'                | NULL                    |
-+--------+-----------------------+-------------------------+
++--------+---------------------------+-------------------------+
+|        | s                         | Output                  |
++--------+---------------------------+-------------------------+
+| Type   | String NULL               | String NULL             |
+| Domain | {"1234"..="ttt"} ∪ {NULL} | {""..} ∪ {NULL}         |
+| Row 0  | 'true'                    | NULL                    |
+| Row 1  | 'ttt'                     | 'expected ident, pos 2' |
+| Row 2  | NULL                      | NULL                    |
+| Row 3  | '1234'                    | NULL                    |
++--------+---------------------------+-------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------+
 | Column | Data                                                                                         |
@@ -396,16 +396,16 @@ ast            : length(parse_json(s))
 raw expr       : length(parse_json(s::String NULL))
 checked expr   : length<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+------------------------+-------------+
-|        | s                      | Output      |
-+--------+------------------------+-------------+
-| Type   | String NULL            | UInt32 NULL |
-| Domain | {""..="true"} ∪ {NULL} | Unknown     |
-| Row 0  | 'true'                 | NULL        |
-| Row 1  | '[1,2,3,4]'            | 4           |
-| Row 2  | NULL                   | NULL        |
-| Row 3  | '["a","b","c"]'        | 3           |
-+--------+------------------------+-------------+
++--------+-------------------------------------------+-------------+
+|        | s                                         | Output      |
++--------+-------------------------------------------+-------------+
+| Type   | String NULL                               | UInt32 NULL |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="true"} ∪ {NULL} | Unknown     |
+| Row 0  | 'true'                                    | NULL        |
+| Row 1  | '[1,2,3,4]'                               | 4           |
+| Row 2  | NULL                                      | NULL        |
+| Row 3  | '["a","b","c"]'                           | 3           |
++--------+-------------------------------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                              |
@@ -459,16 +459,16 @@ ast            : json_object_keys(parse_json(s))
 raw expr       : json_object_keys(parse_json(s::String NULL))
 checked expr   : json_object_keys<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------------------------------+---------------+
-|        | s                                               | Output        |
-+--------+-------------------------------------------------+---------------+
-| Type   | String NULL                                     | Variant NULL  |
-| Domain | {""..="{\"k1\":\"v1\",\"k2\":\"v2\"}"} ∪ {NULL} | Unknown       |
-| Row 0  | '[1,2,3,4]'                                     | NULL          |
-| Row 1  | '{"a":"b","c":"d"}'                             | '["a","c"]'   |
-| Row 2  | NULL                                            | NULL          |
-| Row 3  | '{"k1":"v1","k2":"v2"}'                         | '["k1","k2"]' |
-+--------+-------------------------------------------------+---------------+
++--------+----------------------------------------------------------+---------------+
+|        | s                                                        | Output        |
++--------+----------------------------------------------------------+---------------+
+| Type   | String NULL                                              | Variant NULL  |
+| Domain | {"[1,2,3,4]"..="{\"k1\":\"v1\",\"k2\":\"v2\"}"} ∪ {NULL} | Unknown       |
+| Row 0  | '[1,2,3,4]'                                              | NULL          |
+| Row 1  | '{"a":"b","c":"d"}'                                      | '["a","c"]'   |
+| Row 2  | NULL                                                     | NULL          |
+| Row 3  | '{"k1":"v1","k2":"v2"}'                                  | '["k1","k2"]' |
++--------+----------------------------------------------------------+---------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                  |
@@ -568,16 +568,16 @@ ast            : parse_json(s)[i]
 raw expr       : get(parse_json(s::String NULL), i::UInt64 NULL)
 checked expr   : get<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST(i AS Int64 NULL))
 evaluation:
-+--------+------------------------+------------------+--------------+
-|        | s                      | i                | Output       |
-+--------+------------------------+------------------+--------------+
-| Type   | String NULL            | UInt64 NULL      | Variant NULL |
-| Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown      |
-| Row 0  | 'true'                 | NULL             | NULL         |
-| Row 1  | '[1,2,3,4]'            | 2                | '3'          |
-| Row 2  | NULL                   | NULL             | NULL         |
-| Row 3  | '["a","b","c"]'        | 1                | '"b"'        |
-+--------+------------------------+------------------+--------------+
++--------+-------------------------------------------+------------------+--------------+
+|        | s                                         | i                | Output       |
++--------+-------------------------------------------+------------------+--------------+
+| Type   | String NULL                               | UInt64 NULL      | Variant NULL |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="true"} ∪ {NULL} | {1..=2} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                                    | NULL             | NULL         |
+| Row 1  | '[1,2,3,4]'                               | 2                | '3'          |
+| Row 2  | NULL                                      | NULL             | NULL         |
+| Row 3  | '["a","b","c"]'                           | 1                | '"b"'        |
++--------+-------------------------------------------+------------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                            |
@@ -615,16 +615,16 @@ ast            : parse_json(s)[k]
 raw expr       : get(parse_json(s::String NULL), k::String)
 checked expr   : get<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
 evaluation:
-+--------+-----------------------------+------------+--------------+
-|        | s                           | k          | Output       |
-+--------+-----------------------------+------------+--------------+
-| Type   | String NULL                 | String     | Variant NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown      |
-| Row 0  | 'true'                      | ''         | NULL         |
-| Row 1  | '{"k":1}'                   | 'k'        | '1'          |
-| Row 2  | NULL                        | ''         | NULL         |
-| Row 3  | '{"a":"b"}'                 | 'a'        | '"b"'        |
-+--------+-----------------------------+------------+--------------+
++--------+---------------------------------+------------+--------------+
+|        | s                               | k          | Output       |
++--------+---------------------------------+------------+--------------+
+| Type   | String NULL                     | String     | Variant NULL |
+| Domain | {"true"..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown      |
+| Row 0  | 'true'                          | ''         | NULL         |
+| Row 1  | '{"k":1}'                       | 'k'        | '1'          |
+| Row 2  | NULL                            | ''         | NULL         |
+| Row 3  | '{"a":"b"}'                     | 'a'        | '"b"'        |
++--------+---------------------------------+------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                            |
@@ -689,16 +689,16 @@ ast            : get_ignore_case(parse_json(s), k)
 raw expr       : get_ignore_case(parse_json(s::String NULL), k::String)
 checked expr   : get_ignore_case<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
 evaluation:
-+--------+-----------------------------+------------+--------------+
-|        | s                           | k          | Output       |
-+--------+-----------------------------+------------+--------------+
-| Type   | String NULL                 | String     | Variant NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="K"} | Unknown      |
-| Row 0  | 'true'                      | ''         | NULL         |
-| Row 1  | '{"k":1}'                   | 'K'        | '1'          |
-| Row 2  | NULL                        | ''         | NULL         |
-| Row 3  | '{"a":"b"}'                 | 'A'        | '"b"'        |
-+--------+-----------------------------+------------+--------------+
++--------+---------------------------------+------------+--------------+
+|        | s                               | k          | Output       |
++--------+---------------------------------+------------+--------------+
+| Type   | String NULL                     | String     | Variant NULL |
+| Domain | {"true"..="{\"k\":1}"} ∪ {NULL} | {""..="K"} | Unknown      |
+| Row 0  | 'true'                          | ''         | NULL         |
+| Row 1  | '{"k":1}'                       | 'K'        | '1'          |
+| Row 2  | NULL                            | ''         | NULL         |
+| Row 3  | '{"a":"b"}'                     | 'A'        | '"b"'        |
++--------+---------------------------------+------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                            |
@@ -808,16 +808,16 @@ ast            : get_path(parse_json(s), k)
 raw expr       : get_path(parse_json(s::String NULL), k::String)
 checked expr   : get_path<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
 evaluation:
-+--------+-----------------------------+--------------+--------------+
-|        | s                           | k            | Output       |
-+--------+-----------------------------+--------------+--------------+
-| Type   | String NULL                 | String       | Variant NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="[0]"} | Unknown      |
-| Row 0  | 'true'                      | '[0]'        | NULL         |
-| Row 1  | '{"k":1}'                   | '["k"]'      | '1'          |
-| Row 2  | NULL                        | ''           | NULL         |
-| Row 3  | '["a","b"]'                 | '[0]'        | '"a"'        |
-+--------+-----------------------------+--------------+--------------+
++--------+------------------------------------------+--------------+--------------+
+|        | s                                        | k            | Output       |
++--------+------------------------------------------+--------------+--------------+
+| Type   | String NULL                              | String       | Variant NULL |
+| Domain | {"[\"a\",\"b\"]"..="{\"k\":1}"} ∪ {NULL} | {""..="[0]"} | Unknown      |
+| Row 0  | 'true'                                   | '[0]'        | NULL         |
+| Row 1  | '{"k":1}'                                | '["k"]'      | '1'          |
+| Row 2  | NULL                                     | ''           | NULL         |
+| Row 3  | '["a","b"]'                              | '[0]'        | '"a"'        |
++--------+------------------------------------------+--------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                            |
@@ -900,6 +900,15 @@ output domain  : {"{\"b\":2}"..="{\"b\":2}"}
 output         : '{"b":2}'
 
 
+ast            : json_extract_path_text('{"a":null}', 'a')
+raw expr       : json_extract_path_text('{"a":null}', 'a')
+checked expr   : json_extract_path_text<String, String>("{\"a\":null}", "a")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : json_extract_path_text(s, k)
 raw expr       : json_extract_path_text(s::String, k::String)
 checked expr   : json_extract_path_text<String, String>(s, k)
@@ -927,16 +936,16 @@ ast            : json_extract_path_text(s, k)
 raw expr       : json_extract_path_text(s::String NULL, k::String)
 checked expr   : json_extract_path_text<String NULL, String NULL>(s, CAST(k AS String NULL))
 evaluation:
-+--------+-----------------------------+--------------+-------------+
-|        | s                           | k            | Output      |
-+--------+-----------------------------+--------------+-------------+
-| Type   | String NULL                 | String       | String NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="[0]"} | Unknown     |
-| Row 0  | 'true'                      | '[0]'        | NULL        |
-| Row 1  | '{"k":1}'                   | '["k"]'      | '1'         |
-| Row 2  | NULL                        | ''           | NULL        |
-| Row 3  | '["a","b"]'                 | '[0]'        | 'a'         |
-+--------+-----------------------------+--------------+-------------+
++--------+------------------------------------------+--------------+-------------+
+|        | s                                        | k            | Output      |
++--------+------------------------------------------+--------------+-------------+
+| Type   | String NULL                              | String       | String NULL |
+| Domain | {"[\"a\",\"b\"]"..="{\"k\":1}"} ∪ {NULL} | {""..="[0]"} | Unknown     |
+| Row 0  | 'true'                                   | '[0]'        | NULL        |
+| Row 1  | '{"k":1}'                                | '["k"]'      | '1'         |
+| Row 2  | NULL                                     | ''           | NULL        |
+| Row 3  | '["a","b"]'                              | '[0]'        | 'a'         |
++--------+------------------------------------------+--------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------+
 | Column | Data                                                                                        |
@@ -1519,11 +1528,20 @@ evaluation (internal):
 +--------+----------------------------------------------------------------+
 
 
+ast            : to_boolean(parse_json('null'))
+raw expr       : to_boolean(parse_json('null'))
+checked expr   : to_boolean<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : to_boolean(parse_json('true'))
 raw expr       : to_boolean(parse_json('true'))
 checked expr   : to_boolean<Variant>(parse_json<String>("true"))
 optimized expr : true
-output type    : Boolean
+output type    : Boolean NULL
 output domain  : {TRUE}
 output         : true
 
@@ -1544,11 +1562,20 @@ error:
 
 
 
+ast            : to_uint64(parse_json('null'))
+raw expr       : to_uint64(parse_json('null'))
+checked expr   : to_uint64<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : to_uint64(parse_json('123'))
 raw expr       : to_uint64(parse_json('123'))
 checked expr   : to_uint64<Variant>(parse_json<String>("123"))
 optimized expr : 123_u64
-output type    : UInt64
+output type    : UInt64 NULL
 output domain  : {123..=123}
 output         : 123
 
@@ -1573,7 +1600,7 @@ ast            : to_int64(parse_json('123'))
 raw expr       : to_int64(parse_json('123'))
 checked expr   : to_int64<Variant>(parse_json<String>("123"))
 optimized expr : 123_i64
-output type    : Int64
+output type    : Int64 NULL
 output domain  : {123..=123}
 output         : 123
 
@@ -1582,7 +1609,7 @@ ast            : to_int64(parse_json('-123'))
 raw expr       : to_int64(parse_json('-123'))
 checked expr   : to_int64<Variant>(parse_json<String>("-123"))
 optimized expr : -123_i64
-output type    : Int64
+output type    : Int64 NULL
 output domain  : {-123..=-123}
 output         : -123
 
@@ -1599,7 +1626,7 @@ ast            : to_float64(parse_json('12.34'))
 raw expr       : to_float64(parse_json('12.34'))
 checked expr   : to_float64<Variant>(parse_json<String>("12.34"))
 optimized expr : 12.34_f64
-output type    : Float64
+output type    : Float64 NULL
 output domain  : {12.34..=12.34}
 output         : 12.34
 
@@ -1612,11 +1639,20 @@ error:
 
 
 
+ast            : to_date(parse_json('null'))
+raw expr       : to_date(parse_json('null'))
+checked expr   : to_date<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Date NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : to_date(parse_json('"2023-01-01"'))
 raw expr       : to_date(parse_json('"2023-01-01"'))
 checked expr   : to_date<Variant>(parse_json<String>("\"2023-01-01\""))
 optimized expr : 19358
-output type    : Date
+output type    : Date NULL
 output domain  : {19358..=19358}
 output         : '2023-01-01'
 
@@ -1625,15 +1661,24 @@ error:
   --> SQL:1:1
   |
 1 | to_date(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `DATE` unexpected argument. while evaluating function `to_date('"abc"')` in expr `to_date(parse_json('"abc"'))`
 
+
+
+ast            : to_timestamp(parse_json('null'))
+raw expr       : to_timestamp(parse_json('null'))
+checked expr   : to_timestamp<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Timestamp NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 raw expr       : to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 checked expr   : to_timestamp<Variant>(parse_json<String>("\"2023-01-01 00:00:00\""))
 optimized expr : 1672531200000000
-output type    : Timestamp
+output type    : Timestamp NULL
 output domain  : {1672531200000000..=1672531200000000}
 output         : '2023-01-01 00:00:00.000000'
 
@@ -1642,15 +1687,24 @@ error:
   --> SQL:1:1
   |
 1 | to_timestamp(parse_json('"abc"'))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP`. BadArguments. Code: 1006, Text = unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast to type `TIMESTAMP` unexpected argument. while evaluating function `to_timestamp('"abc"')` in expr `to_timestamp(parse_json('"abc"'))`
 
+
+
+ast            : to_string(parse_json('null'))
+raw expr       : to_string(parse_json('null'))
+checked expr   : to_string<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : to_string(parse_json('12.34'))
 raw expr       : to_string(parse_json('12.34'))
 checked expr   : to_string<Variant>(parse_json<String>("12.34"))
 optimized expr : "12.34"
-output type    : String
+output type    : String NULL
 output domain  : {"12.34"..="12.34"}
 output         : '12.34'
 
@@ -1659,7 +1713,7 @@ ast            : to_string(parse_json('"abc"'))
 raw expr       : to_string(parse_json('"abc"'))
 checked expr   : to_string<Variant>(parse_json<String>("\"abc\""))
 optimized expr : "abc"
-output type    : String
+output type    : String NULL
 output domain  : {"abc"..="abc"}
 output         : 'abc'
 
@@ -1668,15 +1722,15 @@ ast            : to_boolean(parse_json(s))
 raw expr       : to_boolean(parse_json(s::String NULL))
 checked expr   : to_boolean<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+------------------------+--------------+
-|        | s                      | Output       |
-+--------+------------------------+--------------+
-| Type   | String NULL            | Boolean NULL |
-| Domain | {""..="true"} ∪ {NULL} | Unknown      |
-| Row 0  | 'true'                 | true         |
-| Row 1  | NULL                   | NULL         |
-| Row 2  | 'true'                 | true         |
-+--------+------------------------+--------------+
++--------+----------------------------+--------------+
+|        | s                          | Output       |
++--------+----------------------------+--------------+
+| Type   | String NULL                | Boolean NULL |
+| Domain | {"true"..="true"} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                     | true         |
+| Row 1  | NULL                       | NULL         |
+| Row 2  | 'true'                     | true         |
++--------+----------------------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------+
 | Column | Data                                                                          |
@@ -1690,15 +1744,15 @@ ast            : to_int64(parse_json(s))
 raw expr       : to_int64(parse_json(s::String NULL))
 checked expr   : to_int64<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+---------------------+------------+
-|        | s                   | Output     |
-+--------+---------------------+------------+
-| Type   | String NULL         | Int64 NULL |
-| Domain | {""..="1"} ∪ {NULL} | Unknown    |
-| Row 0  | '1'                 | 1          |
-| Row 1  | NULL                | NULL       |
-| Row 2  | '-10'               | -10        |
-+--------+---------------------+------------+
++--------+------------------------+------------+
+|        | s                      | Output     |
++--------+------------------------+------------+
+| Type   | String NULL            | Int64 NULL |
+| Domain | {"-10"..="1"} ∪ {NULL} | Unknown    |
+| Row 0  | '1'                    | 1          |
+| Row 1  | NULL                   | NULL       |
+| Row 2  | '-10'                  | -10        |
++--------+------------------------+------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------+
 | Column | Data                                                                      |
@@ -1712,15 +1766,15 @@ ast            : to_uint64(parse_json(s))
 raw expr       : to_uint64(parse_json(s::String NULL))
 checked expr   : to_uint64<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+----------------------+-------------+
-|        | s                    | Output      |
-+--------+----------------------+-------------+
-| Type   | String NULL          | UInt64 NULL |
-| Domain | {""..="20"} ∪ {NULL} | Unknown     |
-| Row 0  | '1'                  | 1           |
-| Row 1  | NULL                 | NULL        |
-| Row 2  | '20'                 | 20          |
-+--------+----------------------+-------------+
++--------+-----------------------+-------------+
+|        | s                     | Output      |
++--------+-----------------------+-------------+
+| Type   | String NULL           | UInt64 NULL |
+| Domain | {"1"..="20"} ∪ {NULL} | Unknown     |
+| Row 0  | '1'                   | 1           |
+| Row 1  | NULL                  | NULL        |
+| Row 2  | '20'                  | 20          |
++--------+-----------------------+-------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------+
 | Column | Data                                                                     |
@@ -1734,15 +1788,15 @@ ast            : to_float64(parse_json(s))
 raw expr       : to_float64(parse_json(s::String NULL))
 checked expr   : to_float64<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------+--------------+
-|        | s                       | Output       |
-+--------+-------------------------+--------------+
-| Type   | String NULL             | Float64 NULL |
-| Domain | {""..="100.2"} ∪ {NULL} | Unknown      |
-| Row 0  | '1.2'                   | 1.2          |
-| Row 1  | NULL                    | NULL         |
-| Row 2  | '100.2'                 | 100.2        |
-+--------+-------------------------+--------------+
++--------+----------------------------+--------------+
+|        | s                          | Output       |
++--------+----------------------------+--------------+
+| Type   | String NULL                | Float64 NULL |
+| Domain | {"1.2"..="100.2"} ∪ {NULL} | Unknown      |
+| Row 0  | '1.2'                      | 1.2          |
+| Row 1  | NULL                       | NULL         |
+| Row 2  | '100.2'                    | 100.2        |
++--------+----------------------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------+
 | Column | Data                                                                          |
@@ -1756,15 +1810,15 @@ ast            : to_date(parse_json(s))
 raw expr       : to_date(parse_json(s::String NULL))
 checked expr   : to_date<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+----------------------------------+--------------+
-|        | s                                | Output       |
-+--------+----------------------------------+--------------+
-| Type   | String NULL                      | Date NULL    |
-| Domain | {""..="\"2023-10-01\""} ∪ {NULL} | Unknown      |
-| Row 0  | '"2020-01-01"'                   | '2020-01-01' |
-| Row 1  | NULL                             | NULL         |
-| Row 2  | '"2023-10-01"'                   | '2023-10-01' |
-+--------+----------------------------------+--------------+
++--------+------------------------------------------------+--------------+
+|        | s                                              | Output       |
++--------+------------------------------------------------+--------------+
+| Type   | String NULL                                    | Date NULL    |
+| Domain | {"\"2020-01-01\""..="\"2023-10-01\""} ∪ {NULL} | Unknown      |
+| Row 0  | '"2020-01-01"'                                 | '2020-01-01' |
+| Row 1  | NULL                                           | NULL         |
+| Row 2  | '"2023-10-01"'                                 | '2023-10-01' |
++--------+------------------------------------------------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------+
 | Column | Data                                                                                          |
@@ -1778,15 +1832,15 @@ ast            : to_timestamp(parse_json(s))
 raw expr       : to_timestamp(parse_json(s::String NULL))
 checked expr   : to_timestamp<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------------------------+------------------------------+
-|        | s                                         | Output                       |
-+--------+-------------------------------------------+------------------------------+
-| Type   | String NULL                               | Timestamp NULL               |
-| Domain | {""..="\"2023-10-01 10:11:12\""} ∪ {NULL} | Unknown                      |
-| Row 0  | '"2020-01-01 00:00:00"'                   | '2020-01-01 00:00:00.000000' |
-| Row 1  | NULL                                      | NULL                         |
-| Row 2  | '"2023-10-01 10:11:12"'                   | '2023-10-01 10:11:12.000000' |
-+--------+-------------------------------------------+------------------------------+
++--------+------------------------------------------------------------------+------------------------------+
+|        | s                                                                | Output                       |
++--------+------------------------------------------------------------------+------------------------------+
+| Type   | String NULL                                                      | Timestamp NULL               |
+| Domain | {"\"2020-01-01 00:00:00\""..="\"2023-10-01 10:11:12\""} ∪ {NULL} | Unknown                      |
+| Row 0  | '"2020-01-01 00:00:00"'                                          | '2020-01-01 00:00:00.000000' |
+| Row 1  | NULL                                                             | NULL                         |
+| Row 2  | '"2023-10-01 10:11:12"'                                          | '2023-10-01 10:11:12.000000' |
++--------+------------------------------------------------------------------+------------------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                            |
@@ -1800,15 +1854,15 @@ ast            : to_string(parse_json(s))
 raw expr       : to_string(parse_json(s::String NULL))
 checked expr   : to_string<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-----------------------+-------------+
-|        | s                     | Output      |
-+--------+-----------------------+-------------+
-| Type   | String NULL           | String NULL |
-| Domain | {""..="123"} ∪ {NULL} | Unknown     |
-| Row 0  | '"abc"'               | 'abc'       |
-| Row 1  | NULL                  | NULL        |
-| Row 2  | '123'                 | '123'       |
-+--------+-----------------------+-------------+
++--------+------------------------------+-------------+
+|        | s                            | Output      |
++--------+------------------------------+-------------+
+| Type   | String NULL                  | String NULL |
+| Domain | {"\"abc\""..="123"} ∪ {NULL} | Unknown     |
+| Row 0  | '"abc"'                      | 'abc'       |
+| Row 1  | NULL                         | NULL        |
+| Row 2  | '123'                        | '123'       |
++--------+------------------------------+-------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------+
 | Column | Data                                                                          |
@@ -1816,6 +1870,15 @@ evaluation (internal):
 | s      | NullableColumn { column: StringColumn["abc", , 123], validity: [0b_____101] } |
 | Output | NullableColumn { column: StringColumn[abc, , 123], validity: [0b_____101] }   |
 +--------+-------------------------------------------------------------------------------+
+
+
+ast            : try_to_boolean(parse_json('null'))
+raw expr       : try_to_boolean(parse_json('null'))
+checked expr   : try_to_boolean<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : try_to_boolean(parse_json('true'))
@@ -1841,6 +1904,15 @@ raw expr       : try_to_boolean(parse_json('"abc"'))
 checked expr   : try_to_boolean<Variant>(parse_json<String>("\"abc\""))
 optimized expr : NULL
 output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_uint64(parse_json('null'))
+raw expr       : try_to_uint64(parse_json('null'))
+checked expr   : try_to_uint64<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : UInt64 NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1917,6 +1989,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : try_to_date(parse_json('null'))
+raw expr       : try_to_date(parse_json('null'))
+checked expr   : try_to_date<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Date NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : try_to_date(parse_json('"2023-01-01"'))
 raw expr       : try_to_date(parse_json('"2023-01-01"'))
 checked expr   : try_to_date<Variant>(parse_json<String>("\"2023-01-01\""))
@@ -1935,6 +2016,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : try_to_timestamp(parse_json('null'))
+raw expr       : try_to_timestamp(parse_json('null'))
+checked expr   : try_to_timestamp<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : Timestamp NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : try_to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 raw expr       : try_to_timestamp(parse_json('"2023-01-01 00:00:00"'))
 checked expr   : try_to_timestamp<Variant>(parse_json<String>("\"2023-01-01 00:00:00\""))
@@ -1949,6 +2039,15 @@ raw expr       : try_to_timestamp(parse_json('"abc"'))
 checked expr   : try_to_timestamp<Variant>(parse_json<String>("\"abc\""))
 optimized expr : NULL
 output type    : Timestamp NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : try_to_string(parse_json('null'))
+raw expr       : try_to_string(parse_json('null'))
+checked expr   : try_to_string<Variant>(parse_json<String>("null"))
+optimized expr : NULL
+output type    : String NULL
 output domain  : {NULL}
 output         : NULL
 
@@ -1975,20 +2074,20 @@ ast            : try_to_boolean(parse_json(s))
 raw expr       : try_to_boolean(parse_json(s::String NULL))
 checked expr   : try_to_boolean<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------+--------------+
-|        | s                       | Output       |
-+--------+-------------------------+--------------+
-| Type   | String NULL             | Boolean NULL |
-| Domain | {""..="true"} ∪ {NULL}  | Unknown      |
-| Row 0  | 'true'                  | true         |
-| Row 1  | '123'                   | NULL         |
-| Row 2  | '-100'                  | NULL         |
-| Row 3  | '12.34'                 | NULL         |
-| Row 4  | NULL                    | NULL         |
-| Row 5  | '"2020-01-01"'          | NULL         |
-| Row 6  | '"2021-01-01 20:00:00"' | NULL         |
-| Row 7  | '"abc"'                 | NULL         |
-+--------+-------------------------+--------------+
++--------+--------------------------------------+--------------+
+|        | s                                    | Output       |
++--------+--------------------------------------+--------------+
+| Type   | String NULL                          | Boolean NULL |
+| Domain | {"\"2020-01-01\""..="true"} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                               | true         |
+| Row 1  | '123'                                | NULL         |
+| Row 2  | '-100'                               | NULL         |
+| Row 3  | '12.34'                              | NULL         |
+| Row 4  | NULL                                 | NULL         |
+| Row 5  | '"2020-01-01"'                       | NULL         |
+| Row 6  | '"2021-01-01 20:00:00"'              | NULL         |
+| Row 7  | '"abc"'                              | NULL         |
++--------+--------------------------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                  |
@@ -2002,20 +2101,20 @@ ast            : try_to_int64(parse_json(s))
 raw expr       : try_to_int64(parse_json(s::String NULL))
 checked expr   : try_to_int64<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------+------------+
-|        | s                       | Output     |
-+--------+-------------------------+------------+
-| Type   | String NULL             | Int64 NULL |
-| Domain | {""..="true"} ∪ {NULL}  | Unknown    |
-| Row 0  | 'true'                  | 1          |
-| Row 1  | '123'                   | 123        |
-| Row 2  | '-100'                  | -100       |
-| Row 3  | '12.34'                 | NULL       |
-| Row 4  | NULL                    | NULL       |
-| Row 5  | '"2020-01-01"'          | NULL       |
-| Row 6  | '"2021-01-01 20:00:00"' | NULL       |
-| Row 7  | '"abc"'                 | NULL       |
-+--------+-------------------------+------------+
++--------+--------------------------------------+------------+
+|        | s                                    | Output     |
++--------+--------------------------------------+------------+
+| Type   | String NULL                          | Int64 NULL |
+| Domain | {"\"2020-01-01\""..="true"} ∪ {NULL} | Unknown    |
+| Row 0  | 'true'                               | 1          |
+| Row 1  | '123'                                | 123        |
+| Row 2  | '-100'                               | -100       |
+| Row 3  | '12.34'                              | NULL       |
+| Row 4  | NULL                                 | NULL       |
+| Row 5  | '"2020-01-01"'                       | NULL       |
+| Row 6  | '"2021-01-01 20:00:00"'              | NULL       |
+| Row 7  | '"abc"'                              | NULL       |
++--------+--------------------------------------+------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                  |
@@ -2029,20 +2128,20 @@ ast            : try_to_uint64(parse_json(s))
 raw expr       : try_to_uint64(parse_json(s::String NULL))
 checked expr   : try_to_uint64<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------+-------------+
-|        | s                       | Output      |
-+--------+-------------------------+-------------+
-| Type   | String NULL             | UInt64 NULL |
-| Domain | {""..="true"} ∪ {NULL}  | Unknown     |
-| Row 0  | 'true'                  | 1           |
-| Row 1  | '123'                   | 123         |
-| Row 2  | '-100'                  | NULL        |
-| Row 3  | '12.34'                 | NULL        |
-| Row 4  | NULL                    | NULL        |
-| Row 5  | '"2020-01-01"'          | NULL        |
-| Row 6  | '"2021-01-01 20:00:00"' | NULL        |
-| Row 7  | '"abc"'                 | NULL        |
-+--------+-------------------------+-------------+
++--------+--------------------------------------+-------------+
+|        | s                                    | Output      |
++--------+--------------------------------------+-------------+
+| Type   | String NULL                          | UInt64 NULL |
+| Domain | {"\"2020-01-01\""..="true"} ∪ {NULL} | Unknown     |
+| Row 0  | 'true'                               | 1           |
+| Row 1  | '123'                                | 123         |
+| Row 2  | '-100'                               | NULL        |
+| Row 3  | '12.34'                              | NULL        |
+| Row 4  | NULL                                 | NULL        |
+| Row 5  | '"2020-01-01"'                       | NULL        |
+| Row 6  | '"2021-01-01 20:00:00"'              | NULL        |
+| Row 7  | '"abc"'                              | NULL        |
++--------+--------------------------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                  |
@@ -2056,20 +2155,20 @@ ast            : try_to_float64(parse_json(s))
 raw expr       : try_to_float64(parse_json(s::String NULL))
 checked expr   : try_to_float64<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------+--------------+
-|        | s                       | Output       |
-+--------+-------------------------+--------------+
-| Type   | String NULL             | Float64 NULL |
-| Domain | {""..="true"} ∪ {NULL}  | Unknown      |
-| Row 0  | 'true'                  | 1            |
-| Row 1  | '123'                   | 123          |
-| Row 2  | '-100'                  | -100         |
-| Row 3  | '12.34'                 | 12.34        |
-| Row 4  | NULL                    | NULL         |
-| Row 5  | '"2020-01-01"'          | NULL         |
-| Row 6  | '"2021-01-01 20:00:00"' | NULL         |
-| Row 7  | '"abc"'                 | NULL         |
-+--------+-------------------------+--------------+
++--------+--------------------------------------+--------------+
+|        | s                                    | Output       |
++--------+--------------------------------------+--------------+
+| Type   | String NULL                          | Float64 NULL |
+| Domain | {"\"2020-01-01\""..="true"} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                               | 1            |
+| Row 1  | '123'                                | 123          |
+| Row 2  | '-100'                               | -100         |
+| Row 3  | '12.34'                              | 12.34        |
+| Row 4  | NULL                                 | NULL         |
+| Row 5  | '"2020-01-01"'                       | NULL         |
+| Row 6  | '"2021-01-01 20:00:00"'              | NULL         |
+| Row 7  | '"abc"'                              | NULL         |
++--------+--------------------------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                  |
@@ -2083,20 +2182,20 @@ ast            : try_to_date(parse_json(s))
 raw expr       : try_to_date(parse_json(s::String NULL))
 checked expr   : try_to_date<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------+--------------+
-|        | s                       | Output       |
-+--------+-------------------------+--------------+
-| Type   | String NULL             | Date NULL    |
-| Domain | {""..="true"} ∪ {NULL}  | Unknown      |
-| Row 0  | 'true'                  | NULL         |
-| Row 1  | '123'                   | NULL         |
-| Row 2  | '-100'                  | NULL         |
-| Row 3  | '12.34'                 | NULL         |
-| Row 4  | NULL                    | NULL         |
-| Row 5  | '"2020-01-01"'          | '2020-01-01' |
-| Row 6  | '"2021-01-01 20:00:00"' | '2021-01-01' |
-| Row 7  | '"abc"'                 | NULL         |
-+--------+-------------------------+--------------+
++--------+--------------------------------------+--------------+
+|        | s                                    | Output       |
++--------+--------------------------------------+--------------+
+| Type   | String NULL                          | Date NULL    |
+| Domain | {"\"2020-01-01\""..="true"} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                               | NULL         |
+| Row 1  | '123'                                | NULL         |
+| Row 2  | '-100'                               | NULL         |
+| Row 3  | '12.34'                              | NULL         |
+| Row 4  | NULL                                 | NULL         |
+| Row 5  | '"2020-01-01"'                       | '2020-01-01' |
+| Row 6  | '"2021-01-01 20:00:00"'              | '2021-01-01' |
+| Row 7  | '"abc"'                              | NULL         |
++--------+--------------------------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                  |
@@ -2110,20 +2209,20 @@ ast            : try_to_timestamp(parse_json(s))
 raw expr       : try_to_timestamp(parse_json(s::String NULL))
 checked expr   : try_to_timestamp<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------+------------------------------+
-|        | s                       | Output                       |
-+--------+-------------------------+------------------------------+
-| Type   | String NULL             | Timestamp NULL               |
-| Domain | {""..="true"} ∪ {NULL}  | Unknown                      |
-| Row 0  | 'true'                  | NULL                         |
-| Row 1  | '123'                   | NULL                         |
-| Row 2  | '-100'                  | NULL                         |
-| Row 3  | '12.34'                 | NULL                         |
-| Row 4  | NULL                    | NULL                         |
-| Row 5  | '"2020-01-01"'          | '2020-01-01 00:00:00.000000' |
-| Row 6  | '"2021-01-01 20:00:00"' | '2021-01-01 20:00:00.000000' |
-| Row 7  | '"abc"'                 | NULL                         |
-+--------+-------------------------+------------------------------+
++--------+--------------------------------------+------------------------------+
+|        | s                                    | Output                       |
++--------+--------------------------------------+------------------------------+
+| Type   | String NULL                          | Timestamp NULL               |
+| Domain | {"\"2020-01-01\""..="true"} ∪ {NULL} | Unknown                      |
+| Row 0  | 'true'                               | NULL                         |
+| Row 1  | '123'                                | NULL                         |
+| Row 2  | '-100'                               | NULL                         |
+| Row 3  | '12.34'                              | NULL                         |
+| Row 4  | NULL                                 | NULL                         |
+| Row 5  | '"2020-01-01"'                       | '2020-01-01 00:00:00.000000' |
+| Row 6  | '"2021-01-01 20:00:00"'              | '2021-01-01 20:00:00.000000' |
+| Row 7  | '"abc"'                              | NULL                         |
++--------+--------------------------------------+------------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                  |
@@ -2137,20 +2236,20 @@ ast            : try_to_string(parse_json(s))
 raw expr       : try_to_string(parse_json(s::String NULL))
 checked expr   : try_to_string<Variant NULL>(parse_json<String NULL>(s))
 evaluation:
-+--------+-------------------------+-----------------------+
-|        | s                       | Output                |
-+--------+-------------------------+-----------------------+
-| Type   | String NULL             | String NULL           |
-| Domain | {""..="true"} ∪ {NULL}  | Unknown               |
-| Row 0  | 'true'                  | 'true'                |
-| Row 1  | '123'                   | '123'                 |
-| Row 2  | '-100'                  | '-100'                |
-| Row 3  | '12.34'                 | '12.34'               |
-| Row 4  | NULL                    | NULL                  |
-| Row 5  | '"2020-01-01"'          | '2020-01-01'          |
-| Row 6  | '"2021-01-01 20:00:00"' | '2021-01-01 20:00:00' |
-| Row 7  | '"abc"'                 | 'abc'                 |
-+--------+-------------------------+-----------------------+
++--------+--------------------------------------+-----------------------+
+|        | s                                    | Output                |
++--------+--------------------------------------+-----------------------+
+| Type   | String NULL                          | String NULL           |
+| Domain | {"\"2020-01-01\""..="true"} ∪ {NULL} | Unknown               |
+| Row 0  | 'true'                               | 'true'                |
+| Row 1  | '123'                                | '123'                 |
+| Row 2  | '-100'                               | '-100'                |
+| Row 3  | '12.34'                              | '12.34'               |
+| Row 4  | NULL                                 | NULL                  |
+| Row 5  | '"2020-01-01"'                       | '2020-01-01'          |
+| Row 6  | '"2021-01-01 20:00:00"'              | '2021-01-01 20:00:00' |
+| Row 7  | '"abc"'                              | 'abc'                 |
++--------+--------------------------------------+-----------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                  |
@@ -2215,16 +2314,16 @@ ast            : json_object(k1, v1, k2, v2)
 raw expr       : json_object(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
 checked expr   : json_object<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
 evaluation:
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
-|        | k1                   | v1                   | k2                   | v2            | Output                  |
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
-| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant                 |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown                 |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | '{"a1":"j1","a2":"j2"}' |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | '{"b1":"k1"}'           |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | '{"c2":"l2"}'           |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | '{"d2":"m2"}'           |
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
+|        | k1                     | v1                     | k2                     | v2            | Output                  |
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
+| Type   | String NULL            | String NULL            | String NULL            | String NULL   | Variant                 |
+| Domain | {"a1"..="d1"} ∪ {NULL} | {"j1"..="l1"} ∪ {NULL} | {"a2"..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown                 |
+| Row 0  | 'a1'                   | 'j1'                   | 'a2'                   | 'j2'          | '{"a1":"j1","a2":"j2"}' |
+| Row 1  | 'b1'                   | 'k1'                   | NULL                   | 'k2'          | '{"b1":"k1"}'           |
+| Row 2  | NULL                   | 'l1'                   | 'c2'                   | 'l2'          | '{"c2":"l2"}'           |
+| Row 3  | 'd1'                   | NULL                   | 'd2'                   | 'm2'          | '{"d2":"m2"}'           |
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                            |
@@ -2295,16 +2394,16 @@ ast            : try_json_object(k1, v1, k2, v2)
 raw expr       : try_json_object(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
 checked expr   : try_json_object<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
 evaluation:
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
-|        | k1                   | v1                   | k2                   | v2            | Output                  |
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
-| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant NULL            |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Undefined ∪ {NULL}      |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | '{"a1":"j1","a2":"j2"}' |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | '{"b1":"k1"}'           |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | '{"c2":"l2"}'           |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | '{"d2":"m2"}'           |
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
+|        | k1                     | v1                     | k2                     | v2            | Output                  |
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
+| Type   | String NULL            | String NULL            | String NULL            | String NULL   | Variant NULL            |
+| Domain | {"a1"..="d1"} ∪ {NULL} | {"j1"..="l1"} ∪ {NULL} | {"a2"..="d2"} ∪ {NULL} | {"j2"..="m2"} | Undefined ∪ {NULL}      |
+| Row 0  | 'a1'                   | 'j1'                   | 'a2'                   | 'j2'          | '{"a1":"j1","a2":"j2"}' |
+| Row 1  | 'b1'                   | 'k1'                   | NULL                   | 'k2'          | '{"b1":"k1"}'           |
+| Row 2  | NULL                   | 'l1'                   | 'c2'                   | 'l2'          | '{"c2":"l2"}'           |
+| Row 3  | 'd1'                   | NULL                   | 'd2'                   | 'm2'          | '{"d2":"m2"}'           |
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                               |
@@ -2372,16 +2471,16 @@ ast            : json_object_keep_null(k1, v1, k2, v2)
 raw expr       : json_object_keep_null(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
 checked expr   : json_object_keep_null<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
 evaluation:
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
-|        | k1                   | v1                   | k2                   | v2            | Output                  |
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
-| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant                 |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown                 |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | '{"a1":"j1","a2":"j2"}' |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | '{"b1":"k1"}'           |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | '{"c2":"l2"}'           |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | '{"d1":null,"d2":"m2"}' |
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
+|        | k1                     | v1                     | k2                     | v2            | Output                  |
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
+| Type   | String NULL            | String NULL            | String NULL            | String NULL   | Variant                 |
+| Domain | {"a1"..="d1"} ∪ {NULL} | {"j1"..="l1"} ∪ {NULL} | {"a2"..="d2"} ∪ {NULL} | {"j2"..="m2"} | Unknown                 |
+| Row 0  | 'a1'                   | 'j1'                   | 'a2'                   | 'j2'          | '{"a1":"j1","a2":"j2"}' |
+| Row 1  | 'b1'                   | 'k1'                   | NULL                   | 'k2'          | '{"b1":"k1"}'           |
+| Row 2  | NULL                   | 'l1'                   | 'c2'                   | 'l2'          | '{"c2":"l2"}'           |
+| Row 3  | 'd1'                   | NULL                   | 'd2'                   | 'm2'          | '{"d1":null,"d2":"m2"}' |
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                |
@@ -2452,16 +2551,16 @@ ast            : try_json_object_keep_null(k1, v1, k2, v2)
 raw expr       : try_json_object_keep_null(k1::String NULL, v1::String NULL, k2::String NULL, v2::String NULL)
 checked expr   : try_json_object_keep_null<T0=String NULL, T1=String NULL, T2=String NULL, T3=String NULL><T0, T1, T2, T3>(k1, v1, k2, v2)
 evaluation:
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
-|        | k1                   | v1                   | k2                   | v2            | Output                  |
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
-| Type   | String NULL          | String NULL          | String NULL          | String NULL   | Variant NULL            |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | {"j2"..="m2"} | Undefined ∪ {NULL}      |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | 'j2'          | '{"a1":"j1","a2":"j2"}' |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | 'k2'          | '{"b1":"k1"}'           |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | 'l2'          | '{"c2":"l2"}'           |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | 'm2'          | '{"d1":null,"d2":"m2"}' |
-+--------+----------------------+----------------------+----------------------+---------------+-------------------------+
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
+|        | k1                     | v1                     | k2                     | v2            | Output                  |
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
+| Type   | String NULL            | String NULL            | String NULL            | String NULL   | Variant NULL            |
+| Domain | {"a1"..="d1"} ∪ {NULL} | {"j1"..="l1"} ∪ {NULL} | {"a2"..="d2"} ∪ {NULL} | {"j2"..="m2"} | Undefined ∪ {NULL}      |
+| Row 0  | 'a1'                   | 'j1'                   | 'a2'                   | 'j2'          | '{"a1":"j1","a2":"j2"}' |
+| Row 1  | 'b1'                   | 'k1'                   | NULL                   | 'k2'          | '{"b1":"k1"}'           |
+| Row 2  | NULL                   | 'l1'                   | 'c2'                   | 'l2'          | '{"c2":"l2"}'           |
+| Row 3  | 'd1'                   | NULL                   | 'd2'                   | 'm2'          | '{"d1":null,"d2":"m2"}' |
++--------+------------------------+------------------------+------------------------+---------------+-------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                   |
@@ -2532,16 +2631,16 @@ ast            : json_path_query_array(parse_json(s), p)
 raw expr       : json_path_query_array(parse_json(s::String NULL), p::String)
 checked expr   : json_path_query_array<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(p AS String NULL))
 evaluation:
-+--------+------------------------+------------------+--------------+
-|        | s                      | p                | Output       |
-+--------+------------------------+------------------+--------------+
-| Type   | String NULL            | String           | Variant NULL |
-| Domain | {""..="true"} ∪ {NULL} | {"$.a"..="$[0]"} | Unknown      |
-| Row 0  | 'true'                 | '$[0]'           | '[]'         |
-| Row 1  | '[{"k":1},{"k":2}]'    | '$[*].k'         | '[1,2]'      |
-| Row 2  | NULL                   | '$.a'            | NULL         |
-| Row 3  | '[1,2,3,4]'            | '$[0,2]'         | '[1,3]'      |
-+--------+------------------------+------------------+--------------+
++--------+---------------------------------+------------------+--------------+
+|        | s                               | p                | Output       |
++--------+---------------------------------+------------------+--------------+
+| Type   | String NULL                     | String           | Variant NULL |
+| Domain | {"[1,2,3,4]"..="true"} ∪ {NULL} | {"$.a"..="$[0]"} | Unknown      |
+| Row 0  | 'true'                          | '$[0]'           | '[]'         |
+| Row 1  | '[{"k":1},{"k":2}]'             | '$[*].k'         | '[1,2]'      |
+| Row 2  | NULL                            | '$.a'            | NULL         |
+| Row 3  | '[1,2,3,4]'                     | '$[0,2]'         | '[1,3]'      |
++--------+---------------------------------+------------------+--------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                              |
@@ -2610,16 +2709,16 @@ ast            : json_path_query_first(parse_json(s), p)
 raw expr       : json_path_query_first(parse_json(s::String NULL), p::String)
 checked expr   : json_path_query_first<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(p AS String NULL))
 evaluation:
-+--------+------------------------+------------------+--------------+
-|        | s                      | p                | Output       |
-+--------+------------------------+------------------+--------------+
-| Type   | String NULL            | String           | Variant NULL |
-| Domain | {""..="true"} ∪ {NULL} | {"$.a"..="$[0]"} | Unknown      |
-| Row 0  | 'true'                 | '$[0]'           | NULL         |
-| Row 1  | '[{"k":1},{"k":2}]'    | '$[*].k'         | '1'          |
-| Row 2  | NULL                   | '$.a'            | NULL         |
-| Row 3  | '[1,2,3,4]'            | '$[0,2]'         | '1'          |
-+--------+------------------------+------------------+--------------+
++--------+---------------------------------+------------------+--------------+
+|        | s                               | p                | Output       |
++--------+---------------------------------+------------------+--------------+
+| Type   | String NULL                     | String           | Variant NULL |
+| Domain | {"[1,2,3,4]"..="true"} ∪ {NULL} | {"$.a"..="$[0]"} | Unknown      |
+| Row 0  | 'true'                          | '$[0]'           | NULL         |
+| Row 1  | '[{"k":1},{"k":2}]'             | '$[*].k'         | '1'          |
+| Row 2  | NULL                            | '$.a'            | NULL         |
+| Row 3  | '[1,2,3,4]'                     | '$[0,2]'         | '1'          |
++--------+---------------------------------+------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |
@@ -2634,7 +2733,7 @@ ast            : json_to_string(parse_json('true'))
 raw expr       : json_to_string(parse_json('true'))
 checked expr   : to_string<Variant>(parse_json<String>("true"))
 optimized expr : "true"
-output type    : String
+output type    : String NULL
 output domain  : {"true"..="true"}
 output         : 'true'
 
@@ -2643,7 +2742,7 @@ ast            : json_to_string(parse_json('123456'))
 raw expr       : json_to_string(parse_json('123456'))
 checked expr   : to_string<Variant>(parse_json<String>("123456"))
 optimized expr : "123456"
-output type    : String
+output type    : String NULL
 output domain  : {"123456"..="123456"}
 output         : '123456'
 
@@ -2652,7 +2751,7 @@ ast            : json_to_string(parse_json('"abcd"'))
 raw expr       : json_to_string(parse_json('"abcd"'))
 checked expr   : to_string<Variant>(parse_json<String>("\"abcd\""))
 optimized expr : "abcd"
-output type    : String
+output type    : String NULL
 output domain  : {"abcd"..="abcd"}
 output         : 'abcd'
 
@@ -2661,7 +2760,7 @@ ast            : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
 raw expr       : json_to_string(parse_json('[1, 2, 3, 4, 5, 6]'))
 checked expr   : to_string<Variant>(parse_json<String>("[1, 2, 3, 4, 5, 6]"))
 optimized expr : "[1,2,3,4,5,6]"
-output type    : String
+output type    : String NULL
 output domain  : {"[1,2,3,4,5,6]"..="[1,2,3,4,5,6]"}
 output         : '[1,2,3,4,5,6]'
 
@@ -2670,7 +2769,7 @@ ast            : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
 raw expr       : json_to_string(parse_json('{"k1":123, "k2":"abc"}'))
 checked expr   : to_string<Variant>(parse_json<String>("{\"k1\":123, \"k2\":\"abc\"}"))
 optimized expr : "{\"k1\":123,\"k2\":\"abc\"}"
-output type    : String
+output type    : String NULL
 output domain  : {"{\"k1\":123,\"k2\":\"abc\"}"..="{\"k1\":123,\"k2\":\"abc\"}"}
 output         : '{"k1":123,"k2":"abc"}'
 
@@ -2880,16 +2979,16 @@ ast            : json_array(v1, v2, v3)
 raw expr       : json_array(v1::String NULL, v2::String NULL, v3::String NULL)
 checked expr   : json_array<T0=String NULL, T1=String NULL, T2=String NULL><T0, T1, T2>(v1, v2, v3)
 evaluation:
-+--------+----------------------+----------------------+----------------------+--------------------+
-|        | v1                   | v2                   | v3                   | Output             |
-+--------+----------------------+----------------------+----------------------+--------------------+
-| Type   | String NULL          | String NULL          | String NULL          | Variant            |
-| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | Unknown            |
-| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | '["a1","j1","a2"]' |
-| Row 1  | 'b1'                 | 'k1'                 | NULL                 | '["b1","k1",null]' |
-| Row 2  | NULL                 | 'l1'                 | 'c2'                 | '[null,"l1","c2"]' |
-| Row 3  | 'd1'                 | NULL                 | 'd2'                 | '["d1",null,"d2"]' |
-+--------+----------------------+----------------------+----------------------+--------------------+
++--------+------------------------+------------------------+------------------------+--------------------+
+|        | v1                     | v2                     | v3                     | Output             |
++--------+------------------------+------------------------+------------------------+--------------------+
+| Type   | String NULL            | String NULL            | String NULL            | Variant            |
+| Domain | {"a1"..="d1"} ∪ {NULL} | {"j1"..="l1"} ∪ {NULL} | {"a2"..="d2"} ∪ {NULL} | Unknown            |
+| Row 0  | 'a1'                   | 'j1'                   | 'a2'                   | '["a1","j1","a2"]' |
+| Row 1  | 'b1'                   | 'k1'                   | NULL                   | '["b1","k1",null]' |
+| Row 2  | NULL                   | 'l1'                   | 'c2'                   | '[null,"l1","c2"]' |
+| Row 3  | 'd1'                   | NULL                   | 'd2'                   | '["d1",null,"d2"]' |
++--------+------------------------+------------------------+------------------------+--------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                        |
@@ -3072,16 +3171,16 @@ ast            : parse_json(s)->i
 raw expr       : get(parse_json(s::String NULL), i::UInt64 NULL)
 checked expr   : get<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST(i AS Int64 NULL))
 evaluation:
-+--------+------------------------+------------------+--------------+
-|        | s                      | i                | Output       |
-+--------+------------------------+------------------+--------------+
-| Type   | String NULL            | UInt64 NULL      | Variant NULL |
-| Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown      |
-| Row 0  | 'true'                 | NULL             | NULL         |
-| Row 1  | '[1,2,3,4]'            | 2                | '3'          |
-| Row 2  | NULL                   | NULL             | NULL         |
-| Row 3  | '["a","b","c"]'        | 1                | '"b"'        |
-+--------+------------------------+------------------+--------------+
++--------+-------------------------------------------+------------------+--------------+
+|        | s                                         | i                | Output       |
++--------+-------------------------------------------+------------------+--------------+
+| Type   | String NULL                               | UInt64 NULL      | Variant NULL |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="true"} ∪ {NULL} | {1..=2} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                                    | NULL             | NULL         |
+| Row 1  | '[1,2,3,4]'                               | 2                | '3'          |
+| Row 2  | NULL                                      | NULL             | NULL         |
+| Row 3  | '["a","b","c"]'                           | 1                | '"b"'        |
++--------+-------------------------------------------+------------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                            |
@@ -3119,16 +3218,16 @@ ast            : parse_json(s)->k
 raw expr       : get(parse_json(s::String NULL), k::String)
 checked expr   : get<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
 evaluation:
-+--------+-----------------------------+------------+--------------+
-|        | s                           | k          | Output       |
-+--------+-----------------------------+------------+--------------+
-| Type   | String NULL                 | String     | Variant NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown      |
-| Row 0  | 'true'                      | ''         | NULL         |
-| Row 1  | '{"k":1}'                   | 'k'        | '1'          |
-| Row 2  | NULL                        | ''         | NULL         |
-| Row 3  | '{"a":"b"}'                 | 'a'        | '"b"'        |
-+--------+-----------------------------+------------+--------------+
++--------+---------------------------------+------------+--------------+
+|        | s                               | k          | Output       |
++--------+---------------------------------+------------+--------------+
+| Type   | String NULL                     | String     | Variant NULL |
+| Domain | {"true"..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown      |
+| Row 0  | 'true'                          | ''         | NULL         |
+| Row 1  | '{"k":1}'                       | 'k'        | '1'          |
+| Row 2  | NULL                            | ''         | NULL         |
+| Row 3  | '{"a":"b"}'                     | 'a'        | '"b"'        |
++--------+---------------------------------+------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                            |
@@ -3193,6 +3292,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : parse_json('{"k":null}')->>'k'
+raw expr       : get_string(parse_json('{"k":null}'), 'k')
+checked expr   : get_string<Variant, String>(parse_json<String>("{\"k\":null}"), "k")
+optimized expr : NULL
+output type    : String NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : CAST(('a', 'b') AS VARIANT)->>'2'
 raw expr       : get_string(CAST(tuple('a', 'b') AS Variant), '2')
 checked expr   : get_string<Variant, String>(to_variant<T0=Tuple(String, String)><T0>(tuple<String, String>("a", "b")), "2")
@@ -3229,16 +3337,16 @@ ast            : parse_json(s)->>i
 raw expr       : get_string(parse_json(s::String NULL), i::UInt64 NULL)
 checked expr   : get_string<Variant NULL, Int64 NULL>(parse_json<String NULL>(s), CAST(i AS Int64 NULL))
 evaluation:
-+--------+------------------------+------------------+-------------+
-|        | s                      | i                | Output      |
-+--------+------------------------+------------------+-------------+
-| Type   | String NULL            | UInt64 NULL      | String NULL |
-| Domain | {""..="true"} ∪ {NULL} | {0..=2} ∪ {NULL} | Unknown     |
-| Row 0  | 'true'                 | NULL             | NULL        |
-| Row 1  | '[1,2,3,4]'            | 2                | '3'         |
-| Row 2  | NULL                   | NULL             | NULL        |
-| Row 3  | '["a","b","c"]'        | 1                | 'b'         |
-+--------+------------------------+------------------+-------------+
++--------+-------------------------------------------+------------------+-------------+
+|        | s                                         | i                | Output      |
++--------+-------------------------------------------+------------------+-------------+
+| Type   | String NULL                               | UInt64 NULL      | String NULL |
+| Domain | {"[\"a\",\"b\",\"c\"]"..="true"} ∪ {NULL} | {1..=2} ∪ {NULL} | Unknown     |
+| Row 0  | 'true'                                    | NULL             | NULL        |
+| Row 1  | '[1,2,3,4]'                               | 2                | '3'         |
+| Row 2  | NULL                                      | NULL             | NULL        |
+| Row 3  | '["a","b","c"]'                           | 1                | 'b'         |
++--------+-------------------------------------------+------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                              |
@@ -3276,16 +3384,16 @@ ast            : parse_json(s)->>k
 raw expr       : get_string(parse_json(s::String NULL), k::String)
 checked expr   : get_string<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST(k AS String NULL))
 evaluation:
-+--------+-----------------------------+------------+-------------+
-|        | s                           | k          | Output      |
-+--------+-----------------------------+------------+-------------+
-| Type   | String NULL                 | String     | String NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown     |
-| Row 0  | 'true'                      | ''         | NULL        |
-| Row 1  | '{"k":1}'                   | 'k'        | '1'         |
-| Row 2  | NULL                        | ''         | NULL        |
-| Row 3  | '{"a":"b"}'                 | 'a'        | 'b'         |
-+--------+-----------------------------+------------+-------------+
++--------+---------------------------------+------------+-------------+
+|        | s                               | k          | Output      |
++--------+---------------------------------+------------+-------------+
+| Type   | String NULL                     | String     | String NULL |
+| Domain | {"true"..="{\"k\":1}"} ∪ {NULL} | {""..="k"} | Unknown     |
+| Row 0  | 'true'                          | ''         | NULL        |
+| Row 1  | '{"k":1}'                       | 'k'        | '1'         |
+| Row 2  | NULL                            | ''         | NULL        |
+| Row 3  | '{"a":"b"}'                     | 'a'        | 'b'         |
++--------+---------------------------------+------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------+
 | Column | Data                                                                                        |
@@ -3416,16 +3524,16 @@ ast            : parse_json(s) #> '{0}'
 raw expr       : get_by_keypath(parse_json(s::String NULL), '{0}')
 checked expr   : get_by_keypath<Variant NULL, String>(parse_json<String NULL>(s), "{0}")
 evaluation:
-+--------+-----------------------------+--------------+
-|        | s                           | Output       |
-+--------+-----------------------------+--------------+
-| Type   | String NULL                 | Variant NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | Unknown      |
-| Row 0  | '[1,2,3]'                   | '1'          |
-| Row 1  | '{"k":1}'                   | NULL         |
-| Row 2  | NULL                        | NULL         |
-| Row 3  | '{"a":"b"}'                 | NULL         |
-+--------+-----------------------------+--------------+
++--------+------------------------------------+--------------+
+|        | s                                  | Output       |
++--------+------------------------------------+--------------+
+| Type   | String NULL                        | Variant NULL |
+| Domain | {"[1,2,3]"..="{\"k\":1}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[1,2,3]'                          | '1'          |
+| Row 1  | '{"k":1}'                          | NULL         |
+| Row 2  | NULL                               | NULL         |
+| Row 3  | '{"a":"b"}'                        | NULL         |
++--------+------------------------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                           |
@@ -3439,16 +3547,16 @@ ast            : parse_json(s) #> k
 raw expr       : get_by_keypath(parse_json(s::String NULL), k::String NULL)
 checked expr   : get_by_keypath<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
 evaluation:
-+--------+-----------------------------+-----------------------+--------------+
-|        | s                           | k                     | Output       |
-+--------+-----------------------------+-----------------------+--------------+
-| Type   | String NULL                 | String NULL           | Variant NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="{k}"} ∪ {NULL} | Unknown      |
-| Row 0  | 'true'                      | '{1}'                 | NULL         |
-| Row 1  | '{"k":1}'                   | '{k}'                 | '1'          |
-| Row 2  | NULL                        | NULL                  | NULL         |
-| Row 3  | '{"a":"b"}'                 | '{a}'                 | '"b"'        |
-+--------+-----------------------------+-----------------------+--------------+
++--------+---------------------------------+--------------------------+--------------+
+|        | s                               | k                        | Output       |
++--------+---------------------------------+--------------------------+--------------+
+| Type   | String NULL                     | String NULL              | Variant NULL |
+| Domain | {"true"..="{\"k\":1}"} ∪ {NULL} | {"{1}"..="{k}"} ∪ {NULL} | Unknown      |
+| Row 0  | 'true'                          | '{1}'                    | NULL         |
+| Row 1  | '{"k":1}'                       | '{k}'                    | '1'          |
+| Row 2  | NULL                            | NULL                     | NULL         |
+| Row 3  | '{"a":"b"}'                     | '{a}'                    | '"b"'        |
++--------+---------------------------------+--------------------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                            |
@@ -3562,16 +3670,16 @@ ast            : parse_json(s) #>> '{0}'
 raw expr       : get_by_keypath_string(parse_json(s::String NULL), '{0}')
 checked expr   : get_by_keypath_string<Variant NULL, String>(parse_json<String NULL>(s), "{0}")
 evaluation:
-+--------+-----------------------------+-------------+
-|        | s                           | Output      |
-+--------+-----------------------------+-------------+
-| Type   | String NULL                 | String NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | Unknown     |
-| Row 0  | '[1,2,3]'                   | '1'         |
-| Row 1  | '{"k":1}'                   | NULL        |
-| Row 2  | NULL                        | NULL        |
-| Row 3  | '{"a":"b"}'                 | NULL        |
-+--------+-----------------------------+-------------+
++--------+------------------------------------+-------------+
+|        | s                                  | Output      |
++--------+------------------------------------+-------------+
+| Type   | String NULL                        | String NULL |
+| Domain | {"[1,2,3]"..="{\"k\":1}"} ∪ {NULL} | Unknown     |
+| Row 0  | '[1,2,3]'                          | '1'         |
+| Row 1  | '{"k":1}'                          | NULL        |
+| Row 2  | NULL                               | NULL        |
+| Row 3  | '{"a":"b"}'                        | NULL        |
++--------+------------------------------------+-------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                           |
@@ -3585,16 +3693,16 @@ ast            : parse_json(s) #>> k
 raw expr       : get_by_keypath_string(parse_json(s::String NULL), k::String NULL)
 checked expr   : get_by_keypath_string<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
 evaluation:
-+--------+-----------------------------+-----------------------+-------------+
-|        | s                           | k                     | Output      |
-+--------+-----------------------------+-----------------------+-------------+
-| Type   | String NULL                 | String NULL           | String NULL |
-| Domain | {""..="{\"k\":1}"} ∪ {NULL} | {""..="{k}"} ∪ {NULL} | Unknown     |
-| Row 0  | 'true'                      | '{1}'                 | NULL        |
-| Row 1  | '{"k":1}'                   | '{k}'                 | '1'         |
-| Row 2  | NULL                        | NULL                  | NULL        |
-| Row 3  | '{"a":"b"}'                 | '{a}'                 | 'b'         |
-+--------+-----------------------------+-----------------------+-------------+
++--------+---------------------------------+--------------------------+-------------+
+|        | s                               | k                        | Output      |
++--------+---------------------------------+--------------------------+-------------+
+| Type   | String NULL                     | String NULL              | String NULL |
+| Domain | {"true"..="{\"k\":1}"} ∪ {NULL} | {"{1}"..="{k}"} ∪ {NULL} | Unknown     |
+| Row 0  | 'true'                          | '{1}'                    | NULL        |
+| Row 1  | '{"k":1}'                       | '{k}'                    | '1'         |
+| Row 2  | NULL                            | NULL                     | NULL        |
+| Row 3  | '{"a":"b"}'                     | '{a}'                    | 'b'         |
++--------+---------------------------------+--------------------------+-------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------+
 | Column | Data                                                                                        |
@@ -3664,16 +3772,16 @@ raw expr       : json_exists_key(parse_json(s::String NULL), 'a')
 checked expr   : json_exists_key<Variant NULL, String NULL>(parse_json<String NULL>(s), CAST("a" AS String NULL))
 optimized expr : json_exists_key<Variant NULL, String NULL>(parse_json<String NULL>(s), "a")
 evaluation:
-+--------+-----------------------------+--------------+
-|        | s                           | Output       |
-+--------+-----------------------------+--------------+
-| Type   | String NULL                 | Boolean NULL |
-| Domain | {""..="{\"b\":1}"} ∪ {NULL} | Unknown      |
-| Row 0  | '[1,2,3]'                   | false        |
-| Row 1  | '{"a":1}'                   | true         |
-| Row 2  | NULL                        | NULL         |
-| Row 3  | '{"b":1}'                   | false        |
-+--------+-----------------------------+--------------+
++--------+------------------------------------+--------------+
+|        | s                                  | Output       |
++--------+------------------------------------+--------------+
+| Type   | String NULL                        | Boolean NULL |
+| Domain | {"[1,2,3]"..="{\"b\":1}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[1,2,3]'                          | false        |
+| Row 1  | '{"a":1}'                          | true         |
+| Row 2  | NULL                               | NULL         |
+| Row 3  | '{"b":1}'                          | false        |
++--------+------------------------------------+--------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------+
 | Column | Data                                                                                         |
@@ -3742,16 +3850,16 @@ raw expr       : json_exists_any_keys(parse_json(s::String NULL), array('a', 'b'
 checked expr   : json_exists_any_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), CAST(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
 optimized expr : json_exists_any_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), ['a', 'b'])
 evaluation:
-+--------+-----------------------------+--------------+
-|        | s                           | Output       |
-+--------+-----------------------------+--------------+
-| Type   | String NULL                 | Boolean NULL |
-| Domain | {""..="{\"c\":1}"} ∪ {NULL} | Unknown      |
-| Row 0  | '["a","e","d"]'             | true         |
-| Row 1  | '{"a":1,"b":2}'             | true         |
-| Row 2  | NULL                        | NULL         |
-| Row 3  | '{"c":1}'                   | false        |
-+--------+-----------------------------+--------------+
++--------+------------------------------------------------+--------------+
+|        | s                                              | Output       |
++--------+------------------------------------------------+--------------+
+| Type   | String NULL                                    | Boolean NULL |
+| Domain | {"[\"a\",\"e\",\"d\"]"..="{\"c\":1}"} ∪ {NULL} | Unknown      |
+| Row 0  | '["a","e","d"]'                                | true         |
+| Row 1  | '{"a":1,"b":2}'                                | true         |
+| Row 2  | NULL                                           | NULL         |
+| Row 3  | '{"c":1}'                                      | false        |
++--------+------------------------------------------------+--------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                     |
@@ -3820,16 +3928,16 @@ raw expr       : json_exists_all_keys(parse_json(s::String NULL), array('a', 'b'
 checked expr   : json_exists_all_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), CAST(array<T0=String><T0, T0>("a", "b") AS Array(String) NULL))
 optimized expr : json_exists_all_keys<Variant NULL, Array(String) NULL>(parse_json<String NULL>(s), ['a', 'b'])
 evaluation:
-+--------+-------------------------------------+--------------+
-|        | s                                   | Output       |
-+--------+-------------------------------------+--------------+
-| Type   | String NULL                         | Boolean NULL |
-| Domain | {""..="{\"a\":1,\"b\":2}"} ∪ {NULL} | Unknown      |
-| Row 0  | '["a","e","b"]'                     | true         |
-| Row 1  | '{"a":1,"b":2}'                     | true         |
-| Row 2  | NULL                                | NULL         |
-| Row 3  | '{"a":0,"c":1}'                     | false        |
-+--------+-------------------------------------+--------------+
++--------+--------------------------------------------------------+--------------+
+|        | s                                                      | Output       |
++--------+--------------------------------------------------------+--------------+
+| Type   | String NULL                                            | Boolean NULL |
+| Domain | {"[\"a\",\"e\",\"b\"]"..="{\"a\":1,\"b\":2}"} ∪ {NULL} | Unknown      |
+| Row 0  | '["a","e","b"]'                                        | true         |
+| Row 1  | '{"a":1,"b":2}'                                        | true         |
+| Row 2  | NULL                                                   | NULL         |
+| Row 3  | '{"a":0,"c":1}'                                        | false        |
++--------+--------------------------------------------------------+--------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                           |
@@ -4284,16 +4392,16 @@ ast            : json_path_match(parse_json(s), p)
 raw expr       : json_path_match(parse_json(s::String NULL), p::String)
 checked expr   : json_path_match<Variant NULL, String>(parse_json<String NULL>(s), p)
 evaluation:
-+--------+------------------------+-----------------------------+--------------+
-|        | s                      | p                           | Output       |
-+--------+------------------------+-----------------------------+--------------+
-| Type   | String NULL            | String                      | Boolean NULL |
-| Domain | {""..="true"} ∪ {NULL} | {"$.a > 0"..="$[*].k == 1"} | Unknown      |
-| Row 0  | 'true'                 | '$.a > 0'                   | false        |
-| Row 1  | '[{"k":1},{"k":2}]'    | '$[*].k == 1'               | true         |
-| Row 2  | NULL                   | '$[*] > 1'                  | NULL         |
-| Row 3  | '[1,2,3,4]'            | '$[*] > 2'                  | true         |
-+--------+------------------------+-----------------------------+--------------+
++--------+---------------------------------+-----------------------------+--------------+
+|        | s                               | p                           | Output       |
++--------+---------------------------------+-----------------------------+--------------+
+| Type   | String NULL                     | String                      | Boolean NULL |
+| Domain | {"[1,2,3,4]"..="true"} ∪ {NULL} | {"$.a > 0"..="$[*].k == 1"} | Unknown      |
+| Row 0  | 'true'                          | '$.a > 0'                   | false        |
+| Row 1  | '[{"k":1},{"k":2}]'             | '$[*].k == 1'               | true         |
+| Row 2  | NULL                            | '$[*] > 1'                  | NULL         |
+| Row 3  | '[1,2,3,4]'                     | '$[*] > 2'                  | true         |
++--------+---------------------------------+-----------------------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                  |
@@ -4389,16 +4497,16 @@ ast            : parse_json(s) @@ p
 raw expr       : json_path_match(parse_json(s::String NULL), p::String)
 checked expr   : json_path_match<Variant NULL, String>(parse_json<String NULL>(s), p)
 evaluation:
-+--------+------------------------+-----------------------------+--------------+
-|        | s                      | p                           | Output       |
-+--------+------------------------+-----------------------------+--------------+
-| Type   | String NULL            | String                      | Boolean NULL |
-| Domain | {""..="true"} ∪ {NULL} | {"$.a > 0"..="$[*].k == 1"} | Unknown      |
-| Row 0  | 'true'                 | '$.a > 0'                   | false        |
-| Row 1  | '[{"k":1},{"k":2}]'    | '$[*].k == 1'               | true         |
-| Row 2  | NULL                   | '$[*] > 1'                  | NULL         |
-| Row 3  | '[1,2,3,4]'            | '$[*] > 2'                  | true         |
-+--------+------------------------+-----------------------------+--------------+
++--------+---------------------------------+-----------------------------+--------------+
+|        | s                               | p                           | Output       |
++--------+---------------------------------+-----------------------------+--------------+
+| Type   | String NULL                     | String                      | Boolean NULL |
+| Domain | {"[1,2,3,4]"..="true"} ∪ {NULL} | {"$.a > 0"..="$[*].k == 1"} | Unknown      |
+| Row 0  | 'true'                          | '$.a > 0'                   | false        |
+| Row 1  | '[{"k":1},{"k":2}]'             | '$[*].k == 1'               | true         |
+| Row 2  | NULL                            | '$[*] > 1'                  | NULL         |
+| Row 3  | '[1,2,3,4]'                     | '$[*] > 2'                  | true         |
++--------+---------------------------------+-----------------------------+--------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                  |
@@ -4852,16 +4960,16 @@ ast            : parse_json(s) #- '{0,a}'
 raw expr       : delete_by_keypath(parse_json(s::String NULL), '{0,a}')
 checked expr   : delete_by_keypath<Variant NULL, String>(parse_json<String NULL>(s), "{0,a}")
 evaluation:
-+--------+---------------------------------+--------------+
-|        | s                               | Output       |
-+--------+---------------------------------+--------------+
-| Type   | String NULL                     | Variant NULL |
-| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown      |
-| Row 0  | '[{"a":1},2,3]'                 | '[{},2,3]'   |
-| Row 1  | '[1,2,3]'                       | '[1,2,3]'    |
-| Row 2  | NULL                            | NULL         |
-| Row 3  | '{"a":"b"}'                     | '{"a":"b"}'  |
-+--------+---------------------------------+--------------+
++--------+----------------------------------------+--------------+
+|        | s                                      | Output       |
++--------+----------------------------------------+--------------+
+| Type   | String NULL                            | Variant NULL |
+| Domain | {"[1,2,3]"..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[{"a":1},2,3]'                        | '[{},2,3]'   |
+| Row 1  | '[1,2,3]'                              | '[1,2,3]'    |
+| Row 2  | NULL                                   | NULL         |
+| Row 3  | '{"a":"b"}'                            | '{"a":"b"}'  |
++--------+----------------------------------------+--------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                               |
@@ -4875,16 +4983,16 @@ ast            : parse_json(s) #- k
 raw expr       : delete_by_keypath(parse_json(s::String NULL), k::String NULL)
 checked expr   : delete_by_keypath<Variant NULL, String NULL>(parse_json<String NULL>(s), k)
 evaluation:
-+--------+-----------------------------------+----------------------------+---------------+
-|        | s                                 | k                          | Output        |
-+--------+-----------------------------------+----------------------------+---------------+
-| Type   | String NULL                       | String NULL                | Variant NULL  |
-| Domain | {""..="{\"k\":[1,2,3]}"} ∪ {NULL} | {"{1,a}"..="{k}"} ∪ {NULL} | Unknown       |
-| Row 0  | '[1,{"a":2},3]'                   | '{1,a}'                    | '[1,{},3]'    |
-| Row 1  | '{"k":[1,2,3]}'                   | '{k,-1}'                   | '{"k":[1,2]}' |
-| Row 2  | NULL                              | NULL                       | NULL          |
-| Row 3  | '{"a":"b"}'                       | '{c}'                      | '{"a":"b"}'   |
-+--------+-----------------------------------+----------------------------+---------------+
++--------+--------------------------------------------------+-------------------------------+---------------+
+|        | s                                                | k                             | Output        |
++--------+--------------------------------------------------+-------------------------------+---------------+
+| Type   | String NULL                                      | String NULL                   | Variant NULL  |
+| Domain | {"[1,{\"a\":2},3]"..="{\"k\":[1,2,3]}"} ∪ {NULL} | {"{1,a}"..="{k,-1}"} ∪ {NULL} | Unknown       |
+| Row 0  | '[1,{"a":2},3]'                                  | '{1,a}'                       | '[1,{},3]'    |
+| Row 1  | '{"k":[1,2,3]}'                                  | '{k,-1}'                      | '{"k":[1,2]}' |
+| Row 2  | NULL                                             | NULL                          | NULL          |
+| Row 3  | '{"a":"b"}'                                      | '{c}'                         | '{"a":"b"}'   |
++--------+--------------------------------------------------+-------------------------------+---------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                             |
@@ -4954,16 +5062,16 @@ raw expr       : json_array_insert(parse_json(v::String NULL), 2, parse_json(n::
 checked expr   : json_array_insert<Variant NULL, Int32 NULL, Variant NULL>(parse_json<String NULL>(v), CAST(2_u8 AS Int32 NULL), parse_json<String NULL>(n))
 optimized expr : json_array_insert<Variant NULL, Int32 NULL, Variant NULL>(parse_json<String NULL>(v), 2_i32, parse_json<String NULL>(n))
 evaluation:
-+--------+---------------------------------+------------------------+-----------------------+
-|        | v                               | n                      | Output                |
-+--------+---------------------------------+------------------------+-----------------------+
-| Type   | String NULL                     | String NULL            | Variant NULL          |
-| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | {""..="true"} ∪ {NULL} | Unknown               |
-| Row 0  | '[1,2,3,null]'                  | '"hi"'                 | '[1,2,"hi",3,null]'   |
-| Row 1  | '["A","B"]'                     | NULL                   | NULL                  |
-| Row 2  | NULL                            | 'true'                 | NULL                  |
-| Row 3  | '{"a":"b"}'                     | '[1,2,3]'              | '[{"a":"b"},[1,2,3]]' |
-+--------+---------------------------------+------------------------+-----------------------+
++--------+----------------------------------------------+------------------------------+-----------------------+
+|        | v                                            | n                            | Output                |
++--------+----------------------------------------------+------------------------------+-----------------------+
+| Type   | String NULL                                  | String NULL                  | Variant NULL          |
+| Domain | {"[\"A\",\"B\"]"..="{\"a\":\"b\"}"} ∪ {NULL} | {"\"hi\""..="true"} ∪ {NULL} | Unknown               |
+| Row 0  | '[1,2,3,null]'                               | '"hi"'                       | '[1,2,"hi",3,null]'   |
+| Row 1  | '["A","B"]'                                  | NULL                         | NULL                  |
+| Row 2  | NULL                                         | 'true'                       | NULL                  |
+| Row 3  | '{"a":"b"}'                                  | '[1,2,3]'                    | '[{"a":"b"},[1,2,3]]' |
++--------+----------------------------------------------+------------------------------+-----------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                       |
@@ -5041,16 +5149,16 @@ ast            : json_array_distinct(parse_json(v))
 raw expr       : json_array_distinct(parse_json(v::String NULL))
 checked expr   : json_array_distinct<Variant NULL>(parse_json<String NULL>(v))
 evaluation:
-+--------+---------------------------------+-----------------+
-|        | v                               | Output          |
-+--------+---------------------------------+-----------------+
-| Type   | String NULL                     | Variant NULL    |
-| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown         |
-| Row 0  | '[1,1,2,3,3,null,2,1,null]'     | '[1,2,3,null]'  |
-| Row 1  | '["A","B","A","B","C"]'         | '["A","B","C"]' |
-| Row 2  | NULL                            | NULL            |
-| Row 3  | '{"a":"b"}'                     | '[{"a":"b"}]'   |
-+--------+---------------------------------+-----------------+
++--------+----------------------------------------------------------------+-----------------+
+|        | v                                                              | Output          |
++--------+----------------------------------------------------------------+-----------------+
+| Type   | String NULL                                                    | Variant NULL    |
+| Domain | {"[\"A\",\"B\",\"A\",\"B\",\"C\"]"..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown         |
+| Row 0  | '[1,1,2,3,3,null,2,1,null]'                                    | '[1,2,3,null]'  |
+| Row 1  | '["A","B","A","B","C"]'                                        | '["A","B","C"]' |
+| Row 2  | NULL                                                           | NULL            |
+| Row 3  | '{"a":"b"}'                                                    | '[{"a":"b"}]'   |
++--------+----------------------------------------------------------------+-----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                             |
@@ -5154,16 +5262,16 @@ ast            : json_array_intersection(parse_json(v1), parse_json(v2))
 raw expr       : json_array_intersection(parse_json(v1::String NULL), parse_json(v2::String NULL))
 checked expr   : json_array_intersection<Variant NULL, Variant NULL>(parse_json<String NULL>(v1), parse_json<String NULL>(v2))
 evaluation:
-+--------+---------------------------------+---------------------------------+----------------+
-|        | v1                              | v2                              | Output         |
-+--------+---------------------------------+---------------------------------+----------------+
-| Type   | String NULL                     | String NULL                     | Variant NULL   |
-| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown        |
-| Row 0  | '[1,2,3,3,null,null]'           | '[1,1,2,3,4,5,null]'            | '[1,2,3,null]' |
-| Row 1  | '["A","B","A","B","C"]'         | '["X","Y","Z"]'                 | '[]'           |
-| Row 2  | NULL                            | NULL                            | NULL           |
-| Row 3  | '{"a":"b"}'                     | '{"a":"b"}'                     | '[{"a":"b"}]'  |
-+--------+---------------------------------+---------------------------------+----------------+
++--------+----------------------------------------------------------------+----------------------------------------------------+----------------+
+|        | v1                                                             | v2                                                 | Output         |
++--------+----------------------------------------------------------------+----------------------------------------------------+----------------+
+| Type   | String NULL                                                    | String NULL                                        | Variant NULL   |
+| Domain | {"[\"A\",\"B\",\"A\",\"B\",\"C\"]"..="{\"a\":\"b\"}"} ∪ {NULL} | {"[\"X\",\"Y\",\"Z\"]"..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown        |
+| Row 0  | '[1,2,3,3,null,null]'                                          | '[1,1,2,3,4,5,null]'                               | '[1,2,3,null]' |
+| Row 1  | '["A","B","A","B","C"]'                                        | '["X","Y","Z"]'                                    | '[]'           |
+| Row 2  | NULL                                                           | NULL                                               | NULL           |
+| Row 3  | '{"a":"b"}'                                                    | '{"a":"b"}'                                        | '[{"a":"b"}]'  |
++--------+----------------------------------------------------------------+----------------------------------------------------+----------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                               |
@@ -5268,16 +5376,16 @@ ast            : json_array_except(parse_json(v1), parse_json(v2))
 raw expr       : json_array_except(parse_json(v1::String NULL), parse_json(v2::String NULL))
 checked expr   : json_array_except<Variant NULL, Variant NULL>(parse_json<String NULL>(v1), parse_json<String NULL>(v2))
 evaluation:
-+--------+---------------------------------+---------------------------------+-------------------------+
-|        | v1                              | v2                              | Output                  |
-+--------+---------------------------------+---------------------------------+-------------------------+
-| Type   | String NULL                     | String NULL                     | Variant NULL            |
-| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown                 |
-| Row 0  | '[1,2,3,3,null,null]'           | '[1,1,2,3,4,5,null]'            | '[3,null]'              |
-| Row 1  | '["A","B","A","B","C"]'         | '["X","Y","Z"]'                 | '["A","B","A","B","C"]' |
-| Row 2  | NULL                            | NULL                            | NULL                    |
-| Row 3  | '{"a":"b"}'                     | '{"a":"b"}'                     | '[]'                    |
-+--------+---------------------------------+---------------------------------+-------------------------+
++--------+----------------------------------------------------------------+----------------------------------------------------+-------------------------+
+|        | v1                                                             | v2                                                 | Output                  |
++--------+----------------------------------------------------------------+----------------------------------------------------+-------------------------+
+| Type   | String NULL                                                    | String NULL                                        | Variant NULL            |
+| Domain | {"[\"A\",\"B\",\"A\",\"B\",\"C\"]"..="{\"a\":\"b\"}"} ∪ {NULL} | {"[\"X\",\"Y\",\"Z\"]"..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown                 |
+| Row 0  | '[1,2,3,3,null,null]'                                          | '[1,1,2,3,4,5,null]'                               | '[3,null]'              |
+| Row 1  | '["A","B","A","B","C"]'                                        | '["X","Y","Z"]'                                    | '["A","B","A","B","C"]' |
+| Row 2  | NULL                                                           | NULL                                               | NULL                    |
+| Row 3  | '{"a":"b"}'                                                    | '{"a":"b"}'                                        | '[]'                    |
++--------+----------------------------------------------------------------+----------------------------------------------------+-------------------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                     |
@@ -5382,16 +5490,16 @@ ast            : json_array_overlap(parse_json(v1), parse_json(v2))
 raw expr       : json_array_overlap(parse_json(v1::String NULL), parse_json(v2::String NULL))
 checked expr   : json_array_overlap<Variant NULL, Variant NULL>(parse_json<String NULL>(v1), parse_json<String NULL>(v2))
 evaluation:
-+--------+---------------------------------+---------------------------------+--------------+
-|        | v1                              | v2                              | Output       |
-+--------+---------------------------------+---------------------------------+--------------+
-| Type   | String NULL                     | String NULL                     | Boolean NULL |
-| Domain | {""..="{\"a\":\"b\"}"} ∪ {NULL} | {""..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown      |
-| Row 0  | '[1,2,3,3,null,null]'           | '[1,1,2,3,4,5,null]'            | true         |
-| Row 1  | '["A","B","A","B","C"]'         | '["X","Y","Z"]'                 | false        |
-| Row 2  | NULL                            | NULL                            | NULL         |
-| Row 3  | '{"a":"b"}'                     | '{"a":"b"}'                     | true         |
-+--------+---------------------------------+---------------------------------+--------------+
++--------+----------------------------------------------------------------+----------------------------------------------------+--------------+
+|        | v1                                                             | v2                                                 | Output       |
++--------+----------------------------------------------------------------+----------------------------------------------------+--------------+
+| Type   | String NULL                                                    | String NULL                                        | Boolean NULL |
+| Domain | {"[\"A\",\"B\",\"A\",\"B\",\"C\"]"..="{\"a\":\"b\"}"} ∪ {NULL} | {"[\"X\",\"Y\",\"Z\"]"..="{\"a\":\"b\"}"} ∪ {NULL} | Unknown      |
+| Row 0  | '[1,2,3,3,null,null]'                                          | '[1,1,2,3,4,5,null]'                               | true         |
+| Row 1  | '["A","B","A","B","C"]'                                        | '["X","Y","Z"]'                                    | false        |
+| Row 2  | NULL                                                           | NULL                                               | NULL         |
+| Row 3  | '{"a":"b"}'                                                    | '{"a":"b"}'                                        | true         |
++--------+----------------------------------------------------------------+----------------------------------------------------+--------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                     |
@@ -5529,16 +5637,16 @@ ast            : json_object_insert(parse_json(v), 'x', parse_json(n))
 raw expr       : json_object_insert(parse_json(v::String NULL), 'x', parse_json(n::String NULL))
 checked expr   : json_object_insert<Variant NULL, String, Variant NULL>(parse_json<String NULL>(v), "x", parse_json<String NULL>(n))
 evaluation:
-+--------+---------------------------------+------------------------+-----------------------------------------+
-|        | v                               | n                      | Output                                  |
-+--------+---------------------------------+------------------------+-----------------------------------------+
-| Type   | String NULL                     | String NULL            | Variant NULL                            |
-| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | {""..="true"} ∪ {NULL} | Unknown                                 |
-| Row 0  | '{"k":"v"}'                     | '"hi"'                 | '{"k":"v","x":"hi"}'                    |
-| Row 1  | '{"m":"n"}'                     | NULL                   | '{"m":"n"}'                             |
-| Row 2  | NULL                            | 'true'                 | NULL                                    |
-| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '[1,2,3]'              | '{"a":"b","c":"d","x":[1,2,3],"y":"z"}' |
-+--------+---------------------------------+------------------------+-----------------------------------------+
++--------+----------------------------------------------------------------------+------------------------------+-----------------------------------------+
+|        | v                                                                    | n                            | Output                                  |
++--------+----------------------------------------------------------------------+------------------------------+-----------------------------------------+
+| Type   | String NULL                                                          | String NULL                  | Variant NULL                            |
+| Domain | {"{\"a\":\"b\",\"c\":\"d\",\"y\":\"z\"}"..="{\"m\":\"n\"}"} ∪ {NULL} | {"\"hi\""..="true"} ∪ {NULL} | Unknown                                 |
+| Row 0  | '{"k":"v"}'                                                          | '"hi"'                       | '{"k":"v","x":"hi"}'                    |
+| Row 1  | '{"m":"n"}'                                                          | NULL                         | '{"m":"n"}'                             |
+| Row 2  | NULL                                                                 | 'true'                       | NULL                                    |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'                                          | '[1,2,3]'                    | '{"a":"b","c":"d","x":[1,2,3],"y":"z"}' |
++--------+----------------------------------------------------------------------+------------------------------+-----------------------------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                                        |
@@ -5553,16 +5661,16 @@ ast            : json_object_insert(parse_json(v), 'c', parse_json(n), true)
 raw expr       : json_object_insert(parse_json(v::String NULL), 'c', parse_json(n::String NULL), true)
 checked expr   : json_object_insert<Variant NULL, String, Variant NULL, Boolean>(parse_json<String NULL>(v), "c", parse_json<String NULL>(n), true)
 evaluation:
-+--------+---------------------------------+------------------------+---------------------------------+
-|        | v                               | n                      | Output                          |
-+--------+---------------------------------+------------------------+---------------------------------+
-| Type   | String NULL                     | String NULL            | Variant NULL                    |
-| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | {""..="true"} ∪ {NULL} | Unknown                         |
-| Row 0  | '{"k":"v"}'                     | '"hi"'                 | '{"c":"hi","k":"v"}'            |
-| Row 1  | '{"m":"n"}'                     | NULL                   | '{"m":"n"}'                     |
-| Row 2  | NULL                            | 'true'                 | NULL                            |
-| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '[1,2,3]'              | '{"a":"b","c":[1,2,3],"y":"z"}' |
-+--------+---------------------------------+------------------------+---------------------------------+
++--------+----------------------------------------------------------------------+------------------------------+---------------------------------+
+|        | v                                                                    | n                            | Output                          |
++--------+----------------------------------------------------------------------+------------------------------+---------------------------------+
+| Type   | String NULL                                                          | String NULL                  | Variant NULL                    |
+| Domain | {"{\"a\":\"b\",\"c\":\"d\",\"y\":\"z\"}"..="{\"m\":\"n\"}"} ∪ {NULL} | {"\"hi\""..="true"} ∪ {NULL} | Unknown                         |
+| Row 0  | '{"k":"v"}'                                                          | '"hi"'                       | '{"c":"hi","k":"v"}'            |
+| Row 1  | '{"m":"n"}'                                                          | NULL                         | '{"m":"n"}'                     |
+| Row 2  | NULL                                                                 | 'true'                       | NULL                            |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'                                          | '[1,2,3]'                    | '{"a":"b","c":[1,2,3],"y":"z"}' |
++--------+----------------------------------------------------------------------+------------------------------+---------------------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                                                                                                                   |
@@ -5621,16 +5729,16 @@ ast            : json_object_delete(parse_json(v), 'a', 'm')
 raw expr       : json_object_delete(parse_json(v::String NULL), 'a', 'm')
 checked expr   : json_object_delete<Variant NULL, String, String>(parse_json<String NULL>(v), "a", "m")
 evaluation:
-+--------+---------------------------------+---------------------+
-|        | v                               | Output              |
-+--------+---------------------------------+---------------------+
-| Type   | String NULL                     | Variant NULL        |
-| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | Unknown             |
-| Row 0  | '{"k":"v"}'                     | '{"k":"v"}'         |
-| Row 1  | '{"m":"n"}'                     | '{}'                |
-| Row 2  | NULL                            | NULL                |
-| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '{"c":"d","y":"z"}' |
-+--------+---------------------------------+---------------------+
++--------+----------------------------------------------------------------------+---------------------+
+|        | v                                                                    | Output              |
++--------+----------------------------------------------------------------------+---------------------+
+| Type   | String NULL                                                          | Variant NULL        |
+| Domain | {"{\"a\":\"b\",\"c\":\"d\",\"y\":\"z\"}"..="{\"m\":\"n\"}"} ∪ {NULL} | Unknown             |
+| Row 0  | '{"k":"v"}'                                                          | '{"k":"v"}'         |
+| Row 1  | '{"m":"n"}'                                                          | '{}'                |
+| Row 2  | NULL                                                                 | NULL                |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'                                          | '{"c":"d","y":"z"}' |
++--------+----------------------------------------------------------------------+---------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                           |
@@ -5688,16 +5796,16 @@ ast            : json_object_pick(parse_json(v), 'a', 'm')
 raw expr       : json_object_pick(parse_json(v::String NULL), 'a', 'm')
 checked expr   : json_object_pick<Variant NULL, String, String>(parse_json<String NULL>(v), "a", "m")
 evaluation:
-+--------+---------------------------------+--------------+
-|        | v                               | Output       |
-+--------+---------------------------------+--------------+
-| Type   | String NULL                     | Variant NULL |
-| Domain | {""..="{\"m\":\"n\"}"} ∪ {NULL} | Unknown      |
-| Row 0  | '{"k":"v"}'                     | '{}'         |
-| Row 1  | '{"m":"n"}'                     | '{"m":"n"}'  |
-| Row 2  | NULL                            | NULL         |
-| Row 3  | '{"a":"b","c":"d","y":"z"}'     | '{"a":"b"}'  |
-+--------+---------------------------------+--------------+
++--------+----------------------------------------------------------------------+--------------+
+|        | v                                                                    | Output       |
++--------+----------------------------------------------------------------------+--------------+
+| Type   | String NULL                                                          | Variant NULL |
+| Domain | {"{\"a\":\"b\",\"c\":\"d\",\"y\":\"z\"}"..="{\"m\":\"n\"}"} ∪ {NULL} | Unknown      |
+| Row 0  | '{"k":"v"}'                                                          | '{}'         |
+| Row 1  | '{"m":"n"}'                                                          | '{"m":"n"}'  |
+| Row 2  | NULL                                                                 | NULL         |
+| Row 3  | '{"a":"b","c":"d","y":"z"}'                                          | '{"a":"b"}'  |
++--------+----------------------------------------------------------------------+--------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                      |

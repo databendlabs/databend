@@ -17,12 +17,14 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::Query;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use educe::Educe;
 
 use super::CreateDictionaryPlan;
 use super::DropDictionaryPlan;
@@ -75,6 +77,7 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescNotificationPlan;
 use crate::plans::DescPasswordPolicyPlan;
+use crate::plans::DescProcedurePlan;
 use crate::plans::DescUserPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DescribeTaskPlan;
@@ -145,7 +148,6 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
-use crate::plans::ShowRolesPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SystemPlan;
@@ -164,7 +166,11 @@ use crate::plans::VacuumTemporaryFilesPlan;
 use crate::BindContext;
 use crate::MetadataRef;
 
-#[derive(Clone, Debug)]
+#[derive(Educe)]
+#[educe(
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub enum Plan {
     // `SELECT` statement
     Query {
@@ -243,6 +249,7 @@ pub enum Plan {
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable {
         s_expr: Box<SExpr>,
+        hilbert_query: Option<Box<Query>>,
         is_final: bool,
     },
     RevertTable(Box<RevertTablePlan>),
@@ -312,7 +319,6 @@ pub enum Plan {
     DropUDF(Box<DropUDFPlan>),
 
     // Role
-    ShowRoles(Box<ShowRolesPlan>),
     CreateRole(Box<CreateRolePlan>),
     DropRole(Box<DropRolePlan>),
     GrantRole(Box<GrantRolePlan>),
@@ -391,6 +397,7 @@ pub enum Plan {
     ExecuteImmediate(Box<ExecuteImmediatePlan>),
     // ShowCreateProcedure(Box<ShowCreateProcedurePlan>),
     DropProcedure(Box<DropProcedurePlan>),
+    DescProcedure(Box<DescProcedurePlan>),
     CreateProcedure(Box<CreateProcedurePlan>),
     CallProcedure(Box<CallProcedurePlan>),
     // RenameProcedure(Box<RenameProcedurePlan>),
@@ -499,7 +506,6 @@ impl Plan {
             Plan::VacuumTemporaryFiles(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::DescribeView(plan) => plan.schema(),
-            Plan::ShowRoles(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
             Plan::Presign(plan) => plan.schema(),
@@ -537,7 +543,7 @@ impl Plan {
                 DataField::new("cluster", DataType::String),
                 DataField::new("version", DataType::String),
             ]),
-
+            Plan::DescProcedure(plan) => plan.schema(),
             _ => Arc::new(DataSchema::empty()),
         }
     }

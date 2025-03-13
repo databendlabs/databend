@@ -14,7 +14,8 @@
 
 use std::sync::Arc;
 
-use databend_common_ast::parser::parse_comma_separated_exprs;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::tokio::sync::Semaphore;
 use databend_common_catalog::table::Table;
@@ -128,6 +129,7 @@ impl PipelineBuilder {
             table,
             cluster_stats_gen,
             MutationKind::Replace,
+            replace.table_meta_timestamps,
         )?;
         let mut block_builder = serialize_block_transform.get_block_builder();
         block_builder.source_schema = table.schema_with_stream();
@@ -137,6 +139,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             *block_thresholds,
+            replace.table_meta_timestamps,
         );
         if !*need_insert {
             if segment_partition_num == 0 {
@@ -359,7 +362,7 @@ impl PipelineBuilder {
         } else {
             None
         };
-        let cluster_keys = table.cluster_keys(self.ctx.clone());
+        let cluster_keys = table.linear_cluster_keys(self.ctx.clone());
         if *need_insert {
             let replace_into_processor = ReplaceIntoProcessor::create(
                 self.ctx.clone(),
@@ -488,12 +491,12 @@ impl AsyncSource for RawValueSource {
         }
 
         let format = self.ctx.get_format_settings()?;
-        let numeric_cast_option = self
+        let rounding_mode = self
             .ctx
             .get_settings()
             .get_numeric_cast_option()
-            .unwrap_or("rounding".to_string());
-        let rounding_mode = numeric_cast_option.as_str() == "rounding";
+            .map(|s| s == "rounding")
+            .unwrap_or(true);
         let field_decoder = FastFieldDecoderValues::create_for_insert(format, rounding_mode);
 
         let mut values_decoder = FastValuesDecoder::new(&self.data, &field_decoder);
@@ -528,7 +531,15 @@ impl FastValuesDecodeFallback for RawValueSource {
             let mut bind_context = self.bind_context.clone();
             let metadata = self.metadata.clone();
 
-            let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            let exprs = parse_values(&tokens, sql_dialect)?
+                .into_iter()
+                .map(|expr| match expr {
+                    Expr::Placeholder { .. } => {
+                        Err(ErrorCode::SyntaxException("unexpected placeholder"))
+                    }
+                    e => Ok(e),
+                })
+                .collect::<Result<Vec<_>>>()?;
 
             bind_context
                 .exprs_to_scalar(

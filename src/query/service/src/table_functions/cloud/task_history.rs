@@ -87,10 +87,6 @@ impl TaskHistoryTable {
 
 #[async_trait::async_trait]
 impl Table for TaskHistoryTable {
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -150,7 +146,7 @@ impl TaskHistorySource {
     }
     async fn build_request(&self) -> Result<ShowTaskRunsRequest> {
         let tenant = self.ctx.get_tenant();
-        let available_roles = self.ctx.get_available_roles().await?;
+        let available_roles = self.ctx.get_all_available_roles().await?;
         Ok(ShowTaskRunsRequest {
             tenant_id: tenant.tenant_name().to_string(),
             scheduled_time_start: self
@@ -258,7 +254,7 @@ fn parse_date_or_timestamp(v: &Scalar) -> Option<String> {
                 .map(|s| {
                     s.to_date(TimeZone::UTC)
                         .at(0, 0, 0, 0)
-                        .intz("UTC")
+                        .in_tz("UTC")
                         .unwrap()
                         .to_string()
                 })

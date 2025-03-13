@@ -21,6 +21,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -64,9 +65,8 @@ pub struct TempFilesTable {
 
 #[async_trait::async_trait]
 impl Table for TempFilesTable {
-    fn is_local(&self) -> bool {
-        // Follow the practice of `SyncOneBlockSystemTable::is_local`
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn as_any(&self) -> &dyn Any {

@@ -41,9 +41,17 @@ runs:
       if: env.RUNNER_PROVIDER == 'aws'
       shell: bash
       run: |
+        echo "### artifacts 🚀" >> $GITHUB_STEP_SUMMARY
         aws s3 sync ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/ \
           s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
           --exclude "*" --include "databend-*" --no-progress
+        artifacts="meta,query,query.debug"
+        for artifact in ${artifacts//,/ }; do
+          if [[ -f ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-${artifact} ]]; then
+            url=$(aws s3 presign s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-${artifact} --expires-in 21600)
+            echo "- [${artifact}](${url})" >> $GITHUB_STEP_SUMMARY
+          fi
+        done
 
     - name: Upload artifact to gcs
       if: env.RUNNER_PROVIDER == 'gcp'

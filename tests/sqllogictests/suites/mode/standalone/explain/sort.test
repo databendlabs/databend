@@ -64,6 +64,32 @@ Sort
         ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
         └── estimated rows: 0.00
 
+query T
+explain select a from t1 order by a::string limit 1;
+----
+Limit
+├── output columns: [t1.a (#0), a::STRING (#2)]
+├── limit: 1
+├── offset: 0
+├── estimated rows: 0.00
+└── Sort
+    ├── output columns: [t1.a (#0), a::STRING (#2)]
+    ├── sort keys: [a::STRING ASC NULLS LAST]
+    ├── estimated rows: 0.00
+    └── EvalScalar
+        ├── output columns: [t1.a (#0), a::STRING (#2)]
+        ├── expressions: [CAST(t1.a (#0) AS String NULL)]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.default.t1
+            ├── output columns: [a (#0)]
+            ├── read rows: 0
+            ├── read size: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 0.00
+
 statement ok
 set max_threads = 4;
 

@@ -20,6 +20,7 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_pipeline_core::always_callback;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -27,10 +28,14 @@ use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
 use databend_common_sql::plans::Recluster;
 use databend_common_sql::plans::RelOperator;
+use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;
 use crate::interpreters::common::metrics_inc_compact_hook_main_operation_time_ms;
+use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
+use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
+use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::Interpreter;
 use crate::interpreters::OptimizeCompactBlockInterpreter;
 use crate::interpreters::ReclusterTableInterpreter;
@@ -175,6 +180,16 @@ async fn compact_table(
         let mut build_res = compact_interpreter.execute2().await?;
         // execute the compact pipeline
         if build_res.main_pipeline.is_complete_pipeline()? {
+            let query_ctx = ctx.clone();
+            build_res.main_pipeline.set_on_finished(always_callback(
+                move |_info: &ExecutionInfo| {
+                    hook_clear_m_cte_temp_table(&query_ctx)?;
+                    hook_vacuum_temp_files(&query_ctx)?;
+                    hook_disk_temp_dir(&query_ctx)?;
+                    Ok(())
+                },
+            ));
+
             build_res.set_max_threads(settings.get_max_threads()? as usize);
             let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
 
@@ -185,7 +200,7 @@ async fn compact_table(
                 PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
             // Clears previously generated segment locations to avoid duplicate data in the refresh phase
-            ctx.clear_segment_locations()?;
+            ctx.clear_written_segment_locations()?;
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute()?;
             drop(complete_executor);
@@ -194,21 +209,35 @@ async fn compact_table(
 
     {
         // do recluster.
-        if table.cluster_key_meta().is_some() {
-            let recluster = RelOperator::Recluster(Recluster {
-                catalog: compact_target.catalog,
-                database: compact_target.database,
-                table: compact_target.table,
-                filters: None,
-                limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
-            });
-            let s_expr = SExpr::create_leaf(Arc::new(recluster));
-            let recluster_interpreter =
-                ReclusterTableInterpreter::try_create(ctx.clone(), s_expr, lock_opt, false)?;
-            // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
-            // we do not need to use `PipelineCompleteExecutor` to execute it.
-            let build_res = recluster_interpreter.execute2().await?;
-            assert!(build_res.main_pipeline.is_empty());
+        if let Some(cluster_type) = table.cluster_type() {
+            if cluster_type == ClusterType::Linear {
+                // evict the table from cache
+                ctx.evict_table_from_cache(
+                    &compact_target.catalog,
+                    &compact_target.database,
+                    &compact_target.table,
+                )?;
+                ctx.set_enable_sort_spill(false);
+                let recluster = RelOperator::Recluster(Recluster {
+                    catalog: compact_target.catalog,
+                    database: compact_target.database,
+                    table: compact_target.table,
+                    limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
+                    filters: None,
+                });
+                let s_expr = SExpr::create_leaf(Arc::new(recluster));
+                let recluster_interpreter = ReclusterTableInterpreter::try_create(
+                    ctx.clone(),
+                    s_expr,
+                    None,
+                    lock_opt,
+                    false,
+                )?;
+                // Recluster will be done in `ReclusterTableInterpreter::execute2` directly,
+                // we do not need to use `PipelineCompleteExecutor` to execute it.
+                let build_res = recluster_interpreter.execute2().await?;
+                debug_assert!(build_res.main_pipeline.is_empty());
+            }
         }
     }
 

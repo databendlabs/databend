@@ -22,6 +22,7 @@ use crate::config::ObsStorageConfig;
 use crate::config::OssStorageConfig;
 use crate::config::QueryConfig;
 use crate::config::S3StorageConfig;
+use crate::config::SpillConfig;
 use crate::config::WebhdfsStorageConfig;
 use crate::Config;
 use crate::StorageConfig;
@@ -51,7 +52,7 @@ impl Config {
             storage: self.storage.mask_display(),
             catalog: self.catalog,
             cache: self.cache,
-            spill: self.spill,
+            spill: self.spill.mask_display(),
             background: self.background,
             catalogs: self.catalogs,
         }
@@ -212,6 +213,24 @@ impl StorageConfig {
     }
 }
 
+impl SpillConfig {
+    fn mask_display(&self) -> Self {
+        let Self {
+            ref spill_local_disk_path,
+            spill_local_disk_reserved_space_percentage,
+            spill_local_disk_max_bytes,
+            ref storage,
+        } = *self;
+
+        Self {
+            spill_local_disk_path: spill_local_disk_path.clone(),
+            spill_local_disk_reserved_space_percentage,
+            spill_local_disk_max_bytes,
+            storage: storage.as_ref().map(|storage| storage.mask_display()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,5 +372,33 @@ mod tests {
         let masked_config = config.mask_display();
         assert_eq!(masked_config.cos_secret_id, "**********_id");
         assert_eq!(masked_config.cos_secret_key, "***********key");
+    }
+
+    #[test]
+    fn test_spill_config() {
+        let config = SpillConfig {
+            spill_local_disk_path: "".to_string(),
+            spill_local_disk_reserved_space_percentage: 30.0.into(),
+            spill_local_disk_max_bytes: 10,
+            storage: Some(StorageConfig {
+                typ: "s3".to_string(),
+                s3: S3StorageConfig {
+                    secret_access_key: "secret_access_key".to_string(),
+                    security_token: "security_token".to_string(),
+                    ..S3StorageConfig::default()
+                },
+                ..StorageConfig::default()
+            }),
+        };
+
+        let masked_config = config.mask_display();
+        assert_eq!(
+            masked_config.storage.as_ref().unwrap().s3.secret_access_key,
+            "*************_key"
+        );
+        assert_eq!(
+            masked_config.storage.as_ref().unwrap().s3.security_token,
+            "***********ken"
+        );
     }
 }

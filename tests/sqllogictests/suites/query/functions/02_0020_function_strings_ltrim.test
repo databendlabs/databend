@@ -16,3 +16,7 @@ select ltrim(null)
 ----
 NULL
 
+query T
+select ltrim('aaabbaaa', 'aa')
+----
+bbaaa

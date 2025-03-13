@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::alloc::Layout;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -20,8 +19,9 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
-use databend_common_functions::aggregates::get_layout_offsets;
+use databend_common_functions::aggregates::get_states_layout;
 use databend_common_functions::aggregates::AggregateFunctionRef;
+use databend_common_functions::aggregates::StatesLayout;
 use databend_common_sql::IndexType;
 use itertools::Itertools;
 
@@ -35,8 +35,7 @@ pub struct AggregatorParams {
 
     // about function state memory layout
     // If there is no aggregate function, layout is None
-    pub layout: Option<Layout>,
-    pub offsets_aggregate_states: Vec<usize>,
+    pub states_layout: Option<StatesLayout>,
 
     pub enable_experimental_aggregate_hashtable: bool,
     pub cluster_aggregator: bool,
@@ -56,12 +55,11 @@ impl AggregatorParams {
         max_block_size: usize,
         max_spill_io_requests: usize,
     ) -> Result<Arc<AggregatorParams>> {
-        let mut states_offsets: Vec<usize> = Vec::with_capacity(agg_funcs.len());
-        let mut states_layout = None;
-        if !agg_funcs.is_empty() {
-            states_offsets = Vec::with_capacity(agg_funcs.len());
-            states_layout = Some(get_layout_offsets(agg_funcs, &mut states_offsets)?);
-        }
+        let states_layout = if !agg_funcs.is_empty() {
+            Some(get_states_layout(agg_funcs)?)
+        } else {
+            None
+        };
 
         Ok(Arc::new(AggregatorParams {
             input_schema,
@@ -69,8 +67,7 @@ impl AggregatorParams {
             group_data_types,
             aggregate_functions: agg_funcs.to_vec(),
             aggregate_functions_arguments: agg_args.to_vec(),
-            layout: states_layout,
-            offsets_aggregate_states: states_offsets,
+            states_layout,
             enable_experimental_aggregate_hashtable,
             cluster_aggregator,
             max_block_size,
@@ -96,5 +93,9 @@ impl AggregatorParams {
             )
             .collect_vec();
         DataBlock::new_from_columns(columns)
+    }
+
+    pub fn num_states(&self) -> usize {
+        self.aggregate_functions.len()
     }
 }

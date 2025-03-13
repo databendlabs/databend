@@ -31,7 +31,7 @@ use crate::sessions::QueryContext;
 pub struct SystemActionInterpreter {
     ctx: Arc<QueryContext>,
     plan: SystemPlan,
-    proxy_to_cluster: bool,
+    proxy_to_warehouse: bool,
 }
 
 impl SystemActionInterpreter {
@@ -39,7 +39,7 @@ impl SystemActionInterpreter {
         Ok(SystemActionInterpreter {
             ctx,
             plan,
-            proxy_to_cluster: true,
+            proxy_to_warehouse: true,
         })
     }
 
@@ -47,7 +47,7 @@ impl SystemActionInterpreter {
         Ok(SystemActionInterpreter {
             ctx,
             plan,
-            proxy_to_cluster: false,
+            proxy_to_warehouse: false,
         })
     }
 }
@@ -65,11 +65,12 @@ impl Interpreter for SystemActionInterpreter {
     #[async_backtrace::framed]
     #[fastrace::trace]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if self.proxy_to_cluster {
-            let cluster = self.ctx.get_cluster();
-            let mut message = HashMap::with_capacity(cluster.nodes.len());
-            for node_info in &cluster.nodes {
-                if node_info.id != cluster.local_id {
+        if self.proxy_to_warehouse {
+            let warehouse = self.ctx.get_warehouse_cluster().await?;
+
+            let mut message = HashMap::with_capacity(warehouse.nodes.len());
+            for node_info in &warehouse.nodes {
+                if node_info.id != warehouse.local_id {
                     message.insert(node_info.id.clone(), self.plan.clone());
                 }
             }
@@ -80,7 +81,7 @@ impl Interpreter for SystemActionInterpreter {
                 retry_times: settings.get_flight_max_retry_times()?,
                 retry_interval: settings.get_flight_retry_interval()?,
             };
-            cluster
+            warehouse
                 .do_action::<_, ()>(SYSTEM_ACTION, message, flight_params)
                 .await?;
         }

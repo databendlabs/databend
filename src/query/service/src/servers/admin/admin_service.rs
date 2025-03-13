@@ -68,6 +68,10 @@ impl AdminService {
                 get(super::v1::tenant_tables::list_tables_handler),
             )
             .at(
+                "/v1/tables/stats",
+                get(super::v1::tenant_table_stats::get_tables_stats_handler),
+            )
+            .at(
                 "/v1/cluster/list",
                 get(super::v1::cluster::cluster_list_handler),
             )
@@ -85,6 +89,10 @@ impl AdminService {
                 .at(
                     "/v1/tenants/:tenant/tables",
                     get(super::v1::tenant_tables::list_tenant_tables_handler),
+                )
+                .at(
+                    "/v1/tenants/:tenant/tables/stats",
+                    get(super::v1::tenant_table_stats::get_tenant_tables_stats_handler),
                 )
                 .at(
                     "v1/tenants/:tenant/stream_status",

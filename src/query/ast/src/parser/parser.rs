@@ -30,7 +30,7 @@ use crate::parser::common::transform_span;
 use crate::parser::common::IResult;
 use crate::parser::error::display_parser_error;
 use crate::parser::expr::expr;
-use crate::parser::expr::values_with_placeholder;
+use crate::parser::expr::values;
 use crate::parser::input::Dialect;
 use crate::parser::input::Input;
 use crate::parser::input::ParseMode;
@@ -77,17 +77,8 @@ pub fn parse_comma_separated_idents(tokens: &[Token], dialect: Dialect) -> Resul
     })
 }
 
-pub fn parse_values_with_placeholder(
-    tokens: &[Token],
-    dialect: Dialect,
-) -> Result<Vec<Option<Expr>>> {
-    run_parser(
-        tokens,
-        dialect,
-        ParseMode::Default,
-        false,
-        values_with_placeholder,
-    )
+pub fn parse_values(tokens: &[Token], dialect: Dialect) -> Result<Vec<Expr>> {
+    run_parser(tokens, dialect, ParseMode::Default, false, values)
 }
 
 pub fn parse_raw_insert_stmt(tokens: &[Token], dialect: Dialect) -> Result<Statement> {

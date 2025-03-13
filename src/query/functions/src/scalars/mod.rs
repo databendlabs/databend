@@ -37,6 +37,7 @@ pub mod dt_func {
 
 mod map;
 
+mod obfuscator;
 mod other;
 mod string;
 mod string_multi_args;
@@ -80,4 +81,5 @@ pub fn register(registry: &mut FunctionRegistry) {
     geo_func::geography::register(registry);
     hilbert::register(registry);
     dt_func::interval::register(registry);
+    obfuscator::register(registry);
 }

@@ -114,6 +114,13 @@ pub struct SqlLogicTestArgs {
     )]
     pub bench: bool,
 
+    #[arg(
+        long = "force_load",
+        default_missing_value = "false",
+        help = "The arg is used to force load test data (tpch/tpcds)"
+    )]
+    pub force_load: bool,
+
     // Set specific the database to connect
     #[arg(
         long = "database",
@@ -121,4 +128,11 @@ pub struct SqlLogicTestArgs {
         help = "Specify the database to connnect, the default database is 'default'"
     )]
     pub database: String,
+
+    #[arg(
+        long = "port",
+        default_value = "8000",
+        help = "The databend server http port"
+    )]
+    pub port: u16,
 }

@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 # set up
-cat <<EOF |  $BENDSQL_CLIENT_CONNECT
+cat <<EOF |  $BENDSQL_CLIENT_CONNECT > /dev/null
 create or replace database i13947;
 use i13947;
 create or replace stage test_stage;

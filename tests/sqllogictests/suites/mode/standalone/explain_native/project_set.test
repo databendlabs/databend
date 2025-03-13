@@ -91,6 +91,7 @@ HashJoin
 ├── join type: INNER
 ├── build keys: [CAST(t2.a (#3) AS UInt64 NULL)]
 ├── probe keys: [CAST(t1.a (#2) AS UInt64 NULL)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 450.00
 ├── TableScan(Build)

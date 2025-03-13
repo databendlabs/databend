@@ -25,6 +25,18 @@ ColumnRef {
 
 
 ---------- Input ----------
+?
+---------- Output ---------
+?
+---------- AST ------------
+Placeholder {
+    span: Some(
+        0..1,
+    ),
+}
+
+
+---------- Input ----------
 'I''m who I\'m.'
 ---------- Output ---------
 'I\'m who I\'m.'
@@ -100,6 +112,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -813,6 +826,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -1389,6 +1403,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -1418,6 +1433,7 @@ FunctionCall {
         },
         args: [],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -1445,6 +1461,7 @@ FunctionCall {
         },
         args: [],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -1511,6 +1528,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -1652,6 +1670,79 @@ Trim {
             },
         ),
     ),
+}
+
+
+---------- Input ----------
+trim('aa','bb')
+---------- Output ---------
+trim('aa', 'bb')
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..15,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..4,
+            ),
+            name: "trim",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            Literal {
+                span: Some(
+                    5..9,
+                ),
+                value: String(
+                    "aa",
+                ),
+            },
+            Literal {
+                span: Some(
+                    10..14,
+                ),
+                value: String(
+                    "bb",
+                ),
+            },
+        ],
+        params: [],
+        order_by: [],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+timestamp()
+---------- Output ---------
+timestamp()
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..11,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..9,
+            ),
+            name: "timestamp",
+            quote: None,
+            ident_type: None,
+        },
+        args: [],
+        params: [],
+        order_by: [],
+        window: None,
+        lambda: None,
+    },
 }
 
 
@@ -2328,6 +2419,7 @@ BinaryOp {
                         },
                     ],
                     params: [],
+                    order_by: [],
                     window: None,
                     lambda: None,
                 },
@@ -2446,6 +2538,7 @@ BinaryOp {
                 },
             ],
             params: [],
+            order_by: [],
             window: None,
             lambda: None,
         },
@@ -2497,6 +2590,7 @@ BinaryOp {
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -2558,6 +2652,7 @@ BinaryOp {
                         },
                     ],
                     params: [],
+                    order_by: [],
                     window: None,
                     lambda: None,
                 },
@@ -3021,6 +3116,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -3087,6 +3183,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -3139,6 +3236,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -3224,6 +3322,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -3268,6 +3367,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -3334,6 +3434,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: None,
     },
@@ -3488,6 +3589,90 @@ Map {
 
 
 ---------- Input ----------
+LISTAGG(salary, '|') WITHIN GROUP (ORDER BY salary DESC NULLS LAST)
+---------- Output ---------
+LISTAGG(salary, '|') WITHIN GROUP ( ORDER BY salary DESC NULLS LAST )
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..67,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..7,
+            ),
+            name: "LISTAGG",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    8..14,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                8..14,
+                            ),
+                            name: "salary",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+            Literal {
+                span: Some(
+                    16..19,
+                ),
+                value: String(
+                    "|",
+                ),
+            },
+        ],
+        params: [],
+        order_by: [
+            OrderByExpr {
+                expr: ColumnRef {
+                    span: Some(
+                        44..50,
+                    ),
+                    column: ColumnRef {
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                span: Some(
+                                    44..50,
+                                ),
+                                name: "salary",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                    },
+                },
+                asc: Some(
+                    false,
+                ),
+                nulls_first: Some(
+                    false,
+                ),
+            },
+        ],
+        window: None,
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
 ROW_NUMBER() OVER (ORDER BY salary DESC)
 ---------- Output ---------
 ROW_NUMBER() OVER (ORDER BY salary DESC)
@@ -3508,6 +3693,7 @@ FunctionCall {
         },
         args: [],
         params: [],
+        order_by: [],
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -3593,6 +3779,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -3652,6 +3839,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -3731,6 +3919,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -3844,6 +4033,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -3944,6 +4134,7 @@ FunctionCall {
         },
         args: [],
         params: [],
+        order_by: [],
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -4030,6 +4221,7 @@ FunctionCall {
         },
         args: [],
         params: [],
+        order_by: [],
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -4101,6 +4293,7 @@ FunctionCall {
         },
         args: [],
         params: [],
+        order_by: [],
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -4170,6 +4363,7 @@ FunctionCall {
         },
         args: [],
         params: [],
+        order_by: [],
         window: Some(
             WindowDesc {
                 ignore_nulls: None,
@@ -4220,6 +4414,121 @@ FunctionCall {
                                 end_bound: CurrentRow,
                             },
                         ),
+                    },
+                ),
+            },
+        ),
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
+QUANTILE_CONT(0.5)(salary) OVER (PARTITION BY department ORDER BY hire_date)
+---------- Output ---------
+QUANTILE_CONT(0.5)(salary) OVER (PARTITION BY department ORDER BY hire_date)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..76,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..13,
+            ),
+            name: "QUANTILE_CONT",
+            quote: None,
+            ident_type: None,
+        },
+        args: [
+            ColumnRef {
+                span: Some(
+                    19..25,
+                ),
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            span: Some(
+                                19..25,
+                            ),
+                            name: "salary",
+                            quote: None,
+                            ident_type: None,
+                        },
+                    ),
+                },
+            },
+        ],
+        params: [
+            Literal {
+                span: Some(
+                    14..17,
+                ),
+                value: Decimal256 {
+                    value: 5,
+                    precision: 76,
+                    scale: 1,
+                },
+            },
+        ],
+        order_by: [],
+        window: Some(
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [
+                            ColumnRef {
+                                span: Some(
+                                    46..56,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                46..56,
+                                            ),
+                                            name: "department",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                        ],
+                        order_by: [
+                            OrderByExpr {
+                                expr: ColumnRef {
+                                    span: Some(
+                                        66..75,
+                                    ),
+                                    column: ColumnRef {
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                span: Some(
+                                                    66..75,
+                                                ),
+                                                name: "hire_date",
+                                                quote: None,
+                                                ident_type: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                asc: None,
+                                nulls_first: None,
+                            },
+                        ],
+                        window_frame: None,
                     },
                 ),
             },
@@ -4282,6 +4591,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: Some(
             Lambda {
@@ -4375,6 +4685,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: Some(
             Lambda {
@@ -4467,6 +4778,7 @@ Tuple {
                 },
                 args: [],
                 params: [],
+                order_by: [],
                 window: None,
                 lambda: None,
             },
@@ -4487,6 +4799,7 @@ Tuple {
                 },
                 args: [],
                 params: [],
+                order_by: [],
                 window: None,
                 lambda: None,
             },
@@ -4507,6 +4820,7 @@ Tuple {
                 },
                 args: [],
                 params: [],
+                order_by: [],
                 window: None,
                 lambda: None,
             },
@@ -4568,6 +4882,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: Some(
             Lambda {
@@ -4707,6 +5022,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: Some(
             Lambda {
@@ -4846,6 +5162,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: Some(
             Lambda {
@@ -4974,6 +5291,7 @@ FunctionCall {
             },
         ],
         params: [],
+        order_by: [],
         window: None,
         lambda: Some(
             Lambda {
@@ -5053,6 +5371,30 @@ Cast {
     },
     target_type: Interval,
     pg_style: false,
+}
+
+
+---------- Input ----------
+(?, ?)
+---------- Output ---------
+(?, ?)
+---------- AST ------------
+Tuple {
+    span: Some(
+        0..6,
+    ),
+    exprs: [
+        Placeholder {
+            span: Some(
+                1..2,
+            ),
+        },
+        Placeholder {
+            span: Some(
+                4..5,
+            ),
+        },
+    ],
 }
 
 

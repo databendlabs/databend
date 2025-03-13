@@ -31,21 +31,15 @@ pub struct AggregateSerdeMeta {
     pub columns_layout: Vec<usize>,
     // use for new agg hashtable
     pub max_partition_count: usize,
+    pub is_empty: bool,
 }
 
 impl AggregateSerdeMeta {
-    pub fn create(bucket: isize) -> BlockMetaInfoPtr {
-        Box::new(AggregateSerdeMeta {
-            typ: BUCKET_TYPE,
-            bucket,
-            location: None,
-            data_range: None,
-            columns_layout: vec![],
-            max_partition_count: 0,
-        })
-    }
-
-    pub fn create_agg_payload(bucket: isize, max_partition_count: usize) -> BlockMetaInfoPtr {
+    pub fn create_agg_payload(
+        bucket: isize,
+        max_partition_count: usize,
+        is_empty: bool,
+    ) -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
             typ: BUCKET_TYPE,
             bucket,
@@ -53,6 +47,7 @@ impl AggregateSerdeMeta {
             data_range: None,
             columns_layout: vec![],
             max_partition_count,
+            is_empty,
         })
     }
 
@@ -61,6 +56,7 @@ impl AggregateSerdeMeta {
         location: String,
         data_range: Range<u64>,
         columns_layout: Vec<usize>,
+        is_empty: bool,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateSerdeMeta {
             typ: SPILLED_TYPE,
@@ -69,6 +65,7 @@ impl AggregateSerdeMeta {
             location: Some(location),
             data_range: Some(data_range),
             max_partition_count: 0,
+            is_empty,
         })
     }
 
@@ -86,6 +83,7 @@ impl AggregateSerdeMeta {
             location: Some(location),
             data_range: Some(data_range),
             max_partition_count,
+            is_empty: false,
         })
     }
 }

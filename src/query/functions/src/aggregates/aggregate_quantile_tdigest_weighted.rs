@@ -26,6 +26,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::*;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -36,11 +38,14 @@ use num_traits::AsPrimitive;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::aggregate_quantile_tdigest::QuantileTDigestState;
 use crate::aggregates::aggregate_quantile_tdigest::MEDIAN;
 use crate::aggregates::aggregate_quantile_tdigest::QUANTILE;
 use crate::aggregates::assert_binary_arguments;
 use crate::aggregates::assert_params;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::StateAddr;
@@ -77,15 +82,15 @@ where
     fn return_type(&self) -> Result<DataType> {
         Ok(self.return_type.clone())
     }
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: AggrState) {
         place.write(QuantileTDigestState::new)
     }
-    fn state_layout(&self) -> Layout {
-        Layout::new::<QuantileTDigestState>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<QuantileTDigestState>()));
     }
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -112,7 +117,7 @@ where
 
         Ok(())
     }
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let column = NumberType::<T0>::try_downcast_column(&columns[0]).unwrap();
         let weighted = NumberType::<T1>::try_downcast_column(&columns[1]).unwrap();
         let value = unsafe { column.get_unchecked(row) };
@@ -125,7 +130,7 @@ where
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -136,30 +141,29 @@ where
             .zip(weighted.iter())
             .zip(places.iter())
             .for_each(|((value, weight), place)| {
-                let addr = place.next(offset);
-                let state = addr.get::<QuantileTDigestState>();
+                let state = AggrState::new(*place, loc).get::<QuantileTDigestState>();
                 state.add(value.as_(), Some(weight.as_()))
             });
         Ok(())
     }
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         let mut rhs: QuantileTDigestState = borsh_deserialize_state(reader)?;
         state.merge(&mut rhs)
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         let other = rhs.get::<QuantileTDigestState>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         state.merge_result(builder, self.levels.clone())
     }
@@ -168,7 +172,7 @@ where
         true
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<QuantileTDigestState>();
         std::ptr::drop_in_place(state);
     }
@@ -256,6 +260,7 @@ pub fn try_create_aggregate_quantile_tdigest_weighted_function<const TYPE: u8>(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     if TYPE == MEDIAN {
         assert_params(display_name, params.len(), 0)?;

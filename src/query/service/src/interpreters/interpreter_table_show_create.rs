@@ -27,6 +27,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_sql::plans::ShowCreateTablePlan;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_storages_view::view_table::QUERY;
@@ -37,6 +38,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use itertools::Itertools;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -50,6 +52,7 @@ pub struct ShowCreateTableInterpreter {
 
 pub struct ShowCreateQuerySettings {
     pub sql_dialect: Dialect,
+    pub force_quoted_ident: bool,
     pub quoted_ident_case_sensitive: bool,
     pub hide_options_in_show_create_table: bool,
 }
@@ -83,6 +86,7 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let settings = ShowCreateQuerySettings {
             sql_dialect: settings.get_sql_dialect()?,
+            force_quoted_ident: self.plan.with_quoted_ident,
             quoted_ident_case_sensitive: settings.get_quoted_ident_case_sensitive()?,
             hide_options_in_show_create_table: settings
                 .get_hide_options_in_show_create_table()
@@ -142,24 +146,40 @@ impl ShowCreateTableInterpreter {
         let field_comments = table.field_comments();
         let n_fields = schema.fields().len();
         let sql_dialect = settings.sql_dialect;
+        let force_quoted_ident = settings.force_quoted_ident;
         let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
         let hide_options_in_show_create_table = settings.hide_options_in_show_create_table;
 
         let mut table_create_sql = format!(
             "CREATE TABLE {} (\n",
-            display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+            display_ident(
+                name,
+                force_quoted_ident,
+                quoted_ident_case_sensitive,
+                sql_dialect
+            )
         );
         if table.options().contains_key("TRANSIENT") {
             table_create_sql = format!(
                 "CREATE TRANSIENT TABLE {} (\n",
-                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+                display_ident(
+                    name,
+                    force_quoted_ident,
+                    quoted_ident_case_sensitive,
+                    sql_dialect
+                )
             )
         }
 
         if table.options().contains_key(OPT_KEY_TEMP_PREFIX) {
             table_create_sql = format!(
                 "CREATE TEMP TABLE {} (\n",
-                display_ident(name, quoted_ident_case_sensitive, sql_dialect)
+                display_ident(
+                    name,
+                    force_quoted_ident,
+                    quoted_ident_case_sensitive,
+                    sql_dialect
+                )
             )
         }
 
@@ -196,7 +216,12 @@ impl ShowCreateTableInterpreter {
                 } else {
                     "".to_string()
                 };
-                let ident = display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect);
+                let ident = display_ident(
+                    field.name(),
+                    force_quoted_ident,
+                    quoted_ident_case_sensitive,
+                    sql_dialect,
+                );
                 let data_type = field.data_type().sql_name_explicit_null();
                 let column_str =
                     format!("  {ident} {data_type}{default_expr}{computed_expr}{comment}");
@@ -224,7 +249,12 @@ impl ShowCreateTableInterpreter {
                 let mut index_str = format!(
                     "  {} INVERTED INDEX {} ({})",
                     sync,
-                    display_ident(&index_field.name, quoted_ident_case_sensitive, sql_dialect),
+                    display_ident(
+                        &index_field.name,
+                        force_quoted_ident,
+                        quoted_ident_case_sensitive,
+                        sql_dialect
+                    ),
                     column_names_str
                 );
                 if !options.is_empty() {
@@ -321,15 +351,35 @@ impl ShowCreateTableInterpreter {
     }
 
     fn show_attach_table_query(table: &dyn Table, database: &str) -> String {
-        // TODO table that attached before this PR, could not show location properly
+        // Note: Tables that attached before this PR #13403, could not show location properly
         let location_not_available = "N/A".to_string();
         let table_data_location = table
             .options()
             .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
             .unwrap_or(&location_not_available);
 
+        let table_info = table.get_table_info();
+
+        let mut include_cols = "".to_string();
+        if table_info
+            .meta
+            .schema
+            .metadata
+            .contains_key(FUSE_OPT_KEY_ATTACH_COLUMN_IDS)
+        {
+            let cols = table_info
+                .meta
+                .schema
+                .fields
+                .iter()
+                .map(|f| &f.name)
+                .join(",");
+            include_cols = format!("({cols}) ");
+        }
+
         format!(
-            "ATTACH TABLE `{}`.`{}` {}",
+            "ATTACH TABLE {}`{}`.`{}` {}",
+            include_cols,
             database,
             table.name(),
             table_data_location,

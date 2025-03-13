@@ -19,6 +19,7 @@ use databend_common_base::runtime::metrics::MetricSample;
 use databend_common_base::runtime::metrics::MetricValue;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -44,7 +45,7 @@ pub struct MetricsTable {
 impl SyncSystemTable for MetricsTable {
     const NAME: &'static str = "system.metrics";
     // Allow distributed query.
-    const DATA_IN_LOCAL: bool = false;
+    const DISTRIBUTION_LEVEL: DistributionLevel = DistributionLevel::Warehouse;
     const BROADCAST_TRUNCATE: bool = true;
 
     fn get_table_info(&self) -> &TableInfo {
@@ -137,18 +138,11 @@ impl MetricsTable {
 
     /// Custom metrics that are not collected by prometheus.
     fn custom_metric_samples(&self) -> Result<Vec<MetricSample>> {
-        let samples = vec![
-            MetricSample {
-                name: "query_memory_usage_bytes".to_string(),
-                value: MetricValue::Counter(GLOBAL_MEM_STAT.get_memory_usage() as f64),
-                labels: HashMap::new(),
-            },
-            MetricSample {
-                name: "query_memory_peak_usage_bytes".to_string(),
-                value: MetricValue::Counter(GLOBAL_MEM_STAT.get_peak_memory_usage() as f64),
-                labels: HashMap::new(),
-            },
-        ];
+        let samples = vec![MetricSample {
+            name: "query_memory_usage_bytes".to_string(),
+            value: MetricValue::Counter(GLOBAL_MEM_STAT.get_memory_usage() as f64),
+            labels: HashMap::new(),
+        }];
 
         Ok(samples)
     }

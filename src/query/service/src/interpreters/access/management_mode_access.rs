@@ -96,7 +96,6 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::DescUser(_)
 
                 // Roles.
-                | Plan::ShowRoles(_)
                 | Plan::CreateRole(_)
                 | Plan::DropRole(_)
 

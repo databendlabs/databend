@@ -89,6 +89,7 @@ impl From<&SerdePageLocation> for PageLocation {
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
 pub struct ParquetRSRowGroupPart {
     pub location: String,
+    pub start_row: u64,
     #[serde(
         serialize_with = "ser_row_group_meta",
         deserialize_with = "deser_row_group_meta"

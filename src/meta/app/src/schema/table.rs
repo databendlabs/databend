@@ -31,6 +31,7 @@ use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaId;
 use maplit::hashmap;
@@ -38,6 +39,7 @@ use maplit::hashmap;
 use super::CatalogInfo;
 use super::CreateOption;
 use super::DatabaseId;
+use super::MarkedDeletedIndexMeta;
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::schema::table_niv::TableNIV;
 use crate::storage::StorageParams;
@@ -270,6 +272,7 @@ pub struct TableMeta {
     pub updated_on: DateTime<Utc>,
     pub comment: String,
     pub field_comments: Vec<String>,
+    pub virtual_schema: Option<VirtualDataSchema>,
 
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
@@ -431,6 +434,7 @@ impl Default for TableMeta {
             updated_on: Utc::now(),
             comment: "".to_string(),
             field_comments: vec![],
+            virtual_schema: Default::default(),
             drop_on: None,
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
@@ -866,6 +870,7 @@ impl Display for CreateTableIndexReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableIndexReq {
+    pub tenant: Tenant,
     pub if_exists: bool,
     pub table_id: u64,
     pub name: String,
@@ -880,6 +885,15 @@ impl Display for DropTableIndexReq {
         )
     }
 }
+
+/// Maps table_id to a vector of (index_name, index_version, marked_deleted_index_meta) pairs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GetMarkedDeletedTableIndexesReply {
+    pub table_indexes: HashMap<u64, Vec<(IndexName, IndexVersion, MarkedDeletedIndexMeta)>>,
+}
+
+pub type IndexName = String;
+pub type IndexVersion = String;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableReq {

@@ -90,9 +90,10 @@ impl HashJoinProbeState {
                 }
 
                 if FROM_LEFT_SINGLE && match_count > 1 {
-                    return Err(ErrorCode::Internal(
-                        "Scalar subquery can't return more than one row",
-                    ));
+                    return Err(ErrorCode::Internal(format!(
+                        "Scalar subquery can't return more than one row, but got {}",
+                        match_count
+                    )));
                 }
 
                 // Fill `probe_indexes`.

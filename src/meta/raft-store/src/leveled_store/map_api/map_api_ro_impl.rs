@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Borrow;
 use std::io::Error;
 use std::ops::RangeBounds;
 
@@ -29,11 +28,7 @@ use crate::marked::Marked;
 impl<K> MapApiRO<K> for ()
 where K: MapKey
 {
-    async fn get<Q>(&self, _key: &Q) -> Result<Marked<K::V>, Error>
-    where
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-    {
+    async fn get(&self, _key: &K) -> Result<Marked<K::V>, Error> {
         Ok(Marked::empty())
     }
 

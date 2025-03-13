@@ -36,6 +36,9 @@ select a, sum(sum) as sum from (select a, sum(a) as sum from t group by a, b) as
 1	2
 2	4
 
+statement error must appear in the GROUP BY clause or be used in an aggregate function
+SELECT max(a) FROM t GROUP BY a HAVING b NOT IN(SELECT 3 AS c);
+
 statement ok
 drop table t
 

@@ -36,7 +36,15 @@ use crate::InMemoryLruCache;
 /// In memory object cache of SegmentInfo
 pub type CompactSegmentInfoCache = InMemoryLruCache<CompactSegmentInfo>;
 
-pub type BlockMetaCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
+/// In-memory cache for all the block metadata of individual segments.
+///
+/// Note that this cache may be memory-intensive, as each item of this cache
+/// contains ALL the BlockMeta of a segment, for well-compacted segment, the
+/// number of BlockMeta might be 1000 ~ 2000.
+pub type SegmentBlockMetasCache = InMemoryLruCache<Vec<Arc<BlockMeta>>>;
+
+/// In-memory cache of individual BlockMeta.
+pub type BlockMetaCache = InMemoryLruCache<BlockMeta>;
 
 /// In memory object cache of TableSnapshot
 pub type TableSnapshotCache = InMemoryLruCache<TableSnapshot>;
@@ -86,9 +94,9 @@ impl CachedObject<TableSnapshot> for TableSnapshot {
 }
 
 impl CachedObject<Vec<Arc<BlockMeta>>> for Vec<Arc<BlockMeta>> {
-    type Cache = BlockMetaCache;
+    type Cache = SegmentBlockMetasCache;
     fn cache() -> Option<Self::Cache> {
-        CacheManager::instance().get_block_meta_cache()
+        CacheManager::instance().get_segment_block_metas_cache()
     }
 }
 
@@ -171,6 +179,15 @@ impl From<CompactSegmentInfo> for CacheValue<CompactSegmentInfo> {
 
 impl From<Vec<Arc<BlockMeta>>> for CacheValue<Vec<Arc<BlockMeta>>> {
     fn from(value: Vec<Arc<BlockMeta>>) -> Self {
+        CacheValue {
+            inner: Arc::new(value),
+            mem_bytes: 0,
+        }
+    }
+}
+
+impl From<BlockMeta> for CacheValue<BlockMeta> {
+    fn from(value: BlockMeta) -> Self {
         CacheValue {
             inner: Arc::new(value),
             mem_bytes: 0,

@@ -157,6 +157,9 @@ build_exceptions! {
     WrongSequenceCount(1125),
     UnknownSequence(1126),
     UnknownQuery(1127),
+    // virtual column
+    VirtualColumnTooMany(1128),
+    VirtualColumnIdOutBound(1129),
 
     // Data Related Errors
 
@@ -426,8 +429,9 @@ build_exceptions! {
     // recluster error codes
     NoNeedToRecluster(4011),
     NoNeedToCompact(4012),
+    UnsupportedClusterType(4013),
 
-    RefreshTableInfoFailure(4012),
+    RefreshTableInfoFailure(4021),
 }
 
 // Service errors [5001,6000].

@@ -60,6 +60,7 @@ impl ParquetTableForCopy {
         );
         let file_infos = files
             .iter()
+            .filter(|f| f.size > 0)
             .map(|f| (f.path.clone(), f.size))
             .collect::<Vec<_>>();
         let total_size = file_infos.iter().map(|(_, size)| *size as usize).sum();
@@ -85,9 +86,11 @@ impl ParquetTableForCopy {
                 num_rows_loaded: num_rows,
                 error: None,
             });
+            let mut start_row = 0;
             for rg in meta.meta.row_groups() {
                 let part = ParquetRSRowGroupPart {
                     location: meta.location.clone(),
+                    start_row,
                     meta: rg.clone(),
                     schema_index,
                     uncompressed_size: rg.total_byte_size() as u64,
@@ -97,6 +100,7 @@ impl ParquetTableForCopy {
                     page_locations: None,
                     selectors: None,
                 };
+                start_row += rg.num_rows() as u64;
                 parts.push(part);
             }
         }

@@ -30,7 +30,7 @@ evaluation:
 |        | a2               | Output             |
 +--------+------------------+--------------------+
 | Type   | UInt8 NULL       | UInt16 NULL        |
-| Domain | {1..=3} ∪ {NULL} | {11..=13} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {11..=12} ∪ {NULL} |
 | Row 0  | 1                | 11                 |
 | Row 1  | 2                | 12                 |
 | Row 2  | NULL             | NULL               |
@@ -52,7 +52,7 @@ evaluation:
 |        | a2               | c         | Output             |
 +--------+------------------+-----------+--------------------+
 | Type   | UInt8 NULL       | UInt32    | UInt64 NULL        |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} | {11..=33} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {10..=30} | {11..=32} ∪ {NULL} |
 | Row 0  | 1                | 10        | 11                 |
 | Row 1  | 2                | 20        | 22                 |
 | Row 2  | NULL             | 30        | NULL               |
@@ -189,7 +189,7 @@ evaluation:
 |        | d2               | e              | Output                 |
 +--------+------------------+----------------+------------------------+
 | Type   | UInt8 NULL       | Decimal(10, 1) | Decimal(11, 1) NULL    |
-| Domain | {0..=3} ∪ {NULL} | {3.1..=188.8}  | {3.1..=191.8} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {3.1..=188.8}  | {4.1..=191.8} ∪ {NULL} |
 | Row 0  | 1                | 3.1            | 4.1                    |
 | Row 1  | NULL             | 33.5           | NULL                   |
 | Row 2  | 3                | 188.8          | 191.8                  |
@@ -212,7 +212,7 @@ evaluation:
 |        | d2               | f              | Output                  |
 +--------+------------------+----------------+-------------------------+
 | Type   | UInt8 NULL       | Decimal(76, 2) | Decimal(76, 2) NULL     |
-| Domain | {0..=3} ∪ {NULL} | {0.50..=12.34} | {0.50..=15.34} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {0.50..=12.34} | {1.50..=15.34} ∪ {NULL} |
 | Row 0  | 1                | 0.50           | 1.50                    |
 | Row 1  | NULL             | 0.92           | NULL                    |
 | Row 2  | 3                | 12.34          | 15.34                   |
@@ -282,7 +282,7 @@ evaluation:
 |        | a2               | Output             |
 +--------+------------------+--------------------+
 | Type   | UInt8 NULL       | Int16 NULL         |
-| Domain | {1..=3} ∪ {NULL} | {-9..=-7} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-9..=-8} ∪ {NULL} |
 | Row 0  | 1                | -9                 |
 | Row 1  | 2                | -8                 |
 | Row 2  | NULL             | NULL               |
@@ -304,7 +304,7 @@ evaluation:
 |        | a2               | c         | Output              |
 +--------+------------------+-----------+---------------------+
 | Type   | UInt8 NULL       | UInt32    | Int64 NULL          |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} | {-29..=-7} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {10..=30} | {-29..=-8} ∪ {NULL} |
 | Row 0  | 1                | 10        | -9                  |
 | Row 1  | 2                | 20        | -18                 |
 | Row 2  | NULL             | 30        | NULL                |
@@ -441,7 +441,7 @@ evaluation:
 |        | d2               | e              | Output                   |
 +--------+------------------+----------------+--------------------------+
 | Type   | UInt8 NULL       | Decimal(10, 1) | Decimal(11, 1) NULL      |
-| Domain | {0..=3} ∪ {NULL} | {3.1..=188.8}  | {-188.8..=-0.1} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {3.1..=188.8}  | {-187.8..=-0.1} ∪ {NULL} |
 | Row 0  | 1                | 3.1            | -2.1                     |
 | Row 1  | NULL             | 33.5           | NULL                     |
 | Row 2  | 3                | 188.8          | -185.8                   |
@@ -464,7 +464,7 @@ evaluation:
 |        | d2               | f              | Output                   |
 +--------+------------------+----------------+--------------------------+
 | Type   | UInt8 NULL       | Decimal(76, 2) | Decimal(76, 2) NULL      |
-| Domain | {0..=3} ∪ {NULL} | {0.50..=12.34} | {-12.34..=2.50} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {0.50..=12.34} | {-11.34..=2.50} ∪ {NULL} |
 | Row 0  | 1                | 0.50           | 0.50                     |
 | Row 1  | NULL             | 0.92           | NULL                     |
 | Row 2  | 3                | 12.34          | -9.34                    |
@@ -532,7 +532,7 @@ evaluation:
 |        | a2               | Output             |
 +--------+------------------+--------------------+
 | Type   | UInt8 NULL       | Int16 NULL         |
-| Domain | {1..=3} ∪ {NULL} | {-3..=-1} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-2..=-1} ∪ {NULL} |
 | Row 0  | 1                | -1                 |
 | Row 1  | 2                | -2                 |
 | Row 2  | NULL             | NULL               |
@@ -616,15 +616,15 @@ ast            : -d2
 raw expr       : minus(d2::UInt8 NULL)
 checked expr   : minus<UInt8 NULL>(d2)
 evaluation:
-+--------+------------------+-------------------+
-|        | d2               | Output            |
-+--------+------------------+-------------------+
-| Type   | UInt8 NULL       | Int16 NULL        |
-| Domain | {0..=3} ∪ {NULL} | {-3..=0} ∪ {NULL} |
-| Row 0  | 1                | -1                |
-| Row 1  | NULL             | NULL              |
-| Row 2  | 3                | -3                |
-+--------+------------------+-------------------+
++--------+------------------+--------------------+
+|        | d2               | Output             |
++--------+------------------+--------------------+
+| Type   | UInt8 NULL       | Int16 NULL         |
+| Domain | {1..=3} ∪ {NULL} | {-3..=-1} ∪ {NULL} |
+| Row 0  | 1                | -1                 |
+| Row 1  | NULL             | NULL               |
+| Row 2  | 3                | -3                 |
++--------+------------------+--------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------+
 | Column | Data                                                                  |
@@ -718,7 +718,7 @@ evaluation:
 |        | a2               | Output             |
 +--------+------------------+--------------------+
 | Type   | UInt8 NULL       | UInt16 NULL        |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {10..=20} ∪ {NULL} |
 | Row 0  | 1                | 10                 |
 | Row 1  | 2                | 20                 |
 | Row 2  | NULL             | NULL               |
@@ -740,7 +740,7 @@ evaluation:
 |        | a2               | c         | Output             |
 +--------+------------------+-----------+--------------------+
 | Type   | UInt8 NULL       | UInt32    | UInt64 NULL        |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} | {10..=90} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {10..=30} | {10..=60} ∪ {NULL} |
 | Row 0  | 1                | 10        | 10                 |
 | Row 1  | 2                | 20        | 40                 |
 | Row 2  | NULL             | 30        | NULL               |
@@ -877,7 +877,7 @@ evaluation:
 |        | d2               | e              | Output                 |
 +--------+------------------+----------------+------------------------+
 | Type   | UInt8 NULL       | Decimal(10, 1) | Decimal(13, 1) NULL    |
-| Domain | {0..=3} ∪ {NULL} | {3.1..=188.8}  | {0.0..=566.4} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {3.1..=188.8}  | {3.1..=566.4} ∪ {NULL} |
 | Row 0  | 1                | 3.1            | 3.1                    |
 | Row 1  | NULL             | 33.5           | NULL                   |
 | Row 2  | 3                | 188.8          | 566.4                  |
@@ -900,7 +900,7 @@ evaluation:
 |        | d2               | f              | Output                  |
 +--------+------------------+----------------+-------------------------+
 | Type   | UInt8 NULL       | Decimal(76, 2) | Decimal(76, 2) NULL     |
-| Domain | {0..=3} ∪ {NULL} | {0.50..=12.34} | {0.00..=37.02} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {0.50..=12.34} | {0.50..=37.02} ∪ {NULL} |
 | Row 0  | 1                | 0.50           | 0.50                    |
 | Row 1  | NULL             | 0.92           | NULL                    |
 | Row 2  | 3                | 12.34          | 37.02                   |
@@ -1036,7 +1036,7 @@ evaluation:
 |        | a2               | Output       |
 +--------+------------------+--------------+
 | Type   | UInt8 NULL       | Float64 NULL |
-| Domain | {1..=3} ∪ {NULL} | Unknown      |
+| Domain | {1..=2} ∪ {NULL} | Unknown      |
 | Row 0  | 1                | 0.1          |
 | Row 1  | 2                | 0.2          |
 | Row 2  | NULL             | NULL         |
@@ -1058,7 +1058,7 @@ evaluation:
 |        | a2               | c         | Output       |
 +--------+------------------+-----------+--------------+
 | Type   | UInt8 NULL       | UInt32    | Float64 NULL |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} | Unknown      |
+| Domain | {1..=2} ∪ {NULL} | {10..=30} | Unknown      |
 | Row 0  | 1                | 10        | 0.1          |
 | Row 1  | 2                | 20        | 0.1          |
 | Row 2  | NULL             | 30        | NULL         |
@@ -1149,7 +1149,7 @@ evaluation:
 |        | b       | d2               | Output       |
 +--------+---------+------------------+--------------+
 | Type   | Int16   | UInt8 NULL       | Float64 NULL |
-| Domain | {2..=6} | {0..=3} ∪ {NULL} | Unknown      |
+| Domain | {2..=6} | {1..=3} ∪ {NULL} | Unknown      |
 | Row 0  | 2       | 1                | 2            |
 | Row 1  | 4       | NULL             | NULL         |
 | Row 2  | 6       | 3                | 2            |
@@ -1226,7 +1226,7 @@ evaluation:
 |        | d2               | e              | Output              |
 +--------+------------------+----------------+---------------------+
 | Type   | UInt8 NULL       | Decimal(10, 1) | Decimal(10, 6) NULL |
-| Domain | {0..=3} ∪ {NULL} | {3.1..=188.8}  | Unknown             |
+| Domain | {1..=3} ∪ {NULL} | {3.1..=188.8}  | Unknown             |
 | Row 0  | 1                | 3.1            | 0.322581            |
 | Row 1  | NULL             | 33.5           | NULL                |
 | Row 2  | 3                | 188.8          | 0.015890            |
@@ -1249,7 +1249,7 @@ evaluation:
 |        | d2               | f              | Output              |
 +--------+------------------+----------------+---------------------+
 | Type   | UInt8 NULL       | Decimal(76, 2) | Decimal(39, 6) NULL |
-| Domain | {0..=3} ∪ {NULL} | {0.50..=12.34} | Unknown             |
+| Domain | {1..=3} ∪ {NULL} | {0.50..=12.34} | Unknown             |
 | Row 0  | 1                | 0.50           | 2.000000            |
 | Row 1  | NULL             | 0.92           | NULL                |
 | Row 2  | 3                | 12.34          | 0.243112            |
@@ -1319,7 +1319,7 @@ evaluation:
 |        | a2               | Output     |
 +--------+------------------+------------+
 | Type   | UInt8 NULL       | UInt8 NULL |
-| Domain | {1..=3} ∪ {NULL} | Unknown    |
+| Domain | {1..=2} ∪ {NULL} | Unknown    |
 | Row 0  | 1                | 0          |
 | Row 1  | 2                | 0          |
 | Row 2  | NULL             | NULL       |
@@ -1341,7 +1341,7 @@ evaluation:
 |        | a2               | c         | Output      |
 +--------+------------------+-----------+-------------+
 | Type   | UInt8 NULL       | UInt32    | UInt32 NULL |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} | Unknown     |
+| Domain | {1..=2} ∪ {NULL} | {10..=30} | Unknown     |
 | Row 0  | 1                | 10        | 0           |
 | Row 1  | 2                | 20        | 0           |
 | Row 2  | NULL             | 30        | NULL        |
@@ -1433,7 +1433,7 @@ evaluation:
 |        | c         | d2               | Output      |
 +--------+-----------+------------------+-------------+
 | Type   | UInt32    | UInt8 NULL       | UInt32 NULL |
-| Domain | {10..=30} | {0..=3} ∪ {NULL} | Unknown     |
+| Domain | {10..=30} | {1..=3} ∪ {NULL} | Unknown     |
 | Row 0  | 10        | 1                | 10          |
 | Row 1  | 20        | NULL             | NULL        |
 | Row 2  | 30        | 3                | 10          |
@@ -1488,7 +1488,7 @@ evaluation:
 |        | a2               | Output     |
 +--------+------------------+------------+
 | Type   | UInt8 NULL       | UInt8 NULL |
-| Domain | {1..=3} ∪ {NULL} | Unknown    |
+| Domain | {1..=2} ∪ {NULL} | Unknown    |
 | Row 0  | 1                | 1          |
 | Row 1  | 2                | 2          |
 | Row 2  | NULL             | NULL       |
@@ -1511,7 +1511,7 @@ evaluation:
 |        | a2               | c         | Output      |
 +--------+------------------+-----------+-------------+
 | Type   | UInt8 NULL       | UInt32    | UInt32 NULL |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} | Unknown     |
+| Domain | {1..=2} ∪ {NULL} | {10..=30} | Unknown     |
 | Row 0  | 1                | 10        | 5           |
 | Row 1  | 2                | 20        | 6           |
 | Row 2  | NULL             | 30        | NULL        |
@@ -1588,7 +1588,7 @@ evaluation:
 |        | c         | d2               | Output     |
 +--------+-----------+------------------+------------+
 | Type   | UInt32    | UInt8 NULL       | UInt8 NULL |
-| Domain | {10..=30} | {0..=3} ∪ {NULL} | Unknown    |
+| Domain | {10..=30} | {1..=3} ∪ {NULL} | Unknown    |
 | Row 0  | 10        | 1                | 0          |
 | Row 1  | 20        | NULL             | NULL       |
 | Row 2  | 30        | 3                | 0          |
@@ -1633,7 +1633,7 @@ evaluation:
 |        | a2               | Output          |
 +--------+------------------+-----------------+
 | Type   | UInt8 NULL       | String NULL     |
-| Domain | {1..=3} ∪ {NULL} | {""..} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {""..} ∪ {NULL} |
 | Row 0  | 1                | '1'             |
 | Row 1  | 2                | '2'             |
 | Row 2  | NULL             | NULL            |
@@ -1721,7 +1721,7 @@ evaluation:
 |        | d2               | Output          |
 +--------+------------------+-----------------+
 | Type   | UInt8 NULL       | String NULL     |
-| Domain | {0..=3} ∪ {NULL} | {""..} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {""..} ∪ {NULL} |
 | Row 0  | 1                | '1'             |
 | Row 1  | NULL             | NULL            |
 | Row 2  | 3                | '3'             |
@@ -1832,7 +1832,7 @@ evaluation:
 |        | a       | a2               | Output                |
 +--------+---------+------------------+-----------------------+
 | Type   | Int8    | UInt8 NULL       | Float64 NULL          |
-| Domain | {1..=3} | {1..=3} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
+| Domain | {1..=3} | {1..=2} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
 | Row 0  | 1       | 1                | 1                     |
 | Row 1  | 2       | 2                | 4                     |
 | Row 2  | 3       | NULL             | NULL                  |
@@ -1923,7 +1923,7 @@ evaluation:
 |        | a2               | Output                |
 +--------+------------------+-----------------------+
 | Type   | UInt8 NULL       | Float64 NULL          |
-| Domain | {1..=3} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
 | Row 0  | 1                | 1                     |
 | Row 1  | 2                | 1.4142135623          |
 | Row 2  | NULL             | NULL                  |
@@ -2011,7 +2011,7 @@ evaluation:
 |        | d2               | Output                |
 +--------+------------------+-----------------------+
 | Type   | UInt8 NULL       | Float64 NULL          |
-| Domain | {0..=3} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
 | Row 0  | 1                | 1                     |
 | Row 1  | NULL             | NULL                  |
 | Row 2  | 3                | 1.7320508075          |
@@ -2055,7 +2055,7 @@ evaluation:
 |        | a2               | Output                |
 +--------+------------------+-----------------------+
 | Type   | UInt8 NULL       | Float64 NULL          |
-| Domain | {1..=3} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
 | Row 0  | 1                | 1                     |
 | Row 1  | 2                | 1.2599210498          |
 | Row 2  | NULL             | NULL                  |
@@ -2143,7 +2143,7 @@ evaluation:
 |        | d2               | Output                |
 +--------+------------------+-----------------------+
 | Type   | UInt8 NULL       | Float64 NULL          |
-| Domain | {0..=3} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {-inf..=NaN} ∪ {NULL} |
 | Row 0  | 1                | 1                     |
 | Row 1  | NULL             | NULL                  |
 | Row 2  | 3                | 1.4422495703          |
@@ -2187,7 +2187,7 @@ evaluation:
 |        | a2               | Output           |
 +--------+------------------+------------------+
 | Type   | UInt8 NULL       | UInt64 NULL      |
-| Domain | {1..=3} ∪ {NULL} | {1..=3} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {1..=2} ∪ {NULL} |
 | Row 0  | 1                | 1                |
 | Row 1  | 2                | 2                |
 | Row 2  | NULL             | NULL             |
@@ -2275,7 +2275,7 @@ evaluation:
 |        | d2               | Output           |
 +--------+------------------+------------------+
 | Type   | UInt8 NULL       | UInt64 NULL      |
-| Domain | {0..=3} ∪ {NULL} | {0..=3} ∪ {NULL} |
+| Domain | {1..=3} ∪ {NULL} | {1..=3} ∪ {NULL} |
 | Row 0  | 1                | 1                |
 | Row 1  | NULL             | NULL             |
 | Row 2  | 3                | 3                |
@@ -2382,7 +2382,7 @@ evaluation:
 |        | a2               | Output                                                |
 +--------+------------------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 11                                                    |
 | Row 1  | 2                | 8                                                     |
 | Row 2  | NULL             | NULL                                                  |
@@ -2404,7 +2404,7 @@ evaluation:
 |        | a2               | c         | Output                                                |
 +--------+------------------+-----------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | UInt32    | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {10..=30} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 10        | 11                                                    |
 | Row 1  | 2                | 20        | 22                                                    |
 | Row 2  | NULL             | 30        | NULL                                                  |
@@ -2474,7 +2474,7 @@ evaluation:
 |        | a2               | Output                                                |
 +--------+------------------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 0                                                     |
 | Row 1  | 2                | 2                                                     |
 | Row 2  | NULL             | NULL                                                  |
@@ -2496,7 +2496,7 @@ evaluation:
 |        | a2               | c         | Output                                                |
 +--------+------------------+-----------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | UInt32    | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {10..=30} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 10        | 0                                                     |
 | Row 1  | 2                | 20        | 0                                                     |
 | Row 2  | NULL             | 30        | NULL                                                  |
@@ -2566,7 +2566,7 @@ evaluation:
 |        | a2               | Output                                                |
 +--------+------------------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 11                                                    |
 | Row 1  | 2                | 10                                                    |
 | Row 2  | NULL             | NULL                                                  |
@@ -2588,7 +2588,7 @@ evaluation:
 |        | a2               | c         | Output                                                |
 +--------+------------------+-----------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | UInt32    | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {10..=30} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {10..=30} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 10        | 11                                                    |
 | Row 1  | 2                | 20        | 22                                                    |
 | Row 2  | NULL             | 30        | NULL                                                  |
@@ -2656,7 +2656,7 @@ evaluation:
 |        | a2               | Output                                                |
 +--------+------------------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | -2                                                    |
 | Row 1  | 2                | -3                                                    |
 | Row 2  | NULL             | NULL                                                  |
@@ -2745,7 +2745,7 @@ evaluation:
 |        | a2               | Output                                                |
 +--------+------------------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 4                                                     |
 | Row 1  | 2                | 8                                                     |
 | Row 2  | NULL             | NULL                                                  |
@@ -2768,7 +2768,7 @@ evaluation:
 |        | a2               | Output                                                |
 +--------+------------------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 16                                                    |
 | Row 1  | 2                | 32                                                    |
 | Row 2  | NULL             | NULL                                                  |
@@ -2835,7 +2835,7 @@ evaluation:
 |        | a2               | Output                                                |
 +--------+------------------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 0                                                     |
 | Row 1  | 2                | 1                                                     |
 | Row 2  | NULL             | NULL                                                  |
@@ -2858,7 +2858,7 @@ evaluation:
 |        | a2               | Output                                                |
 +--------+------------------+-------------------------------------------------------+
 | Type   | UInt8 NULL       | Int64 NULL                                            |
-| Domain | {1..=3} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
+| Domain | {1..=2} ∪ {NULL} | {-9223372036854775808..=9223372036854775807} ∪ {NULL} |
 | Row 0  | 1                | 0                                                     |
 | Row 1  | 2                | 0                                                     |
 | Row 2  | NULL             | NULL                                                  |

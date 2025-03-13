@@ -35,6 +35,7 @@ static OMIT_FILTER_ROWS: LazyLock<Counter> = LazyLock::new(|| register_counter("
 struct StorageHttpLabels {
     host: String,
     method: String,
+    bucket: String,
 }
 
 static STORAGE_HTTP_REQUESTS_COUNT: LazyLock<FamilyCounter<StorageHttpLabels>> =
@@ -320,9 +321,13 @@ pub fn metrics_inc_omit_filter_rows(c: u64) {
 }
 
 /// Storage Http metrics.
-pub fn metrics_inc_storage_http_requests_count(host: String, method: String) {
+pub fn metrics_inc_storage_http_requests_count(host: String, method: String, bucket: String) {
     STORAGE_HTTP_REQUESTS_COUNT
-        .get_or_create(&StorageHttpLabels { host, method })
+        .get_or_create(&StorageHttpLabels {
+            host,
+            method,
+            bucket,
+        })
         .inc();
 }
 

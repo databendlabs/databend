@@ -348,6 +348,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: Some("(id)".to_string()),
             inverted_indexes: None,
+            attached_columns: None,
         }
     }
 
@@ -372,6 +373,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
+            attached_columns: None,
         }
     }
 
@@ -407,6 +409,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
+            attached_columns: None,
         }
     }
 
@@ -442,6 +445,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
+            attached_columns: None,
         }
     }
 
@@ -486,6 +490,7 @@ impl TestFixture {
             as_select: None,
             cluster_key: None,
             inverted_indexes: None,
+            attached_columns: None,
         }
     }
 
@@ -841,7 +846,11 @@ impl TestFixture {
             data_schema,
         )?;
 
-        table.append_data(ctx.clone(), &mut build_res.main_pipeline)?;
+        table.append_data(
+            ctx.clone(),
+            &mut build_res.main_pipeline,
+            Default::default(),
+        )?;
         if commit {
             table.commit_insertion(
                 ctx.clone(),
@@ -851,6 +860,7 @@ impl TestFixture {
                 overwrite,
                 None,
                 None,
+                Default::default(),
             )?;
         } else {
             build_res

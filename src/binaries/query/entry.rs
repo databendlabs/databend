@@ -15,7 +15,7 @@
 use std::env;
 use std::time::Duration;
 
-use databend_common_base::mem_allocator::GlobalAllocator;
+use databend_common_base::mem_allocator::TrackingGlobalAllocator;
 use databend_common_base::runtime::set_alloc_error_hook;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_config::Commands;
@@ -305,8 +305,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
             "unlimited".to_string()
         }
     });
-    println!("    allocator: {}", GlobalAllocator::name());
-    println!("    config: {}", GlobalAllocator::conf());
+    println!("    allocator: {}", TrackingGlobalAllocator::name());
+    println!("    config: {}", TrackingGlobalAllocator::conf());
 
     println!();
     println!("Cluster: {}", {

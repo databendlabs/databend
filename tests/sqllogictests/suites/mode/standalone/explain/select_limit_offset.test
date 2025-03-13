@@ -136,6 +136,7 @@ Limit
     ├── join type: RIGHT OUTER
     ├── build keys: [t.a (#0)]
     ├── probe keys: [t1.a (#1)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 2.00
     ├── Limit(Build)
@@ -177,6 +178,7 @@ Limit
     ├── join type: RIGHT OUTER
     ├── build keys: [t.a (#1)]
     ├── probe keys: [t1.a (#0)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 2.00
     ├── Limit(Build)

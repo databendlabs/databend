@@ -36,10 +36,7 @@ impl Session {
 
         let shared_query_context = &session_ctx.get_query_context_shared();
         if let Some(shared) = shared_query_context {
-            if let Some(runtime) = shared.get_runtime() {
-                let mem_stat = runtime.get_tracker();
-                memory_usage = mem_stat.get_memory_usage();
-            }
+            memory_usage = shared.get_nodes_memory_usage();
         }
 
         ProcessInfo {
@@ -51,9 +48,11 @@ impl Session {
             settings: self.get_settings(),
             client_address: session_ctx.get_client_host(),
             session_extra_info: self.process_extra_info(session_ctx),
-            memory_usage,
+            memory_usage: memory_usage as i64,
             data_metrics: Self::query_data_metrics(session_ctx),
             scan_progress_value: Self::query_scan_progress_value(session_ctx),
+            write_progress_value: Self::query_write_progress_value(session_ctx),
+            spill_progress_value: Self::query_spill_progress_value(session_ctx),
             mysql_connection_id: self.mysql_connection_id,
             created_time: Self::query_created_time(session_ctx),
             status_info: shared_query_context
@@ -103,6 +102,27 @@ impl Session {
             .get_query_context_shared()
             .as_ref()
             .map(|context_shared| context_shared.scan_progress.get_values())
+    }
+
+    fn query_write_progress_value(status: &SessionContext) -> Option<ProgressValues> {
+        status
+            .get_query_context_shared()
+            .as_ref()
+            .map(|context_shared| context_shared.write_progress.get_values())
+    }
+
+    fn query_spill_progress_value(status: &SessionContext) -> Option<ProgressValues> {
+        status
+            .get_query_context_shared()
+            .as_ref()
+            .map(|context_shared| {
+                context_shared
+                    .agg_spill_progress
+                    .get_values()
+                    .add(&context_shared.join_spill_progress.get_values())
+                    .add(&context_shared.window_partition_spill_progress.get_values())
+                    .add(&context_shared.group_by_spill_progress.get_values())
+            })
     }
 
     fn query_created_time(status: &SessionContext) -> SystemTime {

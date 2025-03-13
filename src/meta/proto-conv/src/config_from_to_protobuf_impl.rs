@@ -261,6 +261,8 @@ impl FromToProto for StorageWebhdfsConfig {
             endpoint_url: p.endpoint_url,
             root: p.root,
             delegation: p.delegation,
+            disable_list_batch: p.disable_list_batch,
+            user_name: p.user_name,
         })
     }
 
@@ -271,9 +273,9 @@ impl FromToProto for StorageWebhdfsConfig {
             endpoint_url: self.endpoint_url.clone(),
             root: self.root.clone(),
             delegation: self.delegation.clone(),
+            disable_list_batch: self.disable_list_batch,
 
-            username: String::new(), // reserved for future use
-            password: String::new(), // reserved for future use
+            user_name: self.user_name.clone(),
         })
     }
 }

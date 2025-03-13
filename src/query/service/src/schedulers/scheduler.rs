@@ -65,6 +65,10 @@ pub async fn build_query_pipeline_without_render_result_set(
     let build_res = if !plan.is_distributed_plan() {
         build_local_pipeline(ctx, plan).await
     } else {
+        if plan.is_warehouse_distributed_plan() {
+            ctx.set_cluster(ctx.get_warehouse_cluster().await?);
+        }
+
         build_distributed_pipeline(ctx, plan).await
     }?;
     Ok(build_res)

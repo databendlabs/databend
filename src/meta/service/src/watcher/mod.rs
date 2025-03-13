@@ -14,21 +14,14 @@
 
 //! The client watch a key range and get notified when the key range changes.
 
-mod command;
 mod desc;
+pub mod dispatch;
 mod id;
-mod stream;
-mod stream_sender;
-mod subscriber;
-mod subscriber_handle;
+pub mod watch_stream;
 
 use std::collections::Bound;
 
 pub use desc::WatchDesc;
 pub use id::WatcherId;
-pub(crate) use stream::WatchStream;
-pub(crate) use stream_sender::StreamSender;
-pub(crate) use subscriber::EventSubscriber;
-pub(crate) use subscriber_handle::SubscriberHandle;
 
 pub(crate) type KeyRange = (Bound<String>, Bound<String>);

@@ -47,7 +47,6 @@ backon = { workspace = true }
 base64 = { workspace = true }
 buf-list = { workspace = true }
 bumpalo = { workspace = true }
-byte-unit = { workspace = true }
 byteorder = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
@@ -150,6 +149,7 @@ paste = { workspace = true }
 petgraph = { workspace = true }
 pin-project-lite = { workspace = true }
 poem = { workspace = true }
+prometheus-client = { workspace = true }
 prost = { workspace = true }
 rand = { workspace = true }
 recursive = { workspace = true }

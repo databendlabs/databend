@@ -37,8 +37,14 @@ use crate::IndexType;
 use crate::ScalarExpr;
 
 /// `SExpr` is abbreviation of single expression, which is a tree of relational operators.
-#[derive(Clone, Debug, Educe)]
-#[educe(PartialEq, Eq, Hash)]
+#[derive(Educe)]
+#[educe(
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Eq,
+    Hash(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub struct SExpr {
     pub(crate) plan: Arc<RelOperator>,
     pub(crate) children: Vec<Arc<SExpr>>,
@@ -51,10 +57,10 @@ pub struct SExpr {
     ///
     /// Since `SExpr` is `Send + Sync`, we use `Mutex` to protect
     /// the cache.
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub(crate) rel_prop: Arc<Mutex<Option<Arc<RelationalProperty>>>>,
 
-    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    #[educe(Hash(ignore), PartialEq(ignore))]
     pub(crate) stat_info: Arc<Mutex<Option<Arc<StatInfo>>>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
@@ -258,7 +264,7 @@ impl SExpr {
             RelOperator::Window(op) => {
                 match &op.function {
                     WindowFuncType::Aggregate(agg) => {
-                        for arg in &agg.args {
+                        for arg in agg.exprs() {
                             get_udf_names(arg)?.iter().for_each(|udf| {
                                 udfs.insert(*udf);
                             });
@@ -322,8 +328,8 @@ impl SExpr {
                 }
             }
             RelOperator::MutationSource(mutation_source) => {
-                if let Some(filter) = &mutation_source.filter {
-                    get_udf_names(filter)?.iter().for_each(|udf| {
+                for predicate in &mutation_source.predicates {
+                    get_udf_names(predicate)?.iter().for_each(|udf| {
                         udfs.insert(*udf);
                     });
                 }
@@ -466,7 +472,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
                     .iter()
                     .any(|expr| find_subquery_in_expr(&expr.scalar))
                 || match &op.function {
-                    WindowFuncType::Aggregate(agg) => agg.args.iter().any(find_subquery_in_expr),
+                    WindowFuncType::Aggregate(agg) => agg.exprs().any(find_subquery_in_expr),
                     _ => false,
                 }
         }
@@ -478,13 +484,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
             .items
             .iter()
             .any(|expr| find_subquery_in_expr(&expr.scalar)),
-        RelOperator::MutationSource(op) => {
-            if let Some(filter) = &op.filter {
-                find_subquery_in_expr(filter)
-            } else {
-                false
-            }
-        }
+        RelOperator::MutationSource(_) => false,
     }
 }
 

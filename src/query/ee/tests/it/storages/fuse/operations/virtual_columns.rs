@@ -16,6 +16,7 @@ use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
+use databend_common_meta_app::schema::VirtualField;
 use databend_common_storage::read_parquet_schema_async_rs;
 use databend_common_storages_fuse::io::BlockReader;
 use databend_common_storages_fuse::io::MetaReaders;
@@ -50,18 +51,23 @@ async fn test_fuse_do_refresh_virtual_column() -> Result<()> {
     let dal = fuse_table.get_operator_ref();
 
     let virtual_columns = vec![
-        (
-            "v['a']".to_string(),
-            TableDataType::Nullable(Box::new(TableDataType::Variant)),
-        ),
-        (
-            "v[0]".to_string(),
-            TableDataType::Nullable(Box::new(TableDataType::Variant)),
-        ),
-        (
-            "v['b']".to_string(),
-            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int64))),
-        ),
+        VirtualField {
+            expr: "v['a']".to_string(),
+            data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            alias_name: None,
+        },
+        VirtualField {
+            expr: "v[0]".to_string(),
+            data_type: TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            alias_name: None,
+        },
+        VirtualField {
+            expr: "v['b']".to_string(),
+            data_type: TableDataType::Nullable(Box::new(TableDataType::Number(
+                NumberDataType::Int64,
+            ))),
+            alias_name: None,
+        },
     ];
     let table_ctx = fixture.new_query_ctx().await?;
 

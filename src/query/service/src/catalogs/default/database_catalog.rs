@@ -27,6 +27,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -61,6 +62,8 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -68,6 +71,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
@@ -656,6 +660,52 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_marked_deleted_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        self.mutable_catalog
+            .list_marked_deleted_indexes(tenant, table_id)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        self.mutable_catalog
+            .list_marked_deleted_table_indexes(tenant, table_id)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        index_ids: &[u64],
+    ) -> Result<()> {
+        self.mutable_catalog
+            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<()> {
+        self.mutable_catalog
+            .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
+            .await
+    }
+
+    #[async_backtrace::framed]
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
         self.mutable_catalog.update_index(req).await
     }
@@ -835,6 +885,14 @@ impl Catalog for DatabaseCatalog {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         self.mutable_catalog.list_dictionaries(req).await
+    }
+
+    async fn set_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime> {
+        self.mutable_catalog.set_table_lvt(name_ident, value).await
     }
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()> {

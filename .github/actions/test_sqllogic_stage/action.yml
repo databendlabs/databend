@@ -6,11 +6,15 @@ inputs:
     required: true
     default: ""
   handlers:
-    description: "logic test handlers, choices: mysql,http,clickhouse"
+    description: "logic test handlers, choices: hybrid,http"
     required: true
     default: ""
   storage:
     description: "storage backend for stage, choices: s3,fs"
+    required: true
+    default: ""
+  deducp:
+    description: "path type for dedup when copy, choices: full_path,sub_path"
     required: true
     default: ""
 runs:
@@ -43,4 +47,5 @@ runs:
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_STAGE_STORAGE: ${{ inputs.storage }}
+        TEST_STAGE_DEDUP: ${{ inputs.dedup}}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-without-sandbox.sh ${{ inputs.dirs }}

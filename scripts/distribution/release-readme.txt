@@ -2,9 +2,9 @@ Thank you for downloading Databend, an open-source elastic and workload-aware mo
 
 Get started with a standalone Databend:
 1. Edit the configuration files in 'configs' to customize Databend settings.
-2. Start Databend: ./scripts/start.sh
+2. Start Databend: systemctl start databend-meta databend-query
 3. Run queries with MySQL client or Databend HTTP handler.
-4. Stop Databend: ./scripts/stop.sh
+4. Stop Databend: systemctl stop databend-meta databend-query
 
 NOTE: If you deploy Databend with a self-hosted S3-compatible object storage,
 set the environment variable STORAGE_S3_ENABLE_VIRTUAL_HOST_STYLE to 'true' before starting Databend.

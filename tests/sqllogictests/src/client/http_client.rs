@@ -37,6 +37,7 @@ pub struct HttpClient {
     pub session_token: String,
     pub debug: bool,
     pub session: Option<HttpSessionConf>,
+    pub port: u16,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -75,7 +76,7 @@ struct LoginResponse {
 }
 
 impl HttpClient {
-    pub async fn create() -> Result<Self> {
+    pub async fn create(port: u16) -> Result<Self> {
         let mut header = HeaderMap::new();
         header.insert(
             "Content-Type",
@@ -94,10 +95,10 @@ impl HttpClient {
             .pool_max_idle_per_host(0)
             .build()?;
 
-        let url = "http://127.0.0.1:8000/v1/session/login";
+        let url = format!("http://127.0.0.1:{}/v1/session/login", port);
 
         let session_token = client
-            .post(url)
+            .post(&url)
             .body("{}")
             .basic_auth("root", Some(""))
             .send()
@@ -119,18 +120,19 @@ impl HttpClient {
             session_token,
             session: None,
             debug: false,
+            port,
         })
     }
 
     pub async fn query(&mut self, sql: &str) -> Result<DBOutput<DefaultColumnType>> {
         let start = Instant::now();
 
-        let url = "http://127.0.0.1:8000/v1/query".to_string();
+        let url = format!("http://127.0.0.1:{}/v1/query", self.port);
         let mut parsed_rows = vec![];
         let mut response = self.post_query(sql, &url).await?;
         self.handle_response(&response, &mut parsed_rows)?;
         while let Some(next_uri) = &response.next_uri {
-            let url = format!("http://127.0.0.1:8000{next_uri}");
+            let url = format!("http://127.0.0.1:{}{next_uri}", self.port);
             let new_response = self.poll_query_result(&url).await?;
             if new_response.next_uri.is_some() {
                 self.handle_response(&new_response, &mut parsed_rows)?;

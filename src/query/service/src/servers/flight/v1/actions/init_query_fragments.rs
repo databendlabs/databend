@@ -23,7 +23,10 @@ use crate::servers::flight::v1::packets::QueryFragments;
 pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
 
 pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
+    let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
+
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
+    tracking_payload.mem_stat = ctx.get_query_memory_tracking();
     tracking_payload.query_id = Some(fragments.query_id.clone());
     let _guard = ThreadTracker::tracking(tracking_payload);
 
@@ -31,7 +34,6 @@ pub async fn init_query_fragments(fragments: QueryFragments) -> Result<()> {
 
     // Avoid blocking runtime.
     let query_id = fragments.query_id.clone();
-    let ctx = DataExchangeManager::instance().get_query_ctx(&fragments.query_id)?;
     let join_handler = ctx.spawn(ThreadTracker::tracking_future(async move {
         DataExchangeManager::instance().init_query_fragments_plan(&fragments)
     }));

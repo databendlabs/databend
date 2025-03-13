@@ -278,33 +278,7 @@ impl<'a> Evaluator<'a> {
                 )
             }
             Ok(Value::Column(result)) => assert_eq!(&result.data_type(), expr.data_type()),
-            Err(_) => {
-                #[cfg(debug_assertions)]
-                {
-                    use std::sync::atomic::AtomicBool;
-                    use std::sync::atomic::Ordering;
-
-                    static RECURSING: AtomicBool = AtomicBool::new(false);
-                    if RECURSING
-                        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_ok()
-                    {
-                        assert_eq!(
-                            ConstantFolder::fold_with_domain(
-                                expr,
-                                &self.data_block.domains().into_iter().enumerate().collect(),
-                                self.func_ctx,
-                                self.fn_registry
-                            )
-                            .1,
-                            None,
-                            "domain calculation should not return any domain for expressions that are possible to fail with err {}",
-                            result.unwrap_err()
-                        );
-                        RECURSING.store(false, Ordering::SeqCst);
-                    }
-                }
-            }
+            Err(_) => {}
         }
 
         result
@@ -349,6 +323,68 @@ impl<'a> Evaluator<'a> {
                 }
                 _ => unreachable!(),
             },
+            (
+                DataType::Nullable(box DataType::Variant) | DataType::Variant,
+                DataType::Nullable(box DataType::Boolean)
+                | DataType::Nullable(box DataType::Number(_))
+                | DataType::Nullable(box DataType::String)
+                | DataType::Nullable(box DataType::Date)
+                | DataType::Nullable(box DataType::Timestamp),
+            ) => {
+                // allow cast variant to nullable types.
+                let inner_dest_ty = dest_type.remove_nullable();
+                let cast_fn = format!("to_{}", inner_dest_ty.to_string().to_lowercase());
+                if let Some(new_value) = self.run_simple_cast(
+                    span,
+                    src_type,
+                    dest_type,
+                    value.clone(),
+                    &cast_fn,
+                    validity.clone(),
+                    options,
+                )? {
+                    Ok(new_value)
+                } else {
+                    Err(ErrorCode::BadArguments(format!(
+                        "unable to cast type `{src_type}` to type `{dest_type}`"
+                    ))
+                    .set_span(span))
+                }
+            }
+            (
+                DataType::Nullable(box DataType::Variant) | DataType::Variant,
+                DataType::Boolean
+                | DataType::Number(_)
+                | DataType::String
+                | DataType::Date
+                | DataType::Timestamp,
+            ) => {
+                // allow cast variant to not null types.
+                let cast_fn = format!("to_{}", dest_type.to_string().to_lowercase());
+                if let Some(new_value) = self.run_simple_cast(
+                    span,
+                    src_type,
+                    &dest_type.wrap_nullable(),
+                    value.clone(),
+                    &cast_fn,
+                    validity.clone(),
+                    options,
+                )? {
+                    let (new_value, has_null) = new_value.remove_nullable();
+                    if has_null {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "unable to cast type `{src_type}` to type `{dest_type}`, result has null values"
+                        ))
+                        .set_span(span));
+                    }
+                    Ok(new_value)
+                } else {
+                    Err(ErrorCode::BadArguments(format!(
+                        "unable to cast type `{src_type}` to type `{dest_type}`"
+                    ))
+                    .set_span(span))
+                }
+            }
             (DataType::Nullable(inner_src_ty), DataType::Nullable(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Null) => Ok(Value::Scalar(Scalar::Null)),
                 Value::Scalar(_) => {
@@ -1755,31 +1791,6 @@ impl<'a> Evaluator<'a> {
             }
         };
 
-        #[cfg(debug_assertions)]
-        if result.is_err() {
-            use std::sync::atomic::AtomicBool;
-            use std::sync::atomic::Ordering;
-
-            static RECURSING: AtomicBool = AtomicBool::new(false);
-            if RECURSING
-                .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-            {
-                assert_eq!(
-                    ConstantFolder::fold_with_domain(
-                        expr,
-                        &self.data_block.domains().into_iter().enumerate().collect(),
-                        self.func_ctx,
-                        self.fn_registry
-                    )
-                    .1,
-                    None,
-                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
-                    result.unwrap_err()
-                );
-                RECURSING.store(false, Ordering::SeqCst);
-            }
-        }
         result
     }
 }
@@ -2084,6 +2095,16 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     });
                 }
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
+                let is_monotonicity = self
+                    .fn_registry
+                    .properties
+                    .get(&function.signature.name)
+                    .map(|p| {
+                        args_expr.len() == 1
+                            && (p.monotonicity
+                                || p.monotonicity_by_type.contains(args_expr[0].data_type()))
+                    })
+                    .unwrap_or_default();
 
                 let func_expr = Expr::FunctionCall {
                     span: *span,
@@ -2094,19 +2115,82 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     return_type: return_type.clone(),
                 };
 
-                let calc_domain = match &function.eval {
-                    FunctionEval::Scalar { calc_domain, .. } => calc_domain,
+                let (calc_domain, eval) = match &function.eval {
+                    FunctionEval::Scalar {
+                        calc_domain, eval, ..
+                    } => (calc_domain, eval),
                     FunctionEval::SRF { .. } => {
                         return (func_expr, None);
                     }
                 };
 
-                let func_domain =
-                    args_domain.and_then(|domains| match (calc_domain)(self.func_ctx, &domains) {
-                        FunctionDomain::MayThrow => None,
-                        FunctionDomain::Full => Some(Domain::full(return_type)),
-                        FunctionDomain::Domain(domain) => Some(domain),
-                    });
+                let func_domain = args_domain.and_then(|domains: Vec<Domain>| {
+                    let res = (calc_domain)(self.func_ctx, &domains);
+                    match (res, is_monotonicity) {
+                        (FunctionDomain::MayThrow | FunctionDomain::Full, true) => {
+                            let (min, max) = domains.iter().map(Domain::to_minmax).next().unwrap();
+
+                            if (min.is_null() || max.is_null())
+                                && !args[0].data_type().is_nullable_or_null()
+                            {
+                                None
+                            } else {
+                                let mut ctx = EvalContext {
+                                    generics,
+                                    num_rows: 2,
+                                    validity: None,
+                                    errors: None,
+                                    func_ctx: self.func_ctx,
+                                    suppress_error: false,
+                                };
+                                let mut builder =
+                                    ColumnBuilder::with_capacity(args[0].data_type(), 2);
+                                builder.push(min.as_ref());
+                                builder.push(max.as_ref());
+
+                                let input = Value::Column(builder.build());
+                                let result = eval(&[input], &mut ctx);
+
+                                if result.is_scalar() {
+                                    None
+                                } else {
+                                    // if error happens, domain maybe incorrect
+                                    // min, max: String("2024-09-02 00:00") String("2024-09-02 00:0�")
+                                    // to_date(s) > to_date('2024-01-1')
+                                    let col = result.as_column().unwrap();
+                                    let d = if ctx.has_error(0) || ctx.has_error(1) {
+                                        let (full_min, full_max) =
+                                            Domain::full(return_type).to_minmax();
+                                        if full_min.is_null() || full_max.is_null() {
+                                            return None;
+                                        }
+
+                                        let mut builder =
+                                            ColumnBuilder::with_capacity(return_type, 2);
+
+                                        for (i, (v, f)) in
+                                            col.iter().zip([full_min, full_max].iter()).enumerate()
+                                        {
+                                            if ctx.has_error(i) {
+                                                builder.push(f.as_ref());
+                                            } else {
+                                                builder.push(v);
+                                            }
+                                        }
+                                        builder.build().domain()
+                                    } else {
+                                        result.as_column().unwrap().domain()
+                                    };
+                                    let (min, max) = d.to_minmax();
+                                    Some(Domain::from_min_max(min, max, return_type))
+                                }
+                            }
+                        }
+                        (FunctionDomain::MayThrow, _) => None,
+                        (FunctionDomain::Full, _) => Some(Domain::full(return_type)),
+                        (FunctionDomain::Domain(domain), _) => Some(domain),
+                    }
+                });
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
                     return (

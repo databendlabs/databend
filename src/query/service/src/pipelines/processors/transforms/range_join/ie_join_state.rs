@@ -125,6 +125,10 @@ impl IEJoinState {
     fn intersection(&self, left_block: &DataBlock, right_block: &DataBlock) -> bool {
         let left_len = left_block.num_rows();
         let right_len = right_block.num_rows();
+        if left_len == 0 || right_len == 0 {
+            return false;
+        }
+
         let left_l1_column = left_block.columns()[0]
             .value
             .convert_to_full_column(&self.l1_data_type, left_len);

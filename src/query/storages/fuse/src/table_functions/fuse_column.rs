@@ -98,7 +98,6 @@ impl TableMetaFunc for FuseColumn {
         let schema = tbl.schema();
         let leaf_fields = schema.leaf_fields();
 
-        let mut end = false;
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<SegmentInfo>(chunk, true)
@@ -128,14 +127,9 @@ impl TableMetaFunc for FuseColumn {
                             row_num += 1;
 
                             if row_num >= limit {
-                                end = true;
-                                break;
+                                break 'FOR;
                             }
                         }
-                    }
-
-                    if end {
-                        break 'FOR;
                     }
                 }
             }

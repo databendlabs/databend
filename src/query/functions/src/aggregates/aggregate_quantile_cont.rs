@@ -39,6 +39,7 @@ use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunctionRef;
@@ -363,6 +364,7 @@ pub fn try_create_aggregate_quantile_cont_function<const TYPE: u8>(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     if TYPE == MEDIAN {
         assert_params(display_name, params.len(), 0)?;

@@ -47,7 +47,7 @@ pub struct StageFileInfo {
     pub path: String,
     pub size: u64,
     pub md5: Option<String>,
-    pub last_modified: DateTime<Utc>,
+    pub last_modified: Option<DateTime<Utc>>,
     pub etag: Option<String>,
     pub status: StageFileStatus,
     pub creator: Option<UserIdentity>,
@@ -59,10 +59,19 @@ impl StageFileInfo {
             path,
             size: meta.content_length(),
             md5: meta.content_md5().map(str::to_string),
-            last_modified: meta.last_modified().unwrap_or_default(),
+            last_modified: meta.last_modified(),
             etag: meta.etag().map(str::to_string),
             status: StageFileStatus::NeedCopy,
             creator: None,
+        }
+    }
+
+    pub fn dedup_key(&self) -> Option<String> {
+        // should not use last_modified because the accuracy is in seconds for S3.
+        if let Some(md5) = &self.md5 {
+            Some(md5.clone())
+        } else {
+            self.etag.clone()
         }
     }
 }
@@ -419,7 +428,7 @@ fn stdin_stage_info() -> StageFileInfo {
         path: STDIN_FD.to_string(),
         size: u64::MAX,
         md5: None,
-        last_modified: Utc::now(),
+        last_modified: Some(Utc::now()),
         etag: None,
         status: StageFileStatus::NeedCopy,
         creator: None,

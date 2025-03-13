@@ -18,7 +18,7 @@ set random_function_seed = 1;
 # estimated rows and output rows are similar for filter
 # the test is flaky, so only put it there as a reference.
 onlyif todo
-query ok
+query ??
 EXPLAIN ANALYZE PARTIAL
 SELECT
   *
@@ -107,7 +107,7 @@ from
 101
 101
 101
-103
+101
 103
 103
 103
@@ -166,20 +166,20 @@ group by
 order by c_custkey
 limit 20;
 ----
-101 12
-103 18
-104 7
-106 18
-107 12
-109 25
+101 13
+103 11
+104 6
+106 20
+107 7
+109 15
 110 9
-112 19
-113 17
-115 28
-116 4
-118 18
-119 10
-NULL 149803
+112 16
+113 9
+115 16
+116 11
+118 17
+119 7
+NULL 1499843
 
 query I
 select
@@ -231,7 +231,7 @@ order by o_custkey
 101
 101
 101
-103
+101
 103
 103
 103
@@ -291,9 +291,6 @@ order by o_custkey
 1
 1
 1
-1
-1
-1
 2
 2
 2
@@ -301,10 +298,13 @@ order by o_custkey
 2
 2
 2
-2
-2
-2
-2
+4
+4
+4
+4
+4
+4
+4
 
 query I
 select
@@ -317,26 +317,26 @@ where o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey 
 order by o_comment
     limit 20;
 ----
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias above the carefully ironic packages nag about the pend
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias above the blithely ironic packages w
 
 statement ok
 set max_block_size = 1024;
@@ -394,9 +394,9 @@ select o_custkey from orders where not exists (select * from customer where subs
 1
 1
 1
-1
-1
-1
+4
+4
+4
 4
 
 query I
@@ -440,10 +440,10 @@ order by
     cust_nation,
     l_year;
 ----
-FRANCE GERMANY 1995 4637235.150
-FRANCE GERMANY 1996 5224779.573
-GERMANY FRANCE 1995 6232818.703
-GERMANY FRANCE 1996 5557312.112
+FRANCE GERMANY 1995 54639732.733
+FRANCE GERMANY 1996 54633083.307
+GERMANY FRANCE 1995 52531746.669
+GERMANY FRANCE 1996 52520549.022
 
 query I
 select
@@ -484,8 +484,8 @@ group by
 order by
     o_year;
 ----
-1995 0.02864874
-1996 0.01825027
+1995 0.03443589
+1996 0.04148552
 
 query I
 select
@@ -521,11 +521,11 @@ order by
     sum_profit
 limit 5;
 ----
-MOZAMBIQUE 1998 162042
-JORDAN 1998 181148
-MOROCCO 1998 181533
-JAPAN 1998 184953
-VIETNAM 1998 192431
+JORDAN 1998 2348986
+JAPAN 1998 2469410
+MOROCCO 1998 2491549
+ETHIOPIA 1998 2513504
+KENYA 1998 2556633
 
 
 statement ok

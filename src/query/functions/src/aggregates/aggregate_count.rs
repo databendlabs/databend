@@ -22,6 +22,8 @@ use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::utils::column_merge_validity;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
@@ -29,10 +31,13 @@ use databend_common_expression::Scalar;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 
 struct AggregateCountState {
     count: u64,
@@ -48,6 +53,7 @@ impl AggregateCountFunction {
         display_name: &str,
         _params: Vec<Scalar>,
         arguments: Vec<DataType>,
+        _sort_descs: Vec<AggregateFunctionSortDesc>,
     ) -> Result<Arc<dyn AggregateFunction>> {
         assert_variadic_arguments(display_name, arguments.len(), (0, 1))?;
         Ok(Arc::new(AggregateCountFunction {
@@ -74,19 +80,19 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(DataType::Number(NumberDataType::UInt64))
     }
 
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: AggrState) {
         place.write(|| AggregateCountState { count: 0 });
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<AggregateCountState>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<AggregateCountState>()));
     }
 
     // columns may be nullable
     // if not we use validity as the null signs
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         input_rows: usize,
@@ -110,7 +116,7 @@ impl AggregateFunction for AggregateCountFunction {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -124,9 +130,9 @@ impl AggregateFunction for AggregateCountFunction {
                 if v.null_count() == v.len() {
                     return Ok(());
                 }
-                for (valid, place) in v.iter().zip(places.iter()) {
+                for (valid, &place) in v.iter().zip(places.iter()) {
                     if valid {
-                        let state = place.next(offset).get::<AggregateCountState>();
+                        let state = AggrState::new(place, loc).get::<AggregateCountState>();
                         state.count += 1;
                     }
                 }
@@ -134,7 +140,7 @@ impl AggregateFunction for AggregateCountFunction {
 
             _ => {
                 for place in places {
-                    let state = place.next(offset).get::<AggregateCountState>();
+                    let state = AggrState::new(*place, loc).get::<AggregateCountState>();
                     state.count += 1;
                 }
             }
@@ -143,25 +149,25 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, _columns: InputColumns, _row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, _columns: InputColumns, _row: usize) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         state.count += 1;
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         borsh_serialize_state(writer, &state.count)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         let other: u64 = borsh_deserialize_state(reader)?;
         state.count += other;
         Ok(())
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<AggregateCountState>();
         let other = rhs.get::<AggregateCountState>();
         state.count += other.count;
@@ -171,13 +177,13 @@ impl AggregateFunction for AggregateCountFunction {
     fn batch_merge_result(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: Box<[AggrStateLoc]>,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         match builder {
             ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                 for place in places {
-                    let state = place.next(offset).get::<AggregateCountState>();
+                    let state = AggrState::new(*place, &loc).get::<AggregateCountState>();
                     builder.push(state.count);
                 }
             }
@@ -186,7 +192,7 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         match builder {
             ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {
                 let state = place.get::<AggregateCountState>();

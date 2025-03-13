@@ -33,6 +33,13 @@ runs:
       with:
         python-version: "3.12"
 
+    - name: Install Python packages
+      shell: bash
+      run: |
+        pip install rich
+        pip install databend_driver
+        pip install duckdb
+
     - uses: actions/setup-java@v4
       with:
         distribution: temurin

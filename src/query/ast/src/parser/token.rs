@@ -381,6 +381,8 @@ pub enum TokenKind {
     ASYNC,
     #[token("ATTACH", ignore(ascii_case))]
     ATTACH,
+    #[token("AVRO", ignore(ascii_case))]
+    AVRO,
     #[token("BEFORE", ignore(ascii_case))]
     BEFORE,
     #[token("BETWEEN", ignore(ascii_case))]
@@ -583,6 +585,8 @@ pub enum TokenKind {
     ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
+    #[token("MICROSECOND", ignore(ascii_case))]
+    MICROSECOND,
     #[token("ERROR_ON_COLUMN_COUNT_MISMATCH", ignore(ascii_case))]
     ERROR_ON_COLUMN_COUNT_MISMATCH,
     #[token("ESCAPE", ignore(ascii_case))]
@@ -940,6 +944,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("QUOTED_IDENTIFIERS", ignore(ascii_case))]
+    QUOTED_IDENTIFIERS,
     #[token("RANGE", ignore(ascii_case))]
     RANGE,
     #[token("RAWDEFLATE", ignore(ascii_case))]
@@ -1252,6 +1258,8 @@ pub enum TokenKind {
     WINDOW,
     #[token("WITH", ignore(ascii_case))]
     WITH,
+    #[token("WITHIN", ignore(ascii_case))]
+    WITHIN,
     #[token("XML", ignore(ascii_case))]
     XML,
     #[token("XOR", ignore(ascii_case))]
@@ -1571,10 +1579,10 @@ impl TokenKind {
             | TokenKind::TABLE
             | TokenKind::THEN
             // | TokenKind::TIME
-            | TokenKind::TIMESTAMP
+            // | TokenKind::TIMESTAMP
             | TokenKind::TRAILING
             // | TokenKind::TREAT
-            | TokenKind::TRIM
+            // | TokenKind::TRIM
             | TokenKind::TRUE
             | TokenKind::TRY_CAST
             // | TokenKind::UNIQUE
@@ -1709,6 +1717,7 @@ impl TokenKind {
             // | TokenKind::SIMILAR
             | TokenKind::SOME
             | TokenKind::SEMI
+            | TokenKind::SET
             | TokenKind::SAMPLE
             // | TokenKind::SYMMETRIC
             // | TokenKind::TABLESAMPLE
@@ -1767,6 +1776,13 @@ impl TokenKind {
             | TokenKind::NOTIFICATION
             if !after_as => true,
             _ => false
+        }
+    }
+
+    pub(crate) fn is_grant_reserved_ident(&self, after_as: bool, in_grant: bool) -> bool {
+        match self {
+            TokenKind::WAREHOUSE if in_grant => true,
+            _ => self.is_reserved_ident(after_as),
         }
     }
 }

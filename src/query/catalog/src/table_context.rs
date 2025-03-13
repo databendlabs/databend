@@ -59,6 +59,8 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -92,6 +94,8 @@ pub struct ProcessInfo {
     /// storage metrics for persisted data reading.
     pub data_metrics: Option<StorageMetrics>,
     pub scan_progress_value: Option<ProgressValues>,
+    pub write_progress_value: Option<ProgressValues>,
+    pub spill_progress_value: Option<ProgressValues>,
     pub mysql_connection_id: Option<u32>,
     pub created_time: SystemTime,
     pub status_info: Option<String>,
@@ -219,7 +223,7 @@ pub trait TableContext: Send + Sync {
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
     ) -> Result<()>;
-    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
@@ -234,6 +238,8 @@ pub trait TableContext: Send + Sync {
     fn get_settings(&self) -> Arc<Settings>;
     fn get_session_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
+    fn set_cluster(&self, cluster: Arc<Cluster>);
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
     fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>>;
@@ -276,14 +282,27 @@ pub trait TableContext: Send + Sync {
         database_name: &str,
         table_name: &str,
         files: &[StageFileInfo],
+        path_prefix: Option<String>,
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles>;
 
-    fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
+    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()>;
 
-    fn clear_segment_locations(&self) -> Result<()>;
+    fn clear_written_segment_locations(&self) -> Result<()>;
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>>;
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>>;
+
+    fn add_selected_segment_location(&self, _segment_loc: Location) {
+        unimplemented!()
+    }
+
+    fn get_selected_segment_locations(&self) -> Vec<Location> {
+        unimplemented!()
+    }
+
+    fn clear_selected_segment_locations(&self) {
+        unimplemented!()
+    }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 
@@ -328,6 +347,11 @@ pub trait TableContext: Send + Sync {
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
     fn txn_mgr(&self) -> TxnManagerRef;
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps>;
 
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);

@@ -18,13 +18,16 @@
 use databend_common_expression as ex;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
+use databend_common_expression::VariantDataType;
 use databend_common_protos::pb;
 use databend_common_protos::pb::data_type::Dt;
 use databend_common_protos::pb::data_type::Dt24;
 use databend_common_protos::pb::number::Num;
+use databend_common_protos::pb::variant_data_type;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
+use crate::FromToProtoEnum;
 use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
@@ -448,6 +451,114 @@ impl FromToProto for ex::types::decimal::DecimalSize {
             min_reader_ver: MIN_READER_VER,
             precision: self.precision as i32,
             scale: self.scale as i32,
+        })
+    }
+}
+
+impl FromToProtoEnum for ex::VariantDataType {
+    type PBEnum = pb::VariantDataType;
+
+    fn from_pb_enum(p: pb::VariantDataType) -> Result<Self, Incompatible> {
+        let Some(dt) = p.dt else {
+            return Err(Incompatible::new(
+                "Invalid VariantDataType: .dt must be Some".to_string(),
+            ));
+        };
+        Ok(match dt {
+            variant_data_type::Dt::JsonbT(_) => ex::VariantDataType::Jsonb,
+            variant_data_type::Dt::BoolT(_) => ex::VariantDataType::Boolean,
+            variant_data_type::Dt::Uint64T(_) => ex::VariantDataType::UInt64,
+            variant_data_type::Dt::Int64T(_) => ex::VariantDataType::Int64,
+            variant_data_type::Dt::Float64T(_) => ex::VariantDataType::Float64,
+            variant_data_type::Dt::StringT(_) => ex::VariantDataType::String,
+            variant_data_type::Dt::ArrayT(dt) => {
+                ex::VariantDataType::Array(Box::new(ex::VariantDataType::from_pb_enum(*dt)?))
+            }
+        })
+    }
+
+    fn to_pb_enum(&self) -> Result<pb::VariantDataType, Incompatible> {
+        let dt = match self {
+            VariantDataType::Jsonb => pb::variant_data_type::Dt::JsonbT(pb::Empty {}),
+            VariantDataType::Boolean => pb::variant_data_type::Dt::BoolT(pb::Empty {}),
+            VariantDataType::UInt64 => pb::variant_data_type::Dt::Uint64T(pb::Empty {}),
+            VariantDataType::Int64 => pb::variant_data_type::Dt::Int64T(pb::Empty {}),
+            VariantDataType::Float64 => pb::variant_data_type::Dt::Float64T(pb::Empty {}),
+            VariantDataType::String => pb::variant_data_type::Dt::StringT(pb::Empty {}),
+            VariantDataType::Array(dt) => {
+                pb::variant_data_type::Dt::ArrayT(Box::new(dt.to_pb_enum()?))
+            }
+        };
+
+        Ok(pb::VariantDataType { dt: Some(dt) })
+    }
+}
+
+impl FromToProto for ex::VirtualDataSchema {
+    type PB = pb::VirtualDataSchema;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let fields = p
+            .fields
+            .into_iter()
+            .map(|field| {
+                let data_types = field
+                    .data_types
+                    .into_iter()
+                    .map(ex::VariantDataType::from_pb_enum)
+                    .collect::<Result<Vec<ex::VariantDataType>, Incompatible>>()?;
+
+                Ok(ex::VirtualDataField {
+                    name: field.name,
+                    data_types,
+                    source_column_id: field.source_column_id,
+                    column_id: field.column_id,
+                })
+            })
+            .collect::<Result<Vec<_>, Incompatible>>()?;
+
+        Ok(ex::VirtualDataSchema {
+            fields,
+            metadata: p.metadata,
+            next_column_id: p.next_column_id,
+            number_of_blocks: p.number_of_blocks,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let fields = self
+            .fields
+            .iter()
+            .map(|field| {
+                let data_types = field
+                    .data_types
+                    .iter()
+                    .map(ex::VariantDataType::to_pb_enum)
+                    .collect::<Result<Vec<pb::VariantDataType>, Incompatible>>()?;
+
+                Ok(pb::VirtualDataField {
+                    name: field.name.clone(),
+                    data_types,
+                    source_column_id: field.source_column_id,
+                    column_id: field.column_id,
+                })
+            })
+            .collect::<Result<Vec<pb::VirtualDataField>, Incompatible>>()?;
+
+        Ok(pb::VirtualDataSchema {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+            number_of_blocks: self.number_of_blocks,
         })
     }
 }

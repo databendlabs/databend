@@ -21,7 +21,9 @@ pid=$!
 # kill query randomly
 sleep_time=$(expr $RANDOM % 5 + 5)
 sleep $sleep_time
-kill $pid
+disown %1
+kill -9 $pid > /dev/null 2>&1
+sleep 1
 
 # restart query
 echo "will restart query"

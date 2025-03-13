@@ -19,7 +19,6 @@ use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::TaskSql;
-use databend_common_ast::ast::WarehouseOptions;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType::Int32;
 use databend_common_expression::types::NumberDataType::Int64;
@@ -83,7 +82,7 @@ pub struct CreateTaskPlan {
     pub if_not_exists: bool,
     pub tenant: Tenant,
     pub task_name: String,
-    pub warehouse_opts: WarehouseOptions,
+    pub warehouse: Option<String>,
     pub schedule_opts: Option<ScheduleOptions>,
     pub after: Vec<String>,
     pub when_condition: Option<String>,

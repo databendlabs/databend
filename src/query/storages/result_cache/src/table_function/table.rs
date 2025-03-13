@@ -95,10 +95,6 @@ impl ResultScan {
 
 #[async_trait::async_trait]
 impl Table for ResultScan {
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -158,8 +154,8 @@ impl Table for ResultScan {
             self.schema.clone(),
         )?
         .with_options(read_options);
-        let row_group_reader = Arc::new(builder.build_row_group_reader()?);
-        let full_file_reader = Some(Arc::new(builder.build_full_reader()?));
+        let row_group_reader = Arc::new(builder.build_row_group_reader(false)?);
+        let full_file_reader = Some(Arc::new(builder.build_full_reader(false)?));
 
         pipeline.add_source(
             |output| {
@@ -169,6 +165,7 @@ impl Table for ResultScan {
                     row_group_reader.clone(),
                     full_file_reader.clone(),
                     Arc::new(None),
+                    vec![],
                 )
             },
             1,

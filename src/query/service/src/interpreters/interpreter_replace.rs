@@ -23,9 +23,11 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -47,6 +49,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use databend_storages_common_table_meta::table::ClusterType;
 use parking_lot::RwLock;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -170,6 +173,10 @@ impl ReplaceInterpreter {
         let table_info = fuse_table.get_table_info();
         let base_snapshot = fuse_table.read_table_snapshot().await?;
 
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
+
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
         let is_distributed = is_multi_node
@@ -187,6 +194,7 @@ impl ReplaceInterpreter {
         } = self
             .connect_input_source(
                 self.ctx.clone(),
+                table_info.clone(),
                 &self.plan.source,
                 self.plan.schema(),
                 &mut purge_info,
@@ -290,7 +298,10 @@ impl ReplaceInterpreter {
             .ctx
             .get_settings()
             .get_replace_into_bloom_pruning_max_column_number()?;
-        let bloom_filter_column_indexes = if table.cluster_key_meta().is_some() {
+        let bloom_filter_column_indexes = if table
+            .cluster_type()
+            .is_some_and(|v| v == ClusterType::Linear)
+        {
             fuse_table
                 .choose_bloom_filter_columns(
                     self.ctx.clone(),
@@ -333,6 +344,7 @@ impl ReplaceInterpreter {
             block_slots: None,
             need_insert: true,
             plan_id: u32::MAX,
+            table_meta_timestamps,
         })));
 
         if is_distributed {
@@ -350,11 +362,14 @@ impl ReplaceInterpreter {
             input: root,
             snapshot: base_snapshot,
             table_info: table_info.clone(),
-            mutation_kind: MutationKind::Replace,
+            commit_type: CommitType::Mutation {
+                kind: MutationKind::Replace,
+                merge_meta: false,
+            },
             update_stream_meta: update_stream_meta.clone(),
-            merge_meta: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            table_meta_timestamps,
             recluster_info: None,
         })));
         root.adjust_plan_id(&mut 0);
@@ -375,6 +390,7 @@ impl ReplaceInterpreter {
     async fn connect_input_source<'a>(
         &'a self,
         ctx: Arc<QueryContext>,
+        table_info: TableInfo,
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo, CopyIntoTableOptions)>,
@@ -396,7 +412,9 @@ impl ReplaceInterpreter {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
                         CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                    let (physical_plan, _) = interpreter.build_physical_plan(&copy_plan).await?;
+                    let (physical_plan, _) = interpreter
+                        .build_physical_plan(table_info, &copy_plan)
+                        .await?;
 
                     // TODO optimization: if copy_plan.stage_table_info.files_to_copy is None, there should be a short-cut plan
 

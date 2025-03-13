@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -143,6 +144,11 @@ impl InterpreterQueryLog {
                 .expect("write to string must succeed");
         }
 
+        let query_tag = if let Ok(tag) = current_session.get_settings().get_query_tag() {
+            tag
+        } else {
+            "".to_string()
+        };
         session_settings.push_str("scope: SESSION");
 
         // Error
@@ -213,11 +219,13 @@ impl InterpreterQueryLog {
             exception_text,
             stack_trace,
             server_version: DATABEND_COMMIT_VERSION.to_string(),
+            query_tag,
             session_settings,
             extra: "".to_string(),
             has_profiles: false,
             txn_state,
             txn_id,
+            peek_memory_usage: HashMap::new(),
         })
     }
 
@@ -309,6 +317,12 @@ impl InterpreterQueryLog {
                 .expect("write to string must succeed");
         }
 
+        // Session
+        let query_tag = if let Ok(tag) = current_session.get_settings().get_query_tag() {
+            tag
+        } else {
+            "".to_string()
+        };
         session_settings.push_str("scope: SESSION");
 
         // Error
@@ -322,6 +336,8 @@ impl InterpreterQueryLog {
         let txn_state = format!("{:?}", guard.state());
         let txn_id = guard.txn_id().to_string();
         drop(guard);
+
+        let peek_memory_usage = ctx.get_node_peek_memory_usage();
 
         Self::write_log(QueryLogElement {
             log_type,
@@ -380,11 +396,13 @@ impl InterpreterQueryLog {
             exception_text,
             stack_trace,
             server_version: DATABEND_COMMIT_VERSION.to_string(),
+            query_tag,
             session_settings,
             extra: "".to_string(),
             has_profiles,
             txn_state,
             txn_id,
+            peek_memory_usage,
         })
     }
 }

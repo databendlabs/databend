@@ -22,6 +22,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::Result;
@@ -111,8 +112,11 @@ impl NumbersTable {
 
 #[async_trait::async_trait]
 impl Table for NumbersTable {
-    fn is_local(&self) -> bool {
-        self.name() == "numbers_local"
+    fn distribution_level(&self) -> DistributionLevel {
+        match self.name() {
+            "numbers_local" => DistributionLevel::Local,
+            _ => DistributionLevel::Cluster,
+        }
     }
 
     fn as_any(&self) -> &dyn Any {

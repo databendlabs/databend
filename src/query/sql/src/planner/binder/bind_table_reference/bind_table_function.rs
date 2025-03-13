@@ -90,6 +90,7 @@ impl Binder {
                             ),
                             params: vec![],
                             args,
+                            order_by: vec![],
                             window: None,
                             lambda: None,
                         },
@@ -113,6 +114,10 @@ impl Binder {
                 srf_expr,
                 alias,
             );
+        }
+
+        if func_name.name.eq_ignore_ascii_case("obfuscate") {
+            return self.bind_obfuscate(bind_context, params, named_params);
         }
 
         let mut scalar_binder = ScalarBinder::new(
@@ -324,7 +329,7 @@ impl Binder {
                 alias,
                 ..
             } => {
-                let mut bind_context = BindContext::with_parent(Box::new(parent_context.clone()));
+                let mut bind_context = BindContext::with_parent(parent_context.clone())?;
                 let func_name = normalize_identifier(name, &self.name_resolution_ctx);
 
                 if BUILTIN_FUNCTIONS
@@ -342,6 +347,7 @@ impl Binder {
                             name: func_name.clone(),
                             args,
                             params: vec![],
+                            order_by: vec![],
                             window: None,
                             lambda: None,
                         },

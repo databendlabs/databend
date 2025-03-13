@@ -1,4 +1,4 @@
-query T
+query IT
 select length(max_state(number)), typeof(max_state(number)) from numbers(100);
 ----
 10 BINARY

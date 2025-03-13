@@ -16,6 +16,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
@@ -65,6 +66,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
 
     let settings = ShowCreateQuerySettings {
         sql_dialect: Dialect::PostgreSQL,
+        force_quoted_ident: false,
         quoted_ident_case_sensitive: true,
         hide_options_in_show_create_table: false,
     };
@@ -111,7 +113,7 @@ async fn load_tenant_tables(tenant: &Tenant) -> Result<TenantTablesResponse> {
                 engine: table.engine().to_string(),
                 created_on: table.get_table_info().meta.created_on,
                 updated_on: table.get_table_info().meta.updated_on,
-                is_local: table.is_local(),
+                is_local: matches!(table.distribution_level(), DistributionLevel::Local),
                 is_external: table.get_table_info().meta.storage_params.is_some(),
                 rows: stats.number_of_rows,
                 data_bytes: stats.data_bytes,

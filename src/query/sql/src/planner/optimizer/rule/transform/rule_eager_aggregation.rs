@@ -1377,10 +1377,12 @@ fn decompose_avg(
                     &column.column.column_name.clone(),
                 ),
             );
-            let func = function_factory.get(&agg.func_name, agg.params.clone(), vec![*column
-                .column
-                .data_type
-                .clone()])?;
+            let func = function_factory.get(
+                &agg.func_name,
+                agg.params.clone(),
+                vec![*column.column.data_type.clone()],
+                vec![],
+            )?;
             agg.return_type = Box::new(func.return_type()?);
         }
     }

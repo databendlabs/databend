@@ -32,17 +32,7 @@ select trim_leading('aaabbaaa', '')
 aaabbaaa
 
 query T
-select ltrim('aaabbaaa', 'aa')
-----
-abbaaa
-
-query T
 select trim_trailing('aaabbaaa', 'aa')
-----
-aaabba
-
-query T
-select rtrim('aaabbaaa', 'aa')
 ----
 aaabba
 

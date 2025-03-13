@@ -156,7 +156,7 @@ impl Operator for ConstantTableScan {
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let mut column_stats: ColumnStatSet = Default::default();
         for (index, value) in self.columns.iter().zip(self.values.iter()) {
-            let (mins, _) = eval_aggr("min", vec![], &[value.clone()], self.num_rows)?;
+            let (mins, _) = eval_aggr("min", vec![], &[value.clone()], self.num_rows, vec![])?;
             let min = if let Some(v) = mins.index(0) {
                 match Datum::from_scalar(v.to_owned()) {
                     Some(val) => val,
@@ -167,7 +167,7 @@ impl Operator for ConstantTableScan {
             } else {
                 continue;
             };
-            let (maxs, _) = eval_aggr("max", vec![], &[value.clone()], self.num_rows)?;
+            let (maxs, _) = eval_aggr("max", vec![], &[value.clone()], self.num_rows, vec![])?;
             let max = if let Some(v) = maxs.index(0) {
                 match Datum::from_scalar(v.to_owned()) {
                     Some(val) => val,
@@ -184,6 +184,7 @@ impl Operator for ConstantTableScan {
                 vec![],
                 &[value.clone()],
                 self.num_rows,
+                vec![],
             )?;
             let ndv = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap()[0];
 

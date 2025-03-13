@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::types::StringType;
@@ -62,9 +63,8 @@ impl SimpleTableFunc for SetCacheCapacity {
         ])
     }
 
-    fn is_local_func(&self) -> bool {
-        // cache operation needs to be broadcast to all nodes
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Warehouse
     }
 
     async fn apply(

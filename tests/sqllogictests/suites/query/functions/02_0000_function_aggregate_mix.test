@@ -345,7 +345,7 @@ select group_array_moving_avg(k), group_array_moving_avg(2)(v) from aggr;
 ----
 [0.09090909090909091,0.2727272727272727,0.45454545454545453,0.6363636363636364,0.8181818181818182,1.0,1.1818181818181819,1.3636363636363635,1.5454545454545454,1.7272727272727273,1.9090909090909092] [5.0,10.0,10.0,10.0,15.0,20.0,22.5,27.5,30.0,30.0,30.0]
 
-statement error Need constant number
+statement error 2004
 SELECT group_array_moving_sum('x')(-1130932975.87767);
 
 query TTT
@@ -354,14 +354,14 @@ select group_array_moving_sum(k), group_array_moving_sum(2)(v) from aggr;
 [1,3,5,7,9,11,13,15,17,19,21] [10,20,20,20,30,40,45,55,60,60,60]
 
 statement ok
-create table t3(s string null);
+create table t3(s string null, x int null, y int null, z int null, b boolean null, arr Array(Int32));
 
 statement ok
 insert into t3 values
-    ('abc'),
-    ('def'),
-    (null),
-    ('xyz');
+    ('abc', 3, 1, 2, true, [1,2,3]),
+    ('def', 2, 1, null, false, [4,5,6]),
+    (null, 1, 2, 1, null, [7,8,9]),
+    ('xyz', 0, 2, 0, true, [10,11,12]);
 
 query T
 select string_agg(s) from t3;
@@ -377,6 +377,89 @@ query T
 select string_agg(s, '|') from t3;
 ----
 abc|def|xyz
+
+query T
+select string_agg(x + 1, '|') from t3;
+----
+4|3|2|1
+
+query T
+select string_agg(b, '|') from t3;
+----
+true|false|true
+
+statement error
+select listagg(arr) from t3;
+
+query T
+select listagg(s) from t3;
+----
+abcdefxyz
+
+query T
+select listagg(s, '-') from t3;
+----
+abc-def-xyz
+
+query T
+select listagg(s, '|') from t3;
+----
+abc|def|xyz
+
+query T
+select listagg(s, '|') from t3;
+----
+abc|def|xyz
+
+query T
+select listagg(s, '|') within group (order by s desc) from t3;
+----
+xyz|def|abc
+
+query T
+select listagg(s, '|') within group (order by x desc) from t3;
+----
+abc|def|xyz
+
+query T
+select listagg(s, '|') within group (order by x + 1 desc) from t3;
+----
+abc|def|xyz
+
+query T
+select listagg(s, '|') within group (order by z desc) from t3;
+----
+abc|xyz|def
+
+query T
+select listagg(s, '|') within group (order by z desc nulls first) from t3;
+----
+def|abc|xyz
+
+query T
+select listagg(s, '|') within group (order by z desc nulls last) from t3;
+----
+abc|xyz|def
+
+query T
+select listagg(concat('Hello ', s), '|') within group (order by y + 1 desc, x desc) from t3;
+----
+Hello xyz|Hello abc|Hello def
+
+query T
+select array_agg(x) within group (order by y + 1 desc, x desc) from t3;
+----
+[1,0,3,2]
+
+query T
+select array_agg(x) within group (order by x desc) from t3;
+----
+[3,2,1,0]
+
+query TT
+select array_agg(s), array_agg(null) from t3;
+----
+['abc','def',NULL,'xyz'] [NULL,NULL,NULL,NULL]
 
 statement ok
 create table aggavg(shopid string, goodsid string, avgcostvalue decimal(16, 8), sdate_rn uint64, md string)
@@ -414,6 +497,11 @@ select stddev_samp(a) from d;
 ----
 7.055988000745655
 
+query F
+select stddev_samp(a) from d where b = 'abc';
+----
+NULL
+
 query TTTTT
 select json_array_agg(a), json_array_agg(b), json_array_agg(c), json_array_agg(d), json_array_agg(e), json_array_agg('a') from d
 ----
@@ -423,6 +511,11 @@ query TTTTT
 select json_object_agg(b, a), json_object_agg(b, c), json_object_agg(b, d), json_object_agg(b, e), json_object_agg(b, 'a') from d
 ----
 {"abc":20.0,"de":10.0,"xyz":5.99} {"de":100,"xyz":300} {"abc":{"k":"v"},"de":null,"xyz":[1,2,3]} {"abc":["a","b"],"de":[],"xyz":["z"]} {"abc":"a","de":"a","xyz":"a"}
+
+query TTTTT
+select array_agg(a), array_agg(b), array_agg(c), array_agg(d), array_agg(e), array_agg('a') from d
+----
+[20.00,10.00,4.23,5.99] ['abc','de',NULL,'xyz'] [NULL,100,200,300] ['{"k":"v"}','null','"uvw"','[1,2,3]'] [['a','b'],[],['x','y'],['z']] ['a','a','a','a']
 
 statement ok
 DROP TABLE d

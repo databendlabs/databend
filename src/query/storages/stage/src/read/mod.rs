@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod avro;
 mod error_handler;
 mod load_context;
 pub mod row_based;
+
+pub(crate) mod block_builder_state;
+pub(crate) mod whole_file_reader;

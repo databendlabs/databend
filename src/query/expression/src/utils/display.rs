@@ -230,7 +230,7 @@ impl Display for ScalarRef<'_> {
             ScalarRef::String(s) => write!(f, "'{s}'"),
             ScalarRef::Timestamp(t) => write!(f, "'{}'", timestamp_to_string(*t, &TimeZone::UTC)),
             ScalarRef::Date(d) => write!(f, "'{}'", date_to_string(*d as i64, &TimeZone::UTC)),
-            ScalarRef::Interval(interval) => write!(f, "{}", interval_to_string(interval)),
+            ScalarRef::Interval(interval) => write!(f, "'{}'", interval_to_string(interval)),
             ScalarRef::Array(col) => write!(f, "[{}]", col.iter().join(", ")),
             ScalarRef::Map(col) => {
                 write!(f, "{{")?;
@@ -1079,5 +1079,5 @@ fn display_f64(num: f64) -> String {
 
 /// Display a tuple field name, if it contains uppercase letters or special characters, add quotes.
 pub fn display_tuple_field_name(field_name: &str) -> String {
-    display_ident(field_name, true, Dialect::PostgreSQL)
+    display_ident(field_name, false, true, Dialect::PostgreSQL)
 }

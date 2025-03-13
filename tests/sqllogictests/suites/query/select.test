@@ -18,6 +18,17 @@ statement ok
 insert into db.t values(1),(2)
 
 onlyif http
+statement error 1005
+from db.t, db.t2;
+
+onlyif http
+query I
+from db.t
+----
+1
+2
+
+onlyif http
 query I
 select db.t.a from db.t
 ----

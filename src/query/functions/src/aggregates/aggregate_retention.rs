@@ -25,6 +25,8 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::ValueType;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
@@ -32,10 +34,13 @@ use databend_common_expression::Scalar;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 
 #[derive(BorshSerialize, BorshDeserialize)]
 struct AggregateRetentionState {
@@ -70,17 +75,19 @@ impl AggregateFunction for AggregateRetentionFunction {
         ))))
     }
 
-    fn init_state(&self, place: StateAddr) {
+    fn init_state(&self, place: AggrState) {
         place.write(|| AggregateRetentionState { events: 0 });
     }
 
-    fn state_layout(&self) -> std::alloc::Layout {
-        Layout::new::<AggregateRetentionState>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(
+            Layout::new::<AggregateRetentionState>(),
+        ));
     }
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         _validity: Option<&Bitmap>,
         input_rows: usize,
@@ -103,7 +110,7 @@ impl AggregateFunction for AggregateRetentionFunction {
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
@@ -112,8 +119,7 @@ impl AggregateFunction for AggregateRetentionFunction {
             .map(|col| BooleanType::try_downcast_column(col).unwrap())
             .collect::<Vec<_>>();
         for (row, place) in places.iter().enumerate() {
-            let place = place.next(offset);
-            let state = place.get::<AggregateRetentionState>();
+            let state = AggrState::new(*place, loc).get::<AggregateRetentionState>();
             for j in 0..self.events_size {
                 if new_columns[j as usize].get_bit(row) {
                     state.add(j);
@@ -123,7 +129,7 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let new_columns = columns
             .iter()
@@ -137,19 +143,19 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let rhs: AggregateRetentionState = borsh_deserialize_state(reader)?;
         state.merge(&rhs);
         Ok(())
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let other = rhs.get::<AggregateRetentionState>();
         state.merge(other);
@@ -157,7 +163,7 @@ impl AggregateFunction for AggregateRetentionFunction {
     }
 
     #[allow(unused_mut)]
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
         let builder = builder.as_array_mut().unwrap();
         let inner = builder
@@ -209,6 +215,7 @@ pub fn try_create_aggregate_retention_function(
     display_name: &str,
     _params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_variadic_arguments(display_name, arguments.len(), (1, 32))?;
 

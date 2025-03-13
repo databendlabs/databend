@@ -75,7 +75,7 @@ impl ExtractSegmentTransform {
         segment: &CompactSegmentInfo,
         populate_cache: bool,
     ) -> databend_common_exception::Result<Arc<Vec<Arc<BlockMeta>>>> {
-        if let Some(cache) = CacheManager::instance().get_block_meta_cache() {
+        if let Some(cache) = CacheManager::instance().get_segment_block_metas_cache() {
             if let Some(metas) = cache.get(segment_path) {
                 Ok(metas)
             } else {

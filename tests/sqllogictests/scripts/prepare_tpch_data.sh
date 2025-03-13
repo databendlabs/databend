@@ -6,6 +6,15 @@
 data_dir="tests/sqllogictests/data"
 
 db=${1:-"tpch_test"}
+force=${2:-"1"}
+
+if [ "$force" == "0" ]; then
+    res=`echo "SELECT COUNT() from ${db}.nation" | $BENDSQL_CLIENT_CONNECT`
+    if [ "$res" != "0" -a "$res" != "" ]; then
+        echo "Table $db.nation already exists and is not empty, size: ${res}. Use force=1 to override it."
+        exit 0
+    fi
+fi
 
 echo "DROP DATABASE if EXISTS ${db}" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE DATABASE ${db}" | $BENDSQL_CLIENT_CONNECT
@@ -108,25 +117,19 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.lineitem
     l_comment      STRING not null
 ) CLUSTER BY(l_shipdate, l_orderkey)" | $BENDSQL_CLIENT_CONNECT
 
-#download data
-mkdir -p $data_dir
-if [ ! -d ${data_dir}/tpch.tar.gz ]; then
-    curl -s -o ${data_dir}/tpch.tar.gz https://ci.databend.com/dataset/stateful/tpch.tar.gz
-fi
-
-tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
+#import data
+CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+python $CURDIR/prepare_duckdb_tpch_data.py 1
 
 stmt "drop stage if exists s1"
-stmt "create stage s1 url='fs://${PWD}/${data_dir}/'"
+stmt "create stage s1 url='fs:///tmp/tpch_1/'"
 
 # insert data to tables
 for t in customer lineitem nation orders partsupp part region supplier; do
     echo "$t"
-    sub_path="tests/suites/0_stateless/13_tpch/data/$t.tbl"
-   	stmt "copy into ${db}.$t from @s1/${sub_path} file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
+   	query "copy into ${db}.$t from @s1/$t.csv force = true file_format = (type = CSV skip_header = 1 field_delimiter = '|' record_delimiter = '\n')"
+    query "analyze table $db.$t"
 done
 
 
-if [ -d "tests/sqllogictests/data" ]; then
-    rm -rf tests/sqllogictests/data
-fi
+# rm -rf /tmp/tpch_1

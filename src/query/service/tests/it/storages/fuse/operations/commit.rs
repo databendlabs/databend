@@ -141,6 +141,7 @@ use databend_common_storage::FileStatus;
 use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
+use databend_common_storages_fuse::operations::load_last_snapshot_hint;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_users::GrantObjectVisibilityChecker;
@@ -151,12 +152,12 @@ use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use uuid::Uuid;
 use walkdir::WalkDir;
 use xorf::BinaryFuse16;
 
@@ -243,16 +244,16 @@ async fn test_last_snapshot_hint() -> Result<()> {
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let last_snapshot_location = fuse_table.snapshot_loc().unwrap();
     let operator = fuse_table.get_operator();
-    let location = fuse_table
-        .meta_location_generator()
-        .gen_last_snapshot_hint_location();
     let storage_meta_data = operator.info();
     let storage_prefix = storage_meta_data.root();
 
-    let expected = format!("{}{}", storage_prefix, last_snapshot_location);
-    let content = operator.read(location.as_str()).await?.to_vec();
+    let expected_snapshot_full_path = format!("{}{}", storage_prefix, last_snapshot_location);
 
-    assert_eq!(content.as_slice(), expected.as_bytes());
+    let hint = load_last_snapshot_hint(fuse_table.meta_location_generator().prefix(), &operator)
+        .await?
+        .unwrap();
+
+    assert_eq!(hint.snapshot_full_path, expected_snapshot_full_path);
 
     Ok(())
 }
@@ -279,16 +280,16 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
             let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
-            let new_snapshot = TableSnapshot::new(
-                Uuid::new_v4(),
+            let new_snapshot = TableSnapshot::try_new(
                 None,
-                &None,
                 None,
                 table.schema().as_ref().clone(),
                 Statistics::default(),
                 new_segments,
                 None,
-            );
+                Default::default(),
+            )
+            .unwrap();
 
             let faked_catalog = FakedCatalog {
                 cat: catalog,
@@ -575,7 +576,7 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
-    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
@@ -715,6 +716,7 @@ impl TableContext for CtxDelegation {
         _database_name: &str,
         _table_name: &str,
         _files: &[StageFileInfo],
+        _path_prefix: Option<String>,
         _max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         todo!()
@@ -730,15 +732,15 @@ impl TableContext for CtxDelegation {
         HashMap::new()
     }
 
-    fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {
+    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
         todo!()
     }
 
-    fn clear_segment_locations(&self) -> Result<()> {
+    fn clear_written_segment_locations(&self) -> Result<()> {
         todo!()
     }
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
         todo!()
     }
 
@@ -881,6 +883,21 @@ impl TableContext for CtxDelegation {
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
         todo!()
     }
+
+    fn set_cluster(&self, _: Arc<Cluster>) {
+        todo!()
+    }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        todo!()
+    }
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.ctx.get_table_meta_timestamps(table, previous_snapshot)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -897,6 +914,10 @@ impl Catalog for FakedCatalog {
 
     fn info(&self) -> Arc<CatalogInfo> {
         self.cat.info()
+    }
+
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        todo!()
     }
 
     async fn get_database(&self, _tenant: &Tenant, _db_name: &str) -> Result<Arc<dyn Database>> {

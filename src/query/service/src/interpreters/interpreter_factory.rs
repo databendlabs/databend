@@ -65,7 +65,6 @@ use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
 use crate::interpreters::interpreter_rename_warehouse::RenameWarehouseInterpreter;
 use crate::interpreters::interpreter_rename_warehouse_cluster::RenameWarehouseClusterInterpreter;
 use crate::interpreters::interpreter_resume_warehouse::ResumeWarehouseInterpreter;
-use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_set_priority::SetPriorityInterpreter;
 use crate::interpreters::interpreter_show_online_nodes::ShowOnlineNodesInterpreter;
 use crate::interpreters::interpreter_show_warehouses::ShowWarehousesInterpreter;
@@ -339,14 +338,17 @@ impl InterpreterFactory {
             Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
             )),
-            Plan::ReclusterTable { s_expr, is_final } => {
-                Ok(Arc::new(ReclusterTableInterpreter::try_create(
-                    ctx,
-                    *s_expr.clone(),
-                    LockTableOption::LockWithRetry,
-                    *is_final,
-                )?))
-            }
+            Plan::ReclusterTable {
+                s_expr,
+                hilbert_query,
+                is_final,
+            } => Ok(Arc::new(ReclusterTableInterpreter::try_create(
+                ctx,
+                *s_expr.clone(),
+                hilbert_query.clone(),
+                LockTableOption::LockWithRetry,
+                *is_final,
+            )?)),
             Plan::TruncateTable(truncate_table) => Ok(Arc::new(
                 TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
             )),
@@ -499,8 +501,6 @@ impl InterpreterFactory {
             Plan::SetSecondaryRoles(set_secondary_roles) => Ok(Arc::new(
                 SetSecondaryRolesInterpreter::try_create(ctx, *set_secondary_roles.clone())?,
             )),
-
-            Plan::ShowRoles(_show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(ctx)?)),
 
             // Stages
             Plan::CreateStage(create_stage) => Ok(Arc::new(
@@ -716,6 +716,9 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::DescProcedure(p) => {
+                Ok(Arc::new(DescProcedureInterpreter::try_create(*p.clone())?))
+            }
             Plan::CallProcedure(p) => Ok(Arc::new(CallProcedureInterpreter::try_create(
                 ctx,
                 *p.clone(),

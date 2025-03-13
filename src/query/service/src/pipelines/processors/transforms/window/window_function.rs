@@ -16,18 +16,22 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::Result;
+use databend_common_expression::get_states_layout;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::AggrState;
+use databend_common_expression::AggrStateLoc;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::InputColumns;
-use databend_common_functions::aggregates::get_layout_offsets;
+use databend_common_expression::StateAddr;
 use databend_common_functions::aggregates::AggregateFunction;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
-use databend_common_functions::aggregates::StateAddr;
+use databend_common_functions::aggregates::AggregateFunctionSortDesc;
 use databend_common_sql::executor::physical_plans::LagLeadDefault;
 use databend_common_sql::executor::physical_plans::WindowFunction;
+use itertools::Itertools;
 
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
@@ -48,14 +52,15 @@ pub struct WindowFuncAggImpl {
     // Need to hold arena until `drop`.
     _arena: Arena,
     agg: Arc<dyn AggregateFunction>,
-    place: StateAddr,
+    addr: StateAddr,
+    loc: Box<[AggrStateLoc]>,
     args: Vec<usize>,
 }
 
 impl WindowFuncAggImpl {
     #[inline]
     pub fn reset(&self) {
-        self.agg.init_state(self.place);
+        self.agg.init_state(AggrState::new(self.addr, &self.loc));
     }
 
     #[inline]
@@ -65,12 +70,14 @@ impl WindowFuncAggImpl {
 
     #[inline]
     pub fn accumulate_row(&self, args: InputColumns, row: usize) -> Result<()> {
-        self.agg.accumulate_row(self.place, args, row)
+        self.agg
+            .accumulate_row(AggrState::new(self.addr, &self.loc), args, row)
     }
 
     #[inline]
     pub fn merge_result(&self, builder: &mut ColumnBuilder) -> Result<()> {
-        self.agg.merge_result(self.place, builder)
+        self.agg
+            .merge_result(AggrState::new(self.addr, &self.loc), builder)
     }
 }
 
@@ -79,7 +86,7 @@ impl Drop for WindowFuncAggImpl {
         drop_guard(move || {
             if self.agg.need_manual_drop_state() {
                 unsafe {
-                    self.agg.drop_state(self.place);
+                    self.agg.drop_state(AggrState::new(self.addr, &self.loc));
                 }
             }
         })
@@ -176,19 +183,48 @@ impl WindowFunctionInfo {
     pub fn try_create(window: &WindowFunction, schema: &DataSchema) -> Result<Self> {
         Ok(match window {
             WindowFunction::Aggregate(agg) => {
+                let input_len = agg.arg_indices.len() + agg.sort_desc_indices.len();
+                let mut arg_indexes = Vec::with_capacity(input_len);
+                let mut args = Vec::with_capacity(input_len);
+
+                for p in agg.arg_indices.iter() {
+                    args.push(schema.index_of(&p.to_string())?);
+                    arg_indexes.push(*p);
+                }
+                for (i, desc) in agg.sig.sort_descs.iter().enumerate() {
+                    // sort_desc will reuse existing columns, so only need to insert new columns.
+                    if agg.sig.sort_descs[i].is_reuse_index && args.contains(&desc.index) {
+                        continue;
+                    }
+                    args.push(schema.index_of(&desc.index.to_string())?);
+                    arg_indexes.push(desc.index);
+                }
+
+                let remapping_sort_descs = agg
+                    .sig
+                    .sort_descs
+                    .iter()
+                    .map(|desc| {
+                        let index = arg_indexes
+                            .iter()
+                            .find_position(|i| **i == desc.index)
+                            .map(|(i, _)| i)
+                            .unwrap_or(desc.index);
+                        Ok(AggregateFunctionSortDesc {
+                            index,
+                            is_reuse_index: desc.is_reuse_index,
+                            data_type: desc.data_type.clone(),
+                            nulls_first: desc.nulls_first,
+                            asc: desc.asc,
+                        })
+                    })
+                    .collect::<Result<Vec<_>>>()?;
                 let agg_func = AggregateFunctionFactory::instance().get(
                     agg.sig.name.as_str(),
                     agg.sig.params.clone(),
                     agg.sig.args.clone(),
+                    remapping_sort_descs,
                 )?;
-                let args = agg
-                    .arg_indices
-                    .iter()
-                    .map(|p| {
-                        let offset = schema.index_of(&p.to_string())?;
-                        Ok(offset)
-                    })
-                    .collect::<Result<Vec<_>>>()?;
                 Self::Aggregate(agg_func, args)
             }
             WindowFunction::RowNumber => Self::RowNumber,
@@ -233,15 +269,15 @@ impl WindowFunctionImpl {
         Ok(match window {
             WindowFunctionInfo::Aggregate(agg, args) => {
                 let arena = Arena::new();
-                let mut state_offset = Vec::with_capacity(1);
-                let layout = get_layout_offsets(&[agg.clone()], &mut state_offset)?;
-                let place: StateAddr = arena.alloc_layout(layout).into();
-                let place = place.next(state_offset[0]);
+                let mut states_layout = get_states_layout(&[agg.clone()])?;
+                let addr = arena.alloc_layout(states_layout.layout).into();
+                let loc = states_layout.states_loc.pop().unwrap();
                 let agg = WindowFuncAggImpl {
-                    _arena: arena,
                     agg,
-                    place,
+                    addr,
+                    loc,
                     args,
+                    _arena: arena,
                 };
                 agg.reset();
                 Self::Aggregate(agg)

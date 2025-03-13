@@ -12,28 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// Evaluate and returns the absolute expire time.
-pub trait EvalExpireTime {
-    /// Evaluate and returns the absolute expire time in millisecond since 1970.
+/// A trait for evaluating and returning the absolute expiration time.
+pub trait Expirable {
+    /// Evaluates and returns the absolute expiration time in milliseconds since the Unix epoch (January 1, 1970).
     ///
-    /// If there is no expire time, return u64::MAX.
-    fn eval_expire_at_ms(&self) -> u64;
+    /// If there is no expiration time, it returns `u64::MAX`.
+    fn expires_at_ms(&self) -> u64;
 }
 
-impl<T> EvalExpireTime for &T
-where T: EvalExpireTime
+impl<T> Expirable for &T
+where T: Expirable
 {
-    fn eval_expire_at_ms(&self) -> u64 {
-        EvalExpireTime::eval_expire_at_ms(*self)
+    fn expires_at_ms(&self) -> u64 {
+        Expirable::expires_at_ms(*self)
     }
 }
 
-impl<T> EvalExpireTime for Option<T>
-where T: EvalExpireTime
+impl<T> Expirable for Option<T>
+where T: Expirable
 {
-    fn eval_expire_at_ms(&self) -> u64 {
-        self.as_ref()
-            .map(|m| m.eval_expire_at_ms())
-            .unwrap_or(u64::MAX)
+    fn expires_at_ms(&self) -> u64 {
+        self.as_ref().map(|m| m.expires_at_ms()).unwrap_or(u64::MAX)
     }
 }

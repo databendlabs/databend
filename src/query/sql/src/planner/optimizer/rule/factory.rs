@@ -52,11 +52,10 @@ use super::transform::RuleEagerAggregation;
 use super::transform::RuleLeftExchangeJoin;
 use super::RuleID;
 use super::RulePtr;
+use crate::optimizer::rule::rewrite::RuleMergeFilterIntoMutation;
 use crate::optimizer::OptimizerContext;
 
 pub struct RuleFactory;
-
-pub const MAX_PUSH_DOWN_LIMIT: usize = 10000;
 
 impl RuleFactory {
     pub fn create_rule(id: RuleID, ctx: OptimizerContext) -> Result<RulePtr> {
@@ -81,15 +80,15 @@ impl RuleFactory {
             }
             RuleID::PushDownLimitOuterJoin => Ok(Box::new(RulePushDownLimitOuterJoin::new())),
             RuleID::PushDownLimitEvalScalar => Ok(Box::new(RulePushDownLimitEvalScalar::new())),
-            RuleID::PushDownLimitSort => {
-                Ok(Box::new(RulePushDownLimitSort::new(MAX_PUSH_DOWN_LIMIT)))
-            }
-            RuleID::PushDownLimitWindow => {
-                Ok(Box::new(RulePushDownLimitWindow::new(MAX_PUSH_DOWN_LIMIT)))
-            }
-            RuleID::RulePushDownRankLimitAggregate => {
-                Ok(Box::new(RulePushDownRankLimitAggregate::new()))
-            }
+            RuleID::PushDownLimitSort => Ok(Box::new(RulePushDownLimitSort::new(
+                ctx.max_push_down_limit,
+            ))),
+            RuleID::PushDownLimitWindow => Ok(Box::new(RulePushDownLimitWindow::new(
+                ctx.max_push_down_limit,
+            ))),
+            RuleID::RulePushDownRankLimitAggregate => Ok(Box::new(
+                RulePushDownRankLimitAggregate::new(ctx.max_push_down_limit),
+            )),
             RuleID::PushDownFilterAggregate => Ok(Box::new(RulePushDownFilterAggregate::new())),
             RuleID::PushDownFilterWindow => Ok(Box::new(RulePushDownFilterWindow::new())),
             RuleID::PushDownFilterWindowTopN => {
@@ -109,6 +108,9 @@ impl RuleFactory {
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(ctx.metadata))),
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
             RuleID::SemiToInnerJoin => Ok(Box::new(RuleSemiToInnerJoin::new())),
+            RuleID::MergeFilterIntoMutation => {
+                Ok(Box::new(RuleMergeFilterIntoMutation::new(ctx.metadata)))
+            }
         }
     }
 }

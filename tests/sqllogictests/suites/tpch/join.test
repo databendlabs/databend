@@ -62,7 +62,7 @@ from
 101
 101
 101
-103
+101
 103
 103
 103
@@ -121,20 +121,20 @@ group by
 order by c_custkey
 limit 20;
 ----
-101 12
-103 18
-104 7
-106 18
-107 12
-109 25
+101 13
+103 11
+104 6
+106 20
+107 7
+109 15
 110 9
-112 19
-113 17
-115 28
-116 4
-118 18
-119 10
-NULL 149803
+112 16
+113 9
+115 16
+116 11
+118 17
+119 7
+NULL 1499843
 
 query I
 select
@@ -186,7 +186,7 @@ order by o_custkey
 101
 101
 101
-103
+101
 103
 103
 103
@@ -246,9 +246,6 @@ order by o_custkey
 1
 1
 1
-1
-1
-1
 2
 2
 2
@@ -256,10 +253,13 @@ order by o_custkey
 2
 2
 2
-2
-2
-2
-2
+4
+4
+4
+4
+4
+4
+4
 
 query I
 select
@@ -272,26 +272,26 @@ where o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey 
 order by o_comment
     limit 20;
 ----
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias about the blithely ironic a
- Tiresias above the carefully ironic packages nag about the pend
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias about the quickly express ideas detect quickly regular depen
+ Tiresias above the blithely ironic packages w
 
 statement ok
 set max_block_size = 1024;
@@ -349,7 +349,7 @@ select o_custkey from orders where not exists (select * from customer where subs
 1
 1
 1
-1
-1
-1
+4
+4
+4
 4

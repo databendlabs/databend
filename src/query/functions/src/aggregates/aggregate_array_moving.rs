@@ -37,6 +37,8 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::types::F64;
 use databend_common_expression::utils::arithmetics_type::ResultTypeOfUnary;
 use databend_common_expression::with_number_mapped_type;
+use databend_common_expression::AggrStateRegistry;
+use databend_common_expression::AggrStateType;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Expr;
@@ -50,12 +52,15 @@ use num_traits::AsPrimitive;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregate_sum::SumState;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::assert_variadic_params;
+use crate::aggregates::AggrState;
+use crate::aggregates::AggrStateLoc;
 use crate::BUILTIN_FUNCTIONS;
 
 #[derive(Default, Debug, BorshDeserialize, BorshSerialize)]
@@ -114,7 +119,7 @@ where
         Ok(())
     }
 
-    fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()> {
+    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()> {
         let buffer = match columns {
             Column::Null { len } => Buffer::from(vec![T::default(); *len]),
             Column::Nullable(box nullable_column) => {
@@ -123,8 +128,7 @@ where
             _ => NumberType::<T>::try_downcast_column(columns).unwrap(),
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let place = place.next(offset);
-            let state = place.get::<Self>();
+            let state = AggrState::new(*place, loc).get::<Self>();
             state.values.push(*c);
         });
         Ok(())
@@ -281,7 +285,7 @@ where T: Decimal
         Ok(())
     }
 
-    fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()> {
+    fn accumulate_keys(places: &[StateAddr], loc: &[AggrStateLoc], columns: &Column) -> Result<()> {
         let buffer = match columns {
             Column::Null { len } => Buffer::from(vec![T::default(); *len]),
             Column::Nullable(box nullable_column) => {
@@ -290,8 +294,7 @@ where T: Decimal
             _ => T::try_downcast_column(columns).unwrap().0,
         };
         buffer.iter().zip(places.iter()).for_each(|(c, place)| {
-            let place = place.next(offset);
-            let state = place.get::<Self>();
+            let state = AggrState::new(*place, loc).get::<Self>();
             state.values.push(*c);
         });
         Ok(())
@@ -403,17 +406,17 @@ where State: SumState
         Ok(self.return_type.clone())
     }
 
-    fn init_state(&self, place: StateAddr) {
-        place.write(|| State::default());
+    fn init_state(&self, place: AggrState) {
+        place.write(State::default);
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<State>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<State>()));
     }
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -425,37 +428,37 @@ where State: SumState
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
-        State::accumulate_keys(places, offset, &columns[0])
+        State::accumulate_keys(places, loc, &columns[0])
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<State>();
         state.accumulate_row(&columns[0], row)
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
         let rhs: State = borsh_deserialize_state(reader)?;
 
         state.merge(&rhs)
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<State>();
         let other = rhs.get::<State>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
         state.merge_avg_result(builder, 0_u64, self.scale_add, &self.window_size)
     }
@@ -464,7 +467,7 @@ where State: SumState
         true
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<State>();
         std::ptr::drop_in_place(state);
     }
@@ -515,6 +518,7 @@ pub fn try_create_aggregate_array_moving_avg_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
     assert_variadic_params(display_name, params.len(), (0, 1))?;
@@ -597,17 +601,17 @@ where State: SumState
         Ok(self.return_type.clone())
     }
 
-    fn init_state(&self, place: StateAddr) {
-        place.write(|| State::default());
+    fn init_state(&self, place: AggrState) {
+        place.write(State::default);
     }
 
-    fn state_layout(&self) -> Layout {
-        Layout::new::<State>()
+    fn register_state(&self, registry: &mut AggrStateRegistry) {
+        registry.register(AggrStateType::Custom(Layout::new::<State>()));
     }
 
     fn accumulate(
         &self,
-        place: StateAddr,
+        place: AggrState,
         columns: InputColumns,
         validity: Option<&Bitmap>,
         _input_rows: usize,
@@ -619,37 +623,37 @@ where State: SumState
     fn accumulate_keys(
         &self,
         places: &[StateAddr],
-        offset: usize,
+        loc: &[AggrStateLoc],
         columns: InputColumns,
         _input_rows: usize,
     ) -> Result<()> {
-        State::accumulate_keys(places, offset, &columns[0])
+        State::accumulate_keys(places, loc, &columns[0])
     }
 
-    fn accumulate_row(&self, place: StateAddr, columns: InputColumns, row: usize) -> Result<()> {
+    fn accumulate_row(&self, place: AggrState, columns: InputColumns, row: usize) -> Result<()> {
         let state = place.get::<State>();
         state.accumulate_row(&columns[0], row)
     }
 
-    fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
+    fn serialize(&self, place: AggrState, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
         borsh_serialize_state(writer, state)
     }
 
-    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: AggrState, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
         let rhs: State = borsh_deserialize_state(reader)?;
 
         state.merge(&rhs)
     }
 
-    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: AggrState, rhs: AggrState) -> Result<()> {
         let state = place.get::<State>();
         let other = rhs.get::<State>();
         state.merge(other)
     }
 
-    fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
+    fn merge_result(&self, place: AggrState, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
         state.merge_result(builder, &self.window_size)
     }
@@ -658,7 +662,7 @@ where State: SumState
         true
     }
 
-    unsafe fn drop_state(&self, place: StateAddr) {
+    unsafe fn drop_state(&self, place: AggrState) {
         let state = place.get::<State>();
         std::ptr::drop_in_place(state);
     }
@@ -707,6 +711,7 @@ pub fn try_create_aggregate_array_moving_sum_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
     assert_variadic_params(display_name, params.len(), (0, 1))?;

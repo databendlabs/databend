@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 
 use crate::optimizer::extract::Matcher;
 use crate::optimizer::rule::Rule;
@@ -88,12 +90,20 @@ impl Rule for RuleSemiToInnerJoin {
         };
 
         // Traverse child to find join keys in group by keys
-        let mut group_by_keys = HashSet::new();
+        let mut group_by_keys = HashMap::new();
         find_group_by_keys(child, &mut group_by_keys)?;
-        if condition_cols
-            .iter()
-            .all(|condition| group_by_keys.contains(condition))
-        {
+
+        // If condition are all group by keys and not nullable
+        // we can rewrite semi join to inner join
+        // inner join will ignore null values but semi join will keep them
+        // this happens in Q38
+        if condition_cols.iter().all(|condition| {
+            if let Some(t) = group_by_keys.get(condition) {
+                !t.is_nullable_or_null()
+            } else {
+                false
+            }
+        }) {
             join.join_type = JoinType::Inner;
             let mut join_expr = SExpr::create_binary(
                 Arc::new(join.into()),
@@ -111,7 +121,10 @@ impl Rule for RuleSemiToInnerJoin {
     }
 }
 
-fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> Result<()> {
+fn find_group_by_keys(
+    child: &SExpr,
+    group_by_keys: &mut HashMap<IndexType, Box<DataType>>,
+) -> Result<()> {
     match child.plan() {
         RelOperator::EvalScalar(_) | RelOperator::Filter(_) | RelOperator::Window(_) => {
             find_group_by_keys(child.child(0)?, group_by_keys)?;
@@ -119,7 +132,7 @@ fn find_group_by_keys(child: &SExpr, group_by_keys: &mut HashSet<IndexType>) -> 
         RelOperator::Aggregate(agg) => {
             for item in agg.group_items.iter() {
                 if let ScalarExpr::BoundColumnRef(c) = &item.scalar {
-                    group_by_keys.insert(c.column.index);
+                    group_by_keys.insert(c.column.index, c.column.data_type.clone());
                 }
             }
         }

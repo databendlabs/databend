@@ -31,6 +31,7 @@ use std::sync::Arc;
 
 use bumpalo::Bump;
 use databend_common_expression::block_debug::assert_block_value_sort_eq;
+use databend_common_expression::get_states_layout;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -81,16 +82,16 @@ fn test_agg_hashtable() {
 
         let aggrs = vec![
             factory
-                .get("min", vec![], vec![Int64Type::data_type()])
+                .get("min", vec![], vec![Int64Type::data_type()], vec![])
                 .unwrap(),
             factory
-                .get("max", vec![], vec![Int64Type::data_type()])
+                .get("max", vec![], vec![Int64Type::data_type()], vec![])
                 .unwrap(),
             factory
-                .get("sum", vec![], vec![Int64Type::data_type()])
+                .get("sum", vec![], vec![Int64Type::data_type()], vec![])
                 .unwrap(),
             factory
-                .get("count", vec![], vec![Int64Type::data_type()])
+                .get("count", vec![], vec![Int64Type::data_type()], vec![])
                 .unwrap(),
         ];
 
@@ -189,13 +190,17 @@ fn test_layout() {
         scale: 2,
     }));
 
-    let aggrs = factory.get("sum", vec![], vec![decimal_type]).unwrap();
+    let aggrs = factory
+        .get("sum", vec![], vec![decimal_type], vec![])
+        .unwrap();
     type S = DecimalSumState<false, DecimalType<i128>>;
     type M = DecimalSumState<false, DecimalType<I256>>;
 
+    let states_layout = get_states_layout(&[aggrs.clone()]).unwrap();
+
     assert_eq!(
-        aggrs.state_layout(),
-        Layout::from_size_align(24, 8).unwrap()
+        states_layout.layout,
+        Layout::from_size_align(17, 8).unwrap()
     );
     assert_eq!(Layout::new::<S>(), Layout::from_size_align(16, 8).unwrap());
     assert_eq!(Layout::new::<M>(), Layout::from_size_align(32, 8).unwrap());

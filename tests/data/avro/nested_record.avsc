@@ -1,0 +1,41 @@
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "user",
+  "fields": [
+    {
+      "name": "id",
+      "type": "long"
+    },
+    {
+      "name": "info",
+      "type": {
+        "type": "record",
+        "name": "info_record",
+        "fields": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "contact",
+            "type": {
+              "type": "record",
+              "name": "contact_record",
+              "fields": [
+                {
+                  "name": "email",
+                  "type": ["string", "null"]
+                },
+                {
+                  "name": "phone",
+                  "type": ["string", "null"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

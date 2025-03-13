@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table::DistributionLevel;
+
 use super::SExpr;
 use crate::plans::RelOperator;
 use crate::MetadataRef;
@@ -22,9 +24,38 @@ pub fn contains_local_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool
         .children()
         .any(|s_expr| contains_local_table_scan(s_expr, metadata))
         || if let RelOperator::Scan(get) = s_expr.plan() {
-            metadata.read().table(get.table_index).table().is_local()
+            matches!(
+                metadata
+                    .read()
+                    .table(get.table_index)
+                    .table()
+                    .distribution_level(),
+                DistributionLevel::Local
+            )
         } else {
             false
         }
         || matches!(s_expr.plan(), RelOperator::RecursiveCteScan { .. })
+}
+
+pub fn contains_warehouse_table_scan(s_expr: &SExpr, metadata: &MetadataRef) -> bool {
+    if s_expr
+        .children()
+        .any(|s_expr| contains_warehouse_table_scan(s_expr, metadata))
+    {
+        return true;
+    }
+
+    if let RelOperator::Scan(scan) = s_expr.plan() {
+        return matches!(
+            metadata
+                .read()
+                .table(scan.table_index)
+                .table()
+                .distribution_level(),
+            DistributionLevel::Warehouse,
+        );
+    }
+
+    false
 }

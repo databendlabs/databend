@@ -11,6 +11,7 @@ doctest = false
 test = true
 
 [dependencies]
+
 databend-common-ast = { workspace = true }
 
 anyhow = { workspace = true }

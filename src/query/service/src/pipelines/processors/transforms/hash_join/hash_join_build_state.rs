@@ -54,6 +54,7 @@ use databend_common_hashtable::RawEntry;
 use databend_common_hashtable::RowPtr;
 use databend_common_hashtable::StringRawEntry;
 use databend_common_hashtable::STRING_EARLY_SIZE;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 use databend_common_sql::ColumnSet;
 use ethnum::U256;
@@ -63,6 +64,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
 
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
@@ -112,10 +114,7 @@ pub struct HashJoinBuildState {
     pub(crate) mutex: Mutex<()>,
 
     /// Spill related states.
-    /// Max memory usage threshold for join.
-    pub(crate) global_memory_threshold: usize,
-    /// Max memory usage threshold for each processor.
-    pub(crate) processor_memory_threshold: usize,
+    pub(crate) memory_settings: MemorySettings,
 
     /// Runtime filter related states
     pub(crate) enable_inlist_runtime_filter: bool,
@@ -136,11 +135,14 @@ impl HashJoinBuildState {
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
-            .map(|expr| {
-                expr.as_expr(&BUILTIN_FUNCTIONS)
-                    .data_type()
-                    .clone()
-                    .remove_nullable()
+            .zip(&hash_join_state.hash_join_desc.is_null_equal)
+            .map(|(expr, is_null_equal)| {
+                let expr = expr.as_expr(&BUILTIN_FUNCTIONS);
+                if *is_null_equal {
+                    expr.data_type().clone()
+                } else {
+                    expr.data_type().remove_nullable()
+                }
             })
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
@@ -161,8 +163,7 @@ impl HashJoinBuildState {
 
         let settings = ctx.get_settings();
         let chunk_size_limit = settings.get_max_block_size()? as usize * 16;
-        let (global_memory_threshold, processor_memory_threshold) =
-            Self::get_memory_threshold(ctx.clone(), num_threads)?;
+        let memory_settings = MemorySettings::from_join_settings(&ctx)?;
 
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
@@ -180,37 +181,11 @@ impl HashJoinBuildState {
             build_worker_num: Default::default(),
             build_hash_table_tasks: Default::default(),
             mutex: Default::default(),
-            global_memory_threshold,
-            processor_memory_threshold,
+            memory_settings,
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
         }))
-    }
-
-    // Get max memory usage for settings
-    fn get_memory_threshold(ctx: Arc<QueryContext>, num_threads: usize) -> Result<(usize, usize)> {
-        debug_assert!(num_threads != 0);
-        let settings = ctx.get_settings();
-        let spilling_threshold_per_proc = settings.get_join_spilling_bytes_threshold_per_proc()?;
-        let mut memory_ratio = settings.get_join_spilling_memory_ratio()? as f64 / 100_f64;
-        if memory_ratio > 1_f64 {
-            memory_ratio = 1_f64;
-        }
-        let max_memory_usage = match settings.get_max_memory_usage()? {
-            0 => usize::MAX,
-            max_memory_usage => match memory_ratio {
-                mr if mr == 0_f64 => usize::MAX,
-                mr => (max_memory_usage as f64 * mr) as usize,
-            },
-        };
-
-        let spilling_threshold_per_proc = match spilling_threshold_per_proc {
-            0 => max_memory_usage / num_threads,
-            bytes => bytes,
-        };
-
-        Ok((max_memory_usage, spilling_threshold_per_proc))
     }
 
     /// Add input `DataBlock` to `hash_join_state.row_space`.

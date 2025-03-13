@@ -36,6 +36,8 @@ mod revert;
 mod truncate;
 mod util;
 
+mod snapshot_hint;
+
 pub use agg_index_sink::AggIndexSink;
 pub use analyze::HistogramInfoSink;
 pub use changes::ChangesDesc;
@@ -47,6 +49,7 @@ pub use mutation_source::*;
 pub use read::need_reserve_block_info;
 pub use read::row_fetch_processor;
 pub use replace_into::*;
+pub use snapshot_hint::*;
 pub use util::acquire_task_permit;
 pub use util::column_parquet_metas;
 pub use util::read_block;

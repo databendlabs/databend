@@ -189,7 +189,7 @@ DROP TABLE t
 # force using spill
 
 statement ok
-SET aggregate_spilling_bytes_threshold_per_proc=1;
+SET force_aggregate_data_spill = 1;
 
 statement ok
 CREATE TABLE t (a int, b int, c int)
@@ -467,3 +467,6 @@ use default
 
 statement ok
 drop database test_index
+
+statement ok
+unset force_aggregate_data_spill;

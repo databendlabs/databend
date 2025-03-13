@@ -78,7 +78,7 @@ use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 use crate::version::METASRV_SEMVER;
 use crate::version::MIN_METACLI_SEMVER;
-use crate::watcher::WatchStream;
+use crate::watcher::watch_stream::WatchStream;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
@@ -396,7 +396,7 @@ impl MetaService for MetaServiceImpl {
         let mn = &self.meta_node;
 
         let sender = mn.add_watcher(watch, tx.clone()).await?;
-        let stream = WatchStream::new(rx, sender, mn.subscriber_handle.clone());
+        let stream = WatchStream::new(rx, sender, mn.dispatcher_handle.clone());
 
         if flush {
             let sm = mn.raft_store.state_machine.clone();

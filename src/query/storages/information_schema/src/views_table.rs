@@ -37,12 +37,12 @@ impl ViewsTable {
             0 AS is_trigger_updatable,
             0 AS is_trigger_deletable,
             0 AS is_trigger_insertable_into
-        FROM system.views";
+        FROM default.system.views";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'views'".to_string(),
+            desc: "default.'information_schema'.'views'".to_string(),
             name: "views".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

@@ -52,6 +52,10 @@ pub struct Args {
     /// The fuzz query test file path.
     #[clap(long, default_value = "")]
     fuzz_path: String,
+
+    /// The log path to write executed SQLs..
+    #[clap(long, default_value = ".databend/sqlsmithlog")]
+    log_path: String,
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 5)]
@@ -69,6 +73,7 @@ async fn main() -> Result<()> {
         args.user.clone(),
         args.pass.clone(),
         args.db.clone(),
+        args.log_path.clone(),
         args.count,
         None,
         args.timeout,

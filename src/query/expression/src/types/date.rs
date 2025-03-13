@@ -24,7 +24,6 @@ use databend_common_io::cursor_ext::ReadBytesExt;
 use jiff::civil::Date;
 use jiff::fmt::strtime;
 use jiff::tz::TimeZone;
-use log::error;
 use num_traits::AsPrimitive;
 
 use super::number::SimpleDomain;
@@ -43,8 +42,10 @@ use crate::ScalarRef;
 
 pub const DATE_FORMAT: &str = "%Y-%m-%d";
 /// Minimum valid date, represented by the day offset from 1970-01-01.
-pub const DATE_MIN: i32 = -354285;
+/// 0001-01-01
+pub const DATE_MIN: i32 = -719162;
 /// Maximum valid date, represented by the day offset from 1970-01-01.
+/// 9999-12-31
 pub const DATE_MAX: i32 = 2932896;
 
 /// Check if date is within range.
@@ -54,7 +55,6 @@ pub fn clamp_date(days: i64) -> i32 {
     if (DATE_MIN as i64..=DATE_MAX as i64).contains(&days) {
         days as i32
     } else {
-        error!("{}", format!("date {} is out of range", days));
         DATE_MIN
     }
 }
@@ -261,10 +261,10 @@ impl ArgType for DateType {
 #[inline]
 pub fn string_to_date(
     date_str: impl AsRef<[u8]>,
-    jiff_tz: &TimeZone,
+    tz: &TimeZone,
 ) -> databend_common_exception::Result<Date> {
     let mut reader = Cursor::new(std::str::from_utf8(date_str.as_ref()).unwrap().as_bytes());
-    match reader.read_date_text(jiff_tz) {
+    match reader.read_date_text(tz) {
         Ok(d) => match reader.must_eof() {
             Ok(..) => Ok(d),
             Err(_) => Err(ErrorCode::BadArguments("unexpected argument")),

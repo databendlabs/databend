@@ -40,34 +40,37 @@ copy2
 <<<<
 copy3
 <<<<
-a/bc/data_UUID_0000_00000000.parquet	393	1
-a/bc/data_UUID_0000_00000001.parquet	393	1
-a/bc/data_UUID_0000_00000002.parquet	393	1
-a/bc/data_UUID_0000_00000003.parquet	393	1
-a/bc/data_UUID_0000_00000004.parquet	393	1
-a/bc/data_UUID_0000_00000005.parquet	393	1
-a/bc/data_UUID_0000_00000006.parquet	393	1
-a/bc/data_UUID_0000_00000007.parquet	393	1
-a/bc/data_UUID_0000_00000008.parquet	393	1
-a/bc/data_UUID_0000_00000009.parquet	393	1
+a/bc/data_UUID_0000_00000000.parquet	1
+a/bc/data_UUID_0000_00000001.parquet	1
+a/bc/data_UUID_0000_00000002.parquet	1
+a/bc/data_UUID_0000_00000003.parquet	1
+a/bc/data_UUID_0000_00000004.parquet	1
+a/bc/data_UUID_0000_00000005.parquet	1
+a/bc/data_UUID_0000_00000006.parquet	1
+a/bc/data_UUID_0000_00000007.parquet	1
+a/bc/data_UUID_0000_00000008.parquet	1
+a/bc/data_UUID_0000_00000009.parquet	1
+10	50
+<<<<
+>>>> copy into @s1/a/bc from (select * from t1)  max_file_size=1 detailed_output=false
 >>>> unload path
 >>>> copy /*+ set_var(max_threads=1) */ into @s1 from (select 1)  detailed_output=true
-data_UUID_0000_00000000.parquet	374	1
+data_UUID_0000_00000000.parquet	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/ from (select 1)  detailed_output=true
-data_UUID_0000_00000000.parquet	374	1
+data_UUID_0000_00000000.parquet	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/a from (select 1)  detailed_output=true
-a/data_UUID_0000_00000000.parquet	374	1
+a/data_UUID_0000_00000000.parquet	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/a/ from (select 1)  detailed_output=true
-a/data_UUID_0000_00000000.parquet	374	1
+a/data_UUID_0000_00000000.parquet	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/a/bc from (select 1)  detailed_output=true
-a/bc/data_UUID_0000_00000000.parquet	374	1
+a/bc/data_UUID_0000_00000000.parquet	1
 <<<<
 >>>> copy /*+ set_var(max_threads=1) */ into @s1/a/data_ from (select 1)  detailed_output=true
-a/data_UUID_0000_00000000.parquet	374	1
+a/data_UUID_0000_00000000.parquet	1
 <<<<
 >>>> drop stage if exists s1
 >>>> drop table if exists t1

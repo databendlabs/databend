@@ -32,7 +32,6 @@ use hickory_resolver::TokioAsyncResolver;
 use hyper::Uri;
 use hyper_util::client::legacy::connect::dns::Name;
 use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_v014::client::connect::dns::Name as Hyperv014Name;
 use log::info;
 use serde::Deserialize;
 use serde::Serialize;
@@ -96,31 +95,6 @@ impl tower_service::Service<Name> for DNSService {
     }
 
     fn call(&mut self, name: Name) -> Self::Future {
-        let blocking = runtime::spawn(async move {
-            let resolver = DNSResolver::instance()?;
-            match resolver.resolve(name.to_string()).await {
-                Err(err) => Err(err),
-                Ok(addrs) => Ok(DNSServiceAddrs {
-                    inner: addrs.into_iter(),
-                }),
-            }
-        });
-
-        DNSServiceFuture { inner: blocking }
-    }
-}
-
-// resolve Name of hyper version 0.14
-impl tower_service::Service<Hyperv014Name> for DNSService {
-    type Response = DNSServiceAddrs;
-    type Error = ErrorCode;
-    type Future = DNSServiceFuture;
-
-    fn poll_ready(&mut self, _: &mut Context<'_>) -> Poll<std::result::Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, name: Hyperv014Name) -> Self::Future {
         let blocking = runtime::spawn(async move {
             let resolver = DNSResolver::instance()?;
             match resolver.resolve(name.to_string()).await {

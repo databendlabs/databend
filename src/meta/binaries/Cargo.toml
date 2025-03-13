@@ -22,16 +22,13 @@ io-uring = [
 ]
 
 [dependencies]
-anyerror = { workspace = true }
-anyhow = { workspace = true }
-chrono = { workspace = true }
-clap = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-client = { workspace = true }
+databend-common-meta-control = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-raft-store = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
@@ -39,17 +36,17 @@ databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
+
+anyerror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
 fastrace = { workspace = true }
-futures = { workspace = true }
 log = { workspace = true }
-raft-log = { workspace = true }
 rand = { workspace = true }
-reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
-tokio-stream = { workspace = true }
-url = { workspace = true }
 
 [[bin]]
 name = "databend-meta"

@@ -17,16 +17,15 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
-use databend_common_expression::DataBlock;
 use databend_common_formats::FieldJsonAstDecoder;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_storage::FileParseError;
 
+use crate::read::block_builder_state::BlockBuilderState;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::ndjson::format::NdJsonInputFormat;
-use crate::read::row_based::processors::BlockBuilderState;
 use crate::read::row_based::utils::truncate_column_data;
 
 pub struct NdJsonDecoder {
@@ -154,12 +153,7 @@ impl NdJsonDecoder {
 }
 
 impl RowDecoder for NdJsonDecoder {
-    fn add(
-        &self,
-        state: &mut BlockBuilderState,
-        batch: RowBatchWithPosition,
-    ) -> Result<Vec<DataBlock>> {
-        let columns = &mut state.mutable_columns;
+    fn add(&self, state: &mut BlockBuilderState, batch: RowBatchWithPosition) -> Result<()> {
         let data = batch.data.into_nd_json().unwrap();
         let null_if = self
             .fmt
@@ -168,9 +162,10 @@ impl RowDecoder for NdJsonDecoder {
             .iter()
             .map(|x| x.as_str())
             .collect::<Vec<_>>();
-
         for (row_id, row) in data.iter().enumerate() {
+            let columns = &mut state.column_builders;
             let row = row.trim();
+            let row_id = batch.start_pos.rows + row_id;
             if !row.is_empty() {
                 if let Err(e) = self.read_row(row, columns, &null_if) {
                     self.load_context.error_handler.on_error(
@@ -178,15 +173,14 @@ impl RowDecoder for NdJsonDecoder {
                         Some((columns, state.num_rows)),
                         &mut state.file_status,
                         &batch.start_pos.path,
-                        batch.start_pos.rows + row_id,
+                        row_id,
                     )?
                 } else {
-                    state.num_rows += 1;
-                    state.file_status.num_rows_loaded += 1;
+                    state.add_row(row_id);
                 }
             }
         }
-        Ok(vec![])
+        Ok(())
     }
 }
 

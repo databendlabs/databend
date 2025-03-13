@@ -34,6 +34,7 @@ use crate::ast::write_comma_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::Span;
 
 // SQL statement
 #[allow(clippy::large_enum_variant)]
@@ -46,7 +47,7 @@ pub enum Statement {
     },
     Explain {
         kind: ExplainKind,
-        options: Vec<ExplainOption>,
+        options: (Span, Vec<ExplainOption>),
         query: Box<Statement>,
     },
     ExplainAnalyze {
@@ -216,7 +217,9 @@ pub enum Statement {
     ShowVirtualColumns(ShowVirtualColumnsStmt),
 
     // User
-    ShowUsers,
+    ShowUsers {
+        show_options: Option<ShowOptions>,
+    },
     DescribeUser {
         user: UserIdentity,
     },
@@ -226,7 +229,9 @@ pub enum Statement {
         if_exists: bool,
         user: UserIdentity,
     },
-    ShowRoles,
+    ShowRoles {
+        show_options: Option<ShowOptions>,
+    },
     CreateRole {
         if_not_exists: bool,
         role_name: String,
@@ -253,7 +258,9 @@ pub enum Statement {
 
     // Stages
     CreateStage(CreateStageStmt),
-    ShowStages,
+    ShowStages {
+        show_options: Option<ShowOptions>,
+    },
     DropStage {
         if_exists: bool,
         stage_name: String,
@@ -457,12 +464,12 @@ impl Statement {
             | Statement::RefreshInvertedIndex(..)
             | Statement::RefreshVirtualColumn(..)
             | Statement::ShowVirtualColumns(..)
-            | Statement::ShowUsers
+            | Statement::ShowUsers { .. }
             | Statement::DescribeUser { .. }
-            | Statement::ShowRoles
+            | Statement::ShowRoles { .. }
             | Statement::ShowGrants { .. }
             | Statement::ShowObjectPrivileges(..)
-            | Statement::ShowStages
+            | Statement::ShowStages { .. }
             | Statement::DescribeStage { .. }
             | Statement::RemoveStage { .. }
             | Statement::ListStage { .. }
@@ -586,7 +593,7 @@ impl Display for Statement {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             Statement::Explain {
-                options,
+                options: (_, options),
                 kind,
                 query,
             } => {
@@ -602,6 +609,7 @@ impl Display for Statement {
                                     ExplainOption::Verbose => "VERBOSE",
                                     ExplainOption::Logical => "LOGICAL",
                                     ExplainOption::Optimized => "OPTIMIZED",
+                                    ExplainOption::Decorrelated => "DECORRELATED",
                                 }
                             })
                             .join(", ")
@@ -805,9 +813,19 @@ impl Display for Statement {
             Statement::DropVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::RefreshVirtualColumn(stmt) => write!(f, "{stmt}")?,
             Statement::ShowVirtualColumns(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowUsers => write!(f, "SHOW USERS")?,
+            Statement::ShowUsers { show_options } => {
+                write!(f, "SHOW USERS")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::DescribeUser { user } => write!(f, "DESCRIBE USER {user}")?,
-            Statement::ShowRoles => write!(f, "SHOW ROLES")?,
+            Statement::ShowRoles { show_options } => {
+                write!(f, "SHOW ROLES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,
             Statement::AlterUser(stmt) => write!(f, "{stmt}")?,
             Statement::DropUser { if_exists, user } => {
@@ -871,7 +889,12 @@ impl Display for Statement {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }
             }
-            Statement::ShowStages => write!(f, "SHOW STAGES")?,
+            Statement::ShowStages { show_options } => {
+                write!(f, "SHOW STAGES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
             Statement::DropStage {
                 if_exists,
                 stage_name,

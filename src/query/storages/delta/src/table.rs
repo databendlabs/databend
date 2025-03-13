@@ -26,6 +26,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
@@ -253,7 +254,7 @@ impl DeltaTable {
                 .with_pruner(Some(pruner))
                 .with_partition_columns(self.meta.partition_columns.clone());
 
-        let parquet_reader = Arc::new(builder.build_full_reader()?);
+        let parquet_reader = Arc::new(builder.build_full_reader(false)?);
 
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(
@@ -367,8 +368,8 @@ impl Table for DeltaTable {
         self
     }
 
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn get_table_info(&self) -> &TableInfo {

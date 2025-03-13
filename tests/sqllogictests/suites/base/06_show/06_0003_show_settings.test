@@ -1,3 +1,6 @@
+statement error 1001
+set global query_tag = 'x';
+
 statement ok
 unset max_threads;
 

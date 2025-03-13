@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use educe::Educe;
 
 use super::MutationSource;
 use crate::optimizer::PhysicalProperty;
@@ -124,7 +125,14 @@ pub enum RelOp {
 }
 
 /// Relational operators
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Educe)]
+#[educe(
+    PartialEq(bound = false, attrs = "#[recursive::recursive]"),
+    Eq,
+    Hash(bound = false, attrs = "#[recursive::recursive]"),
+    Clone(bound = false, attrs = "#[recursive::recursive]"),
+    Debug(bound = false, attrs = "#[recursive::recursive]")
+)]
 pub enum RelOperator {
     Scan(Scan),
     Join(Join),

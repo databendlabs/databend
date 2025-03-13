@@ -33,17 +33,17 @@ echo "create stage s1 url = 'fs:///$STAGE_DIR/' FILE_FORMAT = (type = CSV)" | $B
 echo "create user u1 identified by 'password';" | $BENDSQL_CLIENT_CONNECT
 echo "grant insert on default.test_table to u1;" | $BENDSQL_CLIENT_CONNECT
 echo "==== check internal stage write priv ==="
-echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID | cut -d$'\t' -f1,2
 echo "grant Write on stage s2 to 'u1'" | $BENDSQL_CLIENT_CONNECT
-echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID | cut -d$'\t' -f1,2
 echo "grant select on default.test_table to u1;" | $BENDSQL_CLIENT_CONNECT
-echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID | cut -d$'\t' -f1,2
 echo "list @s2;" | $BENDSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
 
 echo "==== check external stage priv ==="
-echo "copy into @s1/csv/ from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID
+echo "copy into @s1/csv/ from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID | cut -d$'\t' -f1,2
 echo "grant write on stage s1 to 'u1'" | $BENDSQL_CLIENT_CONNECT
-echo "copy into @s1/csv/ from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID
+echo "copy into @s1/csv/ from test_table FILE_FORMAT = (type = CSV);" | $TEST_USER_CONNECT | $RM_UUID | cut -d$'\t' -f1,2
 echo "copy into test_table from @s1/csv/ FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT | $RM_UUID
 echo "grant read on stage s1 to 'u1'" | $BENDSQL_CLIENT_CONNECT
 echo "copy into test_table from @s1/csv/ FILE_FORMAT = (type = CSV skip_header = 0) force=true;" | $TEST_USER_CONNECT | $RM_UUID
@@ -80,7 +80,7 @@ echo "create stage s3;" | $BENDSQL_CLIENT_CONNECT
 echo "remove @s3;" | $TEST_USER_CONNECT
 echo "grant write on stage s3 to u1" | $BENDSQL_CLIENT_CONNECT
 echo "remove @s3;" | $TEST_USER_CONNECT
-echo "copy into '@s3/a b' from (select 2);" | $TEST_USER_CONNECT | $RM_UUID
+echo "copy into '@s3/a b' from (select 2);" | $TEST_USER_CONNECT | $RM_UUID | cut -d$'\t' -f1,2
 
 echo "grant select on system.* to u1" | $BENDSQL_CLIENT_CONNECT
 

@@ -26,6 +26,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
@@ -51,6 +52,7 @@ use databend_common_storage::StorageMetrics;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_blocks::memory::IN_MEMORY_DATA;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use parking_lot::Mutex;
@@ -139,8 +141,8 @@ impl Table for MemoryTable {
 
     /// MemoryTable could be distributed table, yet we only insert data in one node per query
     /// Because commit_insert did not support distributed transaction
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn support_column_projection(&self) -> bool {
@@ -207,7 +209,7 @@ impl Table for MemoryTable {
         let parts = vec![MemoryPartInfo::create()];
         return Ok((
             statistics,
-            Partitions::create(PartitionsShuffleKind::Broadcast, parts),
+            Partitions::create(PartitionsShuffleKind::BroadcastCluster, parts),
         ));
     }
 
@@ -235,7 +237,12 @@ impl Table for MemoryTable {
         )
     }
 
-    fn append_data(&self, _ctx: Arc<dyn TableContext>, _pipeline: &mut Pipeline) -> Result<()> {
+    fn append_data(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _pipeline: &mut Pipeline,
+        _table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -248,6 +255,7 @@ impl Table for MemoryTable {
         overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
 

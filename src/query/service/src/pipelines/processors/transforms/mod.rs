@@ -15,6 +15,7 @@
 pub mod aggregator;
 mod hash_join;
 pub(crate) mod range_join;
+mod runtime_pool;
 mod transform_add_computed_columns;
 mod transform_add_const_columns;
 mod transform_add_internal_columns;
@@ -33,7 +34,6 @@ mod transform_recursive_cte_scan;
 mod transform_recursive_cte_source;
 mod transform_resort_addon;
 mod transform_resort_addon_without_source_schema;
-mod transform_sort_spill;
 mod transform_srf;
 mod transform_stream_sort_spill;
 mod transform_udf_script;
@@ -60,22 +60,8 @@ pub use transform_recursive_cte_scan::TransformRecursiveCteScan;
 pub use transform_recursive_cte_source::TransformRecursiveCteSource;
 pub use transform_resort_addon::TransformResortAddOn;
 pub use transform_resort_addon_without_source_schema::TransformResortAddOnWithoutSourceSchema;
-pub use transform_sort_spill::create_transform_sort_spill;
 pub use transform_srf::TransformSRF;
 pub use transform_stream_sort_spill::*;
 pub use transform_udf_script::TransformUdfScript;
 pub use transform_udf_server::TransformUdfServer;
 pub use window::*;
-
-#[cfg(feature = "python-udf")]
-mod python_udf {
-    use std::sync::Arc;
-    use std::sync::LazyLock;
-
-    use arrow_udf_python::Runtime;
-    use parking_lot::RwLock;
-
-    /// python runtime should be only initialized once by gil lock, see: https://github.com/python/cpython/blob/main/Python/pystate.c
-    pub static GLOBAL_PYTHON_RUNTIME: LazyLock<Arc<RwLock<Runtime>>> =
-        LazyLock::new(|| Arc::new(RwLock::new(Runtime::new().unwrap())));
-}

@@ -35,31 +35,31 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
     assert_eq!(prev, None);
     assert_eq!(result, Some(SeqV::new(1, b("a0"))));
 
-    let got = sm.get_maybe_expired_kv("a").await?;
+    let got = sm.get_maybe_expired_kv(&s("a")).await?;
     assert_eq!(got, Some(SeqV::new(1, b("a0"))));
 
     let mut a = sm.new_applier();
     let (prev, result) = a.upsert_kv(&UpsertKV::update("b", b"b0")).await?;
     assert_eq!(prev, None);
     assert_eq!(result, Some(SeqV::new(2, b("b0"))));
-    let got = sm.get_maybe_expired_kv("b").await?;
+    let got = sm.get_maybe_expired_kv(&s("b")).await?;
     assert_eq!(got, Some(SeqV::new(2, b("b0"))));
 
     let mut a = sm.new_applier();
     let (prev, result) = a.upsert_kv(&UpsertKV::update("a", b"a00")).await?;
     assert_eq!(prev, Some(SeqV::new(1, b("a0"))));
     assert_eq!(result, Some(SeqV::new(3, b("a00"))));
-    let got = sm.get_maybe_expired_kv("a").await?;
+    let got = sm.get_maybe_expired_kv(&s("a")).await?;
     assert_eq!(got, Some(SeqV::new(3, b("a00"))));
 
     // get_kv_ref()
 
-    let got = sm.get_maybe_expired_kv("a").await?;
+    let got = sm.get_maybe_expired_kv(&s("a")).await?;
     assert_eq!(got.seq(), 3);
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), Some(&b("a00")));
 
-    let got = sm.get_maybe_expired_kv("x").await?;
+    let got = sm.get_maybe_expired_kv(&s("x")).await?;
     assert_eq!(got.seq(), 0);
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), None);
@@ -95,31 +95,31 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     // get_kv_ref()
 
-    let got = sm.get_maybe_expired_kv("a").await?;
+    let got = sm.get_maybe_expired_kv(&s("a")).await?;
     assert_eq!((got.seq(), got.value()), (1u64, Some(&b("a0"))));
 
-    let got = sm.get_maybe_expired_kv("b").await?;
+    let got = sm.get_maybe_expired_kv(&s("b")).await?;
     assert_eq!((got.seq(), got.value()), (0, None));
 
-    let got = sm.get_maybe_expired_kv("c").await?;
+    let got = sm.get_maybe_expired_kv(&s("c")).await?;
     assert_eq!((got.seq(), got.value()), (4, Some(&b("c1"))));
 
-    let got = sm.get_maybe_expired_kv("d").await?;
+    let got = sm.get_maybe_expired_kv(&s("d")).await?;
     assert_eq!((got.seq(), got.value()), (5, Some(&b("d1"))));
 
     // get_kv()
 
     assert_eq!(
-        sm.get_maybe_expired_kv("a").await?,
+        sm.get_maybe_expired_kv(&s("a")).await?,
         Some(SeqV::new(1, b("a0")))
     );
-    assert_eq!(sm.get_maybe_expired_kv("b").await?, None);
+    assert_eq!(sm.get_maybe_expired_kv(&s("b")).await?, None);
     assert_eq!(
-        sm.get_maybe_expired_kv("c").await?,
+        sm.get_maybe_expired_kv(&s("c")).await?,
         Some(SeqV::new(4, b("c1")))
     );
     assert_eq!(
-        sm.get_maybe_expired_kv("d").await?,
+        sm.get_maybe_expired_kv(&s("d")).await?,
         Some(SeqV::new(5, b("d1")))
     );
 
@@ -278,7 +278,11 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
     a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(10))
         .await?;
 
-    assert_eq!(sm.get_maybe_expired_kv("a").await?, None, "a is expired");
+    assert_eq!(
+        sm.get_maybe_expired_kv(&s("a")).await?,
+        None,
+        "a is expired"
+    );
 
     // List until 20_000 ms
     let got = sm

@@ -73,7 +73,8 @@ where SM: StateMachineApi + 'static
     pub(crate) cmd_ctx: CmdContext,
 
     /// The changes have been made by the applying one log entry
-    changes: Vec<Change<Vec<u8>, String>>,
+    /// `(key, prev, result)`.
+    changes: Vec<(String, Option<SeqV>, Option<SeqV>)>,
 }
 
 impl<'a, SM> Applier<'a, SM>
@@ -586,8 +587,7 @@ where SM: StateMachineApi + 'static
             return;
         }
 
-        self.changes
-            .push(Change::new(prev, result).with_id(key.to_string()))
+        self.changes.push((key.to_string(), prev, result))
     }
 
     /// Retrieve the proposing time from a raft-log.

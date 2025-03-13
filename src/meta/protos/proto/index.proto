@@ -54,3 +54,15 @@ message IndexMeta {
 
   string original_query = 8;
 }
+
+message MarkedDeletedIndexMeta {
+  enum MarkedDeletedIndexType {
+    AGGREGATING = 0;
+    INVERTED = 1;
+  }
+
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  string dropped_on = 1;
+  MarkedDeletedIndexType index_type = 2;
+}

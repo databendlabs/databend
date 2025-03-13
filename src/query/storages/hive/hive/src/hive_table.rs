@@ -25,6 +25,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableStatistics;
@@ -54,6 +55,7 @@ use databend_common_storages_parquet::ParquetRSPruner;
 use databend_common_storages_parquet::ParquetRSReaderBuilder;
 use databend_storages_common_pruner::partition_prunner::PartitionPruner;
 use databend_storages_common_table_meta::meta::SnapshotId;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ChangeType;
 use futures::TryStreamExt;
 use log::info;
@@ -194,7 +196,7 @@ impl HiveTable {
                 .with_pruner(Some(pruner))
                 .with_partition_columns(partition_keys);
 
-        let parquet_reader = Arc::new(builder.build_full_reader()?);
+        let parquet_reader = Arc::new(builder.build_full_reader(false)?);
 
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(
@@ -396,8 +398,8 @@ impl HiveTable {
 
 #[async_trait::async_trait]
 impl Table for HiveTable {
-    fn is_local(&self) -> bool {
-        false
+    fn distribution_level(&self) -> DistributionLevel {
+        DistributionLevel::Cluster
     }
 
     fn as_any(&self) -> &(dyn std::any::Any + 'static) {
@@ -449,6 +451,7 @@ impl Table for HiveTable {
         _overwrite: bool,
         _prev_snapshot_id: Option<SnapshotId>,
         _deduplicated_label: Option<String>,
+        _table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "commit_insertion operation for table {} is not implemented, table engine is {}",

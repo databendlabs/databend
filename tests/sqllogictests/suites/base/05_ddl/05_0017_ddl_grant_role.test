@@ -241,7 +241,7 @@ grant usage on warehouse a to role role1;
 statement ok
 grant usage on warehouse b to role role1;
 
-statement error 2217
+statement ok
 grant usage on warehouse a to role role2;
 
 statement ok
@@ -257,6 +257,9 @@ statement error 2218
 grant usage on warehouse a to u1;
 
 statement ok
+GRANT create warehouse on *.* to role 'role1';
+
+statement ok
 drop user if exists u1;
 
 statement ok
@@ -264,3 +267,6 @@ drop role if exists role1;
 
 statement ok
 drop role if exists role2;
+
+statement error 1061
+GRANT ownership on warehouse w1 to role 'role1';

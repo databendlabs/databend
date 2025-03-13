@@ -21,6 +21,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -56,6 +57,8 @@ use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -63,6 +66,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
@@ -103,12 +107,12 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_common_meta_types::anyerror::func_name;
 use databend_common_meta_types::MetaId;
 use databend_common_meta_types::SeqV;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use dyn_clone::DynClone;
+use log::info;
 
 use crate::database::Database;
 use crate::table::Table;
@@ -138,23 +142,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     // Get the info of the catalog.
     fn info(&self) -> Arc<CatalogInfo>;
 
-    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
-        Err(ErrorCode::Unimplemented(format!(
-            "{} not implemented",
-            func_name!()
-        )))
-    }
+    // This is used to return a new catalog; in the new catalog, the table info is not refreshed
+    // This is used for attached table, if we attach many tables each is to read from s3, query system.tables it will be very slow.
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>>;
 
     // Get the database by name.
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>>;
 
-    // List all databases history
+    // List all database history
     async fn list_databases_history(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
 
     // Get all the databases.
     async fn list_databases(&self, tenant: &Tenant) -> Result<Vec<Arc<dyn Database>>>;
 
-    // Operation with database.
+    // Operation with a database.
     async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply>;
 
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply>;
@@ -166,6 +167,52 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn drop_index(&self, req: DropIndexReq) -> Result<()>;
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
+
+    async fn list_marked_deleted_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_marked_deleted_indexes' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_marked_deleted_table_indexes' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        _tenant: &Tenant,
+        _table_id: u64,
+        _index_ids: &[u64],
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'remove_marked_deleted_index_ids' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        _tenant: &Tenant,
+        _table_id: u64,
+        _indexes: &[(String, String)],
+    ) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'remove_marked_deleted_table_indexes' not implemented for catalog {}",
+            self.name()
+        )))
+    }
 
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply>;
 
@@ -364,16 +411,21 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         req: UpdateMultiTableMetaReq,
     ) -> Result<UpdateTableMetaReply> {
-        self.retryable_update_multi_table_meta(req)
-            .await?
-            .map_err(|e| {
-                ErrorCode::TableVersionMismatched(format!(
-                    "Fail to update table metas, conflict tables: {:?}",
-                    e.iter()
-                        .map(|(tid, seq, meta)| (tid, seq, &meta.engine))
-                        .collect::<Vec<_>>()
-                ))
-            })
+        let result = self.retryable_update_multi_table_meta(req).await?;
+        match result {
+            Ok(reply) => Ok(reply),
+            Err(failed_tables) => {
+                let err_msg = format!(
+                    "Due to concurrent transactions, transaction commit failed. Conflicting table IDs: {:?}",
+                    failed_tables.iter().map(|(tid, _, _)| tid).collect::<Vec<_>>()
+                );
+                info!(
+                    "Due to concurrent transactions, transaction commit failed. Conflicting tables: {:?}",
+                    failed_tables
+                );
+                Err(ErrorCode::TableVersionMismatched(err_msg))
+            }
+        }
     }
 
     // update stream metas, currently used by "copy into location form stream"
@@ -523,6 +575,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         &self,
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>>;
+
+    async fn set_table_lvt(
+        &self,
+        _name_ident: &LeastVisibleTimeIdent,
+        _value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime> {
+        unimplemented!()
+    }
 
     async fn rename_dictionary(&self, req: RenameDictionaryReq) -> Result<()>;
 }

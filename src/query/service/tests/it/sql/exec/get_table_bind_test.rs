@@ -146,6 +146,8 @@ use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use xorf::BinaryFuse16;
@@ -165,6 +167,10 @@ impl Catalog for FakedCatalog {
 
     fn info(&self) -> Arc<CatalogInfo> {
         self.cat.info()
+    }
+
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        todo!()
     }
 
     async fn get_database(&self, _tenant: &Tenant, _db_name: &str) -> Result<Arc<dyn Database>> {
@@ -674,7 +680,7 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
-    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
@@ -840,20 +846,21 @@ impl TableContext for CtxDelegation {
         _database_name: &str,
         _table_name: &str,
         _files: &[StageFileInfo],
+        _path_prefix: Option<String>,
         _max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles> {
         todo!()
     }
 
-    fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {
+    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
         todo!()
     }
 
-    fn clear_segment_locations(&self) -> Result<()> {
+    fn clear_written_segment_locations(&self) -> Result<()> {
         todo!()
     }
 
-    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
         todo!()
     }
 
@@ -987,6 +994,14 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.ctx.get_table_meta_timestamps(table, previous_snapshot)
+    }
+
     fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
@@ -1004,6 +1019,14 @@ impl TableContext for CtxDelegation {
     }
 
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
+
+    fn set_cluster(&self, _: Arc<Cluster>) {
+        todo!()
+    }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
 }

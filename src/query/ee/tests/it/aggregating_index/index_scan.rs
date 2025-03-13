@@ -1030,6 +1030,7 @@ fn get_test_suites() -> Vec<TestSuite> {
 
 async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
     let test_suites = get_test_suites();
+
     let spill_settings = if spill {
         Some(HashMap::from([
             (
@@ -1037,7 +1038,11 @@ async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
                 "100".to_string(),
             ),
             (
-                "aggregate_spilling_bytes_threshold_per_proc".to_string(),
+                "query_out_of_memory_behavior".to_string(),
+                "spilling".to_string(),
+            ),
+            (
+                "max_query_memory_usage".to_string(),
                 "1".to_string(),
             ),
         ]))

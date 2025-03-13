@@ -67,10 +67,10 @@ async fn test_leveled_query_with_db() -> anyhow::Result<()> {
     ]);
 
     assert_eq!(
-        lm.str_map().get("a").await?,
+        lm.str_map().get(&s("a")).await?,
         Marked::new_with_meta(1, b("a0"), None)
     );
-    assert_eq!(lm.str_map().get("b").await?, Marked::new_tombstone(4));
+    assert_eq!(lm.str_map().get(&s("b")).await?, Marked::new_tombstone(4));
 
     let got = lm
         .expire_map()

@@ -24,6 +24,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_storage::Datum;
 use databend_common_storage::Histogram;
 use databend_common_storage::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -234,10 +235,29 @@ impl Operator for Scan {
                 continue;
             }
             if let Some(col_stat) = v.clone() {
-                // Safe to unwrap: min, max and ndv are all `Some(_)`.
+                // Safe to unwrap: min, max are all `Some(_)`.
                 let min = col_stat.min.unwrap();
                 let max = col_stat.max.unwrap();
-                let ndv = col_stat.ndv.unwrap();
+                // ndv could be `None`, we will use `num_rows - null_count` as ndv instead.
+                //
+                // NOTE: don't touch the original num_rows, since it will be used in other places.
+                let mut ndv = col_stat
+                    .ndv
+                    .unwrap_or_else(|| num_rows.saturating_sub(col_stat.null_count));
+
+                // Alter ndv based on min and max if the datum is uint or int.
+                match (&max, &min) {
+                    (Datum::UInt(m), Datum::UInt(n)) if m >= n => ndv = ndv.min(m - n + 1),
+                    (Datum::Int(m), Datum::Int(n)) if m >= n => {
+                        ndv = ndv.min(m.saturating_add(1).saturating_sub(*n) as u64)
+                    }
+                    _ => {
+                        if max == min {
+                            ndv = 1
+                        }
+                    }
+                };
+
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
                 {

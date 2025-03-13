@@ -104,7 +104,7 @@ impl RulePushDownFilterScan {
 
                         if self.replace_view {
                             column_binding_builder = column_binding_builder
-                                .virtual_computed_expr(column.column.virtual_computed_expr.clone());
+                                .virtual_expr(column.column.virtual_expr.clone());
                         }
 
                         column.column = column_binding_builder.build();

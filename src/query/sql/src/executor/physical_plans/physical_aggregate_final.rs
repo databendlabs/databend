@@ -148,6 +148,23 @@ impl PhysicalPlanBuilder {
                                         .clone())
                                 })
                                 .collect::<Result<_>>()?;
+                            let sort_desc_indices = agg.sort_descs
+                                .iter()
+                                .map(|desc| {
+                                    if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
+                                        Ok(col.column.index)
+                                    } else {
+                                        Err(ErrorCode::Internal(
+                                            "Aggregate function description must be a BoundColumnRef"
+                                                .to_string(),
+                                        ))
+                                    }
+                                })
+                                .collect::<Result<_>>()?;
+                            let sort_descs = agg.sort_descs
+                                .iter()
+                                .map(|desc| desc.try_into())
+                                .collect::<Result<_>>()?;
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: agg.func_name.clone(),
@@ -155,9 +172,11 @@ impl PhysicalPlanBuilder {
                                     return_type: *agg.return_type.clone(),
                                     args,
                                     params: agg.params.clone(),
+                                    sort_descs,
                                 },
                                 output_column: v.index,
                                 arg_indices,
+                                sort_desc_indices,
                                 display: v.scalar.as_expr()?.sql_display(),
                             })
                         }
@@ -193,9 +212,11 @@ impl PhysicalPlanBuilder {
                                     return_type: *udaf.return_type.clone(),
                                     args,
                                     params: vec![],
+                                    sort_descs: vec![],
                                 },
                                 output_column: v.index,
                                 arg_indices,
+                                sort_desc_indices: vec![],
                                 display: v.scalar.as_expr()?.sql_display(),
                             })
                         }
@@ -277,19 +298,16 @@ impl PhysicalPlanBuilder {
 
                         let keys = {
                             let schema = aggregate_partial.output_schema()?;
-                            let start = aggregate_partial.agg_funcs.len();
                             let end = schema.num_fields();
-                            let mut groups = Vec::with_capacity(end - start);
-                            for idx in start..end {
-                                let group_key = RemoteExpr::ColumnRef {
+                            let start = end - aggregate_partial.group_by.len();
+                            (start..end)
+                                .map(|id| RemoteExpr::ColumnRef {
                                     span: None,
-                                    id: idx,
-                                    data_type: schema.field(idx).data_type().clone(),
-                                    display_name: (idx - start).to_string(),
-                                };
-                                groups.push(group_key);
-                            }
-                            groups
+                                    id,
+                                    data_type: schema.field(id).data_type().clone(),
+                                    display_name: (id - start).to_string(),
+                                })
+                                .collect()
                         };
 
                         PhysicalPlan::Exchange(Exchange {
@@ -373,6 +391,19 @@ impl PhysicalPlanBuilder {
                                     }
                                 })
                                 .collect::<Result<Vec<_>>>()?;
+                            let sort_desc_indices = agg.sort_descs
+                                .iter()
+                                .map(|desc| {
+                                    if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
+                                        Ok(col.column.index)
+                                    } else {
+                                        Err(ErrorCode::Internal(
+                                            "Aggregate function sort description must be a BoundColumnRef"
+                                                .to_string(),
+                                        ))
+                                    }
+                                })
+                                .collect::<Result<_>>()?;
                             let args = arg_indices
                                 .iter()
                                 .map(|i| {
@@ -382,6 +413,10 @@ impl PhysicalPlanBuilder {
                                         .clone())
                                 })
                                 .collect::<Result<_>>()?;
+                            let sort_descs = agg.sort_descs
+                                .iter()
+                                .map(|desc| desc.try_into())
+                                .collect::<Result<_>>()?;
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: agg.func_name.clone(),
@@ -389,9 +424,11 @@ impl PhysicalPlanBuilder {
                                     return_type: *agg.return_type.clone(),
                                     args,
                                     params: agg.params.clone(),
+                                    sort_descs,
                                 },
                                 output_column: v.index,
                                 arg_indices,
+                                sort_desc_indices,
                                 display: v.scalar.as_expr()?.sql_display(),
                             })
                         }
@@ -427,9 +464,11 @@ impl PhysicalPlanBuilder {
                                     return_type: *udaf.return_type.clone(),
                                     args,
                                     params: vec![],
+                                    sort_descs: vec![],
                                 },
                                 output_column: v.index,
                                 arg_indices,
+                                sort_desc_indices: vec![],
                                 display: v.scalar.as_expr()?.sql_display(),
                             })
                         }

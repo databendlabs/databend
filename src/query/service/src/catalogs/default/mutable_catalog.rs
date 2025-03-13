@@ -30,6 +30,7 @@ use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::schema::index_id_ident::IndexId;
 use databend_common_meta_app::schema::index_id_ident::IndexIdIdent;
+use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
@@ -69,6 +70,8 @@ use databend_common_meta_app::schema::GetDatabaseReq;
 use databend_common_meta_app::schema::GetDictionaryReply;
 use databend_common_meta_app::schema::GetIndexReply;
 use databend_common_meta_app::schema::GetIndexReq;
+use databend_common_meta_app::schema::GetMarkedDeletedIndexesReply;
+use databend_common_meta_app::schema::GetMarkedDeletedTableIndexesReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReply;
 use databend_common_meta_app::schema::GetSequenceNextValueReq;
 use databend_common_meta_app::schema::GetSequenceReply;
@@ -76,6 +79,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IndexMeta;
+use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
@@ -232,6 +236,10 @@ impl Catalog for MutableCatalog {
         CatalogInfo::default().into()
     }
 
+    fn disable_table_info_refresh(self: Arc<Self>) -> Result<Arc<dyn Catalog>> {
+        Ok(self)
+    }
+
     #[async_backtrace::framed]
     async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
         let db_info = self
@@ -346,6 +354,61 @@ impl Catalog for MutableCatalog {
         let got = self.ctx.meta.get_index(&req.name_ident).await?;
         let got = got.ok_or_else(|| AppError::from(req.name_ident.unknown_error("get_index")))?;
         Ok(got)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_marked_deleted_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedIndexesReply> {
+        let res = self
+            .ctx
+            .meta
+            .list_marked_deleted_indexes(tenant, table_id)
+            .await?;
+        Ok(res)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: Option<u64>,
+    ) -> Result<GetMarkedDeletedTableIndexesReply> {
+        Ok(self
+            .ctx
+            .meta
+            .list_marked_deleted_table_indexes(tenant, table_id)
+            .await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_index_ids(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        index_ids: &[u64],
+    ) -> Result<()> {
+        Ok(self
+            .ctx
+            .meta
+            .remove_marked_deleted_index_ids(tenant, table_id, index_ids)
+            .await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn remove_marked_deleted_table_indexes(
+        &self,
+        tenant: &Tenant,
+        table_id: u64,
+        indexes: &[(String, String)],
+    ) -> Result<()> {
+        Ok(self
+            .ctx
+            .meta
+            .remove_marked_deleted_table_indexes(tenant, table_id, indexes)
+            .await?)
     }
 
     #[async_backtrace::framed]
@@ -796,6 +859,14 @@ impl Catalog for MutableCatalog {
         req: ListDictionaryReq,
     ) -> Result<Vec<(String, DictionaryMeta)>> {
         Ok(self.ctx.meta.list_dictionaries(req).await?)
+    }
+
+    async fn set_table_lvt(
+        &self,
+        name_ident: &LeastVisibleTimeIdent,
+        value: &LeastVisibleTime,
+    ) -> Result<LeastVisibleTime> {
+        Ok(self.ctx.meta.set_table_lvt(name_ident, value).await?)
     }
 
     #[async_backtrace::framed]

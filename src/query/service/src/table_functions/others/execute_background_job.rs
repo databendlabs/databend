@@ -78,10 +78,6 @@ impl ExecuteBackgroundJobTable {
 
 #[async_trait::async_trait]
 impl Table for ExecuteBackgroundJobTable {
-    fn is_local(&self) -> bool {
-        true
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }

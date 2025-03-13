@@ -397,11 +397,28 @@ fn parse_webhdfs_params(l: &mut UriLocation, root: String) -> Result<StoragePara
     let endpoint_url = format!("{prefix}://{}", l.name);
 
     let delegation = l.connection.get("delegation").cloned().unwrap_or_default();
+    let disable_list_batch = l
+        .connection
+        .get("disable_list_batch")
+        .map(|v| v.to_lowercase().parse::<bool>())
+        .unwrap_or(Ok(true))
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "disable_list_batch should be `TRUE` or `FALSE`, parse error with: {:?}",
+                    e,
+                ),
+            )
+        })?;
+    let user_name = l.connection.get("user_name").cloned().unwrap_or_default();
 
     let sp = StorageParams::Webhdfs(StorageWebhdfsConfig {
         endpoint_url,
         root,
         delegation,
+        disable_list_batch,
+        user_name,
     });
 
     l.connection

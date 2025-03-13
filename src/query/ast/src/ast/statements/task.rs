@@ -46,11 +46,22 @@ impl Display for TaskSql {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum CreateTaskOption {
+    Warehouse(String),
+    Schedule(ScheduleOptions),
+    After(Vec<String>),
+    When(Expr),
+    SuspendTaskAfterNumFailures(u64),
+    ErrorIntegration(String),
+    Comment(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct CreateTaskStmt {
     pub if_not_exists: bool,
     pub name: String,
-    pub warehouse_opts: WarehouseOptions,
+    pub warehouse: Option<String>,
     pub schedule_opts: Option<ScheduleOptions>,
     pub session_parameters: BTreeMap<String, String>,
     pub suspend_task_after_num_failures: Option<u64>,
@@ -62,6 +73,34 @@ pub struct CreateTaskStmt {
     pub sql: TaskSql,
 }
 
+impl CreateTaskStmt {
+    pub fn apply_opt(&mut self, opt: CreateTaskOption) {
+        match opt {
+            CreateTaskOption::Warehouse(wh) => {
+                self.warehouse = Some(wh);
+            }
+            CreateTaskOption::Schedule(schedule) => {
+                self.schedule_opts = Some(schedule);
+            }
+            CreateTaskOption::After(after) => {
+                self.after = after;
+            }
+            CreateTaskOption::When(when) => {
+                self.when_condition = Some(when);
+            }
+            CreateTaskOption::SuspendTaskAfterNumFailures(num) => {
+                self.suspend_task_after_num_failures = Some(num);
+            }
+            CreateTaskOption::ErrorIntegration(integration) => {
+                self.error_integration = Some(integration);
+            }
+            CreateTaskOption::Comment(comment) => {
+                self.comments = Some(comment);
+            }
+        }
+    }
+}
+
 impl Display for CreateTaskStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "CREATE TASK")?;
@@ -71,8 +110,8 @@ impl Display for CreateTaskStmt {
 
         write!(f, " {}", self.name)?;
 
-        if self.warehouse_opts.warehouse.is_some() {
-            write!(f, " {}", self.warehouse_opts)?;
+        if let Some(warehouse) = self.warehouse.as_ref() {
+            write!(f, " WAREHOUSE = '{}'", warehouse)?;
         }
 
         if let Some(schedule_opt) = self.schedule_opts.as_ref() {
@@ -172,6 +211,15 @@ impl Display for AlterTaskStmt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AlterTaskSetOption {
+    Warehouse(String),
+    Schedule(ScheduleOptions),
+    SuspendTaskAfterNumFailures(u64),
+    ErrorIntegration(String),
+    Comment(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum AlterTaskOptions {
     Resume,
@@ -192,6 +240,38 @@ pub enum AlterTaskOptions {
     ModifyWhen(Expr),
     AddAfter(Vec<String>),
     RemoveAfter(Vec<String>),
+}
+
+impl AlterTaskOptions {
+    pub fn apply_opt(&mut self, opt: AlterTaskSetOption) {
+        if let AlterTaskOptions::Set {
+            warehouse,
+            schedule,
+            suspend_task_after_num_failures,
+            session_parameters: _,
+            error_integration,
+            comments,
+        } = self
+        {
+            match opt {
+                AlterTaskSetOption::Warehouse(wh) => {
+                    *warehouse = Some(wh);
+                }
+                AlterTaskSetOption::Schedule(s) => {
+                    *schedule = Some(s);
+                }
+                AlterTaskSetOption::ErrorIntegration(integration) => {
+                    *error_integration = Some(integration);
+                }
+                AlterTaskSetOption::SuspendTaskAfterNumFailures(num) => {
+                    *suspend_task_after_num_failures = Some(num);
+                }
+                AlterTaskSetOption::Comment(comment) => {
+                    *comments = Some(comment);
+                }
+            }
+        }
+    }
 }
 
 impl Display for AlterTaskOptions {

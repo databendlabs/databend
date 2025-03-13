@@ -49,6 +49,7 @@ mod hash;
 mod map;
 mod math;
 mod misc;
+mod obfuscator;
 mod other;
 pub(crate) mod parser;
 mod regexp;

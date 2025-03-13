@@ -1,0 +1,90 @@
+statement ok
+create or replace table t(scores map(string, int))
+
+query 
+copy into t from @data/avro/map.avro file_format = (type=avro)
+----
+avro/map.avro 2 0 NULL NULL
+
+query 
+select * from t
+----
+{'math':100}
+{}
+
+query 
+select scores['math'] from t
+----
+100
+NULL
+
+statement ok
+create or replace table t(tags array(string))
+
+query 
+copy into t from @data/avro/array.avro file_format = (type=avro)
+----
+avro/array.avro 2 0 NULL NULL
+
+query 
+select * from t
+----
+['tall','rich','handsome']
+[]
+
+query 
+select tags[1] from t;
+----
+tall
+NULL
+
+statement ok
+create or replace table t(id int, level int not null, info tuple(name string, age int, contact tuple(address string, email string, phone string)))
+
+query error missing
+copy into t from @data/avro/nested_record.avro file_format = (type=avro)
+
+query 
+copy into t from @data/avro/nested_record.avro file_format = (type=avro missing_field_as=field_default)
+----
+avro/nested_record.avro 2 0 NULL NULL
+
+query 
+select * from t
+----
+0 0 ('yang',NULL,(NULL,'yang@m','911'))
+1 0 ('wang',NULL,(NULL,'wang@m',NULL))
+
+statement ok
+create or replace table t(info variant)
+
+query 
+copy into t from @data/avro/nested_record.avro file_format = (type=avro)
+----
+avro/nested_record.avro 2 0 NULL NULL
+
+query 
+select * from t
+----
+{"contact":{"email":"yang@m","phone":"911"},"name":"yang"}
+{"contact":{"email":"wang@m","phone":null},"name":"wang"}
+
+query
+select info:name from t
+----
+"yang"
+"wang"
+
+statement ok
+create or replace table t(c_int int32, c_long int64, c_float float, c_double double)
+
+query
+copy into t from @data/avro/number.avro file_format = (type=avro)
+----
+avro/number.avro 2 0 NULL NULL
+
+query
+select * from t
+----
+2147483647 9223372036854775807 3.4028235e38 1.7976931348623157e308
+-2147483648 -9223372036854775808 -3.4028235e38 -1.7976931348623157e308

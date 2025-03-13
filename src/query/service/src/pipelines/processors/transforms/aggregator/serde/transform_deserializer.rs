@@ -89,18 +89,26 @@ impl TransformDeserializer {
                 }
                 Some(meta) => {
                     return match meta.typ == BUCKET_TYPE {
-                        true => Ok(DataBlock::empty_with_meta(
-                            AggregateMeta::create_serialized(
-                                meta.bucket,
-                                deserialize_block(
-                                    dict,
-                                    fragment_data,
-                                    &self.schema,
-                                    self.arrow_schema.clone(),
-                                )?,
-                                meta.max_partition_count,
-                            ),
-                        )),
+                        true => {
+                            let mut block = deserialize_block(
+                                dict,
+                                fragment_data,
+                                &self.schema,
+                                self.arrow_schema.clone(),
+                            )?;
+
+                            if meta.is_empty {
+                                block = block.slice(0..0);
+                            }
+
+                            Ok(DataBlock::empty_with_meta(
+                                AggregateMeta::create_serialized(
+                                    meta.bucket,
+                                    block,
+                                    meta.max_partition_count,
+                                ),
+                            ))
+                        }
                         false => {
                             let data_schema = Arc::new(exchange_defines::spilled_schema());
                             let arrow_schema = Arc::new(exchange_defines::spilled_arrow_schema());

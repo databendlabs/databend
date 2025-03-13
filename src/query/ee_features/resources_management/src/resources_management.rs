@@ -24,15 +24,21 @@ use databend_common_management::WarehouseInfo;
 use databend_common_meta_types::NodeInfo;
 use databend_common_meta_types::NodeType;
 
+const ENTERPRISE_FEATURE_UNAVAILABLE_ERROR: &str = "The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/";
+
 #[async_trait::async_trait]
 pub trait ResourcesManagement: Sync + Send + 'static {
     fn support_forward_warehouse_request(&self) -> bool;
 
     async fn init_node(&self, node: &mut NodeInfo) -> Result<()>;
 
-    async fn create_warehouse(&self, name: String, nodes: Vec<SelectedNode>) -> Result<()>;
+    async fn create_warehouse(
+        &self,
+        name: String,
+        nodes: Vec<SelectedNode>,
+    ) -> Result<WarehouseInfo>;
 
-    async fn drop_warehouse(&self, name: String) -> Result<()>;
+    async fn drop_warehouse(&self, name: String) -> Result<WarehouseInfo>;
 
     async fn resume_warehouse(&self, name: String) -> Result<()>;
 
@@ -91,32 +97,46 @@ impl ResourcesManagement for DummyResourcesManagement {
         Ok(())
     }
 
-    async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    async fn create_warehouse(&self, _: String, _: Vec<SelectedNode>) -> Result<WarehouseInfo> {
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
-    async fn drop_warehouse(&self, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+    async fn drop_warehouse(&self, _: String) -> Result<WarehouseInfo> {
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn resume_warehouse(&self, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn suspend_warehouse(&self, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn rename_warehouse(&self, _: String, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn inspect_warehouse(&self, _: String) -> Result<Vec<NodeInfo>> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn list_warehouses(&self) -> Result<Vec<WarehouseInfo>> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn add_warehouse_cluster(
@@ -125,15 +145,21 @@ impl ResourcesManagement for DummyResourcesManagement {
         _: String,
         _: Vec<SelectedNode>,
     ) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn rename_warehouse_cluster(&self, _: String, _: String, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn drop_warehouse_cluster(&self, _: String, _: String) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn assign_warehouse_nodes(
@@ -141,7 +167,9 @@ impl ResourcesManagement for DummyResourcesManagement {
         _: String,
         _: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn unassign_warehouse_nodes(
@@ -149,11 +177,15 @@ impl ResourcesManagement for DummyResourcesManagement {
         _: String,
         _: HashMap<String, Vec<SelectedNode>>,
     ) -> Result<()> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 
     async fn list_online_nodes(&self) -> Result<Vec<NodeInfo>> {
-        Err(ErrorCode::Unimplemented("The use of this feature requires a Databend Enterprise Edition license. To unlock enterprise features, please contact Databend to obtain a license. Learn more at https://docs.databend.com/guides/overview/editions/dee/"))
+        Err(ErrorCode::Unimplemented(
+            ENTERPRISE_FEATURE_UNAVAILABLE_ERROR,
+        ))
     }
 }
 

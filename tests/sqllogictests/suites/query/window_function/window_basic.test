@@ -1,6 +1,13 @@
 statement ok
 CREATE DATABASE IF NOT EXISTS test_window_basic
 
+
+statement error 1065
+SELECT last_value(number)  OVER (ORDER BY number ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED PRECEDING) FROM numbers(1);
+
+statement error 1065
+SELECT last_value(number)  OVER (ORDER BY number RANGE BETWEEN UNBOUNDED FOLLOWING AND UNBOUNDED FOLLOWING) FROM numbers(1);
+
 statement ok
 USE test_window_basic
 
@@ -606,6 +613,34 @@ select grouping(salary), grouping(depname), sum(grouping(salary)) over (partitio
 1 0 3
 1 1 1
 
+query TII
+SELECT depname, empno, quantile_cont(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno
+----
+develop 7 4200.0
+develop 8 5100.0
+develop 9 4500.0
+develop 10 4850.0
+develop 11 5200.0
+personnel 2 3900.0
+personnel 5 3700.0
+sales 1 5000.0
+sales 3 4900.0
+sales 4 4800.0
+
+query TII
+SELECT depname, empno, quantile_cont(0.8)(salary) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno
+----
+develop 7 4200.0
+develop 8 5640.0
+develop 9 5400.0
+develop 10 5520.0
+develop 11 5360.0
+personnel 2 3900.0
+personnel 5 3820.0
+sales 1 5000.0
+sales 3 4960.0
+sales 4 4920.0
+
 # Window func in subquery
 query I
 SELECT * FROM (SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalary ORDER BY depname, rn) order by 1;
@@ -846,3 +881,4 @@ Product B 1200 NULL
 
 statement ok
 DROP DATABASE test_window_basic;
+

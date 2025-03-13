@@ -1,0 +1,44 @@
+statement ok
+set copy_dedup_full_path_by_default = 1;
+
+statement ok
+create or replace table t1 (a int, b int);
+
+statement ok
+SET hide_options_in_show_create_table=0;
+
+statement ok
+create or replace connection c1 storage_type = 's3' access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='http://127.0.0.1:9900'
+
+
+statement ok
+create or replace stage data_root url='s3://testbucket/data/' connection=(connection_name='c1') FILE_FORMAT = (type = csv);
+
+statement ok
+create or replace stage data_csv url='s3://testbucket/data/csv/' connection=(connection_name='c1') FILE_FORMAT = (type = csv);
+
+query
+copy into t1 from @data_root/csv/ii_100.csv file_format=(type=csv)
+----
+csv/ii_100.csv 100 0 NULL NULL
+
+
+query
+copy into t1 from @data_csv/ii_100.csv
+----
+
+query
+copy into t1 from @data_csv/ii_100.csv force=true
+----
+ii_100.csv 100 0 NULL NULL
+
+
+query
+copy into t1 from 's3://testbucket/data/csv/ii_100.csv' connection=(connection_name='c1')  file_format=(type=csv)
+----
+
+
+query
+copy into t1 from 's3://testbucket/data/csv/ii_100.csv' connection=(connection_name='c1')  file_format=(type=csv) force=true
+----
+data/csv/ii_100.csv 100 0 NULL NULL

@@ -627,6 +627,7 @@ impl QueryVisitor {
                 name: Identifier::from_name(None, func_name),
                 args,
                 params,
+                order_by: vec![],
                 window: None,
                 lambda: None,
             },

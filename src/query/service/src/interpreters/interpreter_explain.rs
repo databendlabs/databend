@@ -33,6 +33,7 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::executor::format_partial_tree;
+use databend_common_sql::executor::MutationBuildInfo;
 use databend_common_sql::optimizer::ColumnSet;
 use databend_common_sql::plans::Mutation;
 use databend_common_sql::BindContext;
@@ -46,6 +47,7 @@ use serde_json;
 use super::InsertMultiTableInterpreter;
 use super::InterpreterFactory;
 use crate::interpreters::interpreter::on_execution_finished;
+use crate::interpreters::interpreter_mutation::build_mutation_info;
 use crate::interpreters::interpreter_mutation::MutationInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -90,9 +92,6 @@ impl Interpreter for ExplainInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let blocks = match &self.kind {
-            ExplainKind::Raw | ExplainKind::Optimized | ExplainKind::Decorrelated => {
-                self.explain_plan(&self.plan)?
-            }
             ExplainKind::Plan if self.config.logical => self.explain_plan(&self.plan)?,
             ExplainKind::Plan => match &self.plan {
                 Plan::Query {
@@ -149,7 +148,7 @@ impl Interpreter for ExplainInterpreter {
                         schema.clone(),
                         metadata.clone(),
                     )?;
-                    let plan = interpreter.build_physical_plan(&mutation, None).await?;
+                    let plan = interpreter.build_physical_plan(&mutation, true).await?;
                     self.explain_physical_plan(&plan, metadata, &None).await?
                 }
                 _ => self.explain_plan(&self.plan)?,
@@ -184,16 +183,20 @@ impl Interpreter for ExplainInterpreter {
                         s_expr,
                         metadata,
                         bind_context.column_set(),
+                        None,
                         *ignore_result,
                     )
                     .await?
                 }
                 Plan::DataMutation { s_expr, .. } => {
                     let plan: Mutation = s_expr.plan().clone().try_into()?;
+                    let mutation_build_info =
+                        build_mutation_info(self.ctx.clone(), &plan, true).await?;
                     self.explain_analyze(
                         s_expr.child(0)?,
                         &plan.metadata,
                         *plan.required_columns.clone(),
+                        Some(mutation_build_info),
                         true,
                     )
                     .await?
@@ -218,6 +221,10 @@ impl Interpreter for ExplainInterpreter {
                 // The explain pipeline does not require executing on_init and on_finished.
                 let _ = pipeline.main_pipeline.take_on_init();
                 let _ = pipeline.main_pipeline.take_on_finished();
+
+                self.ctx
+                    .get_exchange_manager()
+                    .on_finished_query(&self.ctx.get_id(), None);
 
                 for pipeline in &mut pipeline.sources_pipelines {
                     let _ = pipeline.take_on_init();
@@ -262,6 +269,10 @@ impl Interpreter for ExplainInterpreter {
                 let line_split_result: Vec<&str> = display_string.lines().collect();
                 let column = StringType::from_data(line_split_result);
                 vec![DataBlock::new_from_columns(vec![column])]
+            }
+
+            ExplainKind::Raw | ExplainKind::Optimized | ExplainKind::Decorrelated => {
+                unreachable!()
             }
         };
 
@@ -436,9 +447,13 @@ impl ExplainInterpreter {
         s_expr: &SExpr,
         metadata: &MetadataRef,
         required: ColumnSet,
+        mutation_build_info: Option<MutationBuildInfo>,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
+        if let Some(build_info) = mutation_build_info {
+            builder.set_mutation_build_info(build_info);
+        }
         let plan = builder.build(s_expr, required).await?;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
@@ -536,7 +551,7 @@ impl ExplainInterpreter {
             schema,
             mutation.metadata.clone(),
         )?;
-        let plan = interpreter.build_physical_plan(&mutation, None).await?;
+        let plan = interpreter.build_physical_plan(&mutation, true).await?;
         let root_fragment = Fragmenter::try_create(self.ctx.clone())?.build_fragment(&plan)?;
 
         let mut fragments_actions = QueryFragmentsActions::create(self.ctx.clone());

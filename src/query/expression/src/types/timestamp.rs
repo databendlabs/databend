@@ -42,8 +42,8 @@ use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 pub const TIMESTAMP_FORMAT: &str = "%Y-%m-%d %H:%M:%S%.6f";
-/// Minimum valid timestamp `1000-01-01 00:00:00.000000`, represented by the microsecs offset from 1970-01-01.
-pub const TIMESTAMP_MIN: i64 = -30610224000000000;
+/// Minimum valid timestamp `0001-01-01 00:00:00.000000`, represented by the microsecs offset from 1970-01-01.
+pub const TIMESTAMP_MIN: i64 = -62135596800000000;
 /// Maximum valid timestamp `9999-12-31 23:59:59.999999`, represented by the microsecs offset from 1970-01-01.
 pub const TIMESTAMP_MAX: i64 = 253402300799999999;
 
@@ -274,10 +274,10 @@ pub fn microseconds_to_days(micros: i64) -> i32 {
 #[inline]
 pub fn string_to_timestamp(
     ts_str: impl AsRef<[u8]>,
-    jiff_tz: &TimeZone,
+    tz: &TimeZone,
 ) -> databend_common_exception::Result<Zoned> {
     let mut reader = Cursor::new(std::str::from_utf8(ts_str.as_ref()).unwrap().as_bytes());
-    match reader.read_timestamp_text(jiff_tz) {
+    match reader.read_timestamp_text(tz) {
         Ok(dt) => match dt {
             DateTimeResType::Datetime(dt) => match reader.must_eof() {
                 Ok(..) => Ok(dt),

@@ -19,6 +19,7 @@ use crate::protobuf::watch_request::FilterType;
 use crate::protobuf::WatchRequest;
 use crate::protobuf::WatchResponse;
 use crate::Change;
+use crate::SeqV;
 
 impl WatchRequest {
     /// Build a key range from a `key` and an optional `key_end`.
@@ -59,6 +60,17 @@ impl WatchRequest {
 }
 
 impl WatchResponse {
+    /// Create a new `WatchResponse` with `key`, `prev` and `current` values.
+    pub fn new3(key: String, prev: Option<SeqV>, current: Option<SeqV>) -> Self {
+        let ev = pb::Event {
+            key,
+            prev: prev.map(pb::SeqV::from),
+            current: current.map(pb::SeqV::from),
+        };
+
+        WatchResponse { event: Some(ev) }
+    }
+
     pub fn new(change: &Change<Vec<u8>, String>) -> Option<Self> {
         let ev = pb::Event {
             key: change.ident.clone()?,

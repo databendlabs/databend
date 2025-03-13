@@ -15,6 +15,7 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
@@ -38,11 +39,13 @@ use crate::read::error_handler::ErrorHandler;
 pub struct LoadContext {
     pub table_context: Arc<dyn TableContext>,
     pub func_ctx: FunctionContext,
+    pub internal_columns: Vec<InternalColumn>,
 
     pub schema: TableSchemaRef,
     pub default_values: Option<Vec<RemoteExpr>>,
     pub pos_projection: Option<Vec<usize>>,
     pub is_copy: bool,
+    pub stage_root: String,
 
     pub file_format_options_ext: FileFormatOptionsExt,
     pub block_compact_thresholds: BlockThresholds,
@@ -56,6 +59,7 @@ impl LoadContext {
         stage_table_info: &StageTableInfo,
         pos_projection: Option<Vec<usize>>,
         block_compact_thresholds: BlockThresholds,
+        internal_columns: Vec<InternalColumn>,
     ) -> Result<Self> {
         let settings = ctx.get_settings();
         let func_ctx = ctx.get_function_context()?;
@@ -78,12 +82,14 @@ impl LoadContext {
         let is_copy = ctx.get_query_kind() == QueryKind::CopyIntoTable;
         Ok(Self {
             table_context: ctx,
+            internal_columns,
             func_ctx,
             block_compact_thresholds,
             schema,
             default_values,
             pos_projection,
             is_copy,
+            stage_root: stage_table_info.stage_root.clone(),
             file_format_options_ext,
             error_handler: ErrorHandler {
                 on_error_mode,

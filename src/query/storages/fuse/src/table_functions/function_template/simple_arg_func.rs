@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
+use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -29,9 +30,10 @@ pub trait SimpleArgFunc {
     type Args;
     fn schema() -> TableSchemaRef;
 
-    fn is_local_func() -> bool {
-        true
+    fn distribution_level() -> DistributionLevel {
+        DistributionLevel::Local
     }
+
     async fn apply(
         ctx: &Arc<dyn TableContext>,
         args: &Self::Args,
@@ -63,8 +65,8 @@ where
         T::schema()
     }
 
-    fn is_local_func(&self) -> bool {
-        T::is_local_func()
+    fn distribution_level(&self) -> DistributionLevel {
+        T::distribution_level()
     }
 
     async fn apply(

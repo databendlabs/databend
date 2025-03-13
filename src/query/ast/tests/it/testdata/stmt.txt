@@ -77,6 +77,127 @@ ShowTables(
 
 
 ---------- Input ----------
+show stages like '%a'
+---------- Output ---------
+SHOW STAGES LIKE '%a'
+---------- AST ------------
+ShowStages {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "%a",
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+show users where name='root'
+---------- Output ---------
+SHOW USERS WHERE name = 'root'
+---------- AST ------------
+ShowUsers {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            21..22,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                17..21,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            17..21,
+                                        ),
+                                        name: "name",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                22..28,
+                            ),
+                            value: String(
+                                "root",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
+show roles where name='public'
+---------- Output ---------
+SHOW ROLES WHERE name = 'public'
+---------- AST ------------
+ShowRoles {
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Where {
+                    selection: BinaryOp {
+                        span: Some(
+                            21..22,
+                        ),
+                        op: Eq,
+                        left: ColumnRef {
+                            span: Some(
+                                17..21,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            17..21,
+                                        ),
+                                        name: "name",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        right: Literal {
+                            span: Some(
+                                22..30,
+                            ),
+                            value: String(
+                                "public",
+                            ),
+                        },
+                    },
+                },
+            ),
+            limit: None,
+        },
+    ),
+}
+
+
+---------- Input ----------
 show drop tables
 ---------- Output ---------
 SHOW DROP TABLES
@@ -505,6 +626,38 @@ ShowCreateTable(
             quote: None,
             ident_type: None,
         },
+        with_quoted_ident: false,
+    },
+)
+
+
+---------- Input ----------
+show create table a.b with quoted_identifiers;
+---------- Output ---------
+SHOW CREATE TABLE a.b WITH QUOTED_IDENTIFIERS
+---------- AST ------------
+ShowCreateTable(
+    ShowCreateTableStmt {
+        catalog: None,
+        database: Some(
+            Identifier {
+                span: Some(
+                    18..19,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                20..21,
+            ),
+            name: "b",
+            quote: None,
+            ident_type: None,
+        },
+        with_quoted_ident: true,
     },
 )
 
@@ -535,6 +688,7 @@ ShowCreateTable(
             quote: None,
             ident_type: None,
         },
+        with_quoted_ident: false,
     },
 )
 
@@ -624,6 +778,7 @@ Replace(
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },
@@ -712,7 +867,10 @@ EXPLAIN PIPELINE SELECT a FROM b
 ---------- AST ------------
 Explain {
     kind: Pipeline,
-    options: [],
+    options: (
+        None,
+        [],
+    ),
     query: Query(
         Query {
             span: Some(
@@ -797,7 +955,10 @@ EXPLAIN REPLACE INTO test ON CONFLICT (c) SELECT sum(c) AS c FROM source GROUP B
 ---------- AST ------------
 Explain {
     kind: Plan,
-    options: [],
+    options: (
+        None,
+        [],
+    ),
     query: Replace(
         ReplaceStmt {
             hints: None,
@@ -874,6 +1035,7 @@ Explain {
                                                 },
                                             ],
                                             params: [],
+                                            order_by: [],
                                             window: None,
                                             lambda: None,
                                         },
@@ -963,7 +1125,10 @@ EXPLAIN PIPELINE SELECT a FROM t1 IGNORE_RESULT
 ---------- AST ------------
 Explain {
     kind: Pipeline,
-    options: [],
+    options: (
+        None,
+        [],
+    ),
     query: Query(
         Query {
             span: Some(
@@ -1048,11 +1213,16 @@ EXPLAIN(VERBOSE, LOGICAL, OPTIMIZED) SELECT * FROM t WHERE a = 1
 ---------- AST ------------
 Explain {
     kind: Plan,
-    options: [
-        Verbose,
-        Logical,
-        Optimized,
-    ],
+    options: (
+        Some(
+            7..36,
+        ),
+        [
+            Verbose,
+            Logical,
+            Optimized,
+        ],
+    ),
     query: Query(
         Query {
             span: Some(
@@ -1266,6 +1436,7 @@ CreateIndex(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -1461,6 +1632,7 @@ CreateIndex(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -2375,6 +2547,7 @@ CreateTable(
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },
@@ -2937,9 +3110,9 @@ UseDatabase {
 
 
 ---------- Input ----------
-create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
+create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary' warehouse='default');
 ---------- Output ---------
-CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>' )
+CREATE CATALOG ctl TYPE=HIVE CONNECTION = ( thrift_protocol = 'binary', url = '<hive-meta-store>', warehouse = 'default' )
 ---------- AST ------------
 CreateCatalog(
     CreateCatalogStmt {
@@ -2949,6 +3122,7 @@ CreateCatalog(
         catalog_options: {
             "thrift_protocol": "binary",
             "url": "<hive-meta-store>",
+            "warehouse": "default",
         },
     },
 )
@@ -2991,6 +3165,7 @@ Query(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -5738,6 +5913,162 @@ Query(
                         table: Identifier {
                             span: Some(
                                 17..19,
+                            ),
+                            name: "bb",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+from aa.bb select *;
+---------- Output ---------
+SELECT * FROM aa.bb
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..19,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..19,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    18..19,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            5..10,
+                        ),
+                        catalog: None,
+                        database: Some(
+                            Identifier {
+                                span: Some(
+                                    5..7,
+                                ),
+                                name: "aa",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                        table: Identifier {
+                            span: Some(
+                                8..10,
+                            ),
+                            name: "bb",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+from aa.bb
+---------- Output ---------
+SELECT * FROM aa.bb
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..10,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..10,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    StarColumns {
+                        qualified: [
+                            Star(
+                                Some(
+                                    0..0,
+                                ),
+                            ),
+                        ],
+                        column_filter: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            5..10,
+                        ),
+                        catalog: None,
+                        database: Some(
+                            Identifier {
+                                span: Some(
+                                    5..7,
+                                ),
+                                name: "aa",
+                                quote: None,
+                                ident_type: None,
+                            },
+                        ),
+                        table: Identifier {
+                            span: Some(
+                                8..10,
                             ),
                             name: "bb",
                             quote: None,
@@ -11144,6 +11475,7 @@ Query(
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },
@@ -11267,6 +11599,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -11674,28 +12007,6 @@ CREATE ROLE 'test'
 CreateRole {
     if_not_exists: false,
     role_name: "test",
-}
-
-
----------- Input ----------
-create role `a"a`
----------- Output ---------
-CREATE ROLE 'a"a'
----------- AST ------------
-CreateRole {
-    if_not_exists: false,
-    role_name: "a\"a",
-}
-
-
----------- Input ----------
-create role `a'a`
----------- Output ---------
-CREATE ROLE 'a\'a'
----------- AST ------------
-CreateRole {
-    if_not_exists: false,
-    role_name: "a'a",
 }
 
 
@@ -13183,9 +13494,9 @@ VacuumDropTable(
 
 
 ---------- Input ----------
-CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
+CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='Comment types type speedily \' \\\\ \'\' Fun!';
 ---------- Output ---------
-CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'table comment'
+CREATE TABLE t (a Int32 COMMENT 'col comment') comment = 'Comment types type speedily \' \\\\ \'\' Fun!'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -13226,7 +13537,7 @@ CreateTable(
         uri_location: None,
         cluster_by: None,
         table_options: {
-            "comment": "table comment",
+            "comment": "Comment types type speedily ' \\\\ '' Fun!",
         },
         as_query: None,
         table_type: Normal,
@@ -16333,38 +16644,29 @@ UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
 Update(
     UpdateStmt {
         hints: None,
-        table: Table {
-            span: Some(
-                7..14,
-            ),
-            catalog: None,
-            database: Some(
-                Identifier {
-                    span: Some(
-                        7..10,
-                    ),
-                    name: "db1",
-                    quote: None,
-                    ident_type: None,
-                },
-            ),
-            table: Identifier {
+        catalog: None,
+        database: Some(
+            Identifier {
                 span: Some(
-                    11..14,
+                    7..10,
                 ),
-                name: "tb1",
+                name: "db1",
                 quote: None,
                 ident_type: None,
             },
-            alias: None,
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
+        ),
+        table: Identifier {
+            span: Some(
+                11..14,
+            ),
+            name: "tb1",
+            quote: None,
+            ident_type: None,
         },
+        table_alias: None,
         update_list: [
-            UpdateExpr {
+            MutationUpdateExpr {
+                table: None,
                 name: Identifier {
                     span: Some(
                         19..20,
@@ -16407,7 +16709,8 @@ Update(
                     },
                 },
             },
-            UpdateExpr {
+            MutationUpdateExpr {
+                table: None,
                 name: Identifier {
                     span: Some(
                         30..31,
@@ -16426,6 +16729,7 @@ Update(
                 },
             },
         ],
+        from: None,
         selection: Some(
             BinaryOp {
                 span: Some(
@@ -16517,6 +16821,7 @@ Query(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -17083,6 +17388,7 @@ SetStmt {
                                                     },
                                                 ],
                                                 params: [],
+                                                order_by: [],
                                                 window: None,
                                                 lambda: None,
                                             },
@@ -19154,6 +19460,7 @@ CreateDatamaskPolicy(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -19254,6 +19561,7 @@ CreateDatamaskPolicy(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -19355,103 +19663,109 @@ CreateVirtualColumn(
             ident_type: None,
         },
         virtual_columns: [
-            MapAccess {
-                span: Some(
-                    30..36,
-                ),
+            VirtualColumn {
                 expr: MapAccess {
                     span: Some(
-                        24..30,
+                        30..36,
                     ),
-                    expr: ColumnRef {
+                    expr: MapAccess {
                         span: Some(
-                            23..24,
+                            24..30,
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        23..24,
-                                    ),
-                                    name: "a",
-                                    quote: None,
-                                    ident_type: None,
-                                },
+                        expr: ColumnRef {
+                            span: Some(
+                                23..24,
                             ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            23..24,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    25..29,
+                                ),
+                                value: String(
+                                    "k1",
+                                ),
+                            },
                         },
                     },
                     accessor: Bracket {
                         key: Literal {
                             span: Some(
-                                25..29,
+                                31..35,
                             ),
                             value: String(
-                                "k1",
+                                "k2",
                             ),
                         },
                     },
                 },
-                accessor: Bracket {
-                    key: Literal {
-                        span: Some(
-                            31..35,
-                        ),
-                        value: String(
-                            "k2",
-                        ),
-                    },
-                },
+                alias: None,
             },
-            MapAccess {
-                span: Some(
-                    42..45,
-                ),
+            VirtualColumn {
                 expr: MapAccess {
                     span: Some(
-                        39..42,
+                        42..45,
                     ),
-                    expr: ColumnRef {
+                    expr: MapAccess {
                         span: Some(
-                            38..39,
+                            39..42,
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        38..39,
-                                    ),
-                                    name: "b",
-                                    quote: None,
-                                    ident_type: None,
-                                },
+                        expr: ColumnRef {
+                            span: Some(
+                                38..39,
                             ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            38..39,
+                                        ),
+                                        name: "b",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    40..41,
+                                ),
+                                value: UInt64(
+                                    0,
+                                ),
+                            },
                         },
                     },
                     accessor: Bracket {
                         key: Literal {
                             span: Some(
-                                40..41,
+                                43..44,
                             ),
                             value: UInt64(
-                                0,
+                                1,
                             ),
                         },
                     },
                 },
-                accessor: Bracket {
-                    key: Literal {
-                        span: Some(
-                            43..44,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
-                },
+                alias: None,
             },
         ],
     },
@@ -19459,13 +19773,173 @@ CreateVirtualColumn(
 
 
 ---------- Input ----------
-CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
+CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2']::string as v1, b[0][1]::int as v2) FOR t
 ---------- Output ---------
-CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
+CREATE OR REPLACE VIRTUAL COLUMN (a['k1']['k2']::STRING AS v1, b[0][1]::Int32 AS v2) FOR t
 ---------- AST ------------
 CreateVirtualColumn(
     CreateVirtualColumnStmt {
         create_option: CreateOrReplace,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                87..88,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        virtual_columns: [
+            VirtualColumn {
+                expr: Cast {
+                    span: Some(
+                        47..55,
+                    ),
+                    expr: MapAccess {
+                        span: Some(
+                            41..47,
+                        ),
+                        expr: MapAccess {
+                            span: Some(
+                                35..41,
+                            ),
+                            expr: ColumnRef {
+                                span: Some(
+                                    34..35,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                34..35,
+                                            ),
+                                            name: "a",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            accessor: Bracket {
+                                key: Literal {
+                                    span: Some(
+                                        36..40,
+                                    ),
+                                    value: String(
+                                        "k1",
+                                    ),
+                                },
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    42..46,
+                                ),
+                                value: String(
+                                    "k2",
+                                ),
+                            },
+                        },
+                    },
+                    target_type: String,
+                    pg_style: true,
+                },
+                alias: Some(
+                    Identifier {
+                        span: Some(
+                            59..61,
+                        ),
+                        name: "v1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+            },
+            VirtualColumn {
+                expr: Cast {
+                    span: Some(
+                        70..75,
+                    ),
+                    expr: MapAccess {
+                        span: Some(
+                            67..70,
+                        ),
+                        expr: MapAccess {
+                            span: Some(
+                                64..67,
+                            ),
+                            expr: ColumnRef {
+                                span: Some(
+                                    63..64,
+                                ),
+                                column: ColumnRef {
+                                    database: None,
+                                    table: None,
+                                    column: Name(
+                                        Identifier {
+                                            span: Some(
+                                                63..64,
+                                            ),
+                                            name: "b",
+                                            quote: None,
+                                            ident_type: None,
+                                        },
+                                    ),
+                                },
+                            },
+                            accessor: Bracket {
+                                key: Literal {
+                                    span: Some(
+                                        65..66,
+                                    ),
+                                    value: UInt64(
+                                        0,
+                                    ),
+                                },
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    68..69,
+                                ),
+                                value: UInt64(
+                                    1,
+                                ),
+                            },
+                        },
+                    },
+                    target_type: Int32,
+                    pg_style: true,
+                },
+                alias: Some(
+                    Identifier {
+                        span: Some(
+                            79..81,
+                        ),
+                        name: "v2",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER VIRTUAL COLUMN (a['k1']['k2'] as v1, b[0][1] as v2) FOR t
+---------- Output ---------
+ALTER VIRTUAL COLUMN (a['k1']['k2'] AS v1, b[0][1] AS v2) FOR t
+---------- AST ------------
+AlterVirtualColumn(
+    AlterVirtualColumnStmt {
+        if_exists: false,
         catalog: None,
         database: None,
         table: Identifier {
@@ -19477,225 +19951,127 @@ CreateVirtualColumn(
             ident_type: None,
         },
         virtual_columns: [
-            MapAccess {
-                span: Some(
-                    41..47,
-                ),
+            VirtualColumn {
                 expr: MapAccess {
                     span: Some(
-                        35..41,
+                        29..35,
                     ),
-                    expr: ColumnRef {
+                    expr: MapAccess {
                         span: Some(
-                            34..35,
+                            23..29,
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        34..35,
-                                    ),
-                                    name: "a",
-                                    quote: None,
-                                    ident_type: None,
-                                },
+                        expr: ColumnRef {
+                            span: Some(
+                                22..23,
                             ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            22..23,
+                                        ),
+                                        name: "a",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    24..28,
+                                ),
+                                value: String(
+                                    "k1",
+                                ),
+                            },
                         },
                     },
                     accessor: Bracket {
                         key: Literal {
                             span: Some(
-                                36..40,
+                                30..34,
                             ),
                             value: String(
-                                "k1",
+                                "k2",
                             ),
                         },
                     },
                 },
-                accessor: Bracket {
-                    key: Literal {
+                alias: Some(
+                    Identifier {
                         span: Some(
-                            42..46,
+                            39..41,
                         ),
-                        value: String(
-                            "k2",
-                        ),
+                        name: "v1",
+                        quote: None,
+                        ident_type: None,
                     },
-                },
-            },
-            MapAccess {
-                span: Some(
-                    53..56,
                 ),
+            },
+            VirtualColumn {
                 expr: MapAccess {
                     span: Some(
-                        50..53,
+                        47..50,
                     ),
-                    expr: ColumnRef {
+                    expr: MapAccess {
                         span: Some(
-                            49..50,
+                            44..47,
                         ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        49..50,
-                                    ),
-                                    name: "b",
-                                    quote: None,
-                                    ident_type: None,
-                                },
+                        expr: ColumnRef {
+                            span: Some(
+                                43..44,
                             ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            43..44,
+                                        ),
+                                        name: "b",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        accessor: Bracket {
+                            key: Literal {
+                                span: Some(
+                                    45..46,
+                                ),
+                                value: UInt64(
+                                    0,
+                                ),
+                            },
                         },
                     },
                     accessor: Bracket {
                         key: Literal {
                             span: Some(
-                                51..52,
+                                48..49,
                             ),
                             value: UInt64(
-                                0,
+                                1,
                             ),
                         },
                     },
                 },
-                accessor: Bracket {
-                    key: Literal {
+                alias: Some(
+                    Identifier {
                         span: Some(
-                            54..55,
+                            54..56,
                         ),
-                        value: UInt64(
-                            1,
-                        ),
+                        name: "v2",
+                        quote: None,
+                        ident_type: None,
                     },
-                },
-            },
-        ],
-    },
-)
-
-
----------- Input ----------
-ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
----------- Output ---------
-ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t
----------- AST ------------
-AlterVirtualColumn(
-    AlterVirtualColumnStmt {
-        if_exists: false,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                50..51,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
-        },
-        virtual_columns: [
-            MapAccess {
-                span: Some(
-                    29..35,
                 ),
-                expr: MapAccess {
-                    span: Some(
-                        23..29,
-                    ),
-                    expr: ColumnRef {
-                        span: Some(
-                            22..23,
-                        ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        22..23,
-                                    ),
-                                    name: "a",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ),
-                        },
-                    },
-                    accessor: Bracket {
-                        key: Literal {
-                            span: Some(
-                                24..28,
-                            ),
-                            value: String(
-                                "k1",
-                            ),
-                        },
-                    },
-                },
-                accessor: Bracket {
-                    key: Literal {
-                        span: Some(
-                            30..34,
-                        ),
-                        value: String(
-                            "k2",
-                        ),
-                    },
-                },
-            },
-            MapAccess {
-                span: Some(
-                    41..44,
-                ),
-                expr: MapAccess {
-                    span: Some(
-                        38..41,
-                    ),
-                    expr: ColumnRef {
-                        span: Some(
-                            37..38,
-                        ),
-                        column: ColumnRef {
-                            database: None,
-                            table: None,
-                            column: Name(
-                                Identifier {
-                                    span: Some(
-                                        37..38,
-                                    ),
-                                    name: "b",
-                                    quote: None,
-                                    ident_type: None,
-                                },
-                            ),
-                        },
-                    },
-                    accessor: Bracket {
-                        key: Literal {
-                            span: Some(
-                                39..40,
-                            ),
-                            value: UInt64(
-                                0,
-                            ),
-                        },
-                    },
-                },
-                accessor: Bracket {
-                    key: Literal {
-                        span: Some(
-                            42..43,
-                        ),
-                        value: UInt64(
-                            1,
-                        ),
-                    },
-                },
             },
         ],
     },
@@ -20439,6 +20815,7 @@ CreateDynamicTable(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -20672,6 +21049,7 @@ CreateDynamicTable(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -20782,11 +21160,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 900,
@@ -20824,11 +21200,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 15,
@@ -20861,11 +21235,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1215,
@@ -20890,6 +21262,41 @@ CreateTask(
 
 
 ---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 COMMENT = '123' SCHEDULE = 1215 SECOND WAREHOUSE = 'MyWarehouse' SUSPEND_TASK_AFTER_NUM_FAILURES = 3 AS SELECT * FROM MyTable1
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENTS = '123' AS SELECT * FROM MyTable1
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse: Some(
+            "MyWarehouse",
+        ),
+        schedule_opts: Some(
+            IntervalSecs(
+                1215,
+                0,
+            ),
+        ),
+        session_parameters: {},
+        suspend_task_after_num_failures: Some(
+            3,
+        ),
+        error_integration: None,
+        comments: Some(
+            "123",
+        ),
+        after: [],
+        when_condition: None,
+        sql: SingleStatement(
+            "SELECT * FROM MyTable1",
+        ),
+    },
+)
+
+
+---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
@@ -20898,9 +21305,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: Some(
             CronExpression(
                 "0 6 * * *",
@@ -20933,9 +21338,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: Some(
             CronExpression(
                 "0 12 * * *",
@@ -20964,9 +21367,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: Some(
             CronExpression(
                 "0 13 * * *",
@@ -20995,9 +21396,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: None,
         session_parameters: {},
         suspend_task_after_num_failures: None,
@@ -21038,6 +21437,7 @@ CreateTask(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -21068,9 +21468,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: None,
         session_parameters: {
             "database": "target",
@@ -21112,9 +21510,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: None,
         session_parameters: {
             "database": "target",
@@ -21159,11 +21555,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "merge_task",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "test-parser",
-            ),
-        },
+        warehouse: Some(
+            "test-parser",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1,
@@ -21204,11 +21598,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "merge_task",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "test-parser",
-            ),
-        },
+        warehouse: Some(
+            "test-parser",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1,
@@ -21360,7 +21752,7 @@ AlterTask(
 
 
 ---------- Input ----------
-ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
+ALTER TASK MyTask1 SET SCHEDULE = 5 SECOND WAREHOUSE='MyWarehouse' SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- Output ---------
 ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- AST ------------
@@ -21538,6 +21930,7 @@ AlterTask(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -22333,6 +22726,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -22456,6 +22850,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -22579,6 +22974,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -22704,6 +23100,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -22829,6 +23226,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -22954,6 +23352,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -23138,6 +23537,7 @@ Query(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -23443,6 +23843,28 @@ Grant(
 
 
 ---------- Input ----------
+GRANT OWNERSHIP ON WAREHOUSE w1 TO ROLE 'd20_0015_owner';
+---------- Output ---------
+GRANT OWNERSHIP ON  WAREHOUSE w1 TO ROLE 'd20_0015_owner'
+---------- AST ------------
+Grant(
+    GrantStmt {
+        source: Privs {
+            privileges: [
+                Ownership,
+            ],
+            level: Warehouse(
+                "w1",
+            ),
+        },
+        principal: Role(
+            "d20_0015_owner",
+        ),
+    },
+)
+
+
+---------- Input ----------
 GRANT OWNERSHIP ON UDF f1 TO ROLE 'd20_0015_owner';
 ---------- Output ---------
 GRANT OWNERSHIP ON  UDF f1 TO ROLE 'd20_0015_owner'
@@ -23481,6 +23903,7 @@ AttachTable(
             quote: None,
             ident_type: None,
         },
+        columns_opt: None,
         uri_location: UriLocation {
             protocol: "s3",
             name: "a",
@@ -23567,6 +23990,7 @@ CreateUDF(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -23648,6 +24072,7 @@ CreateUDF(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -24454,6 +24879,7 @@ Query(
                                                     },
                                                     args: [],
                                                     params: [],
+                                                    order_by: [],
                                                     window: Some(
                                                         WindowDesc {
                                                             ignore_nulls: None,
@@ -24722,8 +25148,10 @@ DESCRIBE PROCEDURE p1()
 ---------- AST ------------
 DescProcedure(
     DescProcedureStmt {
-        name: "p1",
-        args: [],
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "",
+        },
     },
 )
 
@@ -24731,15 +25159,14 @@ DescProcedure(
 ---------- Input ----------
 describe PROCEDURE p1(string, timestamp)
 ---------- Output ---------
-DESCRIBE PROCEDURE p1(STRING, TIMESTAMP)
+DESCRIBE PROCEDURE p1(STRING,TIMESTAMP)
 ---------- AST ------------
 DescProcedure(
     DescProcedureStmt {
-        name: "p1",
-        args: [
-            String,
-            Timestamp,
-        ],
+        name: ProcedureIdentity {
+            name: "p1",
+            args_type: "STRING,TIMESTAMP",
+        },
     },
 )
 

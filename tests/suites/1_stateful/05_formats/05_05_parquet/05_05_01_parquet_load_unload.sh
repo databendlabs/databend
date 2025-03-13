@@ -43,7 +43,7 @@
  	# unload1
  	query "select * from test_load_unload"
  	query "select * from test_load_unload" > /tmp/test_load_unload/select1.txt
- 	stmt "copy into @s1/unload1/ from test_load_unload"
+ 	stmt "copy into @s1/unload1/ from test_load_unload" | cut -d$'\t' -f1,2
  	mv `ls /tmp/test_load_unload/unload1/*` /tmp/test_load_unload/unload1.parquet
 
  	# reload with copy into table
@@ -57,7 +57,7 @@
  	diff /tmp/test_load_unload/select1.txt /tmp/test_load_unload/select2.txt
 	echo "end diff"
 
- 	stmt "copy into @s1/unload2/ from test_load_unload"
+ 	stmt "copy into @s1/unload2/ from test_load_unload" | cut -d$'\t' -f1,2
  	mv `ls /tmp/test_load_unload/unload2/*` /tmp/test_load_unload/unload2.parquet
 
 

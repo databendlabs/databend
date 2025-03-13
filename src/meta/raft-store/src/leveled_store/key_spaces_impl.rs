@@ -19,6 +19,7 @@ use std::io;
 use std::io::Error;
 
 use crate::leveled_store::map_api::MapKey;
+use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::state_machine::ExpireKey;
 
@@ -30,20 +31,14 @@ impl MapKeyEncode for String {
     }
 }
 
-impl MapKey for String {
-    type V = Vec<u8>;
-
+impl MapKeyDecode for String {
     fn decode(buf: &str) -> Result<Self, Error> {
         Ok(buf.to_string())
     }
 }
 
-impl MapKeyEncode for str {
-    const PREFIX: &'static str = "kv--";
-
-    fn encode<W: fmt::Write>(&self, mut w: W) -> Result<(), fmt::Error> {
-        w.write_str(self)
-    }
+impl MapKey for String {
+    type V = Vec<u8>;
 }
 
 impl MapKeyEncode for ExpireKey {
@@ -56,9 +51,7 @@ impl MapKeyEncode for ExpireKey {
     }
 }
 
-impl MapKey for ExpireKey {
-    type V = String;
-
+impl MapKeyDecode for ExpireKey {
     fn decode(buf: &str) -> Result<Self, Error> {
         if buf.len() != 41 {
             return Err(Error::new(
@@ -122,17 +115,13 @@ impl MapKey for ExpireKey {
     }
 }
 
+impl MapKey for ExpireKey {
+    type V = String;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_str_encode() {
-        let key = "key";
-        let mut buf: String = String::new();
-        key.encode(&mut buf).unwrap();
-        assert_eq!(key, buf);
-    }
 
     #[test]
     fn test_string_encode_decode() {

@@ -45,6 +45,7 @@ impl PullUpFilterOptimizer {
         }
     }
 
+    #[recursive::recursive]
     pub fn run(mut self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = self.pull_up(s_expr)?;
         s_expr = self.finish(s_expr)?;
@@ -65,6 +66,7 @@ impl PullUpFilterOptimizer {
         }
     }
 
+    #[recursive::recursive]
     pub fn pull_up(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
             RelOperator::Filter(filter) => self.pull_up_filter(s_expr, filter),
@@ -156,6 +158,7 @@ impl PullUpFilterOptimizer {
         Ok(s_expr.replace_children(children))
     }
 
+    #[recursive::recursive]
     fn replace_predicate(
         predicate: &mut ScalarExpr,
         items: &mut Vec<ScalarItem>,
@@ -190,8 +193,8 @@ impl PullUpFilterOptimizer {
             ScalarExpr::WindowFunction(window) => {
                 match &mut window.func {
                     WindowFuncType::Aggregate(agg) => {
-                        for arg in agg.args.iter_mut() {
-                            Self::replace_predicate(arg, items, metadata)?;
+                        for expr in agg.exprs_mut() {
+                            Self::replace_predicate(expr, items, metadata)?;
                         }
                     }
                     WindowFuncType::LagLead(ll) => {
@@ -215,8 +218,8 @@ impl PullUpFilterOptimizer {
                 }
             }
             ScalarExpr::AggregateFunction(agg_func) => {
-                for arg in agg_func.args.iter_mut() {
-                    Self::replace_predicate(arg, items, metadata)?;
+                for expr in agg_func.exprs_mut() {
+                    Self::replace_predicate(expr, items, metadata)?;
                 }
             }
             ScalarExpr::FunctionCall(func) => {

@@ -1015,11 +1015,16 @@ impl WarehouseApi for WarehouseMgr {
                         value: Some(seq_v), ..
                     })),
             }) => Ok(seq_v.seq),
+            // compatibility
+            // After network fail, nodes may become expired due to failed heartbeats.
+            // For system-managed nodes, this situation has already been handled in resolve_conflicts.
+            // For self-managed nodes, we need to return seq = 0 so that the next heartbeat can proceed normally.
+            _ if matches!(node.node_type, NodeType::SelfManaged) => Ok(0),
             _ => Err(ErrorCode::MetaServiceError("Heartbeat node info failure.")),
         }
     }
 
-    async fn drop_warehouse(&self, warehouse: String) -> Result<()> {
+    async fn drop_warehouse(&self, warehouse: String) -> Result<WarehouseInfo> {
         if warehouse.is_empty() {
             return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
         }
@@ -1070,7 +1075,7 @@ impl WarehouseApi for WarehouseMgr {
                 continue;
             }
 
-            return Ok(());
+            return Ok(warehouse_snapshot.warehouse_info);
         }
 
         Err(ErrorCode::WarehouseOperateConflict(
@@ -1078,7 +1083,11 @@ impl WarehouseApi for WarehouseMgr {
         ))
     }
 
-    async fn create_warehouse(&self, warehouse: String, nodes: Vec<SelectedNode>) -> Result<()> {
+    async fn create_warehouse(
+        &self,
+        warehouse: String,
+        nodes: Vec<SelectedNode>,
+    ) -> Result<WarehouseInfo> {
         if warehouse.is_empty() {
             return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
         }
@@ -1124,26 +1133,28 @@ impl WarehouseApi for WarehouseMgr {
 
             let warehouse_info_key = self.warehouse_info_key(&warehouse)?;
 
+            let warehouse_info = WarehouseInfo::SystemManaged(SystemManagedWarehouse {
+                role_id: GlobalUniqName::unique(),
+                status: "Running".to_string(),
+                id: warehouse.clone(),
+                clusters: HashMap::from([(
+                    String::from(DEFAULT_CLUSTER_ID),
+                    SystemManagedCluster {
+                        nodes: nodes.clone(),
+                    },
+                )]),
+            });
+
             txn.condition
                 .push(map_condition(&warehouse_info_key, MatchSeq::Exact(0)));
             txn.if_then.push(TxnOp::put(
                 warehouse_info_key.clone(),
-                serde_json::to_vec(&WarehouseInfo::SystemManaged(SystemManagedWarehouse {
-                    role_id: GlobalUniqName::unique(),
-                    status: "Running".to_string(),
-                    id: warehouse.clone(),
-                    clusters: HashMap::from([(
-                        String::from(DEFAULT_CLUSTER_ID),
-                        SystemManagedCluster {
-                            nodes: nodes.clone(),
-                        },
-                    )]),
-                }))?,
+                serde_json::to_vec(&warehouse_info)?,
             ));
             txn.else_then.push(TxnOp::get(warehouse_info_key));
 
             return match self.metastore.transaction(txn).await? {
-                res if res.success => Ok(()),
+                res if res.success => Ok(warehouse_info),
                 res => match res.responses.last() {
                     Some(TxnOpResponse {
                         response: Some(Response::Get(res)),
@@ -1474,13 +1485,34 @@ impl WarehouseApi for WarehouseMgr {
             return Err(ErrorCode::InvalidWarehouse("Warehouse name is empty."));
         }
 
-        let warehouse_snapshot = self.warehouse_snapshot(&warehouse).await?;
+        let nodes_prefix = format!(
+            "{}/{}/",
+            self.cluster_node_key_prefix,
+            escape_for_key(&warehouse)?
+        );
 
-        Ok(warehouse_snapshot
-            .snapshot_nodes
-            .into_iter()
-            .map(|x| x.node_info)
-            .collect())
+        let values = self.metastore.prefix_list_kv(&nodes_prefix).await?;
+
+        let mut nodes_info = Vec::with_capacity(values.len());
+        for (node_key, value) in values {
+            let mut node_info = serde_json::from_slice::<NodeInfo>(&value.data)?;
+
+            let suffix = &node_key[nodes_prefix.len()..];
+
+            let Some((cluster, node)) = suffix.split_once('/') else {
+                return Err(ErrorCode::InvalidWarehouse(format!(
+                    "Node key is invalid {:?}",
+                    node_key
+                )));
+            };
+
+            node_info.id = unescape_for_key(node)?;
+            node_info.cluster_id = unescape_for_key(cluster)?;
+            node_info.warehouse_id = warehouse.to_string();
+            nodes_info.push(node_info);
+        }
+
+        Ok(nodes_info)
     }
 
     async fn add_warehouse_cluster(
@@ -2138,6 +2170,32 @@ impl WarehouseApi for WarehouseMgr {
 
         Ok(self
             .list_warehouse_cluster_nodes(&node.warehouse_id, &node.cluster_id)
+            .await?
+            .into_iter()
+            .filter(|x| x.binary_version == expect_version)
+            .collect::<Vec<_>>())
+    }
+
+    async fn discover_warehouse_nodes(&self, node_id: &str) -> Result<Vec<NodeInfo>> {
+        let node_key = format!("{}/{}", self.node_key_prefix, escape_for_key(node_id)?);
+
+        let Some(seq) = self.metastore.get_kv(&node_key).await? else {
+            return Err(ErrorCode::NotFoundClusterNode(format!(
+                "Node {} is offline, Please restart this node.",
+                node_id
+            )));
+        };
+
+        let node = serde_json::from_slice::<NodeInfo>(&seq.data)?;
+
+        if !node.assigned_warehouse() {
+            return Ok(vec![node]);
+        }
+
+        let expect_version = DATABEND_COMMIT_VERSION.to_string();
+
+        Ok(self
+            .list_warehouse_nodes(node.warehouse_id.clone())
             .await?
             .into_iter()
             .filter(|x| x.binary_version == expect_version)

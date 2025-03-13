@@ -27,7 +27,6 @@ use crate::processors::transforms::Transformer;
 pub struct TransformDummy;
 
 impl TransformDummy {
-    #[allow(dead_code)]
     pub fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(input, output, TransformDummy {}))
     }

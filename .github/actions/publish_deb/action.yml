@@ -1,9 +1,6 @@
 name: Publish Deb
 description: Publish repository for debian/ubuntu
 inputs:
-  version:
-    description: "Release version"
-    required: true
   gpg_signing_key:
     description: "GPG signing key"
     required: true
@@ -25,32 +22,36 @@ runs:
         echo -n "$GPG_SIGNING_KEY" | gpg --import
         gpg -k
 
-    - name: Add Packages
+    - name: Add Databend Packages
       shell: bash
       working-directory: scripts/distribution/deb
       run: |
-        version=${{ inputs.version }}
-        deb_version=${version/-/.}
-        deb_version=${deb_version/v/}
-        wget -q https://github.com/databendlabs/databend/releases/download/${version}/databend_${deb_version}_amd64.deb
-        wget -q https://github.com/databendlabs/databend/releases/download/${version}/databend_${deb_version}_arm64.deb
-        reprepro includedeb stable databend_${deb_version}_amd64.deb
-        reprepro includedeb stable databend_${deb_version}_arm64.deb
+        version=$(gh release view --repo databendlabs/databend --json name | jq -r '.name')
+        echo "version: $version"
+        # FIXME: tmp disable dbg package
+        assets=$(gh release view --repo databendlabs/databend --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url' | grep -v 'dbg')
+        for asset in $assets; do
+          wget -q $asset
+          asset_name=$(basename $asset)
+          reprepro includedeb stable ${asset_name}
+        done
 
-    - name: Add BendSQL
+    - name: Add BendSQL Packages
       shell: bash
       working-directory: scripts/distribution/deb
       run: |
         version=$(gh release view --repo databendlabs/bendsql --json name | jq -r '.name')
-        deb_version=${version/v/}
-        wget -q https://github.com/databendlabs/bendsql/releases/download/${version}/bendsql_${deb_version}_amd64.deb
-        wget -q https://github.com/databendlabs/bendsql/releases/download/${version}/bendsql_${deb_version}_arm64.deb
-        reprepro includedeb stable bendsql_${deb_version}_amd64.deb
-        reprepro includedeb stable bendsql_${deb_version}_arm64.deb
+        echo "version: $version"
+        assets=$(gh release view --repo databendlabs/bendsql --json assets | jq -r '.assets[] | select(.contentType == "application/x-debian-package") | .url')
+        for asset in $assets; do
+          wget -q $asset
+          asset_name=$(basename $asset)
+          reprepro includedeb stable ${asset_name}
+        done
 
     - name: Publish to S3
       shell: bash
       working-directory: scripts/distribution/deb
       run: |
-        aws s3 sync --delete --no-progress dists s3://repo/deb/dists
-        aws s3 sync --delete --no-progress pool s3://repo/deb/pool
+        aws s3 sync dists s3://repo/deb/dists --delete --no-progress --checksum-algorithm=CRC32
+        aws s3 sync pool s3://repo/deb/pool --delete --no-progress --checksum-algorithm=CRC32

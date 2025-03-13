@@ -122,6 +122,7 @@ async fn test_block_pruner() -> Result<()> {
         as_select: None,
         cluster_key: None,
         inverted_indexes: None,
+        attached_columns: None,
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
