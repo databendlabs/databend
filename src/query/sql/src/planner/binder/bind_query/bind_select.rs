@@ -33,6 +33,7 @@ use databend_common_ast::ast::PivotValues;
 use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::ast::UnpivotName;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -350,14 +351,16 @@ impl SelectRewriter<'_> {
         }
     }
 
-    fn expr_literal_array_from_vec_ident(exprs: Vec<Identifier>) -> Expr {
+    fn expr_literal_array_from_unpivot_names(names: &[UnpivotName]) -> Expr {
         Array {
             span: Span::default(),
-            exprs: exprs
-                .into_iter()
-                .map(|expr| Expr::Literal {
-                    span: None,
-                    value: Literal::String(expr.name),
+            exprs: names
+                .iter()
+                .map(|name| Expr::Literal {
+                    span: name.ident.span,
+                    value: Literal::String(
+                        name.alias.as_ref().unwrap_or(&name.ident.name).to_string(),
+                    ),
                 })
                 .collect(),
         }
@@ -585,26 +588,31 @@ impl<'a> SelectRewriter<'a> {
     }
 
     fn rewrite_unpivot(&mut self, stmt: &SelectStmt) -> Result<()> {
-        if stmt.from.len() != 1 || stmt.from[0].unpivot().is_none() {
+        if stmt.from.len() != 1 {
             return Ok(());
         }
-        let unpivot = stmt.from[0].unpivot().unwrap();
+        let Some(unpivot) = stmt.from[0].unpivot() else {
+            return Ok(());
+        };
         let mut new_select_list = stmt.select_list.clone();
+        let columns = unpivot
+            .column_names
+            .iter()
+            .map(|name| (name.ident.to_owned()))
+            .collect::<Vec<_>>();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(unpivot.names.clone());
+            star.exclude(columns.clone());
         };
         new_select_list.push(Self::target_func_from_name_args(
             Identifier::from_name(stmt.span, "unnest"),
-            vec![Self::expr_literal_array_from_vec_ident(
-                unpivot.names.clone(),
+            vec![Self::expr_literal_array_from_unpivot_names(
+                &unpivot.column_names,
             )],
-            Some(unpivot.column_name.clone()),
+            Some(unpivot.unpivot_column.clone()),
         ));
         new_select_list.push(Self::target_func_from_name_args(
             Identifier::from_name(stmt.span, "unnest"),
-            vec![Self::expr_column_ref_array_from_vec_ident(
-                unpivot.names.clone(),
-            )],
+            vec![Self::expr_column_ref_array_from_vec_ident(columns)],
             Some(unpivot.value_column.clone()),
         ));
 
