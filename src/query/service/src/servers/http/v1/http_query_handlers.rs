@@ -518,7 +518,7 @@ pub fn query_route() -> Route {
         ),
         (
             "/catalog/stats",
-            post(catalog_stats_handler),
+            get(catalog_stats_handler),
             EndpointKind::Catalog,
         ),
         (
