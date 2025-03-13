@@ -5,7 +5,7 @@ statement ok
 use tpcds;
 
 statement ok
-set max_memory_usage = 1024*1024*500;
+set max_memory_usage = 1024*1024*1024;
 
 include ./Q1
 include ./Q2
