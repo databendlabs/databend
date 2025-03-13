@@ -464,6 +464,15 @@ impl Catalog for DatabaseCatalog {
         }
     }
 
+    #[async_backtrace::framed]
+    async fn list_tables_names(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<String>> {
+        let tables = self.list_tables(tenant, db_name).await?;
+        Ok(tables
+            .into_iter()
+            .map(|table| table.name().to_string())
+            .collect())
+    }
+
     fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
         self.mutable_catalog.list_temporary_tables()
     }

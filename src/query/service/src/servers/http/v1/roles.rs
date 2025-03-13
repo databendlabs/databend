@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_users::UserApiProvider;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
 use poem::web::Json;
@@ -46,14 +47,31 @@ async fn handle(ctx: &HttpQueryContext) -> Result<ListRolesResponse> {
         .default_role()
         .map_or("public".to_string(), |role| role.to_string());
     let mut roles = vec![];
-    for role in user.grants.roles() {
-        let is_current = role == current_role;
-        let is_default = role == default_role;
-        roles.push(RoleInfo {
-            name: role.clone(),
-            is_current,
-            is_default,
-        });
+    if user.is_account_admin() {
+        // return all roles for account admin
+        let user_api = UserApiProvider::instance();
+        let all_roles = user_api
+            .get_roles(&ctx.session.get_current_tenant())
+            .await?;
+        for role in all_roles {
+            let is_current = role.name == current_role;
+            let is_default = role.name == default_role;
+            roles.push(RoleInfo {
+                name: role.name,
+                is_current,
+                is_default,
+            });
+        }
+    } else {
+        for role in user.grants.roles() {
+            let is_current = role == current_role;
+            let is_default = role == default_role;
+            roles.push(RoleInfo {
+                name: role.clone(),
+                is_current,
+                is_default,
+            });
+        }
     }
     if roles.is_empty() {
         roles.push(RoleInfo {
