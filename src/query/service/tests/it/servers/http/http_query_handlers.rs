@@ -875,7 +875,7 @@ async fn test_catalog_apis() -> Result<()> {
     let body = response.into_body().into_string().await.unwrap();
     let body: catalog::stats::CatalogStatsResponse = serde_json::from_str(&body).unwrap();
     assert_eq!(body.tables, 1);
-    assert_eq!(body.databases, 1);
+    assert_eq!(body.databases, 3);
 
     Ok(())
 }
