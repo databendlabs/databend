@@ -65,14 +65,19 @@ impl PhysicalPlanBuilder {
         required.extend(lazy_columns);
 
         // if the union has a CTE, the output columns are not filtered
+        // otherwise, if the output columns of the union do not contain the columns used by the plan in the union, the expression will fail to obtain data.
         let (left_required, right_required) = if !union_all.cte_scan_names.is_empty() {
-            let mut left = HashSet::with_capacity(union_all.output_indexes.len());
-            let mut right = HashSet::with_capacity(union_all.output_indexes.len());
+            let left: ColumnSet = union_all
+                .left_outputs
+                .iter()
+                .map(|(index, _)| *index)
+                .collect();
+            let right: ColumnSet = union_all
+                .right_outputs
+                .iter()
+                .map(|(index, _)| *index)
+                .collect();
 
-            for i in 0..union_all.output_indexes.len() {
-                left.insert(union_all.left_outputs[i].0);
-                right.insert(union_all.right_outputs[i].0);
-            }
             (left, right)
         } else {
             let indices: Vec<usize> = (0..union_all.left_outputs.len())
