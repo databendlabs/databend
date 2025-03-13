@@ -406,6 +406,7 @@ struct CompactTaskBuilder {
     blocks: Vec<Arc<BlockMeta>>,
     total_rows: usize,
     total_size: usize,
+    total_compressed: usize,
 }
 
 impl CompactTaskBuilder {
@@ -421,6 +422,7 @@ impl CompactTaskBuilder {
             blocks: vec![],
             total_rows: 0,
             total_size: 0,
+            total_compressed: 0,
         }
     }
 
@@ -431,10 +433,11 @@ impl CompactTaskBuilder {
     fn take_blocks(&mut self) -> Vec<Arc<BlockMeta>> {
         self.total_rows = 0;
         self.total_size = 0;
+        self.total_compressed = 0;
         std::mem::take(&mut self.blocks)
     }
 
-    fn add(&mut self, block: &Arc<BlockMeta>, thresholds: BlockThresholds) -> (bool, bool) {
+    fn add(&mut self, block: &Arc<BlockMeta>) -> (bool, bool) {
         if let Some(default_cluster_key) = self.cluster_key_id {
             if block
                 .cluster_stats
@@ -447,13 +450,15 @@ impl CompactTaskBuilder {
 
         let total_rows = self.total_rows + block.row_count as usize;
         let total_size = self.total_size + block.block_size as usize;
-        if !thresholds.check_large_enough(total_rows, total_size) {
+        let total_compressed = self.total_compressed + block.file_size as usize;
+        if !self.check_large_enough(total_rows, total_size, total_compressed) {
             // blocks < N
             self.blocks.push(block.clone());
             self.total_rows = total_rows;
             self.total_size = total_size;
+            self.total_compressed = total_compressed;
             (false, false)
-        } else if thresholds.check_for_compact(total_rows, total_size) {
+        } else if self.check_for_compact(total_rows, total_size, total_compressed) {
             // N <= blocks < 2N
             self.blocks.push(block.clone());
             (false, true)
@@ -461,6 +466,26 @@ impl CompactTaskBuilder {
             // blocks >= 2N
             (true, !self.blocks.is_empty())
         }
+    }
+
+    fn check_large_enough(
+        &self,
+        total_rows: usize,
+        total_size: usize,
+        total_compressed: usize,
+    ) -> bool {
+        self.thresholds.check_large_enough(total_rows, total_size)
+            || total_compressed >= self.thresholds.max_bytes_per_file
+    }
+
+    fn check_for_compact(
+        &self,
+        total_rows: usize,
+        total_size: usize,
+        total_compressed: usize,
+    ) -> bool {
+        self.thresholds.check_for_compact(total_rows, total_size)
+            && total_compressed < 2 * self.thresholds.max_bytes_per_file
     }
 
     fn build_task(
@@ -552,7 +577,7 @@ impl CompactTaskBuilder {
 
         let mut tasks = VecDeque::new();
         for block in blocks.iter() {
-            let (unchanged, need_take) = self.add(block, self.thresholds);
+            let (unchanged, need_take) = self.add(block);
             if need_take {
                 let blocks = self.take_blocks();
                 latest_flag = self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
@@ -577,17 +602,20 @@ impl CompactTaskBuilder {
                     tasks.pop_back().map_or(vec![], |(_, v)| v)
                 };
 
-                let (total_rows, total_size) =
-                    blocks.iter().chain(tail.iter()).fold((0, 0), |mut acc, x| {
+                let (total_rows, total_size, total_compressed) = blocks
+                    .iter()
+                    .chain(tail.iter())
+                    .fold((0, 0, 0), |mut acc, x| {
                         acc.0 += x.row_count as usize;
                         acc.1 += x.block_size as usize;
+                        acc.2 += x.file_size as usize;
                         acc
                     });
-                if self.thresholds.check_for_compact(total_rows, total_size) {
+                if self.check_for_compact(total_rows, total_size, total_compressed) {
                     blocks.extend(tail);
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                 } else {
-                    // blocks > 2N
+                    // blocks >= 2N
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx + 1, tail);
                 }

@@ -198,6 +198,7 @@ impl ReclusterMutator {
         // specify a rather small value, so that `recluster_block_size` might be tuned to lower value.
         let max_blocks_num =
             (memory_threshold / self.block_thresholds.max_bytes_per_block).max(2) * self.max_tasks;
+        let block_per_seg = self.block_thresholds.block_per_segment;
 
         // Prepare task generation parameters
         let arrow_schema = self.schema.as_ref().into();
@@ -226,10 +227,11 @@ impl ReclusterMutator {
                 }
 
                 // Track small blocks for potential compaction
-                if self
-                    .block_thresholds
-                    .check_too_small(block.row_count as usize, block.block_size as usize)
-                {
+                if self.block_thresholds.check_too_small(
+                    block.row_count as usize,
+                    block.block_size as usize,
+                    block.file_size as usize,
+                ) {
                     small_blocks.insert(i);
                 }
 
@@ -340,8 +342,7 @@ impl ReclusterMutator {
                     ) == Ordering::Greater
                 })
             };
-            (selected_segs_idx.len() > 1 && blocks.len() <= self.block_thresholds.block_per_segment)
-                || unordered()
+            (selected_segs_idx.len() > 1 && blocks.len() <= block_per_seg) || unordered()
         } else {
             true
         };
@@ -445,7 +446,7 @@ impl ReclusterMutator {
         column_nodes: &ColumnNodes,
         total_rows: usize,
         total_bytes: usize,
-        task_compressed: usize,
+        total_compressed: usize,
         level: i32,
     ) -> ReclusterTask {
         if log::log_enabled!(log::Level::Debug) {
@@ -466,7 +467,7 @@ impl ReclusterMutator {
             stats,
             total_rows,
             total_bytes,
-            task_compressed,
+            total_compressed,
             level,
         }
     }
@@ -481,6 +482,7 @@ impl ReclusterMutator {
         let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
         let mut unclustered_segments = IndexSet::new();
         let mut small_segments = IndexSet::new();
+        let block_per_seg = self.block_thresholds.block_per_segment;
 
         // Iterate over all segments
         for (i, (loc, compact_segment)) in compact_segments.iter().enumerate() {
@@ -506,10 +508,7 @@ impl ReclusterMutator {
             }
 
             // Skip if segment has more blocks than required and no reclustering is needed
-            if level < 0
-                && compact_segment.summary.block_count as usize
-                    >= self.block_thresholds.block_per_segment
-            {
+            if level < 0 && compact_segment.summary.block_count as usize >= block_per_seg {
                 continue;
             }
 
@@ -517,7 +516,7 @@ impl ReclusterMutator {
             if let Some(stats) = &compact_segment.summary.cluster_stats {
                 blocks_num += compact_segment.summary.block_count as usize;
                 // Track small segments for special handling later
-                if blocks_num < self.block_thresholds.block_per_segment {
+                if blocks_num < block_per_seg {
                     small_segments.insert(i);
                 }
                 // Add to indices for potential reclustering
@@ -539,18 +538,17 @@ impl ReclusterMutator {
             return Ok((ReclusterMode::Compact, unclustered_segments));
         }
 
-        let selected_segments =
-            if indices.len() > 1 && blocks_num > self.block_thresholds.block_per_segment {
-                let selected = self.fetch_max_depth(points_map, 1.0, max_len)?;
-                if selected.is_empty() && small_segments.len() > 1 {
-                    // If no segments were selected but small segments exist, use those.
-                    small_segments
-                } else {
-                    selected
-                }
+        let selected_segments = if indices.len() > 1 && blocks_num > block_per_seg {
+            let selected = self.fetch_max_depth(points_map, 1.0, max_len)?;
+            if selected.is_empty() && small_segments.len() > 1 {
+                // If no segments were selected but small segments exist, use those.
+                small_segments
             } else {
-                indices
-            };
+                selected
+            }
+        } else {
+            indices
+        };
 
         Ok((ReclusterMode::Recluster, selected_segments))
     }

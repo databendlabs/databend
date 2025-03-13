@@ -154,7 +154,7 @@ impl PipelineBuilder {
                 let sort_block_size = block_thresholds.calc_rows_per_block(
                     task.total_bytes,
                     task.total_rows,
-                    task.task_compressed,
+                    task.total_compressed,
                 );
 
                 let sort_pipeline_builder =
