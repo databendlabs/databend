@@ -31,4 +31,5 @@ unset max_block_size;
 statement ok
 UNSET max_memory_usage;
 
+statement ok
 unset window_partition_spilling_to_disk_bytes_limit;

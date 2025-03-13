@@ -63,6 +63,7 @@ jobs:
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
+          parallel: ${{ matrix.tests.parallel }}
           storage-format: all
       - name: Upload failure
         if: failure()
@@ -192,6 +193,7 @@ jobs:
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
+          parallel: ${{ matrix.tests.parallel }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
