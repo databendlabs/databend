@@ -20,7 +20,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
-use parquet::arrow::arrow_to_parquet_schema;
+use parquet::arrow::ArrowSchemaConverter;
 
 #[test]
 fn test_to_projection_mask() -> Result<()> {
@@ -54,8 +54,7 @@ fn test_to_projection_mask() -> Result<()> {
         TableField::new("h", TableDataType::String),
     ]);
     let arrow_schema = (&schema).into();
-    let schema_desc = arrow_to_parquet_schema(&arrow_schema)?;
-
+    let schema_desc = ArrowSchemaConverter::new().convert(&arrow_schema)?;
     // (Projection, ProjectionMask)
     let test_cases: Vec<(Projection, Vec<usize>)> = vec![
         // Projection::Columns

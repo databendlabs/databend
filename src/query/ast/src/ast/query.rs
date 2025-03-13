@@ -20,6 +20,7 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use educe::Educe;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
@@ -631,10 +632,27 @@ impl Display for Pivot {
 }
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct UnpivotName {
+    pub ident: Identifier,
+    pub alias: Option<String>,
+}
+
+impl Display for UnpivotName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self.alias {
+            Some(alias) => {
+                write!(f, "{} AS {}", self.ident, QuotedString(alias, '\''))
+            }
+            None => write!(f, "{}", self.ident),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct Unpivot {
     pub value_column: Identifier,
-    pub column_name: Identifier,
-    pub names: Vec<Identifier>,
+    pub unpivot_column: Identifier,
+    pub column_names: Vec<UnpivotName>,
 }
 
 impl Display for Unpivot {
@@ -642,11 +660,10 @@ impl Display for Unpivot {
         write!(
             f,
             "UNPIVOT({} FOR {} IN (",
-            self.value_column, self.column_name
+            self.value_column, self.unpivot_column
         )?;
-        write_comma_separated_list(f, &self.names)?;
-        write!(f, "))")?;
-        Ok(())
+        write_comma_separated_list(f, &self.column_names)?;
+        write!(f, "))")
     }
 }
 
