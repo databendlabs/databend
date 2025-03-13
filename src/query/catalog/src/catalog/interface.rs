@@ -311,6 +311,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     /// List all tables in a database.This will not list temporary tables.
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
 
+    /// List all tables names in a database.This will not list temporary tables.
+    async fn list_tables_names(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<String>>;
+
     fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
         Err(ErrorCode::Unimplemented(
             "'list_temporary_tables' not implemented",
