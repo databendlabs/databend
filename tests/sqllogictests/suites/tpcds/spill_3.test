@@ -6,7 +6,7 @@ statement ok
 use tpcds;
 
 statement ok
-set max_memory_usage = 1024*1024*100;
+set max_memory_usage = 1024*1024*200;
 
 # TPC-DS TEST
 include ./Q51

@@ -19,8 +19,6 @@ RUN_DIR=""
 if [ $# -gt 0 ]; then
 	RUN_DIR="--run_dir $*"
 fi
-
-
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
