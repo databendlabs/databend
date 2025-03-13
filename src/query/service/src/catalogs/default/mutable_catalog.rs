@@ -598,6 +598,16 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_tables_names(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<String>> {
+        let db = self.get_database(tenant, db_name).await?;
+        let tables = db.list_tables().await?;
+        Ok(tables
+            .into_iter()
+            .map(|table| table.name().to_string())
+            .collect())
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
         tenant: &Tenant,
