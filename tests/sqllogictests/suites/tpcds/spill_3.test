@@ -1,0 +1,36 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpcds;
+
+statement ok
+set max_memory_usage = 1024*1024*1024;
+
+include ./Q76
+include ./Q77
+include ./Q78
+include ./Q79
+include ./Q80
+include ./Q81
+include ./Q82
+include ./Q83
+include ./Q84
+include ./Q85
+include ./Q86
+include ./Q87
+include ./Q88
+include ./Q89
+include ./Q90
+include ./Q91
+include ./Q92
+include ./Q93
+include ./Q94
+include ./Q95
+include ./Q96
+include ./Q97
+include ./Q98
+include ./Q99
+
+statement ok
+UNSET max_memory_usage;
