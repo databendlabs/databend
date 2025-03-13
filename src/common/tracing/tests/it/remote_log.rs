@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_base::base::tokio;
 use databend_common_exception::Result;
 use databend_common_tracing::convert_to_batch;
 use databend_common_tracing::RemoteLog;

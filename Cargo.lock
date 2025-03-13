@@ -4574,7 +4574,6 @@ dependencies = [
  "parquet",
  "serde",
  "serde_json",
- "tokio",
  "tonic",
 ]
 

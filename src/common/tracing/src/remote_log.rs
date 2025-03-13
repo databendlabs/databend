@@ -26,10 +26,10 @@ use arrow_schema::DataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
 use arrow_schema::TimeUnit;
-use databend_common_base::base::tokio;
 use databend_common_base::base::tokio::sync::mpsc;
 use databend_common_base::base::tokio::time::interval;
 use databend_common_base::base::uuid;
+use databend_common_base::runtime::spawn;
 use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrySpawn;
@@ -83,7 +83,7 @@ impl Drop for RemoteLogGuard {
         if self.sender.try_send(Message::Shutdown).is_ok() {
             // wait for the log to be flushed
             // TODO: use blocking sleep here, may have better wayn
-            let _ = std::thread::sleep(Duration::from_secs(3));
+            std::thread::sleep(Duration::from_secs(3));
         }
     }
 }
@@ -145,7 +145,7 @@ impl RemoteLog {
                     if buffer.is_empty() {
                         continue;
                     }
-                    let flush_buffer = std::mem::replace(&mut buffer, Vec::new());
+                    let flush_buffer = std::mem::take(&mut buffer);
                     RemoteLog::flush(flush_buffer, stage_name).await;
                 }
             }
@@ -165,9 +165,9 @@ impl RemoteLog {
         let path = format!(
             "stage/internal/{}/{}.parquet",
             stage_name,
-            uuid::Uuid::new_v4().to_string()
+            uuid::Uuid::new_v4()
         );
-        let _ = tokio::spawn(async move {
+        spawn(async move {
             if let Err(e) = Self::do_flush(op.unwrap(), flush_buffer, &path).await {
                 eprintln!("Failed to flush logs: {:?}", e);
             }
@@ -190,7 +190,7 @@ impl RemoteLog {
         let mut writer = ArrowWriter::try_new(&mut buf, batch.schema(), Some(props))?;
         writer.write(&batch)?;
         writer.close()?;
-        op.write(&path, buf).await?;
+        op.write(path, buf).await?;
         Ok(())
     }
 
