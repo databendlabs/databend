@@ -21,44 +21,48 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::SendError;
 use tonic::Status;
 
-use crate::watcher::desc::WatchDesc;
+use crate::watcher::WatchDesc;
 
-/// A handle of a watching stream, for feeding messages to the stream.
+/// A handle to a watching stream that feeds messages to connected watchers.
+///
+/// The stream sender is responsible for sending watch events through the stream
+/// to the client-side watcher. It encapsulates the communication channel between
+/// the server's event source and the client's watch request.
 #[derive(Clone)]
-pub struct StreamSender {
+pub struct WatchStreamSender {
     pub desc: WatchDesc,
     tx: mpsc::Sender<Result<WatchResponse, Status>>,
 }
 
-impl fmt::Debug for StreamSender {
+impl fmt::Debug for WatchStreamSender {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "WatchStreamSender({:?})", self.desc)
     }
 }
 
-impl PartialEq for StreamSender {
+impl PartialEq for WatchStreamSender {
     fn eq(&self, other: &Self) -> bool {
         self.desc.watcher_id == other.desc.watcher_id
     }
 }
 
-impl Eq for StreamSender {}
+impl Eq for WatchStreamSender {}
 
-impl PartialOrd for StreamSender {
+impl PartialOrd for WatchStreamSender {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for StreamSender {
+impl Ord for WatchStreamSender {
     fn cmp(&self, other: &Self) -> Ordering {
         self.desc.watcher_id.cmp(&other.desc.watcher_id)
     }
 }
 
-impl StreamSender {
+impl WatchStreamSender {
     pub fn new(desc: WatchDesc, tx: mpsc::Sender<Result<WatchResponse, Status>>) -> Self {
-        StreamSender { desc, tx }
+        WatchStreamSender { desc, tx }
     }
 
     pub async fn send(

@@ -873,6 +873,10 @@ impl Settings {
         Ok(self.try_get_u64("copy_dedup_full_path_by_default")? == 1)
     }
 
+    pub fn get_error_on_nondeterministic_update(&self) -> Result<bool> {
+        Ok(self.try_get_u64("error_on_nondeterministic_update")? == 1)
+    }
+
     pub fn get_max_query_memory_usage(&self) -> Result<u64> {
         self.try_get_u64("max_query_memory_usage")
     }
@@ -907,5 +911,13 @@ impl Settings {
 
     pub fn get_force_aggregate_data_spill(&self) -> Result<bool> {
         Ok(self.try_get_u64("force_aggregate_data_spill")? == 1)
+    }
+
+    pub fn get_enable_auto_vacuum(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_vacuum")? == 1)
+    }
+
+    pub fn get_enable_use_vacuum2_to_purge_transient_table_data(&self) -> Result<bool> {
+        Ok(self.try_get_u64("use_vacuum2_to_purge_transient_table_data")? == 1)
     }
 }

@@ -16,7 +16,6 @@ use std::io;
 
 use databend_common_meta_raft_store::state_machine_api::SMEventSender;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::Change;
 use databend_common_meta_types::SeqV;
 use futures::stream::BoxStream;
 use tokio::sync::mpsc;
@@ -25,18 +24,21 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::RecvError;
 use tonic::Status;
 
-use crate::watcher::command::Command;
-use crate::watcher::EventSubscriber;
+use crate::watcher::dispatch::Command;
+use crate::watcher::dispatch::Dispatcher;
+use crate::watcher::dispatch::Update;
 
 #[derive(Clone, Debug)]
-pub struct SubscriberHandle {
+pub struct DispatcherHandle {
     /// For sending event or command to the dispatcher.
     pub(crate) tx: mpsc::UnboundedSender<Command>,
 }
 
-impl SMEventSender for SubscriberHandle {
-    fn send(&self, change: Change<Vec<u8>, String>) {
-        let _ = self.tx.send(Command::KVChange(change));
+impl SMEventSender for DispatcherHandle {
+    fn send(&self, change: (String, Option<SeqV>, Option<SeqV>)) {
+        let _ = self
+            .tx
+            .send(Command::Update(Update::new(change.0, change.1, change.2)));
     }
 
     fn send_batch(
@@ -46,26 +48,26 @@ impl SMEventSender for SubscriberHandle {
     ) {
         self.tx
             .send(Command::RequestAsync {
-                req: Box::new(move |_d| EventSubscriber::send_stream(tx, strm)),
+                req: Box::new(move |_d| Dispatcher::send_stream(tx, strm)),
             })
             .ok();
     }
 }
 
-impl SubscriberHandle {
+impl DispatcherHandle {
     pub(crate) fn new(tx: mpsc::UnboundedSender<Command>) -> Self {
         Self { tx }
     }
 
     /// Send a request to the watch dispatcher.
-    pub fn request(&self, req: impl FnOnce(&mut EventSubscriber) + Send + 'static) {
+    pub fn request(&self, req: impl FnOnce(&mut Dispatcher) + Send + 'static) {
         let _ = self.tx.send(Command::Request { req: Box::new(req) });
     }
 
     /// Send a request to the watch dispatcher and block until finished
     pub async fn request_blocking<V>(
         &self,
-        req: impl FnOnce(&mut EventSubscriber) -> V + Send + 'static,
+        req: impl FnOnce(&mut Dispatcher) -> V + Send + 'static,
     ) -> Result<V, RecvError>
     where
         V: Send + 'static,

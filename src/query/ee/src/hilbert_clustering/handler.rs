@@ -25,8 +25,6 @@ use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
-use databend_common_storages_fuse::DEFAULT_BLOCK_PER_SEGMENT;
-use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_enterprise_hilbert_clustering::HilbertClusteringHandler;
 use databend_enterprise_hilbert_clustering::HilbertClusteringHandlerWrapper;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -55,13 +53,17 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
             return Ok(None);
         };
 
-        let block_per_seg =
-            fuse_table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
         let block_thresholds = fuse_table.get_block_thresholds();
         let thresholds = BlockThresholds {
-            max_rows_per_block: block_per_seg * block_thresholds.max_rows_per_block,
-            min_rows_per_block: block_per_seg * block_thresholds.min_rows_per_block,
-            max_bytes_per_block: block_per_seg * block_thresholds.max_bytes_per_block,
+            max_rows_per_block: block_thresholds.block_per_segment
+                * block_thresholds.max_rows_per_block,
+            min_rows_per_block: block_thresholds.block_per_segment
+                * block_thresholds.min_rows_per_block,
+            max_bytes_per_block: block_thresholds.block_per_segment
+                * block_thresholds.max_bytes_per_block,
+            max_bytes_per_file: block_thresholds.block_per_segment
+                * block_thresholds.max_bytes_per_file,
+            block_per_segment: block_thresholds.block_per_segment,
         };
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
@@ -98,7 +100,7 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
         }
 
         let rows_per_block =
-            block_thresholds.calc_rows_per_block(checker.total_size, checker.total_rows) as u64;
+            block_thresholds.calc_rows_per_block(checker.total_size, checker.total_rows, 0) as u64;
         let block_size = ctx.get_settings().get_max_block_size()?;
         ctx.get_settings()
             .set_max_block_size(rows_per_block.min(block_size))?;

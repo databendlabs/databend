@@ -286,7 +286,7 @@ impl SubqueryRewriter {
                 )?;
 
                 let mut join_type = JoinType::LeftSingle;
-                if subquery.contain_agg.unwrap() {
+                if matches!(subquery.contain_agg, Some(true)) {
                     let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
                     let card = rel_expr
                         .derive_cardinality()?
@@ -342,6 +342,16 @@ impl SubqueryRewriter {
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
+                let mut is_null_equal = Vec::new();
+                for (i, (l, r)) in left_conditions
+                    .iter()
+                    .zip(right_conditions.iter())
+                    .enumerate()
+                {
+                    if l.data_type()?.is_nullable() || r.data_type()?.is_nullable() {
+                        is_null_equal.push(i);
+                    }
+                }
 
                 let marker_index = if let Some(idx) = subquery.projection_index {
                     idx
@@ -356,7 +366,7 @@ impl SubqueryRewriter {
                     equi_conditions: JoinEquiCondition::new_conditions(
                         right_conditions,
                         left_conditions,
-                        vec![],
+                        is_null_equal,
                     ),
                     non_equi_conditions: vec![],
                     join_type: JoinType::RightMark,
@@ -473,7 +483,9 @@ impl SubqueryRewriter {
                 .table_index(column_entry.table_index())
                 .build(),
             });
-            let derive_column = self.derived_columns.get(correlated_column).unwrap();
+            let Some(derive_column) = self.derived_columns.get(correlated_column) else {
+                continue;
+            };
             let column_entry = metadata.column(*derive_column);
             let left_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,

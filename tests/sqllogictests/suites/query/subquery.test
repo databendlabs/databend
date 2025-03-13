@@ -912,3 +912,33 @@ group by input_date order by input_date;
 
 statement ok
 drop table test_group;
+
+# https://github.com/databendlabs/databend/issues/17476
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+CREATE TABLE t1 (i1 INT);
+
+statement ok
+CREATE TABLE t2 (i1 INT);
+
+statement ok
+insert into t1 values (0);
+
+statement ok
+insert into t2 values (0);
+
+query I
+SELECT 1 FROM t1
+WHERE t1.i1 = (
+  SELECT t1.i1
+    FROM t2 UNION
+  SELECT dt1.i1
+    FROM (t1 AS dt1)
+);
+----
+1

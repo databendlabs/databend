@@ -35,6 +35,9 @@ use databend_query::servers::http::middleware::json_response;
 use databend_query::servers::http::v1::catalog;
 use databend_query::servers::http::v1::make_page_uri;
 use databend_query::servers::http::v1::query_route;
+use databend_query::servers::http::v1::roles::ListRolesResponse;
+use databend_query::servers::http::v1::users::CreateUserRequest;
+use databend_query::servers::http::v1::users::ListUsersResponse;
 use databend_query::servers::http::v1::ExecuteStateKind;
 use databend_query::servers::http::v1::HttpSessionConf;
 use databend_query::servers::http::v1::QueryResponse;
@@ -870,6 +873,56 @@ async fn test_catalog_apis() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn test_user_apis() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+
+    let req = CreateUserRequest {
+        name: "test_user".to_string(),
+        hostname: Some("%".to_string()),
+        auth_type: Some("double_sha1_password".to_string()),
+        auth_string: Some("test_password".to_string()),
+        default_role: None,
+        roles: None,
+        grant_all: Some(true),
+    };
+    let response = post_uri(
+        &ep,
+        "/v1/users",
+        &serde_json::to_value(req).unwrap(),
+        HeaderMap::default(),
+    )
+    .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = get_uri(&ep, "/v1/users").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: ListUsersResponse = serde_json::from_str(&body).unwrap();
+    assert_eq!(body.users.len(), 1);
+    assert_eq!(body.users[0].name, "test_user");
+    assert_eq!(body.users[0].hostname, "%");
+    assert_eq!(body.users[0].auth_type, "double_sha1_password");
+    assert_eq!(body.users[0].disabled, false);
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_role_apis() -> Result<()> {
+    let _fixture = TestFixture::setup().await?;
+    let ep = create_endpoint()?;
+
+    let response = get_uri(&ep, "/v1/roles").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: ListRolesResponse = serde_json::from_str(&body).unwrap();
+    assert_eq!(body.roles.len(), 2);
+    assert_eq!(body.roles[0].name, "account_admin");
+    assert_eq!(body.roles[1].name, "public");
+    Ok(())
+}
+
 async fn check_response(response: Response) -> Result<(StatusCode, QueryResponse)> {
     let status = response.status();
     let body = response.into_body().into_string().await.unwrap();
@@ -894,6 +947,31 @@ async fn get_uri(ep: &EndpointType, uri: &str) -> Response {
     )
     .await
     .unwrap_or_else(|err| err.into_response())
+}
+
+async fn post_uri(
+    ep: &EndpointType,
+    uri: &str,
+    json: &serde_json::Value,
+    headers: HeaderMap,
+) -> Result<Response> {
+    let content_type = "application/json";
+    let body = serde_json::to_vec(&json)?;
+    let basic = headers::Authorization::basic("root", "");
+
+    let mut req = Request::builder()
+        .uri(uri.parse().unwrap())
+        .method(Method::POST)
+        .header(header::CONTENT_TYPE, content_type)
+        .typed_header(basic)
+        .body(body);
+    req.headers_mut().extend(headers.into_iter());
+
+    let response = ep
+        .call(req)
+        .await
+        .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+    Ok(response)
 }
 
 async fn get_uri_checked(ep: &EndpointType, uri: &str) -> Result<(StatusCode, QueryResponse)> {
@@ -939,22 +1017,7 @@ async fn post_json_to_endpoint(
     headers: HeaderMap,
 ) -> Result<(StatusCode, QueryResponse)> {
     let uri = "/v1/query";
-    let content_type = "application/json";
-    let body = serde_json::to_vec(&json)?;
-    let basic = headers::Authorization::basic("root", "");
-
-    let mut req = Request::builder()
-        .uri(uri.parse().unwrap())
-        .method(Method::POST)
-        .header(header::CONTENT_TYPE, content_type)
-        .typed_header(basic)
-        .body(body);
-    req.headers_mut().extend(headers.into_iter());
-
-    let response = ep
-        .call(req)
-        .await
-        .map_err(|e| ErrorCode::Internal(e.to_string()))?;
+    let response = post_uri(ep, uri, json, headers).await?;
     check_response(response).await
 }
 

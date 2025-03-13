@@ -461,7 +461,7 @@ impl HashtableSpillingState {
 
             let columns = data_block.columns().to_vec();
             for column in columns.into_iter() {
-                let column = column.to_column(data_block.num_rows());
+                let column = column.into_column(data_block.num_rows());
 
                 let offset = self.data_payload.len();
 

@@ -36,6 +36,7 @@ use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
+use crate::types::AnyType;
 use crate::types::ArrayColumn;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
@@ -49,9 +50,11 @@ use crate::Column;
 use crate::DataBlock;
 use crate::DataField;
 use crate::DataSchema;
+use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
+use crate::Value;
 
 impl TryFrom<&Field> for DataField {
     type Error = ErrorCode;
@@ -231,6 +234,15 @@ impl DataBlock {
         }
 
         Ok((DataBlock::new_from_columns(columns), schema.clone()))
+    }
+}
+
+impl Value<AnyType> {
+    pub fn from_arrow_rs(array: ArrayRef, data_type: &DataType) -> Result<Self> {
+        if array.null_count() == array.len() {
+            return Ok(Value::Scalar(Scalar::Null));
+        }
+        Ok(Value::Column(Column::from_arrow_rs(array, data_type)?))
     }
 }
 

@@ -1785,6 +1785,7 @@ impl<'a> TypeChecker<'a> {
                 )));
             }
             let _ = arguments.pop();
+            let _ = arg_types.pop();
             let delimiter = delimiter_value.unwrap();
             vec![delimiter.value]
         } else {

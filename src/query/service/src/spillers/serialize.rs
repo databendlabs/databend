@@ -15,19 +15,24 @@
 use std::io::Write;
 use std::sync::Arc;
 
+use arrow_array::ArrayRef;
+use arrow_ipc::reader::FileReaderBuilder;
 use arrow_schema::Schema;
 use buf_list::BufList;
 use buf_list::Cursor;
 use bytes::Buf;
 use databend_common_base::base::Alignment;
 use databend_common_base::base::DmaWriteBuf;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::arrow::read_column;
 use databend_common_expression::arrow::write_column;
 use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::DataType;
+use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
+use databend_common_expression::Value;
 use opendal::Buffer;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::ArrowWriter;
@@ -75,13 +80,12 @@ impl BlocksEncoder {
             let block = if blocks.len() == 1 {
                 blocks.remove(0)
             } else {
-                DataBlock::concat(&blocks).unwrap()
+                DataBlock::concat(&std::mem::take(&mut blocks)).unwrap()
             };
+            let num_rows = block.num_rows();
             let columns_layout = std::iter::once(self.size())
-                .chain(block.columns().iter().map(|entry| {
-                    let column = entry
-                        .value
-                        .convert_to_full_column(&entry.data_type, block.num_rows());
+                .chain(block.take_columns().into_iter().map(|entry| {
+                    let column = entry.value.into_full_column(&entry.data_type, num_rows);
                     write_column(&column, &mut self.buf).unwrap();
                     self.size()
                 }))
@@ -101,22 +105,10 @@ impl BlocksEncoder {
     }
 }
 
-pub(super) fn deserialize_block(columns_layout: &Layout, mut data: Buffer) -> DataBlock {
+pub(super) fn deserialize_block(columns_layout: &Layout, data: Buffer) -> Result<DataBlock> {
     match columns_layout {
-        Layout::ArrowIpc(layout) => {
-            let columns = layout
-                .iter()
-                .map(|&layout| {
-                    let ls = BufList::from_iter(data.slice(0..layout));
-                    data.advance(layout);
-                    let mut cursor = Cursor::new(ls);
-                    read_column(&mut cursor).unwrap()
-                })
-                .collect::<Vec<_>>();
-
-            DataBlock::new_from_columns(columns)
-        }
-        Layout::Parquet => bare_blocks_from_parquet(Reader(data)).unwrap(),
+        Layout::ArrowIpc(layout) => bare_blocks_from_arrow_ipc(layout, data),
+        Layout::Parquet => bare_blocks_from_parquet(Reader(data)),
         Layout::Aggregate => unreachable!(),
     }
 }
@@ -131,6 +123,34 @@ fn fake_data_schema(block: &DataBlock) -> DataSchema {
     DataSchema::new(fields)
 }
 
+fn bare_blocks_from_arrow_ipc(layout: &[usize], mut data: Buffer) -> Result<DataBlock> {
+    assert!(!layout.is_empty());
+    let mut columns = Vec::with_capacity(layout.len());
+    let mut read_array = |layout: usize| -> Result<(ArrayRef, DataType)> {
+        let ls = BufList::from_iter(data.slice(0..layout));
+        data.advance(layout);
+        let mut reader = FileReaderBuilder::new().build(Cursor::new(ls))?;
+        let schema = reader.schema();
+        let f = DataField::try_from(schema.field(0))?;
+        let data_type = f.data_type().clone();
+        let col = reader
+            .next()
+            .ok_or_else(|| ErrorCode::Internal("expected one arrow array"))??
+            .remove_column(0);
+        Ok((col, data_type))
+    };
+    let (array, data_type) = read_array(layout[0])?;
+    let num_rows = array.len();
+    let val = Value::from_arrow_rs(array, &data_type)?;
+    columns.push(BlockEntry::new(data_type, val));
+    for &layout in layout.iter().skip(1) {
+        let (array, data_type) = read_array(layout)?;
+        let val = Value::from_arrow_rs(array, &data_type)?;
+        columns.push(BlockEntry::new(data_type, val));
+    }
+    Ok(DataBlock::new(columns, num_rows))
+}
+
 /// Deserialize bare data block from parquet format.
 fn bare_blocks_from_parquet<R: ChunkReader + 'static>(data: R) -> Result<DataBlock> {
     let reader = ParquetRecordBatchReader::try_new(data, usize::MAX)?;
@@ -138,7 +158,16 @@ fn bare_blocks_from_parquet<R: ChunkReader + 'static>(data: R) -> Result<DataBlo
     for record_batch in reader {
         let record_batch = record_batch?;
         let schema = DataSchema::try_from(record_batch.schema().as_ref())?;
-        let (block, _) = DataBlock::from_record_batch(&schema, &record_batch)?;
+        let num_rows = record_batch.num_rows();
+        let mut columns = Vec::with_capacity(record_batch.num_columns());
+        for (array, field) in record_batch.columns().iter().zip(schema.fields()) {
+            let data_type = field.data_type();
+            columns.push(BlockEntry::new(
+                data_type.clone(),
+                Value::from_arrow_rs(array.clone(), data_type)?,
+            ))
+        }
+        let block = DataBlock::new(columns, num_rows);
         blocks.push(block);
     }
 

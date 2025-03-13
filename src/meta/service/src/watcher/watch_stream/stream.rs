@@ -17,26 +17,26 @@ use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
-use databend_common_base::base::tokio::sync::mpsc::Receiver;
 use futures::Stream;
+use tokio::sync::mpsc::Receiver;
 
-use crate::watcher::StreamSender;
-use crate::watcher::SubscriberHandle;
+use crate::watcher::dispatch::DispatcherHandle;
+use crate::watcher::watch_stream::sender::WatchStreamSender;
 
 /// A wrapper around [`tokio::sync::mpsc::Receiver`] that implements [`Stream`].
 #[derive(Debug)]
-pub(crate) struct WatchStream<T> {
+pub struct WatchStream<T> {
     rx: Receiver<T>,
     // TODO: use a Box<dyn Fn> to replace these two fields
     /// Hold a clone of the sender to remove itself from the dispatcher when dropped.
-    sender: Arc<StreamSender>,
-    subscriber_handle: SubscriberHandle,
+    sender: Arc<WatchStreamSender>,
+    dispatcher_handle: DispatcherHandle,
 }
 
 impl<T> Drop for WatchStream<T> {
     fn drop(&mut self) {
         let sender = self.sender.clone();
-        self.subscriber_handle.request(move |d| {
+        self.dispatcher_handle.request(move |d| {
             d.remove_watcher(sender);
         })
     }
@@ -44,11 +44,15 @@ impl<T> Drop for WatchStream<T> {
 
 impl<T> WatchStream<T> {
     /// Create a new `WatcherStream`.
-    pub fn new(rx: Receiver<T>, sender: Arc<StreamSender>, dispatcher: SubscriberHandle) -> Self {
+    pub fn new(
+        rx: Receiver<T>,
+        sender: Arc<WatchStreamSender>,
+        dispatcher: DispatcherHandle,
+    ) -> Self {
         Self {
             rx,
             sender,
-            subscriber_handle: dispatcher,
+            dispatcher_handle: dispatcher,
         }
     }
 }
