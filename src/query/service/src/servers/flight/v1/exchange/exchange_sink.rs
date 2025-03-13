@@ -16,19 +16,12 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::DataBlock;
-use databend_common_pipeline_core::processors::ProcessorPtr;
 use databend_common_pipeline_core::Pipe;
-use databend_common_pipeline_core::PipeItem;
 use databend_common_pipeline_core::Pipeline;
 
 use super::exchange_params::ExchangeParams;
 use super::exchange_sink_writer::create_writer_item;
-use super::exchange_sorting::ExchangeSorting;
-use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_shuffle::exchange_shuffle;
-use super::serde::ExchangeSerializeMeta;
 use crate::clusters::ClusterHelper;
 use crate::pipelines::processors::transforms::aggregator::FlightExchange;
 use crate::servers::flight::v1::scatter::MergeFlightScatter;
@@ -57,38 +50,31 @@ impl ExchangeSink {
                     )));
                 }
 
-                let exchange_injector = &params.exchange_injector;
-
                 if !params.ignore_exchange {
                     let settings = ctx.get_settings();
                     let compression = settings.get_query_flight_compression()?;
 
                     let nodes = vec![];
-                    pipeline.exchange(
-                        1,
-                        FlightExchange::create(
-                            nodes,
-                            compression,
-                            Arc::new(Box::new(MergeFlightScatter)),
+                    match params.enable_multiway_sort {
+                        true => pipeline.exchange(
+                            1,
+                            FlightExchange::<true>::create(
+                                nodes,
+                                compression,
+                                Arc::new(Box::new(MergeFlightScatter)),
+                            ),
                         ),
-                    );
+                        false => pipeline.exchange(
+                            1,
+                            FlightExchange::<false>::create(
+                                nodes,
+                                compression,
+                                Arc::new(Box::new(MergeFlightScatter)),
+                            ),
+                        ),
+                    };
                 }
 
-                if !params.ignore_exchange && exchange_injector.exchange_sorting().is_some() {
-                    let output_len = pipeline.output_len();
-                    let sorting = SinkExchangeSorting::create();
-                    let transform = TransformExchangeSorting::create(output_len, sorting);
-
-                    let output = transform.get_output();
-                    let inputs = transform.get_inputs();
-                    pipeline.add_pipe(Pipe::create(output_len, 1, vec![PipeItem::create(
-                        ProcessorPtr::create(Box::new(transform)),
-                        inputs,
-                        vec![output],
-                    )]));
-                }
-
-                pipeline.try_resize(1)?;
                 assert_eq!(senders.len(), 1);
                 pipeline.add_pipe(Pipe::create(1, 0, vec![create_writer_item(
                     senders.remove(0),
@@ -120,29 +106,5 @@ impl ExchangeSink {
                 Ok(())
             }
         }
-    }
-}
-
-struct SinkExchangeSorting;
-
-impl SinkExchangeSorting {
-    pub fn create() -> Arc<dyn ExchangeSorting> {
-        Arc::new(SinkExchangeSorting {})
-    }
-}
-
-impl ExchangeSorting for SinkExchangeSorting {
-    fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
-        let block_meta = data_block.get_meta();
-        let shuffle_meta = block_meta
-            .and_then(ExchangeSerializeMeta::downcast_ref_from)
-            .ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "Failed to downcast ExchangeSerializeMeta from BlockMeta: {:?}",
-                    block_meta
-                ))
-            })?;
-
-        Ok(shuffle_meta.block_number)
     }
 }

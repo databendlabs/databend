@@ -64,15 +64,24 @@ pub fn exchange_shuffle(
     let settings = ctx.get_settings();
     let compression = settings.get_query_flight_compression()?;
 
-    let outputs_size = params.destination_ids.len();
-    pipeline.exchange(
-        outputs_size,
-        FlightExchange::create(
-            params.destination_ids.clone(),
-            compression,
-            params.shuffle_scatter.clone(),
+    match params.enable_multiway_sort {
+        true => pipeline.exchange(
+            params.destination_ids.len(),
+            FlightExchange::<true>::create(
+                params.destination_ids.clone(),
+                compression,
+                params.shuffle_scatter.clone(),
+            ),
         ),
-    );
+        false => pipeline.exchange(
+            params.destination_ids.len(),
+            FlightExchange::<false>::create(
+                params.destination_ids.clone(),
+                compression,
+                params.shuffle_scatter.clone(),
+            ),
+        ),
+    };
 
     Ok(())
 }

@@ -543,6 +543,10 @@ impl UnalignedPartitions {
                     AggregateMeta::FinalPartition => unreachable!(),
                     AggregateMeta::SpilledPayload(_) => unreachable!(),
                     AggregateMeta::InFlightPayload(payload) => {
+                        if block.is_empty() {
+                            continue;
+                        }
+
                         let payload = AggregatePayload {
                             partition: payload.partition,
                             max_partition_count: payload.max_partition,
@@ -559,6 +563,10 @@ impl UnalignedPartitions {
                         }
                     }
                     AggregateMeta::AggregatePayload(payload) => {
+                        if payload.payload.len() == 0 {
+                            continue;
+                        }
+
                         let partitioned = self.partition_payload(payload, max_partitions);
                         for payload in partitioned {
                             aligned_partitions.add_data(

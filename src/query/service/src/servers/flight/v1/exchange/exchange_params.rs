@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_expression::DataSchemaRef;
 
-use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
 #[derive(Clone)]
@@ -27,7 +26,7 @@ pub struct ShuffleExchangeParams {
     pub schema: DataSchemaRef,
     pub destination_ids: Vec<String>,
     pub shuffle_scatter: Arc<Box<dyn FlightScatter>>,
-    pub exchange_injector: Arc<dyn ExchangeInjector>,
+    pub enable_multiway_sort: bool,
 }
 
 #[derive(Clone)]
@@ -37,8 +36,8 @@ pub struct MergeExchangeParams {
     pub destination_id: String,
     pub schema: DataSchemaRef,
     pub ignore_exchange: bool,
+    pub enable_multiway_sort: bool,
     pub allow_adjust_parallelism: bool,
-    pub exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
 pub enum ExchangeParams {

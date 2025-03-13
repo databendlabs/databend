@@ -18,30 +18,19 @@ use std::sync::Arc;
 
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_ipc::CompressionType;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline_core::processors::Exchange;
-use databend_common_pipeline_core::processors::MultiwayStrategy;
 use databend_common_settings::FlightCompression;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::servers::flight::v1::exchange::serde::ExchangeSerializeMeta;
-use crate::servers::flight::v1::exchange::DataExchange;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
-use crate::servers::flight::v1::exchange::ExchangeSorting;
-use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
 use crate::servers::flight::v1::scatter::FlightScatter;
-use crate::servers::flight::v1::scatter::HashFlightScatter;
-use crate::sessions::QueryContext;
-
-struct AggregateExchangeSorting {}
 
 pub fn compute_block_number(bucket: isize, max_partition_count: usize) -> Result<isize> {
     match bucket.is_negative() {
@@ -60,31 +49,6 @@ pub fn restore_block_number(value: isize) -> (isize, usize) {
     match value & 1 {
         1 => (0 - abs_partition as isize, max_partition),
         _ => (abs_partition as isize, max_partition),
-    }
-}
-
-impl ExchangeSorting for AggregateExchangeSorting {
-    fn block_number(&self, data_block: &DataBlock) -> Result<isize> {
-        match data_block.get_meta() {
-            None => Ok(-1),
-            Some(block_meta_info) => match AggregateMeta::downcast_ref_from(block_meta_info) {
-                None => Err(ErrorCode::Internal(format!(
-                    "Internal error, AggregateExchangeSorting only recv AggregateMeta {:?}",
-                    serde_json::to_string(block_meta_info)
-                ))),
-                Some(meta_info) => match meta_info {
-                    AggregateMeta::FinalPartition => unreachable!(),
-                    AggregateMeta::InFlightPayload(_) => unreachable!(),
-                    AggregateMeta::Serialized(v) => {
-                        compute_block_number(v.bucket, v.max_partition_count)
-                    }
-                    AggregateMeta::AggregatePayload(v) => {
-                        compute_block_number(v.partition, v.max_partition_count)
-                    }
-                    AggregateMeta::SpilledPayload(_) => Ok(-1),
-                },
-            },
-        }
     }
 }
 
@@ -122,48 +86,7 @@ fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
     Ok(buckets)
 }
 
-pub struct AggregateInjector;
-
-impl AggregateInjector {
-    pub fn create() -> Arc<dyn ExchangeInjector> {
-        Arc::new(AggregateInjector)
-    }
-}
-
-impl ExchangeInjector for AggregateInjector {
-    fn flight_scatter(
-        &self,
-        ctx: &Arc<QueryContext>,
-        exchange: &DataExchange,
-    ) -> Result<Arc<Box<dyn FlightScatter>>> {
-        Ok(Arc::new(match exchange {
-            DataExchange::Merge(_) => unreachable!(),
-            DataExchange::Broadcast(exchange) => Box::new(BroadcastFlightScatter::try_create(
-                exchange.destination_ids.len(),
-            )?),
-            DataExchange::ShuffleDataExchange(exchange) => {
-                let local_id = &ctx.get_cluster().local_id;
-                let local_pos = exchange
-                    .destination_ids
-                    .iter()
-                    .position(|x| x == local_id)
-                    .unwrap();
-                HashFlightScatter::try_create(
-                    ctx.get_function_context()?,
-                    exchange.shuffle_keys.clone(),
-                    exchange.destination_ids.len(),
-                    local_pos,
-                )?
-            }
-        }))
-    }
-
-    fn exchange_sorting(&self) -> Option<Arc<dyn ExchangeSorting>> {
-        Some(Arc::new(AggregateExchangeSorting {}))
-    }
-}
-
-pub struct FlightExchange {
+pub struct FlightExchange<const MULTIWAY_SORT: bool> {
     local_id: String,
     bucket_lookup: HashMap<String, usize>,
     rev_bucket_lookup: Vec<String>,
@@ -171,12 +94,12 @@ pub struct FlightExchange {
     shuffle_scatter: Arc<Box<dyn FlightScatter>>,
 }
 
-impl FlightExchange {
+impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
     pub fn create(
         lookup: Vec<String>,
         compression: Option<FlightCompression>,
         shuffle_scatter: Arc<Box<dyn FlightScatter>>,
-    ) -> Arc<FlightExchange> {
+    ) -> Arc<Self> {
         let compression = match compression {
             None => None,
             Some(compression) => match compression {
@@ -204,7 +127,7 @@ impl FlightExchange {
     }
 }
 
-impl FlightExchange {
+impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
     fn default_partition(&self, data_block: DataBlock) -> Result<Vec<(usize, DataBlock)>> {
         if self.rev_bucket_lookup.is_empty() {
             let data_block = serialize_block(0, data_block, &self.options)?;
@@ -228,9 +151,9 @@ impl FlightExchange {
     }
 }
 
-impl Exchange for FlightExchange {
+impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
     const NAME: &'static str = "AggregateExchange";
-    const STRATEGY: MultiwayStrategy = MultiwayStrategy::Custom;
+    const MULTIWAY_SORT: bool = MULTIWAY_SORT;
 
     fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<(usize, DataBlock)>> {
         let Some(meta) = data_block.take_meta() else {
@@ -267,6 +190,10 @@ impl Exchange for FlightExchange {
             AggregateMeta::AggregatePayload(p) => {
                 let mut blocks = Vec::with_capacity(n);
                 for (idx, payload) in scatter_payload(p.payload, n)?.into_iter().enumerate() {
+                    if payload.len() == 0 {
+                        continue;
+                    }
+
                     if self.rev_bucket_lookup[idx] == self.local_id {
                         blocks.push((
                             idx,

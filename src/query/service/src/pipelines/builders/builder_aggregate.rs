@@ -39,7 +39,6 @@ use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
 use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
-use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
@@ -166,7 +165,8 @@ impl PipelineBuilder {
             )?))
         })?;
 
-        self.exchange_injector = AggregateInjector::create();
+        self.enable_multiway_sort = true;
+        // self.exchange_injector = AggregateInjector::create();
         Ok(())
     }
 
@@ -199,14 +199,12 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        let old_inject = self.exchange_injector.clone();
-
         let input: &PhysicalPlan = &aggregate.input;
-        if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-            self.exchange_injector = AggregateInjector::create();
-        }
+        let old_value = self.enable_multiway_sort;
+        self.enable_multiway_sort |= matches!(input, PhysicalPlan::ExchangeSource(_));
+
         self.build_pipeline(&aggregate.input)?;
-        self.exchange_injector = old_inject;
+        self.enable_multiway_sort = old_value;
         build_partition_bucket(&mut self.main_pipeline, params.clone())
     }
 

@@ -86,7 +86,7 @@ impl ExchangeTransform {
                 let new_outputs = max_threads + nodes_source;
                 pipeline.add_pipe(Pipe::create(len, new_outputs, items));
 
-                if params.exchange_injector.exchange_sorting().is_none() {
+                if !params.enable_multiway_sort {
                     pipeline.try_resize(max_threads)?;
                 }
 

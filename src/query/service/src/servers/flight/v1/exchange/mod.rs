@@ -13,12 +13,10 @@
 // limitations under the License.
 
 mod data_exchange;
-mod exchange_injector;
 mod exchange_manager;
 mod exchange_params;
 mod exchange_sink;
 mod exchange_sink_writer;
-mod exchange_sorting;
 mod exchange_source;
 mod exchange_source_reader;
 mod exchange_transform;
@@ -32,10 +30,7 @@ pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
 pub use data_exchange::MergeExchange;
 pub use data_exchange::ShuffleDataExchange;
-pub use exchange_injector::DefaultExchangeInjector;
-pub use exchange_injector::ExchangeInjector;
 pub use exchange_manager::DataExchangeManager;
 pub use exchange_params::MergeExchangeParams;
 pub use exchange_params::ShuffleExchangeParams;
-pub use exchange_sorting::ExchangeSorting;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;

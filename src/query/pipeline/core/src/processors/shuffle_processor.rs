@@ -27,15 +27,18 @@ use crate::processors::OutputPort;
 use crate::processors::Processor;
 use crate::processors::ProcessorPtr;
 
+#[derive(Eq, PartialEq)]
 pub enum MultiwayStrategy {
     Random,
     Custom,
 }
 
+// std::marker::ConstParamTy!(MultiwayStrategy);
+
 pub trait Exchange: Send + Sync + 'static {
     const NAME: &'static str;
+    const MULTIWAY_SORT: bool = false;
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
-    const STRATEGY: MultiwayStrategy = MultiwayStrategy::Random;
 
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<(usize, DataBlock)>>;
 
@@ -323,7 +326,7 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
         }
 
         let mut all_inputs_finished = true;
-        let mut need_pick_block_to_push = matches!(T::STRATEGY, MultiwayStrategy::Custom);
+        let mut need_pick_block_to_push = T::MULTIWAY_SORT;
 
         for (index, input) in self.inputs.iter().enumerate() {
             if input.is_finished() {
@@ -333,13 +336,13 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             all_inputs_finished = false;
 
             if input.has_data() {
-                match T::STRATEGY {
-                    MultiwayStrategy::Random => {
+                match T::MULTIWAY_SORT {
+                    false => {
                         if self.output.can_push() {
                             self.output.push_data(Ok(input.pull_data().unwrap()?));
                         }
                     }
-                    MultiwayStrategy::Custom => {
+                    true => {
                         if self.inputs_data[index].is_none() {
                             self.inputs_data[index] = Some(input.pull_data().unwrap()?);
                         }

@@ -23,7 +23,6 @@ mod transform_partition_bucket;
 mod transform_single_key;
 mod udaf_script;
 
-pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregate_exchange_injector::FlightExchange;
 pub use aggregate_meta::*;
 pub use aggregator_params::AggregatorParams;
