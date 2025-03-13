@@ -198,13 +198,13 @@ impl TransformPartitionDispatch {
 
     fn ready_partition(&mut self) -> Option<isize> {
         let inputs_min_partition = self.working_partition()?;
-        let stroage_min_partition = self.partitions.min_partition()?;
+        let storage_min_partition = self.partitions.min_partition()?;
 
-        if stroage_min_partition >= inputs_min_partition {
+        if storage_min_partition >= inputs_min_partition {
             return None;
         }
 
-        Some(stroage_min_partition)
+        Some(storage_min_partition)
     }
 
     fn working_partition(&mut self) -> Option<isize> {
