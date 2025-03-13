@@ -50,7 +50,7 @@ jobs:
           - { dirs: "crdb", runner: "2c8g" }
           - { dirs: "base", runner: "2c8g" }
           - { dirs: "ydb", runner: "2c8g" }
-          - { dirs: "tpcds", runner: "2c8g", parallel: "1" }
+          - { dirs: "tpcds", runner: "4c16g", parallel: "1" }
           - { dirs: "tpch", runner: "2c8g" }
           - { dirs: "standalone", runner: "2c8g" }
         handler:
@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 15
+        timeout-minutes: 20
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
@@ -176,7 +176,7 @@ jobs:
           - { dirs: "crdb", runner: "2c8g" }
           - { dirs: "base", runner: "2c8g" }
           - { dirs: "ydb", runner: "2c8g" }
-          - { dirs: "tpcds", runner: "2c8g", parallel: "1" }
+          - { dirs: "tpcds", runner: "4c16g", parallel: "1" }
           - { dirs: "tpch", runner: "2c8g" }
           - { dirs: "cluster", runner: "2c8g" }
         handler:
@@ -189,7 +189,7 @@ jobs:
           runner_provider: ${{ inputs.runner_provider }}
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 15
+        timeout-minutes: 20
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
