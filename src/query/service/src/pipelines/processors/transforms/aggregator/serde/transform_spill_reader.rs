@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::time::Instant;
 
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
@@ -28,7 +27,6 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_core::processors::ProcessorPtr;
-use log::info;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
@@ -138,7 +136,6 @@ impl Processor for TransformSpillReader {
             match &block_meta {
                 AggregateMeta::SpilledPayload(payload) => {
                     let _guard = self.semaphore.acquire().await;
-                    let instant = Instant::now();
                     let data = self
                         .operator
                         .read_with(&payload.location)

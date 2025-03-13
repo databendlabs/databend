@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -265,25 +266,20 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
 }
 
 pub struct MergePartitionProcessor<T: Exchange> {
-    exchange: Arc<T>,
-
     output: Arc<OutputPort>,
     inputs: Vec<Arc<InputPort>>,
     inputs_data: Vec<Option<DataBlock>>,
+    _phantom_data: PhantomData<T>,
 }
 
 impl<T: Exchange> MergePartitionProcessor<T> {
-    pub fn create(
-        inputs: Vec<Arc<InputPort>>,
-        output: Arc<OutputPort>,
-        exchange: Arc<T>,
-    ) -> ProcessorPtr {
+    pub fn create(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>) -> ProcessorPtr {
         let inputs_data = vec![None; inputs.len()];
-        ProcessorPtr::create(Box::new(MergePartitionProcessor {
+        ProcessorPtr::create(Box::new(MergePartitionProcessor::<T> {
             output,
             inputs,
-            exchange,
             inputs_data,
+            _phantom_data: Default::default(),
         }))
     }
 
