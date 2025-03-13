@@ -64,7 +64,6 @@ use databend_common_expression::Value;
 use jiff::civil::date;
 use jiff::Unit;
 use jsonb::jsonpath::parse_json_path;
-use jsonb::jsonpath::Mode;
 use jsonb::keypath::parse_key_paths;
 use jsonb::parse_value;
 use jsonb::OwnedJsonb;
@@ -434,25 +433,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match parse_json_path(path.as_bytes()) {
-                    Ok(json_path) => {
-                        match RawJsonb::new(v).get_by_path_opt(&json_path, Mode::Array) {
-                            Ok(owned_jsonb_opt) => match owned_jsonb_opt {
-                                Some(owned_jsonb) => {
-                                    output.push(owned_jsonb.as_ref());
-                                }
-                                None => {
-                                    output.push_null();
-                                }
-                            },
-                            Err(_) => {
-                                ctx.set_error(
-                                    output.len(),
-                                    format!("Invalid JSONB value '0x{}'", hex::encode(v)),
-                                );
-                                output.push_null();
-                            }
+                    Ok(json_path) => match RawJsonb::new(v).get_by_path_array(&json_path) {
+                        Ok(owned_jsonb) => {
+                            output.push(owned_jsonb.as_ref());
                         }
-                    }
+                        Err(_) => {
+                            ctx.set_error(
+                                output.len(),
+                                format!("Invalid JSONB value '0x{}'", hex::encode(v)),
+                            );
+                            output.push_null();
+                        }
+                    },
                     Err(_) => {
                         ctx.set_error(output.len(), format!("Invalid JSON Path '{path}'"));
                         output.push_null();
@@ -474,25 +466,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match parse_json_path(path.as_bytes()) {
-                    Ok(json_path) => {
-                        match RawJsonb::new(v).get_by_path_opt(&json_path, Mode::First) {
-                            Ok(owned_jsonb_opt) => match owned_jsonb_opt {
-                                Some(owned_jsonb) => {
-                                    output.push(owned_jsonb.as_ref());
-                                }
-                                None => {
-                                    output.push_null();
-                                }
-                            },
-                            Err(_) => {
-                                ctx.set_error(
-                                    output.len(),
-                                    format!("Invalid JSONB value '0x{}'", hex::encode(v)),
-                                );
+                    Ok(json_path) => match RawJsonb::new(v).get_by_path_first(&json_path) {
+                        Ok(owned_jsonb_opt) => match owned_jsonb_opt {
+                            Some(owned_jsonb) => {
+                                output.push(owned_jsonb.as_ref());
+                            }
+                            None => {
                                 output.push_null();
                             }
+                        },
+                        Err(_) => {
+                            ctx.set_error(
+                                output.len(),
+                                format!("Invalid JSONB value '0x{}'", hex::encode(v)),
+                            );
+                            output.push_null();
                         }
-                    }
+                    },
                     Err(_) => {
                         ctx.set_error(output.len(), format!("Invalid JSON Path '{path}'"));
                         output.push_null();
@@ -560,25 +550,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match parse_json_path(path.as_bytes()) {
-                    Ok(json_path) => {
-                        match RawJsonb::new(v).get_by_path_opt(&json_path, Mode::Mixed) {
-                            Ok(owned_jsonb_opt) => match owned_jsonb_opt {
-                                Some(owned_jsonb) => {
-                                    output.push(owned_jsonb.as_ref());
-                                }
-                                None => {
-                                    output.push_null();
-                                }
-                            },
-                            Err(_) => {
-                                ctx.set_error(
-                                    output.len(),
-                                    format!("Invalid JSONB value '0x{}'", hex::encode(v)),
-                                );
+                    Ok(json_path) => match RawJsonb::new(v).get_by_path_scalar(&json_path) {
+                        Ok(owned_jsonb_opt) => match owned_jsonb_opt {
+                            Some(owned_jsonb) => {
+                                output.push(owned_jsonb.as_ref());
+                            }
+                            None => {
                                 output.push_null();
                             }
+                        },
+                        Err(_) => {
+                            ctx.set_error(
+                                output.len(),
+                                format!("Invalid JSONB value '0x{}'", hex::encode(v)),
+                            );
+                            output.push_null();
                         }
-                    }
+                    },
                     Err(_) => {
                         ctx.set_error(output.len(), format!("Invalid JSON Path '{path}'"));
                         output.push_null();
@@ -605,7 +593,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         val.write_to_vec(&mut buf);
                         match parse_json_path(path.as_bytes()) {
                             Ok(json_path) => {
-                                match RawJsonb::new(&buf).get_by_path_opt(&json_path, Mode::Mixed) {
+                                match RawJsonb::new(&buf).get_by_path_scalar(&json_path) {
                                     Ok(owned_jsonb_opt) => match owned_jsonb_opt {
                                         Some(owned_jsonb) => {
                                             if owned_jsonb.as_raw().is_null().unwrap() {
@@ -1086,11 +1074,13 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
         "try_to_string",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|v, output, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(output.len()) {
-                    output.push_null();
-                    return;
+        vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(
+            |val, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
                 }
                 if is_null(val) {
                     output.push_null();
@@ -1117,7 +1107,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return;
             }
             match cast_to_str(val)
-                .ok_or("unsupported type".to_string())
+                .map_err(|e| format!("{e}"))
                 .and_then(|s| {
                     string_to_date(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
                 })
@@ -1140,7 +1130,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_combine_nullable_1_arg::<VariantType, DateType, _, _>(
         "try_to_date",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|v, output, ctx| {
+        vectorize_with_builder_1_arg::<VariantType, NullableType<DateType>>(|val, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
                     output.push_null();
@@ -1148,7 +1138,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
             match cast_to_str(val)
-                .ok_or("unsupported type".to_string())
+                .map_err(|e| format!("{e}"))
                 .and_then(|s| {
                     string_to_date(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
                 })
@@ -1179,11 +1169,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.push_null();
                     return;
                 }
-                match cast_to_str(val)
-                    .ok_or("unsupported type".to_string())
-                    .and_then(|s| {
-                        string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
-                    }) {
+                match cast_to_str(val).map_err(|e| format!("{e}")).and_then(|s| {
+                    string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
+                }) {
                     Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                     Err(e) => {
                         ctx.set_error(
@@ -1201,18 +1189,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         "try_to_timestamp",
         |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<VariantType, NullableType<TimestampType>>(
-            |v, output, ctx| {
+            |val, output, ctx| {
                 if let Some(validity) = &ctx.validity {
                     if !validity.get_bit(output.len()) {
                         output.push_null();
                         return;
                     }
                 }
-                match cast_to_str(val)
-                    .ok_or("unsupported type".to_string())
-                    .and_then(|s| {
-                        string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
-                    }) {
+                match cast_to_str(val).map_err(|e| format!("{e}")).and_then(|s| {
+                    string_to_timestamp(s.as_bytes(), &ctx.func_ctx.tz).map_err(|e| e.message())
+                }) {
                     Ok(ts) => output.push(ts.timestamp().as_microsecond()),
                     Err(_) => {
                         output.push_null();
@@ -1441,7 +1427,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 let new_value = RawJsonb::new(new_val);
-                match RawJsonb::new(val).array_insert(pos, new_value) {
+                match RawJsonb::new(val).array_insert(pos, &new_value) {
                     Ok(owned_jsonb) => {
                         output.put_slice(owned_jsonb.as_ref());
                     }
@@ -1489,7 +1475,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 let left_val = RawJsonb::new(left);
                 let right_val = RawJsonb::new(right);
-                match left_val.array_intersection(right_val) {
+                match left_val.array_intersection(&right_val) {
                     Ok(owned_jsonb) => {
                         output.put_slice(owned_jsonb.as_ref());
                     }
@@ -1515,7 +1501,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 let left_val = RawJsonb::new(left);
                 let right_val = RawJsonb::new(right);
-                match left_val.array_except(right_val) {
+                match left_val.array_except(&right_val) {
                     Ok(owned_jsonb) => {
                         output.put_slice(owned_jsonb.as_ref());
                     }
@@ -1541,7 +1527,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
                 let left_val = RawJsonb::new(left);
                 let right_val = RawJsonb::new(right);
-                match left_val.array_overlap(right_val) {
+                match left_val.array_overlap(&right_val) {
                     Ok(res) => {
                         output.push(res);
                     }
@@ -2334,13 +2320,15 @@ fn json_object_insert_fn(
         let new_key = new_key.as_string().unwrap();
         let res = match new_val {
             ScalarRef::Variant(new_val) => {
-                value.object_insert(new_key, RawJsonb::new(new_val), update_flag)
+                let new_val = RawJsonb::new(new_val);
+                value.object_insert(new_key, &new_val, update_flag)
             }
             _ => {
                 // if the new value is not a json value, cast it to json.
                 let mut new_val_buf = vec![];
                 cast_scalar_to_variant(new_val.clone(), &ctx.func_ctx.tz, &mut new_val_buf);
-                value.object_insert(new_key, RawJsonb::new(new_val_buf.as_bytes()), update_flag)
+                let new_val = RawJsonb::new(new_val_buf.as_bytes());
+                value.object_insert(new_key, &new_val, update_flag)
             }
         };
         match res {
@@ -2485,11 +2473,7 @@ fn cast_to_str(v: &[u8]) -> Result<String, jsonb::Error> {
 }
 
 fn is_null(v: &[u8]) -> bool {
-    if let Ok(true) = RawJsonb::new(v).is_null() {
-        true
-    } else {
-        false
-    }
+    matches!(RawJsonb::new(v).is_null(), Ok(true))
 }
 
 fn cast_to_bool(v: &[u8]) -> Result<bool, jsonb::Error> {

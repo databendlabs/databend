@@ -8959,15 +8959,17 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.4"
-source = "git+https://github.com/databendlabs/jsonb?rev=7694b92#7694b9247148299d3da468bae12fa2b44c4afbc2"
+source = "git+https://github.com/b41sh/jsonb?rev=b84e3b9486e233e998ba28d2397bb384154233bc#b84e3b9486e233e998ba28d2397bb384154233bc"
 dependencies = [
  "byteorder",
  "fast-float2",
  "itoa",
  "nom",
+ "num-traits",
  "ordered-float 4.5.0",
  "rand",
  "ryu",
+ "serde",
  "serde_json",
 ]
 

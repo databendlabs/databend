@@ -48,8 +48,8 @@ use jaq_interpret::RcIter;
 use jaq_interpret::Val;
 use jaq_parse;
 use jaq_std;
+use jsonb::from_raw_jsonb;
 use jsonb::jsonpath::parse_json_path;
-use jsonb::jsonpath::Mode as SelectorMode;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
 
@@ -93,9 +93,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         let val = unsafe { val_arg.index_unchecked(row) };
                                         let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
                                         if let ScalarRef::Variant(val) = val {
-                                            match RawJsonb::new(val)
-                                                .get_by_path(&json_path, SelectorMode::All)
-                                            {
+                                            match RawJsonb::new(val).get_by_path(&json_path) {
                                                 Ok(owned_jsonbs) => {
                                                     for owned_jsonb in owned_jsonbs {
                                                         builder.put_slice(owned_jsonb.as_ref());
@@ -141,9 +139,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     match parse_json_path(path.as_bytes()) {
                                         Ok(json_path) => {
                                             if let ScalarRef::Variant(val) = val {
-                                                match RawJsonb::new(val)
-                                                    .get_by_path(&json_path, SelectorMode::All)
-                                                {
+                                                match RawJsonb::new(val).get_by_path(&json_path) {
                                                     Ok(owned_jsonbs) => {
                                                         for owned_jsonb in owned_jsonbs {
                                                             builder.put_slice(owned_jsonb.as_ref());
@@ -430,9 +426,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     Some((path, ref json_path)) => {
                                         // get inner input values by path
                                         let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
-                                        match RawJsonb::new(val)
-                                            .get_by_path(json_path, SelectorMode::First)
-                                        {
+                                        // first ?
+                                        match RawJsonb::new(val).get_by_path(json_path) {
                                             Ok(owned_jsonbs) => {
                                                 for owned_jsonb in owned_jsonbs {
                                                     builder.put_slice(owned_jsonb.as_ref());
@@ -549,7 +544,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     return null_result;
                                 }
                                 Some(ScalarRef::Variant(v)) => {
-                                    let s = RawJsonb::new(v).to_serde_json();
+                                    let raw_jsonb = RawJsonb::new(v);
+                                    let s = from_raw_jsonb::<serde_json::Value>(&raw_jsonb);
                                     match s {
                                         Err(e) => {
                                             ctx.set_error(row, e.to_string());
