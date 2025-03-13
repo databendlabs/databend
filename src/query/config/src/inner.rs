@@ -80,7 +80,7 @@ impl InnerConfig {
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub async fn load() -> Result<Self> {
-        let mut cfg: Self = Config::load(true)?.try_into()?;
+        let mut cfg: Self = Config::load(None, true)?.try_into()?;
 
         // Handle the node_id and node_secret for query node.
         cfg.query.node_id = GlobalUniqName::unique();
@@ -100,7 +100,7 @@ impl InnerConfig {
     ///
     /// This function is served for tests only.
     pub fn load_for_test() -> Result<Self> {
-        let cfg: Self = Config::load(false)?.try_into()?;
+        let cfg: Self = Config::load(None, false)?.try_into()?;
         Ok(cfg)
     }
 
