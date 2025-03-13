@@ -382,6 +382,12 @@ impl Catalog for IcebergCatalog {
         db.list_tables().await
     }
 
+    #[async_backtrace::framed]
+    async fn list_tables_names(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<String>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.list_tables_names().await
+    }
+
     async fn get_table_history(
         &self,
         _tenant: &Tenant,

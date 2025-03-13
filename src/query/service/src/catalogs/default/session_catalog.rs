@@ -416,6 +416,10 @@ impl Catalog for SessionCatalog {
         self.inner.list_tables(tenant, db_name).await
     }
 
+    async fn list_tables_names(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<String>> {
+        self.inner.list_tables_names(tenant, db_name).await
+    }
+
     fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
         self.temp_tbl_mgr.lock().list_tables()
     }

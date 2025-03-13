@@ -1015,6 +1015,10 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
+    async fn list_tables_names(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<String>> {
+        todo!()
+    }
+
     async fn list_tables_history(
         &self,
         _tenant: &Tenant,

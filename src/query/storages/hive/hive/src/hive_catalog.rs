@@ -478,6 +478,21 @@ impl Catalog for HiveCatalog {
         Ok(tables)
     }
 
+    #[fastrace::trace]
+    #[async_backtrace::framed]
+    async fn list_tables_names(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<String>> {
+        let table_names = self
+            .client
+            .get_all_tables(FastStr::new(db_name))
+            .await
+            .map(from_thrift_exception)
+            .map_err(from_thrift_error)??;
+        Ok(table_names
+            .into_iter()
+            .map(|name| name.as_str().to_string())
+            .collect())
+    }
+
     async fn get_table_history(
         &self,
         _tenant: &Tenant,
