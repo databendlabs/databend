@@ -593,7 +593,6 @@ UNION all SELECT a from t2, closure where t2.a = closure.x
 1
 
 # https://github.com/databendlabs/databend/issues/17432
-
 statement ok
 CREATE OR REPLACE TABLE some_table (
 	id INTEGER NOT NULL,

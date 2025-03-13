@@ -64,30 +64,38 @@ impl PhysicalPlanBuilder {
         let lazy_columns = metadata.lazy_columns();
         required.extend(lazy_columns);
 
-        let indices: Vec<usize> = (0..union_all.left_outputs.len())
-            .filter(|index| {
-                !union_all.cte_scan_names.is_empty()
-                    || required.contains(&union_all.output_indexes[*index])
-            })
-            .collect();
+        // if the union has a CTE, the output columns are not filtered
+        let (left_required, right_required) = if !union_all.cte_scan_names.is_empty() {
+            let mut left = HashSet::with_capacity(union_all.output_indexes.len());
+            let mut right = HashSet::with_capacity(union_all.output_indexes.len());
 
-        let (left_required, right_required) = if indices.is_empty() {
-            (
-                HashSet::from([union_all.left_outputs[0].0]),
-                HashSet::from([union_all.right_outputs[0].0]),
-            )
+            for i in 0..union_all.output_indexes.len() {
+                left.insert(union_all.left_outputs[i].0);
+                right.insert(union_all.right_outputs[i].0);
+            }
+            (left, right)
         } else {
-            indices.iter().fold(
+            let indices: Vec<usize> = (0..union_all.left_outputs.len())
+                .filter(|index| required.contains(&union_all.output_indexes[*index]))
+                .collect();
+            if indices.is_empty() {
                 (
-                    HashSet::with_capacity(indices.len()),
-                    HashSet::with_capacity(indices.len()),
-                ),
-                |(mut left, mut right), &index| {
-                    left.insert(union_all.left_outputs[index].0);
-                    right.insert(union_all.right_outputs[index].0);
-                    (left, right)
-                },
-            )
+                    HashSet::from([union_all.left_outputs[0].0]),
+                    HashSet::from([union_all.right_outputs[0].0]),
+                )
+            } else {
+                indices.iter().fold(
+                    (
+                        HashSet::with_capacity(indices.len()),
+                        HashSet::with_capacity(indices.len()),
+                    ),
+                    |(mut left, mut right), &index| {
+                        left.insert(union_all.left_outputs[index].0);
+                        right.insert(union_all.right_outputs[index].0);
+                        (left, right)
+                    },
+                )
+            }
         };
 
         // 2. Build physical plan.
