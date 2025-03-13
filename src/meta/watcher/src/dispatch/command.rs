@@ -12,40 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::SeqV;
 use futures::future::BoxFuture;
 
-use crate::watcher::dispatch::Dispatcher;
+use crate::dispatch::Dispatcher;
+use crate::type_config::KVChange;
+use crate::type_config::TypeConfig;
 
 /// A command sent to [`Dispatcher`].
 #[allow(clippy::type_complexity)]
-pub enum Command {
+pub enum Command<C>
+where C: TypeConfig
+{
     /// Submit a key-value update event to dispatcher.
-    Update(Update),
+    Update(KVChange<C>),
 
     /// Send a fn to [`Dispatcher`] to run it.
     ///
     /// The function will be called with a mutable reference to the dispatcher.
-    Request {
-        req: Box<dyn FnOnce(&mut Dispatcher) + Send + 'static>,
+    Func {
+        req: Box<dyn FnOnce(&mut Dispatcher<C>) + Send + 'static>,
     },
 
     /// Send a fn to [`Dispatcher`] to run it asynchronously.
-    RequestAsync {
-        req: Box<dyn FnOnce(&mut Dispatcher) -> BoxFuture<'static, ()> + Send + 'static>,
+    AsyncFunc {
+        req: Box<dyn FnOnce(&mut Dispatcher<C>) -> BoxFuture<'static, ()> + Send + 'static>,
     },
-}
 
-/// An update event for a key.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Update {
-    pub key: String,
-    pub before: Option<SeqV>,
-    pub after: Option<SeqV>,
-}
-
-impl Update {
-    pub fn new(key: String, before: Option<SeqV>, after: Option<SeqV>) -> Self {
-        Self { key, before, after }
-    }
+    /// Send a future to [`Dispatcher`] to run it.
+    Future(BoxFuture<'static, ()>),
 }

@@ -26,6 +26,8 @@ use databend_common_grpc::GrpcToken;
 use databend_common_meta_client::MetaGrpcReadReq;
 use databend_common_meta_client::MetaGrpcReq;
 use databend_common_meta_kvapi::kvapi::KVApi;
+use databend_common_meta_raft_store::state_machine_api::StateMachineApi;
+use databend_common_meta_raft_store::state_machine_api_ext::StateMachineApiExt;
 use databend_common_meta_types::protobuf as pb;
 use databend_common_meta_types::protobuf::meta_service_server::MetaService;
 use databend_common_meta_types::protobuf::ClientInfo;
@@ -49,6 +51,10 @@ use databend_common_meta_types::GrpcHelper;
 use databend_common_meta_types::LogEntry;
 use databend_common_meta_types::TxnReply;
 use databend_common_meta_types::TxnRequest;
+use databend_common_meta_watcher::key_range::build_key_range;
+use databend_common_meta_watcher::util::new_watch_sink;
+use databend_common_meta_watcher::util::try_forward;
+use databend_common_meta_watcher::watch_stream::WatchStream;
 use databend_common_metrics::count::Count;
 use fastrace::func_name;
 use fastrace::func_path;
@@ -71,6 +77,7 @@ use tonic::Streaming;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
+use crate::meta_service::watcher::WatchTypes;
 use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
 use crate::metrics::RequestInFlight;
@@ -78,7 +85,6 @@ use crate::version::from_digit_ver;
 use crate::version::to_digit_ver;
 use crate::version::METASRV_SEMVER;
 use crate::version::MIN_METACLI_SEMVER;
-use crate::watcher::watch_stream::WatchStream;
 
 pub struct MetaServiceImpl {
     token: GrpcToken,
@@ -388,7 +394,8 @@ impl MetaService for MetaServiceImpl {
     ) -> Result<Response<Self::WatchStream>, Status> {
         let watch = request.into_inner();
 
-        let key_range = watch.key_range().map_err(Status::invalid_argument)?;
+        let key_range =
+            build_key_range(&watch.key, &watch.key_end).map_err(Status::invalid_argument)?;
         let flush = watch.initial_flush;
 
         let (tx, rx) = mpsc::channel(4);
@@ -396,14 +403,40 @@ impl MetaService for MetaServiceImpl {
         let mn = &self.meta_node;
 
         let sender = mn.add_watcher(watch, tx.clone()).await?;
-        let stream = WatchStream::new(rx, sender, mn.dispatcher_handle.clone());
+
+        let dispatcher_handle = mn.dispatcher_handle.clone();
+        let on_drop = move || {
+            dispatcher_handle.request(move |dispatcher| {
+                dispatcher.remove_watcher(sender);
+            })
+        };
+
+        let stream = WatchStream::new(rx, Box::new(on_drop));
 
         if flush {
-            let sm = mn.raft_store.state_machine.clone();
-            {
-                let mut sm = sm.write().await;
-                sm.send_range(tx, key_range).await?;
-            }
+            // Atomically reads and forwards a range of key-value pairs to the provided `tx`.
+            //
+            // This ensures consistency by:
+            // 1. Queuing all data publishing through the singleton sender to maintain event ordering
+            // 2. Reading the key-value range atomically within the state machine
+            // 3. Forwarding the data to the event sender in a single transaction
+            //
+            // This approach prevents race conditions and guarantees that no events will be
+            // delivered out of order to the watcher.
+            let sm = &mn.raft_store.state_machine;
+            let sm = sm.write().await;
+
+            let ctx = "watch-Dispatcher";
+
+            if let Some(sender) = sm.event_sender() {
+                let snk = new_watch_sink::<WatchTypes>(tx, ctx);
+                let strm = sm.range_kv(key_range).await?;
+
+                let fu = try_forward(strm, snk, ctx);
+                let fu = Box::pin(fu);
+
+                sender.send_future(fu);
+            };
         }
 
         Ok(Response::new(Box::pin(stream) as Self::WatchStream))

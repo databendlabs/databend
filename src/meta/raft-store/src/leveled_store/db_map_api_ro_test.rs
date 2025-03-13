@@ -14,13 +14,14 @@
 
 //! Test for db_map_api_ro_impl.
 
+use databend_common_meta_map_api::map_api_ro::MapApiRO;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
 
 use crate::leveled_store::db_builder::DBBuilder;
+use crate::leveled_store::db_map_api_ro_impl::MapView;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::marked::Marked;
 use crate::sm_v003::SMV003;
 use crate::state_machine::ExpireKey;
@@ -66,7 +67,8 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
 
     // Test kv map
 
-    let smap = db.str_map();
+    let binding = MapView(&db);
+    let smap = binding.str_map();
     assert_eq!(
         Marked::new_with_meta(4, b("a1"), Some(KVMeta::new(Some(15)))),
         smap.get(&s("a")).await?
@@ -99,7 +101,8 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
 
     // Test expire index
 
-    let emap = db.expire_map();
+    let binding = MapView(&db);
+    let emap = binding.expire_map();
 
     assert_eq!(
         Marked::new_normal(4, s("a")),

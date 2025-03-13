@@ -37,10 +37,6 @@ impl MapKeyDecode for String {
     }
 }
 
-impl MapKey for String {
-    type V = Vec<u8>;
-}
-
 impl MapKeyEncode for ExpireKey {
     const PREFIX: &'static str = "exp-";
 
@@ -115,7 +111,7 @@ impl MapKeyDecode for ExpireKey {
     }
 }
 
-impl MapKey for ExpireKey {
+impl<M> MapKey<M> for ExpireKey {
     type V = String;
 }
 

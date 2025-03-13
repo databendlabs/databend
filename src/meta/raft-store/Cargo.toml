@@ -24,6 +24,7 @@ databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
+databend-common-meta-map-api = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
@@ -50,7 +51,6 @@ serde_json = { workspace = true }
 stream-more = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tonic = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }

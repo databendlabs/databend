@@ -16,12 +16,12 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::Formatter;
 
-use databend_common_meta_types::protobuf::WatchResponse;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::SendError;
-use tonic::Status;
 
-use crate::watcher::WatchDesc;
+use crate::type_config::TypeConfig;
+use crate::WatchDesc;
+use crate::WatchResult;
 
 /// A handle to a watching stream that feeds messages to connected watchers.
 ///
@@ -29,46 +29,55 @@ use crate::watcher::WatchDesc;
 /// to the client-side watcher. It encapsulates the communication channel between
 /// the server's event source and the client's watch request.
 #[derive(Clone)]
-pub struct WatchStreamSender {
-    pub desc: WatchDesc,
-    tx: mpsc::Sender<Result<WatchResponse, Status>>,
+pub struct WatchStreamSender<C>
+where C: TypeConfig
+{
+    pub desc: WatchDesc<C>,
+    tx: mpsc::Sender<WatchResult<C>>,
 }
 
-impl fmt::Debug for WatchStreamSender {
+impl<C> fmt::Debug for WatchStreamSender<C>
+where C: TypeConfig
+{
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "WatchStreamSender({:?})", self.desc)
     }
 }
 
-impl PartialEq for WatchStreamSender {
+impl<C> PartialEq for WatchStreamSender<C>
+where C: TypeConfig
+{
     fn eq(&self, other: &Self) -> bool {
         self.desc.watcher_id == other.desc.watcher_id
     }
 }
 
-impl Eq for WatchStreamSender {}
+impl<C> Eq for WatchStreamSender<C> where C: TypeConfig {}
 
-impl PartialOrd for WatchStreamSender {
+impl<C> PartialOrd for WatchStreamSender<C>
+where C: TypeConfig
+{
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for WatchStreamSender {
+impl<C> Ord for WatchStreamSender<C>
+where C: TypeConfig
+{
     fn cmp(&self, other: &Self) -> Ordering {
         self.desc.watcher_id.cmp(&other.desc.watcher_id)
     }
 }
 
-impl WatchStreamSender {
-    pub fn new(desc: WatchDesc, tx: mpsc::Sender<Result<WatchResponse, Status>>) -> Self {
+impl<C> WatchStreamSender<C>
+where C: TypeConfig
+{
+    pub fn new(desc: WatchDesc<C>, tx: mpsc::Sender<WatchResult<C>>) -> Self {
         WatchStreamSender { desc, tx }
     }
 
-    pub async fn send(
-        &self,
-        resp: WatchResponse,
-    ) -> Result<(), SendError<Result<WatchResponse, Status>>> {
+    pub async fn send(&self, resp: C::Response) -> Result<(), SendError<WatchResult<C>>> {
         self.tx.send(Ok(resp)).await
     }
 }

@@ -16,6 +16,10 @@ use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 
+use databend_common_meta_map_api::map_api::MapApi;
+use databend_common_meta_map_api::map_api_ro::MapApiRO;
+use databend_common_meta_map_api::map_key::MapKey;
+use databend_common_meta_map_api::Transition;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::StreamExt;
@@ -23,11 +27,7 @@ use log::warn;
 
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
-use crate::leveled_store::map_api::MapApi;
-use crate::leveled_store::map_api::MapApiRO;
-use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MarkedOf;
-use crate::leveled_store::map_api::Transition;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
@@ -80,8 +80,8 @@ impl Level {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<String> for Level {
-    async fn get(&self, key: &String) -> Result<Marked<<String as MapKey>::V>, io::Error> {
+impl MapApiRO<String, KVMeta> for Level {
+    async fn get(&self, key: &String) -> Result<MarkedOf<String>, io::Error> {
         let got = self.kv.get(key).cloned().unwrap_or(Marked::empty());
         Ok(got)
     }
@@ -108,14 +108,14 @@ impl MapApiRO<String> for Level {
 }
 
 #[async_trait::async_trait]
-impl MapApi<String> for Level {
+impl MapApi<String, KVMeta> for Level {
     async fn set(
         &mut self,
         key: String,
-        value: Option<(<String as MapKey>::V, Option<KVMeta>)>,
+        value: Option<(<String as MapKey<KVMeta>>::V, Option<KVMeta>)>,
     ) -> Result<Transition<MarkedOf<String>>, io::Error> {
         // The chance it is the bottom level is very low in a loaded system.
-        // Thus we always tombstone the key if it is None.
+        // Thus, we always tombstone the key if it is None.
 
         let marked = if let Some((v, meta)) = value {
             let seq = self.sys_data_mut().next_seq();
@@ -133,7 +133,7 @@ impl MapApi<String> for Level {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<ExpireKey> for Level {
+impl MapApiRO<ExpireKey, KVMeta> for Level {
     async fn get(&self, key: &ExpireKey) -> Result<MarkedOf<ExpireKey>, io::Error> {
         let got = self.expire.get(key).cloned().unwrap_or(Marked::empty());
         Ok(got)
@@ -161,11 +161,11 @@ impl MapApiRO<ExpireKey> for Level {
 }
 
 #[async_trait::async_trait]
-impl MapApi<ExpireKey> for Level {
+impl MapApi<ExpireKey, KVMeta> for Level {
     async fn set(
         &mut self,
         key: ExpireKey,
-        value: Option<(<ExpireKey as MapKey>::V, Option<KVMeta>)>,
+        value: Option<(<ExpireKey as MapKey<KVMeta>>::V, Option<KVMeta>)>,
     ) -> Result<Transition<MarkedOf<ExpireKey>>, io::Error> {
         let seq = self.curr_seq();
 

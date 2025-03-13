@@ -12,47 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 
 use futures::Stream;
 use tokio::sync::mpsc::Receiver;
 
-use crate::watcher::dispatch::DispatcherHandle;
-use crate::watcher::watch_stream::sender::WatchStreamSender;
-
 /// A wrapper around [`tokio::sync::mpsc::Receiver`] that implements [`Stream`].
-#[derive(Debug)]
 pub struct WatchStream<T> {
     rx: Receiver<T>,
-    // TODO: use a Box<dyn Fn> to replace these two fields
-    /// Hold a clone of the sender to remove itself from the dispatcher when dropped.
-    sender: Arc<WatchStreamSender>,
-    dispatcher_handle: DispatcherHandle,
+    /// cleanup when this stream is dropped.
+    on_drop: Option<Box<dyn FnOnce() + Send + 'static>>,
+}
+
+impl<T> fmt::Debug for WatchStream<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "WatchStream")
+    }
 }
 
 impl<T> Drop for WatchStream<T> {
     fn drop(&mut self) {
-        let sender = self.sender.clone();
-        self.dispatcher_handle.request(move |d| {
-            d.remove_watcher(sender);
-        })
+        let Some(on_drop) = self.on_drop.take() else {
+            return;
+        };
+        on_drop();
     }
 }
 
 impl<T> WatchStream<T> {
     /// Create a new `WatcherStream`.
-    pub fn new(
-        rx: Receiver<T>,
-        sender: Arc<WatchStreamSender>,
-        dispatcher: DispatcherHandle,
-    ) -> Self {
+    pub fn new(rx: Receiver<T>, on_drop: Box<dyn FnOnce() + Send + 'static>) -> Self {
         Self {
             rx,
-            sender,
-            dispatcher_handle: dispatcher,
+            on_drop: Some(on_drop),
         }
     }
 }

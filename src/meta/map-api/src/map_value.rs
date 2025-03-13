@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Subscribe events and dispatch them to watchers.
+//! Defines the value behavior of the map.
 
-mod command;
-mod dispatcher;
-mod dispatcher_handle;
+/// MapValue defines the behavior of a value in a map.
+///
+/// It is `Clone` to let MapApi return an owned value.
+/// It is `Unpin` to let MapApi extract a value from pinned data, such as a stream.
+/// And it only accepts `static` value for simplicity.
+pub trait MapValue: Clone + Send + Sync + Unpin + 'static {}
 
-pub use command::Command;
-pub use command::Update;
-pub use dispatcher::Dispatcher;
-pub use dispatcher_handle::DispatcherHandle;
+// Auto implement MapValue for all types that satisfy the constraints.
+impl<V> MapValue for V where V: Clone + Send + Sync + Unpin + 'static {}

@@ -24,6 +24,7 @@ pub mod rotbl_codec;
 pub mod sys_data;
 pub mod sys_data_api;
 pub mod util;
+pub mod value_convert;
 
 mod db_map_api_ro_impl;
 #[cfg(test)]
@@ -31,3 +32,5 @@ mod db_map_api_ro_test;
 mod db_open_snapshot_impl;
 mod key_spaces_impl;
 mod rotbl_seq_mark_impl;
+
+pub use db_map_api_ro_impl::MapView;
