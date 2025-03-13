@@ -2492,6 +2492,7 @@ pub struct PersistentLogConfig {
     #[serde(rename = "on")]
     pub log_persistentlog_on: bool,
 
+    /// Specifies the interval in seconds for how often the persistent log is flushed
     #[clap(
         long = "log-persistentlog-interval",
         value_name = "VALUE",
@@ -2500,7 +2501,7 @@ pub struct PersistentLogConfig {
     #[serde(rename = "interval")]
     pub log_persistentlog_interval: usize,
 
-    /// This staging temporarily holds log data before final copy into table
+    /// Specifies the name of the staging area that temporarily holds log data before it is finally copied into the table
     #[clap(
         long = "log-persistentlog-stage-name",
         value_name = "VALUE",
@@ -2508,6 +2509,15 @@ pub struct PersistentLogConfig {
     )]
     #[serde(rename = "stage_name")]
     pub log_persistentlog_stage_name: String,
+
+    /// Specifies how long the persistent log should be retained, in hours
+    #[clap(
+        long = "log-persistentlog-retention",
+        value_name = "VALUE",
+        default_value = "72"
+    )]
+    #[serde(rename = "retention")]
+    pub log_persistentlog_retention: usize,
 }
 
 impl Default for PersistentLogConfig {
@@ -2524,6 +2534,7 @@ impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
             on: self.log_persistentlog_on,
             interval: self.log_persistentlog_interval,
             stage_name: self.log_persistentlog_stage_name,
+            retention: self.log_persistentlog_retention,
         })
     }
 }
@@ -2534,6 +2545,7 @@ impl From<InnerPersistentLogConfig> for PersistentLogConfig {
             log_persistentlog_on: inner.on,
             log_persistentlog_interval: inner.interval,
             log_persistentlog_stage_name: inner.stage_name,
+            log_persistentlog_retention: inner.retention,
         }
     }
 }

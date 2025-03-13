@@ -42,6 +42,7 @@ use crate::persistent_log::session::create_session;
 pub struct GlobalPersistentLog {
     meta_store: MetaStore,
     interval: usize,
+    retention: usize,
     tenant_id: String,
     node_id: String,
     cluster_id: String,
@@ -59,6 +60,7 @@ impl GlobalPersistentLog {
         let instance = Arc::new(Self {
             meta_store,
             interval: cfg.log.persistentlog.interval,
+            retention: cfg.log.persistentlog.retention,
             tenant_id: cfg.query.tenant_id.tenant_name().to_string(),
             node_id: cfg.query.node_id.clone(),
             cluster_id: cfg.query.cluster_id.clone(),
@@ -110,8 +112,11 @@ impl GlobalPersistentLog {
                         error!("Persistent log copy into failed: {:?}", e);
                     }
                     copy_into_count += 1;
-                    if copy_into_count > 20 {
-                        //@TODO: do vacuum  and delete
+                    if copy_into_count > 50 {
+                        if let Err(e) = self.do_delete().await {
+                            error!("Persistent log delete failed: {:?}", e);
+                        }
+                        copy_into_count = 0;
                     }
                 }
             }
@@ -178,6 +183,14 @@ impl GlobalPersistentLog {
             stage_name
         );
         self.execute_sql(&sql).await
+    }
+
+    async fn do_delete(&self) -> Result<()> {
+        let delete = format!(
+            "DELETE FROM persistent_system.text_log WHERE timestamp < subtract_hours(NOW(), {})",
+            self.retention
+        );
+        self.execute_sql(&delete).await
     }
 }
 

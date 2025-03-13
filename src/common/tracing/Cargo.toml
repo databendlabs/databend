@@ -12,11 +12,12 @@ test = true
 
 [dependencies]
 anyhow = { workspace = true }
+arrow-array = { workspace = true }
+arrow-schema = { workspace = true }
 backtrace = { workspace = true, features = ["std", "serialize-serde"] }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
-opendal = {workspace = true}
 defer = { workspace = true }
 fastrace = { workspace = true }
 fastrace-opentelemetry = { workspace = true }
@@ -24,16 +25,15 @@ itertools = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
 logforth = { workspace = true }
+opendal = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true, features = ["reqwest-client"] }
 opentelemetry_sdk = { workspace = true }
+parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tokio = { workspace = true }
 tonic = { workspace = true }
-parquet = { workspace = true }
-arrow-array = { workspace = true }
-arrow-schema = { workspace = true }
-tokio = { workspace = true}
 
 [dev-dependencies]
 
