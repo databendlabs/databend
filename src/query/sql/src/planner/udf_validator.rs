@@ -106,7 +106,7 @@ impl UDFValidator {
                 Ok(())
             }
             other => Err(ErrorCode::Unimplemented(format!(
-                "UDF script of '{}' is not enabled in config",
+                "UDF {} script is not enabled in config",
                 other
             ))),
         }
