@@ -69,10 +69,7 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListDictionaryReq;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
@@ -644,24 +641,6 @@ impl Catalog for HiveCatalog {
 
     #[async_backtrace::framed]
     async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes_by_table_id(
-        &self,
-        _req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
         unimplemented!()
     }
 

@@ -20,8 +20,8 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_storages_common_table_meta::meta::Compression;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
-use parquet::arrow::arrow_to_parquet_schema;
 use parquet::arrow::parquet_to_arrow_field_levels;
+use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
 use parquet::basic::Compression as ParquetCompression;
 
@@ -36,7 +36,8 @@ pub fn column_chunks_to_record_batch(
     compression: &Compression,
 ) -> databend_common_exception::Result<RecordBatch> {
     let arrow_schema = Schema::from(original_schema);
-    let parquet_schema = arrow_to_parquet_schema(&arrow_schema)?;
+    let parquet_schema = ArrowSchemaConverter::new().convert(&arrow_schema)?;
+
     let column_id_to_dfs_id = original_schema
         .to_leaf_column_ids()
         .iter()
