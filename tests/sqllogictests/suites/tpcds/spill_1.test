@@ -6,22 +6,7 @@ statement ok
 use tpcds;
 
 statement ok
-set force_join_data_spill = 1;
-
-statement ok
-SET force_sort_data_spill = 1;
-
-statement ok
-SET force_window_data_spill = 1;
-
-statement ok
-SET force_aggregate_data_spill = 1;
-
-statement ok
-set join_spilling_buffer_threshold_per_proc_mb = 5;
-
-statement ok
-set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
+set max_memory_usage = 1024*1024*100;
 
 # TPC-DS TEST
 include ./Q1
@@ -53,19 +38,4 @@ include ./Q24
 include ./Q25
 
 statement ok
-UNSET force_sort_data_spill;
-
-statement ok
-UNSET force_join_data_spill;
-
-statement ok
-UNSET force_window_data_spill;
-
-statement ok
-UNSET force_aggregate_data_spill;
-
-statement ok
-unset join_spilling_buffer_threshold_per_proc_mb;
-
-statement ok
-unset window_partition_spilling_to_disk_bytes_limit;
+UNSET max_memory_usage;
