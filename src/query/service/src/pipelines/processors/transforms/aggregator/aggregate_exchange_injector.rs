@@ -196,12 +196,12 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
                 },
             },
             AggregateMeta::AggregatePayload(p) => {
+                if p.payload.len() == 0 {
+                    return Ok(vec![]);
+                }
+
                 let mut blocks = Vec::with_capacity(n);
                 for (idx, payload) in scatter_payload(p.payload, n)?.into_iter().enumerate() {
-                    if payload.len() == 0 {
-                        continue;
-                    }
-
                     if self.rev_bucket_lookup[idx] == self.local_id {
                         blocks.push((
                             idx,
