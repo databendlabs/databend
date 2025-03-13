@@ -50,6 +50,7 @@ use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
+use crate::servers::http::v1::catalog::catalog_stats_handler;
 use crate::servers::http::v1::catalog::get_database_table_handler;
 use crate::servers::http::v1::catalog::list_database_table_fields_handler;
 use crate::servers::http::v1::catalog::list_database_tables_handler;
@@ -513,6 +514,11 @@ pub fn query_route() -> Route {
         (
             "/catalog/search/databases",
             post(search_databases_handler),
+            EndpointKind::Catalog,
+        ),
+        (
+            "/catalog/stats",
+            post(catalog_stats_handler),
             EndpointKind::Catalog,
         ),
         (
