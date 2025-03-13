@@ -139,7 +139,7 @@ pub enum AggregateMeta {
     SpilledPayload(SpilledPayload),
     AggregatePayload(AggregatePayload),
     InFlightPayload(InFlightPayload),
-    FinalPayload(FinalPayload),
+    FinalPartition,
 }
 
 impl AggregateMeta {
@@ -178,15 +178,15 @@ impl AggregateMeta {
         Box::new(AggregateMeta::SpilledPayload(payload))
     }
 
-    pub fn create_final(data: Vec<(AggregateMeta, DataBlock)>) -> BlockMetaInfoPtr {
-        Box::new(AggregateMeta::FinalPayload(FinalPayload { data }))
+    pub fn create_final() -> BlockMetaInfoPtr {
+        Box::new(AggregateMeta::FinalPartition)
     }
 }
 
 impl Debug for AggregateMeta {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            AggregateMeta::FinalPayload(_) => f.debug_struct("AggregateMeta::Partitioned").finish(),
+            AggregateMeta::FinalPartition => f.debug_struct("AggregateMeta::Partitioned").finish(),
             AggregateMeta::Serialized { .. } => {
                 f.debug_struct("AggregateMeta::Serialized").finish()
             }

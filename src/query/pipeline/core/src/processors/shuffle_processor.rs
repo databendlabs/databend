@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cmp::Ordering;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -37,7 +38,7 @@ pub trait Exchange: Send + Sync + 'static {
 
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<(usize, DataBlock)>>;
 
-    fn multiway_pick(&self, _partitions: &[Option<DataBlock>]) -> Result<usize> {
+    fn sorting_function(_: &DataBlock, _: &DataBlock) -> Ordering {
         unimplemented!()
     }
 }
@@ -255,10 +256,6 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
             let partitioned = self.exchange.partition(block, self.outputs.len())?;
 
             for (index, block) in partitioned.into_iter() {
-                if block.is_empty() && block.get_meta().is_none() {
-                    continue;
-                }
-
                 self.partitioned_data[index] = Some(block);
             }
         }
@@ -288,6 +285,22 @@ impl<T: Exchange> MergePartitionProcessor<T> {
             exchange,
             inputs_data,
         }))
+    }
+
+    fn multiway_pick(&self, data_blocks: &[Option<DataBlock>]) -> Option<usize> {
+        let position = data_blocks
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
+            .min_by(|(left_idx, left_block), (right_idx, right_block)| {
+                match T::sorting_function(left_block, right_block) {
+                    Ordering::Less => Ordering::Less,
+                    Ordering::Greater => Ordering::Greater,
+                    Ordering::Equal => left_idx.cmp(right_idx),
+                }
+            });
+
+        position.map(|(idx, _)| idx)
     }
 }
 
@@ -345,18 +358,18 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
             input.set_need_data();
         }
 
+        if need_pick_block_to_push {
+            if let Some(pick_index) = self.multiway_pick(&self.inputs_data) {
+                if let Some(block) = self.inputs_data[pick_index].take() {
+                    self.output.push_data(Ok(block));
+                    return Ok(Event::NeedConsume);
+                }
+            }
+        }
+
         if all_inputs_finished {
             self.output.finish();
             return Ok(Event::Finished);
-        }
-
-        if need_pick_block_to_push {
-            let pick_index = self.exchange.multiway_pick(&self.inputs_data)?;
-
-            if let Some(block) = self.inputs_data[pick_index].take() {
-                self.output.push_data(Ok(block));
-                return Ok(Event::NeedConsume);
-            }
         }
 
         Ok(Event::NeedData)

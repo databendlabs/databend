@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -68,15 +69,21 @@ impl Debug for InputPortState {
 }
 
 pub struct TransformPartitionDispatch {
-    output: Arc<OutputPort>,
+    outputs: Vec<Arc<OutputPort>>,
     inputs: Vec<InputPortState>,
+    outputs_data: Vec<VecDeque<DataBlock>>,
+    output_index: usize,
     max_partition: usize,
     initialized_all_inputs: bool,
     partitions: Partitions,
 }
 
 impl TransformPartitionDispatch {
-    pub fn create(input_nums: usize, params: Arc<AggregatorParams>) -> Result<Self> {
+    pub fn create(
+        input_nums: usize,
+        output_nums: usize,
+        params: Arc<AggregatorParams>,
+    ) -> Result<Self> {
         let mut inputs = Vec::with_capacity(input_nums);
 
         for _index in 0..input_nums {
@@ -87,6 +94,14 @@ impl TransformPartitionDispatch {
             });
         }
 
+        let mut outputs = Vec::with_capacity(output_nums);
+        let mut outputs_data = Vec::with_capacity(output_nums);
+
+        for _index in 0..output_nums {
+            outputs.push(OutputPort::create());
+            outputs_data.push(VecDeque::new());
+        }
+
         let max_partition = match params.cluster_aggregator {
             true => MAX_PARTITION_COUNT,
             false => 0,
@@ -94,8 +109,10 @@ impl TransformPartitionDispatch {
 
         Ok(TransformPartitionDispatch {
             inputs,
+            outputs,
+            outputs_data,
             max_partition,
-            output: OutputPort::create(),
+            output_index: 0,
             initialized_all_inputs: false,
             partitions: Partitions::create_unaligned(params),
         })
@@ -111,8 +128,8 @@ impl TransformPartitionDispatch {
         inputs
     }
 
-    pub fn get_output(&self) -> Arc<OutputPort> {
-        self.output.clone()
+    pub fn get_outputs(&self) -> Vec<Arc<OutputPort>> {
+        self.outputs.clone()
     }
 
     // Align each input's max_partition to the maximum max_partition.
@@ -193,6 +210,28 @@ impl TransformPartitionDispatch {
     fn working_partition(&mut self) -> Option<isize> {
         self.inputs.iter().map(|x| x.partition).min()
     }
+
+    fn fetch_ready_partition(&mut self) -> Result<()> {
+        if let Some(ready_partition) = self.ready_partition() {
+            // TODO: read spill data
+            let ready_partition = self.partitions.take_partition(ready_partition);
+
+            for (meta, data_block) in ready_partition {
+                self.outputs_data[self.output_index]
+                    .push_back(data_block.add_meta(Some(Box::new(meta)))?);
+            }
+
+            self.outputs_data[self.output_index]
+                .push_back(DataBlock::empty_with_meta(AggregateMeta::create_final()));
+
+            self.output_index += 1;
+            if self.output_index >= self.outputs_data.len() {
+                self.output_index = 0;
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait]
@@ -206,7 +245,16 @@ impl Processor for TransformPartitionDispatch {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.output.is_finished() {
+        let mut all_output_finished = true;
+
+        for output in &self.outputs {
+            if !output.is_finished() {
+                all_output_finished = false;
+                break;
+            }
+        }
+
+        if all_output_finished {
             for input_state in &self.inputs {
                 input_state.port.finish();
             }
@@ -223,7 +271,17 @@ impl Processor for TransformPartitionDispatch {
             return Ok(Event::NeedData);
         }
 
-        if !self.output.can_push() {
+        let mut output_can_push = false;
+        for (idx, output) in self.outputs.iter().enumerate() {
+            if output.can_push() {
+                output_can_push = true;
+                if let Some(block) = self.outputs_data[idx].pop_front() {
+                    output.push_data(Ok(block));
+                }
+            }
+        }
+
+        if !output_can_push {
             for input_state in &self.inputs {
                 input_state.port.set_not_need_data();
             }
@@ -231,14 +289,7 @@ impl Processor for TransformPartitionDispatch {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(ready_partition) = self.ready_partition() {
-            // TODO: read spill data
-            let ready_partition = self.partitions.take_partition(ready_partition);
-            self.output
-                .push_data(Ok(DataBlock::empty_with_meta(AggregateMeta::create_final(
-                    ready_partition,
-                ))));
-        }
+        self.fetch_ready_partition()?;
 
         let working_partition = self.working_partition().unwrap_or(0);
 
@@ -250,11 +301,6 @@ impl Processor for TransformPartitionDispatch {
             }
 
             all_inputs_is_finished = false;
-
-            eprintln!(
-                "working partition: {}, input_{}:{}",
-                working_partition, index, self.inputs[index].partition
-            );
 
             if self.inputs[index].partition > working_partition {
                 continue;
@@ -272,22 +318,27 @@ impl Processor for TransformPartitionDispatch {
             }
         }
 
-        if let Some(ready_partition) = self.ready_partition() {
-            if self.output.can_push() {
-                let ready_partition = self.partitions.take_partition(ready_partition);
-                self.output
-                    .push_data(Ok(DataBlock::empty_with_meta(AggregateMeta::create_final(
-                        ready_partition,
-                    ))));
+        self.fetch_ready_partition()?;
+
+        let mut has_data = false;
+        for (idx, output) in self.outputs.iter().enumerate() {
+            if self.outputs_data[idx].is_empty() {
+                continue;
             }
 
-            return Ok(Event::NeedConsume);
-            // TODO: read spill data
-            // TODO: try push
+            has_data = true;
+            if output.can_push() {
+                if let Some(block) = self.outputs_data[idx].pop_front() {
+                    output.push_data(Ok(block));
+                }
+            }
         }
 
-        if all_inputs_is_finished {
-            self.output.finish();
+        if all_inputs_is_finished && !has_data {
+            for output in &self.outputs {
+                output.finish();
+            }
+
             return Ok(Event::Finished);
         }
 
@@ -308,19 +359,22 @@ pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
-    let input_nums = pipeline.output_len();
-    let transform = TransformPartitionDispatch::create(input_nums, params.clone())?;
+    let transform = TransformPartitionDispatch::create(
+        pipeline.output_len(),
+        pipeline.output_len(),
+        params.clone(),
+    )?;
 
-    let output = transform.get_output();
     let inputs_port = transform.get_inputs();
+    let outputs_port = transform.get_outputs();
 
-    pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
-        ProcessorPtr::create(Box::new(transform)),
-        inputs_port,
-        vec![output],
-    )]));
-
-    pipeline.try_resize(input_nums)?;
+    pipeline.add_pipe(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
+        PipeItem::create(
+            ProcessorPtr::create(Box::new(transform)),
+            inputs_port,
+            outputs_port,
+        ),
+    ]));
 
     let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
     let operator = DataOperator::instance().spill_operator();
@@ -380,7 +434,7 @@ impl UnalignedPartitions {
     pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize) {
         match &meta {
             AggregateMeta::Serialized(_) => unreachable!(),
-            AggregateMeta::FinalPayload(_) => unreachable!(),
+            AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::SpilledPayload(payload) => {
                 let max_partition = payload.max_partition_count;
                 self.insert_data(max_partition, meta, block);
@@ -438,7 +492,7 @@ impl UnalignedPartitions {
         )?;
 
         hashtable.payload.mark_min_cardinality();
-        assert_eq!(hashtable.payload.len(), 1);
+        assert_eq!(hashtable.payload.payloads.len(), 1);
         Ok(hashtable.payload.payloads.pop().unwrap())
     }
 
@@ -486,7 +540,7 @@ impl UnalignedPartitions {
             for (meta, block) in repartition_data {
                 match meta {
                     AggregateMeta::Serialized(_) => unreachable!(),
-                    AggregateMeta::FinalPayload(_) => unreachable!(),
+                    AggregateMeta::FinalPartition => unreachable!(),
                     AggregateMeta::SpilledPayload(_) => unreachable!(),
                     AggregateMeta::InFlightPayload(payload) => {
                         let payload = AggregatePayload {
@@ -531,7 +585,7 @@ impl AlignedPartitions {
     pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize) {
         let (partition, max_partition) = match &meta {
             AggregateMeta::Serialized(_) => unreachable!(),
-            AggregateMeta::FinalPayload(_) => unreachable!(),
+            AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::SpilledPayload(v) => (v.partition, v.max_partition_count),
             AggregateMeta::AggregatePayload(v) => (v.partition, v.max_partition_count),
             AggregateMeta::InFlightPayload(v) => (v.partition, v.max_partition),

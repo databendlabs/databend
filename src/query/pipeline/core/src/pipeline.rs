@@ -460,7 +460,11 @@ impl Pipeline {
                 let input = InputPort::create();
                 let outputs: Vec<_> = (0..n).map(|_| OutputPort::create()).collect();
                 items.push(PipeItem::create(
-                    PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
+                    PartitionProcessor::create(
+                        input.clone(),
+                        outputs.clone(),
+                        exchange.clone(),
+                    ),
                     vec![input],
                     outputs,
                 ));

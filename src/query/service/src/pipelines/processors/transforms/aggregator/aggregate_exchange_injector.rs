@@ -29,7 +29,6 @@ use databend_common_expression::PayloadFlushState;
 use databend_common_pipeline_core::processors::Exchange;
 use databend_common_pipeline_core::processors::MultiwayStrategy;
 use databend_common_settings::FlightCompression;
-use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
@@ -74,7 +73,7 @@ impl ExchangeSorting for AggregateExchangeSorting {
                     serde_json::to_string(block_meta_info)
                 ))),
                 Some(meta_info) => match meta_info {
-                    AggregateMeta::FinalPayload(_) => unreachable!(),
+                    AggregateMeta::FinalPartition => unreachable!(),
                     AggregateMeta::InFlightPayload(_) => unreachable!(),
                     AggregateMeta::Serialized(v) => {
                         compute_block_number(v.bucket, v.max_partition_count)
@@ -245,7 +244,7 @@ impl Exchange for FlightExchange {
         assert_eq!(self.bucket_lookup.len(), n);
         match meta {
             AggregateMeta::Serialized(_) => unreachable!(),
-            AggregateMeta::FinalPayload(_) => unreachable!(),
+            AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::InFlightPayload(_) => unreachable!(),
             AggregateMeta::SpilledPayload(v) => match self.bucket_lookup.get(&v.destination_node) {
                 None => unreachable!(),
@@ -296,43 +295,29 @@ impl Exchange for FlightExchange {
         }
     }
 
-    fn multiway_pick(&self, data_blocks: &[Option<DataBlock>]) -> Result<usize> {
-        let position = data_blocks.iter().position_min_by(|left, right| {
-            let Some(left_block) = left else {
-                return Ordering::Greater;
-            };
-            let Some(left_meta) = left_block.get_meta() else {
-                return Ordering::Greater;
-            };
-            let Some(left_meta) = ExchangeSerializeMeta::downcast_ref_from(left_meta) else {
-                return Ordering::Greater;
-            };
+    fn sorting_function(left_block: &DataBlock, right_block: &DataBlock) -> Ordering {
+        let Some(left_meta) = left_block.get_meta() else {
+            return Ordering::Equal;
+        };
+        let Some(left_meta) = ExchangeSerializeMeta::downcast_ref_from(left_meta) else {
+            return Ordering::Equal;
+        };
 
-            let Some(right_block) = right else {
-                return Ordering::Less;
-            };
-            let Some(right_meta) = right_block.get_meta() else {
-                return Ordering::Less;
-            };
-            let Some(right_meta) = ExchangeSerializeMeta::downcast_ref_from(right_meta) else {
-                return Ordering::Less;
-            };
+        let Some(right_meta) = right_block.get_meta() else {
+            return Ordering::Equal;
+        };
+        let Some(right_meta) = ExchangeSerializeMeta::downcast_ref_from(right_meta) else {
+            return Ordering::Equal;
+        };
 
-            let (l_partition, l_max_partition) = restore_block_number(left_meta.block_number);
-            let (r_partition, r_max_partition) = restore_block_number(right_meta.block_number);
+        let (l_partition, l_max_partition) = restore_block_number(left_meta.block_number);
+        let (r_partition, r_max_partition) = restore_block_number(right_meta.block_number);
 
-            // ORDER BY max_partition asc, partition asc
-            match l_max_partition.cmp(&r_max_partition) {
-                Ordering::Less => Ordering::Less,
-                Ordering::Greater => Ordering::Greater,
-                Ordering::Equal => match l_partition.cmp(&r_partition) {
-                    Ordering::Less => Ordering::Less,
-                    Ordering::Equal => Ordering::Equal,
-                    Ordering::Greater => Ordering::Greater,
-                },
-            }
-        });
-
-        position.ok_or_else(|| ErrorCode::Internal("Cannot multiway pick with all none"))
+        // ORDER BY max_partition asc, partition asc
+        match l_max_partition.cmp(&r_max_partition) {
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Equal => l_partition.cmp(&r_partition),
+        }
     }
 }

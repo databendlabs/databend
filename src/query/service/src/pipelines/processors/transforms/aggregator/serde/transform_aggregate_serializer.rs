@@ -127,7 +127,7 @@ impl TransformAggregateSerializer {
                     AggregateMeta::SpilledPayload(_) => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
                     AggregateMeta::InFlightPayload(_) => unreachable!(),
-                    AggregateMeta::FinalPayload(_) => unreachable!(),
+                    AggregateMeta::FinalPartition => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
                         self.input_data = Some(SerializeAggregateStream::create(
                             &self.params,
