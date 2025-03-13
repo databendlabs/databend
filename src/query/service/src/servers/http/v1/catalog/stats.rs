@@ -40,23 +40,25 @@ async fn handle(ctx: &HttpQueryContext) -> Result<CatalogStatsResponse> {
     let mut databases: u64 = 0;
 
     for db in catalog.list_databases(&tenant).await? {
-        if visibility_checker.check_database_visibility(
+        if !visibility_checker.check_database_visibility(
             catalog.name().as_str(),
             db.name(),
             db.get_db_info().database_id.db_id,
         ) {
-            databases += 1;
-            for table in db.list_tables().await? {
-                if visibility_checker.check_table_visibility(
-                    catalog.name().as_str(),
-                    db.name(),
-                    table.name(),
-                    db.get_db_info().database_id.db_id,
-                    table.get_table_info().ident.table_id,
-                ) {
-                    tables += 1;
-                }
+            continue;
+        }
+        databases += 1;
+        for table in db.list_tables().await? {
+            if !visibility_checker.check_table_visibility(
+                catalog.name().as_str(),
+                db.name(),
+                table.name(),
+                db.get_db_info().database_id.db_id,
+                table.get_table_info().ident.table_id,
+            ) {
+                continue;
             }
+            tables += 1;
         }
     }
 
