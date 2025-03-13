@@ -157,10 +157,18 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
 
     fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<(usize, DataBlock)>> {
         let Some(meta) = data_block.take_meta() else {
+            if data_block.is_empty() {
+                return Ok(vec![]);
+            }
+
             return self.default_partition(data_block);
         };
 
         let Some(meta) = AggregateMeta::downcast_from(meta) else {
+            if data_block.is_empty() {
+                return Ok(vec![]);
+            }
+
             return self.default_partition(data_block);
         };
 
