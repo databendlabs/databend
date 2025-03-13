@@ -17,6 +17,8 @@ use super::*;
 
 mod aggregate_null_adaptor;
 mod aggregate_ornull_adaptor;
+mod aggregate_sort_adaptor;
 
 pub use aggregate_null_adaptor::*;
 pub use aggregate_ornull_adaptor::*;
+pub use aggregate_sort_adaptor::*;

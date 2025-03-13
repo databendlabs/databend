@@ -157,6 +157,9 @@ build_exceptions! {
     WrongSequenceCount(1125),
     UnknownSequence(1126),
     UnknownQuery(1127),
+    // virtual column
+    VirtualColumnTooMany(1128),
+    VirtualColumnIdOutBound(1129),
 
     // Data Related Errors
 

@@ -778,6 +778,7 @@ Replace(
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },
@@ -1034,6 +1035,7 @@ Explain {
                                                 },
                                             ],
                                             params: [],
+                                            order_by: [],
                                             window: None,
                                             lambda: None,
                                         },
@@ -1434,6 +1436,7 @@ CreateIndex(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -1629,6 +1632,7 @@ CreateIndex(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -2543,6 +2547,7 @@ CreateTable(
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },
@@ -3160,6 +3165,7 @@ Query(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -11469,6 +11475,7 @@ Query(
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },
@@ -11592,6 +11599,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -16813,6 +16821,7 @@ Query(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -17379,6 +17388,7 @@ SetStmt {
                                                     },
                                                 ],
                                                 params: [],
+                                                order_by: [],
                                                 window: None,
                                                 lambda: None,
                                             },
@@ -19450,6 +19460,7 @@ CreateDatamaskPolicy(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -19550,6 +19561,7 @@ CreateDatamaskPolicy(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: None,
                                 lambda: None,
                             },
@@ -20803,6 +20815,7 @@ CreateDynamicTable(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -21036,6 +21049,7 @@ CreateDynamicTable(
                                         },
                                     ],
                                     params: [],
+                                    order_by: [],
                                     window: None,
                                     lambda: None,
                                 },
@@ -21146,11 +21160,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 900,
@@ -21188,11 +21200,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 15,
@@ -21225,11 +21235,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "MyWarehouse",
-            ),
-        },
+        warehouse: Some(
+            "MyWarehouse",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1215,
@@ -21254,6 +21262,41 @@ CreateTask(
 
 
 ---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 COMMENT = '123' SCHEDULE = 1215 SECOND WAREHOUSE = 'MyWarehouse' SUSPEND_TASK_AFTER_NUM_FAILURES = 3 AS SELECT * FROM MyTable1
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 1215 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENTS = '123' AS SELECT * FROM MyTable1
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse: Some(
+            "MyWarehouse",
+        ),
+        schedule_opts: Some(
+            IntervalSecs(
+                1215,
+                0,
+            ),
+        ),
+        session_parameters: {},
+        suspend_task_after_num_failures: Some(
+            3,
+        ),
+        error_integration: None,
+        comments: Some(
+            "123",
+        ),
+        after: [],
+        when_condition: None,
+        sql: SingleStatement(
+            "SELECT * FROM MyTable1",
+        ),
+    },
+)
+
+
+---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENTS = 'serverless + cron' AS INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4)
@@ -21262,9 +21305,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: Some(
             CronExpression(
                 "0 6 * * *",
@@ -21297,9 +21338,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: Some(
             CronExpression(
                 "0 12 * * *",
@@ -21328,9 +21367,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: Some(
             CronExpression(
                 "0 13 * * *",
@@ -21359,9 +21396,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: None,
         session_parameters: {},
         suspend_task_after_num_failures: None,
@@ -21402,6 +21437,7 @@ CreateTask(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -21432,9 +21468,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: None,
         session_parameters: {
             "database": "target",
@@ -21476,9 +21510,7 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "MyTask1",
-        warehouse_opts: WarehouseOptions {
-            warehouse: None,
-        },
+        warehouse: None,
         schedule_opts: None,
         session_parameters: {
             "database": "target",
@@ -21523,11 +21555,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "merge_task",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "test-parser",
-            ),
-        },
+        warehouse: Some(
+            "test-parser",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1,
@@ -21568,11 +21598,9 @@ CreateTask(
     CreateTaskStmt {
         if_not_exists: true,
         name: "merge_task",
-        warehouse_opts: WarehouseOptions {
-            warehouse: Some(
-                "test-parser",
-            ),
-        },
+        warehouse: Some(
+            "test-parser",
+        ),
         schedule_opts: Some(
             IntervalSecs(
                 1,
@@ -21724,7 +21752,7 @@ AlterTask(
 
 
 ---------- Input ----------
-ALTER TASK MyTask1 SET WAREHOUSE= 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
+ALTER TASK MyTask1 SET SCHEDULE = 5 SECOND WAREHOUSE='MyWarehouse' SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- Output ---------
 ALTER TASK MyTask1 SET WAREHOUSE = 'MyWarehouse' SCHEDULE = 5 SECOND SUSPEND_TASK_AFTER_NUM_FAILURES = 10 COMMENT = 'serverless + cron'
 ---------- AST ------------
@@ -21902,6 +21930,7 @@ AlterTask(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -22697,6 +22726,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -22820,6 +22850,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -22943,6 +22974,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -23068,6 +23100,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -23193,6 +23226,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: Some(
@@ -23318,6 +23352,7 @@ Query(
                                     },
                                 ],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -23502,6 +23537,7 @@ Query(
                                 },
                                 args: [],
                                 params: [],
+                                order_by: [],
                                 window: Some(
                                     WindowDesc {
                                         ignore_nulls: None,
@@ -23954,6 +23990,7 @@ CreateUDF(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -24035,6 +24072,7 @@ CreateUDF(
                             },
                         ],
                         params: [],
+                        order_by: [],
                         window: None,
                         lambda: None,
                     },
@@ -24841,6 +24879,7 @@ Query(
                                                     },
                                                     args: [],
                                                     params: [],
+                                                    order_by: [],
                                                     window: Some(
                                                         WindowDesc {
                                                             ignore_nulls: None,

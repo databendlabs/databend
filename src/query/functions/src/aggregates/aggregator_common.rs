@@ -34,6 +34,7 @@ use super::get_states_layout;
 use super::AggrState;
 use super::AggregateFunctionFactory;
 use super::AggregateFunctionRef;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::StatesLayout;
 use crate::BUILTIN_FUNCTIONS;
 
@@ -161,8 +162,9 @@ pub fn eval_aggr(
     params: Vec<Scalar>,
     columns: &[Column],
     rows: usize,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
-    eval_aggr_for_test(name, params, columns, rows, false)
+    eval_aggr_for_test(name, params, columns, rows, false, sort_descs)
 }
 
 pub fn eval_aggr_for_test(
@@ -171,11 +173,12 @@ pub fn eval_aggr_for_test(
     columns: &[Column],
     rows: usize,
     with_serialize: bool,
+    sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<(Column, DataType)> {
     let factory = AggregateFunctionFactory::instance();
     let arguments = columns.iter().map(|x| x.data_type()).collect();
 
-    let func = factory.get(name, params, arguments)?;
+    let func = factory.get(name, params, arguments, sort_descs)?;
     let data_type = func.return_type()?;
 
     let eval = EvalAggr::new(func.clone());

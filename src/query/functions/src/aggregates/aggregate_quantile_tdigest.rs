@@ -42,6 +42,7 @@ use num_traits::AsPrimitive;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggrState;
@@ -472,6 +473,7 @@ pub fn try_create_aggregate_quantile_tdigest_function<const TYPE: u8>(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     if TYPE == MEDIAN {
         assert_params(display_name, params.len(), 0)?;

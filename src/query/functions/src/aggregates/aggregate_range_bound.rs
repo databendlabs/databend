@@ -38,6 +38,7 @@ use super::AggregateUnaryFunction;
 use super::FunctionData;
 use super::UnaryState;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::with_simple_no_number_mapped_type;
 
 struct RangeBoundData {
@@ -234,6 +235,7 @@ pub fn try_create_aggregate_range_bound_function(
     display_name: &str,
     params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_unary_arguments(display_name, arguments.len())?;
     let data_type = arguments[0].clone().remove_nullable();

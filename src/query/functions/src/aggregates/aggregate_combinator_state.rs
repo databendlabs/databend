@@ -26,6 +26,7 @@ use databend_common_expression::Scalar;
 use super::AggregateFunctionFactory;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
+use crate::aggregates::aggregate_function_factory::AggregateFunctionSortDesc;
 use crate::aggregates::aggregate_function_factory::CombinatorDescription;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
@@ -43,6 +44,7 @@ impl AggregateStateCombinator {
         nested_name: &str,
         params: Vec<Scalar>,
         arguments: Vec<DataType>,
+        sort_descs: Vec<AggregateFunctionSortDesc>,
         _nested_creator: &AggregateFunctionCreator,
     ) -> Result<AggregateFunctionRef> {
         let arg_name = arguments
@@ -52,7 +54,8 @@ impl AggregateStateCombinator {
             .join(", ");
 
         let name = format!("StateCombinator({nested_name}, {arg_name})");
-        let nested = AggregateFunctionFactory::instance().get(nested_name, params, arguments)?;
+        let nested =
+            AggregateFunctionFactory::instance().get(nested_name, params, arguments, sort_descs)?;
         Ok(Arc::new(AggregateStateCombinator { name, nested }))
     }
 

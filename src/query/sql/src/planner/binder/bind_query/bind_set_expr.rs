@@ -27,6 +27,7 @@ impl Binder {
         set_expr: &SetExpr,
         order_by: &[OrderByExpr],
         limit: Option<usize>,
+        cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
         match set_expr {
             SetExpr::Select(stmt) => self.bind_select(bind_context, stmt, order_by, limit),
@@ -37,7 +38,7 @@ impl Binder {
                 &set_operation.right,
                 &set_operation.op,
                 &set_operation.all,
-                None,
+                cte_name,
             ),
             SetExpr::Values { span, values } => self.bind_values(bind_context, *span, values),
         }

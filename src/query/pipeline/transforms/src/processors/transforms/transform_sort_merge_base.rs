@@ -15,7 +15,6 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_exception::Result;
 use databend_common_expression::row::RowConverter as CommonConverter;
 use databend_common_expression::types::ArgType;
@@ -49,9 +48,7 @@ use super::AccumulatingTransform;
 use super::AccumulatingTransformer;
 use super::TransformSortMerge;
 use super::TransformSortMergeLimit;
-
-/// The memory will be doubled during merging.
-const MERGE_RATIO: usize = 2;
+use crate::processors::memory_settings::MemorySettings;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy)]
 pub struct SortSpillParams {
@@ -104,11 +101,7 @@ pub struct TransformSortMergeBase<M, R, Converter> {
     /// The index for the next input block.
     next_index: usize,
 
-    // The following fields are used for spilling.
-    may_spill: bool,
-    max_memory_usage: usize,
-    spilling_bytes_threshold: usize,
-    spilling_batch_bytes: usize,
+    memory_settings: MemorySettings,
 
     // The spill_params will be passed to the spill processor.
     // If spill_params is Some, it means we need to spill.
@@ -128,12 +121,9 @@ where
         sort_desc: Arc<Vec<SortColumnDescription>>,
         order_col_generated: bool,
         output_order_col: bool,
-        max_memory_usage: usize,
-        spilling_bytes_threshold: usize,
-        spilling_batch_bytes: usize,
+        memory_settings: MemorySettings,
         inner: M,
     ) -> Result<Self> {
-        let may_spill = max_memory_usage != 0 && spilling_bytes_threshold != 0;
         let row_converter = Converter::create(&sort_desc, schema)?;
 
         Ok(Self {
@@ -143,11 +133,8 @@ where
             output_order_col,
             order_col_generated,
             next_index: 0,
-            max_memory_usage,
-            spilling_bytes_threshold,
-            spilling_batch_bytes,
+            memory_settings,
             spill_params: None,
-            may_spill,
             _r: PhantomData,
         })
     }
@@ -158,7 +145,7 @@ where
             let num_merge = self
                 .inner
                 .num_bytes()
-                .div_ceil(self.spilling_batch_bytes)
+                .div_ceil(self.memory_settings.spill_unit_size)
                 .max(2);
             let batch_rows = self.inner.num_rows().div_ceil(num_merge);
             // The first block to spill will contain the parameters of spilling.
@@ -232,16 +219,11 @@ where
 
         self.inner.add_block(block, rows, self.next_index)?;
         self.next_index += 1;
-        let blocks = if self.may_spill
-            && (self.inner.num_bytes() * MERGE_RATIO >= self.spilling_bytes_threshold
-                || GLOBAL_MEM_STAT.get_memory_usage() as usize >= self.max_memory_usage)
-        {
-            self.prepare_spill()?
-        } else {
-            vec![]
-        };
 
-        Ok(blocks)
+        match self.memory_settings.check_spill() {
+            false => Ok(vec![]),
+            true => self.prepare_spill(),
+        }
     }
 
     fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
@@ -259,9 +241,7 @@ pub struct TransformSortMergeBuilder {
     sort_desc: Arc<Vec<SortColumnDescription>>,
     order_col_generated: bool,
     output_order_col: bool,
-    max_memory_usage: usize,
-    spilling_bytes_threshold_per_core: usize,
-    spilling_batch_bytes: usize,
+    memory_settings: MemorySettings,
     enable_loser_tree: bool,
     limit: Option<usize>,
 }
@@ -282,11 +262,9 @@ impl TransformSortMergeBuilder {
             sort_desc,
             order_col_generated: false,
             output_order_col: false,
-            max_memory_usage: 0,
-            spilling_bytes_threshold_per_core: 0,
-            spilling_batch_bytes: 8 * 1024 * 1024,
             enable_loser_tree: false,
             limit: None,
+            memory_settings: MemorySettings::disable_spill(),
         }
     }
 
@@ -305,23 +283,8 @@ impl TransformSortMergeBuilder {
         self
     }
 
-    pub fn with_max_memory_usage(mut self, max_memory_usage: usize) -> Self {
-        self.max_memory_usage = max_memory_usage;
-        self
-    }
-
-    pub fn with_spilling_bytes_threshold_per_core(
-        mut self,
-        spilling_bytes_threshold_per_core: usize,
-    ) -> Self {
-        self.spilling_bytes_threshold_per_core = spilling_bytes_threshold_per_core;
-        self
-    }
-
-    pub fn with_spilling_batch_bytes(mut self, spilling_batch_bytes: usize) -> Self {
-        if spilling_batch_bytes > 0 {
-            self.spilling_batch_bytes = spilling_batch_bytes;
-        }
+    pub fn with_memory_settings(mut self, memory_settings: MemorySettings) -> Self {
+        self.memory_settings = memory_settings;
         self
     }
 
@@ -392,9 +355,7 @@ impl TransformSortMergeBuilder {
                 self.sort_desc.clone(),
                 self.order_col_generated,
                 self.output_order_col,
-                self.max_memory_usage,
-                self.spilling_bytes_threshold_per_core,
-                self.spilling_batch_bytes,
+                self.memory_settings,
                 TransformSortMerge::create(
                     self.schema,
                     self.sort_desc,
@@ -454,9 +415,7 @@ impl TransformSortMergeBuilder {
                 self.sort_desc,
                 self.order_col_generated,
                 self.output_order_col,
-                self.max_memory_usage,
-                self.spilling_bytes_threshold_per_core,
-                self.spilling_batch_bytes,
+                self.memory_settings,
                 TransformSortMergeLimit::create(self.block_size, self.limit.unwrap()),
             )?,
         ))

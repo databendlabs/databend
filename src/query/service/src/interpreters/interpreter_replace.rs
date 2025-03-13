@@ -27,6 +27,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::physical_plans::CommitSink;
+use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::Exchange;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -171,6 +172,10 @@ impl ReplaceInterpreter {
 
         let table_info = fuse_table.get_table_info();
         let base_snapshot = fuse_table.read_table_snapshot().await?;
+
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(table.as_ref(), base_snapshot.clone())?;
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
         let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
@@ -339,6 +344,7 @@ impl ReplaceInterpreter {
             block_slots: None,
             need_insert: true,
             plan_id: u32::MAX,
+            table_meta_timestamps,
         })));
 
         if is_distributed {
@@ -356,11 +362,14 @@ impl ReplaceInterpreter {
             input: root,
             snapshot: base_snapshot,
             table_info: table_info.clone(),
-            mutation_kind: MutationKind::Replace,
+            commit_type: CommitType::Mutation {
+                kind: MutationKind::Replace,
+                merge_meta: false,
+            },
             update_stream_meta: update_stream_meta.clone(),
-            merge_meta: false,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
+            table_meta_timestamps,
             recluster_info: None,
         })));
         root.adjust_plan_id(&mut 0);

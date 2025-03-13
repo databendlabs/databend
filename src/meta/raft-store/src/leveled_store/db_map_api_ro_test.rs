@@ -69,18 +69,18 @@ async fn test_db_map_api_ro() -> anyhow::Result<()> {
     let smap = db.str_map();
     assert_eq!(
         Marked::new_with_meta(4, b("a1"), Some(KVMeta::new(Some(15)))),
-        smap.get("a").await?
+        smap.get(&s("a")).await?
     );
     assert_eq!(
         Marked::empty(),
-        smap.get("b").await?,
+        smap.get(&s("b")).await?,
         "no tombstone is stored"
     );
     assert_eq!(
         Marked::new_with_meta(3, b("c0"), Some(KVMeta::new(Some(20)))),
-        smap.get("c").await?
+        smap.get(&s("c")).await?
     );
-    assert_eq!(Marked::empty(), smap.get("d").await?);
+    assert_eq!(Marked::empty(), smap.get(&s("d")).await?);
 
     let got = smap.range(..).await?.try_collect::<Vec<_>>().await?;
     assert_eq!(

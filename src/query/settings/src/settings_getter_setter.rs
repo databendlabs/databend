@@ -40,6 +40,12 @@ pub enum SpillFileFormat {
     Parquet,
 }
 
+#[derive(Clone, Copy)]
+pub enum OutofMemoryBehavior {
+    Throw,
+    Spilling,
+}
+
 impl SpillFileFormat {
     pub fn range() -> Vec<String> {
         ["arrow", "parquet"]
@@ -327,10 +333,6 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
 
-    pub fn get_join_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("join_spilling_bytes_threshold_per_proc")? as usize)
-    }
-
     pub fn get_join_spilling_partition_bits(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
     }
@@ -452,16 +454,8 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_allow_inconsistent")? != 0)
     }
 
-    pub fn get_aggregate_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("aggregate_spilling_bytes_threshold_per_proc")? as usize)
-    }
-
     pub fn get_aggregate_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("aggregate_spilling_memory_ratio")? as usize)
-    }
-
-    pub fn get_window_partition_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("window_partition_spilling_bytes_threshold_per_proc")? as usize)
     }
 
     pub fn get_window_partition_spilling_to_disk_bytes_limit(&self) -> Result<usize> {
@@ -484,20 +478,12 @@ impl Settings {
         self.try_get_u64("window_partition_sort_block_size")
     }
 
-    pub fn get_sort_spilling_bytes_threshold_per_proc(&self) -> Result<usize> {
-        Ok(self.try_get_u64("sort_spilling_bytes_threshold_per_proc")? as usize)
-    }
-
     pub fn get_sort_spilling_batch_bytes(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_batch_bytes")? as usize)
     }
 
     pub fn get_sort_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("sort_spilling_memory_ratio")? as usize)
-    }
-
-    pub fn get_enable_experimental_stream_sort_spilling(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_experimental_stream_sort_spilling")? != 0)
     }
 
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
@@ -530,6 +516,10 @@ impl Settings {
 
     pub fn get_enable_experimental_rbac_check(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_rbac_check")? != 0)
+    }
+
+    pub fn get_enable_expand_roles(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_expand_roles")? != 0)
     }
 
     pub fn get_table_lock_expire_secs(&self) -> Result<u64> {
@@ -883,11 +873,51 @@ impl Settings {
         Ok(self.try_get_u64("copy_dedup_full_path_by_default")? == 1)
     }
 
+    pub fn get_error_on_nondeterministic_update(&self) -> Result<bool> {
+        Ok(self.try_get_u64("error_on_nondeterministic_update")? == 1)
+    }
+
     pub fn get_max_query_memory_usage(&self) -> Result<u64> {
         self.try_get_u64("max_query_memory_usage")
     }
 
     pub fn set_max_query_memory_usage(&self, max_memory_usage: u64) -> Result<()> {
         self.try_set_u64("max_query_memory_usage", max_memory_usage)
+    }
+
+    pub fn get_query_out_of_memory_behavior(&self) -> Result<OutofMemoryBehavior> {
+        match self
+            .try_get_string("query_out_of_memory_behavior")?
+            .to_lowercase()
+            .as_str()
+        {
+            "throw" => Ok(OutofMemoryBehavior::Throw),
+            "spilling" => Ok(OutofMemoryBehavior::Spilling),
+            _ => Err(ErrorCode::BadArguments("")),
+        }
+    }
+
+    pub fn get_force_sort_data_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_sort_data_spill")? == 1)
+    }
+
+    pub fn get_force_join_data_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_join_data_spill")? == 1)
+    }
+
+    pub fn get_force_window_data_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_window_data_spill")? == 1)
+    }
+
+    pub fn get_force_aggregate_data_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_aggregate_data_spill")? == 1)
+    }
+
+    pub fn get_enable_auto_vacuum(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_vacuum")? == 1)
+    }
+
+    pub fn get_enable_use_vacuum2_to_purge_transient_table_data(&self) -> Result<bool> {
+        Ok(self.try_get_u64("use_vacuum2_to_purge_transient_table_data")? == 1)
     }
 }

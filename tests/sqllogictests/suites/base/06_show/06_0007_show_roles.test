@@ -15,3 +15,121 @@ account_admin 0 (empty) 1 1
 
 statement ok
 DROP ROLE test
+
+statement ok
+drop role if exists a;
+
+statement ok
+drop role if exists b;
+
+statement ok
+drop user if exists a;
+
+statement ok
+create user a identified by '123';
+
+statement ok
+create or replace table t(id int);
+
+statement ok
+create role a;
+
+statement ok
+grant ownership on default.t to role a;
+
+statement ok
+grant select on default.t to role a;
+
+statement ok
+grant insert on *.* to role a;
+
+statement ok
+create or replace table t1(id int);
+
+statement ok
+create role b;
+
+statement ok
+grant ownership on default.t1 to role b;
+
+statement ok
+grant select on *.* to role b;
+
+statement ok
+grant role b to role a;
+
+statement ok
+grant role a to a;
+
+statement ok
+grant create database on *.* to a;
+
+statement ok
+set enable_expand_roles=1;
+
+query T
+select grants from show_grants('role', 'b') order by object_id;
+----
+GRANT OWNERSHIP ON 'default'.'default'.'t1' TO ROLE `b`
+GRANT SELECT ON *.* TO ROLE `b`
+
+query T
+select grants from show_grants('role', 'a') order by object_id;
+----
+GRANT SELECT ON 'default'.'default'.'t' TO ROLE `a`
+GRANT OWNERSHIP ON 'default'.'default'.'t' TO ROLE `a`
+GRANT OWNERSHIP ON 'default'.'default'.'t1' TO ROLE `a`
+GRANT SELECT,INSERT ON *.* TO ROLE `a`
+
+query T
+select grants from show_grants('user', 'a') order by object_id;
+----
+GRANT SELECT ON 'default'.'default'.'t' TO 'a'@'%'
+GRANT OWNERSHIP ON 'default'.'default'.'t' TO 'a'@'%'
+GRANT OWNERSHIP ON 'default'.'default'.'t1' TO 'a'@'%'
+GRANT SELECT,INSERT,CREATE DATABASE ON *.* TO 'a'@'%'
+
+statement ok
+set enable_expand_roles=0;
+
+query T
+select grants from show_grants('role', 'b') order by object_id;
+----
+GRANT OWNERSHIP ON 'default'.'default'.'t1' TO ROLE `b`
+GRANT ROLE public to ROLE `b`
+GRANT SELECT ON *.* TO ROLE `b`
+
+query T
+select grants from show_grants('role', 'a') order by object_id;
+----
+GRANT SELECT ON 'default'.'default'.'t' TO ROLE `a`
+GRANT OWNERSHIP ON 'default'.'default'.'t' TO ROLE `a`
+GRANT ROLE b to ROLE `a`
+GRANT ROLE public to ROLE `a`
+GRANT INSERT ON *.* TO ROLE `a`
+
+query T
+select grants from show_grants('user', 'a') order by object_id;
+----
+GRANT ROLE a to 'a'@'%'
+GRANT ROLE b to 'a'@'%'
+GRANT ROLE public to 'a'@'%'
+GRANT CREATE DATABASE ON *.* TO 'a'@'%'
+
+statement ok
+unset enable_expand_roles;
+
+statement ok
+drop role if exists a;
+
+statement ok
+drop role if exists b;
+
+statement ok
+drop user if exists a;
+
+statement ok
+drop table t;
+
+statement ok
+drop table t1;

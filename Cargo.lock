@@ -242,6 +242,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aef82843a0ec9f8b19567445ad2421ceeb1d711514384bdd3d49fe37102ee13"
 dependencies = [
  "bigdecimal",
+ "bzip2",
+ "crc32fast",
  "digest",
  "libflate",
  "log",
@@ -252,11 +254,14 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "snap",
  "strum 0.26.3",
  "strum_macros 0.26.4",
  "thiserror",
  "typed-builder 0.19.1",
  "uuid",
+ "xz2",
+ "zstd 0.13.2",
 ]
 
 [[package]]
@@ -1624,16 +1629,6 @@ name = "bumpalo"
 version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
-
-[[package]]
-name = "byte-unit"
-version = "4.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da78b32057b8fdfc352504708feeba7216dcd65a2c9ab02978cbd288d1279b6c"
-dependencies = [
- "serde",
- "utf8-width",
-]
 
 [[package]]
 name = "byte-unit"
@@ -3264,7 +3259,7 @@ dependencies = [
  "hex",
  "hyper-util",
  "itertools 0.13.0",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "lexical-core",
  "log",
@@ -3311,7 +3306,7 @@ dependencies = [
  "geozero",
  "goldenfile",
  "hex",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -3365,7 +3360,7 @@ dependencies = [
  "jaq-interpret",
  "jaq-parse",
  "jaq-std",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "lexical-core",
  "libm",
@@ -3458,7 +3453,7 @@ dependencies = [
  "geo",
  "geozero",
  "hex",
- "jiff",
+ "jiff 0.2.1",
  "lexical-core",
  "micromarshal",
  "rmp-serde",
@@ -4163,6 +4158,7 @@ dependencies = [
  "databend-common-storage",
  "databend-common-users",
  "databend-enterprise-fail-safe",
+ "databend-enterprise-vacuum-handler",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-index",
@@ -4311,6 +4307,7 @@ dependencies = [
  "databend-common-pipeline-core",
  "databend-common-pipeline-sinks",
  "databend-common-pipeline-sources",
+ "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -4432,6 +4429,7 @@ dependencies = [
 name = "databend-common-storages-stage"
 version = "0.1.0"
 dependencies = [
+ "apache-avro",
  "arrow-schema",
  "async-backtrace",
  "async-trait",
@@ -4440,6 +4438,7 @@ dependencies = [
  "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
+ "databend-common-column",
  "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",
@@ -4459,7 +4458,11 @@ dependencies = [
  "databend-storages-common-table-meta",
  "enum-as-inner",
  "futures",
+ "jsonb",
+ "lexical-core",
  "log",
+ "match-template",
+ "num-traits",
  "opendal 0.51.2",
  "parquet",
  "serde",
@@ -4521,7 +4524,7 @@ dependencies = [
  "databend-storages-common-cache",
  "futures",
  "itertools 0.13.0",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "log",
  "once_cell",
@@ -4771,6 +4774,7 @@ dependencies = [
  "opendal 0.51.2",
  "tantivy",
  "tempfile",
+ "uuid",
 ]
 
 [[package]]
@@ -4827,7 +4831,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
- "databend-common-storages-fuse",
 ]
 
 [[package]]
@@ -4865,7 +4868,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "dtparse",
- "jiff",
+ "jiff 0.2.1",
  "num-traits",
 ]
 
@@ -5042,7 +5045,6 @@ dependencies = [
  "base64 0.22.1",
  "buf-list",
  "bumpalo",
- "byte-unit 4.0.19",
  "byteorder",
  "bytes",
  "chrono",
@@ -5129,7 +5131,7 @@ dependencies = [
  "hyper-util",
  "indicatif",
  "itertools 0.13.0",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "jwt-simple",
  "log",
@@ -5232,7 +5234,7 @@ dependencies = [
  "derive-visitor",
  "ethnum",
  "itertools 0.13.0",
- "jiff",
+ "jiff 0.2.1",
  "jsonb",
  "rand",
  "reqwest",
@@ -5346,6 +5348,7 @@ dependencies = [
 name = "databend-storages-common-session"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-meta-types",
@@ -8903,6 +8906,20 @@ version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c607c728e28764fecde611a2764a3a5db19ae21dcec46f292244f5cc5c085a81"
 dependencies = [
+ "jiff-tzdb-platform",
+ "log",
+ "portable-atomic",
+ "portable-atomic-util",
+ "serde",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "jiff"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3590fea8e9e22d449600c9bbd481a8163bef223e4ff938e5f55899f8cf1adb93"
+dependencies = [
  "jiff-tzdb",
  "jiff-tzdb-platform",
  "log",
@@ -9370,7 +9387,7 @@ dependencies = [
  "crossbeam-channel",
  "env_filter",
  "fastrace",
- "jiff",
+ "jiff 0.1.28",
  "log",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -10388,7 +10405,7 @@ version = "0.10.0"
 source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.7#e99cfebbc7a485fe55efe476c083d9decc888ef7"
 dependencies = [
  "anyerror",
- "byte-unit 5.1.6",
+ "byte-unit",
  "chrono",
  "clap",
  "derive_more",
