@@ -32,9 +32,9 @@ runs:
     - uses: actions/github-script@v7
       id: ext-args
       env:
-          DIRS: ${{ inputs.dirs }}
+        DIRS: ${{ inputs.dirs }}
       with:
-        script: return require('.github/actions/test_sqllogic_standalone_linux/script.js')(core)
+        script: require('.github/actions/test_sqllogic_standalone_linux/script.js')(core)
 
     - name: Run sqllogic Tests with Standalone mode
       if: inputs.storage-format == 'all' || inputs.storage-format == 'parquet'
