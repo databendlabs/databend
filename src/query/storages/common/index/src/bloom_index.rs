@@ -55,6 +55,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
+use jsonb::RawJsonb;
 use parquet::format::FileMetaData;
 
 use crate::filters::BlockBloomFilterIndexVersion;
@@ -240,7 +241,8 @@ impl BloomIndex {
                         );
                         for val in column.iter() {
                             if let ScalarRef::Variant(v) = val {
-                                if let Ok(str_val) = jsonb::to_str(v) {
+                                let raw_jsonb = RawJsonb::new(v);
+                                if let Ok(str_val) = raw_jsonb.to_str() {
                                     builder.push(ScalarRef::String(str_val.as_str()));
                                     continue;
                                 }

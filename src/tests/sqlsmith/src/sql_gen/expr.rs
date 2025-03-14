@@ -235,7 +235,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 }
             }
             DataType::Variant => {
-                let val = jsonb::rand_value();
+                let val = jsonb::Value::rand_value();
                 let arg = Expr::Literal {
                     span: None,
                     value: Literal::String(format!("{}", val)),

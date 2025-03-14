@@ -20,6 +20,8 @@ use databend_common_io::deserialize_bitmap;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
 use jiff::tz::TimeZone;
+use jsonb::OwnedJsonb;
+use jsonb::RawJsonb;
 use jsonb::Value;
 
 use super::binary::BinaryColumn;
@@ -182,7 +184,9 @@ impl ValueType for VariantType {
 
     #[inline(always)]
     fn compare(lhs: Self::ScalarRef<'_>, rhs: Self::ScalarRef<'_>) -> Ordering {
-        jsonb::compare(lhs, rhs).expect("unable to parse jsonb value")
+        let left_jsonb = RawJsonb::new(lhs);
+        let right_jsonb = RawJsonb::new(rhs);
+        left_jsonb.cmp(&right_jsonb)
     }
 }
 
@@ -235,7 +239,9 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
         ScalarRef::Interval(i) => interval_to_string(&i).to_string().into(),
         ScalarRef::Array(col) => {
             let items = cast_scalars_to_variants(col.iter(), tz);
-            jsonb::build_array(items.iter(), buf).expect("failed to build jsonb array");
+            let owned_jsonb = OwnedJsonb::build_array(items.iter().map(RawJsonb::new))
+                .expect("failed to build jsonb array");
+            buf.extend_from_slice(owned_jsonb.as_ref());
             return;
         }
         ScalarRef::Map(col) => {
@@ -255,8 +261,10 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
                 cast_scalar_to_variant(v, tz, &mut val);
                 kvs.insert(key, val);
             }
-            jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), buf)
-                .expect("failed to build jsonb object from map");
+            let owned_jsonb =
+                OwnedJsonb::build_object(kvs.iter().map(|(k, v)| (k, RawJsonb::new(&v[..]))))
+                    .expect("failed to build jsonb object from map");
+            buf.extend_from_slice(owned_jsonb.as_ref());
             return;
         }
         ScalarRef::Bitmap(b) => {
@@ -272,14 +280,14 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: &TimeZone, buf: &mut Vec<u8
         }
         ScalarRef::Tuple(fields) => {
             let values = cast_scalars_to_variants(fields, tz);
-            jsonb::build_object(
+            let owned_jsonb = OwnedJsonb::build_object(
                 values
                     .iter()
                     .enumerate()
-                    .map(|(i, bytes)| (format!("{}", i + 1), bytes)),
-                buf,
+                    .map(|(i, bytes)| (format!("{}", i + 1), RawJsonb::new(bytes))),
             )
             .expect("failed to build jsonb object from tuple");
+            buf.extend_from_slice(owned_jsonb.as_ref());
             return;
         }
         ScalarRef::Variant(bytes) => {

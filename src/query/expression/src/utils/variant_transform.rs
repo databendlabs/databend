@@ -15,7 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use jsonb::parse_value;
-use jsonb::to_string;
+use jsonb::RawJsonb;
 
 use crate::types::AnyType;
 use crate::types::DataType;
@@ -96,7 +96,8 @@ fn transform_scalar(scalar: ScalarRef<'_>, decode: bool) -> Result<Scalar> {
         }
         ScalarRef::Variant(data) => {
             if decode {
-                Scalar::Variant(to_string(data).into_bytes())
+                let raw_jsonb = RawJsonb::new(data);
+                Scalar::Variant(raw_jsonb.to_string().into_bytes())
             } else {
                 let value = parse_value(data).map_err(|err| {
                     ErrorCode::UDFDataError(format!("parse json value error: {err}"))

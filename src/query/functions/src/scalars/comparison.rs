@@ -52,6 +52,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
 use databend_functions_scalar_decimal::register_decimal_compare_op;
+use jsonb::RawJsonb;
 use regex::Regex;
 
 use crate::scalars::string_multi_args::regexp;
@@ -86,42 +87,54 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
         "eq",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Equal
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) == Ordering::Equal
         },
     );
     registry.register_comparison_2_arg::<VariantType, VariantType, _, _>(
         "noteq",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Equal
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) != Ordering::Equal
         },
     );
     registry.register_comparison_2_arg::<VariantType, VariantType, _, _>(
         "gt",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Greater
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) == Ordering::Greater
         },
     );
     registry.register_comparison_2_arg::<VariantType, VariantType, _, _>(
         "gte",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Less
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) != Ordering::Less
         },
     );
     registry.register_comparison_2_arg::<VariantType, VariantType, _, _>(
         "lt",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") == Ordering::Less
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) == Ordering::Less
         },
     );
     registry.register_comparison_2_arg::<VariantType, VariantType, _, _>(
         "lte",
         |_, _, _| FunctionDomain::Full,
         |lhs, rhs, _| {
-            jsonb::compare(lhs, rhs).expect("unable to parse jsonb value") != Ordering::Greater
+            let left_jsonb = RawJsonb::new(lhs);
+            let right_jsonb = RawJsonb::new(rhs);
+            left_jsonb.cmp(&right_jsonb) != Ordering::Greater
         },
     );
 }
@@ -520,14 +533,26 @@ fn register_like(registry: &mut FunctionRegistry) {
             | LikePattern::StartOfPercent(_)
             | LikePattern::EndOfPercent(_)
             | LikePattern::Constant(_) => {
-                if let Some(s) = jsonb::as_str(val) {
-                    pattern_type.compare(s.as_bytes())
-                } else {
-                    false
+                let raw_jsonb = RawJsonb::new(val);
+                match raw_jsonb.as_str() {
+                    Ok(Some(s)) => pattern_type.compare(s.as_bytes()),
+                    Ok(None) => false,
+                    Err(_) => {
+                        let s = raw_jsonb.to_string();
+                        pattern_type.compare(s.as_bytes())
+                    }
                 }
             }
-
-            _ => jsonb::traverse_check_string(val, |v| pattern_type.compare(v)),
+            _ => {
+                let raw_jsonb = RawJsonb::new(val);
+                match raw_jsonb.traverse_check_string(|v| pattern_type.compare(v)) {
+                    Ok(res) => res,
+                    Err(_) => {
+                        let s = raw_jsonb.to_string();
+                        pattern_type.compare(s.as_bytes())
+                    }
+                }
+            }
         }),
     );
 

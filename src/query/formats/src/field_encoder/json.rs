@@ -21,6 +21,7 @@ use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
+use jsonb::RawJsonb;
 
 use crate::field_encoder::helpers::write_json_string;
 use crate::field_encoder::FieldEncoderValues;
@@ -81,7 +82,7 @@ impl FieldEncoderJSON {
 
             Column::Variant(c) => {
                 let v = unsafe { c.index_unchecked(row_index) };
-                out_buf.extend_from_slice(jsonb::to_string(v).as_bytes());
+                out_buf.extend_from_slice(RawJsonb::new(v).to_string().as_bytes());
             }
             Column::Geometry(c) => {
                 let v = unsafe { c.index_unchecked(row_index) };

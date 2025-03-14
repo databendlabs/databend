@@ -48,17 +48,10 @@ use jaq_interpret::RcIter;
 use jaq_interpret::Val;
 use jaq_parse;
 use jaq_std;
-use jsonb::array_length;
-use jsonb::array_values;
-use jsonb::as_str;
-use jsonb::get_by_index;
-use jsonb::get_by_name;
+use jsonb::from_raw_jsonb;
 use jsonb::jsonpath::parse_json_path;
-use jsonb::jsonpath::Mode as SelectorMode;
-use jsonb::jsonpath::Selector;
-use jsonb::object_each;
-use jsonb::object_keys;
-use jsonb::to_serde_json;
+use jsonb::OwnedJsonb;
+use jsonb::RawJsonb;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.properties.insert(
@@ -94,29 +87,29 @@ pub fn register(registry: &mut FunctionRegistry) {
                         Value::Scalar(Scalar::String(path)) => {
                             match parse_json_path(path.as_bytes()) {
                                 Ok(json_path) => {
-                                    let selector = Selector::new(json_path, SelectorMode::All);
                                     for (row, max_nums_per_row) in
                                         max_nums_per_row.iter_mut().enumerate().take(ctx.num_rows)
                                     {
                                         let val = unsafe { val_arg.index_unchecked(row) };
                                         let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
                                         if let ScalarRef::Variant(val) = val {
-                                            if selector
-                                                .select(
-                                                    val,
-                                                    &mut builder.data,
-                                                    &mut builder.offsets,
-                                                )
-                                                .is_err()
-                                            {
-                                                ctx.set_error(
-                                                    0,
-                                                    format!(
-                                                        "Invalid JSONB value '0x{}'",
-                                                        hex::encode(val)
-                                                    ),
-                                                );
-                                                break;
+                                            match RawJsonb::new(val).get_by_path(&json_path) {
+                                                Ok(owned_jsonbs) => {
+                                                    for owned_jsonb in owned_jsonbs {
+                                                        builder.put_slice(owned_jsonb.as_ref());
+                                                        builder.commit_row();
+                                                    }
+                                                }
+                                                Err(_err) => {
+                                                    ctx.set_error(
+                                                        0,
+                                                        format!(
+                                                            "Invalid JSONB value '0x{}'",
+                                                            hex::encode(val)
+                                                        ),
+                                                    );
+                                                    break;
+                                                }
                                             }
                                         }
                                         let array =
@@ -131,7 +124,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     }
                                 }
                                 Err(_) => {
-                                    ctx.set_error(0, format!("Invalid JSON Path '{}'", &path,));
+                                    ctx.set_error(0, format!("Invalid JSON Path '{}'", &path));
                                 }
                             }
                         }
@@ -146,24 +139,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     match parse_json_path(path.as_bytes()) {
                                         Ok(json_path) => {
                                             if let ScalarRef::Variant(val) = val {
-                                                let selector =
-                                                    Selector::new(json_path, SelectorMode::All);
-                                                if selector
-                                                    .select(
-                                                        val,
-                                                        &mut builder.data,
-                                                        &mut builder.offsets,
-                                                    )
-                                                    .is_err()
-                                                {
-                                                    ctx.set_error(
-                                                        0,
-                                                        format!(
-                                                            "Invalid JSONB value '0x{}'",
-                                                            hex::encode(val)
-                                                        ),
-                                                    );
-                                                    break;
+                                                match RawJsonb::new(val).get_by_path(&json_path) {
+                                                    Ok(owned_jsonbs) => {
+                                                        for owned_jsonb in owned_jsonbs {
+                                                            builder.put_slice(owned_jsonb.as_ref());
+                                                            builder.commit_row();
+                                                        }
+                                                    }
+                                                    Err(_err) => {
+                                                        ctx.set_error(
+                                                            0,
+                                                            format!(
+                                                                "Invalid JSONB value '0x{}'",
+                                                                hex::encode(val)
+                                                            ),
+                                                        );
+                                                        break;
+                                                    }
                                                 }
                                             }
                                         }
@@ -331,8 +323,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             Value::Scalar(Scalar::String(v)) => {
                                 match parse_json_path(v.as_bytes()) {
                                     Ok(jsonpath) => {
-                                        let selector = Selector::new(jsonpath, SelectorMode::First);
-                                        json_path = Some((v, selector));
+                                        json_path = Some((v, jsonpath));
                                     }
                                     Err(_) => {
                                         ctx.set_error(0, format!("Invalid JSON Path {v:?}",));
@@ -432,21 +423,27 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                             ScalarRef::Variant(val) => {
                                 let columns = match json_path {
-                                    Some((path, ref selector)) => {
+                                    Some((path, ref json_path)) => {
                                         // get inner input values by path
                                         let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
-                                        if selector
-                                            .select(val, &mut builder.data, &mut builder.offsets)
-                                            .is_err()
-                                        {
-                                            ctx.set_error(
-                                                0,
-                                                format!(
-                                                    "Invalid JSONB value '0x{}'",
-                                                    hex::encode(val)
-                                                ),
-                                            );
-                                            break;
+                                        // first ?
+                                        match RawJsonb::new(val).get_by_path(json_path) {
+                                            Ok(owned_jsonbs) => {
+                                                for owned_jsonb in owned_jsonbs {
+                                                    builder.put_slice(owned_jsonb.as_ref());
+                                                    builder.commit_row();
+                                                }
+                                            }
+                                            Err(_err) => {
+                                                ctx.set_error(
+                                                    0,
+                                                    format!(
+                                                        "Invalid JSONB value '0x{}'",
+                                                        hex::encode(val)
+                                                    ),
+                                                );
+                                                break;
+                                            }
                                         }
                                         let inner_val = builder.pop().unwrap_or_default();
                                         generator.generate(
@@ -547,7 +544,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     return null_result;
                                 }
                                 Some(ScalarRef::Variant(v)) => {
-                                    let s = to_serde_json(v);
+                                    let raw_jsonb = RawJsonb::new(v);
+                                    let s = from_raw_jsonb::<serde_json::Value>(&raw_jsonb);
                                     match s {
                                         Err(e) => {
                                             ctx.set_error(row, e.to_string());
@@ -620,10 +618,11 @@ fn jaq_val_to_jsonb(val: &Val) -> Result<Vec<u8>> {
                 .iter()
                 .map(jaq_val_to_jsonb)
                 .collect::<Result<Vec<_>>>()?;
-            return match jsonb::build_array(items.iter().map(|v| &v[..]), &mut buf) {
-                Ok(_) => Ok(buf),
-                Err(_) => Err(ErrorCode::BadBytes("failed to build jsonb array")),
-            };
+            let owned_jsonb = OwnedJsonb::build_array(items.iter().map(|v| RawJsonb::new(v)))
+                .map_err(|e| {
+                    ErrorCode::Internal(format!("failed to build array error: {:?}", e))
+                })?;
+            return Ok(owned_jsonb.to_vec());
         }
         Val::Obj(obj) => {
             let mut kvs = BTreeMap::new();
@@ -632,10 +631,12 @@ fn jaq_val_to_jsonb(val: &Val) -> Result<Vec<u8>> {
                 let val = jaq_val_to_jsonb(v)?;
                 kvs.insert(key, val);
             }
-            return match jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut buf) {
-                Ok(_) => Ok(buf),
-                Err(_) => Err(ErrorCode::BadBytes("failed to build jsonb object")),
-            };
+            let owned_jsonb =
+                OwnedJsonb::build_object(kvs.iter().map(|(k, v)| (k, RawJsonb::new(&v[..]))))
+                    .map_err(|e| {
+                        ErrorCode::Internal(format!("failed to build object error: {:?}", e))
+                    })?;
+            return Ok(owned_jsonb.to_vec());
         }
     };
     jsonb_value.write_to_vec(&mut buf);
@@ -647,15 +648,15 @@ pub(crate) fn unnest_variant_array(
     row: usize,
     max_nums_per_row: &mut [usize],
 ) -> (Value<AnyType>, usize) {
-    match array_values(val) {
-        Some(vals) if !vals.is_empty() => {
+    match RawJsonb::new(val).array_values() {
+        Ok(Some(vals)) if !vals.is_empty() => {
             let len = vals.len();
             let mut builder = BinaryColumnBuilder::with_capacity(0, 0);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
             for val in vals {
-                builder.put_slice(&val);
+                builder.put_slice(val.as_ref());
                 builder.commit_row();
             }
 
@@ -671,17 +672,17 @@ fn unnest_variant_obj(
     row: usize,
     max_nums_per_row: &mut [usize],
 ) -> (Value<AnyType>, usize) {
-    match object_each(val) {
-        Some(vals) if !vals.is_empty() => {
-            let len = vals.len();
+    match RawJsonb::new(val).object_each() {
+        Ok(Some(key_vals)) if !key_vals.is_empty() => {
+            let len = key_vals.len();
             let mut val_builder = BinaryColumnBuilder::with_capacity(0, 0);
             let mut key_builder = StringColumnBuilder::with_capacity(0);
 
             max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
 
-            for (key, val) in vals {
-                key_builder.put_and_commit(String::from_utf8_lossy(&key));
-                val_builder.put_slice(&val);
+            for (key, val) in key_vals {
+                key_builder.put_and_commit(&key);
+                val_builder.put_slice(val.as_ref());
                 val_builder.commit_row();
             }
 
@@ -723,7 +724,7 @@ impl FlattenGenerator {
     #[allow(clippy::too_many_arguments)]
     fn flatten(
         &mut self,
-        input: &[u8],
+        input: &RawJsonb,
         path: &str,
         key_builder: &mut Option<NullableColumnBuilder<StringType>>,
         path_builder: &mut Option<StringColumnBuilder>,
@@ -785,7 +786,7 @@ impl FlattenGenerator {
     #[allow(clippy::too_many_arguments)]
     fn flatten_array(
         &mut self,
-        input: &[u8],
+        input: &RawJsonb,
         path: &str,
         key_builder: &mut Option<NullableColumnBuilder<StringType>>,
         path_builder: &mut Option<StringColumnBuilder>,
@@ -794,10 +795,10 @@ impl FlattenGenerator {
         this_builder: &mut Option<BinaryColumnBuilder>,
         rows: &mut usize,
     ) {
-        if let Some(len) = array_length(input) {
+        if let Ok(Some(len)) = input.array_length() {
             for i in 0..len {
                 let inner_path = format!("{}[{}]", path, i);
-                let val = get_by_index(input, i).unwrap();
+                let val = input.get_by_index(i).unwrap().unwrap();
 
                 if let Some(key_builder) = key_builder {
                     key_builder.push_null();
@@ -809,18 +810,18 @@ impl FlattenGenerator {
                     index_builder.push(i.try_into().unwrap());
                 }
                 if let Some(value_builder) = value_builder {
-                    value_builder.put_slice(&val);
+                    value_builder.put_slice(val.as_ref());
                     value_builder.commit_row();
                 }
                 if let Some(this_builder) = this_builder {
-                    this_builder.put_slice(input);
+                    this_builder.put_slice(input.as_ref());
                     this_builder.commit_row();
                 }
                 *rows += 1;
 
                 if self.recursive {
                     self.flatten(
-                        &val,
+                        &val.as_raw(),
                         &inner_path,
                         key_builder,
                         path_builder,
@@ -837,7 +838,7 @@ impl FlattenGenerator {
     #[allow(clippy::too_many_arguments)]
     fn flatten_object(
         &mut self,
-        input: &[u8],
+        input: &RawJsonb,
         path: &str,
         key_builder: &mut Option<NullableColumnBuilder<StringType>>,
         path_builder: &mut Option<StringColumnBuilder>,
@@ -846,12 +847,14 @@ impl FlattenGenerator {
         this_builder: &mut Option<BinaryColumnBuilder>,
         rows: &mut usize,
     ) {
-        if let Some(obj_keys) = object_keys(input) {
-            if let Some(len) = array_length(&obj_keys) {
+        if let Ok(Some(owned_obj_keys)) = input.object_keys() {
+            let obj_keys = owned_obj_keys.as_raw();
+            if let Ok(Some(len)) = obj_keys.array_length() {
                 for i in 0..len {
-                    let key = get_by_index(&obj_keys, i).unwrap();
-                    let name = as_str(&key).unwrap();
-                    let val = get_by_name(input, &name, false).unwrap();
+                    let owned_key = obj_keys.get_by_index(i).unwrap().unwrap();
+                    let key = owned_key.as_raw();
+                    let name = key.as_str().unwrap().unwrap();
+                    let val = input.get_by_name(&name, false).unwrap().unwrap();
                     let inner_path = if !path.is_empty() {
                         format!("{}.{}", path, name)
                     } else {
@@ -868,18 +871,18 @@ impl FlattenGenerator {
                         index_builder.push_null();
                     }
                     if let Some(value_builder) = value_builder {
-                        value_builder.put_slice(&val);
+                        value_builder.put_slice(val.as_ref());
                         value_builder.commit_row();
                     }
                     if let Some(this_builder) = this_builder {
-                        this_builder.put_slice(input);
+                        this_builder.put_slice(input.as_ref());
                         this_builder.commit_row();
                     }
                     *rows += 1;
 
                     if self.recursive {
                         self.flatten(
-                            &val,
+                            &val.as_raw(),
                             &inner_path,
                             key_builder,
                             path_builder,
@@ -925,7 +928,7 @@ impl FlattenGenerator {
 
         if !input.is_empty() {
             self.flatten(
-                input,
+                &RawJsonb::new(input),
                 path,
                 &mut key_builder,
                 &mut path_builder,
