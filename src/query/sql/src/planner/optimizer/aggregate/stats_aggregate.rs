@@ -124,6 +124,8 @@ impl RuleStatsAggregateOptimizer {
                     for (need_rewrite_agg, agg) in
                         need_rewrite_aggs.iter().zip(agg.aggregate_functions.iter())
                     {
+                        let agg_func = AggregateFunction::try_from(agg.scalar.clone())?;
+
                         if let Some((col_id, name)) = need_rewrite_agg {
                             if let Some(stat) = stats.get(col_id) {
                                 let value_bound = if name.eq_ignore_ascii_case("min") {
@@ -132,12 +134,17 @@ impl RuleStatsAggregateOptimizer {
                                     &stat.max
                                 };
                                 if !value_bound.may_be_truncated {
+                                    let scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                                        span: agg.scalar.span(),
+                                        value: value_bound.value.clone(),
+                                    });
+
+                                    let scalar =
+                                        scalar.unify_to_data_type(agg_func.return_type.as_ref());
+
                                     eval_scalar_results.push(ScalarItem {
                                         index: agg.index,
-                                        scalar: ScalarExpr::ConstantExpr(ConstantExpr {
-                                            span: agg.scalar.span(),
-                                            value: value_bound.value.clone(),
-                                        }),
+                                        scalar,
                                     });
                                     continue;
                                 }
@@ -146,7 +153,6 @@ impl RuleStatsAggregateOptimizer {
 
                         // Add other aggregate functions as derived column,
                         // this will be used in aggregating index rewrite.
-                        let agg_func = AggregateFunction::try_from(agg.scalar.clone())?;
                         eval_scalar_results.push(ScalarItem {
                             index: agg.index,
                             scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
