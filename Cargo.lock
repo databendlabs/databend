@@ -5317,6 +5317,7 @@ dependencies = [
  "databend-common-functions",
  "databend-storages-common-table-meta",
  "fastrace",
+ "goldenfile",
  "jsonb",
  "levenshtein_automata",
  "log",
