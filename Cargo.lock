@@ -5188,6 +5188,7 @@ dependencies = [
  "serde_json",
  "serde_stacker",
  "serde_urlencoded",
+ "serde_yaml",
  "sha2",
  "socket2",
  "sqlx",
