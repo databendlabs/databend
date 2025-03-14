@@ -15,6 +15,8 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::cell::RefCell;
+use std::thread_local;
 use std::sync::Arc;
 
 use databend_common_catalog::BasicColumnStatistics;
@@ -69,8 +71,6 @@ struct YamlColumnStatistics {
     null_count: Option<u64>,
 }
 
-use std::cell::RefCell;
-use std::thread_local;
 
 type TableStatsMap = HashMap<String, YamlTableStatistics>;
 type ColumnStatsMap = HashMap<String, YamlColumnStatistics>;
@@ -79,6 +79,42 @@ type ColumnStatsMap = HashMap<String, YamlColumnStatistics>;
 thread_local! {
     static TEST_CASE_DATA: RefCell<Option<(TableStatsMap, ColumnStatsMap)>> = const { RefCell::new(None) };
 }
+
+/// Setup TPC-DS tables with required schema
+async fn setup_tpcds_tables(ctx: &Arc<QueryContext>) -> Result<()> {
+    // Get the base path for table definitions
+    let base_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data/tables");
+
+    // Check if the directory exists
+    if !base_path.exists() {
+        return Err(ErrorCode::UnknownException(format!(
+            "Tables directory not found at {:?}",
+            base_path
+        )));
+    }
+
+    // Read all SQL files from the tables directory
+    for entry in fs::read_dir(&base_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        // Only process SQL files
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "sql") {
+            // Extract table name from filename (without extension)
+            if let Some(file_stem) = path.file_stem() {
+                if let Some(table_name) = file_stem.to_str() {
+                    let sql = fs::read_to_string(&path)?;
+                    println!("Creating table: {}", table_name);
+                    execute_sql(ctx, &sql).await?;
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 
 /// Convert a YAML test case to a TestCase
 fn create_test_case(yaml: YamlTestCase) -> Result<TestCase> {
@@ -276,37 +312,3 @@ async fn test_tpcds_optimizer() -> Result<()> {
     Ok(())
 }
 
-/// Setup TPC-DS tables with required schema
-async fn setup_tpcds_tables(ctx: &Arc<QueryContext>) -> Result<()> {
-    // Get the base path for table definitions
-    let base_path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data/tables");
-
-    // Check if the directory exists
-    if !base_path.exists() {
-        return Err(ErrorCode::UnknownException(format!(
-            "Tables directory not found at {:?}",
-            base_path
-        )));
-    }
-
-    // Read all SQL files from the tables directory
-    for entry in fs::read_dir(&base_path)? {
-        let entry = entry?;
-        let path = entry.path();
-
-        // Only process SQL files
-        if path.is_file() && path.extension().is_some_and(|ext| ext == "sql") {
-            // Extract table name from filename (without extension)
-            if let Some(file_stem) = path.file_stem() {
-                if let Some(table_name) = file_stem.to_str() {
-                    let sql = fs::read_to_string(&path)?;
-                    println!("Creating table: {}", table_name);
-                    execute_sql(ctx, &sql).await?;
-                }
-            }
-        }
-    }
-
-    Ok(())
-}

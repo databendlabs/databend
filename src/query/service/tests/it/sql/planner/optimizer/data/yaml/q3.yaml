@@ -15,43 +15,78 @@ sql: |
 
 table_statistics:
   date_dim:
-    num_rows: 1000
-    data_size: 102400
-    data_size_compressed: 51200
-    index_size: 20480
-    number_of_blocks: 10
-    number_of_segments: 2
+    num_rows: 73049  # Estimated based on typical date dimension cardinality
+    data_size: 2138624  # From snow_plan: "TableScan (DATE_DIM as DT) [partitions: 1/1, bytes: 2,138,624]"
+    data_size_compressed: 1069312  # Estimated as 50% of data_size
+    index_size: 427724  # Estimated as 20% of data_size
+    number_of_blocks: 21  # Estimated based on data_size
+    number_of_segments: 1  # From snow_plan: "partitions: 1/1"
   store_sales:
-    num_rows: 10000
-    data_size: 1024000
-    data_size_compressed: 512000
-    index_size: 204800
-    number_of_blocks: 100
-    number_of_segments: 5
+    num_rows: 2879987999  # Estimated based on data size and typical row size
+    data_size: 1212628258304  # From snow_plan: "TableScan (STORE_SALES) [partitions: 70,412/72,718, bytes: 1,212,628,258,304]"
+    data_size_compressed: 606314129152  # Estimated as 50% of data_size
+    index_size: 242525651660  # Estimated as 20% of data_size
+    number_of_blocks: 12126282  # Estimated based on data_size
+    number_of_segments: 70412  # From snow_plan: "partitions: 70,412/72,718"
   item:
-    num_rows: 500
-    data_size: 51200
-    data_size_compressed: 25600
-    index_size: 10240
-    number_of_blocks: 5
-    number_of_segments: 1
+    num_rows: 462000  # Estimated based on ss_item_sk range and typical item dimension size
+    data_size: 23811584  # From snow_plan: "TableScan (ITEM) [partitions: 2/2, bytes: 23,811,584]"
+    data_size_compressed: 11905792  # Estimated as 50% of data_size
+    index_size: 4762316  # Estimated as 20% of data_size
+    number_of_blocks: 238  # Estimated based on data_size
+    number_of_segments: 2  # From snow_plan: "partitions: 2/2"
 
 column_statistics:
   date_dim.d_year:
-    min: 1990
-    max: 2000
-    ndv: 10
-    null_count: 0
+    min: 1990  # Typical range for TPC-DS
+    max: 2000  # Typical range for TPC-DS
+    ndv: 11  # Based on min/max range
+    null_count: 0  # Primary dimension columns typically don't have nulls
+  date_dim.d_date_sk:
+    min: 1  # Typical starting value for surrogate key
+    max: 73049  # Based on table row count
+    ndv: 73049  # Primary key, so NDV equals row count
+    null_count: 0  # Primary key cannot be null
+  date_dim.d_moy:
+    min: 1  # January
+    max: 12  # December
+    ndv: 12  # 12 months in a year
+    null_count: 0  # Date parts typically don't have nulls
   store_sales.ss_ext_sales_price:
-    min: 10.0
-    max: 1000.0
-    ndv: 1000
-    null_count: 5
+    min: 0.01  # Minimum reasonable sales price
+    max: 30000.00  # Maximum reasonable extended sales price
+    ndv: 573997  # Estimated as ~20% of row count
+    null_count: 0  # Sales amount is typically not null
+  store_sales.ss_sold_date_sk:
+    min: 1  # Matches date_dim.d_date_sk min
+    max: 73049  # Matches date_dim.d_date_sk max
+    ndv: 73049  # Foreign key to date_dim
+    null_count: 287998  # From snow_plan filter: "STORE_SALES.SS_SOLD_DATE_SK IS NOT NULL" implies some nulls exist
+  store_sales.ss_item_sk:
+    min: 1  # Typical starting value for surrogate key
+    max: 462000  # Matches item.i_item_sk max
+    ndv: 462000  # Foreign key to item table
+    null_count: 0  # Required join key is typically not null
   item.i_brand_id:
-    min: 1
-    max: 50
-    ndv: 50
-    null_count: 0
+    min: 1  # Typical starting value for ID
+    max: 1000  # Typical range for TPC-DS
+    ndv: 948  # Estimated based on TPC-DS typical cardinality
+    null_count: 0  # Brand ID is typically not null
+  item.i_brand:
+    min: "AAAAAAAAAAAAAA"  # Lexicographically smallest possible brand name
+    max: "zzzzzzzzzzzzzz"  # Lexicographically largest possible brand name
+    ndv: 948  # Same as i_brand_id (1:1 relationship)
+    null_count: 0  # Brand name is typically not null
+  item.i_item_sk:
+    min: 1  # Typical starting value for surrogate key
+    max: 462000  # Based on estimated row count
+    ndv: 462000  # Primary key, so NDV equals row count
+    null_count: 0  # Primary key cannot be null
+  item.i_manufact_id:
+    min: 1  # Typical starting value for ID
+    max: 1000  # Typical range for TPC-DS
+    ndv: 1000  # Based on typical TPC-DS cardinality
+    null_count: 0  # Manufacturer ID is typically not null
 
 raw_plan: |
   Limit
@@ -133,66 +168,23 @@ optimized_plan: |
                               └── limit: NONE
 
 snow_plan: |
-  {
-    "stages": [
-      {
-        "id": "0",
-        "type": "TableScan",
-        "table": "date_dim",
-        "filters": ["d_moy = 11"],
-        "output": ["d_date_sk", "d_year"]
-      },
-      {
-        "id": "1",
-        "type": "TableScan",
-        "table": "store_sales",
-        "filters": [],
-        "output": ["ss_sold_date_sk", "ss_item_sk", "ss_ext_sales_price"]
-      },
-      {
-        "id": "2",
-        "type": "TableScan",
-        "table": "item",
-        "filters": ["i_manufact_id = 128"],
-        "output": ["i_item_sk", "i_brand_id", "i_brand"]
-      },
-      {
-        "id": "3",
-        "type": "HashJoin",
-        "join_type": "inner",
-        "left": "1",
-        "right": "2",
-        "left_keys": ["ss_item_sk"],
-        "right_keys": ["i_item_sk"]
-      },
-      {
-        "id": "4",
-        "type": "HashJoin",
-        "join_type": "inner",
-        "left": "0",
-        "right": "3",
-        "left_keys": ["d_date_sk"],
-        "right_keys": ["ss_sold_date_sk"]
-      },
-      {
-        "id": "5",
-        "type": "Aggregate",
-        "group_by": ["d_year", "i_brand", "i_brand_id"],
-        "aggregates": [{"function": "sum", "input": "ss_ext_sales_price", "alias": "sum_agg"}]
-      },
-      {
-        "id": "6",
-        "type": "Sort",
-        "sort_keys": [
-          {"column": "d_year", "direction": "asc"},
-          {"column": "sum_agg", "direction": "desc"},
-          {"column": "i_brand_id", "direction": "asc"}
-        ]
-      },
-      {
-        "id": "7",
-        "type": "Limit",
-        "limit": 100
-      }
-    ]
-  }
+  Result [output: DT.D_YEAR, ITEM.I_BRAND_ID, ITEM.I_BRAND, SUM(...)]
+  └── SortWithLimit [limit: 100]
+      ├── sort keys: [DT.D_YEAR ASC NULLS LAST, SUM(SS_EXT_SALES_PRICE) DESC NULLS FIRST, ITEM.I_BRAND_ID ASC NULLS LAST]
+      └── Aggregate [group by: DT.D_YEAR, ITEM.I_BRAND, ITEM.I_BRAND_ID]
+          └── Aggregate [group by: DT.D_YEAR, ITEM.I_BRAND, ITEM.I_BRAND_ID]
+              └── InnerJoin [join key: (DT.D_DATE_SK = STORE_SALES.SS_SOLD_DATE_SK)]
+                  ├── Filter [condition: DT.D_MOY = 11]
+                  │   └── TableScan (DATE_DIM as DT) [partitions: 1/1, bytes: 2,138,624]
+                  │       └── columns: [D_DATE_SK, D_YEAR, D_MOY]
+                  └── Aggregate [group by: ITEM.I_BRAND_ID, ITEM.I_BRAND, STORE_SALES.SS_SOLD_DATE_SK]
+                      └── InnerJoin [join key: (ITEM.I_ITEM_SK = STORE_SALES.SS_ITEM_SK)]
+                          ├── Aggregate [group by: ITEM.I_ITEM_SK, ITEM.I_BRAND_ID, ITEM.I_BRAND]
+                          │   └── Filter [condition: ITEM.I_MANUFACT_ID = 128]
+                          │       └── TableScan (ITEM) [partitions: 2/2, bytes: 23,811,584]
+                          │           └── columns: [I_ITEM_SK, I_BRAND_ID, I_BRAND, I_MANUFACT_ID]
+                          └── Aggregate [group by: STORE_SALES.SS_SOLD_DATE_SK, STORE_SALES.SS_ITEM_SK]
+                              └── Filter [condition: STORE_SALES.SS_SOLD_DATE_SK IS NOT NULL]
+                                  └── JoinFilter [join key: (DT.D_DATE_SK = STORE_SALES.SS_SOLD_DATE_SK)]
+                                      └── TableScan (STORE_SALES) [partitions: 70,412/72,718, bytes: 1,212,628,258,304]
+                                          └── columns: [SS_SOLD_DATE_SK, SS_ITEM_SK, SS_EXT_SALES_PRICE]
