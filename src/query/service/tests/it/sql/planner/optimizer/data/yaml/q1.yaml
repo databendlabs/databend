@@ -2,26 +2,26 @@ name: "Q1"
 description: "TPC-DS Query 1 optimizer test"
 
 sql: |
-  WITH customer_total_return 
-     AS (SELECT sr_customer_sk     AS ctr_customer_sk, 
-                sr_store_sk        AS ctr_store_sk, 
-                Sum(sr_return_amt) AS ctr_total_return 
-         FROM   store_returns, 
-                date_dim 
-         WHERE  sr_returned_date_sk = d_date_sk 
-                AND d_year = 2001 
-         GROUP  BY sr_customer_sk, 
-                   sr_store_sk) 
-  SELECT c_customer_id 
-  FROM   customer_total_return ctr1, 
-       store, 
-       customer 
-  WHERE  ctr1.ctr_total_return > (SELECT Avg(ctr_total_return) * 1.2 
-                                FROM   customer_total_return ctr2 
-                                WHERE  ctr1.ctr_store_sk = ctr2.ctr_store_sk) 
-       AND s_store_sk = ctr1.ctr_store_sk 
-       AND s_state = 'TN' 
-       AND ctr1.ctr_customer_sk = c_customer_sk 
+  WITH customer_total_return
+     AS (SELECT sr_customer_sk     AS ctr_customer_sk,
+                sr_store_sk        AS ctr_store_sk,
+                Sum(sr_return_amt) AS ctr_total_return
+         FROM   store_returns,
+                date_dim
+         WHERE  sr_returned_date_sk = d_date_sk
+                AND d_year = 2001
+         GROUP  BY sr_customer_sk,
+                   sr_store_sk)
+  SELECT c_customer_id
+  FROM   customer_total_return ctr1,
+       store,
+       customer
+  WHERE  ctr1.ctr_total_return > (SELECT Avg(ctr_total_return) * 1.2
+                                FROM   customer_total_return ctr2
+                                WHERE  ctr1.ctr_store_sk = ctr2.ctr_store_sk)
+       AND s_store_sk = ctr1.ctr_store_sk
+       AND s_state = 'TN'
+       AND ctr1.ctr_customer_sk = c_customer_sk
   ORDER  BY c_customer_id
   LIMIT 100
 
@@ -31,17 +31,17 @@ table_statistics:
     num_rows: 73049  # Estimated based on typical date dimension cardinality
     data_size: 2138624  # Directly from snow_plan: "bytes: 2,138,624"
     number_of_segments: 1  # From snow_plan: "partitions: 1/1"
-  
+
   store_returns:
     num_rows: 287000000  # Estimated based on data size and typical row size
     data_size: 124763446272  # Directly from snow_plan: "bytes: 124,763,446,272"
     number_of_segments: 7070  # From snow_plan: "partitions: 7070/7070"
-  
+
   store:
     num_rows: 1002  # Estimated based on typical store dimension cardinality
     data_size: 135680  # Directly from snow_plan: "bytes: 135,680"
     number_of_segments: 1  # From snow_plan: "partitions: 1/1"
-  
+
   customer:
     num_rows: 12000000  # Estimated based on typical customer dimension size
     data_size: 2328538624  # Directly from snow_plan: "bytes: 2,328,538,624"
@@ -55,58 +55,58 @@ column_statistics:
     max: 2010  # Typical range for TPC-DS
     ndv: 21  # Based on min/max range (2010-1990+1)
     null_count: 0  # Primary dimension columns typically don't have nulls
-  
+
   date_dim.d_date_sk:
     min: 1  # Typical starting value for surrogate key
     max: 73049  # Based on table row count
     ndv: 73049  # Primary key, so NDV equals row count
     null_count: 0  # Primary key cannot be null
-  
+
   # Store returns columns used in the query
   store_returns.sr_returned_date_sk:
     min: 1  # Matches date_dim.d_date_sk min
     max: 73049  # Matches date_dim.d_date_sk max
     ndv: 73049  # Foreign key to date_dim
     null_count: 287998  # Inferred from filter in snow_plan: "STORE_RETURNS.SR_RETURNED_DATE_SK IS NOT NULL"
-  
+
   store_returns.sr_customer_sk:
     min: 1  # Typical starting value for surrogate key
     max: 12000000  # Matches customer.c_customer_sk max
     ndv: 11000000  # Estimated as slightly less than customer table cardinality
     null_count: 143500  # Inferred from filter in snow_plan: "STORE_RETURNS.SR_CUSTOMER_SK IS NOT NULL"
-  
+
   store_returns.sr_store_sk:
     min: 1  # Typical starting value for surrogate key
     max: 1002  # Matches store.s_store_sk max
     ndv: 1002  # Foreign key to store table
     null_count: 143500  # Inferred from filter in snow_plan: "STORE_RETURNS.SR_STORE_SK IS NOT NULL"
-  
+
   store_returns.sr_return_amt:
     min: 0.01  # Minimum reasonable return amount
     max: 10000.00  # Maximum reasonable return amount
     ndv: 100000  # Estimated based on typical distribution
     null_count: 0  # Return amount is typically not null
-  
+
   # Store columns used in the query
   store.s_store_sk:
     min: 1  # Typical starting value for surrogate key
     max: 1002  # Based on estimated row count
     ndv: 1002  # Primary key, so NDV equals row count
     null_count: 0  # Primary key cannot be null
-  
+
   store.s_state:
     min: "AK"  # Alaska (alphabetically first US state)
     max: "WY"  # Wyoming (alphabetically last US state)
     ndv: 50  # Number of US states
     null_count: 0  # State is typically not null
-  
+
   # Customer columns used in the query
   customer.c_customer_sk:
     min: 1  # Typical starting value for surrogate key
     max: 12000000  # Based on estimated row count
     ndv: 12000000  # Primary key, so NDV equals row count
     null_count: 0  # Primary key cannot be null
-  
+
   customer.c_customer_id:
     min: "AAAAAAAAAAAAAA"  # Lexicographically smallest possible customer ID
     max: "ZZZZZZZZZZZZZZ"  # Lexicographically largest possible customer ID
