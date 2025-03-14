@@ -286,7 +286,7 @@ async fn test_tpcds_optimizer() -> Result<()> {
         let optimized_plan = optimize_plan(&ctx, raw_plan).await?;
         let optimized_plan_str = optimized_plan.format_indent(false)?;
         println!("Optimized plan:\n{}", optimized_plan_str);
-
+        
         // Verify the optimized plan matches expected output
         let actual_optimized = optimized_plan_str.trim();
         let expected_optimized = test.expected_plan.trim();
