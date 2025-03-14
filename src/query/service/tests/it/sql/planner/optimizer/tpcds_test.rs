@@ -12,13 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Scalar;
+use databend_common_sql::plans::Plan;
+use databend_common_storage::Datum;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::sql::planner::optimizer::test_utils::execute_sql;
 use crate::sql::planner::optimizer::test_utils::optimize_plan;
@@ -26,154 +36,183 @@ use crate::sql::planner::optimizer::test_utils::raw_plan;
 use crate::sql::planner::optimizer::test_utils::PlanStatisticsExt;
 use crate::sql::planner::optimizer::test_utils::TestCase;
 
+/// YAML representation of a test case
+#[derive(Debug, Serialize, Deserialize)]
+struct YamlTestCase {
+    name: String,
+    description: Option<String>,
+    sql: String,
+    table_statistics: HashMap<String, YamlTableStatistics>,
+    column_statistics: HashMap<String, YamlColumnStatistics>,
+    raw_plan: String,
+    optimized_plan: String,
+    snow_plan: Option<String>,
+}
+
+/// YAML representation of table statistics
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct YamlTableStatistics {
+    num_rows: Option<u64>,
+    data_size: Option<u64>,
+    data_size_compressed: Option<u64>,
+    index_size: Option<u64>,
+    number_of_blocks: Option<u64>,
+    number_of_segments: Option<u64>,
+}
+
+/// YAML representation of column statistics
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct YamlColumnStatistics {
+    min: Option<serde_json::Value>,
+    max: Option<serde_json::Value>,
+    ndv: Option<u64>,
+    null_count: Option<u64>,
+}
+
+use std::cell::RefCell;
+use std::thread_local;
+
+type TableStatsMap = HashMap<String, YamlTableStatistics>;
+type ColumnStatsMap = HashMap<String, YamlColumnStatistics>;
+
+// Thread-local storage for test case data
+thread_local! {
+    static TEST_CASE_DATA: RefCell<Option<(TableStatsMap, ColumnStatsMap)>> = const { RefCell::new(None) };
+}
+
+/// Convert a YAML test case to a TestCase
+fn create_test_case(yaml: YamlTestCase) -> Result<TestCase> {
+    // Store statistics data in thread-local storage
+    TEST_CASE_DATA.with(|data| {
+        *data.borrow_mut() = Some((
+            yaml.table_statistics.clone(),
+            yaml.column_statistics.clone(),
+        ));
+    });
+
+    // Create a stats setup function that accesses the thread-local data
+    fn stats_setup(plan: &mut Plan) -> Result<()> {
+        TEST_CASE_DATA.with(|data_cell| {
+            if let Some((table_stats, column_stats)) = &*data_cell.borrow() {
+                // Set table statistics
+                for (table_name, stats) in table_stats {
+                    plan.set_table_statistics(
+                        table_name,
+                        Some(TableStatistics {
+                            num_rows: stats.num_rows,
+                            data_size: stats.data_size,
+                            data_size_compressed: stats.data_size_compressed,
+                            index_size: stats.index_size,
+                            number_of_blocks: stats.number_of_blocks,
+                            number_of_segments: stats.number_of_segments,
+                        }),
+                    )?;
+                }
+
+                // Set column statistics
+                for (key, stats) in column_stats {
+                    let parts: Vec<&str> = key.split('.').collect();
+                    if parts.len() == 2 {
+                        let (table, column) = (parts[0], parts[1]);
+
+                        plan.set_column_statistics(
+                            table,
+                            column,
+                            Some(BasicColumnStatistics {
+                                min: convert_to_datum(&stats.min),
+                                max: convert_to_datum(&stats.max),
+                                ndv: stats.ndv,
+                                null_count: stats.null_count.unwrap_or(0),
+                            }),
+                        )?;
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
+
+    Ok(TestCase {
+        name: Box::leak(yaml.name.into_boxed_str()),
+        sql: Box::leak(yaml.sql.into_boxed_str()),
+        stats_setup,
+        raw_plan: Box::leak(yaml.raw_plan.into_boxed_str()),
+        expected_plan: Box::leak(yaml.optimized_plan.into_boxed_str()),
+    })
+}
+
+/// Convert a JSON value to a Datum
+fn convert_to_datum(value: &Option<serde_json::Value>) -> Option<Datum> {
+    if let Some(val) = value {
+        match val {
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    // Convert to i64 datum using from_scalar
+                    return Datum::from_scalar(Scalar::Number(NumberScalar::Int64(i)));
+                } else if let Some(f) = n.as_f64() {
+                    // Convert to f64 datum using from_scalar
+                    return Datum::from_scalar(Scalar::Number(NumberScalar::Float64(f.into())));
+                }
+            }
+            serde_json::Value::String(s) => {
+                // Convert to string datum using from_scalar
+                return Datum::from_scalar(Scalar::String(s.clone()));
+            }
+            // Add other type conversions as needed
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Load test cases from YAML files
+fn load_test_cases(base_path: &Path) -> Result<Vec<TestCase>> {
+    let yaml_dir = base_path.join("yaml");
+    let mut test_cases = Vec::new();
+
+    if !yaml_dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    for entry in fs::read_dir(yaml_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file()
+            && path
+                .extension()
+                .is_some_and(|ext| ext == "yaml" || ext == "yml")
+        {
+            let content = fs::read_to_string(&path)?;
+            let yaml_test_case: YamlTestCase = serde_yaml::from_str(&content)
+                .map_err(|e| ErrorCode::Internal(format!("Failed to parse YAML: {}", e)))?;
+            let test_case = create_test_case(yaml_test_case)?;
+            test_cases.push(test_case);
+        }
+    }
+
+    Ok(test_cases)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn test_tpcds_optimizer() -> Result<()> {
-    // Create test fixture
+    // Create a test fixture with a query context
     let fixture = TestFixture::setup().await?;
     let ctx = fixture.new_query_ctx().await?;
 
     // Setup tables needed for TPC-DS queries
     setup_tpcds_tables(&ctx).await?;
 
-    // Define test cases
-    let tests = vec![TestCase {
-        name: "Q3",
-        sql: r#"
-                SELECT dt.d_year, item.i_brand_id brand_id, item.i_brand brand, 
-                       SUM(ss_ext_sales_price) AS sum_agg
-                FROM date_dim dt, store_sales, item
-                WHERE dt.d_date_sk = store_sales.ss_sold_date_sk
-                  AND store_sales.ss_item_sk = item.i_item_sk
-                  AND item.i_manufact_id = 128
-                  AND dt.d_moy = 11
-                GROUP BY dt.d_year, item.i_brand, item.i_brand_id
-                ORDER BY dt.d_year, sum_agg DESC, brand_id
-                LIMIT 100
-            "#,
-        stats_setup: |plan| {
-            plan.set_table_statistics(
-                "date_dim",
-                Some(TableStatistics {
-                    num_rows: Some(1000),
-                    ..Default::default()
-                }),
-            )?
-            .set_column_statistics(
-                "date_dim",
-                "d_year",
-                Some(BasicColumnStatistics {
-                    ndv: Some(10),
-                    ..Default::default()
-                }),
-            )?
-            .set_table_statistics(
-                "store_sales",
-                Some(TableStatistics {
-                    num_rows: Some(10000),
-                    ..Default::default()
-                }),
-            )?
-            .set_column_statistics(
-                "store_sales",
-                "ss_ext_sales_price",
-                Some(BasicColumnStatistics {
-                    ndv: Some(1000),
-                    ..Default::default()
-                }),
-            )?
-            .set_table_statistics(
-                "item",
-                Some(TableStatistics {
-                    num_rows: Some(500),
-                    ..Default::default()
-                }),
-            )?
-            .set_column_statistics(
-                "item",
-                "i_brand_id",
-                Some(BasicColumnStatistics {
-                    ndv: Some(50),
-                    ..Default::default()
-                }),
-            )?;
-            Ok(())
-        },
-        raw_plan: r#"Limit
-├── limit: [100]
-├── offset: [0]
-└── Sort
-    ├── sort keys: [default.date_dim.d_year (#6) ASC, derived.SUM(ss_ext_sales_price) (#73) DESC, default.item.i_brand_id (#58) ASC]
-    ├── limit: [NONE]
-    └── EvalScalar
-        ├── scalars: [dt.d_year (#6) AS (#6), item.i_brand_id (#58) AS (#58), item.i_brand (#59) AS (#59), SUM(ss_ext_sales_price) (#73) AS (#73)]
-        └── Aggregate(Initial)
-            ├── group items: [dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58)]
-            ├── aggregate functions: [SUM(ss_ext_sales_price) (#73)]
-            └── EvalScalar
-                ├── scalars: [dt.d_year (#6) AS (#6), store_sales.ss_ext_sales_price (#43) AS (#43), item.i_brand_id (#58) AS (#58), item.i_brand (#59) AS (#59)]
-                └── Filter
-                    ├── filters: [eq(dt.d_date_sk (#0), store_sales.ss_sold_date_sk (#28)), eq(store_sales.ss_item_sk (#30), item.i_item_sk (#51)), eq(item.i_manufact_id (#64), 128), eq(dt.d_moy (#8), 11)]
-                    └── Join(Cross)
-                        ├── build keys: []
-                        ├── probe keys: []
-                        ├── other filters: []
-                        ├── Join(Cross)
-                        │   ├── build keys: []
-                        │   ├── probe keys: []
-                        │   ├── other filters: []
-                        │   ├── Scan
-                        │   │   ├── table: default.date_dim
-                        │   │   ├── filters: []
-                        │   │   ├── order by: []
-                        │   │   └── limit: NONE
-                        │   └── Scan
-                        │       ├── table: default.store_sales
-                        │       ├── filters: []
-                        │       ├── order by: []
-                        │       └── limit: NONE
-                        └── Scan
-                            ├── table: default.item
-                            ├── filters: []
-                            ├── order by: []
-                            └── limit: NONE"#,
-        expected_plan: r#"Limit
-├── limit: [100]
-├── offset: [0]
-└── Sort
-    ├── sort keys: [default.date_dim.d_year (#6) ASC, derived.SUM(ss_ext_sales_price) (#73) DESC, default.item.i_brand_id (#58) ASC]
-    ├── limit: [100]
-    └── Aggregate(Final)
-        ├── group items: [dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58)]
-        ├── aggregate functions: [SUM(ss_ext_sales_price) (#73)]
-        └── Aggregate(Partial)
-            ├── group items: [dt.d_year (#6), item.i_brand (#59), item.i_brand_id (#58)]
-            ├── aggregate functions: [SUM(ss_ext_sales_price) (#73)]
-            └── EvalScalar
-                ├── scalars: [dt.d_year (#6) AS (#6), store_sales.ss_ext_sales_price (#43) AS (#43), item.i_brand_id (#58) AS (#58), item.i_brand (#59) AS (#59), dt.d_date_sk (#0) AS (#74), store_sales.ss_sold_date_sk (#28) AS (#75), store_sales.ss_item_sk (#30) AS (#76), item.i_item_sk (#51) AS (#77), item.i_manufact_id (#64) AS (#78), dt.d_moy (#8) AS (#79)]
-                └── Join(Inner)
-                    ├── build keys: [store_sales.ss_sold_date_sk (#28)]
-                    ├── probe keys: [dt.d_date_sk (#0)]
-                    ├── other filters: []
-                    ├── Scan
-                    │   ├── table: default.date_dim
-                    │   ├── filters: [eq(date_dim.d_moy (#8), 11)]
-                    │   ├── order by: []
-                    │   └── limit: NONE
-                    └── Join(Inner)
-                        ├── build keys: [item.i_item_sk (#51)]
-                        ├── probe keys: [store_sales.ss_item_sk (#30)]
-                        ├── other filters: []
-                        ├── Scan
-                        │   ├── table: default.store_sales
-                        │   ├── filters: []
-                        │   ├── order by: []
-                        │   └── limit: NONE
-                        └── Scan
-                            ├── table: default.item
-                            ├── filters: [eq(item.i_manufact_id (#64), 128)]
-                            ├── order by: []
-                            └── limit: NONE"#,
-    }];
+    // Load test cases from YAML files
+    let base_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data");
+
+    let tests = load_test_cases(&base_path)?;
+
+    if tests.is_empty() {
+        println!("No test cases found in {:?}", base_path);
+        return Ok(());
+    }
 
     // Run all test cases
     for test in tests {
@@ -239,108 +278,35 @@ async fn test_tpcds_optimizer() -> Result<()> {
 
 /// Setup TPC-DS tables with required schema
 async fn setup_tpcds_tables(ctx: &Arc<QueryContext>) -> Result<()> {
-    // Create date_dim table
-    execute_sql(
-        ctx,
-        r#"
-        CREATE TABLE date_dim (
-            d_date_sk INTEGER,
-            d_date_id CHAR(16),
-            d_date DATE NULL,
-            d_month_seq INTEGER NULL,
-            d_week_seq INTEGER NULL,
-            d_quarter_seq INTEGER NULL,
-            d_year INTEGER NULL,
-            d_dow INTEGER NULL,
-            d_moy INTEGER NULL,
-            d_dom INTEGER NULL,
-            d_qoy INTEGER NULL,
-            d_fy_year INTEGER NULL,
-            d_fy_quarter_seq INTEGER NULL,
-            d_fy_week_seq INTEGER NULL,
-            d_day_name CHAR(9) NULL,
-            d_quarter_name CHAR(6) NULL,
-            d_holiday CHAR(1) NULL,
-            d_weekend CHAR(1) NULL,
-            d_following_holiday CHAR(1) NULL,
-            d_first_dom INTEGER NULL,
-            d_last_dom INTEGER NULL,
-            d_same_day_ly INTEGER NULL,
-            d_same_day_lq INTEGER NULL,
-            d_current_day CHAR(1) NULL,
-            d_current_week CHAR(1) NULL,
-            d_current_month CHAR(1) NULL,
-            d_current_quarter CHAR(1) NULL,
-            d_current_year CHAR(1) NULL
-        )
-    "#,
-    )
-    .await?;
+    // Get the base path for table definitions
+    let base_path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/sql/planner/optimizer/data/tables");
 
-    // Create store_sales table
-    execute_sql(
-        ctx,
-        r#"
-        CREATE TABLE store_sales (
-            ss_sold_date_sk INTEGER NULL,
-            ss_sold_time_sk INTEGER NULL,
-            ss_item_sk INTEGER,
-            ss_customer_sk INTEGER NULL,
-            ss_cdemo_sk INTEGER NULL,
-            ss_hdemo_sk INTEGER NULL,
-            ss_addr_sk INTEGER NULL,
-            ss_store_sk INTEGER NULL,
-            ss_promo_sk INTEGER NULL,
-            ss_ticket_number INTEGER,
-            ss_quantity INTEGER NULL,
-            ss_wholesale_cost DECIMAL(7,2) NULL,
-            ss_list_price DECIMAL(7,2) NULL,
-            ss_sales_price DECIMAL(7,2) NULL,
-            ss_ext_discount_amt DECIMAL(7,2) NULL,
-            ss_ext_sales_price DECIMAL(7,2) NULL,
-            ss_ext_wholesale_cost DECIMAL(7,2) NULL,
-            ss_ext_list_price DECIMAL(7,2) NULL,
-            ss_ext_tax DECIMAL(7,2) NULL,
-            ss_coupon_amt DECIMAL(7,2) NULL,
-            ss_net_paid DECIMAL(7,2) NULL,
-            ss_net_paid_inc_tax DECIMAL(7,2) NULL,
-            ss_net_profit DECIMAL(7,2) NULL
-        )
-    "#,
-    )
-    .await?;
+    // Check if the directory exists
+    if !base_path.exists() {
+        return Err(ErrorCode::UnknownException(format!(
+            "Tables directory not found at {:?}",
+            base_path
+        )));
+    }
 
-    // Create item table
-    execute_sql(
-        ctx,
-        r#"
-        CREATE TABLE item (
-            i_item_sk INTEGER,
-            i_item_id CHAR(16),
-            i_rec_start_date DATE NULL,
-            i_rec_end_date DATE NULL,
-            i_item_desc VARCHAR(200) NULL,
-            i_current_price DECIMAL(7,2) NULL,
-            i_wholesale_cost DECIMAL(7,2) NULL,
-            i_brand_id INTEGER NULL,
-            i_brand CHAR(50) NULL,
-            i_class_id INTEGER NULL,
-            i_class CHAR(50) NULL,
-            i_category_id INTEGER NULL,
-            i_category CHAR(50) NULL,
-            i_manufact_id INTEGER NULL,
-            i_manufact CHAR(50) NULL,
-            i_size CHAR(20) NULL,
-            i_formulation CHAR(20) NULL,
-            i_color CHAR(20) NULL,
-            i_units CHAR(10) NULL,
-            i_container CHAR(10) NULL,
-            i_manager_id INTEGER NULL,
-            i_product_name CHAR(50) NULL
-        )
-    "#,
-    )
-    .await?;
+    // Read all SQL files from the tables directory
+    for entry in fs::read_dir(&base_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        // Only process SQL files
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "sql") {
+            // Extract table name from filename (without extension)
+            if let Some(file_stem) = path.file_stem() {
+                if let Some(table_name) = file_stem.to_str() {
+                    let sql = fs::read_to_string(&path)?;
+                    println!("Creating table: {}", table_name);
+                    execute_sql(ctx, &sql).await?;
+                }
+            }
+        }
+    }
 
     Ok(())
 }
