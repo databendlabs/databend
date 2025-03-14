@@ -189,7 +189,7 @@ impl FuseTable {
 
             block_count += compact_segment.1.summary.block_count as usize;
             selected_segs.push(compact_segment);
-            if block_count >= mutator.block_per_seg || idx == latest {
+            if block_count >= mutator.block_thresholds.block_per_segment || idx == latest {
                 let selected_segs = std::mem::take(&mut selected_segs);
                 let mutator_clone = mutator.clone();
                 let tx_clone = tx.clone();

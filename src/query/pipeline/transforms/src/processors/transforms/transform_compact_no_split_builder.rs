@@ -98,7 +98,7 @@ impl AccumulatingTransform for BlockCompactNoSplitBuilder {
             // N <= blocks < 2N
             std::mem::swap(&mut self.staged_blocks, &mut self.pending_blocks);
         } else {
-            // blocks > 2N
+            // blocks >= 2N
             res.push(Self::create_output_data(&mut self.pending_blocks));
         }
         self.staged_blocks.push(data);

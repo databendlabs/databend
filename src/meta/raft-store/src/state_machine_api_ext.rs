@@ -16,6 +16,9 @@ use std::future;
 use std::io;
 use std::ops::RangeBounds;
 
+use databend_common_meta_map_api::map_api::MapApi;
+use databend_common_meta_map_api::map_api_ro::MapApiRO;
+use databend_common_meta_map_api::IOResultStream;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Expirable;
 use databend_common_meta_types::MatchSeqExt;
@@ -29,10 +32,7 @@ use log::debug;
 use log::warn;
 
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::IOResultStream;
-use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiExt;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MarkedOf;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_map_api::map_api::MapApi;
+use databend_common_meta_map_api::map_api_ro::MapApiRO;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::KVMeta;
@@ -26,8 +28,6 @@ use pretty_assertions::assert_eq;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::MapApi;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::marked::Marked;
 use crate::sm_v003::sm_v003::SMV003;

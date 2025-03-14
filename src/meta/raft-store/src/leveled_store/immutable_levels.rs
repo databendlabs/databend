@@ -15,12 +15,14 @@
 use std::io;
 use std::ops::RangeBounds;
 
+use databend_common_meta_map_api::compact::compacted_get;
+use databend_common_meta_map_api::compact::compacted_range;
+use databend_common_meta_map_api::map_api_ro::MapApiRO;
+use databend_common_meta_types::KVMeta;
+
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level::Level;
-use crate::leveled_store::map_api::compacted_get;
-use crate::leveled_store::map_api::compacted_range;
 use crate::leveled_store::map_api::KVResultStream;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
@@ -67,22 +69,22 @@ impl ImmutableLevels {
 }
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for ImmutableLevels
+impl<K> MapApiRO<K, KVMeta> for ImmutableLevels
 where
-    K: MapKey,
+    K: MapKey<KVMeta>,
     K: MapKeyEncode,
     K: MapKeyDecode,
-    Level: MapApiRO<K>,
-    Immutable: MapApiRO<K>,
+    Level: MapApiRO<K, KVMeta>,
+    Immutable: MapApiRO<K, KVMeta>,
 {
     async fn get(&self, key: &K) -> Result<Marked<K::V>, io::Error> {
         let levels = self.iter_immutable_levels();
-        compacted_get::<_, _, Immutable>(key, levels, []).await
+        compacted_get::<_, _, _, Immutable>(key, levels, []).await
     }
 
     async fn range<R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
     where R: RangeBounds<K> + Clone + Send + Sync + 'static {
         let levels = self.iter_immutable_levels();
-        compacted_range::<_, _, _, Level, Level>(range, None, levels, []).await
+        compacted_range::<_, _, _, Level, _, Level>(range, None, levels, []).await
     }
 }

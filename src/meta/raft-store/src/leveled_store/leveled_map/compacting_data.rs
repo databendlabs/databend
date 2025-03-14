@@ -15,6 +15,8 @@
 use std::fmt;
 use std::io;
 
+use databend_common_meta_map_api::map_api_ro::MapApiRO;
+use databend_common_meta_map_api::IOResultStream;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::future;
@@ -27,8 +29,6 @@ use stream_more::StreamMore;
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::IOResultStream;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::rotbl_codec::RotblCodec;
 use crate::leveled_store::util;
 use crate::marked::Marked;

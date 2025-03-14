@@ -23,7 +23,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::AbortChecker;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_storages_fuse::FuseTable;
 // (TableName, file, file size)
 pub type VacuumDropFileInfo = (String, String, u64);
 
@@ -34,11 +33,18 @@ pub type VacuumDropTablesResult = Result<(Option<Vec<VacuumDropFileInfo>>, HashS
 pub trait VacuumHandler: Sync + Send {
     async fn do_vacuum(
         &self,
-        fuse_table: &FuseTable,
+        table: &dyn Table,
         ctx: Arc<dyn TableContext>,
         retention_time: DateTime<Utc>,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>>;
+
+    async fn do_vacuum2(
+        &self,
+        table: &dyn Table,
+        ctx: Arc<dyn TableContext>,
+        respect_flash_back: bool,
+    ) -> Result<Vec<String>>;
 
     async fn do_vacuum_drop_tables(
         &self,
@@ -75,13 +81,25 @@ impl VacuumHandlerWrapper {
     #[async_backtrace::framed]
     pub async fn do_vacuum(
         &self,
-        fuse_table: &FuseTable,
+        table: &dyn Table,
         ctx: Arc<dyn TableContext>,
         retention_time: DateTime<Utc>,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
         self.handler
-            .do_vacuum(fuse_table, ctx, retention_time, dry_run)
+            .do_vacuum(table, ctx, retention_time, dry_run)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_vacuum2(
+        &self,
+        table: &dyn Table,
+        ctx: Arc<dyn TableContext>,
+        respect_flash_back: bool,
+    ) -> Result<Vec<String>> {
+        self.handler
+            .do_vacuum2(table, ctx, respect_flash_back)
             .await
     }
 

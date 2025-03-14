@@ -14,6 +14,7 @@
 
 use std::io;
 
+use databend_common_meta_map_api::IOResultStream;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use rotbl::v001::SeqMarked;
@@ -21,7 +22,6 @@ use rotbl::v001::SeqMarked;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
-use crate::leveled_store::map_api::IOResultStream;
 
 /// Compactor is responsible for compacting the immutable levels and db.
 ///
