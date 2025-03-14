@@ -20,8 +20,8 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
 use databend_common_meta_types::KVMeta;
+use map_api::map_api_ro::MapApiRO;
 
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;

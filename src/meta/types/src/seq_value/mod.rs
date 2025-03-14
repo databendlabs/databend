@@ -14,7 +14,7 @@
 
 mod kv_meta;
 
-pub use databend_common_meta_map_api::seq_value::SeqValue;
 pub use kv_meta::KVMeta;
+pub use map_api::seq_value::SeqValue;
 
-pub type SeqV<T = Vec<u8>> = databend_common_meta_map_api::seq_value::SeqV<KVMeta, T>;
+pub type SeqV<T = Vec<u8>> = map_api::seq_value::SeqV<KVMeta, T>;

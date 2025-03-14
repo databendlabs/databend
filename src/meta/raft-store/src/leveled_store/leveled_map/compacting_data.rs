@@ -15,13 +15,13 @@
 use std::fmt;
 use std::io;
 
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
-use databend_common_meta_map_api::IOResultStream;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::future;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
+use map_api::map_api_ro::MapApiRO;
+use map_api::IOResultStream;
 use rotbl::v001::SeqMarked;
 use stream_more::KMerge;
 use stream_more::StreamMore;

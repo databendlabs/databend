@@ -14,11 +14,11 @@
 
 use std::fmt::Debug;
 
-use databend_common_meta_map_api::map_api::MapApi;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::SeqV;
 use futures::future::BoxFuture;
+use map_api::map_api::MapApi;
 
 use crate::state_machine::ExpireKey;
 

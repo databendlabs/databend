@@ -97,7 +97,6 @@ members = [
     "src/meta/embedded",
     "src/meta/kvapi",
     "src/meta/process",
-    "src/meta/map-api",
     "src/meta/raft-store",
     "src/meta/sled-store",
     "src/meta/stoerr",
@@ -144,7 +143,6 @@ databend-common-meta-client = { path = "src/meta/client" }
 databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-embedded = { path = "src/meta/embedded" }
 databend-common-meta-kvapi = { path = "src/meta/kvapi" }
-databend-common-meta-map-api = { path = "src/meta/map-api" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/raft-store" }
 databend-common-meta-sled-store = { path = "src/meta/sled-store" }
@@ -359,6 +357,7 @@ logforth = { version = "0.14", features = [
     'fastrace',
 ] }
 lz4 = "1.24.0"
+map-api = { version = "0.2.1" }
 maplit = "1.0.2"
 match-template = "0.0.1"
 md-5 = "0.10.5"
@@ -634,6 +633,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
+map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.1" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.7" }
 orc-rust = { git = "https://github.com/youngsofun/orc-rust", rev = "94ab8e9" }

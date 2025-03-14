@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_map_api::expirable::Expirable;
+use map_api::expirable::Expirable;
 use serde::Deserialize;
 use serde::Serialize;
 

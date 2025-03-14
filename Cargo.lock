@@ -3650,22 +3650,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-meta-map-api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "futures",
- "futures-util",
- "log",
- "pretty_assertions",
- "serde",
- "stream-more",
- "tempfile",
- "tokio",
-]
-
-[[package]]
 name = "databend-common-meta-process"
 version = "0.1.0"
 dependencies = [
@@ -3698,7 +3682,6 @@ dependencies = [
  "databend-common-exception",
  "databend-common-grpc",
  "databend-common-meta-kvapi",
- "databend-common-meta-map-api",
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
@@ -3712,6 +3695,7 @@ dependencies = [
  "hostname",
  "itertools 0.13.0",
  "log",
+ "map-api",
  "maplit",
  "num",
  "openraft",
@@ -3781,13 +3765,13 @@ dependencies = [
  "databend-common-base",
  "databend-common-building",
  "databend-common-exception",
- "databend-common-meta-map-api",
  "databend-common-meta-stoerr",
  "databend-common-tracing",
  "deepsize",
  "derive_more",
  "futures-util",
  "log",
+ "map-api",
  "num-derive",
  "num-traits",
  "openraft",
@@ -9729,6 +9713,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b955cdeb2a02b9117f121ce63aa52d08ade45de53e48fe6a38b39c10f6f709"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "map-api"
+version = "0.2.0"
+source = "git+https://github.com/databendlabs/map-api?tag=v0.2.0#70bb8c13e7e0092dc544c71748aff17313b4284e"
+dependencies = [
+ "async-trait",
+ "futures",
+ "futures-util",
+ "log",
+ "serde",
+ "stream-more",
 ]
 
 [[package]]

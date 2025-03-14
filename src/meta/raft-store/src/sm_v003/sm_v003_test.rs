@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::seq_value::SeqValue;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
+use map_api::map_api_ro::MapApiRO;
 use pretty_assertions::assert_eq;
 
 use crate::leveled_store::map_api::AsMap;

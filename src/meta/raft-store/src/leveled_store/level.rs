@@ -16,14 +16,14 @@ use std::collections::BTreeMap;
 use std::io;
 use std::ops::RangeBounds;
 
-use databend_common_meta_map_api::map_api::MapApi;
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
-use databend_common_meta_map_api::map_key::MapKey;
-use databend_common_meta_map_api::Transition;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::sys_data::SysData;
 use futures_util::StreamExt;
 use log::warn;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
+use map_api::map_key::MapKey;
+use map_api::BeforeAfter;
 
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
@@ -113,7 +113,7 @@ impl MapApi<String, KVMeta> for Level {
         &mut self,
         key: String,
         value: Option<(<String as MapKey<KVMeta>>::V, Option<KVMeta>)>,
-    ) -> Result<Transition<MarkedOf<String>>, io::Error> {
+    ) -> Result<BeforeAfter<MarkedOf<String>>, io::Error> {
         // The chance it is the bottom level is very low in a loaded system.
         // Thus, we always tombstone the key if it is None.
 
@@ -166,7 +166,7 @@ impl MapApi<ExpireKey, KVMeta> for Level {
         &mut self,
         key: ExpireKey,
         value: Option<(<ExpireKey as MapKey<KVMeta>>::V, Option<KVMeta>)>,
-    ) -> Result<Transition<MarkedOf<ExpireKey>>, io::Error> {
+    ) -> Result<BeforeAfter<MarkedOf<ExpireKey>>, io::Error> {
         let seq = self.curr_seq();
 
         let marked = if let Some((v, meta)) = value {

@@ -24,7 +24,6 @@ databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-grpc = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
-databend-common-meta-map-api = { workspace = true }
 databend-common-meta-sled-store = { workspace = true }
 databend-common-meta-stoerr = { workspace = true }
 databend-common-meta-types = { workspace = true }
@@ -38,6 +37,7 @@ futures-util = { workspace = true }
 hostname = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
+map-api = { workspace = true }
 maplit = { workspace = true }
 num = { workspace = true }
 openraft = { workspace = true }
