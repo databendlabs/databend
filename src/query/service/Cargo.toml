@@ -191,7 +191,7 @@ p256 = { workspace = true }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
 serde_json.workspace = true
-serde_yaml = "0.9.34"
+serde_yaml = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 tower = { workspace = true }

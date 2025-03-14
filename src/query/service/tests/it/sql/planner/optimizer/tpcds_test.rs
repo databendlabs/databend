@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::cell::RefCell;
-use std::thread_local;
 use std::sync::Arc;
+use std::thread_local;
 
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
@@ -71,7 +71,6 @@ struct YamlColumnStatistics {
     null_count: Option<u64>,
 }
 
-
 type TableStatsMap = HashMap<String, YamlTableStatistics>;
 type ColumnStatsMap = HashMap<String, YamlColumnStatistics>;
 
@@ -114,7 +113,6 @@ async fn setup_tpcds_tables(ctx: &Arc<QueryContext>) -> Result<()> {
 
     Ok(())
 }
-
 
 /// Convert a YAML test case to a TestCase
 fn create_test_case(yaml: YamlTestCase) -> Result<TestCase> {
@@ -286,7 +284,7 @@ async fn test_tpcds_optimizer() -> Result<()> {
         let optimized_plan = optimize_plan(&ctx, raw_plan).await?;
         let optimized_plan_str = optimized_plan.format_indent(false)?;
         println!("Optimized plan:\n{}", optimized_plan_str);
-        
+
         // Verify the optimized plan matches expected output
         let actual_optimized = optimized_plan_str.trim();
         let expected_optimized = test.expected_plan.trim();
@@ -311,4 +309,3 @@ async fn test_tpcds_optimizer() -> Result<()> {
 
     Ok(())
 }
-
