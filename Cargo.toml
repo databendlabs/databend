@@ -106,7 +106,6 @@ members = [
     "src/meta/proto-conv",
     "src/meta/protos",
     "src/meta/service",
-    "src/meta/watcher",
     "tests/sqllogictests",
     "src/tests/sqlsmith",
 ]
@@ -149,7 +148,6 @@ databend-common-meta-sled-store = { path = "src/meta/sled-store" }
 databend-common-meta-stoerr = { path = "src/meta/stoerr" }
 databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
-databend-common-meta-watcher = { path = "src/meta/watcher" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
 databend-common-openai = { path = "src/common/openai" }
@@ -513,6 +511,7 @@ url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
 walkdir = "2.3.2"
+watcher = { version = "0.1.0" }
 wiremock = "0.6"
 wkt = "0.10.3"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
@@ -642,4 +641,5 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
+watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.1.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

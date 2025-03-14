@@ -3787,19 +3787,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-common-meta-watcher"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fastrace",
- "futures",
- "log",
- "span-map",
- "tokio",
- "tokio-util",
-]
-
-[[package]]
 name = "databend-common-metrics"
 version = "0.1.0"
 dependencies = [
@@ -4957,7 +4944,6 @@ dependencies = [
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
- "databend-common-meta-watcher",
  "databend-common-metrics",
  "databend-common-tracing",
  "deepsize",
@@ -4990,6 +4976,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-reflection",
+ "watcher",
 ]
 
 [[package]]
@@ -9717,8 +9704,8 @@ dependencies = [
 
 [[package]]
 name = "map-api"
-version = "0.2.0"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.2.0#70bb8c13e7e0092dc544c71748aff17313b4284e"
+version = "0.2.1"
+source = "git+https://github.com/databendlabs/map-api?tag=v0.2.1#1c75c8db6d97997d0cfa4c1a669c81c733301d9f"
 dependencies = [
  "async-trait",
  "futures",
@@ -16100,6 +16087,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b1f3c6d82af47286494c6caea1d332037f5cbeeac82bbf5ef59cb8c201c466e"
 dependencies = [
  "wast 221.0.2",
+]
+
+[[package]]
+name = "watcher"
+version = "0.1.0"
+source = "git+https://github.com/databendlabs/watcher?tag=v0.1.0#bb04329f099b10e2f29f4faca0a0980d51f1c1b7"
+dependencies = [
+ "futures",
+ "log",
+ "span-map",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
