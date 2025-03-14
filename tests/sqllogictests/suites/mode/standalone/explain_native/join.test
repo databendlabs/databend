@@ -673,7 +673,7 @@ HashJoin
 ├── build keys: []
 ├── probe keys: []
 ├── keys is null equal: []
-├── filters: [t1.a (#0) >= scalar_subquery_2 (#2)]
+├── filters: [t1.a (#0) >= CAST(scalar_subquery_2 (#2) AS Int32 NULL)]
 ├── estimated rows: 4.00
 ├── EvalScalar(Build)
 │   ├── output columns: [MAX(a) (#2)]
