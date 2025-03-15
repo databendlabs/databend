@@ -84,7 +84,7 @@ pub fn load_can_auto_cast_to(from_type: &DataType, to_type: &DataType) -> bool {
         (EmptyArray, Array(_)) => true,
         (_, Array(_)) | (Array(_), _) => false,
 
-        // ==== handle primary types at last, so the _ bellow only need to consider themselves.
+        // ==== handle primary types at last, so the _ below only need to consider themselves.
         //
         // [specificity] binary to string return error if not utf8
         (Binary, String) => true,
