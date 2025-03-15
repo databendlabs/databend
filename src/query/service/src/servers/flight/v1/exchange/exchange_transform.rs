@@ -27,7 +27,7 @@ use super::exchange_source::via_exchange_source;
 use super::exchange_source_reader::create_reader_item;
 use super::exchange_transform_shuffle::exchange_shuffle;
 use crate::clusters::ClusterHelper;
-use crate::servers::flight::v1::exchange::ExchangeInjector;
+use crate::pipelines::processors::transforms::aggregator::TransformAggregateDeserializer;
 use crate::sessions::QueryContext;
 
 pub struct ExchangeTransform;
@@ -37,11 +37,10 @@ impl ExchangeTransform {
         ctx: &Arc<QueryContext>,
         params: &ExchangeParams,
         pipeline: &mut Pipeline,
-        injector: Arc<dyn ExchangeInjector>,
     ) -> Result<()> {
         match params {
             ExchangeParams::MergeExchange(params) => {
-                via_exchange_source(ctx.clone(), params, injector, pipeline)
+                via_exchange_source(ctx.clone(), params, pipeline)
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(ctx, params, pipeline)?;
@@ -87,11 +86,13 @@ impl ExchangeTransform {
                 let new_outputs = max_threads + nodes_source;
                 pipeline.add_pipe(Pipe::create(len, new_outputs, items));
 
-                if params.exchange_injector.exchange_sorting().is_none() {
+                if !params.enable_multiway_sort {
                     pipeline.try_resize(max_threads)?;
                 }
 
-                injector.apply_shuffle_deserializer(params, pipeline)
+                pipeline.add_transform(|input, output| {
+                    TransformAggregateDeserializer::try_create(input, output, &params.schema)
+                })
             }
         }
     }

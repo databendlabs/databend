@@ -124,11 +124,10 @@ impl TransformAggregateSerializer {
         if let Some(block_meta) = data_block.take_meta() {
             if let Some(block_meta) = AggregateMeta::downcast_from(block_meta) {
                 match block_meta {
-                    AggregateMeta::Spilled(_) => unreachable!(),
+                    AggregateMeta::SpilledPayload(_) => unreachable!(),
                     AggregateMeta::Serialized(_) => unreachable!(),
-                    AggregateMeta::BucketSpilled(_) => unreachable!(),
-                    AggregateMeta::Partitioned { .. } => unreachable!(),
-                    AggregateMeta::AggregateSpilling(_) => unreachable!(),
+                    AggregateMeta::InFlightPayload(_) => unreachable!(),
+                    AggregateMeta::FinalPartition => unreachable!(),
                     AggregateMeta::AggregatePayload(p) => {
                         self.input_data = Some(SerializeAggregateStream::create(
                             &self.params,
@@ -231,7 +230,7 @@ impl SerializeAggregateStream {
                         self.nums += 1;
                         Ok(Some(block.add_meta(Some(
                             AggregateSerdeMeta::create_agg_payload(
-                                p.bucket,
+                                p.partition,
                                 p.max_partition_count,
                                 false,
                             ),
@@ -244,7 +243,7 @@ impl SerializeAggregateStream {
                             let block = p.payload.empty_block(Some(1));
                             Ok(Some(block.add_meta(Some(
                                 AggregateSerdeMeta::create_agg_payload(
-                                    p.bucket,
+                                    p.partition,
                                     p.max_partition_count,
                                     true,
                                 ),

@@ -39,11 +39,9 @@ use itertools::Itertools;
 
 use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
 use crate::pipelines::processors::transforms::aggregator::create_udaf_script_function;
-use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggregator;
-use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformExpandGroupingSets;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
 use crate::pipelines::PipelineBuilder;
@@ -153,36 +151,22 @@ impl PipelineBuilder {
             });
         }
 
+        let location_prefix = self.ctx.query_id_spill_prefix();
+        let operator = DataOperator::instance().spill_operator();
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(TransformPartialAggregate::try_create(
                 self.ctx.clone(),
                 input,
                 output,
+                operator.clone(),
                 params.clone(),
                 partial_agg_config.clone(),
+                location_prefix.clone(),
             )?))
         })?;
 
-        // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
-        if !self.is_exchange_neighbor {
-            let operator = DataOperator::instance().spill_operator();
-            let location_prefix = self.ctx.query_id_spill_prefix();
-
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(
-                    TransformAggregateSpillWriter::try_create(
-                        self.ctx.clone(),
-                        input,
-                        output,
-                        operator.clone(),
-                        params.clone(),
-                        location_prefix.clone(),
-                    )?,
-                ))
-            })?;
-        }
-
-        self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
+        self.enable_multiway_sort = true;
+        // self.exchange_injector = AggregateInjector::create();
         Ok(())
     }
 
@@ -215,14 +199,12 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        let old_inject = self.exchange_injector.clone();
-
         let input: &PhysicalPlan = &aggregate.input;
-        if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-            self.exchange_injector = AggregateInjector::create(self.ctx.clone(), params.clone());
-        }
+        let old_value = self.enable_multiway_sort;
+        self.enable_multiway_sort |= matches!(input, PhysicalPlan::ExchangeSource(_));
+
         self.build_pipeline(&aggregate.input)?;
-        self.exchange_injector = old_inject;
+        self.enable_multiway_sort = old_value;
         build_partition_bucket(&mut self.main_pipeline, params.clone())
     }
 

@@ -481,11 +481,7 @@ impl Pipeline {
                 let output = OutputPort::create();
                 let inputs: Vec<_> = (0..input_len).map(|_| InputPort::create()).collect();
                 items.push(PipeItem::create(
-                    MergePartitionProcessor::create(
-                        inputs.clone(),
-                        output.clone(),
-                        exchange.clone(),
-                    ),
+                    MergePartitionProcessor::<T>::create(inputs.clone(), output.clone()),
                     inputs,
                     vec![output],
                 ));

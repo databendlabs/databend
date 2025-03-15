@@ -15,6 +15,7 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::check_function;
@@ -37,6 +38,7 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use crate::servers::flight::v1::scatter::flight_scatter::FlightScatter;
+use crate::sessions::QueryContext;
 
 #[derive(Clone)]
 pub struct HashFlightScatter {
@@ -47,11 +49,15 @@ pub struct HashFlightScatter {
 
 impl HashFlightScatter {
     pub fn try_create(
-        func_ctx: FunctionContext,
+        ctx: &QueryContext,
         hash_keys: Vec<RemoteExpr>,
-        scatter_size: usize,
-        local_pos: usize,
+        destination_ids: &[String],
     ) -> Result<Box<dyn FlightScatter>> {
+        let local_id = &ctx.get_cluster().local_id;
+        let func_ctx = ctx.get_function_context()?;
+        let scatter_size = destination_ids.len();
+        let local_pos = destination_ids.iter().position(|x| x == local_id).unwrap();
+
         if hash_keys.len() == 1 {
             return OneHashKeyFlightScatter::try_create(
                 func_ctx,

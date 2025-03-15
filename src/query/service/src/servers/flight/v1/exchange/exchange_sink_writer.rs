@@ -69,9 +69,10 @@ impl AsyncSink for ExchangeWriterSink {
     #[async_backtrace::framed]
     async fn consume(&mut self, mut data_block: DataBlock) -> Result<bool> {
         let serialize_meta = match data_block.take_meta() {
-            None => Err(ErrorCode::Internal(
-                "ExchangeWriterSink only recv ExchangeSerializeMeta.",
-            )),
+            None => Err(ErrorCode::Internal(format!(
+                "ExchangeWriterSink only recv ExchangeSerializeMeta. {:?}",
+                data_block
+            ))),
             Some(block_meta) => ExchangeSerializeMeta::downcast_from(block_meta).ok_or_else(|| {
                 ErrorCode::Internal("ExchangeWriterSink only recv ExchangeSerializeMeta.")
             }),
