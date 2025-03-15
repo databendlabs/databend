@@ -1,0 +1,112 @@
+# Usage:
+# databend-query -c databend_query_config_spec.toml
+
+[query]
+max_active_sessions = 256
+shutdown_wait_timeout_ms = 5000
+
+# For flight rpc.
+flight_api_address = "0.0.0.0:9091"
+
+# Databend Query http address.
+# For admin RESET API.
+admin_api_address = "0.0.0.0:8080"
+
+# Databend Query metrics RESET API.
+metric_api_address = "0.0.0.0:7070"
+
+# Databend Query MySQL Handler.
+mysql_handler_host = "0.0.0.0"
+mysql_handler_port = 3307
+
+# Databend Query ClickHouse Handler.
+clickhouse_http_handler_host = "0.0.0.0"
+clickhouse_http_handler_port = 8124
+
+# Databend Query HTTP Handler.
+http_handler_host = "0.0.0.0"
+http_handler_port = 8000
+
+# Databend Query FlightSQL Handler.
+flight_sql_handler_host = "0.0.0.0"
+flight_sql_handler_port = 8900
+
+tenant_id = "test_tenant"
+cluster_id = "test_cluster"
+
+table_engine_memory_enabled = true
+default_storage_format = 'parquet'
+default_compression = 'zstd'
+
+enable_udf_server = true
+udf_server_allow_list = ['http://0.0.0.0:8815']
+udf_server_allow_insecure = true
+
+cloud_control_grpc_server_address = "http://0.0.0.0:50051"
+
+# network_policy_whitelist = ['127.0.0.0/8']
+
+[[query.users]]
+name = "root"
+auth_type = "no_password"
+
+[[query.users]]
+name = "default"
+auth_type = "no_password"
+
+# [[query.users]]
+# name = "admin"
+# auth_type = "no_password"
+
+# [[query.users]]
+# name = "databend"
+# auth_type = "double_sha1_password"
+# # echo -n "databend" | sha1sum | cut -d' ' -f1 | xxd -r -p | sha1sum
+# auth_string = "3081f32caef285c232d066033c89a78d88a6d8a5"
+
+# [[query.users]]
+# name = "datafuselabs"
+# auth_type = "sha256_password"
+# #  echo -n "datafuselabs" | sha256sum
+# auth_string = "6db1a2f5da402b43c066fcadcbf78f04260b3236d9035e44dd463f21e29e6f3b"
+
+# This for test
+[[query.udfs]]
+name = "ping"
+definition = "CREATE FUNCTION ping(STRING) RETURNS STRING LANGUAGE python HANDLER = 'ping' ADDRESS = 'http://0.0.0.0:8815'"
+
+[query.settings]
+aggregate_spilling_memory_ratio = 60
+join_spilling_memory_ratio = 60
+
+[log]
+
+[log.file]
+level = "DEBUG"
+format = "text"
+dir = "./.databend/logs_1"
+
+[log.query]
+on = true
+
+[log.structlog]
+on = true
+dir = "./.databend/structlog_1"
+
+[meta]
+# It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config
+endpoints = ["0.0.0.0:9191"]
+username = "root"
+password = "root"
+client_timeout_in_second = 60
+auto_sync_interval = 60
+
+# Storage config.
+[storage]
+# fs | s3 | azblob | obs | oss
+type = "fs"
+
+# Set a local folder to store your data.
+# Comment out this block if you're NOT using local file system as storage.
+[storage.fs]
+data_path = "/tmp/bendsave"

@@ -68,7 +68,7 @@ runs:
       if: inputs.artifacts == 'all'
       shell: bash
       run: |
-        artifacts="meta,metactl,metabench,query,sqllogictests"
+        artifacts="meta,metactl,metabench,query,sqllogictests,bendsave"
         binaries=""
         for artifact in ${artifacts//,/ }; do
           binaries="${binaries} --bin databend-$artifact"
