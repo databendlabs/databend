@@ -82,7 +82,6 @@ impl Binder {
             | RelOperator::Aggregate(_)
             | RelOperator::Window(_)
             | RelOperator::Mutation(_)
-            | RelOperator::Recluster(_)
             | RelOperator::MutationSource(_)
             | RelOperator::CompactBlock(_) => {
                 return Err(ErrorCode::SyntaxException(format!(

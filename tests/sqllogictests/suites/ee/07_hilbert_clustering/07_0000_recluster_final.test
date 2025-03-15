@@ -19,10 +19,10 @@ statement ok
 USE test_hilbert
 
 statement ok
-set enable_parallel_multi_merge_sort = 0;
+create or replace table t(a int, b int) cluster by hilbert(a, b) row_per_block=2 block_per_segment=2 block_size_threshold = 18;
 
 statement ok
-create or replace table t(a int, b int) cluster by hilbert(a, b) row_per_block=2 block_per_segment=2;
+set hilbert_clustering_min_bytes = 35;
 
 statement ok
 insert into t values(1, 1), (3, 3);

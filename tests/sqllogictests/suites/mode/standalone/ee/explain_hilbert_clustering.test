@@ -13,9 +13,6 @@
 ## limitations under the License.
 
 statement ok
-set enable_parallel_multi_merge_sort = 0;
-
-statement ok
 CREATE OR REPLACE TABLE test_hilbert(a int, b int) cluster by hilbert(a,b) row_per_block = 2;
 
 statement ok
