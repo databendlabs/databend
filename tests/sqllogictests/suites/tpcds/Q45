@@ -1,0 +1,65 @@
+# Q45
+query I
+SELECT ca_zip,
+       ca_city,
+       sum(ws_sales_price)
+FROM web_sales,
+     customer,
+     customer_address,
+     date_dim,
+     item
+WHERE ws_bill_customer_sk = c_customer_sk
+  AND c_current_addr_sk = ca_address_sk
+  AND ws_item_sk = i_item_sk
+  AND (SUBSTRING(ca_zip,1,5) IN ('85669',
+                              '86197',
+                              '88274',
+                              '83405',
+                              '86475',
+                              '85392',
+                              '85460',
+                              '80348',
+                              '81792')
+       OR i_item_id IN
+         (SELECT i_item_id
+          FROM item
+          WHERE i_item_sk IN (2,
+                              3,
+                              5,
+                              7,
+                              11,
+                              13,
+                              17,
+                              19,
+                              23,
+                              29) ))
+  AND ws_sold_date_sk = d_date_sk
+  AND d_qoy = 2
+  AND d_year = 2001
+GROUP BY ca_zip,
+         ca_city
+ORDER BY ca_zip,
+         ca_city
+LIMIT 100;
+----
+10150 Bunker Hill 101.73
+16098 Five Points 90.64
+28048 Salem 9.26
+29584 Oakdale 34.55
+31289 Lincoln 41.97
+34975 Kingston 11.43
+36971 Wilson 74.09
+38354 Sulphur Springs 102.77
+44975 Kingston 51.21
+62808 Hamilton 2.48
+62812 Shady Grove 28.07
+66557 Arlington 172.95
+68252 Maple Grove 23.26
+69583 Jackson 14.52
+73003 Hillcrest 142.64
+78222 Clinton 11.62
+83683 Plainview 114.33
+84536 Friendship 11.65
+88370 Oak Grove 8.97
+
+

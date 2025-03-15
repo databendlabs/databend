@@ -114,11 +114,14 @@ impl HashJoinProbeState {
         }
         let hash_key_types = probe_keys
             .iter()
-            .map(|expr| {
-                expr.as_expr(&BUILTIN_FUNCTIONS)
-                    .data_type()
-                    .remove_nullable()
-                    .clone()
+            .zip(&hash_join_state.hash_join_desc.is_null_equal)
+            .map(|(expr, is_null_equal)| {
+                let expr = expr.as_expr(&BUILTIN_FUNCTIONS);
+                if *is_null_equal {
+                    expr.data_type().clone()
+                } else {
+                    expr.data_type().remove_nullable()
+                }
             })
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;

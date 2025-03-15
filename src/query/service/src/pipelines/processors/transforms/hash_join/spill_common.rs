@@ -34,6 +34,7 @@ pub fn get_hashes(
     method: &HashMethodKind,
     join_type: &JoinType,
     from_build: bool,
+    is_null_equal: &[bool],
     hashes: &mut Vec<u64>,
 ) -> Result<()> {
     let mut block = block.clone();
@@ -58,11 +59,12 @@ pub fn get_hashes(
     // When chose hash method, the keys are removed nullable, so we need to remove nullable here.
     let columns = keys
         .iter()
-        .map(|expr| {
+        .zip(is_null_equal)
+        .map(|(expr, is_null_equal)| {
             let column = evaluator
                 .run(expr)?
                 .convert_to_full_column(expr.data_type(), block.num_rows());
-            if expr.data_type().is_nullable() {
+            if !is_null_equal && expr.data_type().is_nullable() {
                 Ok(column.remove_nullable())
             } else {
                 Ok(column)
