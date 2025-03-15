@@ -97,7 +97,6 @@ members = [
     "src/meta/embedded",
     "src/meta/kvapi",
     "src/meta/process",
-    "src/meta/map-api",
     "src/meta/raft-store",
     "src/meta/sled-store",
     "src/meta/stoerr",
@@ -107,7 +106,6 @@ members = [
     "src/meta/proto-conv",
     "src/meta/protos",
     "src/meta/service",
-    "src/meta/watcher",
     "tests/sqllogictests",
     "src/tests/sqlsmith",
 ]
@@ -144,14 +142,12 @@ databend-common-meta-client = { path = "src/meta/client" }
 databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-embedded = { path = "src/meta/embedded" }
 databend-common-meta-kvapi = { path = "src/meta/kvapi" }
-databend-common-meta-map-api = { path = "src/meta/map-api" }
 databend-common-meta-process = { path = "src/meta/process" }
 databend-common-meta-raft-store = { path = "src/meta/raft-store" }
 databend-common-meta-sled-store = { path = "src/meta/sled-store" }
 databend-common-meta-stoerr = { path = "src/meta/stoerr" }
 databend-common-meta-store = { path = "src/meta/store" }
 databend-common-meta-types = { path = "src/meta/types" }
-databend-common-meta-watcher = { path = "src/meta/watcher" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
 databend-common-openai = { path = "src/common/openai" }
@@ -359,6 +355,7 @@ logforth = { version = "0.14", features = [
     'fastrace',
 ] }
 lz4 = "1.24.0"
+map-api = { version = "0.2.1" }
 maplit = "1.0.2"
 match-template = "0.0.1"
 md-5 = "0.10.5"
@@ -514,6 +511,7 @@ url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
 walkdir = "2.3.2"
+watcher = { version = "0.1.0" }
 wiremock = "0.6"
 wkt = "0.10.3"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
@@ -634,6 +632,7 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
+map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.1" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.7" }
 orc-rust = { git = "https://github.com/youngsofun/orc-rust", rev = "94ab8e9" }
@@ -642,4 +641,5 @@ sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafus
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
+watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.1.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

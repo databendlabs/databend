@@ -15,10 +15,10 @@
 use std::io;
 use std::ops::RangeBounds;
 
-use databend_common_meta_map_api::compact::compacted_get;
-use databend_common_meta_map_api::compact::compacted_range;
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
 use databend_common_meta_types::KVMeta;
+use map_api::compact::compacted_get;
+use map_api::compact::compacted_range;
+use map_api::map_api_ro::MapApiRO;
 
 use crate::leveled_store::immutable::Immutable;
 use crate::leveled_store::level::Level;

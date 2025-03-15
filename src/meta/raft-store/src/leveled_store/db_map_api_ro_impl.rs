@@ -15,10 +15,10 @@
 use std::io;
 use std::ops::RangeBounds;
 
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::KVMeta;
 use futures_util::StreamExt;
+use map_api::map_api_ro::MapApiRO;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::map_api::KVResultStream;

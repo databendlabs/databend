@@ -18,13 +18,13 @@ use std::fmt;
 use std::fmt::Write;
 use std::io;
 
-use databend_common_meta_map_api::map_api::MapApi;
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
-pub use databend_common_meta_map_api::map_key::MapKey;
-pub use databend_common_meta_map_api::map_value::MapValue;
-pub use databend_common_meta_map_api::IOResultStream;
-pub use databend_common_meta_map_api::Transition;
 use databend_common_meta_types::seq_value::KVMeta;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
+pub use map_api::map_key::MapKey;
+pub use map_api::map_value::MapValue;
+pub use map_api::BeforeAfter;
+pub use map_api::IOResultStream;
 
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
@@ -96,7 +96,7 @@ impl MapApiExt {
         s: &mut T,
         key: K,
         meta: Option<KVMeta>,
-    ) -> Result<Transition<MarkedOf<K>>, io::Error>
+    ) -> Result<BeforeAfter<MarkedOf<K>>, io::Error>
     where
         K: MapKey<KVMeta>,
         K: MapKeyEncode,
@@ -121,7 +121,7 @@ impl MapApiExt {
         s: &mut T,
         key: K,
         value: K::V,
-    ) -> Result<Transition<MarkedOf<K>>, io::Error>
+    ) -> Result<BeforeAfter<MarkedOf<K>>, io::Error>
     where
         K: MapKey<KVMeta>,
         K: MapKeyEncode,

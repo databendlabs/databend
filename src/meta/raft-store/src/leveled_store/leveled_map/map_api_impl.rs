@@ -16,12 +16,12 @@ use std::fmt;
 use std::io;
 use std::ops::RangeBounds;
 
-use databend_common_meta_map_api::compact::compacted_get;
-use databend_common_meta_map_api::compact::compacted_range;
-use databend_common_meta_map_api::map_api::MapApi;
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
-use databend_common_meta_map_api::Transition;
 use databend_common_meta_types::seq_value::KVMeta;
+use map_api::compact::compacted_get;
+use map_api::compact::compacted_range;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
+use map_api::BeforeAfter;
 
 use crate::leveled_store::db_map_api_ro_impl::MapView;
 use crate::leveled_store::immutable::Immutable;
@@ -72,7 +72,7 @@ where
         &mut self,
         key: K,
         value: Option<(K::V, Option<KVMeta>)>,
-    ) -> Result<Transition<MarkedOf<K>>, io::Error>
+    ) -> Result<BeforeAfter<MarkedOf<K>>, io::Error>
     where
         K: Ord,
     {

@@ -16,9 +16,6 @@ use std::future;
 use std::io;
 use std::ops::RangeBounds;
 
-use databend_common_meta_map_api::map_api::MapApi;
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
-use databend_common_meta_map_api::IOResultStream;
 use databend_common_meta_types::CmdContext;
 use databend_common_meta_types::Expirable;
 use databend_common_meta_types::MatchSeqExt;
@@ -30,6 +27,9 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::debug;
 use log::warn;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
+use map_api::IOResultStream;
 
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::MapApiExt;

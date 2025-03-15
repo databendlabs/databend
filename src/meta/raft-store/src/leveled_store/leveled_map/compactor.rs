@@ -14,9 +14,9 @@
 
 use std::io;
 
-use databend_common_meta_map_api::IOResultStream;
 use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
+use map_api::IOResultStream;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::immutable_levels::ImmutableLevels;

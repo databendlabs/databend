@@ -14,10 +14,10 @@
 
 //! Test for db_map_api_ro_impl.
 
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
+use map_api::map_api_ro::MapApiRO;
 
 use crate::leveled_store::db_builder::DBBuilder;
 use crate::leveled_store::db_map_api_ro_impl::MapView;

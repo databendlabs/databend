@@ -14,8 +14,6 @@
 
 use std::io;
 
-use databend_common_meta_map_api::map_api::MapApi;
-use databend_common_meta_map_api::map_api_ro::MapApiRO;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::KVMeta;
@@ -23,6 +21,8 @@ use databend_common_meta_types::Endpoint;
 use databend_common_meta_types::Node;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
