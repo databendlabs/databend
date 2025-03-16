@@ -43,7 +43,7 @@ raw_plan: |                     # Expected raw plan
 optimized_plan: |               # Expected optimized plan
   ...
 
-snow_plan: |                    # Optional expected snowflake plan
+good_plan: |                    # Optional expected good plan
   ...
 ```
 
@@ -64,4 +64,4 @@ To add a new test case:
 If the expected output of a test changes (e.g., due to optimizer improvements):
 
 1. Run the test to see the actual output.
-2. Update the `raw_plan`, `optimized_plan`, or `snow_plan` field in the YAML file to match the actual output.
+2. Update the `raw_plan`, `optimized_plan`, or `good_plan` field in the YAML file to match the actual output.
