@@ -51,7 +51,7 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         let prev = self.map_ref().str_map().get(&upsert_kv.key).await?.clone();
 
-        if upsert_kv.seq.match_seq(prev.seq()).is_err() {
+        if upsert_kv.seq.match_seq(&prev.seq()).is_err() {
             return Ok((prev.clone(), prev));
         }
 

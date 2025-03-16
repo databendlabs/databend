@@ -9738,15 +9738,17 @@ dependencies = [
 
 [[package]]
 name = "map-api"
-version = "0.2.1"
-source = "git+https://github.com/databendlabs/map-api?tag=v0.2.1#1c75c8db6d97997d0cfa4c1a669c81c733301d9f"
+version = "0.2.3"
+source = "git+https://github.com/databendlabs/map-api?tag=v0.2.3#e4de1786b63d2c401413413ac8069f305c849c06"
 dependencies = [
  "async-trait",
+ "deepsize",
  "futures",
  "futures-util",
  "log",
  "serde",
  "stream-more",
+ "thiserror 1.0.65",
 ]
 
 [[package]]
