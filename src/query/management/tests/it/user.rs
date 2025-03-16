@@ -29,7 +29,6 @@ use databend_common_meta_kvapi::kvapi::ListKVReply;
 use databend_common_meta_kvapi::kvapi::MGetKVReply;
 use databend_common_meta_kvapi::kvapi::UpsertKVReply;
 use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaError;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::TxnReply;
@@ -84,6 +83,7 @@ mod add {
     use databend_common_meta_app::principal::UserInfo;
     use databend_common_meta_app::schema::CreateOption;
     use databend_common_meta_app::tenant::Tenant;
+    use databend_common_meta_types::MatchSeq;
     use databend_common_meta_types::Operation;
 
     use super::*;
@@ -162,6 +162,7 @@ mod add {
 mod get {
     use databend_common_meta_app::principal::UserInfo;
     use databend_common_meta_app::tenant::Tenant;
+    use databend_common_meta_types::MatchSeq;
 
     use super::*;
 
@@ -395,6 +396,7 @@ mod get_users {
 
 mod drop {
     use databend_common_meta_app::tenant::Tenant;
+    use databend_common_meta_types::MatchSeq;
 
     use super::*;
 
@@ -454,6 +456,7 @@ mod update {
     use databend_common_meta_app::principal::AuthInfo;
     use databend_common_meta_app::principal::UserInfo;
     use databend_common_meta_app::tenant::Tenant;
+    use databend_common_meta_types::MatchSeq;
 
     use super::*;
 
@@ -605,6 +608,7 @@ mod set_user_privileges {
     use databend_common_meta_app::principal::UserPrivilegeSet;
     use databend_common_meta_app::principal::UserPrivilegeType;
     use databend_common_meta_app::tenant::Tenant;
+    use databend_common_meta_types::MatchSeq;
 
     use super::*;
 

@@ -2242,7 +2242,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                     UnknownTableId::new(req.0.table_id, "update_multi_table_meta"),
                 )));
             }
-            if req_seq.match_seq(*tb_meta_seq).is_err() {
+            if req_seq.match_seq(tb_meta_seq).is_err() {
                 mismatched_tbs.push((
                     req.0.table_id,
                     *tb_meta_seq,
@@ -2356,7 +2356,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 )));
             }
 
-            if req.seq.match_seq(stream_meta_seq).is_err() {
+            if req.seq.match_seq(&stream_meta_seq).is_err() {
                 return Err(KVAppError::AppError(AppError::from(
                     StreamVersionMismatched::new(
                         req.stream_id,
@@ -2403,7 +2403,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             };
 
             // check table version
-            if req.0.seq.match_seq(tb_meta_seq).is_err() {
+            if req.0.seq.match_seq(&tb_meta_seq).is_err() {
                 mismatched_tbs.push((req.0.table_id, tb_meta_seq, table_meta));
             }
         }
@@ -2445,7 +2445,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 )));
             };
 
-            if req_seq.match_seq(seq_meta.seq).is_err() {
+            if req_seq.match_seq(&seq_meta.seq).is_err() {
                 return Err(KVAppError::AppError(AppError::from(
                     TableVersionMismatched::new(
                         req.table_id,

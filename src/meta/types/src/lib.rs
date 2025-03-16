@@ -25,13 +25,10 @@ mod endpoint;
 mod grpc_config;
 mod grpc_helper;
 mod log_entry;
-mod match_seq;
 mod message;
-mod non_empty;
 mod operation;
 mod raft_snapshot_data;
 mod raft_txid;
-mod seq_errors;
 mod seq_num;
 mod time;
 mod with;
@@ -40,13 +37,12 @@ mod proto_display;
 mod proto_ext;
 
 pub mod cmd;
-pub mod config;
 pub mod errors;
+pub mod node;
 pub mod raft_types;
 pub mod seq_value;
 pub mod snapshot_db;
 pub mod sys_data;
-
 // reexport
 
 pub use anyerror;
@@ -61,7 +57,6 @@ pub mod protobuf {
 
 pub use applied_state::AppliedState;
 pub use change::Change;
-pub use cluster::Node;
 pub use cluster::NodeInfo;
 pub use cluster::NodeType;
 pub use endpoint::Endpoint;
@@ -83,8 +78,15 @@ pub use errors::rpc_errors::ForwardRPCError;
 pub use grpc_config::GrpcConfig;
 pub use log_entry::LogEntry;
 pub use map_api::expirable::Expirable;
+pub mod match_seq {
+    pub use map_api::match_seq::errors::ConflictSeq;
+    pub use map_api::match_seq::MatchSeq;
+    pub use map_api::match_seq::MatchSeqExt;
+}
+pub use match_seq::ConflictSeq;
 pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
+pub use node::Node;
 pub use operation::MetaId;
 pub use operation::Operation;
 pub use proto_display::VecDisplay;
@@ -106,7 +108,6 @@ pub use protobuf::TxnPutResponse;
 pub use protobuf::TxnReply;
 pub use protobuf::TxnRequest;
 pub use raft_txid::RaftTxId;
-pub use seq_errors::ConflictSeq;
 pub use seq_num::SeqNum;
 pub use seq_value::KVMeta;
 pub use seq_value::SeqV;
@@ -120,6 +121,4 @@ pub use crate::cmd::CmdContext;
 pub use crate::cmd::MetaSpec;
 pub use crate::cmd::UpsertKV;
 pub use crate::grpc_helper::GrpcHelper;
-pub use crate::non_empty::NonEmptyStr;
-pub use crate::non_empty::NonEmptyString;
 pub use crate::raft_snapshot_data::SnapshotData;
