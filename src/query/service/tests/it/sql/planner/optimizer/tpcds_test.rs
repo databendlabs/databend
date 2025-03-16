@@ -48,7 +48,7 @@ struct YamlTestCase {
     column_statistics: HashMap<String, YamlColumnStatistics>,
     raw_plan: String,
     optimized_plan: String,
-    snow_plan: Option<String>,
+    good_plan: Option<String>,
 }
 
 /// YAML representation of table statistics

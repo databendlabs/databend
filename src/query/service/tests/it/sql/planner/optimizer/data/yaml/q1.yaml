@@ -251,7 +251,7 @@ optimized_plan: |
                                                   └── limit: NONE
 
 # Converted from tabular format to tree format based on parent-child relationships
-snow_plan: |
+good_plan: |
   Result
   └── SortWithLimit [sortKey: (CUSTOMER.C_CUSTOMER_ID ASC NULLS LAST), rowCount: 100]
       └── InnerJoin [joinKey: (CTR1.CTR_CUSTOMER_SK = CUSTOMER.C_CUSTOMER_SK)]
