@@ -69,7 +69,7 @@ impl Exchange for WindowPartitionTopNExchange {
     const NAME: &'static str = "WindowTopN";
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
-    fn partition(&self, block: DataBlock, n: usize) -> Result<Vec<(usize, DataBlock)>> {
+    fn partition(&self, block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let partition_permutation = self.partition_permutation(&block);
 
         // Partition the data blocks to different processors.
@@ -83,7 +83,6 @@ impl Exchange for WindowPartitionTopNExchange {
             .into_iter()
             .map(WindowPartitionMeta::create)
             .map(DataBlock::empty_with_meta)
-            .enumerate()
             .collect())
     }
 }

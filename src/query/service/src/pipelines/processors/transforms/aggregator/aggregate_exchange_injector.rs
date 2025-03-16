@@ -128,10 +128,10 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
 }
 
 impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
-    fn default_partition(&self, data_block: DataBlock) -> Result<Vec<(usize, DataBlock)>> {
+    fn default_partition(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         if self.rev_bucket_lookup.is_empty() {
             let data_block = serialize_block(0, data_block, &self.options)?;
-            return Ok(vec![(0, data_block)]);
+            return Ok(vec![data_block]);
         }
 
         let data_blocks = self.shuffle_scatter.execute(data_block)?;
@@ -139,12 +139,11 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
         let mut blocks = Vec::with_capacity(data_blocks.len());
         for (idx, data_block) in data_blocks.into_iter().enumerate() {
             if self.rev_bucket_lookup[idx] == self.local_id {
-                blocks.push((idx, data_block));
+                blocks.push(data_block);
                 continue;
             }
 
-            let data_block = serialize_block(0, data_block, &self.options)?;
-            blocks.push((idx, data_block));
+            blocks.push(serialize_block(0, data_block, &self.options)?);
         }
 
         Ok(blocks)
@@ -155,7 +154,7 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
     const NAME: &'static str = "AggregateExchange";
     const MULTIWAY_SORT: bool = MULTIWAY_SORT;
 
-    fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<(usize, DataBlock)>> {
+    fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let Some(meta) = data_block.take_meta() else {
             if data_block.is_empty() {
                 return Ok(vec![]);
@@ -179,21 +178,30 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
             AggregateMeta::InFlightPayload(_) => unreachable!(),
             AggregateMeta::SpilledPayload(v) => match self.bucket_lookup.get(&v.destination_node) {
                 None => unreachable!(),
-                Some(idx) => match v.destination_node == self.local_id {
-                    true => Ok(vec![(
-                        *idx,
-                        DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v)),
-                    )]),
-                    false => {
-                        let block_number = compute_block_number(-1, v.max_partition_count)?;
-                        let block =
-                            DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v));
-                        Ok(vec![(
-                            *idx,
-                            serialize_block(block_number, block, &self.options)?,
-                        )])
+                Some(idx) => {
+                    let block_num = compute_block_number(-1, v.max_partition_count)?;
+
+                    let mut blocks = Vec::with_capacity(n);
+                    for _index in 0..n {
+                        blocks.push(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
+                            block_num,
+                            Vec::with_capacity(0),
+                        )));
                     }
-                },
+
+                    blocks[*idx] = match v.destination_node == self.local_id {
+                        true => {
+                            DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v))
+                        }
+                        false => serialize_block(
+                            block_num,
+                            DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v)),
+                            &self.options,
+                        )?,
+                    };
+
+                    Ok(blocks)
+                }
             },
             AggregateMeta::AggregatePayload(p) => {
                 if p.payload.len() == 0 {
@@ -203,13 +211,12 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
                 let mut blocks = Vec::with_capacity(n);
                 for (idx, payload) in scatter_payload(p.payload, n)?.into_iter().enumerate() {
                     if self.rev_bucket_lookup[idx] == self.local_id {
-                        blocks.push((
-                            idx,
-                            DataBlock::empty_with_meta(AggregateMeta::create_agg_payload(
+                        blocks.push(DataBlock::empty_with_meta(
+                            AggregateMeta::create_agg_payload(
                                 payload,
                                 p.partition,
                                 p.max_partition_count,
-                            )),
+                            ),
                         ));
 
                         continue;
@@ -222,7 +229,7 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
 
                     let block_number = compute_block_number(p.partition, p.max_partition_count)?;
                     let data_block = serialize_block(block_number, data_block, &self.options)?;
-                    blocks.push((idx, data_block));
+                    blocks.push(data_block);
                 }
 
                 Ok(blocks)

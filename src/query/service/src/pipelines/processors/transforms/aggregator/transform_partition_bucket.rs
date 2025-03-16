@@ -139,6 +139,7 @@ impl TransformPartitionDispatch {
 
         for index in 0..self.inputs.len() {
             if self.inputs[index].port.is_finished() {
+                self.inputs[index].max_partition = self.max_partition;
                 self.inputs[index].partition = self.max_partition as isize;
                 continue;
             }
@@ -172,10 +173,18 @@ impl TransformPartitionDispatch {
             if before_max_partition_count > 0 && before_max_partition_count != self.max_partition {
                 // set need data for inputs which is less than the max partition
                 for i in 0..index {
-                    if !self.inputs[i].port.is_finished()
-                        && !self.inputs[i].port.has_data()
-                        && self.inputs[i].max_partition != self.max_partition
-                    {
+                    if self.inputs[i].port.is_finished() {
+                        self.inputs[index].max_partition = self.max_partition;
+                        self.inputs[index].partition = self.max_partition as isize;
+                        continue;
+                    }
+
+                    // It will soon wake itself up
+                    if self.inputs[i].port.has_data() {
+                        continue;
+                    }
+
+                    if self.inputs[i].max_partition != self.max_partition {
                         self.inputs[i].port.set_need_data();
                         initialized_all_inputs = false;
                     }
@@ -208,12 +217,15 @@ impl TransformPartitionDispatch {
     }
 
     fn working_partition(&mut self) -> Option<isize> {
-        self.inputs.iter().map(|x| x.partition).min()
+        self.inputs
+            .iter()
+            .filter(|x| !x.port.is_finished())
+            .map(|x| x.partition)
+            .min()
     }
 
     fn fetch_ready_partition(&mut self) -> Result<()> {
         if let Some(ready_partition) = self.ready_partition() {
-            // TODO: read spill data
             let ready_partition = self.partitions.take_partition(ready_partition);
 
             for (meta, data_block) in ready_partition {
@@ -301,7 +313,6 @@ impl Processor for TransformPartitionDispatch {
             }
 
             all_inputs_is_finished = false;
-
             if self.inputs[index].partition > working_partition {
                 continue;
             }
@@ -326,12 +337,13 @@ impl Processor for TransformPartitionDispatch {
                 continue;
             }
 
-            has_data = true;
             if output.can_push() {
                 if let Some(block) = self.outputs_data[idx].pop_front() {
                     output.push_data(Ok(block));
                 }
             }
+
+            has_data |= !self.outputs_data[idx].is_empty();
         }
 
         if all_inputs_is_finished && !has_data {

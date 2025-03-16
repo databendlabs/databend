@@ -38,7 +38,7 @@ impl WindowPartitionExchange {
 
 impl Exchange for WindowPartitionExchange {
     const NAME: &'static str = "Window";
-    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<(usize, DataBlock)>> {
+    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let num_rows = data_block.num_rows();
 
         // Extract the columns used for hash computation.
@@ -67,7 +67,6 @@ impl Exchange for WindowPartitionExchange {
             .into_iter()
             .map(WindowPartitionMeta::create)
             .map(DataBlock::empty_with_meta)
-            .enumerate()
             .collect())
     }
 }

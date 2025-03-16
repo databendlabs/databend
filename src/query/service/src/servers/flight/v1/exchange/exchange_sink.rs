@@ -50,30 +50,28 @@ impl ExchangeSink {
                     )));
                 }
 
-                if !params.ignore_exchange {
-                    let settings = ctx.get_settings();
-                    let compression = settings.get_query_flight_compression()?;
+                let settings = ctx.get_settings();
+                let compression = settings.get_query_flight_compression()?;
 
-                    let nodes = vec![];
-                    match params.enable_multiway_sort {
-                        true => pipeline.exchange(
-                            1,
-                            FlightExchange::<true>::create(
-                                nodes,
-                                compression,
-                                Arc::new(Box::new(MergeFlightScatter)),
-                            ),
+                let nodes = vec![];
+                match params.enable_multiway_sort {
+                    true => pipeline.exchange(
+                        1,
+                        FlightExchange::<true>::create(
+                            nodes,
+                            compression,
+                            Arc::new(Box::new(MergeFlightScatter)),
                         ),
-                        false => pipeline.exchange(
-                            1,
-                            FlightExchange::<false>::create(
-                                nodes,
-                                compression,
-                                Arc::new(Box::new(MergeFlightScatter)),
-                            ),
+                    ),
+                    false => pipeline.exchange(
+                        1,
+                        FlightExchange::<false>::create(
+                            nodes,
+                            compression,
+                            Arc::new(Box::new(MergeFlightScatter)),
                         ),
-                    };
-                }
+                    ),
+                };
 
                 assert_eq!(senders.len(), 1);
                 pipeline.add_pipe(Pipe::create(1, 0, vec![create_writer_item(

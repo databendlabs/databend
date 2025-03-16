@@ -40,7 +40,7 @@ pub trait Exchange: Send + Sync + 'static {
     const MULTIWAY_SORT: bool = false;
     const SKIP_EMPTY_DATA_BLOCK: bool = false;
 
-    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<(usize, DataBlock)>>;
+    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>>;
 
     fn sorting_function(_: &DataBlock, _: &DataBlock) -> Ordering {
         unimplemented!()
@@ -259,7 +259,12 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
 
             let partitioned = self.exchange.partition(block, self.outputs.len())?;
 
-            for (index, block) in partitioned.into_iter() {
+            if partitioned.is_empty() {
+                return Ok(());
+            }
+
+            assert_eq!(partitioned.len(), self.outputs.len());
+            for (index, block) in partitioned.into_iter().enumerate() {
                 self.partitioned_data[index] = Some(block);
             }
         }
