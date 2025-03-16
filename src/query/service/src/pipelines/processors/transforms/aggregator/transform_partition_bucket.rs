@@ -599,21 +599,25 @@ struct AlignedPartitions {
 
 impl AlignedPartitions {
     pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize) {
-        let (partition, max_partition) = match &meta {
+        let (is_empty, partition, max_partition) = match &meta {
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::FinalPartition => unreachable!(),
-            AggregateMeta::SpilledPayload(v) => (v.partition, v.max_partition_count),
-            AggregateMeta::AggregatePayload(v) => (v.partition, v.max_partition_count),
-            AggregateMeta::InFlightPayload(v) => (v.partition, v.max_partition),
+            AggregateMeta::SpilledPayload(v) => (false, v.partition, v.max_partition_count),
+            AggregateMeta::AggregatePayload(v) => {
+                (v.payload.len() == 0, v.partition, v.max_partition_count)
+            }
+            AggregateMeta::InFlightPayload(v) => (block.is_empty(), v.partition, v.max_partition),
         };
 
         assert_eq!(max_partition, self.max_partition);
-        match self.data.entry(partition) {
-            std::collections::btree_map::Entry::Vacant(v) => {
-                v.insert(vec![(meta, block)]);
-            }
-            std::collections::btree_map::Entry::Occupied(mut v) => {
-                v.get_mut().push((meta, block));
+        if !is_empty {
+            match self.data.entry(partition) {
+                std::collections::btree_map::Entry::Vacant(v) => {
+                    v.insert(vec![(meta, block)]);
+                }
+                std::collections::btree_map::Entry::Occupied(mut v) => {
+                    v.get_mut().push((meta, block));
+                }
             }
         }
 

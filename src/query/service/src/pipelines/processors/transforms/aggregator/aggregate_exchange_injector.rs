@@ -168,38 +168,40 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
             return self.default_partition(data_block.add_meta(Some(meta))?);
         };
 
+        assert!(MULTIWAY_SORT);
         assert_eq!(self.bucket_lookup.len(), n);
         match AggregateMeta::downcast_from(meta).unwrap() {
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::InFlightPayload(_) => unreachable!(),
-            AggregateMeta::SpilledPayload(v) => match self.bucket_lookup.get(&v.destination_node) {
-                None => unreachable!(),
-                Some(idx) => {
-                    let block_num = compute_block_number(-1, v.max_partition_count)?;
+            AggregateMeta::SpilledPayload(v) => {
+                let block_num = compute_block_number(-1, v.max_partition_count)?;
 
-                    let mut blocks = Vec::with_capacity(n);
-                    for _index in 0..n {
-                        blocks.push(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
+                let mut blocks = Vec::with_capacity(n);
+                for local in &self.rev_bucket_lookup {
+                    blocks.push(match *local == self.local_id {
+                        true => DataBlock::empty_with_meta(
+                            AggregateMeta::create_in_flight_payload(-1, v.max_partition_count),
+                        ),
+                        false => DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
                             block_num,
                             Vec::with_capacity(0),
-                        )));
-                    }
-
-                    blocks[*idx] = match v.destination_node == self.local_id {
-                        true => {
-                            DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v))
-                        }
-                        false => serialize_block(
-                            block_num,
-                            DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v)),
-                            &self.options,
-                        )?,
-                    };
-
-                    Ok(blocks)
+                        )),
+                    });
                 }
-            },
+
+                let index = *self.bucket_lookup.get(&v.destination_node).unwrap();
+                blocks[index] = match v.destination_node == self.local_id {
+                    true => DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v)),
+                    false => serialize_block(
+                        block_num,
+                        DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v)),
+                        &self.options,
+                    )?,
+                };
+
+                Ok(blocks)
+            }
             AggregateMeta::AggregatePayload(p) => {
                 if p.payload.len() == 0 {
                     return Ok(vec![]);
