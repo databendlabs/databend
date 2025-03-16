@@ -3543,6 +3543,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-expression",
  "databend-common-io",
+ "databend-common-meta-app-types",
  "databend-common-meta-kvapi",
  "databend-common-meta-types",
  "derive_more",
@@ -3560,6 +3561,36 @@ dependencies = [
  "sha1",
  "sha2",
  "thiserror 1.0.65",
+]
+
+[[package]]
+name = "databend-common-meta-app-types"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "databend-common-base",
+ "databend-common-building",
+ "databend-common-exception",
+ "databend-common-meta-stoerr",
+ "databend-common-tracing",
+ "deepsize",
+ "derive_more",
+ "futures-util",
+ "log",
+ "map-api",
+ "num-derive",
+ "num-traits",
+ "openraft",
+ "prost",
+ "prost-build",
+ "rotbl",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.65",
+ "tokio",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
@@ -3640,6 +3671,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "databend-common-base",
+ "databend-common-meta-app-types",
  "databend-common-meta-types",
  "fastrace",
  "futures-util",
@@ -3912,6 +3944,7 @@ dependencies = [
  "databend-common-expression",
  "databend-common-io",
  "databend-common-meta-app",
+ "databend-common-meta-app-types",
  "databend-common-meta-types",
  "databend-common-protos",
  "enumflags2",
@@ -5061,6 +5094,7 @@ dependencies = [
  "databend-common-management",
  "databend-common-meta-api",
  "databend-common-meta-app",
+ "databend-common-meta-app-types",
  "databend-common-meta-kvapi",
  "databend-common-meta-store",
  "databend-common-meta-types",
