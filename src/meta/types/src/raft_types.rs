@@ -14,6 +14,7 @@
 
 //! This mod wraps openraft types that have generics parameter with concrete types.
 
+use openraft::error::Infallible;
 use openraft::impls::OneshotResponder;
 use openraft::RaftTypeConfig;
 use openraft::TokioRuntime;
@@ -54,17 +55,15 @@ pub type Entry = openraft::Entry<TypeConfig>;
 
 pub type SnapshotMeta = openraft::SnapshotMeta<TypeConfig>;
 pub type Snapshot = openraft::Snapshot<TypeConfig>;
-#[allow(dead_code)]
-pub type SnapshotSegmentId = openraft::SnapshotSegmentId;
 
 pub type RaftMetrics = openraft::RaftMetrics<TypeConfig>;
 
 pub type ErrorSubject = openraft::ErrorSubject<TypeConfig>;
 pub type ErrorVerb = openraft::ErrorVerb;
 
-pub type RPCError<E = openraft::error::Infallible> = openraft::error::RPCError<TypeConfig, E>;
+pub type RPCError<E = Infallible> = openraft::error::RPCError<TypeConfig, E>;
 pub type RemoteError<E> = openraft::error::RemoteError<TypeConfig, E>;
-pub type RaftError<E = openraft::error::Infallible> = openraft::error::RaftError<TypeConfig, E>;
+pub type RaftError<E = Infallible> = openraft::error::RaftError<TypeConfig, E>;
 pub type NetworkError = openraft::error::NetworkError;
 
 pub type StorageError = openraft::StorageError<TypeConfig>;
@@ -73,8 +72,7 @@ pub type Fatal = openraft::error::Fatal<TypeConfig>;
 pub type ChangeMembershipError = openraft::error::ChangeMembershipError<TypeConfig>;
 pub type ClientWriteError = openraft::error::ClientWriteError<TypeConfig>;
 pub type InitializeError = openraft::error::InitializeError<TypeConfig>;
-pub type StreamingError<E = openraft::error::Infallible> =
-    openraft::error::StreamingError<TypeConfig, E>;
+pub type StreamingError<E = Infallible> = openraft::error::StreamingError<TypeConfig, E>;
 
 pub type AppendEntriesRequest = openraft::raft::AppendEntriesRequest<TypeConfig>;
 pub type AppendEntriesResponse = openraft::raft::AppendEntriesResponse<TypeConfig>;
