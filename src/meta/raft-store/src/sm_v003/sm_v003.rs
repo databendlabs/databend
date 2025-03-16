@@ -21,7 +21,7 @@ use databend_common_meta_types::snapshot_db::DB;
 use databend_common_meta_types::sys_data::SysData;
 use databend_common_meta_types::AppliedState;
 use log::info;
-use openraft::RaftLogId;
+use openraft::entry::RaftEntry;
 
 use crate::applier::Applier;
 use crate::leveled_store::leveled_map::compactor::Compactor;
@@ -137,7 +137,7 @@ impl SMV003 {
         let mut res = vec![];
 
         for ent in entries.into_iter() {
-            let log_id = *ent.get_log_id();
+            let log_id = ent.log_id();
             let r = applier
                 .apply(&ent)
                 .await

@@ -397,7 +397,6 @@ opendal = { version = "0.51.2", features = [
 openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
-    "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
 opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "a1fb4da", features = ["tls"] }
 orc-rust = "0.5.0"
@@ -636,7 +635,7 @@ deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.3" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
-openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.7" }
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
 orc-rust = { git = "https://github.com/youngsofun/orc-rust", rev = "94ab8e9" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }

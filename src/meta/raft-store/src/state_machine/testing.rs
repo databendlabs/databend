@@ -29,7 +29,9 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
     let logs = vec![
         Entry {
             log_id: new_log_id(1, 0, 1),
-            payload: EntryPayload::Membership(Membership::new(vec![btreeset![1, 2, 3]], ())),
+            payload: EntryPayload::Membership(
+                Membership::new(vec![btreeset![1, 2, 3]], ()).unwrap(),
+            ),
         },
         Entry::new_blank(new_log_id(1, 0, 2)),
         Entry::new_blank(new_log_id(1, 0, 3)),
@@ -43,7 +45,9 @@ pub fn snapshot_logs() -> (Vec<Entry>, Vec<String>) {
         },
         Entry {
             log_id: new_log_id(1, 0, 5),
-            payload: EntryPayload::Membership(Membership::new(vec![btreeset![4, 5, 6]], ())),
+            payload: EntryPayload::Membership(
+                Membership::new(vec![btreeset![4, 5, 6]], ()).unwrap(),
+            ),
         },
         Entry {
             log_id: new_log_id(1, 0, 6),

@@ -240,7 +240,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
         info!("--- install snapshot");
         {
-            sto.do_install_snapshot(data.as_ref().clone()).await?;
+            sto.do_install_snapshot(data.clone()).await?;
         }
 
         info!("--- check installed meta");
@@ -256,7 +256,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
             assert_eq!(
                 StoredMembership::new(
                     Some(log_id(1, 0, 5)),
-                    Membership::new(vec![btreeset! {4,5,6}], ())
+                    Membership::new(vec![btreeset! {4,5,6}], ())?
                 ),
                 mem
             );
