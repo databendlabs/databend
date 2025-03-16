@@ -174,8 +174,8 @@ impl TransformPartitionDispatch {
                 // set need data for inputs which is less than the max partition
                 for i in 0..index {
                     if self.inputs[i].port.is_finished() {
-                        self.inputs[index].max_partition = self.max_partition;
-                        self.inputs[index].partition = self.max_partition as isize;
+                        self.inputs[i].max_partition = self.max_partition;
+                        self.inputs[i].partition = self.max_partition as isize;
                         continue;
                     }
 
@@ -217,15 +217,11 @@ impl TransformPartitionDispatch {
     }
 
     fn working_partition(&mut self) -> Option<isize> {
-        self.inputs
-            .iter()
-            .filter(|x| !x.port.is_finished())
-            .map(|x| x.partition)
-            .min()
+        self.inputs.iter().map(|x| x.partition).min()
     }
 
     fn fetch_ready_partition(&mut self) -> Result<()> {
-        if let Some(ready_partition) = self.ready_partition() {
+        while let Some(ready_partition) = self.ready_partition() {
             let ready_partition = self.partitions.take_partition(ready_partition);
 
             for (meta, data_block) in ready_partition {
