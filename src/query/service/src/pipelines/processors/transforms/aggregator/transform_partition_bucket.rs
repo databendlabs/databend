@@ -170,7 +170,7 @@ impl TransformPartitionDispatch {
             }
 
             // max partition count change
-            if before_max_partition_count > 0 && before_max_partition_count != self.max_partition {
+            if before_max_partition_count != self.max_partition {
                 // set need data for inputs which is less than the max partition
                 for i in 0..index {
                     if self.inputs[i].port.is_finished() {

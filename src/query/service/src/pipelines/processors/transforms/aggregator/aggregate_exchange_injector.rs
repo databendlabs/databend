@@ -156,6 +156,7 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
 
     fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let Some(meta) = data_block.take_meta() else {
+            // only exchange data
             if data_block.is_empty() {
                 return Ok(vec![]);
             }
@@ -163,16 +164,12 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
             return self.default_partition(data_block);
         };
 
-        let Some(meta) = AggregateMeta::downcast_from(meta) else {
-            if data_block.is_empty() {
-                return Ok(vec![]);
-            }
-
-            return self.default_partition(data_block);
+        let Some(_) = AggregateMeta::downcast_ref_from(&meta) else {
+            return self.default_partition(data_block.add_meta(Some(meta))?);
         };
 
         assert_eq!(self.bucket_lookup.len(), n);
-        match meta {
+        match AggregateMeta::downcast_from(meta).unwrap() {
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::InFlightPayload(_) => unreachable!(),
