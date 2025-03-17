@@ -16,36 +16,42 @@ use std::io;
 use std::ops::RangeBounds;
 
 use databend_common_meta_types::snapshot_db::DB;
+use databend_common_meta_types::KVMeta;
 use futures_util::StreamExt;
+use map_api::map_api_ro::MapApiRO;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::map_api::KVResultStream;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::rotbl_codec::RotblCodec;
+use crate::leveled_store::value_convert::ValueConvert;
 use crate::marked::Marked;
 
+/// A wrapper that implements the `MapApiRO` trait for the `DB`.
+#[derive(Debug, Clone)]
+pub struct MapView<'a>(pub &'a DB);
+
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for DB
+impl<K> MapApiRO<K, KVMeta> for MapView<'_>
 where
-    K: MapKey,
+    K: MapKey<KVMeta>,
     K: MapKeyEncode,
     K: MapKeyDecode,
-    Marked<K::V>: TryFrom<SeqMarked, Error = io::Error>,
+    Marked<K::V>: ValueConvert<SeqMarked>,
 {
     async fn get(&self, key: &K) -> Result<Marked<K::V>, io::Error> {
         let key = RotblCodec::encode_key(key)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-        let res = self.rotbl.get(&key).await?;
+        let res = self.0.rotbl.get(&key).await?;
 
         let Some(seq_marked) = res else {
             return Ok(Marked::empty());
         };
 
-        let marked = Marked::<K::V>::try_from(seq_marked)?;
+        let marked = Marked::<K::V>::conv_from(seq_marked)?;
         Ok(marked)
     }
 
@@ -54,12 +60,12 @@ where
         let rng = RotblCodec::encode_range(&range)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-        let strm = self.rotbl.range(rng);
+        let strm = self.0.rotbl.range(rng);
 
         let strm = strm.map(|res_item: Result<(String, SeqMarked), io::Error>| {
             let (str_k, seq_marked) = res_item?;
             let key = RotblCodec::decode_key(&str_k)?;
-            let marked = Marked::try_from(seq_marked)?;
+            let marked = Marked::conv_from(seq_marked)?;
             Ok((key, marked))
         });
 

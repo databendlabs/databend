@@ -1137,7 +1137,7 @@ fn test_query() {
         r#"select * from (select * from monthly_sales) pivot(sum(amount) for month in ('JAN', 'FEB', 'MAR', 'APR')) order by empid"#,
         r#"select * from monthly_sales pivot(sum(amount) for month in (select distinct month from monthly_sales)) order by empid"#,
         r#"select * from (select * from monthly_sales) pivot(sum(amount) for month in ((select distinct month from monthly_sales))) order by empid"#,
-        r#"select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
+        r#"select * from monthly_sales_1 unpivot(sales for month in (jan as '1月', feb 'February', mar As 'MARCH', april)) order by empid"#,
         r#"select * from (select * from monthly_sales_1) unpivot(sales for month in (jan, feb, mar, april)) order by empid"#,
         r#"select * from range(1, 2)"#,
         r#"select sum(a) over w from customer window w as (partition by a order by b)"#,

@@ -16,7 +16,7 @@ use std::iter::Peekable;
 use std::str::Split;
 use std::string::FromUtf8Error;
 
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app_types::non_empty::NonEmptyString;
 
 use crate::kvapi::helper::decode_id;
 use crate::kvapi::helper::unescape;

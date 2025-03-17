@@ -51,12 +51,13 @@ mod math;
 mod misc;
 mod obfuscator;
 mod other;
-pub(crate) mod parser;
 mod regexp;
 mod string;
 mod tuple;
 mod variant;
 mod vector;
+
+pub use databend_common_functions::test_utils as parser;
 
 pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, Column)]) {
     let text = text.as_ref();

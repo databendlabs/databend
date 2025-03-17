@@ -20,11 +20,13 @@ use std::io;
 use std::ops::Bound;
 use std::ops::RangeBounds;
 
+use databend_common_meta_types::KVMeta;
 use rotbl::v001::SeqMarked;
 
 use crate::leveled_store::map_api::MapKey;
 use crate::leveled_store::map_api::MapKeyDecode;
 use crate::leveled_store::map_api::MapKeyEncode;
+use crate::leveled_store::value_convert::ValueConvert;
 use crate::marked::Marked;
 
 pub struct RotblCodec;
@@ -34,7 +36,7 @@ impl RotblCodec {
     /// Convert range of user key to range of rotbl range.
     pub(crate) fn encode_range<K, R>(range: &R) -> Result<(Bound<String>, Bound<String>), io::Error>
     where
-        K: MapKey,
+        K: MapKey<KVMeta>,
         K: MapKeyEncode,
         R: RangeBounds<K>,
     {
@@ -52,7 +54,7 @@ impl RotblCodec {
     /// `MapKey::PREFIX` is prepended to the bound value and an open bound is converted to a bound with key-space.
     /// E.g., use the `PREFIX/` as the left side closed bound,
     /// and use the `next(PREFIX/)` as the right side open bound.
-    fn encode_bound<K: MapKey + MapKeyEncode>(
+    fn encode_bound<K: MapKey<KVMeta> + MapKeyEncode>(
         v: Bound<&K>,
         dir: &str,
     ) -> Result<Bound<String>, io::Error> {
@@ -77,12 +79,12 @@ impl RotblCodec {
         marked: Marked<K::V>,
     ) -> Result<(String, SeqMarked), io::Error>
     where
-        K: MapKey,
+        K: MapKey<KVMeta>,
         K: MapKeyEncode,
-        SeqMarked: TryFrom<Marked<K::V>, Error = io::Error>,
+        Marked<K::V>: ValueConvert<SeqMarked>,
     {
         let k = Self::encode_key(key)?;
-        let v = SeqMarked::try_from(marked)?;
+        let v = marked.conv_to()?;
         Ok((k, v))
     }
 
@@ -102,7 +104,7 @@ impl RotblCodec {
     /// Decode a key from a string with key-space prefix into [`MapKey`] implementation.
     pub(crate) fn decode_key<K>(str_key: &str) -> Result<K, io::Error>
     where
-        K: MapKey,
+        K: MapKey<KVMeta>,
         K: MapKeyEncode,
         K: MapKeyDecode,
     {

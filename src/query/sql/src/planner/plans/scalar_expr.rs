@@ -338,6 +338,31 @@ impl ScalarExpr {
         visitor.visit(self).unwrap();
         visitor.has_column_ref && visitor.num_column_ref == 1
     }
+
+    pub fn unify_to_data_type(self, data_type: &DataType) -> Self {
+        match self {
+            ScalarExpr::ConstantExpr(ref constant_expr) => {
+                let infer_type = constant_expr.value.as_ref().infer_data_type();
+                if &infer_type != data_type {
+                    let cast_expr = CastExpr {
+                        span: None,
+                        is_try: false,
+                        argument: Box::new(self),
+                        target_type: Box::new(data_type.clone()),
+                    };
+                    ScalarExpr::CastExpr(cast_expr)
+                } else {
+                    self
+                }
+            }
+            other => ScalarExpr::CastExpr(CastExpr {
+                span: None,
+                is_try: false,
+                argument: Box::new(other),
+                target_type: Box::new(data_type.clone()),
+            }),
+        }
+    }
 }
 
 impl From<BoundColumnRef> for ScalarExpr {

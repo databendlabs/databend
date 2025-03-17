@@ -14,13 +14,15 @@
 
 use std::io;
 
+use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::Node;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
@@ -29,9 +31,8 @@ use crate::leveled_store::db_builder::DBBuilder;
 use crate::leveled_store::immutable_levels::ImmutableLevels;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::MapApi;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
+use crate::leveled_store::MapView;
 use crate::marked::Marked;
 use crate::sm_v003::sm_v003::SMV003;
 use crate::state_machine::ExpireKey;
@@ -168,7 +169,7 @@ async fn test_compact() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = db
+    let got = MapView(db)
         .str_map()
         .range(..)
         .await?
@@ -181,7 +182,7 @@ async fn test_compact() -> anyhow::Result<()> {
         (s("e"), Marked::new_with_meta(6, b("e1"), None)),
     ]);
 
-    let got = db
+    let got = MapView(db)
         .expire_map()
         .range(..)
         .await?
@@ -214,7 +215,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     assert_eq!(db.last_applied_ref(), &None);
     assert_eq!(db.nodes_ref(), &btreemap! {});
 
-    let got = db
+    let got = MapView(db)
         .str_map()
         .range(..)
         .await?
@@ -236,7 +237,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
     ]);
 
-    let got = db
+    let got = MapView(db)
         .expire_map()
         .range(..)
         .await?

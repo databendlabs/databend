@@ -12,8 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod sender;
-mod stream;
-
-pub use sender::WatchStreamSender;
-pub use stream::WatchStream;
+pub mod non_empty;

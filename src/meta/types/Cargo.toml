@@ -20,6 +20,7 @@ deepsize = { workspace = true }
 derive_more = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }
+map-api = { workspace = true }
 num-derive = { workspace = true }
 num-traits = { workspace = true }
 openraft = { workspace = true }
