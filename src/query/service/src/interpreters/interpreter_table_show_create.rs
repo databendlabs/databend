@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
@@ -144,7 +145,6 @@ impl ShowCreateTableInterpreter {
         let engine = table.engine();
         let schema = table.schema();
         let field_comments = table.field_comments();
-        let n_fields = schema.fields().len();
         let sql_dialect = settings.sql_dialect;
         let force_quoted_ident = settings.force_quoted_ident;
         let quoted_ident_case_sensitive = settings.quoted_ident_case_sensitive;
@@ -204,18 +204,14 @@ impl ShowCreateTableInterpreter {
                     }
                     _ => "".to_string(),
                 };
-                // compatibility: creating table in the old planner will not have `fields_comments`
-                let comment = if field_comments.len() == n_fields && !field_comments[idx].is_empty()
+                let comment = if field_comments.len() == schema.fields().len()
+                    && !field_comments[idx].is_empty()
                 {
-                    // make the display more readable.
-                    // can not use debug print, will add double quote
-                    format!(
-                        " COMMENT '{}'",
-                        &field_comments[idx].as_str().replace('\'', "\\'")
-                    )
+                    format!(" COMMENT {}", QuotedString(&field_comments[idx], '\''))
                 } else {
                     "".to_string()
                 };
+
                 let ident = display_ident(
                     field.name(),
                     force_quoted_ident,
@@ -306,7 +302,13 @@ impl ShowCreateTableInterpreter {
         }
 
         if !table_info.meta.comment.is_empty() {
-            table_create_sql.push_str(format!(" COMMENT = '{}'", table_info.meta.comment).as_str());
+            table_create_sql.push_str(
+                format!(
+                    " COMMENT = {}",
+                    QuotedString(&table_info.meta.comment, '\'')
+                )
+                .as_str(),
+            );
         }
         Ok(table_create_sql)
     }
@@ -345,7 +347,7 @@ impl ShowCreateTableInterpreter {
 
         let comment = stream_table.get_table_info().meta.comment.clone();
         if !comment.is_empty() {
-            create_sql.push_str(format!(" COMMENT = '{}'", comment).as_str());
+            create_sql.push_str(format!(" COMMENT = {}", QuotedString(comment, '\'')).as_str());
         }
         Ok(create_sql)
     }

@@ -207,21 +207,11 @@ impl ColumnsTable {
                     _ => {
                         let schema = table.schema();
                         let field_comments = table.field_comments();
-                        let n_fields = schema.fields().len();
                         for (idx, field) in schema.fields().iter().enumerate() {
-                            // compatibility: creating table in the old planner will not have `fields_comments`
-                            let comment = if field_comments.len() == n_fields
-                                && !field_comments[idx].is_empty()
-                            {
-                                // can not use debug print, will add double quote
-                                format!("{}", &field_comments[idx].as_str().replace('\'', "\\'"))
-                            } else {
-                                "".to_string()
-                            };
                             rows.push((
                                 database.clone(),
                                 table.name().into(),
-                                comment,
+                                field_comments[idx].clone(),
                                 field.clone(),
                             ))
                         }
