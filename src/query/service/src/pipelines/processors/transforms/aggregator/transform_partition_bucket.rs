@@ -178,6 +178,7 @@ impl Processor for TransformPartitionDispatch {
                 return Ok(Event::Sync);
             }
 
+            self.input.set_need_data();
             return Ok(Event::NeedData);
         }
 
@@ -208,6 +209,7 @@ impl Processor for TransformPartitionDispatch {
             if partition != self.working_partition {
                 // ready partition
                 self.fetch_ready_partition()?;
+                self.working_partition = partition;
             }
         }
 
