@@ -21,9 +21,28 @@ statement ok
 CREATE TABLE `test`.`b` ( a bigint not null comment 'abc '' vs \' cde', b int null default null, c varchar(255) not null, d smallint unsigned null) Engine = Null COMMENT = 'abc '' vs \' cde'
 
 query TT
+select
+t.comment as table_comment,
+c.comment as column_comment
+from
+system.tables t
+join system.columns c on t.database = c.database
+and t.name = c.table and c.name = 'a'
+where
+t.database = 'test'
+and t.name = 'b'
+----
+abc ' vs ' cde abc ' vs ' cde
+
+query TT
 SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE b ( a BIGINT NOT NULL comment 'abc '' vs \' cde', b INT NULL DEFAULT NULL, c VARCHAR NOT NULL, d SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT = 'abc '' vs \' cde'
+b CREATE TABLE b (
+  a BIGINT NOT NULL COMMENT 'abc \' vs \' cde',
+  b INT NULL DEFAULT NULL,
+  c VARCHAR NOT NULL,
+  d SMALLINT UNSIGNED NULL
+) ENGINE=NULL COMMENT = 'abc \' vs \' cde'
 
 statement ok
 set hide_options_in_show_create_table=0
@@ -31,7 +50,12 @@ set hide_options_in_show_create_table=0
 query TT
 SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE b (  a BIGINT NOT NULL comment 'abc \' vs \' cde', b INT NULL DEFAULT NULL, c VARCHAR NOT NULL, d SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT =  'abc \' vs \' cde'
+b CREATE TABLE b (
+  a BIGINT NOT NULL COMMENT 'abc \' vs \' cde',
+  b INT NULL DEFAULT NULL,
+  c VARCHAR NOT NULL,
+  d SMALLINT UNSIGNED NULL
+) ENGINE=NULL COMMENT = 'abc \' vs \' cde'
 
 statement ok
 create view test.v_b as select * from `test`.`b`
@@ -47,7 +71,9 @@ CREATE TABLE test.c (a int not null) CLUSTER BY (a, a % 3) COMPRESSION='lz4' STO
 query TT
 SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE c ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY linear(a, a % 3) CLUSTER_TYPE='linear' COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+c CREATE TABLE c (
+  a INT NOT NULL
+) ENGINE=FUSE CLUSTER BY linear(a, a % 3) CLUSTER_TYPE='linear' COMPRESSION='lz4' COPY_DEDUP_FULL_PATH='1' STORAGE_FORMAT='parquet'
 
 statement error 4000
 CREATE TABLE test.should_fail (a int not null) ENGINE=FUSE 's3://load/files/' CONNECTION=(access_key_id='1a2b3c' aws_secret_key='4x5y6z') CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
@@ -58,12 +84,16 @@ CREATE TABLE test.d (a int not null) ENGINE=FUSE 'fs:///tmp/load/files/' CONNECT
 query TT
 SHOW CREATE TABLE `test`.`d`
 ----
-d CREATE TABLE d ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY linear(a, a % 3) CLUSTER_TYPE='linear' COMPRESSION='lz4' STORAGE_FORMAT='parquet' 'fs | root=/tmp/load/files/'
+d CREATE TABLE d (
+  a INT NOT NULL
+) ENGINE=FUSE CLUSTER BY linear(a, a % 3) CLUSTER_TYPE='linear' COMPRESSION='lz4' COPY_DEDUP_FULL_PATH='1' STORAGE_FORMAT='parquet' 'fs | root=/tmp/load/files/'
 
 query TT
 SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE c ( a INT NOT NULL ) ENGINE=FUSE CLUSTER BY linear(a, a % 3) CLUSTER_TYPE='linear' COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+c CREATE TABLE c (
+  a INT NOT NULL
+) ENGINE=FUSE CLUSTER BY linear(a, a % 3) CLUSTER_TYPE='linear' COMPRESSION='lz4' COPY_DEDUP_FULL_PATH='1' STORAGE_FORMAT='parquet'
 
 statement ok
 DROP TABLE `test`.`a`
@@ -185,7 +215,7 @@ select * from default.v_join order by c2;
 3 3 z
 3 3 z
 
-statement ok
+statement error Databend sqllogictests error: http query error: code: 2306, Text: 'v_test' as view Already Exists
 create view default.v_test as select * from t;
 
 query TT

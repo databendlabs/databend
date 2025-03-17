@@ -207,11 +207,20 @@ impl ColumnsTable {
                     _ => {
                         let schema = table.schema();
                         let field_comments = table.field_comments();
+                        let comment = if field_comments.len() == n_fields
+                            && !field_comments[idx].is_empty()
+                        {
+                            // can not use debug print, will add double quote
+                            field_comments[idx].clone()
+                        } else {
+                            "".to_string()
+                        };
+
                         for (idx, field) in schema.fields().iter().enumerate() {
                             rows.push((
                                 database.clone(),
                                 table.name().into(),
-                                field_comments[idx].clone(),
+                                comment,
                                 field.clone(),
                             ))
                         }
