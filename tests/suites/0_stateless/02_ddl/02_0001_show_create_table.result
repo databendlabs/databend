@@ -104,3 +104,4 @@ tc	CREATE TABLE tc (
   id4 INT NULL,
   id5 INT NULL
 ) ENGINE=FUSE
+>>>> drop database test
