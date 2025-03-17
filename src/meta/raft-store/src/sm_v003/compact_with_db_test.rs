@@ -44,7 +44,10 @@ async fn test_leveled_query_with_db() -> anyhow::Result<()> {
     assert_eq!(lm.curr_seq(), 7);
     assert_eq!(
         lm.last_membership_ref(),
-        &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ())?)
+        &StoredMembership::new(
+            Some(log_id(3, 3, 3)),
+            Membership::new_with_defaults(vec![], [])
+        )
     );
     assert_eq!(lm.last_applied_ref(), &Some(log_id(3, 3, 3)));
     assert_eq!(
@@ -93,7 +96,7 @@ async fn test_leveled_query_with_expire_index() -> anyhow::Result<()> {
     assert_eq!(lm.curr_seq(), 4);
     assert_eq!(
         lm.last_membership_ref(),
-        &StoredMembership::new(None, Membership::new(vec![], ())?)
+        &StoredMembership::new(None, Membership::new_with_defaults(vec![], []))
     );
     assert_eq!(lm.last_applied_ref(), &None);
     assert_eq!(lm.nodes_ref(), &btreemap! {});
@@ -161,7 +164,10 @@ async fn test_compact() -> anyhow::Result<()> {
     assert_eq!(db.curr_seq(), 7);
     assert_eq!(
         db.last_membership_ref(),
-        &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ())?)
+        &StoredMembership::new(
+            Some(log_id(3, 3, 3)),
+            Membership::new_with_defaults(vec![], [])
+        )
     );
     assert_eq!(db.last_applied_ref(), &Some(log_id(3, 3, 3)));
     assert_eq!(
@@ -210,7 +216,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     assert_eq!(db.curr_seq(), 4);
     assert_eq!(
         db.last_membership_ref(),
-        &StoredMembership::new(None, Membership::new(vec![], ())?)
+        &StoredMembership::new(None, Membership::new_with_defaults(vec![], []))
     );
     assert_eq!(db.last_applied_ref(), &None);
     assert_eq!(db.nodes_ref(), &btreemap! {});
@@ -274,7 +280,10 @@ async fn test_compact_output_3_level() -> anyhow::Result<()> {
     assert_eq!(sys_data.curr_seq(), 7);
     assert_eq!(
         sys_data.last_membership_ref(),
-        &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()).unwrap())
+        &StoredMembership::new(
+            Some(log_id(3, 3, 3)),
+            Membership::new_with_defaults(vec![], [])
+        )
     );
     assert_eq!(sys_data.last_applied_ref(), &Some(log_id(3, 3, 3)));
     assert_eq!(
@@ -305,8 +314,10 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     let mut lm = LeveledMap::default();
     let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() =
-        StoredMembership::new(Some(log_id(1, 1, 1)), Membership::new(vec![], ())?);
+    *sd.last_membership_mut() = StoredMembership::new(
+        Some(log_id(1, 1, 1)),
+        Membership::new_with_defaults(vec![], []),
+    );
     *sd.last_applied_mut() = Some(log_id(1, 1, 1));
     *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
@@ -319,8 +330,10 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     lm.freeze_writable();
     let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() =
-        StoredMembership::new(Some(log_id(2, 2, 2)), Membership::new(vec![], ())?);
+    *sd.last_membership_mut() = StoredMembership::new(
+        Some(log_id(2, 2, 2)),
+        Membership::new_with_defaults(vec![], []),
+    );
     *sd.last_applied_mut() = Some(log_id(2, 2, 2));
     *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
@@ -332,8 +345,10 @@ async fn build_3_levels() -> anyhow::Result<(LeveledMap, impl Drop)> {
     lm.freeze_writable();
     let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() =
-        StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ())?);
+    *sd.last_membership_mut() = StoredMembership::new(
+        Some(log_id(3, 3, 3)),
+        Membership::new_with_defaults(vec![], []),
+    );
     *sd.last_applied_mut() = Some(log_id(3, 3, 3));
     *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 

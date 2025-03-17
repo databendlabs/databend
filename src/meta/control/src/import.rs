@@ -317,7 +317,7 @@ async fn init_new_cluster(
     let mut log_id = last_log_id.unwrap_or(new_log_id(0, 0, 0));
 
     let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
-    let membership = Membership::new(vec![node_ids], ())?;
+    let membership = Membership::new_with_defaults(vec![node_ids], []);
 
     // Update snapshot: Replace nodes set and membership config.
     {

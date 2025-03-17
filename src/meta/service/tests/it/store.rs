@@ -256,7 +256,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
             assert_eq!(
                 StoredMembership::new(
                     Some(log_id(1, 0, 5)),
-                    Membership::new(vec![btreeset! {4,5,6}], ())?
+                    Membership::new_with_defaults(vec![btreeset! {4,5,6}], [])
                 ),
                 mem
             );
