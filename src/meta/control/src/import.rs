@@ -38,7 +38,7 @@ use databend_common_meta_sled_store::init_get_sled_db;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorageExt;
 use databend_common_meta_sled_store::openraft::RaftSnapshotBuilder;
 use databend_common_meta_types::node::Node;
-use databend_common_meta_types::raft_types::CommittedLeaderId;
+use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::EntryPayload;
 use databend_common_meta_types::raft_types::LogId;
@@ -314,10 +314,10 @@ async fn init_new_cluster(
     };
 
     let last_log_id = std::cmp::max(last_applied, max_log_id);
-    let mut log_id = last_log_id.unwrap_or(LogId::new(CommittedLeaderId::new(0, 0), 0));
+    let mut log_id = last_log_id.unwrap_or(new_log_id(0, 0, 0));
 
     let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
-    let membership = Membership::new(vec![node_ids], ());
+    let membership = Membership::new_with_defaults(vec![node_ids], []);
 
     // Update snapshot: Replace nodes set and membership config.
     {

@@ -3567,30 +3567,10 @@ dependencies = [
 name = "databend-common-meta-app-types"
 version = "0.1.0"
 dependencies = [
- "anyerror",
  "anyhow",
- "databend-common-base",
- "databend-common-building",
- "databend-common-exception",
- "databend-common-meta-stoerr",
- "databend-common-tracing",
- "deepsize",
- "derive_more",
- "futures-util",
- "log",
- "map-api",
  "num-derive",
- "num-traits",
- "openraft",
  "prost",
- "prost-build",
- "rotbl",
  "serde",
- "serde_json",
- "thiserror 1.0.65",
- "tokio",
- "tonic",
- "tonic-build",
 ]
 
 [[package]]
@@ -10597,7 +10577,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.10.0"
-source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.7#e99cfebbc7a485fe55efe476c083d9decc888ef7"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.9#a529931e633e641cac09d078ed815a0d7c15a3c3"
 dependencies = [
  "anyerror",
  "byte-unit",
@@ -10607,7 +10587,7 @@ dependencies = [
  "futures",
  "maplit",
  "openraft-macros",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "thiserror 1.0.65",
  "tokio",
@@ -10619,7 +10599,7 @@ dependencies = [
 [[package]]
 name = "openraft-macros"
 version = "0.10.0"
-source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.7#e99cfebbc7a485fe55efe476c083d9decc888ef7"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.9#a529931e633e641cac09d078ed815a0d7c15a3c3"
 dependencies = [
  "chrono",
  "proc-macro2",

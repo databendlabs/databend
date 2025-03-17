@@ -169,7 +169,7 @@ impl RaftServiceImpl {
 
             let snapshot = Snapshot {
                 meta: snapshot_meta.clone(),
-                snapshot: Box::new(db),
+                snapshot: db,
             };
 
             let resp = raft.install_full_snapshot(req_vote, snapshot).await?;
@@ -206,7 +206,7 @@ impl RaftServiceImpl {
 
         let snapshot = Snapshot {
             meta: snapshot_meta,
-            snapshot: Box::new(db),
+            snapshot: db,
         };
 
         let res = self
