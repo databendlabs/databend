@@ -32,6 +32,8 @@ use databend_common_meta_sled_store::SledBytesError;
 use databend_common_meta_sled_store::SledOrderedSerde;
 use databend_common_meta_sled_store::SledSerde;
 
+use crate::marked::Marked;
+
 /// The identifier of the index for kv with expiration.
 #[derive(
     Default,
@@ -71,6 +73,24 @@ pub struct ExpireValue {
     #[serde(default)]
     pub seq: u64,
     pub key: String,
+}
+
+impl ExpireValue {
+    /// Convert internally used expire-index value `Marked<String>` to externally used type `ExpireValue`.
+    ///
+    /// `Marked<String>` is the value of an expire-index in the state machine.
+    /// `ExpireValue.seq` equals to the seq of the str-map record,
+    /// i.e., when an expire-index is inserted, the seq does not increase.
+    pub fn from_marked(m: Marked<String>) -> Option<Self> {
+        match m {
+            Marked::TombStone { internal_seq: _ } => None,
+            Marked::Normal {
+                internal_seq: seq,
+                value,
+                meta: _,
+            } => Some(ExpireValue::new(value, seq)),
+        }
+    }
 }
 
 fn is_zero(v: &u64) -> bool {

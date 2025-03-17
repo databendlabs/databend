@@ -105,6 +105,8 @@ History versions that are not included in the above chart:
 | [1.2.655, +∞)       | [1.2.288, +∞)            |
 
 
+![Image](https://github.com/user-attachments/assets/f63d80ee-f646-4d6a-9bec-be607e47088d)
+
 - `1.2.53` Incompatible, rolling upgrade is allowed without snapshot transmitting.
   Snapshot format changed thus during rolling upgrading,
   it requires all node data to be up-to-date, ensure there is no need to replicate with snapshot.

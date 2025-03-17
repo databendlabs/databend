@@ -33,6 +33,7 @@ pub mod aggregates;
 mod cast_rules;
 pub mod scalars;
 pub mod srfs;
+pub mod test_utils;
 
 pub fn is_builtin_function(name: &str) -> bool {
     let name = Ascii::new(name);

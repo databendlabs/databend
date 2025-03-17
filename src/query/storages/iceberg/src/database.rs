@@ -99,4 +99,21 @@ impl Database for IcebergDatabase {
         }
         Ok(tables)
     }
+
+    #[async_backtrace::framed]
+    async fn list_tables_names(&self) -> Result<Vec<String>> {
+        let table_names = self
+            .ctl
+            .iceberg_catalog()
+            .list_tables(&self.ident)
+            .await
+            .map_err(|err| {
+                ErrorCode::UnknownException(format!("Iceberg list tables failed: {err:?}"))
+            })?;
+
+        Ok(table_names
+            .into_iter()
+            .map(|table_name| table_name.name.to_string())
+            .collect())
+    }
 }

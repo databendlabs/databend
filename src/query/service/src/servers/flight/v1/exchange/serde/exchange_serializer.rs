@@ -242,8 +242,7 @@ pub fn batches_to_flight_data_with_options(
     let mut flight_data = Vec::with_capacity(batches.len());
 
     let data_gen = IpcDataGenerator::default();
-    let mut dictionary_tracker =
-        DictionaryTracker::new_with_preserve_dict_id(false, options.preserve_dict_id());
+    let mut dictionary_tracker = DictionaryTracker::new(false);
 
     for batch in batches.iter() {
         let (encoded_dictionaries, encoded_batch) =

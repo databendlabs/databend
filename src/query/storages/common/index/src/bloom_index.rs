@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::ops::ControlFlow;
 use std::ops::Deref;
 use std::sync::Arc;
 
@@ -337,73 +338,79 @@ impl BloomIndex {
     #[fastrace::trace]
     pub fn apply(
         &self,
-        mut expr: Expr<String>,
+        expr: Expr<String>,
         scalar_map: &HashMap<Scalar, u64>,
         column_stats: &StatisticsOfColumns,
         data_schema: TableSchemaRef,
     ) -> Result<FilterEvalResult> {
-        let mut new_col_id = 1;
-        let mut domains = ConstantFolder::full_input_domains(&expr);
-
-        visit_expr_column_eq_constant(
-            &mut expr,
-            &mut |span, col_name, scalar, ty, return_type| {
-                let filter_column = &Self::build_filter_column_name(
-                    self.version,
-                    data_schema.field_with_name(col_name)?,
-                )?;
-
-                // If the column doesn't contain the constant,
-                // we rewrite the expression to a new column with `false` domain.
-                if self.find(filter_column, scalar, ty, scalar_map)? == FilterEvalResult::MustFalse
-                {
-                    let new_col_name = format!("__bloom_column_{}_{}", col_name, new_col_id);
-                    new_col_id += 1;
-
-                    let bool_domain = Domain::Boolean(BooleanDomain {
-                        has_false: true,
-                        has_true: false,
-                    });
-                    let new_domain = if return_type.is_nullable() {
-                        // generate `has_null` based on the `null_count` in column statistics.
-                        let has_null = match data_schema.column_id_of(col_name) {
-                            Ok(col_id) => match column_stats.get(&col_id) {
-                                Some(stat) => stat.null_count > 0,
-                                None => true,
-                            },
-                            Err(_) => true,
-                        };
-                        Domain::Nullable(NullableDomain {
-                            has_null,
-                            value: Some(Box::new(bool_domain)),
-                        })
-                    } else {
-                        bool_domain
-                    };
-                    domains.insert(new_col_name.clone(), new_domain);
-
-                    Ok(Some(Expr::ColumnRef {
-                        span,
-                        id: new_col_name.clone(),
-                        data_type: return_type.clone(),
-                        display_name: new_col_name,
-                    }))
-                } else {
-                    Ok(None)
-                }
-            },
-        )?;
-
-        let (new_expr, _) =
-            ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-        match new_expr {
+        let (expr, domains) = self.rewrite_expr(expr, scalar_map, column_stats, data_schema)?;
+        match ConstantFolder::fold_with_domain(&expr, &domains, &self.func_ctx, &BUILTIN_FUNCTIONS)
+            .0
+        {
             Expr::Constant {
                 scalar: Scalar::Boolean(false),
                 ..
             } => Ok(FilterEvalResult::MustFalse),
             _ => Ok(FilterEvalResult::Uncertain),
         }
+    }
+
+    pub fn rewrite_expr(
+        &self,
+        mut expr: Expr<String>,
+        scalar_map: &HashMap<Scalar, u64>,
+        column_stats: &StatisticsOfColumns,
+        data_schema: TableSchemaRef,
+    ) -> Result<(Expr<String>, HashMap<String, Domain>)> {
+        let mut domains = expr
+            .column_refs()
+            .into_iter()
+            .map(|(id, ty)| {
+                match ty.remove_nullable() {
+                    DataType::Binary
+                    | DataType::String
+                    | DataType::Number(_)
+                    | DataType::Decimal(_)
+                    | DataType::Timestamp
+                    | DataType::Date => (),
+                    _ => {
+                        let domain = Domain::full(&ty);
+                        return (id, domain);
+                    }
+                };
+                let domain = data_schema
+                    .column_id_of(&id)
+                    .ok()
+                    .and_then(|col_id| {
+                        column_stats.get(&col_id).map(|stat| {
+                            match Domain::from_min_max(stat.min.clone(), stat.max.clone(), &ty) {
+                                Domain::Nullable(NullableDomain { value, .. }) => {
+                                    Domain::Nullable(NullableDomain {
+                                        has_null: stat.null_count > 0,
+                                        value,
+                                    })
+                                }
+                                domain => domain,
+                            }
+                        })
+                    })
+                    .unwrap_or_else(|| Domain::full(&ty));
+                (id, domain)
+            })
+            .collect::<HashMap<_, _>>();
+
+        let mut visitor = RewriteVisitor {
+            new_col_id: 1,
+            index: self,
+            data_schema,
+            scalar_map,
+            column_stats,
+            domains: &mut domains,
+        };
+
+        visit_expr_column_eq_constant(&mut expr, &mut visitor)?;
+
+        Ok((expr, domains))
     }
 
     /// calculate digest for column
@@ -474,21 +481,22 @@ impl BloomIndex {
         Ok(digest)
     }
 
-    /// Find all columns that match the pattern of `col = <constant>` in the expression.
-    pub fn find_eq_columns(
-        expr: &Expr<String>,
-        fields: Vec<TableField>,
-    ) -> Result<Vec<(TableField, Scalar, DataType)>> {
-        let mut cols = Vec::new();
-        visit_expr_column_eq_constant(&mut expr.clone(), &mut |_, col_name, scalar, ty, _| {
-            if let Some(v) = fields.iter().find(|f: &&TableField| f.name() == col_name) {
-                if Xor8Filter::supported_type(ty) && !scalar.is_null() {
-                    cols.push((v.clone(), scalar.clone(), ty.clone()));
-                }
-            }
-            Ok(None)
-        })?;
-        Ok(cols)
+    /// Find all columns that can be use for index in the expression.
+    #[expect(clippy::type_complexity)]
+    pub fn filter_index_field(
+        mut expr: Expr<String>,
+        fields: &[TableField],
+    ) -> Result<(Vec<TableField>, Vec<(Scalar, DataType)>)> {
+        let mut visitor = ShortListVisitor {
+            fields: fields.to_vec(),
+            founds: Vec::new(),
+            scalars: Vec::new(),
+        };
+        visit_expr_column_eq_constant(&mut expr, &mut visitor)?;
+        let ShortListVisitor {
+            founds, scalars, ..
+        } = visitor;
+        Ok((founds, scalars))
     }
 
     /// For every applicable column, we will create a filter.
@@ -560,11 +568,9 @@ impl BloomIndex {
 
 fn visit_expr_column_eq_constant(
     expr: &mut Expr<String>,
-    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
+    visitor: &mut impl EqVisitor,
 ) -> Result<()> {
-    // Find patterns like `Column = <constant>`, `<constant> = Column`,
-    // or `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
-    match expr {
+    match match expr {
         Expr::FunctionCall {
             span,
             id,
@@ -572,6 +578,7 @@ fn visit_expr_column_eq_constant(
             return_type,
             ..
         } if id.name() == "eq" => match args.as_slice() {
+            // patterns like `Column = <constant>`, `<constant> = Column`
             [Expr::ColumnRef {
                 id,
                 data_type: column_type,
@@ -594,13 +601,12 @@ fn visit_expr_column_eq_constant(
                 // debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
                 if scalar_type == column_type {
-                    if let Some(new_expr) = visitor(*span, id, scalar, column_type, return_type)? {
-                        *expr = new_expr;
-
-                        return Ok(());
-                    }
+                    visitor.enter_target(*span, id, scalar, column_type, return_type)?
+                } else {
+                    ControlFlow::Continue(None)
                 }
             }
+            // patterns like `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
             [Expr::FunctionCall { id, args, .. }, Expr::Constant {
                 scalar,
                 data_type: scalar_type,
@@ -610,16 +616,12 @@ fn visit_expr_column_eq_constant(
                 scalar,
                 data_type: scalar_type,
                 ..
-            }, Expr::FunctionCall { id, args, .. }] => {
-                if id.name() == "get" {
-                    if let Some(new_expr) =
-                        visit_map_column(*span, args, scalar, scalar_type, return_type, visitor)?
-                    {
-                        *expr = new_expr;
-                        return Ok(());
-                    }
-                }
+            }, Expr::FunctionCall { id, args, .. }]
+                if id.name() == "get" =>
+            {
+                visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
             }
+            // patterns like `CAST(MapColumn[<key>] as X) = <constant>`, `<constant> = CAST(MapColumn[<key>] as X)`
             [Expr::Cast {
                 expr:
                     box Expr::FunctionCall {
@@ -649,74 +651,391 @@ fn visit_expr_column_eq_constant(
                     },
                 dest_type,
                 ..
-            }] => {
-                if id.name() == "get" {
-                    // Only support cast variant value in map to string value
-                    if return_type.remove_nullable() != DataType::Variant
-                        || dest_type.remove_nullable() != DataType::String
-                    {
-                        return Ok(());
-                    }
-                    if let Some(new_expr) =
-                        visit_map_column(*span, args, scalar, scalar_type, return_type, visitor)?
-                    {
-                        *expr = new_expr;
-                        return Ok(());
-                    }
+            }] if id.name() == "get" => {
+                // Only support cast variant value in map to string value
+                if return_type.remove_nullable() != DataType::Variant
+                    || dest_type.remove_nullable() != DataType::String
+                {
+                    ControlFlow::Break(None)
+                } else {
+                    visitor.enter_map_column(*span, args, scalar, scalar_type, return_type)?
                 }
             }
-            _ => (),
-        },
-        _ => (),
-    }
+            [cast @ Expr::Cast { .. }, Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }]
+            | [Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }, cast @ Expr::Cast { .. }] => visitor.enter_cast(cast, scalar, scalar_type)?,
 
-    // Otherwise, rewrite sub expressions.
-    match expr {
-        Expr::Cast { expr, .. } => {
-            visit_expr_column_eq_constant(expr, visitor)?;
-        }
-        Expr::FunctionCall { args, .. } => {
-            for arg in args.iter_mut() {
-                visit_expr_column_eq_constant(arg, visitor)?;
+            [func @ Expr::FunctionCall {
+                id,
+                args,
+                return_type: dest_type,
+                ..
+            }, Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }]
+            | [Expr::Constant {
+                scalar,
+                data_type: scalar_type,
+                ..
+            }, func @ Expr::FunctionCall {
+                id,
+                args,
+                return_type: dest_type,
+                ..
+            }] if id.name().starts_with("to_") && args.len() == 1 && func.contains_column_ref() => {
+                visitor.enter_cast(
+                    &Expr::Cast {
+                        span: *span,
+                        is_try: false,
+                        expr: Box::new(args[0].clone()),
+                        dest_type: dest_type.clone(),
+                    },
+                    scalar,
+                    scalar_type,
+                )?
+            }
+            _ => ControlFlow::Continue(None),
+        },
+        _ => ControlFlow::Continue(None),
+    } {
+        ControlFlow::Continue(new_expr) => {
+            if let Some(new_expr) = new_expr {
+                *expr = new_expr;
+            }
+            // Otherwise, rewrite sub expressions.
+            match expr {
+                Expr::Cast { expr, .. } => {
+                    visit_expr_column_eq_constant(expr, visitor)?;
+                }
+                Expr::FunctionCall { args, .. } => {
+                    for arg in args.iter_mut() {
+                        visit_expr_column_eq_constant(arg, visitor)?;
+                    }
+                }
+                _ => (),
             }
         }
-        _ => (),
+        ControlFlow::Break(Some(new_expr)) => {
+            *expr = new_expr;
+        }
+        ControlFlow::Break(None) => (),
     }
-
     Ok(())
 }
 
-fn visit_map_column(
-    span: Span,
-    args: &[Expr<String>],
-    scalar: &Scalar,
-    scalar_type: &DataType,
-    return_type: &DataType,
-    visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
-) -> Result<Option<Expr<String>>> {
-    match &args[0] {
-        Expr::ColumnRef { id, data_type, .. }
-        | Expr::Cast {
-            expr: box Expr::ColumnRef { id, data_type, .. },
-            ..
-        } => {
-            if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
-                let val_type = match inner_ty {
-                    DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                    _ => unreachable!(),
-                };
-                // Only JSON value of string type have bloom index.
-                if val_type.remove_nullable() == DataType::Variant {
-                    if scalar_type.remove_nullable() != DataType::String {
-                        return Ok(None);
+type ResultRewrite = Result<ControlFlow<Option<Expr<String>>, Option<Expr<String>>>>;
+
+trait EqVisitor {
+    fn enter_target(
+        &mut self,
+        span: Span,
+        col_name: &str,
+        scalar: &Scalar,
+        ty: &DataType,
+        return_type: &DataType,
+    ) -> ResultRewrite;
+
+    fn enter_map_column(
+        &mut self,
+        span: Span,
+        args: &[Expr<String>],
+        scalar: &Scalar,
+        scalar_type: &DataType,
+        return_type: &DataType,
+    ) -> ResultRewrite {
+        match &args[0] {
+            Expr::ColumnRef { id, data_type, .. }
+            | Expr::Cast {
+                expr: box Expr::ColumnRef { id, data_type, .. },
+                ..
+            } => {
+                if let DataType::Map(box inner_ty) = data_type.remove_nullable() {
+                    let val_type = match inner_ty {
+                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
+                        _ => unreachable!(),
+                    };
+                    // Only JSON value of string type have bloom index.
+                    if val_type.remove_nullable() == DataType::Variant {
+                        if scalar_type.remove_nullable() != DataType::String {
+                            return Ok(ControlFlow::Continue(None));
+                        }
+                    } else if val_type.remove_nullable() != scalar_type.remove_nullable() {
+                        return Ok(ControlFlow::Continue(None));
                     }
-                } else if val_type.remove_nullable() != scalar_type.remove_nullable() {
-                    return Ok(None);
+                    return self.enter_target(span, id, scalar, scalar_type, return_type);
                 }
-                return visitor(span, id, scalar, scalar_type, return_type);
+            }
+            _ => {}
+        }
+        Ok(ControlFlow::Continue(None))
+    }
+
+    fn enter_cast(
+        &mut self,
+        _cast: &Expr<String>,
+        _scalar: &Scalar,
+        _scalar_type: &DataType,
+    ) -> ResultRewrite {
+        Ok(ControlFlow::Continue(None))
+    }
+}
+
+struct RewriteVisitor<'a> {
+    new_col_id: usize,
+    index: &'a BloomIndex,
+    data_schema: TableSchemaRef,
+    scalar_map: &'a HashMap<Scalar, u64>,
+    column_stats: &'a StatisticsOfColumns,
+    domains: &'a mut HashMap<String, Domain>,
+}
+
+impl EqVisitor for RewriteVisitor<'_> {
+    fn enter_target(
+        &mut self,
+        span: Span,
+        col_name: &str,
+        scalar: &Scalar,
+        ty: &DataType,
+        return_type: &DataType,
+    ) -> ResultRewrite {
+        let filter_column = &BloomIndex::build_filter_column_name(
+            self.index.version,
+            self.data_schema.field_with_name(col_name)?,
+        )?;
+
+        // If the column doesn't contain the constant,
+        // we rewrite the expression to a new column with `false` domain.
+        if self
+            .index
+            .find(filter_column, scalar, ty, self.scalar_map)?
+            != FilterEvalResult::MustFalse
+        {
+            return Ok(ControlFlow::Break(None));
+        }
+        let new_col_name = format!("__bloom_column_{}_{}", col_name, self.new_col_id);
+        self.new_col_id += 1;
+
+        let bool_domain = Domain::Boolean(BooleanDomain {
+            has_false: true,
+            has_true: false,
+        });
+        let new_domain = if return_type.is_nullable() {
+            // generate `has_null` based on the `null_count` in column statistics.
+            let has_null = match self.data_schema.column_id_of(col_name) {
+                Ok(col_id) => match self.column_stats.get(&col_id) {
+                    Some(stat) => stat.null_count > 0,
+                    None => true,
+                },
+                Err(_) => true,
+            };
+            Domain::Nullable(NullableDomain {
+                has_null,
+                value: Some(Box::new(bool_domain)),
+            })
+        } else {
+            bool_domain
+        };
+        self.domains.insert(new_col_name.clone(), new_domain);
+
+        Ok(ControlFlow::Break(Some(Expr::ColumnRef {
+            span,
+            id: new_col_name.clone(),
+            data_type: return_type.clone(),
+            display_name: new_col_name,
+        })))
+    }
+
+    fn enter_cast(
+        &mut self,
+        cast: &Expr<String>,
+        scalar: &Scalar,
+        scalar_type: &DataType,
+    ) -> ResultRewrite {
+        let Expr::Cast {
+            span,
+            is_try: false,
+            expr:
+                box Expr::ColumnRef {
+                    id,
+                    data_type: src_type,
+                    ..
+                },
+            dest_type,
+            ..
+        } = cast
+        else {
+            return Ok(ControlFlow::Continue(None));
+        };
+
+        // For any injective function y = f(x), the eq(column, inverse_f(const)) is a necessary condition for eq(f(column), const).
+        // For example, the result of col = '+1'::int contains col::string = '+1'.
+        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
+            return Ok(ControlFlow::Break(None));
+        }
+
+        // check domain for possible overflow
+        if ConstantFolder::<String>::fold_with_domain(
+            cast,
+            self.domains,
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        )
+        .1
+        .is_none()
+        {
+            return Ok(ControlFlow::Break(None));
+        }
+
+        let Some(s) = cast_const(src_type.to_owned(), scalar_type.to_owned(), scalar) else {
+            return Ok(ControlFlow::Break(None));
+        };
+        if s.is_null() {
+            return Ok(ControlFlow::Break(None));
+        }
+
+        self.enter_target(
+            *span,
+            id,
+            &s,
+            src_type,
+            &if dest_type.is_nullable() {
+                DataType::Boolean.wrap_nullable()
+            } else {
+                DataType::Boolean
+            },
+        )
+    }
+}
+
+struct ShortListVisitor {
+    fields: Vec<TableField>,
+    founds: Vec<TableField>,
+    scalars: Vec<(Scalar, DataType)>,
+}
+
+impl ShortListVisitor {
+    fn found_field(&self, name: &str) -> Option<&TableField> {
+        self.fields.iter().find(|field| field.name == name)
+    }
+}
+
+impl EqVisitor for ShortListVisitor {
+    fn enter_target(
+        &mut self,
+        _: Span,
+        col_name: &str,
+        scalar: &Scalar,
+        ty: &DataType,
+        _: &DataType,
+    ) -> ResultRewrite {
+        if let Some(v) = self.found_field(col_name) {
+            if !scalar.is_null() && Xor8Filter::supported_type(ty) {
+                self.founds.push(v.clone());
+                self.scalars.push((scalar.clone(), ty.clone()));
             }
         }
-        _ => {}
+        Ok(ControlFlow::Break(None))
     }
-    Ok(None)
+
+    fn enter_cast(
+        &mut self,
+        cast: &Expr<String>,
+        scalar: &Scalar,
+        scalar_type: &DataType,
+    ) -> ResultRewrite {
+        let Expr::Cast {
+            is_try: false,
+            expr:
+                box Expr::ColumnRef {
+                    id,
+                    data_type: src_type,
+                    ..
+                },
+            dest_type,
+            ..
+        } = cast
+        else {
+            return Ok(ControlFlow::Continue(None));
+        };
+
+        let Some(field) = self.found_field(id) else {
+            return Ok(ControlFlow::Break(None));
+        };
+        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
+            return Ok(ControlFlow::Break(None));
+        }
+
+        let Some(s) = cast_const(src_type.to_owned(), scalar_type.to_owned(), scalar) else {
+            return Ok(ControlFlow::Break(None));
+        };
+
+        if !s.is_null() {
+            self.founds.push(field.to_owned());
+            self.scalars.push((s, src_type.to_owned()));
+        }
+
+        Ok(ControlFlow::Break(None))
+    }
+}
+
+fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
+    if src == dest {
+        return true;
+    }
+
+    match (src, dest) {
+        (DataType::Boolean, DataType::String | DataType::Number(_) | DataType::Decimal(_)) => true,
+
+        (DataType::Number(src), DataType::Number(dest))
+            if src.is_integer() && dest.is_integer() =>
+        {
+            true
+        }
+        (DataType::Number(src), DataType::Decimal(_)) if src.is_integer() => true,
+        (DataType::Number(_), DataType::String) => true,
+        (DataType::Decimal(_), DataType::String) => true,
+
+        (DataType::Date, DataType::Timestamp) => true,
+
+        // (_, DataType::Boolean) => false,
+        // (DataType::String, _) => false,
+        // (DataType::Decimal(_), DataType::Number(_)) => false,
+        // (DataType::Number(src), DataType::Number(dest))
+        //     if src.is_float() && dest.is_integer() =>
+        // {
+        //     false
+        // }
+        (DataType::Nullable(src), DataType::Nullable(dest)) => is_injective_cast(src, dest),
+        _ => false,
+    }
+}
+
+fn cast_const(dest_type: DataType, src_type: DataType, scalar: &Scalar) -> Option<Scalar> {
+    let (_, Some(domain)) = ConstantFolder::<String>::fold(
+        &Expr::Cast {
+            span: None,
+            is_try: false,
+            expr: Box::new(Expr::Constant {
+                span: None,
+                scalar: scalar.to_owned(),
+                data_type: src_type,
+            }),
+            dest_type,
+        },
+        &FunctionContext::default(),
+        &BUILTIN_FUNCTIONS,
+    ) else {
+        return None;
+    };
+
+    domain.as_singleton()
 }

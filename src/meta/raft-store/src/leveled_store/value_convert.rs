@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Subscribe events and dispatch them to watchers.
+//! Convert one type to another type for this crate to convert between 3rd party types.
 
-mod command;
-mod dispatcher;
-mod dispatcher_handle;
+use std::io;
 
-pub use command::Command;
-pub use command::Update;
-pub use dispatcher::Dispatcher;
-pub use dispatcher_handle::DispatcherHandle;
+/// Convert one type to another type for this crate to convert between 3rd party types.
+pub trait ValueConvert<T>
+where Self: Sized
+{
+    /// Convert `Self` to `T`.
+    fn conv_to(self) -> Result<T, io::Error>;
+
+    /// Convert `T` to `Self`.
+    fn conv_from(value: T) -> Result<Self, io::Error>;
+}

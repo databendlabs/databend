@@ -26,7 +26,7 @@ use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_app::schema as mt;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_meta_types::NonEmptyString;
+use databend_common_meta_app_types::non_empty::NonEmptyString;
 use databend_common_protos::pb;
 
 use crate::reader_check_msg;

@@ -216,14 +216,20 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply>;
 
-    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>>;
+    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        Ok(vec![])
+    }
 
-    async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>>;
+    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        Ok(vec![])
+    }
 
     async fn list_indexes_by_table_id(
         &self,
-        req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>>;
+        _req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>> {
+        Ok(vec![])
+    }
 
     async fn create_virtual_column(&self, req: CreateVirtualColumnReq) -> Result<()>;
 
@@ -304,6 +310,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     /// List all tables in a database.This will not list temporary tables.
     async fn list_tables(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<Arc<dyn Table>>>;
+
+    /// List all tables names in a database.This will not list temporary tables.
+    async fn list_tables_names(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<String>>;
 
     fn list_temporary_tables(&self) -> Result<Vec<TableInfo>> {
         Err(ErrorCode::Unimplemented(
