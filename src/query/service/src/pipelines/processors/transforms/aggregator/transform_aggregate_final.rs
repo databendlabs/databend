@@ -67,13 +67,17 @@ impl AccumulatingTransform for TransformFinalAggregate {
                     .combine_payloads(&payload, &mut self.flush_state)?;
             }
             AggregateMeta::InFlightPayload(_payload) => {
-                let payload = self.deserialize_flight(data)?;
-                self.hash_table
-                    .combine_payload(&payload, &mut self.flush_state)?;
+                if !data.is_empty() {
+                    let payload = self.deserialize_flight(data)?;
+                    self.hash_table
+                        .combine_payload(&payload, &mut self.flush_state)?;
+                }
             }
             AggregateMeta::AggregatePayload(payload) => {
-                self.hash_table
-                    .combine_payload(&payload.payload, &mut self.flush_state)?;
+                if payload.payload.len() != 0 {
+                    self.hash_table
+                        .combine_payload(&payload.payload, &mut self.flush_state)?;
+                }
             }
             AggregateMeta::FinalPartition => {
                 if self.hash_table.len() == 0 {

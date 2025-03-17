@@ -157,7 +157,7 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
     fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let Some(meta) = data_block.take_meta() else {
             // only exchange data
-            if !MULTIWAY_SORT && data_block.is_empty() {
+            if data_block.is_empty() {
                 return Ok(vec![]);
             }
 
@@ -205,9 +205,9 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
                 Ok(blocks)
             }
             AggregateMeta::AggregatePayload(p) => {
-                // if p.payload.len() == 0 {
-                //     return Ok(vec![]);
-                // }
+                if p.payload.len() == 0 {
+                    return Ok(vec![]);
+                }
 
                 let mut blocks = Vec::with_capacity(n);
                 for (idx, payload) in scatter_payload(p.payload, n)?.into_iter().enumerate() {
