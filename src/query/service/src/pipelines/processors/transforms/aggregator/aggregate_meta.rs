@@ -37,7 +37,8 @@ pub struct SerializedPayload {
     pub bucket: isize,
     pub data_block: DataBlock,
     // use for new agg_hashtable
-    pub max_partition_count: usize,
+    pub max_partition: usize,
+    pub global_max_partition: usize,
 }
 
 impl SerializedPayload {
@@ -113,20 +114,23 @@ pub struct SpilledPayload {
     pub location: String,
     pub data_range: Range<u64>,
     pub destination_node: String,
-    pub max_partition_count: usize,
+    pub max_partition: usize,
+    pub global_max_partition: usize,
 }
 
 pub struct AggregatePayload {
     pub partition: isize,
     pub payload: Payload,
     // use for new agg_hashtable
-    pub max_partition_count: usize,
+    pub max_partition: usize,
+    pub global_max_partition: usize,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct InFlightPayload {
     pub partition: isize,
     pub max_partition: usize,
+    pub global_max_partition: usize,
 }
 
 pub struct FinalPayload {
@@ -146,12 +150,13 @@ impl AggregateMeta {
     pub fn create_agg_payload(
         payload: Payload,
         partition: isize,
-        max_partition_count: usize,
+        max_partition: usize,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::AggregatePayload(AggregatePayload {
             payload,
             partition,
-            max_partition_count,
+            max_partition,
+            global_max_partition: max_partition,
         }))
     }
 
@@ -159,18 +164,20 @@ impl AggregateMeta {
         Box::new(AggregateMeta::InFlightPayload(InFlightPayload {
             partition,
             max_partition,
+            global_max_partition: max_partition,
         }))
     }
 
     pub fn create_serialized(
         bucket: isize,
         block: DataBlock,
-        max_partition_count: usize,
+        max_partition: usize,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::Serialized(SerializedPayload {
             bucket,
             data_block: block,
-            max_partition_count,
+            max_partition,
+            global_max_partition: max_partition,
         }))
     }
 
@@ -180,6 +187,24 @@ impl AggregateMeta {
 
     pub fn create_final() -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::FinalPartition)
+    }
+
+    pub fn set_global_max_partition(&mut self, global_max_partition: usize) {
+        match self {
+            AggregateMeta::Serialized(v) => {
+                v.global_max_partition = global_max_partition;
+            }
+            AggregateMeta::SpilledPayload(v) => {
+                v.global_max_partition = global_max_partition;
+            }
+            AggregateMeta::AggregatePayload(v) => {
+                v.global_max_partition = global_max_partition;
+            }
+            AggregateMeta::InFlightPayload(v) => {
+                v.global_max_partition = global_max_partition;
+            }
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
     }
 }
 

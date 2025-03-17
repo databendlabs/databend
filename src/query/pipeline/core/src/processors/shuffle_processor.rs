@@ -45,6 +45,23 @@ pub trait Exchange: Send + Sync + 'static {
     fn sorting_function(_: &DataBlock, _: &DataBlock) -> Ordering {
         unimplemented!()
     }
+
+    fn multiway_pick(data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
+        let position =
+            data_blocks
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
+                .min_by(|(left_idx, left_block), (right_idx, right_block)| {
+                    match Self::sorting_function(left_block, right_block) {
+                        Ordering::Less => Ordering::Less,
+                        Ordering::Greater => Ordering::Greater,
+                        Ordering::Equal => left_idx.cmp(right_idx),
+                    }
+                });
+
+        position.map(|(idx, _)| idx)
+    }
 }
 
 pub struct ShuffleProcessor {
@@ -290,22 +307,6 @@ impl<T: Exchange> MergePartitionProcessor<T> {
             _phantom_data: Default::default(),
         }))
     }
-
-    fn multiway_pick(&self, data_blocks: &[Option<DataBlock>]) -> Option<usize> {
-        let position = data_blocks
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
-            .min_by(|(left_idx, left_block), (right_idx, right_block)| {
-                match T::sorting_function(left_block, right_block) {
-                    Ordering::Less => Ordering::Less,
-                    Ordering::Greater => Ordering::Greater,
-                    Ordering::Equal => left_idx.cmp(right_idx),
-                }
-            });
-
-        position.map(|(idx, _)| idx)
-    }
 }
 
 impl<T: Exchange> Processor for MergePartitionProcessor<T> {
@@ -363,7 +364,7 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
         }
 
         if need_pick_block_to_push {
-            if let Some(pick_index) = self.multiway_pick(&self.inputs_data) {
+            if let Some(pick_index) = T::multiway_pick(&mut self.inputs_data) {
                 if let Some(block) = self.inputs_data[pick_index].take() {
                     self.output.push_data(Ok(block));
                     return Ok(Event::NeedConsume);

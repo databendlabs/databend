@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_pipeline_core::processors::create_resize_item;
 use databend_common_pipeline_core::Pipe;
 use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
@@ -57,8 +56,7 @@ impl ExchangeTransform {
                 let senders = flight_senders.into_iter();
                 for (destination_id, sender) in params.destination_ids.iter().zip(senders) {
                     items.push(match destination_id == &params.executor_id {
-                        true if max_threads == 1 => create_dummy_item(),
-                        true => create_resize_item(1, max_threads),
+                        true => create_dummy_item(),
                         false => create_writer_item(
                             sender,
                             false,
@@ -69,26 +67,33 @@ impl ExchangeTransform {
                     });
                 }
 
-                let mut nodes_source = 0;
                 let receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
-                for (destination_id, receiver) in receivers {
-                    if destination_id != params.executor_id {
-                        nodes_source += 1;
-                        items.push(create_reader_item(
-                            receiver,
-                            &destination_id,
-                            &params.executor_id,
-                            params.fragment_id,
-                        ));
+                let nodes_source = receivers.len();
+                let mut idx = 1;
+                let mut reorder = vec![0_usize; nodes_source];
+
+                for (index, (destination_id, receiver)) in receivers.into_iter().enumerate() {
+                    if destination_id == params.executor_id {
+                        reorder[0] = index;
+                        continue;
                     }
+
+                    reorder[idx] = index;
+                    idx += 1;
+                    items.push(create_reader_item(
+                        receiver,
+                        &destination_id,
+                        &params.executor_id,
+                        params.fragment_id,
+                    ));
                 }
 
-                let new_outputs = max_threads + nodes_source;
-                pipeline.add_pipe(Pipe::create(len, new_outputs, items));
+                pipeline.add_pipe(Pipe::create(len, nodes_source, items));
 
-                if !params.enable_multiway_sort {
-                    pipeline.try_resize(max_threads)?;
-                }
+                match params.enable_multiway_sort {
+                    true => pipeline.reorder_inputs(reorder),
+                    false => pipeline.try_resize(max_threads)?,
+                };
 
                 pipeline.add_transform(|input, output| {
                     TransformAggregateDeserializer::try_create(input, output, &params.schema)

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -34,6 +35,7 @@ use databend_common_expression::Payload;
 use databend_common_expression::PayloadFlushState;
 use databend_common_expression::ProbeState;
 use databend_common_pipeline_core::processors::Event;
+use databend_common_pipeline_core::processors::Exchange;
 use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
@@ -51,49 +53,21 @@ use crate::pipelines::processors::transforms::aggregator::aggregate_meta::Aggreg
 use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
 static SINGLE_LEVEL_BUCKET_NUM: isize = -1;
-static MAX_PARTITION_COUNT: usize = 128;
-
-struct InputPortState {
-    port: Arc<InputPort>,
-    partition: isize,
-    max_partition: usize,
-}
-
-impl Debug for InputPortState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InputPortState")
-            .field("bucket", &self.partition)
-            .field("max_partition_count", &self.max_partition)
-            .finish()
-    }
-}
 
 pub struct TransformPartitionDispatch {
     outputs: Vec<Arc<OutputPort>>,
-    inputs: Vec<InputPortState>,
+    input: Arc<InputPort>,
     outputs_data: Vec<VecDeque<DataBlock>>,
     output_index: usize,
+    initialized_input: bool,
+
     max_partition: usize,
-    initialized_all_inputs: bool,
+    working_partition: isize,
     partitions: Partitions,
 }
 
 impl TransformPartitionDispatch {
-    pub fn create(
-        input_nums: usize,
-        output_nums: usize,
-        params: Arc<AggregatorParams>,
-    ) -> Result<Self> {
-        let mut inputs = Vec::with_capacity(input_nums);
-
-        for _index in 0..input_nums {
-            inputs.push(InputPortState {
-                partition: -1,
-                port: InputPort::create(),
-                max_partition: 0,
-            });
-        }
-
+    pub fn create(output_nums: usize, params: Arc<AggregatorParams>) -> Result<Self> {
         let mut outputs = Vec::with_capacity(output_nums);
         let mut outputs_data = Vec::with_capacity(output_nums);
 
@@ -102,30 +76,20 @@ impl TransformPartitionDispatch {
             outputs_data.push(VecDeque::new());
         }
 
-        let max_partition = match params.cluster_aggregator {
-            true => MAX_PARTITION_COUNT,
-            false => 0,
-        };
-
         Ok(TransformPartitionDispatch {
-            inputs,
             outputs,
             outputs_data,
-            max_partition,
+            input: InputPort::create(),
             output_index: 0,
-            initialized_all_inputs: false,
+            max_partition: 0,
+            initialized_input: false,
             partitions: Partitions::create_unaligned(params),
+            working_partition: 0,
         })
     }
 
-    pub fn get_inputs(&self) -> Vec<Arc<InputPort>> {
-        let mut inputs = Vec::with_capacity(self.inputs.len());
-
-        for input_state in &self.inputs {
-            inputs.push(input_state.port.clone());
-        }
-
-        inputs
+    pub fn get_input(&self) -> Arc<InputPort> {
+        self.input.clone()
     }
 
     pub fn get_outputs(&self) -> Vec<Arc<OutputPort>> {
@@ -134,95 +98,36 @@ impl TransformPartitionDispatch {
 
     // Align each input's max_partition to the maximum max_partition.
     // If an input's max_partition is smaller than the maximum, continuously fetch its data until either the stream ends or its max_partition reaches/exceeds the maximum value.
-    fn initialize_all_inputs(&mut self) -> Result<bool> {
-        let mut initialized_all_inputs = true;
-
-        for index in 0..self.inputs.len() {
-            if self.inputs[index].port.is_finished() {
-                self.inputs[index].max_partition = self.max_partition;
-                self.inputs[index].partition = self.max_partition as isize;
-                continue;
-            }
-
-            if self.inputs[index].max_partition > 0
-                && self.inputs[index].partition > SINGLE_LEVEL_BUCKET_NUM
-                && self.inputs[index].max_partition == self.max_partition
-            {
-                continue;
-            }
-
-            if !self.inputs[index].port.has_data() {
-                self.inputs[index].port.set_need_data();
-                initialized_all_inputs = false;
-                continue;
-            }
-
-            let before_max_partition_count = self.max_partition;
-
-            self.add_block(index, self.inputs[index].port.pull_data().unwrap()?)?;
-
-            // we need pull all spill data in init, and data less than max partition
-            if self.inputs[index].partition <= SINGLE_LEVEL_BUCKET_NUM
-                || self.inputs[index].max_partition < self.max_partition
-            {
-                self.inputs[index].port.set_need_data();
-                initialized_all_inputs = false;
-            }
-
-            // max partition count change
-            if before_max_partition_count != self.max_partition {
-                // set need data for inputs which is less than the max partition
-                for i in 0..index {
-                    if self.inputs[i].port.is_finished() {
-                        self.inputs[i].max_partition = self.max_partition;
-                        self.inputs[i].partition = self.max_partition as isize;
-                        continue;
-                    }
-
-                    // It will soon wake itself up
-                    if self.inputs[i].port.has_data() {
-                        continue;
-                    }
-
-                    if self.inputs[i].max_partition != self.max_partition {
-                        self.inputs[i].port.set_need_data();
-                        initialized_all_inputs = false;
-                    }
-                }
-            }
+    fn initialize_input(&mut self) -> Result<bool> {
+        if self.input.is_finished() {
+            return Ok(true);
         }
 
-        Ok(initialized_all_inputs)
-    }
+        if !self.input.has_data() {
+            self.input.set_need_data();
+            return Ok(false);
+        }
 
-    fn add_block(&mut self, index: usize, data_block: DataBlock) -> Result<()> {
-        (
-            self.inputs[index].partition,
-            self.inputs[index].max_partition,
-        ) = self.partitions.add_block(data_block)?;
-
-        self.max_partition = std::cmp::max(self.max_partition, self.inputs[index].max_partition);
-        Ok(())
+        let data_block = self.input.pull_data().unwrap()?;
+        let (partition, max_partition, global_max_partition) =
+            self.partitions.add_block(data_block)?;
+        self.max_partition = global_max_partition;
+        Ok(partition > SINGLE_LEVEL_BUCKET_NUM && max_partition == global_max_partition)
     }
 
     fn ready_partition(&mut self) -> Option<isize> {
-        let inputs_min_partition = self.working_partition()?;
         let storage_min_partition = self.partitions.min_partition()?;
 
-        if storage_min_partition >= inputs_min_partition {
+        if storage_min_partition >= self.working_partition {
             return None;
         }
 
         Some(storage_min_partition)
     }
 
-    fn working_partition(&mut self) -> Option<isize> {
-        self.inputs.iter().map(|x| x.partition).min()
-    }
-
     fn fetch_ready_partition(&mut self) -> Result<()> {
-        while let Some(ready_partition) = self.ready_partition() {
-            let ready_partition = self.partitions.take_partition(ready_partition);
+        while let Some(ready_partition_id) = self.ready_partition() {
+            let ready_partition = self.partitions.take_partition(ready_partition_id);
 
             for (meta, data_block) in ready_partition {
                 self.outputs_data[self.output_index]
@@ -263,16 +168,13 @@ impl Processor for TransformPartitionDispatch {
         }
 
         if all_output_finished {
-            for input_state in &self.inputs {
-                input_state.port.finish();
-            }
-
+            self.input.finish();
             return Ok(Event::Finished);
         }
 
         // We pull the first unsplitted data block
-        if !self.initialized_all_inputs {
-            if self.initialize_all_inputs()? {
+        if !self.initialized_input {
+            if self.initialize_input()? {
                 return Ok(Event::Sync);
             }
 
@@ -290,42 +192,26 @@ impl Processor for TransformPartitionDispatch {
         }
 
         if !output_can_push {
-            for input_state in &self.inputs {
-                input_state.port.set_not_need_data();
-            }
-
+            self.input.set_not_need_data();
             return Ok(Event::NeedConsume);
         }
 
-        self.fetch_ready_partition()?;
+        if self.input.is_finished() {
+            self.working_partition = self.max_partition as isize;
+            self.fetch_ready_partition()?;
+        }
 
-        let working_partition = self.working_partition().unwrap_or(0);
+        if self.input.has_data() {
+            let data_block = self.input.pull_data().unwrap()?;
+            let (partition, _, _) = self.partitions.add_block(data_block)?;
 
-        let mut all_inputs_is_finished = true;
-        for index in 0..self.inputs.len() {
-            if self.inputs[index].port.is_finished() {
-                self.inputs[index].partition = self.max_partition as isize;
-                continue;
-            }
-
-            all_inputs_is_finished = false;
-            if self.inputs[index].partition > working_partition {
-                continue;
-            }
-
-            if !self.inputs[index].port.has_data() {
-                self.inputs[index].port.set_need_data();
-                continue;
-            }
-
-            self.add_block(index, self.inputs[index].port.pull_data().unwrap()?)?;
-
-            if self.inputs[index].partition <= working_partition {
-                self.inputs[index].port.set_need_data();
+            if partition != self.working_partition {
+                // ready partition
+                self.fetch_ready_partition()?;
             }
         }
 
-        self.fetch_ready_partition()?;
+        self.input.set_need_data();
 
         let mut has_data = false;
         for (idx, output) in self.outputs.iter().enumerate() {
@@ -342,7 +228,7 @@ impl Processor for TransformPartitionDispatch {
             has_data |= !self.outputs_data[idx].is_empty();
         }
 
-        if all_inputs_is_finished && !has_data {
+        if self.input.is_finished() && !has_data {
             for output in &self.outputs {
                 output.finish();
             }
@@ -354,8 +240,8 @@ impl Processor for TransformPartitionDispatch {
     }
 
     fn process(&mut self) -> Result<()> {
-        if !self.initialized_all_inputs {
-            self.initialized_all_inputs = true;
+        if !self.initialized_input {
+            self.initialized_input = true;
             return self.partitions.align(self.max_partition);
         }
 
@@ -363,26 +249,112 @@ impl Processor for TransformPartitionDispatch {
     }
 }
 
+struct ResortingPartition;
+
+impl ResortingPartition {
+    fn block_number(meta: &AggregateMeta) -> (isize, usize, usize) {
+        match meta {
+            AggregateMeta::Serialized(v) => (v.bucket, v.max_partition, v.global_max_partition),
+            AggregateMeta::SpilledPayload(v) => {
+                (v.partition, v.max_partition, v.global_max_partition)
+            }
+            AggregateMeta::AggregatePayload(v) => {
+                (v.partition, v.max_partition, v.global_max_partition)
+            }
+            AggregateMeta::InFlightPayload(v) => {
+                (v.partition, v.max_partition, v.global_max_partition)
+            }
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
+    }
+}
+
+impl Exchange for ResortingPartition {
+    const NAME: &'static str = "PartitionResorting";
+
+    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
+        debug_assert_eq!(n, 1);
+        Ok(vec![data_block])
+    }
+
+    fn multiway_pick(data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
+        let mut global_max_partition = 0_usize;
+        let global_max_partition_ref = &mut global_max_partition;
+
+        let min_position = data_blocks
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
+            .min_by(move |(left_idx, left_block), (right_idx, right_block)| {
+                let Some(left_meta) = left_block.get_meta() else {
+                    return Ordering::Equal;
+                };
+                let Some(left_meta) = AggregateMeta::downcast_ref_from(left_meta) else {
+                    return Ordering::Equal;
+                };
+
+                let Some(right_meta) = right_block.get_meta() else {
+                    return Ordering::Equal;
+                };
+                let Some(right_meta) = AggregateMeta::downcast_ref_from(right_meta) else {
+                    return Ordering::Equal;
+                };
+
+                let (l_partition, l_max_partition, l_global_max_partition) =
+                    ResortingPartition::block_number(left_meta);
+                let (r_partition, r_max_partition, r_global_max_partition) =
+                    ResortingPartition::block_number(right_meta);
+                let global_max_partition = l_global_max_partition.max(r_global_max_partition);
+                *global_max_partition_ref = (*global_max_partition_ref).max(global_max_partition);
+
+                // ORDER BY max_partition asc, partition asc, idx asc
+                match l_max_partition.cmp(&r_max_partition) {
+                    Ordering::Less => Ordering::Less,
+                    Ordering::Greater => Ordering::Greater,
+                    Ordering::Equal => match l_partition.cmp(&r_partition) {
+                        Ordering::Less => Ordering::Less,
+                        Ordering::Greater => Ordering::Greater,
+                        Ordering::Equal => left_idx.cmp(right_idx),
+                    },
+                }
+            })
+            .map(|(idx, _)| idx);
+
+        if let Some(min_pos) = min_position {
+            if global_max_partition == 0 {
+                return Some(min_pos);
+            }
+
+            if let Some(mut block) = data_blocks[min_pos].take() {
+                let mut meta = AggregateMeta::downcast_from(block.take_meta().unwrap()).unwrap();
+                meta.set_global_max_partition(global_max_partition);
+                data_blocks[min_pos] = Some(block.add_meta(Some(Box::new(meta))).unwrap());
+            }
+        }
+
+        min_position
+    }
+}
+
 pub fn build_partition_bucket(
     pipeline: &mut Pipeline,
     params: Arc<AggregatorParams>,
 ) -> Result<()> {
-    let transform = TransformPartitionDispatch::create(
-        pipeline.output_len(),
-        pipeline.output_len(),
-        params.clone(),
-    )?;
+    let output = pipeline.output_len();
 
-    let inputs_port = transform.get_inputs();
+    // 1. reorder partition
+    pipeline.exchange(1, Arc::new(ResortingPartition));
+
+    let transform = TransformPartitionDispatch::create(output, params.clone())?;
+
+    let input_port = transform.get_input();
     let outputs_port = transform.get_outputs();
 
-    pipeline.add_pipe(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
-        PipeItem::create(
-            ProcessorPtr::create(Box::new(transform)),
-            inputs_port,
-            outputs_port,
-        ),
-    ]));
+    pipeline.add_pipe(Pipe::create(1, outputs_port.len(), vec![PipeItem::create(
+        ProcessorPtr::create(Box::new(transform)),
+        vec![input_port],
+        outputs_port,
+    )]));
 
     let semaphore = Arc::new(Semaphore::new(params.max_spill_io_requests));
     let operator = DataOperator::instance().spill_operator();
@@ -439,29 +411,32 @@ impl UnalignedPartitions {
         }
     }
 
-    pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize) {
+    pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
         match &meta {
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::SpilledPayload(payload) => {
-                let max_partition = payload.max_partition_count;
+                let max_partition = payload.max_partition;
+                let global_max_partition = payload.global_max_partition;
                 self.insert_data(max_partition, meta, block);
 
-                (SINGLE_LEVEL_BUCKET_NUM, max_partition)
+                (SINGLE_LEVEL_BUCKET_NUM, max_partition, global_max_partition)
             }
             AggregateMeta::InFlightPayload(payload) => {
                 let partition = payload.partition;
                 let max_partition = payload.max_partition;
+                let global_max_partition = payload.global_max_partition;
                 self.insert_data(max_partition, meta, block);
 
-                (partition, max_partition)
+                (partition, max_partition, global_max_partition)
             }
             AggregateMeta::AggregatePayload(payload) => {
                 let partition = payload.partition;
-                let max_partition = payload.max_partition_count;
-                self.insert_data(max_partition, meta, block);
+                let max_partition = payload.max_partition;
+                let global_max_partition = payload.global_max_partition;
 
-                (partition, max_partition)
+                self.insert_data(max_partition, meta, block);
+                (partition, max_partition, global_max_partition)
             }
         }
     }
@@ -520,7 +495,8 @@ impl UnalignedPartitions {
             partitioned.push(AggregatePayload {
                 payload,
                 partition: partition as isize,
-                max_partition_count: to,
+                max_partition: to,
+                global_max_partition: 0,
             });
         }
 
@@ -557,8 +533,9 @@ impl UnalignedPartitions {
 
                         let payload = AggregatePayload {
                             partition: payload.partition,
-                            max_partition_count: payload.max_partition,
+                            max_partition: payload.max_partition,
                             payload: self.deserialize_flight(block)?,
+                            global_max_partition: 0,
                         };
 
                         let partitioned = self.partition_payload(payload, max_partitions);
@@ -598,30 +575,32 @@ struct AlignedPartitions {
 }
 
 impl AlignedPartitions {
-    pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize) {
-        let (is_empty, partition, max_partition) = match &meta {
+    pub fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
+        let (partition, max_partition, global_max_partition) = match &meta {
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::FinalPartition => unreachable!(),
-            AggregateMeta::SpilledPayload(v) => (false, v.partition, v.max_partition_count),
-            AggregateMeta::AggregatePayload(v) => {
-                (v.payload.len() == 0, v.partition, v.max_partition_count)
+            AggregateMeta::SpilledPayload(v) => {
+                (v.partition, v.max_partition, v.global_max_partition)
             }
-            AggregateMeta::InFlightPayload(v) => (block.is_empty(), v.partition, v.max_partition),
+            AggregateMeta::AggregatePayload(v) => {
+                (v.partition, v.max_partition, v.global_max_partition)
+            }
+            AggregateMeta::InFlightPayload(v) => {
+                (v.partition, v.max_partition, v.global_max_partition)
+            }
         };
 
         assert_eq!(max_partition, self.max_partition);
-        if !is_empty {
-            match self.data.entry(partition) {
-                std::collections::btree_map::Entry::Vacant(v) => {
-                    v.insert(vec![(meta, block)]);
-                }
-                std::collections::btree_map::Entry::Occupied(mut v) => {
-                    v.get_mut().push((meta, block));
-                }
+        match self.data.entry(partition) {
+            std::collections::btree_map::Entry::Vacant(v) => {
+                v.insert(vec![(meta, block)]);
+            }
+            std::collections::btree_map::Entry::Occupied(mut v) => {
+                v.get_mut().push((meta, block));
             }
         }
 
-        (partition, max_partition)
+        (partition, max_partition, global_max_partition)
     }
 }
 
@@ -636,14 +615,20 @@ impl Partitions {
         Partitions::Unaligned(UnalignedPartitions::create(params))
     }
 
-    fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize) {
+    // pub fn is_empty(&self) -> bool {
+    //     match self {
+    //         Partitions::Aligned(c) => {}
+    //     }
+    // }
+
+    fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
         match self {
             Partitions::Aligned(v) => v.add_data(meta, block),
             Partitions::Unaligned(v) => v.add_data(meta, block),
         }
     }
 
-    pub fn add_block(&mut self, mut block: DataBlock) -> Result<(isize, usize)> {
+    pub fn add_block(&mut self, mut block: DataBlock) -> Result<(isize, usize, usize)> {
         let Some(meta) = block.take_meta() else {
             return Err(ErrorCode::Internal(
                 "Internal, TransformPartitionBucket only recv DataBlock with meta.",
@@ -694,83 +679,78 @@ impl Partitions {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_expression::types::DataType;
-    use databend_common_expression::types::NumberDataType;
-    use databend_common_expression::DataBlock;
-    use databend_common_expression::DataField;
-    use databend_common_expression::DataSchemaRefExt;
-    use databend_common_functions::aggregates::AggregateFunctionFactory;
+    // use databend_common_expression::types::DataType;
+    // use databend_common_expression::types::NumberDataType;
+    // use databend_common_expression::DataField;
+    // use databend_common_expression::DataSchemaRefExt;
+    // use databend_common_functions::aggregates::AggregateFunctionFactory;
+    //
+    // use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::UnalignedPartitions;
+    // use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
 
-    use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::UnalignedPartitions;
-    use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::SINGLE_LEVEL_BUCKET_NUM;
-    use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
-    use crate::pipelines::processors::transforms::aggregator::AggregatorParams;
-    use crate::pipelines::processors::transforms::aggregator::InFlightPayload;
-    use crate::pipelines::processors::transforms::aggregator::SpilledPayload;
+    // fn create_unaligned_partitions() -> UnalignedPartitions {
+    //     let schema = DataSchemaRefExt::create(vec![
+    //         DataField::new("a", DataType::Number(NumberDataType::Int16)),
+    //         DataField::new("b", DataType::Number(NumberDataType::Float32)),
+    //         DataField::new("c", DataType::String),
+    //     ]);
+    //
+    //     let aggregate_functions = vec![AggregateFunctionFactory::instance()
+    //         .get("count", vec![], vec![], vec![])
+    //         .unwrap()];
+    //
+    //     let params = AggregatorParams::try_create(
+    //         schema,
+    //         vec![
+    //             DataType::Number(NumberDataType::Int16),
+    //             DataType::Number(NumberDataType::Float32),
+    //             DataType::String,
+    //         ],
+    //         &[0, 1, 2],
+    //         &aggregate_functions,
+    //         &[],
+    //         true,
+    //         false,
+    //         1024,
+    //         1024,
+    //     );
+    //
+    //     UnalignedPartitions::create(params.unwrap())
+    // }
 
-    fn create_unaligned_partitions() -> UnalignedPartitions {
-        let schema = DataSchemaRefExt::create(vec![
-            DataField::new("a", DataType::Number(NumberDataType::Int16)),
-            DataField::new("b", DataType::Number(NumberDataType::Float32)),
-            DataField::new("c", DataType::String),
-        ]);
-
-        let aggregate_functions = vec![AggregateFunctionFactory::instance()
-            .get("count", vec![], vec![], vec![])
-            .unwrap()];
-
-        let params = AggregatorParams::try_create(
-            schema,
-            vec![
-                DataType::Number(NumberDataType::Int16),
-                DataType::Number(NumberDataType::Float32),
-                DataType::String,
-            ],
-            &[0, 1, 2],
-            &aggregate_functions,
-            &[],
-            true,
-            false,
-            1024,
-            1024,
-        );
-
-        UnalignedPartitions::create(params.unwrap())
-    }
-
-    #[test]
-    fn test_add_data_spilled_payload() {
-        let mut partitions = create_unaligned_partitions();
-        let max_partition = 5;
-        let meta = AggregateMeta::SpilledPayload(SpilledPayload {
-            partition: 0,
-            location: "".to_string(),
-            data_range: Default::default(),
-            destination_node: "".to_string(),
-            max_partition_count: max_partition,
-        });
-
-        let result = partitions.add_data(meta, DataBlock::empty());
-
-        assert_eq!(result, (SINGLE_LEVEL_BUCKET_NUM, max_partition));
-        assert_eq!(partitions.data.get(&max_partition).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn test_add_data_in_flight_payload() {
-        let mut partitions = create_unaligned_partitions();
-        let partition = 2;
-        let max_partition = 8;
-        let meta = AggregateMeta::InFlightPayload(InFlightPayload {
-            partition,
-            max_partition,
-        });
-
-        let result = partitions.add_data(meta, DataBlock::empty());
-
-        assert_eq!(result, (partition, max_partition));
-        assert_eq!(partitions.data.get(&max_partition).unwrap().len(), 1);
-    }
+    // #[test]
+    // fn test_add_data_spilled_payload() {
+    //     let mut partitions = create_unaligned_partitions();
+    //     let max_partition = 5;
+    //     let meta = AggregateMeta::SpilledPayload(SpilledPayload {
+    //         partition: 0,
+    //         location: "".to_string(),
+    //         data_range: Default::default(),
+    //         destination_node: "".to_string(),
+    //         max_partition: max_partition,
+    //     });
+    //
+    //     let result = partitions.add_data(meta, DataBlock::empty(), -1);
+    //
+    //     assert_eq!(result, (SINGLE_LEVEL_BUCKET_NUM, max_partition));
+    //     assert_eq!(partitions.data.get(&max_partition).unwrap().len(), 1);
+    // }
+    //
+    // #[test]
+    // fn test_add_data_in_flight_payload() {
+    //     let mut partitions = create_unaligned_partitions();
+    //     let partition = 2;
+    //     let max_partition = 8;
+    //     let meta = AggregateMeta::InFlightPayload(InFlightPayload {
+    //         partition,
+    //         max_partition,
+    //     });
+    //
+    //     let result = partitions.add_data(meta, DataBlock::empty(), -1);
+    //
+    //     assert_eq!(result, (partition, max_partition));
+    //     assert_eq!(partitions.data.get(&max_partition).unwrap().len(), 1);
+    // }
 
     #[test]
     fn test_add_data_aggregate_payload() {

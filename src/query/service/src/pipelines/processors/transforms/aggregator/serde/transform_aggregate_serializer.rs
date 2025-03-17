@@ -231,7 +231,7 @@ impl SerializeAggregateStream {
                         Ok(Some(block.add_meta(Some(
                             AggregateSerdeMeta::create_agg_payload(
                                 p.partition,
-                                p.max_partition_count,
+                                p.max_partition,
                                 false,
                             ),
                         ))?))
@@ -244,7 +244,7 @@ impl SerializeAggregateStream {
                             Ok(Some(block.add_meta(Some(
                                 AggregateSerdeMeta::create_agg_payload(
                                     p.partition,
-                                    p.max_partition_count,
+                                    p.max_partition,
                                     true,
                                 ),
                             ))?))

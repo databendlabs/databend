@@ -204,7 +204,8 @@ impl TransformSpillReader {
         AggregateMeta::Serialized(SerializedPayload {
             bucket: payload.partition,
             data_block: block,
-            max_partition_count: payload.max_partition_count,
+            max_partition: payload.max_partition,
+            global_max_partition: payload.global_max_partition,
         })
     }
 }

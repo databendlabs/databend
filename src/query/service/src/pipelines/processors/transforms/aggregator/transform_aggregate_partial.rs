@@ -283,15 +283,13 @@ impl AccumulatingTransform for TransformPartialAggregate {
                 );
 
                 for (partition, payload) in hashtable.payload.payloads.into_iter().enumerate() {
-                    if payload.len() != 0 {
-                        blocks.push(DataBlock::empty_with_meta(
-                            AggregateMeta::create_agg_payload(
-                                payload,
-                                partition as isize,
-                                partition_count,
-                            ),
-                        ));
-                    }
+                    blocks.push(DataBlock::empty_with_meta(
+                        AggregateMeta::create_agg_payload(
+                            payload,
+                            partition as isize,
+                            partition_count,
+                        ),
+                    ));
                 }
 
                 blocks
@@ -363,7 +361,8 @@ impl AccumulatingTransform for TransformPartialAggregate {
                         data_range: last_offset as u64..writer.write_bytes() as u64,
                         destination_node: self.configure_peer_nodes[spilling_state.working_bucket]
                             .clone(),
-                        max_partition_count: max_partition,
+                        max_partition,
+                        global_max_partition: max_partition,
                     };
 
                     self.spill_blocks.push(DataBlock::empty_with_meta(

@@ -130,7 +130,7 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
 impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
     fn default_partition(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
         if self.rev_bucket_lookup.is_empty() {
-            let data_block = serialize_block(0, data_block, &self.options)?;
+            let data_block = serialize_block(0, 0, data_block, &self.options)?;
             return Ok(vec![data_block]);
         }
 
@@ -143,7 +143,7 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
                 continue;
             }
 
-            blocks.push(serialize_block(0, data_block, &self.options)?);
+            blocks.push(serialize_block(0, 0, data_block, &self.options)?);
         }
 
         Ok(blocks)
@@ -157,7 +157,7 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
     fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let Some(meta) = data_block.take_meta() else {
             // only exchange data
-            if data_block.is_empty() {
+            if !MULTIWAY_SORT && data_block.is_empty() {
                 return Ok(vec![]);
             }
 
@@ -175,16 +175,17 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
             AggregateMeta::FinalPartition => unreachable!(),
             AggregateMeta::InFlightPayload(_) => unreachable!(),
             AggregateMeta::SpilledPayload(v) => {
-                let block_num = compute_block_number(-1, v.max_partition_count)?;
+                let block_num = compute_block_number(-1, v.max_partition)?;
 
                 let mut blocks = Vec::with_capacity(n);
                 for local in &self.rev_bucket_lookup {
                     blocks.push(match *local == self.local_id {
                         true => DataBlock::empty_with_meta(
-                            AggregateMeta::create_in_flight_payload(-1, v.max_partition_count),
+                            AggregateMeta::create_in_flight_payload(-1, v.max_partition),
                         ),
                         false => DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
                             block_num,
+                            v.global_max_partition,
                             Vec::with_capacity(0),
                         )),
                     });
@@ -195,6 +196,7 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
                     true => DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v)),
                     false => serialize_block(
                         block_num,
+                        v.global_max_partition,
                         DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v)),
                         &self.options,
                     )?,
@@ -203,9 +205,9 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
                 Ok(blocks)
             }
             AggregateMeta::AggregatePayload(p) => {
-                if p.payload.len() == 0 {
-                    return Ok(vec![]);
-                }
+                // if p.payload.len() == 0 {
+                //     return Ok(vec![]);
+                // }
 
                 let mut blocks = Vec::with_capacity(n);
                 for (idx, payload) in scatter_payload(p.payload, n)?.into_iter().enumerate() {
@@ -214,20 +216,29 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
                             AggregateMeta::create_agg_payload(
                                 payload,
                                 p.partition,
-                                p.max_partition_count,
+                                p.max_partition,
                             ),
                         ));
 
                         continue;
                     }
 
-                    let data_block = payload.aggregate_flush_all()?;
+                    let data_block = match payload.len() == 0 {
+                        true => DataBlock::empty(),
+                        false => payload.aggregate_flush_all()?,
+                    };
+
                     let data_block = data_block.add_meta(Some(
-                        AggregateMeta::create_in_flight_payload(p.partition, p.max_partition_count),
+                        AggregateMeta::create_in_flight_payload(p.partition, p.max_partition),
                     ))?;
 
-                    let block_number = compute_block_number(p.partition, p.max_partition_count)?;
-                    let data_block = serialize_block(block_number, data_block, &self.options)?;
+                    let block_number = compute_block_number(p.partition, p.max_partition)?;
+                    let data_block = serialize_block(
+                        block_number,
+                        p.global_max_partition,
+                        data_block,
+                        &self.options,
+                    )?;
                     blocks.push(data_block);
                 }
 
@@ -236,29 +247,60 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
         }
     }
 
-    fn sorting_function(left_block: &DataBlock, right_block: &DataBlock) -> Ordering {
-        let Some(left_meta) = left_block.get_meta() else {
-            return Ordering::Equal;
-        };
-        let Some(left_meta) = ExchangeSerializeMeta::downcast_ref_from(left_meta) else {
-            return Ordering::Equal;
-        };
+    fn multiway_pick(data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
+        let mut global_max_partition = 0_usize;
+        let global_max_partition_ref = &mut global_max_partition;
 
-        let Some(right_meta) = right_block.get_meta() else {
-            return Ordering::Equal;
-        };
-        let Some(right_meta) = ExchangeSerializeMeta::downcast_ref_from(right_meta) else {
-            return Ordering::Equal;
-        };
+        let min_position = data_blocks
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
+            .min_by(move |(left_idx, left_block), (right_idx, right_block)| {
+                let Some(left_meta) = left_block.get_meta() else {
+                    return Ordering::Equal;
+                };
+                let Some(left_meta) = ExchangeSerializeMeta::downcast_ref_from(left_meta) else {
+                    return Ordering::Equal;
+                };
 
-        let (l_partition, l_max_partition) = restore_block_number(left_meta.block_number);
-        let (r_partition, r_max_partition) = restore_block_number(right_meta.block_number);
+                let Some(right_meta) = right_block.get_meta() else {
+                    return Ordering::Equal;
+                };
+                let Some(right_meta) = ExchangeSerializeMeta::downcast_ref_from(right_meta) else {
+                    return Ordering::Equal;
+                };
 
-        // ORDER BY max_partition asc, partition asc
-        match l_max_partition.cmp(&r_max_partition) {
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => l_partition.cmp(&r_partition),
+                let max_block_number = left_meta.max_block_number.max(right_meta.max_block_number);
+                *global_max_partition_ref = (*global_max_partition_ref).max(max_block_number);
+                let (l_partition, l_max_partition) = restore_block_number(left_meta.block_number);
+                let (r_partition, r_max_partition) = restore_block_number(right_meta.block_number);
+
+                // ORDER BY max_partition asc, partition asc, idx asc
+                match l_max_partition.cmp(&r_max_partition) {
+                    Ordering::Less => Ordering::Less,
+                    Ordering::Greater => Ordering::Greater,
+                    Ordering::Equal => match l_partition.cmp(&r_partition) {
+                        Ordering::Less => Ordering::Less,
+                        Ordering::Greater => Ordering::Greater,
+                        Ordering::Equal => left_idx.cmp(right_idx),
+                    },
+                }
+            })
+            .map(|(idx, _)| idx);
+
+        if let Some(min_pos) = min_position {
+            if global_max_partition == 0 {
+                return Some(min_pos);
+            }
+
+            if let Some(mut block) = data_blocks[min_pos].take() {
+                let mut meta =
+                    ExchangeSerializeMeta::downcast_from(block.take_meta().unwrap()).unwrap();
+                meta.max_block_number = global_max_partition;
+                data_blocks[min_pos] = Some(block.add_meta(Some(Box::new(meta))).unwrap());
+            }
         }
+
+        min_position
     }
 }

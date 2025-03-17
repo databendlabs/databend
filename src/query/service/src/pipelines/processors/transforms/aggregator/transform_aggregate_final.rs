@@ -172,7 +172,7 @@ impl TransformFinalAggregate {
         )?;
 
         hashtable.payload.mark_min_cardinality();
-        assert_eq!(hashtable.payload.len(), 1);
+        assert_eq!(hashtable.payload.payloads.len(), 1);
         Ok(hashtable.payload.payloads.pop().unwrap())
     }
 }
