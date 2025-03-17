@@ -88,3 +88,5 @@ set quoted_ident_case_sensitive=1;
 set sql_dialect='MySQL';
 show create table test.tc;
 """ | $BENDSQL_CLIENT_CONNECT
+
+stmt "drop database test"
