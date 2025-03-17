@@ -29,7 +29,6 @@ use databend_common_storages_fuse::table_functions::FuseTimeTravelSizeFunc;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropAggregatingIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumDropInvertedIndex;
 use databend_common_storages_fuse::table_functions::FuseVacuumTemporaryTable;
-use databend_common_storages_fuse::table_functions::HilbertClusteringInfoFunc;
 use databend_common_storages_fuse::table_functions::SetCacheCapacity;
 use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
@@ -44,7 +43,7 @@ use super::ExecuteBackgroundJobTable;
 use super::LicenseInfoTable;
 use super::SuggestedBackgroundTasksTable;
 use super::TenantQuotaTable;
-use crate::storages::fuse::table_functions::ClusteringInformationFunc;
+use crate::storages::fuse::table_functions::ClusteringInformationTable;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
@@ -196,7 +195,7 @@ impl TableFunctionFactory {
             "clustering_information".to_string(),
             (
                 next_id(),
-                Arc::new(TableFunctionTemplate::<ClusteringInformationFunc>::create),
+                Arc::new(TableFunctionTemplate::<ClusteringInformationTable>::create),
             ),
         );
 
@@ -205,14 +204,6 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<ClusteringStatisticsFunc>::create),
-            ),
-        );
-
-        creators.insert(
-            "hilbert_clustering_information".to_string(),
-            (
-                next_id(),
-                Arc::new(TableFunctionTemplate::<HilbertClusteringInfoFunc>::create),
             ),
         );
 

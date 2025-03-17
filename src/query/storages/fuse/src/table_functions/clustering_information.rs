@@ -45,6 +45,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::analyze_cluster_keys;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
@@ -58,15 +59,108 @@ use crate::sessions::TableContext;
 use crate::table_functions::cmp_with_null;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
-use crate::table_functions::SimpleArgFunc;
-use crate::table_functions::SimpleArgFuncTemplate;
+use crate::table_functions::SimpleTableFunc;
 use crate::FuseTable;
 use crate::Table;
 
-pub struct ClusteringInformationArgs {
+pub struct ClusteringInformationTable {
+    args: ClusteringInformationArgs,
+}
+
+#[async_trait::async_trait]
+impl SimpleTableFunc for ClusteringInformationTable {
+    fn get_engine_name(&self) -> String {
+        "clustering_information".to_owned()
+    }
+
+    fn table_args(&self) -> Option<TableArgs> {
+        Some((&self.args).into())
+    }
+
+    fn schema(&self) -> TableSchemaRef {
+        match &self.args.cluster_option {
+            ClusteringOption::Linear(_) => ClusteringInformation::schema(),
+            ClusteringOption::Hilbert => HilbertClusteringInfo::schema(),
+        }
+    }
+
+    async fn apply(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        _: &DataSourcePlan,
+    ) -> Result<Option<DataBlock>> {
+        let tenant_id = ctx.get_tenant();
+        let tbl = ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .get_table(
+                &tenant_id,
+                self.args.database_name.as_str(),
+                self.args.table_name.as_str(),
+            )
+            .await?;
+
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        let res = match &self.args.cluster_option {
+            ClusteringOption::Linear(cluster_key) => {
+                ClusteringInformation::new(
+                    ctx.clone(),
+                    tbl,
+                    &self.args.database_name,
+                    &self.args.table_name,
+                    cluster_key.clone(),
+                )
+                .get_clustering_info()
+                .await
+            }
+            ClusteringOption::Hilbert => {
+                HilbertClusteringInfo::new(
+                    ctx.clone(),
+                    tbl,
+                    &self.args.database_name,
+                    &self.args.table_name,
+                )
+                .get_clustering_info()
+                .await
+            }
+        }?;
+        Ok(Some(res))
+    }
+
+    fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
+    where Self: Sized {
+        let (database_name, table_name, cluster_opt_str) =
+            parse_db_tb_opt_args(&table_args, func_name)?;
+        let cluster_option = match cluster_opt_str {
+            Some(cluster_opt_str) => {
+                if cluster_opt_str.to_lowercase() == "hilbert" {
+                    ClusteringOption::Hilbert
+                } else {
+                    ClusteringOption::Linear(Some(cluster_opt_str))
+                }
+            }
+            None => ClusteringOption::Linear(None),
+        };
+
+        Ok(Self {
+            args: ClusteringInformationArgs {
+                database_name,
+                table_name,
+                cluster_option,
+            },
+        })
+    }
+}
+
+enum ClusteringOption {
+    Linear(Option<String>),
+    Hilbert,
+}
+
+struct ClusteringInformationArgs {
     database_name: String,
     table_name: String,
-    cluster_key: Option<String>,
+    cluster_option: ClusteringOption,
 }
 
 impl From<&ClusteringInformationArgs> for TableArgs {
@@ -74,67 +168,19 @@ impl From<&ClusteringInformationArgs> for TableArgs {
         let mut tbl_args = Vec::new();
         tbl_args.push(string_literal(args.database_name.as_str()));
         tbl_args.push(string_literal(args.table_name.as_str()));
-        if let Some(arg_cluster_key) = &args.cluster_key {
-            tbl_args.push(string_literal(arg_cluster_key));
+        match &args.cluster_option {
+            ClusteringOption::Linear(cluster_keys) => {
+                if let Some(cluster_keys) = cluster_keys {
+                    tbl_args.push(string_literal(cluster_keys));
+                }
+            }
+            ClusteringOption::Hilbert => {
+                tbl_args.push(string_literal("hilbert"));
+            }
         }
+
         TableArgs::new_positioned(tbl_args)
     }
-}
-impl TryFrom<(&str, TableArgs)> for ClusteringInformationArgs {
-    type Error = ErrorCode;
-    fn try_from(
-        (func_name, table_args): (&str, TableArgs),
-    ) -> std::result::Result<Self, Self::Error> {
-        let (database_name, table_name, cluster_key) =
-            parse_db_tb_opt_args(&table_args, func_name)?;
-
-        Ok(Self {
-            database_name,
-            table_name,
-            cluster_key,
-        })
-    }
-}
-
-pub type ClusteringInformationFunc = SimpleArgFuncTemplate<ClusteringInformationNew>;
-pub struct ClusteringInformationNew;
-
-#[async_trait::async_trait]
-impl SimpleArgFunc for ClusteringInformationNew {
-    type Args = ClusteringInformationArgs;
-
-    fn schema() -> TableSchemaRef {
-        ClusteringInformation::schema()
-    }
-
-    async fn apply(
-        ctx: &Arc<dyn TableContext>,
-        args: &Self::Args,
-        _plan: &DataSourcePlan,
-    ) -> Result<DataBlock> {
-        let tenant_id = ctx.get_tenant();
-        let tbl = ctx
-            .get_catalog(CATALOG_DEFAULT)
-            .await?
-            .get_table(
-                &tenant_id,
-                args.database_name.as_str(),
-                args.table_name.as_str(),
-            )
-            .await?;
-
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-
-        ClusteringInformation::new(ctx.clone(), tbl, args.cluster_key.clone())
-            .get_clustering_info()
-            .await
-    }
-}
-
-pub struct ClusteringInformation<'a> {
-    pub ctx: Arc<dyn TableContext>,
-    pub table: &'a FuseTable,
-    pub cluster_key: Option<String>,
 }
 
 struct ClusteringStatistics {
@@ -148,21 +194,33 @@ struct ClusteringStatistics {
     block_depth_histogram: JsonValue,
 }
 
+struct ClusteringInformation<'a> {
+    ctx: Arc<dyn TableContext>,
+    table: &'a FuseTable,
+    database_name: &'a str,
+    table_name: &'a str,
+    cluster_key: Option<String>,
+}
+
 impl<'a> ClusteringInformation<'a> {
-    pub fn new(
+    fn new(
         ctx: Arc<dyn TableContext>,
         table: &'a FuseTable,
+        database_name: &'a str,
+        table_name: &'a str,
         cluster_key: Option<String>,
     ) -> Self {
         Self {
             ctx,
             table,
+            database_name,
+            table_name,
             cluster_key,
         }
     }
 
     #[async_backtrace::framed]
-    pub async fn get_clustering_info(&self) -> Result<DataBlock> {
+    async fn get_clustering_info(&self) -> Result<DataBlock> {
         let mut default_cluster_key_id = None;
         let (cluster_key, exprs) = match (self.table.cluster_key_str(), &self.cluster_key) {
             (a, Some(b)) => {
@@ -192,8 +250,8 @@ impl<'a> ClusteringInformation<'a> {
             }
             _ => {
                 return Err(ErrorCode::UnclusteredTable(format!(
-                    "Unclustered table {}",
-                    self.table.table_info.desc
+                    "Unclustered table '{}'.'{}'",
+                    self.database_name, self.table_name
                 )));
             }
         };
@@ -203,9 +261,10 @@ impl<'a> ClusteringInformation<'a> {
                 .table
                 .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
             if matches!(typ, ClusterType::Hilbert) {
-                return Err(ErrorCode::UnsupportedClusterType(
-                    "Unsupported 'hilbert' type, please use `hilbert_clustering_information` instead",
-                ));
+                return Err(ErrorCode::UnsupportedClusterType(format!(
+                    "Unsupported 'hilbert' type, please use `clustering_information('{}', '{}', 'hilbert')` instead",
+                    self.database_name, self.table_name
+                )));
             }
         }
         let cluster_type = "linear".to_string();
@@ -412,7 +471,7 @@ impl<'a> ClusteringInformation<'a> {
         ))
     }
 
-    pub fn schema() -> Arc<TableSchema> {
+    fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
             TableField::new("cluster_key", TableDataType::String),
             TableField::new("type", TableDataType::String),
@@ -434,6 +493,167 @@ impl<'a> ClusteringInformation<'a> {
                 TableDataType::Number(NumberDataType::Float64),
             ),
             TableField::new("block_depth_histogram", TableDataType::Variant),
+        ])
+    }
+}
+
+struct HilbertClusteringInfo<'a> {
+    ctx: Arc<dyn TableContext>,
+    table: &'a FuseTable,
+
+    database_name: &'a str,
+    table_name: &'a str,
+}
+
+impl<'a> HilbertClusteringInfo<'a> {
+    fn new(
+        ctx: Arc<dyn TableContext>,
+        table: &'a FuseTable,
+        database_name: &'a str,
+        table_name: &'a str,
+    ) -> Self {
+        Self {
+            ctx,
+            table,
+            database_name,
+            table_name,
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn get_clustering_info(&self) -> Result<DataBlock> {
+        let Some((cluster_key_id, cluster_key_str)) = self.table.cluster_key_meta() else {
+            return Err(ErrorCode::UnclusteredTable(format!(
+                "Unclustered table '{}'.'{}'",
+                self.database_name, self.table_name
+            )));
+        };
+        let cluster_type = self
+            .table
+            .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
+        if matches!(cluster_type, ClusterType::Linear) {
+            return Err(ErrorCode::UnsupportedClusterType( format!(
+                "Unsupported `linear` type, please use `clustering_information('{}', '{}')` instead",
+            self.database_name,self.table_name)));
+        }
+
+        let snapshot = self.table.read_table_snapshot().await?;
+        let now = Utc::now();
+        let timestamp = snapshot
+            .as_ref()
+            .map_or(now, |s| s.timestamp.unwrap_or(now))
+            .timestamp_micros();
+        let mut total_segment_count = 0;
+        let mut stable_segment_count = 0;
+        let mut partial_segment_count = 0;
+        let mut unclustered_segment_count = 0;
+        let mut unclustered_block_count = 0;
+        if let Some(snapshot) = snapshot {
+            let total_count = snapshot.segments.len();
+            total_segment_count = total_count as u64;
+            let chunk_size = std::cmp::min(
+                self.ctx.get_settings().get_max_threads()? as usize * 4,
+                total_count,
+            )
+            .max(1);
+            let segments_io = SegmentsIO::create(
+                self.ctx.clone(),
+                self.table.operator.clone(),
+                self.table.schema(),
+            );
+            for chunk in snapshot.segments.chunks(chunk_size) {
+                let segments = segments_io
+                    .read_segments::<Arc<CompactSegmentInfo>>(chunk, true)
+                    .await?;
+                for segment in segments {
+                    let segment = segment?;
+                    if segment
+                        .summary
+                        .cluster_stats
+                        .as_ref()
+                        .is_none_or(|v| v.cluster_key_id != cluster_key_id)
+                    {
+                        unclustered_segment_count += 1;
+                        unclustered_block_count += segment.summary.block_count;
+                        continue;
+                    }
+                    let level = segment.summary.cluster_stats.as_ref().unwrap().level;
+                    if level == -1 {
+                        stable_segment_count += 1;
+                    } else {
+                        partial_segment_count += 1;
+                    }
+                }
+            }
+        }
+        Ok(DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(cluster_key_str.to_string())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String("hilbert".to_string())),
+                ),
+                BlockEntry::new(
+                    DataType::Timestamp,
+                    Value::Scalar(Scalar::Timestamp(timestamp)),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(total_segment_count))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(stable_segment_count))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(partial_segment_count))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(
+                        unclustered_segment_count,
+                    ))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(
+                        unclustered_block_count,
+                    ))),
+                ),
+            ],
+            1,
+        ))
+    }
+
+    fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("cluster_key", TableDataType::String),
+            TableField::new("type", TableDataType::String),
+            TableField::new("timestamp", TableDataType::Timestamp),
+            TableField::new(
+                "total_segment_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "stable_segment_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "partial_segment_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "unclustered_segment_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "unclustered_block_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
         ])
     }
 }

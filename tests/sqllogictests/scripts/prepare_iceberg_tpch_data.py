@@ -157,7 +157,7 @@ for table_name, (schema, file_path) in tables.items():
 
     create_table = f"""
     CREATE OR REPLACE TABLE {full_table_name} (
-        {', '.join([f'{field.name} {field.dataType.simpleString()}' for field in schema.fields])}
+        {", ".join([f"{field.name} {field.dataType.simpleString()}" for field in schema.fields])}
     ) USING iceberg;
     """
     print(create_table)
