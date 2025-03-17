@@ -20,6 +20,8 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::Arc;
 
 use bumpalo::Bump;
@@ -251,73 +253,95 @@ impl Processor for TransformPartitionDispatch {
     }
 }
 
-struct ResortingPartition;
+struct ResortingPartition {
+    global_max_partition: AtomicUsize,
+}
 
 impl ResortingPartition {
-    fn block_number(meta: &AggregateMeta) -> (isize, usize, usize) {
+    fn block_number(meta: &AggregateMeta) -> (isize, usize) {
         match meta {
-            AggregateMeta::Serialized(v) => (v.bucket, v.max_partition, v.global_max_partition),
-            AggregateMeta::SpilledPayload(v) => {
-                (v.partition, v.max_partition, v.global_max_partition)
-            }
-            AggregateMeta::AggregatePayload(v) => {
-                (v.partition, v.max_partition, v.global_max_partition)
-            }
-            AggregateMeta::InFlightPayload(v) => {
-                (v.partition, v.max_partition, v.global_max_partition)
-            }
+            AggregateMeta::Serialized(v) => (v.bucket, v.max_partition),
+            AggregateMeta::SpilledPayload(v) => (v.partition, v.max_partition),
+            AggregateMeta::AggregatePayload(v) => (v.partition, v.max_partition),
+            AggregateMeta::InFlightPayload(v) => (v.partition, v.max_partition),
             AggregateMeta::FinalPartition => unreachable!(),
         }
+    }
+
+    fn get_global_max_partition(data_blocks: &[Option<DataBlock>]) -> usize {
+        let mut global_max_partition = 0;
+
+        for data_block in data_blocks {
+            let Some(data_block) = data_block else {
+                continue;
+            };
+
+            let Some(meta) = data_block.get_meta() else {
+                continue;
+            };
+            let Some(meta) = AggregateMeta::downcast_ref_from(meta) else {
+                continue;
+            };
+
+            global_max_partition = global_max_partition.max(meta.get_global_max_partition())
+        }
+
+        global_max_partition
     }
 }
 
 impl Exchange for ResortingPartition {
     const NAME: &'static str = "PartitionResorting";
+    const MULTIWAY_SORT: bool = true;
 
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         debug_assert_eq!(n, 1);
         Ok(vec![data_block])
     }
 
-    fn multiway_pick(data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
-        let mut global_max_partition = 0_usize;
-        let global_max_partition_ref = &mut global_max_partition;
+    fn sorting_function(left_block: &DataBlock, right_block: &DataBlock) -> Ordering {
+        let Some(left_meta) = left_block.get_meta() else {
+            return Ordering::Equal;
+        };
+        let Some(left_meta) = AggregateMeta::downcast_ref_from(left_meta) else {
+            return Ordering::Equal;
+        };
+
+        let Some(right_meta) = right_block.get_meta() else {
+            return Ordering::Equal;
+        };
+        let Some(right_meta) = AggregateMeta::downcast_ref_from(right_meta) else {
+            return Ordering::Equal;
+        };
+
+        let (l_partition, l_max_partition) = ResortingPartition::block_number(left_meta);
+        let (r_partition, r_max_partition) = ResortingPartition::block_number(right_meta);
+
+        // ORDER BY max_partition asc, partition asc, idx asc
+        match l_max_partition.cmp(&r_max_partition) {
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Equal => l_partition.cmp(&r_partition),
+        }
+    }
+
+    fn multiway_pick(&self, data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
+        let new_value = Self::get_global_max_partition(data_blocks);
+        let old_value = self
+            .global_max_partition
+            .fetch_max(new_value, AtomicOrdering::SeqCst);
+
+        let global_max_partition = std::cmp::max(new_value, old_value);
 
         let min_position = data_blocks
             .iter()
             .enumerate()
-            .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
-            .min_by(move |(left_idx, left_block), (right_idx, right_block)| {
-                let Some(left_meta) = left_block.get_meta() else {
-                    return Ordering::Equal;
-                };
-                let Some(left_meta) = AggregateMeta::downcast_ref_from(left_meta) else {
-                    return Ordering::Equal;
-                };
-
-                let Some(right_meta) = right_block.get_meta() else {
-                    return Ordering::Equal;
-                };
-                let Some(right_meta) = AggregateMeta::downcast_ref_from(right_meta) else {
-                    return Ordering::Equal;
-                };
-
-                let (l_partition, l_max_partition, l_global_max_partition) =
-                    ResortingPartition::block_number(left_meta);
-                let (r_partition, r_max_partition, r_global_max_partition) =
-                    ResortingPartition::block_number(right_meta);
-                let global_max_partition = l_global_max_partition.max(r_global_max_partition);
-                *global_max_partition_ref = (*global_max_partition_ref).max(global_max_partition);
-
-                // ORDER BY max_partition asc, partition asc, idx asc
-                match l_max_partition.cmp(&r_max_partition) {
+            .filter_map(|(i, x)| x.as_ref().map(|x| (i, x)))
+            .min_by(|(left_idx, left_block), (right_idx, right_block)| {
+                match ResortingPartition::sorting_function(left_block, right_block) {
                     Ordering::Less => Ordering::Less,
                     Ordering::Greater => Ordering::Greater,
-                    Ordering::Equal => match l_partition.cmp(&r_partition) {
-                        Ordering::Less => Ordering::Less,
-                        Ordering::Greater => Ordering::Greater,
-                        Ordering::Equal => left_idx.cmp(right_idx),
-                    },
+                    Ordering::Equal => left_idx.cmp(right_idx),
                 }
             })
             .map(|(idx, _)| idx);
@@ -345,7 +369,12 @@ pub fn build_partition_bucket(
     let output = pipeline.output_len();
 
     // 1. reorder partition
-    pipeline.exchange(1, Arc::new(ResortingPartition));
+    pipeline.exchange(
+        1,
+        Arc::new(ResortingPartition {
+            global_max_partition: AtomicUsize::new(0),
+        }),
+    );
 
     let transform = TransformPartitionDispatch::create(output, params.clone())?;
 

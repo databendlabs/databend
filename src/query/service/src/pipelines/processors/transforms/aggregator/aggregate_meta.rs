@@ -189,6 +189,16 @@ impl AggregateMeta {
         Box::new(AggregateMeta::FinalPartition)
     }
 
+    pub fn get_global_max_partition(&self) -> usize {
+        match self {
+            AggregateMeta::Serialized(v) => v.global_max_partition,
+            AggregateMeta::SpilledPayload(v) => v.global_max_partition,
+            AggregateMeta::AggregatePayload(v) => v.global_max_partition,
+            AggregateMeta::InFlightPayload(v) => v.global_max_partition,
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
+    }
+
     pub fn set_global_max_partition(&mut self, global_max_partition: usize) {
         match self {
             AggregateMeta::Serialized(v) => {

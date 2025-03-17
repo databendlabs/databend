@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::cmp::Ordering;
-use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -46,7 +45,7 @@ pub trait Exchange: Send + Sync + 'static {
         unimplemented!()
     }
 
-    fn multiway_pick(data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
+    fn multiway_pick(&self, data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
         let position =
             data_blocks
                 .iter()
@@ -294,17 +293,22 @@ pub struct MergePartitionProcessor<T: Exchange> {
     output: Arc<OutputPort>,
     inputs: Vec<Arc<InputPort>>,
     inputs_data: Vec<Option<DataBlock>>,
-    _phantom_data: PhantomData<T>,
+    exchange: Arc<T>,
+    // _phantom_data: PhantomData<T>,
 }
 
 impl<T: Exchange> MergePartitionProcessor<T> {
-    pub fn create(inputs: Vec<Arc<InputPort>>, output: Arc<OutputPort>) -> ProcessorPtr {
+    pub fn create(
+        inputs: Vec<Arc<InputPort>>,
+        output: Arc<OutputPort>,
+        exchange: Arc<T>,
+    ) -> ProcessorPtr {
         let inputs_data = vec![None; inputs.len()];
         ProcessorPtr::create(Box::new(MergePartitionProcessor::<T> {
             output,
             inputs,
             inputs_data,
-            _phantom_data: Default::default(),
+            exchange,
         }))
     }
 }
@@ -364,7 +368,7 @@ impl<T: Exchange> Processor for MergePartitionProcessor<T> {
         }
 
         if need_pick_block_to_push {
-            if let Some(pick_index) = T::multiway_pick(&mut self.inputs_data) {
+            if let Some(pick_index) = self.exchange.multiway_pick(&mut self.inputs_data) {
                 if let Some(block) = self.inputs_data[pick_index].take() {
                     self.output.push_data(Ok(block));
                     return Ok(Event::NeedConsume);

@@ -14,6 +14,8 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering as AtomicOrdering;
 use std::sync::Arc;
 
 use arrow_ipc::writer::IpcWriteOptions;
@@ -92,6 +94,7 @@ pub struct FlightExchange<const MULTIWAY_SORT: bool> {
     rev_bucket_lookup: Vec<String>,
     options: IpcWriteOptions,
     shuffle_scatter: Arc<Box<dyn FlightScatter>>,
+    global_max_partition: AtomicUsize,
 }
 
 impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
@@ -123,6 +126,7 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
                 .try_with_compression(compression)
                 .unwrap(),
             shuffle_scatter,
+            global_max_partition: AtomicUsize::new(0),
         })
     }
 }
@@ -147,6 +151,34 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
         }
 
         Ok(blocks)
+    }
+
+    fn get_global_max_partition(data_blocks: &[Option<DataBlock>]) -> usize {
+        let mut global_max_partition = 0;
+
+        for data_block in data_blocks {
+            let Some(data_block) = data_block else {
+                continue;
+            };
+
+            let Some(meta) = data_block.get_meta() else {
+                continue;
+            };
+
+            let meta_value = match ExchangeSerializeMeta::downcast_ref_from(meta) {
+                Some(meta) => meta.max_block_number,
+                None => match AggregateMeta::downcast_ref_from(meta) {
+                    Some(meta) => meta.get_global_max_partition(),
+                    None => {
+                        continue;
+                    }
+                },
+            };
+
+            global_max_partition = global_max_partition.max(meta_value)
+        }
+
+        global_max_partition
     }
 }
 
@@ -247,46 +279,54 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
         }
     }
 
-    fn multiway_pick(data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
-        let mut global_max_partition = 0_usize;
-        let global_max_partition_ref = &mut global_max_partition;
+    fn sorting_function(left_block: &DataBlock, right_block: &DataBlock) -> Ordering {
+        let Some(left_meta) = left_block.get_meta() else {
+            return Ordering::Equal;
+        };
+        let Some(left_meta) = ExchangeSerializeMeta::downcast_ref_from(left_meta) else {
+            return Ordering::Equal;
+        };
 
-        let min_position = data_blocks
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
-            .min_by(move |(left_idx, left_block), (right_idx, right_block)| {
-                let Some(left_meta) = left_block.get_meta() else {
-                    return Ordering::Equal;
-                };
-                let Some(left_meta) = ExchangeSerializeMeta::downcast_ref_from(left_meta) else {
-                    return Ordering::Equal;
-                };
+        let Some(right_meta) = right_block.get_meta() else {
+            return Ordering::Equal;
+        };
+        let Some(right_meta) = ExchangeSerializeMeta::downcast_ref_from(right_meta) else {
+            return Ordering::Equal;
+        };
 
-                let Some(right_meta) = right_block.get_meta() else {
-                    return Ordering::Equal;
-                };
-                let Some(right_meta) = ExchangeSerializeMeta::downcast_ref_from(right_meta) else {
-                    return Ordering::Equal;
-                };
+        let (l_partition, l_max_partition) = restore_block_number(left_meta.block_number);
+        let (r_partition, r_max_partition) = restore_block_number(right_meta.block_number);
 
-                let max_block_number = left_meta.max_block_number.max(right_meta.max_block_number);
-                *global_max_partition_ref = (*global_max_partition_ref).max(max_block_number);
-                let (l_partition, l_max_partition) = restore_block_number(left_meta.block_number);
-                let (r_partition, r_max_partition) = restore_block_number(right_meta.block_number);
+        // ORDER BY max_partition asc, partition asc
+        match l_max_partition.cmp(&r_max_partition) {
+            Ordering::Less => Ordering::Less,
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Equal => l_partition.cmp(&r_partition),
+        }
+    }
 
-                // ORDER BY max_partition asc, partition asc, idx asc
-                match l_max_partition.cmp(&r_max_partition) {
-                    Ordering::Less => Ordering::Less,
-                    Ordering::Greater => Ordering::Greater,
-                    Ordering::Equal => match l_partition.cmp(&r_partition) {
+    fn multiway_pick(&self, data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
+        let new_value = Self::get_global_max_partition(data_blocks);
+        let old_value = self
+            .global_max_partition
+            .fetch_max(new_value, AtomicOrdering::SeqCst);
+
+        let global_max_partition = std::cmp::max(new_value, old_value);
+
+        let min_position =
+            data_blocks
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, x)| x.as_ref().map(|d| (idx, d)))
+                .min_by(move |(left_idx, left_block), (right_idx, right_block)| {
+                    match FlightExchange::<MULTIWAY_SORT>::sorting_function(left_block, right_block)
+                    {
                         Ordering::Less => Ordering::Less,
                         Ordering::Greater => Ordering::Greater,
                         Ordering::Equal => left_idx.cmp(right_idx),
-                    },
-                }
-            })
-            .map(|(idx, _)| idx);
+                    }
+                })
+                .map(|(idx, _)| idx);
 
         if let Some(min_pos) = min_position {
             if global_max_partition == 0 {
@@ -294,10 +334,28 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
             }
 
             if let Some(mut block) = data_blocks[min_pos].take() {
-                let mut meta =
-                    ExchangeSerializeMeta::downcast_from(block.take_meta().unwrap()).unwrap();
-                meta.max_block_number = global_max_partition;
-                data_blocks[min_pos] = Some(block.add_meta(Some(Box::new(meta))).unwrap());
+                let meta = block.get_meta().unwrap();
+                match ExchangeSerializeMeta::downcast_ref_from(meta) {
+                    Some(_) => {
+                        let mut meta =
+                            ExchangeSerializeMeta::downcast_from(block.take_meta().unwrap())
+                                .unwrap();
+                        meta.max_block_number = global_max_partition;
+                        data_blocks[min_pos] = Some(block.add_meta(Some(Box::new(meta))).unwrap());
+                    }
+                    None => match AggregateMeta::downcast_ref_from(meta) {
+                        Some(_) => {
+                            let mut meta =
+                                AggregateMeta::downcast_from(block.take_meta().unwrap()).unwrap();
+                            meta.set_global_max_partition(global_max_partition);
+                            data_blocks[min_pos] =
+                                Some(block.add_meta(Some(Box::new(meta))).unwrap());
+                        }
+                        None => {
+                            // do nothing
+                        }
+                    },
+                }
             }
         }
 
