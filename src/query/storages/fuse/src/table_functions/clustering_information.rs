@@ -539,13 +539,17 @@ impl<'a> HilbertClusteringInfo<'a> {
             .map_or(now, |s| s.timestamp.unwrap_or(now))
             .timestamp_micros();
         let mut total_segment_count = 0;
+        let mut total_block_count = 0;
         let mut stable_segment_count = 0;
+        let mut stable_block_count = 0;
         let mut partial_segment_count = 0;
+        let mut partial_block_count = 0;
         let mut unclustered_segment_count = 0;
         let mut unclustered_block_count = 0;
         if let Some(snapshot) = snapshot {
             let total_count = snapshot.segments.len();
             total_segment_count = total_count as u64;
+            total_block_count = snapshot.summary.block_count;
             let chunk_size = std::cmp::min(
                 self.ctx.get_settings().get_max_threads()? as usize * 4,
                 total_count,
@@ -574,8 +578,10 @@ impl<'a> HilbertClusteringInfo<'a> {
                     }
                     let level = segment.summary.cluster_stats.as_ref().unwrap().level;
                     if level == -1 {
+                        stable_block_count += segment.summary.block_count;
                         stable_segment_count += 1;
                     } else {
+                        partial_block_count += segment.summary.block_count;
                         partial_segment_count += 1;
                     }
                 }
@@ -601,11 +607,23 @@ impl<'a> HilbertClusteringInfo<'a> {
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(total_block_count))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
                     Value::Scalar(Scalar::Number(NumberScalar::UInt64(stable_segment_count))),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(stable_block_count))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
                     Value::Scalar(Scalar::Number(NumberScalar::UInt64(partial_segment_count))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(partial_block_count))),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
@@ -634,11 +652,23 @@ impl<'a> HilbertClusteringInfo<'a> {
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
+                "total_block_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
                 "stable_segment_count",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
+                "stable_block_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
                 "partial_segment_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "partial_block_count",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
