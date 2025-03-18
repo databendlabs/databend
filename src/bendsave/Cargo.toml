@@ -9,11 +9,15 @@ edition = "2021"
 [dependencies]
 databend-common-base = { workspace = true }
 databend-common-config = { workspace = true }
+databend-common-license = { workspace = true }
 databend-common-meta-client = { workspace = true }
 databend-common-meta-control = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-storage = { workspace = true }
+databend-common-users = { workspace = true }
+databend-enterprise-query = { workspace = true }
 databend-meta = { workspace = true }
+databend-query = { workspace = true }
 
 anyhow = { workspace = true }
 bytes = { workspace = true }

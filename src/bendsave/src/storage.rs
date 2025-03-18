@@ -26,10 +26,18 @@ use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_config::Config;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_license::license::Feature;
+use databend_common_license::license_manager::LicenseManager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_client::ClientHandle;
 use databend_common_meta_client::MetaGrpcClient;
 use databend_common_meta_types::protobuf::ExportRequest;
 use databend_common_storage::init_operator;
+use databend_common_users::builtin::BuiltIn;
+use databend_common_users::UserApiProvider;
+use databend_enterprise_query::license::RealLicenseManager;
+use databend_query::sessions::SessionManager;
+use databend_query::sessions::SessionType;
 use futures::TryStream;
 use futures::TryStreamExt;
 use log::debug;
@@ -40,7 +48,7 @@ use opendal::Operator;
 /// Load the configuration file and return the operator for databend.
 ///
 /// The given input is the path to databend's configuration file.
-pub fn load_query_storage(path: &str) -> Result<Operator> {
+pub async fn load_query_storage(path: &str) -> Result<Operator> {
     GlobalInstance::init_production();
 
     let outer_config: Config = Config::load_with_config_file(path)?;
@@ -49,6 +57,25 @@ pub fn load_query_storage(path: &str) -> Result<Operator> {
     // FIXME: I really don't like this pattern, but it's how databend work.
     GlobalConfig::init(&inner_config)?;
     GlobalIORuntime::init(inner_config.storage.num_cpus as usize)?;
+    RealLicenseManager::init(inner_config.query.tenant_id.tenant_name().to_string())?;
+    SessionManager::init(&inner_config)?;
+    UserApiProvider::init(
+        inner_config.meta.to_meta_grpc_client_conf(),
+        BuiltIn::default(),
+        &inner_config.query.tenant_id,
+        inner_config.query.tenant_quota.clone(),
+    )
+    .await?;
+
+    let session_manager = SessionManager::create(&inner_config);
+    let session = session_manager.create_session(SessionType::Dummy).await?;
+    let session = session_manager.register_session(session)?;
+    let settings = session.get_settings();
+
+    LicenseManagerSwitch::instance().check_enterprise_enabled(
+        unsafe { settings.get_enterprise_license().unwrap_or_default() },
+        Feature::SystemManagement,
+    )?;
 
     let op = init_operator(&inner_config.storage.params)?;
     debug!("databend storage loaded: {:?}", op.info());
@@ -165,17 +192,6 @@ mod tests {
     use opendal::Scheme;
 
     use super::*;
-
-    #[tokio::test]
-    async fn test_load_query_storage() -> Result<()> {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        let file_path = Path::new(manifest_dir).join("tests/fixtures/databend_query_config.toml");
-        let op = load_query_storage(&file_path.to_string_lossy())?;
-
-        assert_eq!(op.info().scheme(), Scheme::Fs);
-        assert_eq!(op.info().root(), "/tmp/bendsave");
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_load_meta_config() -> Result<()> {

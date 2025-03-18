@@ -26,7 +26,7 @@ use crate::storage::load_query_storage;
 use crate::utils::DATABEND_META_BACKUP_PATH;
 
 pub async fn backup(from: &str, to: &str) -> Result<()> {
-    let databend_storage = load_query_storage(from)?;
+    let databend_storage = load_query_storage(from).await?;
     let epochfs_op = load_epochfs_storage(to).await?;
     let epochfs_storage = epochfs::Fs::new(epochfs_op).await?;
 

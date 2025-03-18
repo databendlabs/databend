@@ -34,7 +34,7 @@ pub async fn restore(from: &str, checkpoint: &str, to_query: &str, to_meta: &str
     epochfs_storage.load(checkpoint).await?;
     info!("load from checkpoint: {checkpoint}");
 
-    let databend_storage = load_query_storage(to_query)?;
+    let databend_storage = load_query_storage(to_query).await?;
     let meta_config = load_meta_config(to_meta)?;
 
     restore_query(&epochfs_storage, databend_storage).await?;
