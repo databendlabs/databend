@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
@@ -36,6 +35,7 @@ use crate::plans::ExpressionScan;
 use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
+use crate::plans::Operator;
 use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
@@ -44,13 +44,9 @@ use crate::plans::Scan;
 use crate::plans::Sort;
 use crate::plans::UnionAll;
 use crate::plans::Window;
-use crate::BaseTableColumn;
 use crate::ColumnEntry;
-use crate::DerivedColumn;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::TableInternalColumn;
-use crate::VirtualColumn;
 
 impl SubqueryRewriter {
     #[recursive::recursive]
@@ -349,7 +345,7 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
-        let mut items = Vec::with_capacity(eval_scalar.items.len());
+        let mut items = Vec::with_capacity(eval_scalar.items.len() + correlated_columns.len());
         for item in eval_scalar.items.iter() {
             let new_item = ScalarItem {
                 scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
@@ -358,23 +354,24 @@ impl SubqueryRewriter {
             items.push(new_item);
         }
         let metadata = self.metadata.read();
-        for derived_column in self.derived_columns.values() {
-            let column_entry = metadata.column(*derived_column);
-            let column_binding = ColumnBindingBuilder::new(
-                column_entry.name(),
-                *derived_column,
-                Box::from(column_entry.data_type()),
-                Visibility::Visible,
-            )
-            .build();
-            items.push(ScalarItem {
+
+        items.extend(correlated_columns.iter().map(|old| {
+            let index = *self.derived_columns.get(old).unwrap();
+            let column_entry = metadata.column(index);
+            ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,
-                    column: column_binding,
+                    column: ColumnBindingBuilder::new(
+                        format!("correlated_{}", column_entry.name()),
+                        index,
+                        Box::from(column_entry.data_type()),
+                        Visibility::Visible,
+                    )
+                    .build(),
                 }),
-                index: *derived_column,
-            });
-        }
+                index,
+            }
+        }));
         Ok(SExpr::create_unary(
             Arc::new(EvalScalar { items }.into()),
             Arc::new(flatten_plan),
@@ -423,7 +420,7 @@ impl SubqueryRewriter {
         for derived_column in self.derived_columns.values() {
             let column_entry = metadata.column(*derived_column);
             let column_binding = ColumnBindingBuilder::new(
-                column_entry.name(),
+                format!("correlated_{}", column_entry.name()),
                 *derived_column,
                 Box::from(column_entry.data_type()),
                 Visibility::Visible,
@@ -652,7 +649,8 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
-        let mut group_items = Vec::with_capacity(aggregate.group_items.len());
+        let mut group_items =
+            Vec::with_capacity(aggregate.group_items.len() + correlated_columns.len());
         for item in aggregate.group_items.iter() {
             let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
             group_items.push(ScalarItem {
@@ -660,40 +658,27 @@ impl SubqueryRewriter {
                 index: item.index,
             })
         }
-        for derived_column in self.derived_columns.values() {
-            let column_binding = {
-                let metadata = self.metadata.read();
-                let column_entry = metadata.column(*derived_column);
-                let data_type = match column_entry {
-                    ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
-                        DataType::from(data_type)
-                    }
-                    ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
-                        data_type.clone()
-                    }
-                    ColumnEntry::InternalColumn(TableInternalColumn {
-                        internal_column, ..
-                    }) => internal_column.data_type(),
-                    ColumnEntry::VirtualColumn(VirtualColumn { data_type, .. }) => {
-                        DataType::from(data_type)
-                    }
-                };
-                ColumnBindingBuilder::new(
-                    format!("subquery_{}", derived_column),
-                    *derived_column,
-                    Box::from(data_type.clone()),
-                    Visibility::Visible,
-                )
-                .build()
-            };
-            group_items.push(ScalarItem {
+
+        let metadata = self.metadata.read();
+        group_items.extend(correlated_columns.iter().map(|old| {
+            let index = *self.derived_columns.get(old).unwrap();
+            let column_entry = metadata.column(index);
+            ScalarItem {
                 scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,
-                    column: column_binding,
+                    column: ColumnBindingBuilder::new(
+                        format!("correlated_{}", column_entry.name()),
+                        index,
+                        Box::from(column_entry.data_type()),
+                        Visibility::Visible,
+                    )
+                    .build(),
                 }),
-                index: *derived_column,
-            });
-        }
+                index,
+            }
+        }));
+        drop(metadata);
+
         let mut agg_items = Vec::with_capacity(aggregate.aggregate_functions.len());
         for item in aggregate.aggregate_functions.iter() {
             let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
@@ -810,24 +795,11 @@ impl SubqueryRewriter {
             let column_binding = {
                 let metadata = self.metadata.read();
                 let column_entry = metadata.column(*derived_column);
-                let data_type = match column_entry {
-                    ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) => {
-                        DataType::from(data_type)
-                    }
-                    ColumnEntry::DerivedColumn(DerivedColumn { data_type, .. }) => {
-                        data_type.clone()
-                    }
-                    ColumnEntry::InternalColumn(TableInternalColumn {
-                        internal_column, ..
-                    }) => internal_column.data_type(),
-                    ColumnEntry::VirtualColumn(VirtualColumn { data_type, .. }) => {
-                        DataType::from(data_type)
-                    }
-                };
+                let data_type = column_entry.data_type();
                 ColumnBindingBuilder::new(
-                    format!("subquery_{}", derived_column),
+                    format!("correlated_{}", column_entry.name()),
                     *derived_column,
-                    Box::from(data_type.clone()),
+                    Box::from(data_type),
                     Visibility::Visible,
                 )
                 .build()
@@ -960,11 +932,11 @@ impl ModifyPlan for Modify {
                     .iter()
                     .map(|ScalarItem { scalar, index: old }| {
                         let mut scalar = scalar.clone();
-                        for old in scalar.used_columns().iter() {
-                            let Some(new) = self.derived_columns.get(old) else {
+                        for old in scalar.used_columns() {
+                            let Some(new) = self.derived_columns.get(&old) else {
                                 continue;
                             };
-                            scalar.replace_column(*old, *new).unwrap();
+                            scalar.replace_column(old, *new).unwrap();
                         }
                         let column_entry = metadata.column(*old);
                         let name = column_entry.name();
@@ -977,7 +949,40 @@ impl ModifyPlan for Modify {
                     .collect();
                 EvalScalar { items }.into()
             }
-            _ => unimplemented!(),
+            RelOperator::Limit(limit) => limit.clone().into(),
+            RelOperator::Sort(sort) => {
+                let mut sort = sort.clone();
+                for old in sort.used_columns() {
+                    let Some(new) = self.derived_columns.get(&old) else {
+                        continue;
+                    };
+                    sort.replace_column(old, *new);
+                }
+                sort.into()
+            }
+            RelOperator::Filter(filter) => {
+                let mut filter = filter.clone();
+                for predicate in &mut filter.predicates {
+                    for old in predicate.used_columns() {
+                        let Some(new) = self.derived_columns.get(&old) else {
+                            continue;
+                        };
+                        predicate.replace_column(old, *new).unwrap();
+                    }
+                }
+                filter.into()
+            }
+            RelOperator::Join(join) => {
+                let mut join = join.clone();
+                for old in join.used_columns().unwrap() {
+                    let Some(new) = self.derived_columns.get(&old) else {
+                        continue;
+                    };
+                    join.replace_column(old, *new).unwrap();
+                }
+                join.into()
+            }
+            _ => unimplemented!("unimplemented {:?}", plan.rel_op()),
         }
     }
 }
