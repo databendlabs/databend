@@ -79,7 +79,7 @@ impl AccumulatingTransform for BlockCompactNoSplitBuilder {
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         self.accumulated_rows += data.num_rows();
-        self.accumulated_bytes += crate::processors::memory_size(&data);
+        self.accumulated_bytes += data.estimate_block_size();
         if !self
             .thresholds
             .check_large_enough(self.accumulated_rows, self.accumulated_bytes)
