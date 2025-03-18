@@ -268,20 +268,58 @@ impl SubqueryRewriter {
         &mut self,
         left: Option<&SExpr>,
         plan: &SExpr,
-        _correlated_columns: &ColumnSet,
+        correlated_columns: &ColumnSet,
     ) -> Result<SExpr> {
         let mut modifier = Modify {
             derived_columns: Default::default(),
             metadata: self.metadata.clone(),
         };
         let left = clone_and_modify(left.unwrap(), &mut modifier);
-        // aggr todo
-
         self.derived_columns.extend(modifier.derived_columns);
+
+        let mut correlated = Vec::from_iter(
+            correlated_columns
+                .iter()
+                .map(|i| *self.derived_columns.get(i).unwrap()),
+        );
+        correlated.sort();
+        let metadata = self.metadata.read();
+        // Wrap logical get with distinct to eliminate duplicates rows.
+        let group_items = correlated
+            .into_iter()
+            .map(|index| {
+                let entry = metadata.column(index);
+                ScalarItem {
+                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: ColumnBindingBuilder::new(
+                            entry.name(),
+                            index,
+                            Box::new(entry.data_type()),
+                            Visibility::Visible,
+                        )
+                        .build(),
+                    }),
+                    index,
+                }
+            })
+            .collect();
+
+        let aggr = SExpr::create_unary(
+            Arc::new(
+                Aggregate {
+                    mode: AggregateMode::Initial,
+                    group_items,
+                    ..Default::default()
+                }
+                .into(),
+            ),
+            Arc::new(left),
+        );
 
         Ok(SExpr::create_binary(
             Arc::new(Join::default().into()),
-            Arc::new(left),
+            Arc::new(aggr),
             Arc::new(plan.clone()),
         ))
     }
@@ -931,7 +969,7 @@ impl ModifyPlan for Modify {
                         let data_type = column_entry.data_type();
                         let index =
                             metadata.add_derived_column(name, data_type, Some(scalar.clone()));
-
+                        self.derived_columns.insert(*old, index);
                         ScalarItem { scalar, index }
                     })
                     .collect();
