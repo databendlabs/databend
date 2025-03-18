@@ -50,6 +50,7 @@ fn create_column_ref1(
         table_index,
         visibility: Visibility::Visible,
         virtual_expr: None,
+        source_table_index: None,
     };
     ScalarExpr::BoundColumnRef(BoundColumnRef { column, span: None })
 }

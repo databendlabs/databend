@@ -85,13 +85,14 @@ impl Rule for RuleSubqueryNotInToIn {
     ) -> databend_common_exception::Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut join: Join = s_expr.children[0].plan().clone().try_into()?;
-
         let (ScalarExpr::FunctionCall(call), Some(mark_index)) =
             (&filter.predicates[0], join.marker_index)
         else {
             return Ok(());
         };
-        if call.func_name != "not"
+        // subquery only one eq condition(subquery child_expr = subquery output column)
+        if join.equi_conditions.len() != 1
+            || call.func_name != "not"
             || call.arguments.len() != 1
             || call.arguments[0]
                 .used_columns()
@@ -100,8 +101,6 @@ impl Rule for RuleSubqueryNotInToIn {
         {
             return Ok(());
         }
-        // subquery only one eq condition(subquery child_expr = subquery output column)
-        debug_assert!(join.equi_conditions.len() == 1);
 
         let condition = &join.equi_conditions[0];
         let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = &condition.left else {
