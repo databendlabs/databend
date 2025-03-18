@@ -1,0 +1,165 @@
+statement ok
+CREATE OR REPLACE TABLE posts
+(
+    id                      integer                        NOT NULL,
+    user_id                 integer,
+    topic_id                integer                        NOT NULL,
+    post_number             integer                        NOT NULL,
+    raw                     text                           NOT NULL,
+    cooked                  text                           NOT NULL,
+    created_at              timestamp                      NOT NULL,
+    updated_at              timestamp                      NOT NULL,
+    reply_to_post_number    integer,
+    reply_count             integer          DEFAULT 0     NOT NULL,
+    quote_count             integer          DEFAULT 0     NOT NULL,
+    deleted_at              timestamp,
+    off_topic_count         integer          DEFAULT 0     NOT NULL,
+    like_count              integer          DEFAULT 0     NOT NULL,
+    incoming_link_count     integer          DEFAULT 0     NOT NULL,
+    bookmark_count          integer          DEFAULT 0     NOT NULL,
+    avg_time                integer,
+    score                   double precision,
+    reads                   integer          DEFAULT 0     NOT NULL,
+    post_type               integer          DEFAULT 1     NOT NULL,
+    sort_order              integer,
+    last_editor_id          integer,
+    hidden                  boolean          DEFAULT false NOT NULL,
+    hidden_reason_id        integer,
+    notify_moderators_count integer          DEFAULT 0     NOT NULL,
+    spam_count              integer          DEFAULT 0     NOT NULL,
+    illegal_count           integer          DEFAULT 0     NOT NULL,
+    inappropriate_count     integer          DEFAULT 0     NOT NULL,
+    last_version_at         timestamp                      NOT NULL,
+    user_deleted            boolean          DEFAULT false NOT NULL,
+    reply_to_user_id        integer,
+    percent_rank            double precision DEFAULT 1.0,
+    notify_user_count       integer          DEFAULT 0     NOT NULL,
+    like_score              integer          DEFAULT 0     NOT NULL,
+    deleted_by_id           integer,
+    edit_reason             varchar,
+    word_count              integer,
+    version                 integer          DEFAULT 1     NOT NULL,
+    cook_method             integer          DEFAULT 1     NOT NULL,
+    wiki                    boolean          DEFAULT false NOT NULL,
+    baked_at                timestamp,
+    baked_version           integer,
+    hidden_at               timestamp,
+    self_edits              integer          DEFAULT 0     NOT NULL,
+    reply_quoted            boolean          DEFAULT false NOT NULL,
+    via_email               boolean          DEFAULT false NOT NULL,
+    raw_email               text,
+    public_version          integer          DEFAULT 1     NOT NULL,
+    action_code             varchar,
+    image_url               varchar,
+    locked_by_id            integer
+);
+
+statement ok
+CREATE OR REPLACE TABLE topics
+(
+    id                        integer                        NOT NULL,
+    title                     varchar                        NOT NULL,
+    last_posted_at            timestamp,
+    created_at                timestamp                      NOT NULL,
+    updated_at                timestamp                      NOT NULL,
+    views                     integer          DEFAULT 0     NOT NULL,
+    posts_count               integer          DEFAULT 0     NOT NULL,
+    user_id                   integer,
+    last_post_user_id         integer                        NOT NULL,
+    reply_count               integer          DEFAULT 0     NOT NULL,
+    featured_user1_id         integer,
+    featured_user2_id         integer,
+    featured_user3_id         integer,
+    avg_time                  integer,
+    deleted_at                timestamp,
+    highest_post_number       integer          DEFAULT 0     NOT NULL,
+    image_url                 varchar,
+    like_count                integer          DEFAULT 0     NOT NULL,
+    incoming_link_count       integer          DEFAULT 0     NOT NULL,
+    category_id               integer,
+    visible                   boolean          DEFAULT true  NOT NULL,
+    moderator_posts_count     integer          DEFAULT 0     NOT NULL,
+    closed                    boolean          DEFAULT false NOT NULL,
+    archived                  boolean          DEFAULT false NOT NULL,
+    bumped_at                 timestamp                      NOT NULL,
+    has_summary               boolean          DEFAULT false NOT NULL,
+    archetype                 varchar          DEFAULT 'regular':: varchar NOT NULL,
+    featured_user4_id         integer,
+    notify_moderators_count   integer          DEFAULT 0     NOT NULL,
+    spam_count                integer          DEFAULT 0     NOT NULL,
+    pinned_at                 timestamp,
+    score                     double precision,
+    percent_rank              double precision DEFAULT 1.0   NOT NULL,
+    subtype                   varchar,
+    slug                      varchar,
+    deleted_by_id             integer,
+    participant_count         integer          DEFAULT 1,
+    word_count                integer,
+    excerpt                   varchar(1000),
+    pinned_globally           boolean          DEFAULT false NOT NULL,
+    pinned_until              timestamp,
+    fancy_title               varchar(400),
+    highest_staff_post_number integer          DEFAULT 0     NOT NULL,
+    featured_link             varchar,
+    reviewable_score          double precision DEFAULT 0.0   NOT NULL
+);
+
+statement ok
+CREATE OR REPLACE TABLE post_search_data
+(
+    post_id     integer NOT NULL,
+    search_data BINARY,
+    raw_data    text,
+    locale      varchar,
+    version     integer DEFAULT 0
+);
+
+statement ok
+INSERT INTO topics (id, title, user_id, created_at, updated_at, last_post_user_id, bumped_at)
+VALUES
+    (1, 'Topic 1', 123, '2025-03-18', '2025-03-18', 123, '2025-03-18'),
+    (2, 'Topic 2', 456, '2025-03-18', '2025-03-18', 456, '2025-03-18'),
+    (3, 'Topic 3', 9627, '2025-03-18', '2025-03-18', 9627, '2025-03-18');
+
+statement ok
+INSERT INTO posts (id, user_id, topic_id, post_number, raw, cooked, created_at, updated_at, deleted_at, last_version_at)
+VALUES
+    (1, 123, 1, 1, 'Raw content 1', 'Cooked content 1', '2025-03-18', '2025-03-18', NULL, '2025-03-18'),
+    (2, 456, 2, 1, 'Raw content 2', 'Cooked content 2', '2025-03-18', '2025-03-18', NULL, '2025-03-18'),
+    (3, 9627, 3, 1, 'Raw content 3', 'Cooked content 3', '2025-03-18', '2025-03-18', NULL, '2025-03-18'),
+    (4, 123, 1, 2, 'Raw content 4', 'Cooked content 4', '2025-03-18', '2025-03-18', '2025-03-18', '2025-03-18'),
+    (5, 9627, 1, 3, 'Raw content 5', 'Cooked content 5', '2025-03-18', '2025-03-18', NULL, '2025-03-18'),
+    (6, 456, 2, 2, 'Raw content 6', 'Cooked content 6', '2025-03-18', '2025-03-18', NULL, '2025-03-18');
+
+statement ok
+INSERT INTO post_search_data (post_id, search_data, raw_data, locale, version)
+VALUES
+    (1, NULL, 'Raw data 1', 'en', 1),
+    (2, NULL, 'Raw data 2', '0', 1),
+    (3, NULL, 'Raw data 3', 'en', 1),
+    (4, NULL, 'Raw data 4', '0', 1),
+    (6, NULL, 'Raw data 6', '0', 1);
+
+# 11	discourse	Subquery to join (results)
+query
+SELECT *
+FROM posts
+         INNER JOIN topics ON topics.id = posts.topic_id
+WHERE NOT posts.id IN (SELECT post_id FROM post_search_data WHERE locale = '0');
+----
+1 123 1 1 Raw content 1 Cooked content 1 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 NULL 0 0 NULL 0 0 0 0 NULL NULL 0 1 NULL NULL 0 NULL 0 0 0 0 2025-03-18 00:00:00.000000 0 NULL 1.0 0 0 NULL NULL NULL 1 1 0 NULL NULL NULL 0 0 0 NULL 1 NULL NULL NULL 1 Topic 1 NULL 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 0 0 123 123 0 NULL NULL NULL NULL NULL 0 NULL 0 0 NULL 1 0 0 0 2025-03-18 00:00:00.000000 0 regular NULL 0 0 NULL NULL 1.0 NULL NULL NULL 1 NULL NULL 0 NULL NULL 0 NULL 0.0
+3 9627 3 1 Raw content 3 Cooked content 3 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 NULL 0 0 NULL 0 0 0 0 NULL NULL 0 1 NULL NULL 0 NULL 0 0 0 0 2025-03-18 00:00:00.000000 0 NULL 1.0 0 0 NULL NULL NULL 1 1 0 NULL NULL NULL 0 0 0 NULL 1 NULL NULL NULL 3 Topic 3 NULL 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 0 0 9627 9627 0 NULL NULL NULL NULL NULL 0 NULL 0 0 NULL 1 0 0 0 2025-03-18 00:00:00.000000 0 regular NULL 0 0 NULL NULL 1.0 NULL NULL NULL 1 NULL NULL 0 NULL NULL 0 NULL 0.0
+5 9627 1 3 Raw content 5 Cooked content 5 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 NULL 0 0 NULL 0 0 0 0 NULL NULL 0 1 NULL NULL 0 NULL 0 0 0 0 2025-03-18 00:00:00.000000 0 NULL 1.0 0 0 NULL NULL NULL 1 1 0 NULL NULL NULL 0 0 0 NULL 1 NULL NULL NULL 1 Topic 1 NULL 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 0 0 123 123 0 NULL NULL NULL NULL NULL 0 NULL 0 0 NULL 1 0 0 0 2025-03-18 00:00:00.000000 0 regular NULL 0 0 NULL NULL 1.0 NULL NULL NULL 1 NULL NULL 0 NULL NULL 0 NULL 0.0
+
+query
+SELECT *
+FROM posts
+         INNER JOIN topics ON topics.id = posts.topic_id
+WHERE posts.id IN (SELECT p2.id
+                   FROM posts p2
+                            LEFT JOIN post_search_data pd ON locale = '0' AND p2.id = pd.post_id
+                   WHERE pd.post_id IS NULL)
+----
+1 123 1 1 Raw content 1 Cooked content 1 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 NULL 0 0 NULL 0 0 0 0 NULL NULL 0 1 NULL NULL 0 NULL 0 0 0 0 2025-03-18 00:00:00.000000 0 NULL 1.0 0 0 NULL NULL NULL 1 1 0 NULL NULL NULL 0 0 0 NULL 1 NULL NULL NULL 1 Topic 1 NULL 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 0 0 123 123 0 NULL NULL NULL NULL NULL 0 NULL 0 0 NULL 1 0 0 0 2025-03-18 00:00:00.000000 0 regular NULL 0 0 NULL NULL 1.0 NULL NULL NULL 1 NULL NULL 0 NULL NULL 0 NULL 0.0
+3 9627 3 1 Raw content 3 Cooked content 3 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 NULL 0 0 NULL 0 0 0 0 NULL NULL 0 1 NULL NULL 0 NULL 0 0 0 0 2025-03-18 00:00:00.000000 0 NULL 1.0 0 0 NULL NULL NULL 1 1 0 NULL NULL NULL 0 0 0 NULL 1 NULL NULL NULL 3 Topic 3 NULL 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 0 0 9627 9627 0 NULL NULL NULL NULL NULL 0 NULL 0 0 NULL 1 0 0 0 2025-03-18 00:00:00.000000 0 regular NULL 0 0 NULL NULL 1.0 NULL NULL NULL 1 NULL NULL 0 NULL NULL 0 NULL 0.0
+5 9627 1 3 Raw content 5 Cooked content 5 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 NULL 0 0 NULL 0 0 0 0 NULL NULL 0 1 NULL NULL 0 NULL 0 0 0 0 2025-03-18 00:00:00.000000 0 NULL 1.0 0 0 NULL NULL NULL 1 1 0 NULL NULL NULL 0 0 0 NULL 1 NULL NULL NULL 1 Topic 1 NULL 2025-03-18 00:00:00.000000 2025-03-18 00:00:00.000000 0 0 123 123 0 NULL NULL NULL NULL NULL 0 NULL 0 0 NULL 1 0 0 0 2025-03-18 00:00:00.000000 0 regular NULL 0 0 NULL NULL 1.0 NULL NULL NULL 1 NULL NULL 0 NULL NULL 0 NULL 0.0

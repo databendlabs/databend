@@ -46,6 +46,7 @@ use super::rewrite::RulePushDownSortEvalScalar;
 use super::rewrite::RulePushDownSortScan;
 use super::rewrite::RuleSemiToInnerJoin;
 use super::rewrite::RuleSplitAggregate;
+use super::rewrite::RuleSubqueryNotInToIn;
 use super::rewrite::RuleTryApplyAggIndex;
 use super::transform::RuleCommuteJoinBaseTable;
 use super::transform::RuleEagerAggregation;
@@ -111,6 +112,7 @@ impl RuleFactory {
             RuleID::MergeFilterIntoMutation => {
                 Ok(Box::new(RuleMergeFilterIntoMutation::new(ctx.metadata)))
             }
+            RuleID::SubqueryNotInToIn => Ok(Box::new(RuleSubqueryNotInToIn::new(ctx.metadata))),
         }
     }
 }

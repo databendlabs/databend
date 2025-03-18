@@ -58,6 +58,8 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
+        // Subquery
+        RuleID::SubqueryNotInToIn,
     ]
 });
 
@@ -113,6 +115,7 @@ pub enum RuleID {
     PushDownPrewhere,
     TryApplyAggIndex,
     CommuteJoin,
+    SubqueryNotInToIn,
 
     // Exploration rules
     CommuteJoinBaseTable,
@@ -165,6 +168,7 @@ impl Display for RuleID {
             RuleID::EliminateUnion => write!(f, "EliminateUnion"),
 
             RuleID::MergeFilterIntoMutation => write!(f, "MergeFilterIntoMutation"),
+            RuleID::SubqueryNotInToIn => write!(f, "SubqueryNotInToIn"),
         }
     }
 }
