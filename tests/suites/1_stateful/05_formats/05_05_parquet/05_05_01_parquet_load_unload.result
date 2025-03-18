@@ -38,5 +38,6 @@ end diff
 >>>> copy into @s1/unload2/ from test_load_unload
 2	390
 begin diff parquet
+True
 end diff
 >>>> truncate table test_load_unload

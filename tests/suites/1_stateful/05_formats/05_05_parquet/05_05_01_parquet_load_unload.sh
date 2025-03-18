@@ -62,6 +62,8 @@
 
 
 	echo "begin diff parquet"
+  PYTHON_SCRIPT="./compare_parquet.py"
+  python3 PYTHON_SCRIPT
  	diff /tmp/test_load_unload/unload2.parquet /tmp/test_load_unload/unload1.parquet
 	echo "end diff"
  	stmt "truncate table test_load_unload"

@@ -113,9 +113,6 @@ statement ok
 drop table abc.t
 
 statement ok
-drop table if exists abc.t
-
-statement ok
 drop table abc.t1
 
 statement error

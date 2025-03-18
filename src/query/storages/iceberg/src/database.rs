@@ -212,22 +212,7 @@ impl Database for IcebergDatabase {
     #[async_backtrace::framed]
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
         let table_name = TableIdent::new(self.ident.clone(), req.table_name.to_string());
-        if req.if_exists
-            && !self
-                .ctl
-                .iceberg_catalog()
-                .table_exists(&table_name)
-                .await
-                .map_err(|err| {
-                    ErrorCode::Internal(format!(
-                        "Iceberg drop table check exists {}.{} failed: {err:?}",
-                        req.db_name, req.table_name
-                    ))
-                })?
-        {
-            return Ok(DropTableReply {});
-        }
-        let _ = self
+        if let Err(err) = self
             .ctl
             .iceberg_catalog()
             .drop_table(&table_name)
@@ -237,7 +222,15 @@ impl Database for IcebergDatabase {
                     "Iceberg drop table {}.{} failed: {err:?}",
                     req.db_name, req.table_name
                 ))
-            })?;
-        Ok(DropTableReply {})
+            })
+        {
+            if req.if_exists {
+                Ok(DropTableReply {})
+            } else {
+                Err(err)
+            }
+        } else {
+            Ok(DropTableReply {})
+        }
     }
 }
