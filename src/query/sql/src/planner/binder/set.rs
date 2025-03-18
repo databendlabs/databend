@@ -59,7 +59,7 @@ impl Binder {
                         .await?;
                     SetScalarsOrQuery::Query(Box::new(p))
                 } else {
-                    let mut results = vec![];
+                    let mut results = Vec::with_capacity(exprs.len());
                     for expr in exprs.iter() {
                         let (scalar, _) = *type_checker.resolve(expr.as_ref())?;
                         let expr = scalar.as_expr()?;
