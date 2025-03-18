@@ -102,6 +102,8 @@ impl sqllogictest::AsyncDB for Databend {
         self.client.query(sql).await
     }
 
+    async fn shutdown(&mut self) {}
+
     fn engine_name(&self) -> &str {
         self.client.engine_name()
     }
@@ -311,6 +313,7 @@ async fn run_suits(args: SqlLogicTestArgs, client_type: ClientType) -> Result<()
                     file.unwrap().path(),
                     col_separator,
                     validator,
+                    sqllogictest::default_normalizer,
                     column_validator,
                 )
                 .await

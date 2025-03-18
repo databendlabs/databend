@@ -270,7 +270,7 @@ impl RaftStoreInner {
 
         Ok(Snapshot {
             meta: snapshot_meta,
-            snapshot: Box::new(db),
+            snapshot: db,
         })
     }
 

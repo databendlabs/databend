@@ -1417,7 +1417,6 @@ impl Binder {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
             let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
-
             let mut field = TableField::new(&name, schema_data_type.clone());
             if let Some(expr) = &column.expr {
                 match expr {

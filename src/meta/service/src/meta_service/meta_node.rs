@@ -43,10 +43,9 @@ use databend_common_meta_types::protobuf::raft_service_server::RaftServiceServer
 use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::raft_types::CommittedLeaderId;
+use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::raft_types::ForwardToLeader;
 use databend_common_meta_types::raft_types::InitializeError;
-use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftMetrics;
@@ -243,6 +242,9 @@ impl MetaNode {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(config.snapshot_logs_since_last),
             max_in_snapshot_log_to_keep: config.max_applied_log_to_keep,
             snapshot_max_chunk_size: config.snapshot_chunk_size,
+            // Allow Leader to reset replication if a follower clears its log.
+            // Usefull in a testing environment.
+            allow_log_reversion: Some(true),
             ..Default::default()
         }
         .validate()
@@ -907,9 +909,7 @@ impl MetaNode {
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,
             last_log_index: metrics.last_log_index.unwrap_or(0),
-            last_applied: metrics
-                .last_applied
-                .unwrap_or(LogId::new(CommittedLeaderId::new(0, 0), 0)),
+            last_applied: metrics.last_applied.unwrap_or(new_log_id(0, 0, 0)),
             snapshot_last_log_id: metrics.snapshot,
             purged: metrics.purged,
             leader,
