@@ -358,9 +358,10 @@ impl Metadata {
         source_of_index: bool,
         source_of_stage: bool,
         cte_suffix_name: Option<String>,
-    ) -> IndexType {
+    ) -> (IndexType, Option<IndexType>) {
         let table_name = table_meta.name().to_string();
         let table_name = Self::remove_cte_suffix(table_name, cte_suffix_name);
+        let source_table_index = self.get_table_index(Some(database.as_str()), table_name.as_str());
 
         let table_index = self.tables.len();
         // If exists table alias name, use it instead of origin name
@@ -455,7 +456,7 @@ impl Metadata {
             }
         }
 
-        table_index
+        (table_index, source_table_index)
     }
 
     pub fn change_derived_column_alias(&mut self, index: IndexType, alias: String) {

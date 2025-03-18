@@ -143,6 +143,7 @@ impl RuleNormalizeAggregateOptimizer {
                             column: ColumnBinding {
                                 table_name: None,
                                 table_index: None,
+                                source_table_index: None,
                                 database_name: None,
                                 column_position: None,
                                 index: work_index,

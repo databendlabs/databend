@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use std::vec;
 
@@ -22,6 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::ColumnIndex;
 use databend_common_expression::Scalar;
 use databend_common_functions::aggregates::AggregateCountFunction;
 
@@ -32,6 +34,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
+use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
@@ -53,6 +56,7 @@ use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
 use crate::plans::WindowFuncType;
 use crate::Binder;
+use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -600,6 +604,53 @@ impl SubqueryRewriter {
             }
             SubqueryType::Any => {
                 let output_column = subquery.output_column.clone();
+
+                let mut visitor = SubqueryInnerJoinVisitor::default();
+                visitor.visit(&subquery.subquery)?;
+
+                let child_binding = subquery
+                    .child_expr
+                    .as_ref()
+                    .map(|expr| Option::<SourceColumnBinding>::try_from(expr.as_ref()))
+                    .transpose()?
+                    .flatten();
+                if let (Some(child_binding), Some(eq_map)) = (child_binding, visitor.eq_map) {
+                    let left_binding = SourceColumnBinding::from(&output_column);
+                    let is_same_binding = eq_map
+                        .get(&child_binding)
+                        .map(|binding| Result::Ok(binding == &left_binding))
+                        .transpose()?;
+                    if matches!(is_same_binding, Some(true)) {
+                        // `In` need to make subquery deduplicated
+                        return Ok((
+                            SExpr::create_unary(
+                                Arc::new(
+                                    Aggregate {
+                                        mode: AggregateMode::Initial,
+                                        group_items: vec![ScalarItem {
+                                            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                                span: subquery.span,
+                                                column: ColumnBindingBuilder::new(
+                                                    output_column.column_name,
+                                                    output_column.index,
+                                                    output_column.data_type,
+                                                    Visibility::Visible,
+                                                )
+                                                .table_index(output_column.table_index)
+                                                .build(),
+                                            }),
+                                            index: output_column.index,
+                                        }],
+                                        ..Default::default()
+                                    }
+                                    .into(),
+                                ),
+                                Arc::new(subquery.subquery.deref().clone()),
+                            ),
+                            UnnestResult::SimpleJoin { output_index: None },
+                        ));
+                    }
+                }
                 let column_name = format!("subquery_{}", output_column.index);
                 let left_condition = wrap_cast(
                     &ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -673,6 +724,82 @@ impl SubqueryRewriter {
             }
             _ => unreachable!(),
         }
+    }
+}
+
+// Only used to determine whether two logical columns are the same column of the same table
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize, Eq, PartialEq, Hash)]
+struct SourceColumnBinding {
+    table_index: Option<usize>,
+    column_pos: Option<usize>,
+}
+
+impl From<&ColumnBinding> for SourceColumnBinding {
+    fn from(value: &ColumnBinding) -> Self {
+        SourceColumnBinding {
+            table_index: value.source_table_index.or(value.table_index),
+            column_pos: value.column_position,
+        }
+    }
+}
+
+impl TryFrom<&ScalarExpr> for Option<SourceColumnBinding> {
+    type Error = ErrorCode<()>;
+
+    fn try_from(value: &ScalarExpr) -> std::result::Result<Self, Self::Error> {
+        if let Some((_, binding, _, _)) = value.as_expr()?.as_column_ref() {
+            return Ok(Some(SourceColumnBinding::from(binding)));
+        }
+        Ok(None)
+    }
+}
+
+impl ColumnIndex for SourceColumnBinding {}
+
+#[derive(Debug, Default)]
+struct SubqueryInnerJoinVisitor {
+    eq_map: Option<HashMap<SourceColumnBinding, SourceColumnBinding>>,
+    finish: bool,
+}
+
+impl SubqueryInnerJoinVisitor {
+    fn visit(&mut self, s_expr: &SExpr) -> Result<()> {
+        if self.eq_map.is_some() || self.finish {
+            return Ok(());
+        }
+        if let RelOperator::Join(join) = s_expr.plan.as_ref() {
+            if join.join_type == JoinType::Inner {
+                let mut eq_map = HashMap::with_capacity(join.equi_conditions.len() * 2);
+                let fn_check_single_column = |expr: &ScalarExpr| {
+                    Result::Ok(expr.used_columns().len() == 1 && expr.used_tables()?.len() == 1)
+                };
+
+                for eq_condition in join.equi_conditions.iter() {
+                    if !fn_check_single_column(&eq_condition.left)?
+                        || !fn_check_single_column(&eq_condition.right)?
+                    {
+                        self.finish = true;
+                        return Ok(());
+                    }
+                    let (Some(left_binding), Some(right_binding)) = (
+                        Option::<SourceColumnBinding>::try_from(&eq_condition.left)?,
+                        Option::<SourceColumnBinding>::try_from(&eq_condition.right)?,
+                    ) else {
+                        self.finish = true;
+                        return Ok(());
+                    };
+                    eq_map.insert(left_binding, right_binding);
+                    eq_map.insert(right_binding, left_binding);
+                }
+                self.eq_map = Some(eq_map);
+            }
+            // finish
+            return Ok(());
+        }
+        for visit in s_expr.children() {
+            self.visit(visit)?;
+        }
+        Ok(())
     }
 }
 

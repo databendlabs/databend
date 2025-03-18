@@ -28,6 +28,8 @@ pub struct ColumnBinding {
     pub column_position: Option<usize>,
     /// Table index of this `ColumnBinding` in current context
     pub table_index: Option<IndexType>,
+    /// Source table index of this `ColumnBinding` in current context
+    pub source_table_index: Option<IndexType>,
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     /// Column index of ColumnBinding
@@ -72,6 +74,7 @@ impl ColumnBinding {
             table_name: None,
             column_position: None,
             table_index: None,
+            source_table_index: None,
             column_name: name,
             index,
             data_type,
@@ -96,6 +99,8 @@ pub struct ColumnBindingBuilder {
     pub column_position: Option<usize>,
     /// Table index of this `ColumnBinding` in current context
     pub table_index: Option<IndexType>,
+    /// Source table index of this `ColumnBinding` in current context
+    pub source_table_index: Option<IndexType>,
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
     /// Column index of ColumnBinding
@@ -120,6 +125,7 @@ impl ColumnBindingBuilder {
             table_name: None,
             column_position: None,
             table_index: None,
+            source_table_index: None,
             column_name,
             index,
             data_type,
@@ -148,6 +154,11 @@ impl ColumnBindingBuilder {
         self
     }
 
+    pub fn source_table_index(mut self, index: Option<IndexType>) -> ColumnBindingBuilder {
+        self.source_table_index = index;
+        self
+    }
+
     pub fn virtual_expr(mut self, virtual_expr: Option<String>) -> ColumnBindingBuilder {
         self.virtual_expr = virtual_expr;
         self
@@ -159,6 +170,7 @@ impl ColumnBindingBuilder {
             table_name: self.table_name,
             column_position: self.column_position,
             table_index: self.table_index,
+            source_table_index: self.source_table_index,
             column_name: self.column_name,
             index: self.index,
             data_type: self.data_type,
