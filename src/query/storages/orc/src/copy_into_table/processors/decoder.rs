@@ -132,7 +132,7 @@ impl StripeDecoderForCopy {
 
                         if let Column::Nullable(box NullableColumn {
                             column: Column::Tuple(ref v),
-                            validity: inner_validty,
+                            validity: inner_validity,
                         }) = column
                         {
                             let len = v[0].len();
@@ -146,7 +146,7 @@ impl StripeDecoderForCopy {
                             }
                             let new_tuple_column = Column::Nullable(Box::new(NullableColumn {
                                 column: Column::Tuple(v2),
-                                validity: inner_validty.clone(),
+                                validity: inner_validity.clone(),
                             }));
 
                             let new_array_column = ArrayColumn::new(new_tuple_column, offsets);
