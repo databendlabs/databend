@@ -84,7 +84,7 @@ abc
 tpch
 
 statement ok
-create table abc.t(id int);
+create table if not exists abc.t(id int);
 
 query T
 desc abc.t;
@@ -94,14 +94,14 @@ id INT YES NULL (empty)
 statement ok
 create or replace table abc.t1(c1 int, c2 string);
 
-
 statement ok
 create or replace table abc.t1(c1 date, c2 string);
 
 query T
-show create table abc.t1;
+desc abc.t1;
 ----
-t1 CREATE TABLE t1 (     c1 DATE NULL,     c2 VARCHAR NULL   ) ENGINE=iceberg
+c1 DATE YES NULL (empty)
+c2 VARCHAR YES NULL (empty)
 
 query T
 show tables from abc;
@@ -111,9 +111,6 @@ t1
 
 statement ok
 drop table abc.t
-
-statement ok
-drop table if exists abc.t
 
 statement ok
 drop table abc.t1

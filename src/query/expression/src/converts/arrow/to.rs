@@ -36,7 +36,6 @@ use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
-use super::PARQUET_FIELD_ID_META_KEY;
 use crate::infer_table_schema;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
@@ -88,10 +87,6 @@ impl From<&TableField> for Field {
     fn from(f: &TableField) -> Self {
         let mut metadata = HashMap::new();
 
-        metadata.insert(
-            PARQUET_FIELD_ID_META_KEY.to_string(),
-            f.column_id.to_string(),
-        );
         let ty = match &f.data_type {
             TableDataType::Null => ArrowDataType::Null,
             TableDataType::EmptyArray => {
