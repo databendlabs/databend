@@ -2921,7 +2921,6 @@ dependencies = [
  "databend-enterprise-query",
  "databend-meta",
  "databend-query",
- "epochfs",
  "form_urlencoded",
  "futures",
  "http 1.1.0",
@@ -6070,24 +6069,6 @@ dependencies = [
  "env_filter",
  "humantime",
  "log",
-]
-
-[[package]]
-name = "epochfs"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfd641407066de625d604af613024fe22af3ba6b594b52915bd471a9322d5275"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "blake3",
- "futures",
- "log",
- "opendal",
- "prost",
- "prost-build",
- "sqlx",
- "uuid",
 ]
 
 [[package]]
@@ -9484,7 +9465,6 @@ version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
 dependencies = [
- "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -13729,7 +13709,6 @@ dependencies = [
  "indexmap 2.6.0",
  "log",
  "memchr",
- "native-tls",
  "once_cell",
  "percent-encoding",
  "serde",

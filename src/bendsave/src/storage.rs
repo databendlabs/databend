@@ -146,7 +146,7 @@ pub async fn load_databend_meta() -> Result<(
 ///
 /// S3: `s3://bucket/path/to/root/?region=us-east-1&access_key_id=xxx&secret_access_key=xxx`
 /// Fs: `fs://path/to/data`
-pub async fn load_epochfs_storage(uri: &str) -> Result<Operator> {
+pub async fn load_bendsave_storage(uri: &str) -> Result<Operator> {
     let uri = http::Uri::from_str(uri)?;
     let scheme = uri.scheme_str().unwrap_or_default();
     let name = uri.host().unwrap_or_default();
@@ -206,12 +206,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_load_epochfs_storage() -> Result<()> {
-        let op = load_epochfs_storage("s3://bendsave/tmp?region=us-east-1").await?;
+        let op = load_bendsave_storage("s3://bendsave/tmp?region=us-east-1").await?;
         assert_eq!(op.info().scheme(), Scheme::S3);
         assert_eq!(op.info().name(), "bendsave");
         assert_eq!(op.info().root(), "/tmp/");
 
-        let op = load_epochfs_storage("fs://tmp").await?;
+        let op = load_bendsave_storage("fs://tmp").await?;
         assert_eq!(op.info().scheme(), Scheme::Fs);
         assert_eq!(op.info().root(), "/tmp");
         Ok(())

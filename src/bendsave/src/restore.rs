@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::pin::pin;
-
-use anyhow::anyhow;
 use anyhow::Result;
 use databend_common_meta_control::args::ImportArgs;
 use databend_common_meta_control::import::import_data;
@@ -23,36 +20,28 @@ use log::info;
 use opendal::Operator;
 use tokio::io::AsyncWriteExt;
 
-use crate::storage::load_epochfs_storage;
+use crate::storage::load_bendsave_storage;
 use crate::storage::load_meta_config;
 use crate::storage::load_query_storage;
+use crate::utils::storage_copy;
 use crate::utils::DATABEND_META_BACKUP_PATH;
 
-pub async fn restore(from: &str, checkpoint: &str, to_query: &str, to_meta: &str) -> Result<()> {
-    let epochfs_op = load_epochfs_storage(from).await?;
-    let epochfs_storage = epochfs::Fs::new(epochfs_op).await?;
-    epochfs_storage.load(checkpoint).await?;
-    info!("load from checkpoint: {checkpoint}");
-
+pub async fn restore(from: &str, to_query: &str, to_meta: &str) -> Result<()> {
+    let bendsave_stroage = load_bendsave_storage(from).await?;
     let databend_storage = load_query_storage(to_query).await?;
     let meta_config = load_meta_config(to_meta)?;
 
-    restore_query(&epochfs_storage, databend_storage).await?;
-    restore_meta(&epochfs_storage, &meta_config).await?;
+    storage_copy(bendsave_stroage.clone(), databend_storage).await?;
+    restore_meta(bendsave_stroage, &meta_config).await?;
     Ok(())
 }
 
-pub async fn restore_meta(
-    efs: &epochfs::Fs,
-    meta_cfg: &databend_meta::configs::Config,
-) -> Result<()> {
-    let Some(file) = efs.open_file(DATABEND_META_BACKUP_PATH).await? else {
-        return Err(anyhow!(
-            "meta backup file not found, is the backup succeed?"
-        ));
-    };
-    let stream = file.stream().await?;
-    let mut stream = pin!(stream);
+pub async fn restore_meta(efs: Operator, meta_cfg: &databend_meta::configs::Config) -> Result<()> {
+    let mut stream = efs
+        .reader(DATABEND_META_BACKUP_PATH)
+        .await?
+        .into_bytes_stream(..)
+        .await?;
 
     // Write databend meta backup to local fs.
     let mut local_file = tokio::fs::File::create_new(DATABEND_META_BACKUP_PATH).await?;
@@ -72,25 +61,5 @@ pub async fn restore_meta(
     import_data(&import_args).await?;
 
     info!("databend meta has been restored");
-    Ok(())
-}
-
-pub async fn restore_query(efs: &epochfs::Fs, dstore: Operator) -> Result<()> {
-    let files = efs.list_files();
-    let mut files = pin!(files);
-
-    while let Some(file) = files.next().await.transpose()? {
-        let reader = file.stream().await?;
-        let mut reader = pin!(reader);
-
-        let mut writer = dstore.writer(file.path()).await?;
-        while let Some(buffer) = reader.next().await {
-            let buffer = buffer?;
-            writer.write(buffer).await?;
-        }
-        writer.close().await?;
-        info!("databend query file {} has been restored", file.path());
-    }
-    info!("databend query has been restored");
     Ok(())
 }

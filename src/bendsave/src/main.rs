@@ -47,9 +47,6 @@ enum Commands {
         /// Backup manifest file path
         #[arg(long)]
         from: String,
-        /// The target checkpoint to restore
-        #[arg(long)]
-        checkpoint: String,
         /// Target configuration file path of databend query
         #[arg(long)]
         to_query: String,
@@ -60,14 +57,6 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         confirm: bool,
     },
-    // /// List all backups in the specified location
-    // List {
-    //     /// Backup location
-    //     #[arg(short, long)]
-    //     location: String,
-    // },
-    // /// Manage backup retention policies
-    // Vacuum,
 }
 
 #[tokio::main]
@@ -89,21 +78,20 @@ async fn main() -> Result<()> {
         }
         Commands::Restore {
             from,
-            checkpoint,
             to_query,
             to_meta,
             confirm,
         } => {
             if *confirm {
                 println!(
-                    "Restoring from {} at checkpoint {} to query {} and meta {} with confirmation",
-                    from, checkpoint, to_query, to_meta
+                    "Restoring from {} to query {} and meta {} with confirmation",
+                    from, to_query, to_meta
                 );
-                restore(from, checkpoint, to_query, to_meta).await?;
+                restore(from, to_query, to_meta).await?;
             } else {
                 println!(
-                    "Dry-run restore from {} at checkout {}  query {} and meta {}",
-                    from, checkpoint, to_query, to_meta
+                    "Dry-run restore from {} at query {} and meta {}",
+                    from, to_query, to_meta
                 );
             }
         }

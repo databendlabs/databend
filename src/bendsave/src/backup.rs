@@ -12,67 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use anyhow::anyhow;
 use anyhow::Result;
-use futures::StreamExt;
+use futures::SinkExt;
 use futures::TryStreamExt;
 use log::info;
-use opendal::Buffer;
 use opendal::Operator;
 
+use crate::storage::load_bendsave_storage;
 use crate::storage::load_databend_meta;
-use crate::storage::load_epochfs_storage;
 use crate::storage::load_query_storage;
+use crate::utils::storage_copy;
 use crate::utils::DATABEND_META_BACKUP_PATH;
 
 pub async fn backup(from: &str, to: &str) -> Result<()> {
     let databend_storage = load_query_storage(from).await?;
-    let epochfs_op = load_epochfs_storage(to).await?;
-    let epochfs_storage = epochfs::Fs::new(epochfs_op).await?;
+    let bendsave_stroage = load_bendsave_storage(to).await?;
 
     // backup metadata first.
-    backup_meta(&epochfs_storage).await?;
-    backup_query(databend_storage, &epochfs_storage).await?;
+    backup_meta(bendsave_stroage.clone()).await?;
+    storage_copy(databend_storage, bendsave_stroage).await?;
 
-    let checkpoint = epochfs_storage.commit().await?;
-    info!("backup to checkpoint: {checkpoint}");
+    info!("databend backup has been finished");
     Ok(())
 }
 
 /// Backup the entire databend meta to epochfs.
-pub async fn backup_meta(efs: &epochfs::Fs) -> Result<()> {
+pub async fn backup_meta(op: Operator) -> Result<()> {
     let (_client_handle, stream) = load_databend_meta().await?;
-    let stream = stream.map_ok(Buffer::from);
+    let mut stream = stream.map_err(std::io::Error::other);
 
-    let mut file = efs.create_file(DATABEND_META_BACKUP_PATH).await?;
-    file.sink(stream).await?;
-    file.commit().await?;
+    let mut file = op
+        .writer_with(DATABEND_META_BACKUP_PATH)
+        .chunk(8 * 1024 * 1024)
+        .await?
+        .into_bytes_sink();
+    file.send_all(&mut stream).await?;
+    file.close().await?;
     info!("databend meta has been backed up");
-    Ok(())
-}
-
-/// Backup the entire databend query data to epochfs.
-pub async fn backup_query(dstore: Operator, efs: &epochfs::Fs) -> Result<()> {
-    let mut list = dstore.lister_with("/").recursive(true).await?;
-    while let Some(entry) = list.next().await.transpose()? {
-        if entry.metadata().is_dir() {
-            continue;
-        }
-
-        let stream = dstore
-            .reader_with(entry.path())
-            .chunk(8 * 1024 * 1024)
-            .await?
-            .into_bytes_stream(..)
-            .await?
-            .map_ok(Buffer::from)
-            .map_err(|err| anyhow!("read databend query data failed: {err:?}"));
-
-        let mut file = efs.create_file(entry.path()).await?;
-        file.sink(stream).await?;
-        file.commit().await?;
-        info!("databend query file {} has been backed up", entry.path());
-    }
-    info!("databend query has been backed up");
     Ok(())
 }
