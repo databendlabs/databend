@@ -270,6 +270,7 @@ impl SubqueryRewriter {
             SubqueryType::Scalar => {
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan = self.flatten_plan(
+                    Some(left),
                     &subquery.subquery,
                     &correlated_columns,
                     flatten_info,
@@ -328,6 +329,7 @@ impl SubqueryRewriter {
                 }
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan = self.flatten_plan(
+                    Some(left),
                     &subquery.subquery,
                     &correlated_columns,
                     flatten_info,
@@ -387,6 +389,7 @@ impl SubqueryRewriter {
             SubqueryType::Any => {
                 let correlated_columns = subquery.outer_columns.clone();
                 let flatten_plan = self.flatten_plan(
+                    Some(left),
                     &subquery.subquery,
                     &correlated_columns,
                     flatten_info,

@@ -3567,30 +3567,10 @@ dependencies = [
 name = "databend-common-meta-app-types"
 version = "0.1.0"
 dependencies = [
- "anyerror",
  "anyhow",
- "databend-common-base",
- "databend-common-building",
- "databend-common-exception",
- "databend-common-meta-stoerr",
- "databend-common-tracing",
- "deepsize",
- "derive_more",
- "futures-util",
- "log",
- "map-api",
  "num-derive",
- "num-traits",
- "openraft",
  "prost",
- "prost-build",
- "rotbl",
  "serde",
- "serde_json",
- "thiserror 1.0.65",
- "tokio",
- "tonic",
- "tonic-build",
 ]
 
 [[package]]

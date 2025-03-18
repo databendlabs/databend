@@ -384,6 +384,7 @@ impl Binder {
             let mut decorrelator =
                 SubqueryRewriter::new(self.ctx.clone(), self.metadata.clone(), Some(self.clone()));
             right_child = decorrelator.flatten_plan(
+                Some(&left_child),
                 &right_child,
                 &right_prop.outer_columns,
                 &mut FlattenInfo {
