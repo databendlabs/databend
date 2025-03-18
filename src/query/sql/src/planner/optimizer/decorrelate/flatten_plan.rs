@@ -68,11 +68,13 @@ impl SubqueryRewriter {
                 return Ok(plan.clone());
             }
 
-            if self
-                .metadata
-                .read()
-                .table_index_by_column_indexes(correlated_columns)
-                .is_some()
+            #[allow(clippy::overly_complex_bool_expr)]
+            if false
+                && self
+                    .metadata
+                    .read()
+                    .table_index_by_column_indexes(correlated_columns)
+                    .is_some()
             {
                 return self.rewrite_to_join(plan, correlated_columns);
             } else {

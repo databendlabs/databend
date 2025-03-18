@@ -98,18 +98,7 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
                 cast.target_type
             )
         }
-        ScalarExpr::SubqueryExpr(subquery) => {
-            format!(
-                "SUBQUERY({:?}, OP({:?}){})",
-                subquery.typ,
-                subquery.compare_op,
-                if !subquery.outer_columns.is_empty() {
-                    ", Correlated"
-                } else {
-                    ""
-                },
-            )
-        }
+        ScalarExpr::SubqueryExpr(_) => "SUBQUERY".to_string(),
         ScalarExpr::UDFCall(udf) => {
             format!(
                 "{}({})",
