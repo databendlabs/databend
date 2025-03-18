@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::SetType;
 use databend_common_ast::ast::SetValues;
@@ -49,23 +50,37 @@ impl Binder {
 
         let values = match values {
             SetValues::Expr(exprs) => {
-                let mut results = vec![];
-                for expr in exprs.iter() {
-                    let (scalar, _) = *type_checker.resolve(expr.as_ref())?;
-                    let expr = scalar.as_expr()?;
-                    let (new_expr, _) = ConstantFolder::fold(
-                        &expr,
-                        &self.ctx.get_function_context()?,
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    match new_expr {
-                        databend_common_expression::Expr::Constant { scalar, .. } => {
-                            results.push(scalar);
+                if exprs.len() == 1
+                    && let Expr::Subquery { subquery, .. } = *exprs[0].clone()
+                {
+                    let p = self
+                        .clone()
+                        .bind(&Statement::Query(subquery.clone()))
+                        .await?;
+                    SetScalarsOrQuery::Query(Box::new(p))
+                } else {
+                    let mut results = vec![];
+                    for expr in exprs.iter() {
+                        let (scalar, _) = *type_checker.resolve(expr.as_ref())?;
+                        let expr = scalar.as_expr()?;
+                        let (new_expr, _) = ConstantFolder::fold(
+                            &expr,
+                            &self.ctx.get_function_context()?,
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        match new_expr {
+                            databend_common_expression::Expr::Constant { scalar, .. } => {
+                                results.push(scalar);
+                            }
+                            _ => {
+                                return Err(ErrorCode::SemanticError(
+                                    "value must be constant value",
+                                ))
+                            }
                         }
-                        _ => return Err(ErrorCode::SemanticError("value must be constant value")),
                     }
+                    SetScalarsOrQuery::VarValue(results)
                 }
-                SetScalarsOrQuery::VarValue(results)
             }
             SetValues::Query(query) => {
                 let p = self.clone().bind(&Statement::Query(query.clone())).await?;

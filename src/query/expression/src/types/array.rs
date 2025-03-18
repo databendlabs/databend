@@ -205,11 +205,15 @@ impl<T: ArgType> ArgType for ArrayType<T> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArrayColumn<T: ValueType> {
-    pub values: T::Column,
-    pub offsets: Buffer<u64>,
+    values: T::Column,
+    offsets: Buffer<u64>,
 }
 
 impl<T: ValueType> ArrayColumn<T> {
+    pub fn new(values: T::Column, offsets: Buffer<u64>) -> ArrayColumn<T> {
+        ArrayColumn { values, offsets }
+    }
+
     pub fn len(&self) -> usize {
         self.offsets.len() - 1
     }
@@ -261,10 +265,37 @@ impl<T: ValueType> ArrayColumn<T> {
         T::column_memory_size(&self.values) + self.offsets.len() * 8
     }
 
+    // Note: if the array column has been sliced, the number of values may not match the offsets,
+    // use the `underlying_column` function to get the actual values.
+    pub fn values(&self) -> &T::Column {
+        &self.values
+    }
+
     pub fn underlying_column(&self) -> T::Column {
         debug_assert!(!self.offsets.is_empty());
         let range = *self.offsets.first().unwrap() as usize..*self.offsets.last().unwrap() as usize;
         T::slice_column(&self.values, range)
+    }
+
+    // Note: if the array column has been sliced, the offsets may not start at 0.
+    // If construct a new array column, use the `underlying_offsets` function.
+    pub fn offsets(&self) -> &Buffer<u64> {
+        &self.offsets
+    }
+
+    pub fn underlying_offsets(&self) -> Buffer<u64> {
+        debug_assert!(!self.offsets.is_empty());
+        let start_offset = self.offsets.first().unwrap();
+        if *start_offset > 0 {
+            let sliced_offsets = self
+                .offsets
+                .iter()
+                .map(|&offset| offset - start_offset)
+                .collect();
+            sliced_offsets
+        } else {
+            self.offsets.clone()
+        }
     }
 
     pub fn check_valid(&self) -> Result<()> {

@@ -135,10 +135,10 @@ impl FieldEncoderJSON {
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) {
-        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
-        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
+        let start = unsafe { *column.underlying_offsets().get_unchecked(row_index) as usize };
+        let end = unsafe { *column.underlying_offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'[');
-        let inner = &T::upcast_column(column.values.clone());
+        let inner = &T::upcast_column(column.underlying_column());
         for i in start..end {
             if i != start {
                 out_buf.extend_from_slice(b",");
@@ -154,10 +154,10 @@ impl FieldEncoderJSON {
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) {
-        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
-        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
+        let start = unsafe { *column.underlying_offsets().get_unchecked(row_index) as usize };
+        let end = unsafe { *column.underlying_offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'{');
-        let inner = &T::upcast_column(column.values.clone());
+        let inner = &T::upcast_column(column.underlying_column());
         match inner {
             Column::Tuple(fields) => {
                 for i in start..end {
