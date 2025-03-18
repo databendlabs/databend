@@ -131,15 +131,10 @@ impl SimpleTableFunc for ClusteringInformationTable {
     where Self: Sized {
         let (database_name, table_name, cluster_opt_str) =
             parse_db_tb_opt_args(&table_args, func_name)?;
-        let cluster_option = match cluster_opt_str {
-            Some(cluster_opt_str) => {
-                if cluster_opt_str.to_lowercase() == "hilbert" {
-                    ClusteringOption::Hilbert
-                } else {
-                    ClusteringOption::Linear(Some(cluster_opt_str))
-                }
-            }
-            None => ClusteringOption::Linear(None),
+        let cluster_option = match cluster_opt_str.map(|v| v.to_lowercase()).as_deref() {
+            Some("hilbert") => ClusteringOption::Hilbert,
+            Some("linear") | None => ClusteringOption::Linear(None),
+            Some(other) => ClusteringOption::Linear(Some(other.to_string())),
         };
 
         Ok(Self {
