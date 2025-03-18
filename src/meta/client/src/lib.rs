@@ -113,11 +113,11 @@ pub static METACLI_COMMIT_SEMVER: LazyLock<Version> = LazyLock::new(|| {
 /// - 2024-11-23: since 1.2.663
 ///   👥 client: remove use of `Operation::AsIs`
 ///
-/// - 2024-12-1*: since 1.2.*
+/// - 2024-12-16: since 1.2.674
 ///   🖥 server: add `txn_condition::Target::KeysWithPrefix`,
 ///              to support matching the key count by a prefix.
 ///
-/// - 2024-12-1*: since 1.2.*
+/// - 2024-12-20: since 1.2.676
 ///   🖥 server: add `TxnRequest::condition_tree`,
 ///              to specify a complex bool expression.
 ///
