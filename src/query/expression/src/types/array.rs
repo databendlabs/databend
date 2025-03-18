@@ -265,8 +265,8 @@ impl<T: ValueType> ArrayColumn<T> {
         T::column_memory_size(&self.values) + self.offsets.len() * 8
     }
 
-    // Note: if the array column has been sliced, the number of values may not match the offsets,
-    // use the `underlying_column` function to get the actual values.
+    // Note: if the array column has been sliced, the number of values may not match the offsets.
+    // Use the `underlying_column` function to get the actual values.
     pub fn values(&self) -> &T::Column {
         &self.values
     }
@@ -278,7 +278,7 @@ impl<T: ValueType> ArrayColumn<T> {
     }
 
     // Note: if the array column has been sliced, the offsets may not start at 0.
-    // If construct a new array column, use the `underlying_offsets` function.
+    // Use the `underlying_offsets` function when construct a new array column.
     pub fn offsets(&self) -> &Buffer<u64> {
         &self.offsets
     }
