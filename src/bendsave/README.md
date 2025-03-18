@@ -21,59 +21,7 @@ bendsave is a tool built by Databend Labs to backup and restore data from a Data
 |                                       |
 |       Storage Backend (S3 etc.)       |
 |                                       |
-|   ┌── data/                           |
-|   │   └── [content-addressed          |
-|   │       deduplicated chunks]        |
-|   │                                   |
-|   └── logs/                           |
-|       └── [backup manifests]          |
 +---------------------------------------+
-```
-
-### Backup
-
-```txt
-+-----------------+      +------------------+      +------------------+
-| Databend Cluster|----->| databend-bendsave|----->| Storage Backend  |
-|                 |      | (backup)         |      | (S3, etc.)       |
-+-----------------+      +------------------+      +------------------+
-        |                         |                         |
-        |                         |                         |
-        v                         v                         v
-+----------------+     +--------------------+    +--------------------+
-| Source Data    |     | Processing Steps:  |    | Storage Structure: |
-|                |     |                    |    |                    |
-| - Metadata     |     | 1. Read config     |    | data/              |
-| - Data         |     | 2. Connect to DB   |    | ├── a1b2c3d4...    |
-|                |     | 3. Collect data    |    | ├── e5f6g7h8...    |
-|                |     | 4. Deduplicate     |    | └── ...            |
-|                |     | 5. Create chunks   |    |                    |
-|                |     | 6. Generate log    |    | logs/              |
-+----------------+     +--------------------+    | └── 20250115_201500|
-                                                 +--------------------+
-```
-
-### Restore
-
-```txt
-+------------------+      +------------------+      +-----------------+
-| Storage Backend  |----->| databend-bendsave|----->| Databend Cluster|
-| (S3, etc.)       |      | (restore)        |      |                 |
-+------------------+      +------------------+      +-----------------+
-        |                         |                         |
-        |                         |                         |
-        v                         v                         v
-+--------------------+    +--------------------+    +--------------------+
-| Storage Structure: |    | Processing Steps:  |    | Target Restoration:|
-|                    |    |                    |    |                    |
-| logs/              |    | 1. Read checkpoint |    | 1. Apply data      |
-| └── 20250115_201500|--->| 2. Locate chunks   |--->| 2. Rebuild meta    |
-|                    |    | 3. Validate data   |    | 3. Restore state   |
-| data/              |    | 4. Prepare restore |    |                    |
-| ├── a1b2c3d4...    |    |                    |    |                    |
-| ├── e5f6g7h8...    |    |                    |    |                    |
-| └── ...            |    |                    |    |                    |
-+--------------------+    +--------------------+    +--------------------+
 ```
 
 ## Usage
@@ -108,7 +56,6 @@ databend-bendsave restore \
   --from s3://backup?endpoint=http://127.0.0.1:9900/ \
   --to-query /path/to/databend-query-config.toml \
   --to-meta /path/to/databend-meta-config.toml \
-  --checkpoint=$CHECKPOINT \
   --confirm
 ```
 
@@ -118,10 +65,4 @@ The `--from` flag defines the URL of the backup location, incorporating all nece
 
 The `--to-query` flag specifies the path to the Databend query configuration file, while the `--to-meta` flag designates the path to the Databend meta configuration file.
 
-The `--checkpoint` flag indicates the checkpoint ID to restore, and the `--confirm` flag confirms the restore operation.
-
-NOTE: the backup list is still under development, so we need to get the checkpoint by hand from the backup storage. Take S3 as an example, we can get the checkpoint like this:
-
-```shell
-CHECKPOINT=$(aws --endpoint-url http://127.0.0.1:9900/ s3 ls s3://backup/logs/ --recursive | sort -k 1,2 | tail -n 1 | awk -F'[/.]' '{print $(NF-1)}')
-```
+The `--confirm` flag confirms the restore operation.
