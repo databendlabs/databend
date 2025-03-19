@@ -270,6 +270,20 @@ impl VisitorMut<'_> for ExprAsSourceVisitor {
             self.failed = true;
             return Ok(());
         };
+        if binding.source_table_index.or(binding.table_index).is_none()
+            || binding.column_position.is_none()
+            || binding.database_name.is_none()
+        {
+            self.failed = true;
+            return Ok(());
+        }
+        // filter table function
+        if matches!(
+            binding.database_name.as_ref().map(String::as_ref),
+            Some("system")
+        ) {
+            return Ok(());
+        }
         col.column = binding;
         Ok(())
     }

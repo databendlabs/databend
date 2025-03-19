@@ -93,7 +93,7 @@ impl ColumnBinding {
         self.source_table_index
             .or(self.table_index)
             .map(|table_index| ColumnBinding {
-                database_name: None,
+                database_name: self.database_name.clone(),
                 table_name: None,
                 column_position: self.column_position,
                 table_index: Some(table_index),
