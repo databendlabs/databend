@@ -257,8 +257,8 @@ impl<'a> ClusteringInformation<'a> {
                 .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
             if matches!(typ, ClusterType::Hilbert) {
                 return Err(ErrorCode::UnsupportedClusterType(format!(
-                    "Unsupported 'hilbert' type, please use `clustering_information('{}', '{}', 'hilbert')` instead",
-                    self.database_name, self.table_name
+                    "Table '{}'.'{}' uses hilbert clustering, please use `clustering_information('{}', '{}', 'hilbert')` instead",
+                    self.database_name, self.table_name, self.database_name, self.table_name
                 )));
             }
         }
@@ -528,8 +528,8 @@ impl<'a> HilbertClusteringInfo<'a> {
             .get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
         if matches!(cluster_type, ClusterType::Linear) {
             return Err(ErrorCode::UnsupportedClusterType( format!(
-                "Unsupported `linear` type, please use `clustering_information('{}', '{}')` instead",
-            self.database_name,self.table_name)));
+                "Table '{}'.'{}' uses linear clustering, please use `clustering_information('{}', '{}')` instead",
+                self.database_name,self.table_name, self.database_name,self.table_name)));
         }
 
         let snapshot = self.table.read_table_snapshot().await?;
