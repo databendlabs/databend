@@ -605,6 +605,8 @@ pub struct DropTableByIdReq {
 
     pub db_id: MetaId,
 
+    pub db_name: String,
+
     pub engine: String,
 
     pub session_id: String,
