@@ -138,7 +138,7 @@ impl FieldEncoderJSON {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'[');
-        let inner = &T::upcast_column(column.underlying_column());
+        let inner = &T::upcast_column(column.values());
         for i in start..end {
             if i != start {
                 out_buf.extend_from_slice(b",");
@@ -157,7 +157,7 @@ impl FieldEncoderJSON {
         let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
         let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'{');
-        let inner = &T::upcast_column(column.underlying_column());
+        let inner = &T::upcast_column(column.values());
         match inner {
             Column::Tuple(fields) => {
                 for i in start..end {
