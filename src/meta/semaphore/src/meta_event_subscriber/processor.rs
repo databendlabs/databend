@@ -1,0 +1,260 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use chrono::Local;
+use codeq::Decode;
+use databend_common_base::display::display_option::DisplayOptionExt;
+use databend_common_meta_types::protobuf::WatchResponse;
+use databend_common_meta_types::SeqV;
+use log::warn;
+use tokio::sync::mpsc;
+
+use crate::errors::ConnectionClosed;
+use crate::meta_event_subscriber::now_str;
+use crate::meta_event_subscriber::DD;
+use crate::queue::SemaphoreEvent;
+use crate::queue::SemaphoreQueue;
+use crate::SemaphoreEntry;
+use crate::SemaphoreKey;
+
+pub(crate) struct Processor {
+    pub(crate) queue: SemaphoreQueue,
+    pub(crate) tx: mpsc::Sender<SemaphoreEvent>,
+
+    /// Contains descriptive information about the context of this watcher.
+    pub(crate) ctx: String,
+}
+
+impl Processor {
+    pub(crate) fn new(queue_capacity: u64, tx: mpsc::Sender<SemaphoreEvent>) -> Self {
+        Self {
+            queue: SemaphoreQueue::new(queue_capacity),
+            tx,
+            ctx: "".to_string(),
+        }
+    }
+
+    pub(crate) fn with_context(mut self, ctx: impl ToString) -> Self {
+        self.ctx = ctx.to_string();
+        self
+    }
+
+    /// Parse the watch response, feed key-value changes to local queue, emit semaphore events.
+    pub(crate) async fn process_watch_response(
+        &mut self,
+        watch_response: WatchResponse,
+    ) -> Result<(), ConnectionClosed> {
+        let Some((sem_key, prev, current)) =
+            Self::decode_watch_response(watch_response, &self.ctx)?
+        else {
+            return Ok(());
+        };
+
+        self.process_kv_change(sem_key, prev, current).await
+    }
+
+    async fn process_kv_change(
+        &mut self,
+        sem_key: SemaphoreKey,
+        prev: Option<SeqV<SemaphoreEntry>>,
+        current: Option<SeqV<SemaphoreEntry>>,
+    ) -> Result<(), ConnectionClosed> {
+        // println!(
+        //     "[{}] {} process_kv_change: {}: {} -> {}",
+        //     now_str(),
+        //     self.ctx,
+        //     sem_key,
+        //     DD(&prev),
+        //     DD(&current)
+        // );
+
+        // Update local queue to update the acquired/released state.
+        let state_changes = match (prev, current) {
+            (None, Some(entry)) => self.queue.insert(sem_key.seq, entry.data),
+            (Some(_entry), None) => self.queue.remove(sem_key.seq),
+            (Some(_), Some(_)) => {
+                // An event of updating the lease.
+                vec![]
+            }
+            (None, None) => {
+                // both prev and current are None. not possible but just ignore
+                warn!("semaphore loop: both prev and current are None");
+                vec![]
+            }
+        };
+
+        for event in state_changes {
+            // println!("[{}] {} send: {}", now_str(), self.ctx, event);
+            self.tx.send(event).await.map_err(|e| {
+                ConnectionClosed::new_str(format!("Semaphore-Watcher fail to send {}", e.0))
+                    .context(&self.ctx)
+            })?;
+        }
+
+        Ok(())
+    }
+
+    /// Decode the serialized key-value back to [`SemaphoreKey`] and [`SemaphoreEntry`].
+    ///
+    /// Returns a tuple of `(key, value_before, value_after)` where:
+    /// - `key` is the decoded [`SemaphoreKey`]
+    /// - `value_before` is the previous state of the entry (if it existed)
+    /// - `value_after` is the current state of the entry (if it exists)
+    ///
+    /// Returns `None` if the watch response contains no events.
+    fn decode_watch_response(
+        watch_response: WatchResponse,
+        ctx: &str,
+    ) -> Result<
+        Option<(
+            SemaphoreKey,
+            Option<SeqV<SemaphoreEntry>>,
+            Option<SeqV<SemaphoreEntry>>,
+        )>,
+        ConnectionClosed,
+    > {
+        let Some((sem_key, prev, current)) = watch_response.unpack() else {
+            warn!("unexpected WatchResponse with empty event",);
+            return Ok(None);
+        };
+
+        let sem_key = SemaphoreKey::parse_key(&sem_key).map_err(|x| {
+            ConnectionClosed::new_io_error(x)
+                .context(format!("parse semaphore key: {}", sem_key))
+                .context(&ctx)
+        })?;
+
+        let prev = Self::decode_option_seqv(prev)
+            .map_err(|e| e.context("decode prev seqv").context(ctx))?;
+
+        let current = Self::decode_option_seqv(current)
+            .map_err(|e| e.context("decode current seqv").context(ctx))?;
+
+        Ok(Some((sem_key, prev, current)))
+    }
+
+    fn decode_option_seqv(
+        seqv: Option<SeqV>,
+    ) -> Result<Option<SeqV<SemaphoreEntry>>, ConnectionClosed> {
+        match seqv {
+            Some(seqv) => {
+                let seqv = seqv.try_map(|data| SemaphoreEntry::decode(&mut data.as_slice()))?;
+                Ok(Some(seqv))
+            }
+            None => Ok(None),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use codeq::Encode;
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_process_kv_change() -> anyhow::Result<()> {
+        let (tx, mut rx) = mpsc::channel(100);
+        let mut processor = Processor::new(10, tx);
+
+        let events = vec![
+            (key(1), None, ent(5)),
+            (key(2), None, ent(4)),
+            (key(3), None, ent(3)),
+            (key(4), None, ent(2)),
+            (key(2), ent(4), None), // size = 10
+            (key(5), None, ent(6)), // waiting
+            (key(1), ent(5), None), // size = 5
+            (key(6), None, ent(1)), // size = 5
+            (key(4), ent(2), None), // size = 10
+        ];
+
+        for (sem_key, prev, current) in events {
+            processor.process_kv_change(sem_key, prev, current).await?;
+        }
+
+        drop(processor);
+
+        // Drain the rx channel and collect into a Vec
+        let mut received_events = Vec::new();
+        while let Some(event) = rx.recv().await {
+            received_events.push(event);
+        }
+
+        assert_eq!(received_events, vec![
+            acquired(1, 5),
+            acquired(2, 4),
+            removed(2, 4),
+            acquired(3, 3),
+            acquired(4, 2), // size = 10
+            removed(1, 5),
+            removed(4, 2),  // size = 3
+            acquired(5, 6), // size = 9
+            acquired(6, 1), // size = 10
+        ]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_decode_watch_response() -> anyhow::Result<()> {
+        // Non-empty watch response.
+
+        let sem_key = SemaphoreKey::new("test_key", 1);
+        let prev = SemaphoreEntry::new("a", 1);
+        let current = SemaphoreEntry::new("b", 2);
+
+        let watch_response = WatchResponse::new3(
+            sem_key.format_key(),
+            Some(SeqV::new(1, prev.encode_to_vec()?)),
+            Some(SeqV::new(2, current.encode_to_vec()?)),
+        );
+
+        let got = Processor::decode_watch_response(watch_response, "test")?;
+        let got = got.unwrap();
+
+        assert_eq!(got.0, sem_key);
+        assert_eq!(got.1, Some(prev));
+        assert_eq!(got.2, Some(current));
+
+        // Empty watch response.
+
+        let watch_response = WatchResponse::default();
+        let got = Processor::decode_watch_response(watch_response, "test")?;
+        assert_eq!(got, None);
+
+        Ok(())
+    }
+
+    fn key(seq: u64) -> SemaphoreKey {
+        SemaphoreKey::new("foo".to_string(), seq)
+    }
+
+    /// Create a semaphore entry for testing.
+    fn ent(value: u64) -> Option<SemaphoreEntry> {
+        Some(SemaphoreEntry::new(format!("id-{}", value), value))
+    }
+
+    /// Create an acquired event.
+    fn acquired(seq: u64, entry: u64) -> SemaphoreEvent {
+        SemaphoreEvent::new_acquired(seq, ent(entry).unwrap())
+    }
+
+    /// Create a removed event.
+    fn removed(seq: u64, entry: u64) -> SemaphoreEvent {
+        SemaphoreEvent::new_removed(seq, ent(entry).unwrap())
+    }
+}

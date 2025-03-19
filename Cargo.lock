@@ -2205,9 +2205,9 @@ checksum = "67ba02a97a2bd10f4b59b25c7973101c79642302776489e030cd13cdab09ed15"
 
 [[package]]
 name = "codeq"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dc658ab6515a8d5ef40bf5267796fa065d6376eb508d8362eaf533755b4008f"
+checksum = "a72a59f33777d39160f5b4a8a258732cb6b538607c28b65eaa3b96f7cd35b994"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -3750,6 +3750,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-meta-semaphore"
+version = "0.1.0"
+dependencies = [
+ "anyerror",
+ "anyhow",
+ "arrow-flight",
+ "async-backtrace",
+ "byteorder",
+ "chrono",
+ "codeq",
+ "databend-common-base",
+ "databend-common-building",
+ "databend-common-exception",
+ "databend-common-grpc",
+ "databend-common-meta-api",
+ "databend-common-meta-client",
+ "databend-common-meta-kvapi",
+ "databend-common-meta-types",
+ "databend-common-metrics",
+ "databend-common-tracing",
+ "derive_more",
+ "fastrace",
+ "futures",
+ "itertools 0.13.0",
+ "log",
+ "logcall",
+ "once_cell",
+ "parking_lot 0.12.3",
+ "pretty_assertions",
+ "prost",
+ "rand 0.8.5",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.65",
+ "tokio",
+ "tonic",
+]
+
+[[package]]
 name = "databend-common-meta-sled-store"
 version = "0.1.0"
 dependencies = [
@@ -4962,6 +5002,7 @@ dependencies = [
  "databend-common-meta-client",
  "databend-common-meta-kvapi",
  "databend-common-meta-raft-store",
+ "databend-common-meta-semaphore",
  "databend-common-meta-sled-store",
  "databend-common-meta-stoerr",
  "databend-common-meta-types",
