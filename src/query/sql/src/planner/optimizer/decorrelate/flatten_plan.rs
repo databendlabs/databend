@@ -53,7 +53,7 @@ impl SubqueryRewriter {
     #[recursive::recursive]
     pub fn flatten_plan(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
@@ -140,7 +140,7 @@ impl SubqueryRewriter {
 
     fn flatten_right_eval_scalar(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         plan: &SExpr,
         eval_scalar: &EvalScalar,
         correlated_columns: &ColumnSet,
@@ -178,7 +178,7 @@ impl SubqueryRewriter {
 
     fn flatten_right_project_set(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         plan: &SExpr,
         project_set: &ProjectSet,
         correlated_columns: &ColumnSet,
@@ -234,7 +234,7 @@ impl SubqueryRewriter {
 
     fn flatten_right_filter(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         filter: &Filter,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
@@ -268,7 +268,7 @@ impl SubqueryRewriter {
 
     fn flatten_right_join(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         join: &Join,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
@@ -409,7 +409,7 @@ impl SubqueryRewriter {
 
     fn flatten_right_aggregate(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         aggregate: &Aggregate,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
@@ -479,7 +479,7 @@ impl SubqueryRewriter {
 
     fn flatten_right_sort(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         plan: &SExpr,
         sort: &Sort,
         correlated_columns: &ColumnSet,
@@ -515,7 +515,7 @@ impl SubqueryRewriter {
 
     fn flatten_right_limit(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
@@ -537,7 +537,7 @@ impl SubqueryRewriter {
 
     fn flatten_right_window(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         plan: &SExpr,
         window: &Window,
         correlated_columns: &ColumnSet,
@@ -578,7 +578,7 @@ impl SubqueryRewriter {
 
     fn flatten_right_union_all(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         op: &UnionAll,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
@@ -631,20 +631,23 @@ impl SubqueryRewriter {
 
     fn flatten_left(
         &mut self,
-        left: Option<&SExpr>,
+        left: &SExpr,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
     ) -> Result<SExpr> {
-        let left = self.flatten_left_recursive(left.unwrap())?;
+        let left = self.flatten_left_recursive(left)?;
 
         // Wrap logical get with distinct to eliminate duplicates rows.
         let metadata = self.metadata.read();
         let group_items = sortd_iter(correlated_columns)
             .map(|old| {
-                let index = *self.derived_columns.get(&old).unwrap();
-                self.scalar_item_from_index(index, "correlated.", &metadata)
+                let index = *self
+                    .derived_columns
+                    .get(&old)
+                    .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
+                Ok(self.scalar_item_from_index(index, "correlated.", &metadata))
             })
-            .collect();
+            .collect::<Result<_>>()?;
 
         let aggr = SExpr::create_unary(
             Arc::new(
@@ -691,9 +694,10 @@ impl SubqueryRewriter {
             RelOperator::Sort(sort) => {
                 let mut sort = sort.clone();
                 for old in sort.used_columns() {
-                    let Some(new) = self.derived_columns.get(&old) else {
-                        continue;
-                    };
+                    let new = self
+                        .derived_columns
+                        .get(&old)
+                        .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
                     sort.replace_column(old, *new);
                 }
                 sort.into()
@@ -702,9 +706,10 @@ impl SubqueryRewriter {
                 let mut filter = filter.clone();
                 for predicate in &mut filter.predicates {
                     for old in predicate.used_columns() {
-                        let Some(new) = self.derived_columns.get(&old) else {
-                            continue;
-                        };
+                        let new = self
+                            .derived_columns
+                            .get(&old)
+                            .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
                         predicate.replace_column(old, *new)?;
                     }
                 }
@@ -712,11 +717,12 @@ impl SubqueryRewriter {
             }
             RelOperator::Join(join) => {
                 let mut join = join.clone();
-                for old in join.used_columns().unwrap() {
-                    let Some(new) = self.derived_columns.get(&old) else {
-                        continue;
-                    };
-                    join.replace_column(old, *new).unwrap();
+                for old in join.used_columns()? {
+                    let new = self
+                        .derived_columns
+                        .get(&old)
+                        .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
+                    join.replace_column(old, *new)?;
                 }
                 join.into()
             }
@@ -792,9 +798,10 @@ impl SubqueryRewriter {
     ) -> Result<ScalarItem> {
         let mut scalar = scalar.clone();
         for old in scalar.used_columns() {
-            let Some(new) = self.derived_columns.get(&old) else {
-                continue;
-            };
+            let new = self
+                .derived_columns
+                .get(&old)
+                .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
             scalar.replace_column(old, *new)?;
         }
         let column_entry = metadata.column(*old);
