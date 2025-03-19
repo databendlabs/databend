@@ -317,11 +317,11 @@ async fn test_accumulator() -> databend_common_exception::Result<()> {
     let mut stats_acc = RowOrientedSegmentBuilder::default();
 
     let operator = Operator::new(opendal::services::Memory::default())?.finish();
-    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
+    let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     for item in blocks {
         let block = item?;
         let col_stats = gen_columns_statistics(&block, None, &schema)?;
-        let block_writer = BlockWriter::new(&operator, &loc_generator);
+        let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default(), true);
         let (block_meta, _index_meta) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
             .await?;
@@ -351,7 +351,13 @@ async fn test_ft_cluster_stats_with_stats() -> databend_common_exception::Result
         None,
     ));
 
-    let block_compactor = BlockThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
+    let block_compactor = BlockThresholds::new(
+        1_000_000,
+        800_000,
+        100 * 1024 * 1024,
+        10 * 1024 * 1024,
+        1000,
+    );
     let stats_gen = ClusterStatsGenerator::new(
         0,
         vec![0],

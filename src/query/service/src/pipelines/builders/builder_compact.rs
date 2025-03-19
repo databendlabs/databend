@@ -172,6 +172,7 @@ impl PipelineBuilder {
                 table,
                 cluster_stats_gen.clone(),
                 MutationKind::Compact,
+                compact_block.table_meta_timestamps,
             )?;
             proc.into_processor()
         })?;
@@ -187,6 +188,7 @@ impl PipelineBuilder {
                     vec![],
                     Default::default(),
                     MutationKind::Compact,
+                    compact_block.table_meta_timestamps,
                 )
             });
         }

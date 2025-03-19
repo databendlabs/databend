@@ -1785,6 +1785,7 @@ impl<'a> TypeChecker<'a> {
                 )));
             }
             let _ = arguments.pop();
+            let _ = arg_types.pop();
             let delimiter = delimiter_value.unwrap();
             vec![delimiter.value]
         } else {
@@ -4088,7 +4089,9 @@ impl<'a> TypeChecker<'a> {
             return_type,
             runtime_version,
         } = udf_definition;
+
         let language = language.parse()?;
+        UDFValidator::is_udf_script_allowed(&language)?;
         let mut arguments = Vec::with_capacity(args.len());
         for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
             let box (arg, ty) = self.resolve(argument)?;

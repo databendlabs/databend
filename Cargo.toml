@@ -91,6 +91,7 @@ members = [
     "src/query/ee",
     "src/meta/api",
     "src/meta/app",
+    "src/meta/app-types",
     "src/meta/binaries",
     "src/meta/client",
     "src/meta/control",
@@ -138,6 +139,7 @@ databend-common-license = { path = "src/common/license" }
 databend-common-management = { path = "src/query/management" }
 databend-common-meta-api = { path = "src/meta/api" }
 databend-common-meta-app = { path = "src/meta/app" }
+databend-common-meta-app-types = { path = "src/meta/app-types" }
 databend-common-meta-client = { path = "src/meta/client" }
 databend-common-meta-control = { path = "src/meta/control" }
 databend-common-meta-embedded = { path = "src/meta/embedded" }
@@ -222,19 +224,19 @@ anyerror = { version = "=0.1.13" }
 anyhow = { version = "1.0.65" }
 apache-avro = { version = "0.17.0", features = ["snappy", "zstandard", "xz", "snappy", "bzip"] }
 approx = "0.5.1"
-arrow = { version = "53" }
-arrow-array = { version = "53" }
-arrow-buffer = { version = "53" }
-arrow-cast = { version = "53", features = ["prettyprint"] }
-arrow-data = { version = "53" }
-arrow-flight = { version = "53", features = ["flight-sql-experimental", "tls"] }
-arrow-ipc = { version = "53" }
-arrow-ord = { version = "53" }
-arrow-schema = { version = "53.4", features = ["serde"] }
-arrow-select = { version = "53" }
-arrow-udf-js = { version = "0.5.0" }
+arrow = { version = "54" }
+arrow-array = { version = "54" }
+arrow-buffer = { version = "54" }
+arrow-cast = { version = "54", features = ["prettyprint"] }
+arrow-data = { version = "54" }
+arrow-flight = { version = "54", features = ["flight-sql-experimental", "tls"] }
+arrow-ipc = { version = "54" }
+arrow-ord = { version = "54" }
+arrow-schema = { version = "54", features = ["serde"] }
+arrow-select = { version = "54" }
+arrow-udf-js = { version = "0.6.0" }
 arrow-udf-python = { version = "0.4.0" }
-arrow-udf-wasm = { version = "0.4.1" }
+arrow-udf-wasm = { version = "0.5.0" }
 async-backtrace = "0.2"
 async-channel = "1.7.1"
 async-compat = { version = "0.2" }
@@ -286,7 +288,7 @@ ctrlc = { version = "3.2.3", features = ["termination"] }
 dashmap = "6.1.0"
 deepsize = { version = "0.2.0" }
 defer = "0.2"
-deltalake = "0.21"
+deltalake = "0.25"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
 derive_more = { version = "1.0.0", features = ["full"] }
 dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "30e28ca" }
@@ -326,12 +328,12 @@ http = "1"
 humantime = "2.1.0"
 hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
-iceberg = { version = "0.4.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "56fa9d11", features = [
+iceberg = { version = "0.4.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "864a8b05f", features = [
     "storage-all",
 ] }
-iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "56fa9d11" }
-iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "56fa9d11" }
-iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "56fa9d11" }
+iceberg-catalog-glue = { version = "0.4.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "864a8b05f" }
+iceberg-catalog-hms = { version = "0.4.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "864a8b05f" }
+iceberg-catalog-rest = { version = "0.4.0", git = "https://github.com/Xuanwo/iceberg-rust/", rev = "864a8b05f" }
 indexmap = "2.0.0"
 indicatif = "0.17.5"
 itertools = "0.13.0"
@@ -339,7 +341,7 @@ jaq-core = "1.5.1"
 jaq-interpret = "1.5.0"
 jaq-parse = "1.0.3"
 jaq-std = "1.6.0"
-jiff = { version = "0.1.26", features = ["serde", "tzdb-bundle-always"] }
+jiff = { version = "0.2.1", features = ["serde", "tzdb-bundle-always"] }
 jsonb = "0.4.4"
 jwt-simple = { version = "0.12.10", default-features = false, features = ["pure-rust"] }
 lenient_semver = "0.4.2"
@@ -355,6 +357,7 @@ logforth = { version = "0.14", features = [
     'fastrace',
 ] }
 lz4 = "1.24.0"
+map-api = { version = "0.2.3" }
 maplit = "1.0.2"
 match-template = "0.0.1"
 md-5 = "0.10.5"
@@ -394,7 +397,6 @@ opendal = { version = "0.51.2", features = [
 openraft = { version = "0.10.0", features = [
     "serde",
     "tracing-log",
-    "loosen-follower-log-revert", # allows removing all data from a follower and restoring from the leader.
 ] }
 opensrv-mysql = { git = "https://github.com/databendlabs/opensrv.git", rev = "a1fb4da", features = ["tls"] }
 orc-rust = "0.5.0"
@@ -402,7 +404,7 @@ ordered-float = { version = "4.5.0", default-features = false }
 ordq = "0.2.0"
 p256 = "0.13"
 parking_lot = "0.12.1"
-parquet = { version = "53", features = ["async"] }
+parquet = { version = "54", features = ["async"] }
 passwords = { version = "3.1.16", features = ["common-password"] }
 paste = "1.0.15"
 percent-encoding = "2.3.1"
@@ -457,6 +459,7 @@ serde_stacker = { version = "0.1" }
 serde_test = "1.0"
 serde_urlencoded = "0.7.1"
 serde_with = { version = "3.8.1" }
+serde_yaml = { version = "0.9.34" }
 serfig = "0.1.0"
 sha1 = "0.10.5"
 sha2 = "0.10.8"
@@ -493,6 +496,7 @@ tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }
 tikv-jemalloc-sys = "0.6.0"
 tokio = { version = "1.35.0", features = ["full"] }
 tokio-stream = "0.1.11"
+tokio-util = { version = "0.7.13" }
 toml = { version = "0.8", default-features = false }
 tonic = { version = "0.12.3", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 tonic-build = { version = "0.12.3" }
@@ -504,10 +508,11 @@ typetag = "0.2.3"
 unicase = "2.8.0"
 unicode-segmentation = "1.10.1"
 unindent = "0.2"
-url = "2.3.1"
+url = "2.5.4"
 uuid = { version = "1.10.0", features = ["std", "serde", "v4", "v7"] }
 volo-thrift = "0.10"
 walkdir = "2.3.2"
+watcher = { version = "0.1.0" }
 wiremock = "0.6"
 wkt = "0.10.3"
 xorf = { version = "0.11.0", default-features = false, features = ["binary-fuse"] }
@@ -552,7 +557,7 @@ tracing-subscriber = { version = "0.3.17", features = ["env-filter", "json", "va
 
 # Databend Integration Test
 quickcheck = "1.0"
-sqllogictest = "0.21.0"
+sqllogictest = "0.28.0"
 
 [workspace.lints.rust]
 async_fn_in_trait = "allow"
@@ -619,21 +624,23 @@ overflow-checks = true
 rpath = false
 
 [patch.crates-io]
-arrow-udf-js = { git = "https://github.com/arrow-udf/arrow-udf", rev = "ade868f" }
-arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "ade868f" }
-arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "ade868f" }
+arrow-udf-js = { git = "https://github.com/arrow-udf/arrow-udf", rev = "d910692" }
+arrow-udf-python = { git = "https://github.com/arrow-udf/arrow-udf", rev = "d910692" }
+arrow-udf-wasm = { git = "https://github.com/arrow-udf/arrow-udf", rev = "d910692" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
-deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "3038c145" }
+deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "c149502" }
 ethnum = { git = "https://github.com/datafuse-extras/ethnum-rs", rev = "4cb05f1" }
+map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.2.3" }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
-openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.7" }
-orc-rust = { git = "https://github.com/youngsofun/orc-rust", rev = "6c5ac57" }
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.9" }
+orc-rust = { git = "https://github.com/youngsofun/orc-rust", rev = "94ab8e9" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "6af35a1" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 tantivy = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370" }
 tantivy-common = { git = "https://github.com/datafuse-extras/tantivy", rev = "7502370", package = "tantivy-common" }
 tantivy-jieba = { git = "https://github.com/datafuse-extras/tantivy-jieba", rev = "0e300e9" }
+watcher = { git = "https://github.com/databendlabs/watcher", tag = "v0.1.0" }
 xorfilter-rs = { git = "https://github.com/datafuse-extras/xorfilter", tag = "databend-alpha.4" }

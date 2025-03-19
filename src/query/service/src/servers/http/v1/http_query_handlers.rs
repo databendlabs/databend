@@ -50,10 +50,12 @@ use crate::servers::http::error::QueryError;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
+use crate::servers::http::v1::catalog::catalog_stats_handler;
 use crate::servers::http::v1::catalog::get_database_table_handler;
 use crate::servers::http::v1::catalog::list_database_table_fields_handler;
 use crate::servers::http::v1::catalog::list_database_tables_handler;
 use crate::servers::http::v1::catalog::list_databases_handler;
+use crate::servers::http::v1::catalog::search_databases_handler;
 use crate::servers::http::v1::catalog::search_tables_handler;
 use crate::servers::http::v1::discovery_nodes;
 use crate::servers::http::v1::list_suggestions;
@@ -62,7 +64,10 @@ use crate::servers::http::v1::logout_handler;
 use crate::servers::http::v1::query::string_block::StringBlock;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::refresh_handler;
+use crate::servers::http::v1::roles::list_roles_handler;
 use crate::servers::http::v1::upload_to_stage;
+use crate::servers::http::v1::users::create_user_handler;
+use crate::servers::http::v1::users::list_users_handler;
 use crate::servers::http::v1::verify_handler;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
@@ -502,10 +507,26 @@ pub fn query_route() -> Route {
             EndpointKind::Catalog,
         ),
         (
-            "/catalog/tables/search",
+            "/catalog/search/tables",
             post(search_tables_handler),
             EndpointKind::Catalog,
         ),
+        (
+            "/catalog/search/databases",
+            post(search_databases_handler),
+            EndpointKind::Catalog,
+        ),
+        (
+            "/catalog/stats",
+            get(catalog_stats_handler),
+            EndpointKind::Catalog,
+        ),
+        (
+            "/users",
+            get(list_users_handler).post(create_user_handler),
+            EndpointKind::Metadata,
+        ),
+        ("/roles", get(list_roles_handler), EndpointKind::Metadata),
     ];
 
     let mut route = Route::new();
@@ -518,6 +539,7 @@ pub fn query_route() -> Route {
                 .with(CookieJarManager::new()),
         );
     }
+
     route
 }
 

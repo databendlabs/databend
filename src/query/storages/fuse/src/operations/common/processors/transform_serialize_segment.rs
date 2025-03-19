@@ -31,6 +31,7 @@ use databend_common_pipeline_core::PipeItem;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
 use opendal::Operator;
@@ -66,10 +67,10 @@ pub struct TransformSerializeSegment<B: SegmentBuilder> {
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
-    block_per_seg: u64,
 
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl<B: SegmentBuilder> TransformSerializeSegment<B> {
@@ -79,6 +80,7 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
         table: &FuseTable,
         thresholds: BlockThresholds,
         segment_builder: B,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         let default_cluster_key_id = table.cluster_key_id();
 
@@ -93,8 +95,10 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             block_per_seg: table
                 .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT)
                 as u64,
+            accumulator: Default::default(),
             thresholds,
             default_cluster_key_id,
+            table_meta_timestamps,
         }
     }
 

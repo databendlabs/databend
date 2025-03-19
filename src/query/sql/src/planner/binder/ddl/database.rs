@@ -59,7 +59,9 @@ impl Binder {
             limit,
         } = stmt;
 
-        let mut select_builder = SelectBuilder::from("default.system.databases");
+        let default_catalog = self.ctx.get_default_catalog()?.name();
+        let mut select_builder =
+            SelectBuilder::from(&format!("{}.system.databases", default_catalog));
 
         let ctl = if let Some(ctl) = catalog {
             normalize_identifier(ctl, &self.name_resolution_ctx).name
@@ -101,7 +103,11 @@ impl Binder {
         stmt: &ShowDropDatabasesStmt,
     ) -> Result<Plan> {
         let ShowDropDatabasesStmt { catalog, limit } = stmt;
-        let mut select_builder = SelectBuilder::from("default.system.databases_with_history");
+        let default_catalog = self.ctx.get_default_catalog()?.name();
+        let mut select_builder = SelectBuilder::from(&format!(
+            "{}.system.databases_with_history",
+            default_catalog
+        ));
 
         let ctl = if let Some(ctl) = catalog {
             normalize_identifier(ctl, &self.name_resolution_ctx).name

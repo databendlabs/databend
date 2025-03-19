@@ -16,7 +16,6 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::ops::Not;
 
-use databend_common_column::bitmap::Bitmap;
 use databend_common_column::buffer::Buffer;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -72,35 +71,22 @@ impl<T> HashMethodFixedKeys<T>
 where T: Clone + Default
 {
     fn build_keys_vec(&self, group_columns: InputColumns, rows: usize) -> Result<Vec<T>> {
-        let step = std::mem::size_of::<T>();
-        let mut group_keys: Vec<T> = vec![T::default(); rows];
-        let ptr = group_keys.as_mut_ptr() as *mut u8;
-        let mut offsize = 0;
-        let mut null_offsize = group_columns
-            .iter()
-            .map(|col| {
-                col.data_type()
-                    .remove_nullable()
-                    .numeric_byte_size()
-                    .unwrap()
-            })
-            .sum::<usize>();
-
         let mut group_columns = group_columns.iter().collect::<Vec<_>>();
-        group_columns.sort_by(|a, b| {
-            let ta = a.data_type().remove_nullable();
-            let tb = b.data_type().remove_nullable();
-
-            tb.numeric_byte_size()
+        group_columns.sort_by_key(|col| {
+            col.data_type()
+                .remove_nullable()
+                .numeric_byte_size()
                 .unwrap()
-                .cmp(&ta.numeric_byte_size().unwrap())
         });
 
-        for col in group_columns.into_iter() {
-            build(&mut offsize, &mut null_offsize, col, ptr, step)?;
+        let mut keys_vec = KeysVec::new::<T>(&group_columns, rows);
+        for (i, col) in group_columns.into_iter().enumerate() {
+            debug_assert_eq!(rows, col.len());
+
+            fixed_hash(&mut keys_vec, i, col)?;
         }
 
-        Ok(group_keys)
+        Ok(keys_vec.group_keys())
     }
 }
 
@@ -375,33 +361,6 @@ macro_rules! impl_hash_method_fixed_large_keys {
 impl_hash_method_fixed_large_keys! {u128, U128}
 impl_hash_method_fixed_large_keys! {U256, U256}
 
-#[inline]
-fn build(
-    offsize: &mut usize,
-    null_offsize: &mut usize,
-    col: &Column,
-    writer: *mut u8,
-    step: usize,
-) -> Result<()> {
-    let ty = &col.data_type();
-    let data_type_nonull = ty.remove_nullable();
-    let size = data_type_nonull.numeric_byte_size().unwrap();
-
-    let writer = unsafe { writer.add(*offsize) };
-    let nulls: Option<(usize, Option<Bitmap>)> = if ty.is_nullable() {
-        // origin_ptr-------ptr<------old------>null_offset
-        let null_offsize_from_ptr = *null_offsize - *offsize;
-        *null_offsize += 1;
-        Some((null_offsize_from_ptr, None))
-    } else {
-        None
-    };
-
-    fixed_hash(col, ty, writer, step, nulls)?;
-    *offsize += size;
-    Ok(())
-}
-
 // Group by (nullable(u16), nullable(u8)) needs 2 + 1 + 1 + 1 = 5 bytes, then we pad the bytes up to u64 to store the hash value.
 // If the value is null, we write 1 to the null_offset, otherwise we write 0.
 // since most value is not null, so this can make the hash number as low as possible.
@@ -416,172 +375,204 @@ fn build(
 //                                   │                       └─────────► unused bytes  ◄─────────┘
 //                                   └─ null offset of u16 column
 
-pub fn fixed_hash(
-    column: &Column,
-    data_type: &DataType,
-    ptr: *mut u8,
+struct KeysVec {
+    data: Vec<u8>,
+    rows: usize,
     step: usize,
-    // (null_offset, bitmap)
-    nulls: Option<(usize, Option<Bitmap>)>,
-) -> Result<()> {
-    if let Column::Nullable(c) = column {
-        let (null_offset, bitmap) = nulls.unwrap();
-        let bitmap = bitmap
-            .map(|b| (&b) & (&c.validity))
-            .unwrap_or_else(|| c.validity.clone());
+    column_offsets: Vec<usize>, // len = group_columns.len+1
+    null_offsets: Vec<usize>,
+}
 
-        let inner_type = data_type.as_nullable().unwrap();
-        return fixed_hash(
-            &c.column,
-            inner_type.as_ref(),
-            ptr,
-            step,
-            Some((null_offset, Some(bitmap))),
+impl KeysVec {
+    fn new<T>(group_columns: &[&Column], rows: usize) -> Self
+    where T: Clone + Default {
+        let group_keys: Vec<T> = vec![T::default(); rows];
+        let (ptr, length, capacity) = group_keys.into_raw_parts();
+        let step = std::mem::size_of::<T>();
+        let group_keys =
+            unsafe { Vec::from_raw_parts(ptr as *mut u8, length * step, capacity * step) };
+
+        let mut offset = 0;
+        let column_offsets = std::iter::once(0)
+            .chain(group_columns.iter().map(|col| {
+                col.data_type()
+                    .remove_nullable()
+                    .numeric_byte_size()
+                    .unwrap()
+            }))
+            .map(|size| {
+                offset += size;
+                offset
+            })
+            .collect::<Vec<_>>();
+
+        let mut null_offset = *column_offsets.last().unwrap();
+        assert!(null_offset <= step, "size of T too small");
+
+        let null_offsets = group_columns
+            .iter()
+            .map(|col| {
+                if col.data_type().is_nullable() {
+                    let o = null_offset;
+                    null_offset += 1;
+                    o
+                } else {
+                    usize::MAX
+                }
+            })
+            .collect::<Vec<_>>();
+
+        assert!(
+            null_offsets
+                .iter()
+                .rev()
+                .find(|x| **x != usize::MAX)
+                .copied()
+                .unwrap_or_default()
+                < step,
+            "size of T too small"
         );
+
+        Self {
+            data: group_keys,
+            rows,
+            step,
+            column_offsets,
+            null_offsets,
+        }
     }
 
+    #[inline]
+    fn value(&mut self, row: usize, col: usize) -> &mut [u8] {
+        debug_assert!(row < self.rows);
+        debug_assert!(col + 1 < self.column_offsets.len());
+        let row_start = row * self.step;
+        let start = unsafe { self.column_offsets.get_unchecked(col) } + row_start;
+        let end = unsafe { self.column_offsets.get_unchecked(col + 1) } + row_start;
+        &mut self.data[start..end]
+    }
+
+    #[inline]
+    fn set_null(&mut self, row: usize, col: usize) {
+        debug_assert!(row < self.rows);
+        debug_assert!(col < self.column_offsets.len());
+        let offset = unsafe { *self.null_offsets.get_unchecked(col) };
+        debug_assert!(offset != usize::MAX);
+        let offset = offset + row * self.step;
+        debug_assert!(offset < self.data.len());
+        unsafe { *self.data.get_unchecked_mut(offset) = 1 }
+    }
+
+    fn group_keys<T>(self) -> Vec<T> {
+        assert_eq!(self.step, std::mem::size_of::<T>());
+        let (ptr, length, capacity) = self.data.into_raw_parts();
+        unsafe { Vec::from_raw_parts(ptr as *mut T, length / self.step, capacity / self.step) }
+    }
+}
+
+fn fixed_hash(keys_vec: &mut KeysVec, col_index: usize, column: &Column) -> Result<()> {
+    let (column, bitmap) = match column {
+        Column::Nullable(box column) => (&column.column, Some(&column.validity)),
+        column => (column, None),
+    };
+
     match column {
-        Column::Boolean(c) => {
-            let mut ptr = ptr;
-            match nulls {
-                Some((offsize, Some(bitmap))) => {
-                    for (value, valid) in c.iter().zip(bitmap.iter()) {
-                        unsafe {
-                            if valid {
-                                std::ptr::copy_nonoverlapping(&(value as u8) as *const u8, ptr, 1);
-                            } else {
-                                ptr.add(offsize).write(1u8);
-                            }
-                            ptr = ptr.add(step);
-                        }
+        Column::Boolean(c) => match bitmap {
+            Some(bitmap) => {
+                for (row, (value, valid)) in c.iter().zip(bitmap.iter()).enumerate() {
+                    if !valid {
+                        keys_vec.set_null(row, col_index);
+                        continue;
                     }
-                }
-                _ => {
-                    for value in c.iter() {
-                        unsafe {
-                            std::ptr::copy_nonoverlapping(&(value as u8) as *const u8, ptr, 1);
-                            ptr = ptr.add(step);
-                        }
-                    }
+                    let slice = keys_vec.value(row, col_index);
+                    slice[0] = if value { 1 } else { 0 };
                 }
             }
-        }
+            None => {
+                for (row, value) in c.iter().enumerate() {
+                    let slice = keys_vec.value(row, col_index);
+                    slice[0] = if value { 1 } else { 0 };
+                }
+            }
+        },
         Column::Number(c) => {
             with_number_mapped_type!(|NUM_TYPE| match c {
-                NumberColumn::NUM_TYPE(t) => {
-                    let mut ptr = ptr;
-                    let count = std::mem::size_of::<NUM_TYPE>();
-                    match nulls {
-                        Some((offsize, Some(bitmap))) => {
-                            for (value, valid) in t.iter().zip(bitmap.iter()) {
-                                unsafe {
-                                    if valid {
-                                        let slice = std::slice::from_raw_parts_mut(ptr, count);
-                                        value.marshal(slice);
-                                    } else {
-                                        ptr.add(offsize).write(1u8);
-                                    }
-
-                                    ptr = ptr.add(step);
+                NumberColumn::NUM_TYPE(c) => {
+                    match bitmap {
+                        Some(bitmap) => {
+                            for (row, (value, valid)) in c.iter().zip(bitmap.iter()).enumerate() {
+                                if valid {
+                                    let slice = keys_vec.value(row, col_index);
+                                    value.marshal(slice);
+                                } else {
+                                    keys_vec.set_null(row, col_index);
                                 }
                             }
                         }
-                        _ => {
-                            for value in t.iter() {
-                                unsafe {
-                                    let slice = std::slice::from_raw_parts_mut(ptr, count);
-                                    value.marshal(slice);
-                                    ptr = ptr.add(step);
-                                }
+                        None => {
+                            for (row, value) in c.iter().enumerate() {
+                                let slice = keys_vec.value(row, col_index);
+                                value.marshal(slice);
                             }
                         }
                     }
                 }
             })
         }
-        Column::Date(c) => {
-            let mut ptr = ptr;
-            match nulls {
-                Some((offsize, Some(bitmap))) => {
-                    for (value, valid) in c.iter().zip(bitmap.iter()) {
-                        unsafe {
-                            if valid {
-                                let slice = std::slice::from_raw_parts_mut(ptr, 4);
-                                value.marshal(slice);
-                            } else {
-                                ptr.add(offsize).write(1u8);
-                            }
-
-                            ptr = ptr.add(step);
-                        }
-                    }
-                }
-                _ => {
-                    for value in c.iter() {
-                        unsafe {
-                            let slice = std::slice::from_raw_parts_mut(ptr, 4);
-                            value.marshal(slice);
-                            ptr = ptr.add(step);
-                        }
+        Column::Date(c) => match bitmap {
+            Some(bitmap) => {
+                for (row, (value, valid)) in c.iter().zip(bitmap.iter()).enumerate() {
+                    if valid {
+                        let slice = keys_vec.value(row, col_index);
+                        value.marshal(slice);
+                    } else {
+                        keys_vec.set_null(row, col_index);
                     }
                 }
             }
-        }
-        Column::Timestamp(c) => {
-            let mut ptr = ptr;
-            match nulls {
-                Some((offsize, Some(bitmap))) => {
-                    for (value, valid) in c.iter().zip(bitmap.iter()) {
-                        unsafe {
-                            if valid {
-                                let slice = std::slice::from_raw_parts_mut(ptr, 8);
-                                value.marshal(slice);
-                            } else {
-                                ptr.add(offsize).write(1u8);
-                            }
-
-                            ptr = ptr.add(step);
-                        }
-                    }
+            None => {
+                for (row, value) in c.iter().enumerate() {
+                    let slice = keys_vec.value(row, col_index);
+                    value.marshal(slice);
                 }
-                _ => {
-                    for value in c.iter() {
-                        unsafe {
-                            let slice = std::slice::from_raw_parts_mut(ptr, 8);
-                            value.marshal(slice);
-                            ptr = ptr.add(step);
-                        }
+            }
+        },
+        Column::Timestamp(c) => match bitmap {
+            Some(bitmap) => {
+                for (row, (value, valid)) in c.iter().zip(bitmap.iter()).enumerate() {
+                    if valid {
+                        let slice = keys_vec.value(row, col_index);
+                        value.marshal(slice);
+                    } else {
+                        keys_vec.set_null(row, col_index);
                     }
                 }
             }
-        }
+            None => {
+                for (row, value) in c.iter().enumerate() {
+                    let slice = keys_vec.value(row, col_index);
+                    value.marshal(slice);
+                }
+            }
+        },
         Column::Decimal(c) => {
             with_decimal_mapped_type!(|DECIMAL_TYPE| match c {
-                DecimalColumn::DECIMAL_TYPE(t, _) => {
-                    let mut ptr = ptr;
-                    let count = std::mem::size_of::<DECIMAL_TYPE>();
-                    match nulls {
-                        Some((offsize, Some(bitmap))) => {
-                            for (value, valid) in t.iter().zip(bitmap.iter()) {
-                                unsafe {
-                                    if valid {
-                                        let slice = std::slice::from_raw_parts_mut(ptr, count);
-                                        value.marshal(slice);
-                                    } else {
-                                        ptr.add(offsize).write(1u8);
-                                    }
-
-                                    ptr = ptr.add(step);
+                DecimalColumn::DECIMAL_TYPE(c, _) => {
+                    match bitmap {
+                        Some(bitmap) => {
+                            for (row, (value, valid)) in c.iter().zip(bitmap.iter()).enumerate() {
+                                if valid {
+                                    let slice = keys_vec.value(row, col_index);
+                                    value.marshal(slice);
+                                } else {
+                                    keys_vec.set_null(row, col_index);
                                 }
                             }
                         }
-                        _ => {
-                            for value in t.iter() {
-                                unsafe {
-                                    let slice = std::slice::from_raw_parts_mut(ptr, count);
-                                    value.marshal(slice);
-                                    ptr = ptr.add(step);
-                                }
+                        None => {
+                            for (row, value) in c.iter().enumerate() {
+                                let slice = keys_vec.value(row, col_index);
+                                value.marshal(slice);
                             }
                         }
                     }
@@ -591,7 +582,7 @@ pub fn fixed_hash(
         _ => {
             return Err(ErrorCode::BadDataValueType(format!(
                 "Unsupported apply fn fixed_hash operation for column: {:?}",
-                data_type
+                column.data_type()
             )));
         }
     }

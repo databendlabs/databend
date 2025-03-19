@@ -94,10 +94,7 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListDictionaryReq;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
@@ -152,12 +149,12 @@ use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use uuid::Uuid;
 use walkdir::WalkDir;
 use xorf::BinaryFuse16;
 
@@ -280,16 +277,16 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
             let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
-            let new_snapshot = TableSnapshot::new(
-                Uuid::new_v4(),
+            let new_snapshot = TableSnapshot::try_new(
                 None,
-                &None,
                 None,
                 table.schema().as_ref().clone(),
                 Statistics::default(),
                 new_segments,
                 None,
-            );
+                Default::default(),
+            )
+            .unwrap();
 
             let faked_catalog = FakedCatalog {
                 cat: catalog,
@@ -891,6 +888,13 @@ impl TableContext for CtxDelegation {
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.ctx.get_table_meta_timestamps(table, previous_snapshot)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1008,6 +1012,10 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
+    async fn list_tables_names(&self, _tenant: &Tenant, _db_name: &str) -> Result<Vec<String>> {
+        todo!()
+    }
+
     async fn list_tables_history(
         &self,
         _tenant: &Tenant,
@@ -1096,24 +1104,6 @@ impl Catalog for FakedCatalog {
 
     #[async_backtrace::framed]
     async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes_by_table_id(
-        &self,
-        _req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
         unimplemented!()
     }
 

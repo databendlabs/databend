@@ -12,114 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_meta_types::seq_value::KVMeta;
-use databend_common_meta_types::seq_value::SeqV;
-use databend_common_meta_types::seq_value::SeqValue;
-
 use crate::marked::Marked;
-use crate::marked::SeqTombstone;
 use crate::state_machine::ExpireValue;
-
-#[test]
-fn test_from_tuple() -> anyhow::Result<()> {
-    let m = Marked::from((1, 2u64, Some(KVMeta::new_expire(3))));
-
-    assert_eq!(m, Marked::new_with_meta(1, 2, Some(KVMeta::new_expire(3))));
-
-    Ok(())
-}
-
-#[test]
-fn test_impl_trait_seq_value() -> anyhow::Result<()> {
-    let m = Marked::new_with_meta(1, 2, None);
-    assert_eq!(m.seq(), 1);
-    assert_eq!(m.value(), Some(&2));
-    assert_eq!(m.meta(), None);
-
-    let m = Marked::new_with_meta(1, 2, Some(KVMeta::new_expire(3)));
-    assert_eq!(m.seq(), 1);
-    assert_eq!(m.value(), Some(&2));
-    assert_eq!(m.meta(), Some(&KVMeta::new_expire(3)));
-
-    let m: Marked<u64> = Marked::new_tombstone(1);
-    assert_eq!(m.seq(), 0, "internal_seq is not returned to application");
-    assert_eq!(m.value(), None);
-    assert_eq!(m.meta(), None);
-
-    Ok(())
-}
-
-// Test Marked::empty()
-#[test]
-fn test_empty() -> anyhow::Result<()> {
-    let m = Marked::<u64>::empty();
-    assert_eq!(m, Marked::TombStone { internal_seq: 0 });
-
-    Ok(())
-}
-
-// Test Marked::order_key()
-#[test]
-fn test_order_key() -> anyhow::Result<()> {
-    let m = Marked::new_with_meta(1, 2, None);
-    assert_eq!(m.order_key(), SeqTombstone::normal(1));
-
-    let m: Marked<u64> = Marked::new_tombstone(1);
-    assert_eq!(m.order_key(), SeqTombstone::tombstone(1));
-
-    Ok(())
-}
-
-// Test Marked::unpack()
-#[test]
-fn test_unpack() -> anyhow::Result<()> {
-    let m = Marked::new_with_meta(1, 2, None);
-    assert_eq!(m.unpack_ref(), Some((&2, None)));
-
-    let m = Marked::new_with_meta(1, 2, Some(KVMeta::new_expire(3)));
-    assert_eq!(m.unpack_ref(), Some((&2, Some(&KVMeta::new_expire(3)))));
-
-    let m: Marked<u64> = Marked::new_tombstone(1);
-    assert_eq!(m.unpack_ref(), None);
-
-    Ok(())
-}
-
-// Test Marked::max()
-#[test]
-fn test_max() -> anyhow::Result<()> {
-    let m1 = Marked::new_with_meta(1, 2, None);
-    let m2 = Marked::new_with_meta(3, 2, None);
-    let m3: Marked<u64> = Marked::new_tombstone(2);
-
-    assert_eq!(Marked::max_ref(&m1, &m2), &m2);
-    assert_eq!(Marked::max_ref(&m1, &m3), &m3);
-    assert_eq!(Marked::max_ref(&m2, &m3), &m2);
-
-    assert_eq!(Marked::max_ref(&m1, &m1), &m1);
-    assert_eq!(Marked::max_ref(&m2, &m2), &m2);
-    assert_eq!(Marked::max_ref(&m3, &m3), &m3);
-
-    Ok(())
-}
-
-// Test From<Marked<T>> for Option<SeqV<T>>
-#[test]
-fn test_from_marked_for_option_seqv() -> anyhow::Result<()> {
-    let m = Marked::new_with_meta(1, 2, None);
-    let s: Option<SeqV<u64>> = Some(SeqV::new(1, 2));
-    assert_eq!(s, m.into());
-
-    let m = Marked::new_with_meta(1, 2, Some(KVMeta::new_expire(3)));
-    let s: Option<SeqV<u64>> = Some(SeqV::with_meta(1, Some(KVMeta::new_expire(3)), 2));
-    assert_eq!(s, m.into());
-
-    let m: Marked<u64> = Marked::new_tombstone(1);
-    let s: Option<SeqV<u64>> = None;
-    assert_eq!(s, m.into());
-
-    Ok(())
-}
 
 // Test From<ExpireValue> for Marked<String>
 #[test]
@@ -136,11 +30,11 @@ fn test_from_expire_value_for_marked() -> anyhow::Result<()> {
 fn test_from_marked_for_option_expire_value() -> anyhow::Result<()> {
     let m = Marked::new_with_meta(1, "2".to_string(), None);
     let s: Option<ExpireValue> = Some(ExpireValue::new("2".to_string(), 1));
-    assert_eq!(s, m.into());
+    assert_eq!(s, ExpireValue::from_marked(m));
 
     let m = Marked::new_tombstone(1);
     let s: Option<ExpireValue> = None;
-    assert_eq!(s, m.into());
+    assert_eq!(s, ExpireValue::from_marked(m));
 
     Ok(())
 }

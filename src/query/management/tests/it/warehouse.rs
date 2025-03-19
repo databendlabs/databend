@@ -1534,7 +1534,7 @@ async fn assert_key_seq(kv: &MetaStore, key: &str, expect: MatchSeq) {
 
     match reply {
         Some(SeqV { seq, .. }) => {
-            assert!(expect.match_seq(seq).is_ok());
+            assert!(expect.match_seq(&seq).is_ok());
         }
         catch => panic!("GetKVActionReply{:?}", catch),
     }

@@ -143,6 +143,7 @@ fn test_decode_v33_table_meta() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
         field_comments: vec!["c".to_string(); 21],
+        virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
         shared_by: btreeset! {1},

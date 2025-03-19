@@ -94,6 +94,7 @@ pub enum EndpointKind {
     UploadToStage,
     SystemInfo,
     Catalog,
+    Metadata,
 }
 
 impl EndpointKind {
@@ -121,6 +122,7 @@ impl EndpointKind {
             | EndpointKind::SystemInfo
             | EndpointKind::HeartBeat
             | EndpointKind::UploadToStage
+            | EndpointKind::Metadata
             | EndpointKind::Catalog => {
                 if GlobalConfig::instance().query.management_mode {
                     Ok(None)

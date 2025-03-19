@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchemaRef;
 use opendal::Operator;
-use parquet::arrow::arrow_to_parquet_schema;
+use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescPtr;
 
@@ -80,7 +80,9 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         table_schema: TableSchemaRef,
         arrow_schema: arrow_schema::Schema,
     ) -> Result<ParquetRSReaderBuilder<'a>> {
-        let schema_desc = Arc::new(arrow_to_parquet_schema(&arrow_schema)?);
+        let parquet_schema_desc = ArrowSchemaConverter::new().convert(&arrow_schema)?;
+        let schema_desc = Arc::new(parquet_schema_desc);
+
         Ok(Self::create_with_parquet_schema(
             ctx,
             op,

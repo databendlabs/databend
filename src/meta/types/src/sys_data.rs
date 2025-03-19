@@ -16,10 +16,10 @@ use std::collections::BTreeMap;
 
 use log::debug;
 
+use crate::node::Node;
 use crate::raft_types::LogId;
 use crate::raft_types::NodeId;
 use crate::raft_types::StoredMembership;
-use crate::Node;
 
 /// Snapshot System data(non-user data).
 ///

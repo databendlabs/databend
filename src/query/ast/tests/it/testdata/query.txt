@@ -7154,19 +7154,19 @@ Query {
 
 
 ---------- Input ----------
-select * from monthly_sales_1 unpivot(sales for month in (jan, feb, mar, april)) order by empid
+select * from monthly_sales_1 unpivot(sales for month in (jan as '1月', feb 'February', mar As 'MARCH', april)) order by empid
 ---------- Output ---------
-SELECT * FROM monthly_sales_1 UNPIVOT(sales FOR month IN (jan, feb, mar, april)) ORDER BY empid
+SELECT * FROM monthly_sales_1 UNPIVOT(sales FOR month IN (jan AS '1月', feb AS 'February', mar AS 'MARCH', april)) ORDER BY empid
 ---------- AST ------------
 Query {
     span: Some(
-        0..80,
+        0..112,
     ),
     with: None,
     body: Select(
         SelectStmt {
             span: Some(
-                0..80,
+                0..112,
             ),
             hints: None,
             distinct: false,
@@ -7186,7 +7186,7 @@ Query {
             from: [
                 Table {
                     span: Some(
-                        14..80,
+                        14..112,
                     ),
                     catalog: None,
                     database: None,
@@ -7212,7 +7212,7 @@ Query {
                                 quote: None,
                                 ident_type: None,
                             },
-                            column_name: Identifier {
+                            unpivot_column: Identifier {
                                 span: Some(
                                     48..53,
                                 ),
@@ -7220,38 +7220,56 @@ Query {
                                 quote: None,
                                 ident_type: None,
                             },
-                            names: [
-                                Identifier {
-                                    span: Some(
-                                        58..61,
+                            column_names: [
+                                UnpivotName {
+                                    ident: Identifier {
+                                        span: Some(
+                                            58..61,
+                                        ),
+                                        name: "jan",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: Some(
+                                        "1月",
                                     ),
-                                    name: "jan",
-                                    quote: None,
-                                    ident_type: None,
                                 },
-                                Identifier {
-                                    span: Some(
-                                        63..66,
+                                UnpivotName {
+                                    ident: Identifier {
+                                        span: Some(
+                                            73..76,
+                                        ),
+                                        name: "feb",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: Some(
+                                        "February",
                                     ),
-                                    name: "feb",
-                                    quote: None,
-                                    ident_type: None,
                                 },
-                                Identifier {
-                                    span: Some(
-                                        68..71,
+                                UnpivotName {
+                                    ident: Identifier {
+                                        span: Some(
+                                            89..92,
+                                        ),
+                                        name: "mar",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: Some(
+                                        "MARCH",
                                     ),
-                                    name: "mar",
-                                    quote: None,
-                                    ident_type: None,
                                 },
-                                Identifier {
-                                    span: Some(
-                                        73..78,
-                                    ),
-                                    name: "april",
-                                    quote: None,
-                                    ident_type: None,
+                                UnpivotName {
+                                    ident: Identifier {
+                                        span: Some(
+                                            105..110,
+                                        ),
+                                        name: "april",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
                                 },
                             ],
                         },
@@ -7270,7 +7288,7 @@ Query {
         OrderByExpr {
             expr: ColumnRef {
                 span: Some(
-                    90..95,
+                    122..127,
                 ),
                 column: ColumnRef {
                     database: None,
@@ -7278,7 +7296,7 @@ Query {
                     column: Name(
                         Identifier {
                             span: Some(
-                                90..95,
+                                122..127,
                             ),
                             name: "empid",
                             quote: None,
@@ -7405,7 +7423,7 @@ Query {
                                 quote: None,
                                 ident_type: None,
                             },
-                            column_name: Identifier {
+                            unpivot_column: Identifier {
                                 span: Some(
                                     64..69,
                                 ),
@@ -7413,38 +7431,50 @@ Query {
                                 quote: None,
                                 ident_type: None,
                             },
-                            names: [
-                                Identifier {
-                                    span: Some(
-                                        74..77,
-                                    ),
-                                    name: "jan",
-                                    quote: None,
-                                    ident_type: None,
+                            column_names: [
+                                UnpivotName {
+                                    ident: Identifier {
+                                        span: Some(
+                                            74..77,
+                                        ),
+                                        name: "jan",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
                                 },
-                                Identifier {
-                                    span: Some(
-                                        79..82,
-                                    ),
-                                    name: "feb",
-                                    quote: None,
-                                    ident_type: None,
+                                UnpivotName {
+                                    ident: Identifier {
+                                        span: Some(
+                                            79..82,
+                                        ),
+                                        name: "feb",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
                                 },
-                                Identifier {
-                                    span: Some(
-                                        84..87,
-                                    ),
-                                    name: "mar",
-                                    quote: None,
-                                    ident_type: None,
+                                UnpivotName {
+                                    ident: Identifier {
+                                        span: Some(
+                                            84..87,
+                                        ),
+                                        name: "mar",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
                                 },
-                                Identifier {
-                                    span: Some(
-                                        89..94,
-                                    ),
-                                    name: "april",
-                                    quote: None,
-                                    ident_type: None,
+                                UnpivotName {
+                                    ident: Identifier {
+                                        span: Some(
+                                            89..94,
+                                        ),
+                                        name: "april",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                    alias: None,
                                 },
                             ],
                         },

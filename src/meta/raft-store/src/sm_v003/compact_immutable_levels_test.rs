@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_meta_types::node::Node;
 use databend_common_meta_types::raft_types::Membership;
 use databend_common_meta_types::raft_types::StoredMembership;
 use databend_common_meta_types::seq_value::KVMeta;
 use databend_common_meta_types::Endpoint;
-use databend_common_meta_types::Node;
 use databend_common_meta_types::UpsertKV;
 use futures_util::TryStreamExt;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
@@ -26,8 +28,6 @@ use pretty_assertions::assert_eq;
 use crate::leveled_store::leveled_map::compacting_data::CompactingData;
 use crate::leveled_store::leveled_map::LeveledMap;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::MapApi;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::sys_data_api::SysDataApiRO;
 use crate::marked::Marked;
 use crate::sm_v003::sm_v003::SMV003;
@@ -51,7 +51,10 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     assert_eq!(compacted.iter_immutable_levels().count(), 1);
     assert_eq!(
         d.last_membership_ref(),
-        &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()))
+        &StoredMembership::new(
+            Some(log_id(3, 3, 3)),
+            Membership::new_with_defaults(vec![], [])
+        )
     );
     assert_eq!(d.last_applied_ref(), &Some(log_id(3, 3, 3)));
     assert_eq!(
@@ -203,8 +206,10 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     let mut lm = LeveledMap::default();
     let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() =
-        StoredMembership::new(Some(log_id(1, 1, 1)), Membership::new(vec![], ()));
+    *sd.last_membership_mut() = StoredMembership::new(
+        Some(log_id(1, 1, 1)),
+        Membership::new_with_defaults(vec![], []),
+    );
     *sd.last_applied_mut() = Some(log_id(1, 1, 1));
     *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
@@ -217,8 +222,10 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     lm.freeze_writable();
     let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() =
-        StoredMembership::new(Some(log_id(2, 2, 2)), Membership::new(vec![], ()));
+    *sd.last_membership_mut() = StoredMembership::new(
+        Some(log_id(2, 2, 2)),
+        Membership::new_with_defaults(vec![], []),
+    );
     *sd.last_applied_mut() = Some(log_id(2, 2, 2));
     *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
@@ -230,8 +237,10 @@ async fn build_3_levels() -> anyhow::Result<LeveledMap> {
     lm.freeze_writable();
     let sd = lm.writable_mut().sys_data_mut();
 
-    *sd.last_membership_mut() =
-        StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()));
+    *sd.last_membership_mut() = StoredMembership::new(
+        Some(log_id(3, 3, 3)),
+        Membership::new_with_defaults(vec![], []),
+    );
     *sd.last_applied_mut() = Some(log_id(3, 3, 3));
     *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 

@@ -25,6 +25,7 @@ use databend_common_exception::ResultExt;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
+use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use futures::TryStreamExt;
@@ -284,6 +285,7 @@ impl FuseTable {
         snapshot_id: &str,
         retention_point: DateTime<Utc>,
     ) -> Result<(String, Vec<String>)> {
+        // TODO(Sky): unify location related logic into a single place
         let mut location = None;
         let prefix = format!(
             "{}/{}/",
@@ -291,10 +293,11 @@ impl FuseTable {
             FUSE_TBL_SNAPSHOT_PREFIX,
         );
         let prefix_loc = format!("{}{}", prefix, snapshot_id);
+        let prefix_loc_v5 = format!("{}{}{}", prefix, VACUUM2_OBJECT_KEY_PREFIX, snapshot_id);
 
         let files = self
             .list_files(prefix, |loc, modified| {
-                if loc.starts_with(&prefix_loc) {
+                if loc.starts_with(&prefix_loc) || loc.starts_with(&prefix_loc_v5) {
                     location = Some(loc);
                 }
                 modified <= retention_point

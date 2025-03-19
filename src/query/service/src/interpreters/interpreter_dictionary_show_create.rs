@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
@@ -129,7 +130,7 @@ impl ShowCreateDictionaryInterpreter {
                 // compatibility: creating table in the old planner will not have `fields_comments`
                 let comment = field_comments
                     .get(&field.column_id)
-                    .and_then(|c| format!(" COMMENT '{}'", c).into())
+                    .and_then(|c| format!(" COMMENT {}", QuotedString(c, '\'')).into())
                     .unwrap_or_default();
 
                 let ident = display_ident(
