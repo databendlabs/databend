@@ -119,11 +119,11 @@ fn test_slice() {
         "databend",
         "yyyyyyyyyyyyyyyyyyyyy",
         "zzzzzzzzzzzzzzzzzzzzz",
-        "abc",
+        "abcabcabcabcabcabc",
     ];
 
     let array: Utf8ViewColumn = data.into_iter().collect();
-    assert_eq!(array.memory_size(), 114);
+    assert_eq!(array.memory_size(), 132);
 
     let a3 = array.sliced(2, 3);
     assert_eq!(a3.into_iter().collect::<Vec<_>>(), vec![
