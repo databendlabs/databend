@@ -199,6 +199,26 @@ impl AggregateMeta {
         }
     }
 
+    pub fn get_partition(&self) -> isize {
+        match self {
+            AggregateMeta::Serialized(v) => v.bucket,
+            AggregateMeta::SpilledPayload(v) => v.partition,
+            AggregateMeta::AggregatePayload(v) => v.partition,
+            AggregateMeta::InFlightPayload(v) => v.partition,
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
+    }
+
+    pub fn get_max_partition(&self) -> usize {
+        match self {
+            AggregateMeta::Serialized(v) => v.max_partition,
+            AggregateMeta::SpilledPayload(v) => v.max_partition,
+            AggregateMeta::AggregatePayload(v) => v.max_partition,
+            AggregateMeta::InFlightPayload(v) => v.max_partition,
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
+    }
+
     pub fn set_global_max_partition(&mut self, global_max_partition: usize) {
         match self {
             AggregateMeta::Serialized(v) => {

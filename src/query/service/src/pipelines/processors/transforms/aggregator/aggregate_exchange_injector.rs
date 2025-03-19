@@ -215,11 +215,15 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
                         true => DataBlock::empty_with_meta(
                             AggregateMeta::create_in_flight_payload(-1, v.max_partition),
                         ),
-                        false => DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
+                        false => serialize_block(
                             block_num,
                             v.global_max_partition,
-                            Vec::with_capacity(0),
-                        )),
+                            DataBlock::empty_with_meta(AggregateMeta::create_in_flight_payload(
+                                -1,
+                                v.max_partition,
+                            )),
+                            &self.options,
+                        )?,
                     });
                 }
 
@@ -283,19 +287,36 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
         let Some(left_meta) = left_block.get_meta() else {
             return Ordering::Equal;
         };
-        let Some(left_meta) = ExchangeSerializeMeta::downcast_ref_from(left_meta) else {
-            return Ordering::Equal;
-        };
+
+        let (l_partition, l_max_partition) =
+            match ExchangeSerializeMeta::downcast_ref_from(left_meta) {
+                Some(left_meta) => restore_block_number(left_meta.block_number),
+                None => {
+                    // to local
+                    let Some(meta) = AggregateMeta::downcast_ref_from(left_meta) else {
+                        return Ordering::Equal;
+                    };
+
+                    (meta.get_partition(), meta.get_max_partition())
+                }
+            };
 
         let Some(right_meta) = right_block.get_meta() else {
             return Ordering::Equal;
         };
-        let Some(right_meta) = ExchangeSerializeMeta::downcast_ref_from(right_meta) else {
-            return Ordering::Equal;
-        };
 
-        let (l_partition, l_max_partition) = restore_block_number(left_meta.block_number);
-        let (r_partition, r_max_partition) = restore_block_number(right_meta.block_number);
+        let (r_partition, r_max_partition) =
+            match ExchangeSerializeMeta::downcast_ref_from(right_meta) {
+                Some(meta) => restore_block_number(meta.block_number),
+                None => {
+                    // to local
+                    let Some(meta) = AggregateMeta::downcast_ref_from(right_meta) else {
+                        return Ordering::Equal;
+                    };
+
+                    (meta.get_partition(), meta.get_max_partition())
+                }
+            };
 
         // ORDER BY max_partition asc, partition asc
         match l_max_partition.cmp(&r_max_partition) {

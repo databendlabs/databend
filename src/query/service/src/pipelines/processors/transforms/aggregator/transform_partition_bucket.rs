@@ -457,7 +457,10 @@ impl UnalignedPartitions {
                 let partition = payload.partition;
                 let max_partition = payload.max_partition;
                 let global_max_partition = payload.global_max_partition;
-                self.insert_data(max_partition, meta, block);
+
+                if !block.is_empty() {
+                    self.insert_data(max_partition, meta, block);
+                }
 
                 (partition, max_partition, global_max_partition)
             }
