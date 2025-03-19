@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_base::base::tokio::sync::Barrier;
 use databend_common_base::runtime::defer;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
@@ -456,11 +457,18 @@ impl Pipeline {
             let input_len = pipe.output_length;
             let mut items = Vec::with_capacity(input_len);
 
-            for _index in 0..input_len {
+            let barrier = Arc::new(Barrier::new(input_len));
+            for index in 0..input_len {
                 let input = InputPort::create();
                 let outputs: Vec<_> = (0..n).map(|_| OutputPort::create()).collect();
                 items.push(PipeItem::create(
-                    PartitionProcessor::create(input.clone(), outputs.clone(), exchange.clone()),
+                    PartitionProcessor::create(
+                        input.clone(),
+                        outputs.clone(),
+                        exchange.clone(),
+                        index,
+                        barrier.clone(),
+                    ),
                     vec![input],
                     outputs,
                 ));

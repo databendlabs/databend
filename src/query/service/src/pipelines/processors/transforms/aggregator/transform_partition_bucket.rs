@@ -259,34 +259,7 @@ struct ResortingPartition {
 
 impl ResortingPartition {
     fn block_number(meta: &AggregateMeta) -> (isize, usize) {
-        match meta {
-            AggregateMeta::Serialized(v) => (v.bucket, v.max_partition),
-            AggregateMeta::SpilledPayload(v) => (v.partition, v.max_partition),
-            AggregateMeta::AggregatePayload(v) => (v.partition, v.max_partition),
-            AggregateMeta::InFlightPayload(v) => (v.partition, v.max_partition),
-            AggregateMeta::FinalPartition => unreachable!(),
-        }
-    }
-
-    fn get_global_max_partition(data_blocks: &[Option<DataBlock>]) -> usize {
-        let mut global_max_partition = 0;
-
-        for data_block in data_blocks {
-            let Some(data_block) = data_block else {
-                continue;
-            };
-
-            let Some(meta) = data_block.get_meta() else {
-                continue;
-            };
-            let Some(meta) = AggregateMeta::downcast_ref_from(meta) else {
-                continue;
-            };
-
-            global_max_partition = global_max_partition.max(meta.get_global_max_partition())
-        }
-
-        global_max_partition
+        (meta.get_sorting_partition(), meta.get_max_partition())
     }
 }
 
@@ -294,9 +267,36 @@ impl Exchange for ResortingPartition {
     const NAME: &'static str = "PartitionResorting";
     const MULTIWAY_SORT: bool = true;
 
-    fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
+    fn partition(&self, mut data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         debug_assert_eq!(n, 1);
-        Ok(vec![data_block])
+
+        let Some(meta) = data_block.take_meta() else {
+            return Ok(vec![data_block]);
+        };
+
+        let Some(_) = AggregateMeta::downcast_ref_from(&meta) else {
+            return Ok(vec![data_block]);
+        };
+
+        let global_max_partition = self.global_max_partition.load(AtomicOrdering::SeqCst);
+        let mut meta = AggregateMeta::downcast_from(meta).unwrap();
+        meta.set_global_max_partition(global_max_partition);
+
+        Ok(vec![data_block.add_meta(Some(Box::new(meta)))?])
+    }
+
+    fn init_way(&self, _index: usize, first_data: &DataBlock) -> Result<()> {
+        let max_partition = match first_data.get_meta() {
+            None => 0,
+            Some(meta) => match AggregateMeta::downcast_ref_from(meta) {
+                None => 0,
+                Some(v) => v.get_global_max_partition(),
+            },
+        };
+
+        self.global_max_partition
+            .fetch_max(max_partition, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
     }
 
     fn sorting_function(left_block: &DataBlock, right_block: &DataBlock) -> Ordering {
@@ -323,42 +323,6 @@ impl Exchange for ResortingPartition {
             Ordering::Greater => Ordering::Greater,
             Ordering::Equal => l_partition.cmp(&r_partition),
         }
-    }
-
-    fn multiway_pick(&self, data_blocks: &mut [Option<DataBlock>]) -> Option<usize> {
-        let new_value = Self::get_global_max_partition(data_blocks);
-        let old_value = self
-            .global_max_partition
-            .fetch_max(new_value, AtomicOrdering::SeqCst);
-
-        let global_max_partition = std::cmp::max(new_value, old_value);
-
-        let min_position = data_blocks
-            .iter()
-            .enumerate()
-            .filter_map(|(i, x)| x.as_ref().map(|x| (i, x)))
-            .min_by(|(left_idx, left_block), (right_idx, right_block)| {
-                match ResortingPartition::sorting_function(left_block, right_block) {
-                    Ordering::Less => Ordering::Less,
-                    Ordering::Greater => Ordering::Greater,
-                    Ordering::Equal => left_idx.cmp(right_idx),
-                }
-            })
-            .map(|(idx, _)| idx);
-
-        if let Some(min_pos) = min_position {
-            if global_max_partition == 0 {
-                return Some(min_pos);
-            }
-
-            if let Some(mut block) = data_blocks[min_pos].take() {
-                let mut meta = AggregateMeta::downcast_from(block.take_meta().unwrap()).unwrap();
-                meta.set_global_max_partition(global_max_partition);
-                data_blocks[min_pos] = Some(block.add_meta(Some(Box::new(meta))).unwrap());
-            }
-        }
-
-        min_position
     }
 }
 

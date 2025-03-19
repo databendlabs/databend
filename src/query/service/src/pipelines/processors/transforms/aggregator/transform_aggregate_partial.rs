@@ -288,6 +288,7 @@ impl AccumulatingTransform for TransformPartialAggregate {
                             payload,
                             partition as isize,
                             partition_count,
+                            partition_count,
                         ),
                     ));
                 }

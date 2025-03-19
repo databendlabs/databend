@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
@@ -69,17 +70,28 @@ impl ExchangeTransform {
 
                 let receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
                 let nodes_source = receivers.len();
-                let mut idx = 1;
-                let mut reorder = vec![0_usize; nodes_source];
 
-                for (index, (destination_id, receiver)) in receivers.into_iter().enumerate() {
+                let mut lookup = params
+                    .destination_ids
+                    .iter()
+                    .cloned()
+                    .enumerate()
+                    .map(|(x, y)| (y, x))
+                    .collect::<HashMap<_, _>>();
+
+                let mut nodes = Vec::with_capacity(nodes_source);
+                let mut reorder = Vec::with_capacity(nodes_source);
+                nodes.push(params.executor_id.clone());
+                reorder.push(lookup.remove(&params.executor_id).unwrap());
+
+                for (destination_id, receiver) in receivers {
                     if destination_id == params.executor_id {
-                        reorder[0] = index;
                         continue;
                     }
 
-                    reorder[idx] = index;
-                    idx += 1;
+                    nodes.push(destination_id.clone());
+                    reorder.push(lookup.remove(&destination_id).unwrap());
+
                     items.push(create_reader_item(
                         receiver,
                         &destination_id,
@@ -96,7 +108,11 @@ impl ExchangeTransform {
                 };
 
                 pipeline.add_transform(|input, output| {
-                    TransformAggregateDeserializer::try_create(input, output, &params.schema)
+                    TransformAggregateDeserializer::try_create(
+                        input.clone(),
+                        output.clone(),
+                        &params.schema,
+                    )
                 })
             }
         }

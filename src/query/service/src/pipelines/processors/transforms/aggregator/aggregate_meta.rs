@@ -118,6 +118,12 @@ pub struct SpilledPayload {
     pub global_max_partition: usize,
 }
 
+impl SpilledPayload {
+    pub fn get_sorting_partition(&self) -> isize {
+        -(self.max_partition as isize - self.partition)
+    }
+}
+
 pub struct AggregatePayload {
     pub partition: isize,
     pub payload: Payload,
@@ -151,20 +157,25 @@ impl AggregateMeta {
         payload: Payload,
         partition: isize,
         max_partition: usize,
+        global_max_partition: usize,
     ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::AggregatePayload(AggregatePayload {
             payload,
             partition,
             max_partition,
-            global_max_partition: max_partition,
+            global_max_partition,
         }))
     }
 
-    pub fn create_in_flight_payload(partition: isize, max_partition: usize) -> BlockMetaInfoPtr {
+    pub fn create_in_flight_payload(
+        partition: isize,
+        max_partition: usize,
+        global_max_partition: usize,
+    ) -> BlockMetaInfoPtr {
         Box::new(AggregateMeta::InFlightPayload(InFlightPayload {
             partition,
             max_partition,
-            global_max_partition: max_partition,
+            global_max_partition,
         }))
     }
 
@@ -205,6 +216,16 @@ impl AggregateMeta {
             AggregateMeta::SpilledPayload(v) => v.partition,
             AggregateMeta::AggregatePayload(v) => v.partition,
             AggregateMeta::InFlightPayload(v) => v.partition,
+            AggregateMeta::FinalPartition => unreachable!(),
+        }
+    }
+
+    pub fn get_sorting_partition(&self) -> isize {
+        match self {
+            AggregateMeta::Serialized(v) => v.bucket,
+            AggregateMeta::AggregatePayload(v) => v.partition,
+            AggregateMeta::InFlightPayload(v) => v.partition,
+            AggregateMeta::SpilledPayload(v) => v.get_sorting_partition(),
             AggregateMeta::FinalPartition => unreachable!(),
         }
     }

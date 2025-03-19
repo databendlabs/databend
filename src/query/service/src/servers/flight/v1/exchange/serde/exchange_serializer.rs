@@ -37,21 +37,24 @@ use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::FragmentData;
 
 pub struct ExchangeSerializeMeta {
-    pub block_number: isize,
-    pub max_block_number: usize,
+    pub partition: isize,
+    pub max_partition: usize,
+    pub global_max_partition: usize,
     pub packet: Vec<DataPacket>,
 }
 
 impl ExchangeSerializeMeta {
     pub fn create(
-        block_number: isize,
-        max_block_number: usize,
+        partition: isize,
+        max_partition: usize,
+        global_max_partition: usize,
         packet: Vec<DataPacket>,
     ) -> BlockMetaInfoPtr {
         Box::new(ExchangeSerializeMeta {
             packet,
-            block_number,
-            max_block_number,
+            partition,
+            max_partition,
+            global_max_partition,
         })
     }
 }
@@ -68,15 +71,17 @@ local_block_meta_serde!(ExchangeSerializeMeta);
 impl BlockMetaInfo for ExchangeSerializeMeta {}
 
 pub fn serialize_block(
-    block_num: isize,
-    max_block_num: usize,
+    partition: isize,
+    max_partition: usize,
+    global_max_partition: usize,
     data_block: DataBlock,
     options: &IpcWriteOptions,
 ) -> Result<DataBlock> {
     if data_block.is_empty() && data_block.get_meta().is_none() {
         return Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-            block_num,
-            max_block_num,
+            partition,
+            max_partition,
+            global_max_partition,
             vec![],
         )));
     }
@@ -118,8 +123,9 @@ pub fn serialize_block(
     }
 
     Ok(DataBlock::empty_with_meta(ExchangeSerializeMeta::create(
-        block_num,
-        max_block_num,
+        partition,
+        max_partition,
+        global_max_partition,
         packet,
     )))
 }
