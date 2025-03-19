@@ -23,6 +23,8 @@ use crate::seq_value::SeqV;
 
 impl pb::TxnRequest {
     /// Push a new conditional operation branch to the transaction.
+    ///
+    /// A branch is just like a `if (condition1 [and|or] condition2 ... ) { then; return; }` block.
     pub fn push_branch(
         mut self,
         expr: Option<pb::BooleanExpression>,
@@ -34,6 +36,8 @@ impl pb::TxnRequest {
     }
 
     /// Push the old version of `condition` and `if_then` to the transaction.
+    ///
+    /// It is just like a `if (condition) { then; return; }` block.
     pub fn push_if_then(
         mut self,
         conditions: impl IntoIterator<Item = pb::TxnCondition>,
