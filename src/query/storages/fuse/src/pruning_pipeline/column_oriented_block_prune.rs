@@ -87,15 +87,14 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
         let range_pruner = &self.block_pruner.pruning_ctx.range_pruner;
 
         let block_num = segment.block_metas.num_rows();
-        let location_path_col = segment.col_by_name(&[LOCATION, LOCATION_PATH]).unwrap();
-        let rows_count_col = segment.col_by_name(&[ROW_COUNT]).unwrap();
-        let compression_col = segment.col_by_name(&[COMPRESSION]).unwrap();
+        let location_path_col = segment.location_path_col();
+        let rows_count_col = segment.row_count_col();
+        let compression_col = segment.compression_col();
         let create_on_col = segment.col_by_name(&[CREATE_ON]).unwrap();
 
         for block_idx in 0..block_num {
             // 1. prune internal column
             let location_path = location_path_col.index(block_idx).unwrap();
-            let location_path = location_path.as_string().unwrap();
             if self
                 .block_pruner
                 .pruning_ctx
@@ -144,11 +143,9 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
             // TODO(Sky): add bloom filter pruning, inverted index pruning
 
-            let row_count = rows_count_col.index(block_idx).unwrap();
-            let row_count = row_count.as_number().unwrap().as_u_int64().unwrap();
-            let compression = compression_col.index(block_idx).unwrap();
-            let compression =
-                Compression::from_u8(*compression.as_number().unwrap().as_u_int8().unwrap());
+            let row_count = rows_count_col[block_idx];
+            let compression = compression_col[block_idx];
+            let compression = Compression::from_u8(compression);
             let create_on = create_on_col.index(block_idx).unwrap();
             let create_on = match create_on {
                 ScalarRef::Null => None,
@@ -162,7 +159,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                 segment_idx: segment_location.segment_idx,
                 block_idx,
                 range: None,
-                page_size: *row_count as usize,
+                page_size: row_count as usize,
                 block_id: block_id_in_segment(block_num, block_idx),
                 // TODO(Sky): this is duplicate with FuseBlockPartInfo.location.
                 block_location: location_path.to_string(),
@@ -192,7 +189,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
             let part_info = FuseBlockPartInfo::create(
                 location_path.to_string(),
-                *row_count,
+                row_count,
                 columns_meta,
                 Some(columns_stat),
                 compression,

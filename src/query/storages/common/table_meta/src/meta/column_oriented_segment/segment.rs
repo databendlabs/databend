@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use arrow::datatypes::Schema;
 use bytes::Bytes;
+use databend_common_column::binview::BinaryViewColumnGeneric;
 use databend_common_exception::Result;
+use databend_common_expression::types::Buffer;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
@@ -31,8 +35,13 @@ use parquet::file::properties::WriterProperties;
 
 use super::meta_name;
 use super::stat_name;
+use super::BLOCK_SIZE;
+use super::COMPRESSION;
+use super::LOCATION_PATH;
+use super::ROW_COUNT;
 use crate::meta::column_oriented_segment::schema::META_PREFIX;
 use crate::meta::column_oriented_segment::schema::STAT_PREFIX;
+use crate::meta::column_oriented_segment::LOCATION;
 use crate::meta::format::compress;
 use crate::meta::format::decode;
 use crate::meta::format::decompress;
@@ -68,7 +77,7 @@ impl AbstractSegment for CompactSegmentInfo {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ColumnOrientedSegment {
     pub block_metas: DataBlock,
     pub summary: Statistics,
@@ -84,6 +93,56 @@ impl ColumnOrientedSegment {
     pub fn meta_col(&self, col_id: u32) -> Option<Column> {
         let meta_name = meta_name(col_id);
         self.col_by_name(&[&meta_name])
+    }
+
+    pub fn row_count_col(&self) -> Buffer<u64> {
+        self.col_by_name(&[ROW_COUNT])
+            .unwrap()
+            .as_number()
+            .unwrap()
+            .as_u_int64()
+            .unwrap()
+            .clone()
+    }
+
+    pub fn block_size_col(&self) -> Buffer<u64> {
+        self.col_by_name(&[BLOCK_SIZE])
+            .unwrap()
+            .as_number()
+            .unwrap()
+            .as_u_int64()
+            .unwrap()
+            .clone()
+    }
+
+    pub fn location_path_col(&self) -> BinaryViewColumnGeneric<str> {
+        self.col_by_name(&[LOCATION, LOCATION_PATH])
+            .unwrap()
+            .as_string()
+            .unwrap()
+            .clone()
+    }
+
+    pub fn compression_col(&self) -> Buffer<u8> {
+        self.col_by_name(&[COMPRESSION])
+            .unwrap()
+            .as_number()
+            .unwrap()
+            .as_u_int8()
+            .unwrap()
+            .clone()
+    }
+
+    pub fn col_meta_cols(&self, col_ids: &HashSet<ColumnId>) -> HashMap<ColumnId, Column> {
+        let mut col_metas = HashMap::new();
+        for col_id in col_ids {
+            let meta_name = meta_name(*col_id);
+            let meta_col = self.col_by_name(&[&meta_name]);
+            if let Some(meta_col) = meta_col {
+                col_metas.insert(*col_id, meta_col);
+            }
+        }
+        col_metas
     }
 
     pub fn col_by_name(&self, name: &[&str]) -> Option<Column> {
@@ -126,6 +185,10 @@ impl ColumnOrientedSegment {
                 _ => panic!("expect tuple type"),
             }
         }
+    }
+
+    pub fn block_metas(&self) -> DataBlock {
+        self.block_metas.clone()
     }
 }
 
@@ -172,6 +235,7 @@ impl AbstractSegment for ColumnOrientedSegment {
     }
 }
 
+// TODO(Sky):project with column_name instead of column_id
 pub fn deserialize_column_oriented_segment(
     data: Bytes,
     column_ids: &[ColumnId],

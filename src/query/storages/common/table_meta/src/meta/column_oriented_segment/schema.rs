@@ -131,7 +131,6 @@ pub fn segment_schema(table_schema: &TableSchema) -> TableSchema {
     TableSchema::new(fields)
 }
 
-// TODO(Sky): stat and meta are always read as a whole, maybe merge them into a single field.
 pub const STAT_PREFIX: &str = "stat_";
 pub const META_PREFIX: &str = "meta_";
 

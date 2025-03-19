@@ -32,6 +32,7 @@ pub use inverted_index::InvertedIndexReader;
 pub use meta::CompactSegmentInfoReader;
 pub use meta::MetaReaders;
 pub use meta::TableSnapshotReader;
+pub use segment_reader::read_column_oriented_segment;
 pub use segment_reader::ColumnOrientedSegmentReader;
 pub use segment_reader::CompactSegmentReader;
 pub use segment_reader::SegmentReader;

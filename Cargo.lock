@@ -5373,6 +5373,7 @@ dependencies = [
  "bytes",
  "chrono",
  "databend-common-base",
+ "databend-common-column",
  "databend-common-datavalues",
  "databend-common-exception",
  "databend-common-expression",

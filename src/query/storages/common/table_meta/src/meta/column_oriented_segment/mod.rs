@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// mod block_meta;
+mod block_read_info;
+pub use block_read_info::BlockReadInfo;
 mod schema;
 mod segment;
 mod segment_builder;
-
 pub use schema::col_meta_type;
 pub use schema::col_stats_type;
 pub use schema::meta_name;

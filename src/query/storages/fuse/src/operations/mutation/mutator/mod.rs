@@ -13,11 +13,15 @@
 // limitations under the License.
 
 mod block_compact_mutator;
+mod compact_task_builder;
 mod recluster_mutator;
 mod segment_compact_mutator;
 
 pub use block_compact_mutator::BlockCompactMutator;
+pub use block_compact_mutator::RowOrientedCompactTaskBuilder;
 pub use block_compact_mutator::SegmentCompactChecker;
+pub use compact_task_builder::ColumnOrientedCompactTaskBuilder;
+pub use compact_task_builder::CompactTaskBuilder;
 pub use recluster_mutator::ReclusterMode;
 pub use recluster_mutator::ReclusterMutator;
 pub use segment_compact_mutator::SegmentCompactMutator;

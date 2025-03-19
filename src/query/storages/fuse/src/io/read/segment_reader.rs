@@ -28,15 +28,33 @@ use opendal::Operator;
 
 use super::meta::bytes_reader;
 use crate::io::SegmentsIO;
+use crate::operations::ColumnOrientedCompactTaskBuilder;
+use crate::operations::ColumnOrientedSegmentsWithIndices;
+use crate::operations::CompactSegmentsWithIndices;
+use crate::operations::CompactTaskBuilder;
+use crate::operations::RowOrientedCompactTaskBuilder;
+use crate::operations::SegmentsWithIndices;
 
 #[async_trait::async_trait]
 pub trait SegmentReader: Send + Sync + 'static {
     type Segment: AbstractSegment;
+    type SegmentsWithIndices: SegmentsWithIndices<Segment = Self::Segment> + Clone;
+    type CompactTaskBuilder: CompactTaskBuilder<Segment = Self::Segment>;
     async fn read_segment_through_cache(
         dal: Operator,
         location: Location,
         column_ids: Vec<ColumnId>,
         table_schema: TableSchemaRef,
+    ) -> Result<Arc<Self::Segment>> {
+        Self::read_segment(dal, location, column_ids, table_schema, true).await
+    }
+
+    async fn read_segment(
+        dal: Operator,
+        location: Location,
+        column_ids: Vec<ColumnId>,
+        table_schema: TableSchemaRef,
+        put_cache: bool,
     ) -> Result<Arc<Self::Segment>>;
 }
 
@@ -45,13 +63,16 @@ pub struct CompactSegmentReader;
 #[async_trait::async_trait]
 impl SegmentReader for CompactSegmentReader {
     type Segment = CompactSegmentInfo;
-    async fn read_segment_through_cache(
+    type SegmentsWithIndices = CompactSegmentsWithIndices;
+    type CompactTaskBuilder = RowOrientedCompactTaskBuilder;
+    async fn read_segment(
         dal: Operator,
         location: Location,
         _column_ids: Vec<ColumnId>,
         table_schema: TableSchemaRef,
+        put_cache: bool,
     ) -> Result<Arc<Self::Segment>> {
-        SegmentsIO::read_compact_segment(dal, location, table_schema, true).await
+        SegmentsIO::read_compact_segment(dal, location, table_schema, put_cache).await
     }
 }
 
@@ -60,20 +81,25 @@ pub struct ColumnOrientedSegmentReader;
 #[async_trait::async_trait]
 impl SegmentReader for ColumnOrientedSegmentReader {
     type Segment = ColumnOrientedSegment;
-    async fn read_segment_through_cache(
+    type SegmentsWithIndices = ColumnOrientedSegmentsWithIndices;
+    type CompactTaskBuilder = ColumnOrientedCompactTaskBuilder;
+    async fn read_segment(
         dal: Operator,
         location: Location,
         column_ids: Vec<ColumnId>,
         _table_schema: TableSchemaRef,
+        put_cache: bool,
     ) -> Result<Arc<Self::Segment>> {
-        read_column_oriented_segment(dal, &location.0, column_ids).await
+        read_column_oriented_segment(dal, &location.0, column_ids, put_cache).await
     }
 }
 
+// TODO(Sky): support projection for block level meta(like block location), for example: in compact segment, only block location is needed.
 pub async fn read_column_oriented_segment(
     dal: Operator,
     location: &str,
     column_ids: Vec<ColumnId>,
+    put_cache: bool,
 ) -> Result<Arc<ColumnOrientedSegment>> {
     let cache = CacheManager::instance().get_column_oriented_segment_info_cache();
     let cached_segment = cache.get(location);
@@ -101,7 +127,10 @@ pub async fn read_column_oriented_segment(
                 summary: segment.summary().clone(),
                 segment_schema: merged_schema,
             };
-            cache.insert(location.to_string(), merged_segment.clone());
+
+            if put_cache {
+                cache.insert(location.to_string(), merged_segment.clone());
+            }
             Ok(Arc::new(merged_segment))
         }
         None => {
@@ -113,7 +142,10 @@ pub async fn read_column_oriented_segment(
                 summary: summary.unwrap(),
                 segment_schema,
             };
-            cache.insert(location.to_string(), segment.clone());
+
+            if put_cache {
+                cache.insert(location.to_string(), segment.clone());
+            }
             Ok(Arc::new(segment))
         }
     }

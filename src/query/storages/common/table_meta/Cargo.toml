@@ -16,6 +16,7 @@ bincode_v1 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-column = { workspace = true }
 databend-common-datavalues = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }

@@ -26,8 +26,8 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_storages_fuse::io::read::read_column_oriented_segment;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
-use databend_common_storages_fuse::read_column_oriented_segment;
 use databend_common_storages_fuse::statistics::gen_columns_statistics;
 use databend_common_storages_fuse::statistics::reduce_block_metas;
 use databend_common_storages_fuse::FuseStorageFormat;
@@ -355,7 +355,7 @@ async fn test_segment_cache() -> Result<()> {
 
     // 1. only read and cache block level meta
     let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, vec![]).await?;
+        read_column_oriented_segment(operator.clone(), &location, vec![], false).await?;
     let cached = cache.get(&location).unwrap();
     assert_eq!(cached.segment_schema.fields.len(), 10);
     assert_eq!(cached.segment_schema, segment_schema(&TableSchema::empty()));
@@ -365,7 +365,7 @@ async fn test_segment_cache() -> Result<()> {
     // 2. read and cache meta and stats of column 1
     let col_id = 1;
     let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, vec![col_id]).await?;
+        read_column_oriented_segment(operator.clone(), &location, vec![col_id], false).await?;
     let cached = cache.get(&location).unwrap();
     assert_eq!(cached.segment_schema.fields.len(), 12);
 
@@ -385,7 +385,7 @@ async fn test_segment_cache() -> Result<()> {
     // 3. read and cache meta and stats of column 2
     let col_id = 2;
     let _column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, vec![col_id]).await?;
+        read_column_oriented_segment(operator.clone(), &location, vec![col_id], false).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
     assert_eq!(cached.segment_schema.fields.len(), 13);
@@ -396,7 +396,7 @@ async fn test_segment_cache() -> Result<()> {
     // 4. read column 1 again, should hit cache
     let col_id = 1;
     let column_oriented_segment =
-        read_column_oriented_segment(operator.clone(), &location, vec![col_id]).await?;
+        read_column_oriented_segment(operator.clone(), &location, vec![col_id], false).await?;
     let cached = cache.get(&location).unwrap();
     // column 2 does not have stats
     assert_eq!(cached.segment_schema.fields.len(), 13);
