@@ -360,6 +360,13 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         debug_assert!(offset + length <= self.len());
         self.views.slice_unchecked(offset, length);
         self.total_bytes_len = self.views.iter().map(|v| v.length as usize).sum::<usize>();
+        // total buffer len only collect views has bytes in buffer
+        self.total_buffer_len = self
+            .views
+            .iter()
+            .filter(|v| v.offset > 0)
+            .map(|v| v.length as usize)
+            .sum::<usize>();
     }
 
     impl_sliced!();
