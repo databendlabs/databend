@@ -686,30 +686,7 @@ impl SubqueryRewriter {
         let op = match plan {
             RelOperator::DummyTableScan(_) => DummyTableScan.into(),
             RelOperator::Scan(scan) => self.flatten_left_scan(scan),
-            RelOperator::EvalScalar(eval) => {
-                let mut metadata = self.metadata.write();
-                let items = eval
-                    .items
-                    .iter()
-                    .map(|ScalarItem { scalar, index: old }| {
-                        let mut scalar = scalar.clone();
-                        for old in scalar.used_columns() {
-                            let Some(new) = self.derived_columns.get(&old) else {
-                                continue;
-                            };
-                            scalar.replace_column(old, *new).unwrap();
-                        }
-                        let column_entry = metadata.column(*old);
-                        let name = column_entry.name();
-                        let data_type = column_entry.data_type();
-                        let index =
-                            metadata.add_derived_column(name, data_type, Some(scalar.clone()));
-                        self.derived_columns.insert(*old, index);
-                        ScalarItem { scalar, index }
-                    })
-                    .collect();
-                EvalScalar { items }.into()
-            }
+            RelOperator::EvalScalar(eval) => self.flatten_left_eval_scalar(eval)?,
             RelOperator::Limit(limit) => limit.clone().into(),
             RelOperator::Sort(sort) => {
                 let mut sort = sort.clone();
@@ -728,7 +705,7 @@ impl SubqueryRewriter {
                         let Some(new) = self.derived_columns.get(&old) else {
                             continue;
                         };
-                        predicate.replace_column(old, *new).unwrap();
+                        predicate.replace_column(old, *new)?;
                     }
                 }
                 filter.into()
@@ -743,7 +720,30 @@ impl SubqueryRewriter {
                 }
                 join.into()
             }
-            _ => return Err(ErrorCode::Unimplemented(format!("{:?}", plan.rel_op()))),
+            RelOperator::Aggregate(aggregate) => {
+                let mut aggregate = aggregate.clone();
+                let metadata = self.metadata.clone();
+                let mut metadata = metadata.write();
+                for item in &mut aggregate.group_items {
+                    *item = self.flatten_left_scalar_item(item, &mut metadata)?;
+                }
+                for func in &mut aggregate.aggregate_functions {
+                    *func = self.flatten_left_scalar_item(func, &mut metadata)?;
+                }
+                aggregate.rank_limit = None;
+                if aggregate.grouping_sets.is_some() {
+                    return Err(ErrorCode::Unimplemented(
+                        "join left plan can't contain aggregate with GROUPING SETS to dcorrelated join right plan",
+                   ));
+                }
+                aggregate.into()
+            }
+            _ => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "join left plan can't contain {:?} to dcorrelated join right plan",
+                    plan.rel_op()
+                )))
+            }
         };
         Ok(op)
     }
@@ -772,6 +772,37 @@ impl SubqueryRewriter {
             ..Default::default()
         }
         .into()
+    }
+
+    fn flatten_left_eval_scalar(&mut self, eval: &EvalScalar) -> Result<RelOperator> {
+        let metadata = self.metadata.clone();
+        let mut metadata = metadata.write();
+        let items = eval
+            .items
+            .iter()
+            .map(|item| self.flatten_left_scalar_item(item, &mut metadata))
+            .collect::<Result<_>>()?;
+        Ok(EvalScalar { items }.into())
+    }
+
+    fn flatten_left_scalar_item(
+        &mut self,
+        ScalarItem { scalar, index: old }: &ScalarItem,
+        metadata: &mut Metadata,
+    ) -> Result<ScalarItem> {
+        let mut scalar = scalar.clone();
+        for old in scalar.used_columns() {
+            let Some(new) = self.derived_columns.get(&old) else {
+                continue;
+            };
+            scalar.replace_column(old, *new)?;
+        }
+        let column_entry = metadata.column(*old);
+        let name = column_entry.name();
+        let data_type = column_entry.data_type();
+        let index = metadata.add_derived_column(name, data_type, Some(scalar.clone()));
+        self.derived_columns.insert(*old, index);
+        Ok(ScalarItem { scalar, index })
     }
 
     fn scalar_item_from_index(
