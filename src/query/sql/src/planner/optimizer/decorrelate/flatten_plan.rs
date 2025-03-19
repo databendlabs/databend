@@ -30,6 +30,7 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
+use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::ExpressionScan;
 use crate::plans::Filter;
@@ -46,7 +47,7 @@ use crate::plans::UnionAll;
 use crate::plans::Window;
 use crate::ColumnEntry;
 use crate::IndexType;
-use crate::MetadataRef;
+use crate::Metadata;
 
 impl SubqueryRewriter {
     #[recursive::recursive]
@@ -63,23 +64,11 @@ impl SubqueryRewriter {
             if !need_cross_join {
                 return Ok(plan.clone());
             }
-
-            #[allow(clippy::overly_complex_bool_expr)]
-            if false
-                && self
-                    .metadata
-                    .read()
-                    .table_index_by_column_indexes(correlated_columns)
-                    .is_some()
-            {
-                return self.rewrite_to_join(plan, correlated_columns);
-            } else {
-                return self.rewrite_to_join2(left, plan, correlated_columns);
-            }
+            return self.flatten_left(left, plan, correlated_columns);
         }
 
         match plan.plan() {
-            RelOperator::EvalScalar(eval_scalar) => self.flatten_eval_scalar(
+            RelOperator::EvalScalar(eval_scalar) => self.flatten_right_eval_scalar(
                 left,
                 plan,
                 eval_scalar,
@@ -87,7 +76,7 @@ impl SubqueryRewriter {
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::ProjectSet(project_set) => self.flatten_project_set(
+            RelOperator::ProjectSet(project_set) => self.flatten_right_project_set(
                 left,
                 plan,
                 project_set,
@@ -95,7 +84,7 @@ impl SubqueryRewriter {
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::Filter(filter) => self.flatten_filter(
+            RelOperator::Filter(filter) => self.flatten_right_filter(
                 left,
                 filter,
                 plan,
@@ -104,9 +93,9 @@ impl SubqueryRewriter {
                 need_cross_join,
             ),
             RelOperator::Join(join) => {
-                self.flatten_join(left, join, plan, correlated_columns, flatten_info)
+                self.flatten_right_join(left, join, plan, correlated_columns, flatten_info)
             }
-            RelOperator::Aggregate(aggregate) => self.flatten_aggregate(
+            RelOperator::Aggregate(aggregate) => self.flatten_right_aggregate(
                 left,
                 aggregate,
                 plan,
@@ -114,7 +103,7 @@ impl SubqueryRewriter {
                 flatten_info,
                 need_cross_join,
             ),
-            RelOperator::Sort(sort) => self.flatten_sort(
+            RelOperator::Sort(sort) => self.flatten_right_sort(
                 left,
                 plan,
                 sort,
@@ -122,16 +111,14 @@ impl SubqueryRewriter {
                 flatten_info,
                 need_cross_join,
             ),
-
-            RelOperator::Limit(_) => self.flatten_limit(
+            RelOperator::Limit(_) => self.flatten_right_limit(
                 left,
                 plan,
                 correlated_columns,
                 flatten_info,
                 need_cross_join,
             ),
-
-            RelOperator::UnionAll(op) => self.flatten_union_all(
+            RelOperator::UnionAll(op) => self.flatten_right_union_all(
                 left,
                 op,
                 plan,
@@ -139,190 +126,19 @@ impl SubqueryRewriter {
                 flatten_info,
                 need_cross_join,
             ),
-
             RelOperator::Window(op) => {
-                self.flatten_window(left, plan, op, correlated_columns, flatten_info)
+                self.flatten_right_window(left, plan, op, correlated_columns, flatten_info)
             }
-
             RelOperator::ExpressionScan(scan) => {
-                self.flatten_expression_scan(plan, scan, correlated_columns)
+                self.flatten_right_expression_scan(plan, scan, correlated_columns)
             }
-
             _ => Err(ErrorCode::SemanticError(
                 "Invalid plan type for flattening subquery",
             )),
         }
     }
 
-    fn rewrite_to_join(&mut self, plan: &SExpr, correlated_columns: &ColumnSet) -> Result<SExpr> {
-        // Construct a Scan plan by correlated columns.
-        // Finally, generate a cross join, so we finish flattening the subquery.
-        let mut metadata = self.metadata.write();
-        // Currently, we don't support left plan's from clause contains subquery.
-        // Such as: select t2.a from (select a + 1 as a from t) as t2 where (select sum(a) from t as t1 where t1.a < t2.a) = 1;
-        let table_index =
-                match metadata.table_index_by_column_indexes(correlated_columns) {
-                    Some(index) => index,
-                    None => return Err(ErrorCode::SemanticError(
-                        "Join left plan's from clause can't contain subquery to dcorrelated join right plan",
-                    )),
-                };
-
-        let mut data_types = Vec::with_capacity(correlated_columns.len());
-        let mut scalar_items = vec![];
-        let mut scan_columns = ColumnSet::new();
-        for correlated_column in correlated_columns.iter().copied() {
-            let column_entry = metadata.column(correlated_column).clone();
-            let data_type = column_entry.data_type();
-            data_types.push(data_type.clone());
-            let name = column_entry.name();
-            let derived_col = metadata.add_derived_column(name, data_type, None);
-            self.derived_columns.insert(correlated_column, derived_col);
-
-            let ColumnEntry::DerivedColumn(derived_column) = column_entry else {
-                scan_columns.insert(derived_col);
-                continue;
-            };
-            let Some(mut scalar) = derived_column.scalar_expr else {
-                continue;
-            };
-            // Replace columns in `scalar` to derived columns.
-            for col in scalar.used_columns().iter() {
-                if let Some(new_col) = self.derived_columns.get(col) {
-                    scalar.replace_column(*col, *new_col)?;
-                } else {
-                    scan_columns.insert(*col);
-                }
-            }
-            scalar_items.push(ScalarItem {
-                scalar,
-                index: derived_col,
-            });
-        }
-        let scan = SExpr::create_leaf(Arc::new(
-            Scan {
-                table_index,
-                columns: scan_columns,
-                scan_id: metadata.next_scan_id(),
-                ..Default::default()
-            }
-            .into(),
-        ));
-        let scan = if scalar_items.is_empty() {
-            scan
-        } else {
-            // Wrap `EvalScalar` to `scan`.
-            SExpr::create_unary(
-                Arc::new(
-                    EvalScalar {
-                        items: scalar_items,
-                    }
-                    .into(),
-                ),
-                Arc::new(scan),
-            )
-        };
-        // Wrap logical get with distinct to eliminate duplicates rows.
-        let group_items = self
-            .derived_columns
-            .values()
-            .cloned()
-            .zip(data_types)
-            .map(|(column_index, data_type)| ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: ColumnBindingBuilder::new(
-                        "".to_string(),
-                        column_index,
-                        Box::new(data_type),
-                        Visibility::Visible,
-                    )
-                    .table_index(Some(table_index))
-                    .build(),
-                }),
-                index: column_index,
-            })
-            .collect();
-        let aggr = SExpr::create_unary(
-            Arc::new(
-                Aggregate {
-                    mode: AggregateMode::Initial,
-                    group_items,
-                    ..Default::default()
-                }
-                .into(),
-            ),
-            Arc::new(scan),
-        );
-
-        Ok(SExpr::create_binary(
-            Arc::new(Join::default().into()),
-            Arc::new(aggr),
-            Arc::new(plan.clone()),
-        ))
-    }
-
-    fn rewrite_to_join2(
-        &mut self,
-        left: Option<&SExpr>,
-        plan: &SExpr,
-        correlated_columns: &ColumnSet,
-    ) -> Result<SExpr> {
-        let mut modifier = Modify {
-            derived_columns: Default::default(),
-            metadata: self.metadata.clone(),
-        };
-        let left = clone_and_modify(left.unwrap(), &mut modifier);
-        self.derived_columns.extend(modifier.derived_columns);
-
-        let mut correlated = Vec::from_iter(
-            correlated_columns
-                .iter()
-                .map(|i| *self.derived_columns.get(i).unwrap()),
-        );
-        correlated.sort();
-        let metadata = self.metadata.read();
-        // Wrap logical get with distinct to eliminate duplicates rows.
-        let group_items = correlated
-            .into_iter()
-            .map(|index| {
-                let entry = metadata.column(index);
-                ScalarItem {
-                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: ColumnBindingBuilder::new(
-                            entry.name(),
-                            index,
-                            Box::new(entry.data_type()),
-                            Visibility::Visible,
-                        )
-                        .build(),
-                    }),
-                    index,
-                }
-            })
-            .collect();
-
-        let aggr = SExpr::create_unary(
-            Arc::new(
-                Aggregate {
-                    mode: AggregateMode::Initial,
-                    group_items,
-                    ..Default::default()
-                }
-                .into(),
-            ),
-            Arc::new(left),
-        );
-
-        Ok(SExpr::create_binary(
-            Arc::new(Join::default().into()),
-            Arc::new(aggr),
-            Arc::new(plan.clone()),
-        ))
-    }
-
-    fn flatten_eval_scalar(
+    fn flatten_right_eval_scalar(
         &mut self,
         left: Option<&SExpr>,
         plan: &SExpr,
@@ -331,11 +147,7 @@ impl SubqueryRewriter {
         flatten_info: &mut FlattenInfo,
         mut need_cross_join: bool,
     ) -> Result<SExpr> {
-        if eval_scalar
-            .used_columns()?
-            .iter()
-            .any(|index| correlated_columns.contains(index))
-        {
+        if !eval_scalar.used_columns()?.is_disjoint(correlated_columns) {
             need_cross_join = true;
         }
         let flatten_plan = self.flatten_plan(
@@ -354,23 +166,9 @@ impl SubqueryRewriter {
             items.push(new_item);
         }
         let metadata = self.metadata.read();
-
-        items.extend(correlated_columns.iter().map(|old| {
-            let index = *self.derived_columns.get(old).unwrap();
-            let column_entry = metadata.column(index);
-            ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: ColumnBindingBuilder::new(
-                        format!("correlated_{}", column_entry.name()),
-                        index,
-                        Box::from(column_entry.data_type()),
-                        Visibility::Visible,
-                    )
-                    .build(),
-                }),
-                index,
-            }
+        items.extend(sortd_iter(correlated_columns).map(|old| {
+            let index = *self.derived_columns.get(&old).unwrap();
+            self.scalar_item_from_index(index, "correlated.", &metadata)
         }));
         Ok(SExpr::create_unary(
             Arc::new(EvalScalar { items }.into()),
@@ -378,7 +176,7 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_project_set(
+    fn flatten_right_project_set(
         &mut self,
         left: Option<&SExpr>,
         plan: &SExpr,
@@ -387,7 +185,7 @@ impl SubqueryRewriter {
         flatten_info: &mut FlattenInfo,
         mut need_cross_join: bool,
     ) -> Result<SExpr> {
-        if project_set
+        if !project_set
             .srfs
             .iter()
             .map(|srf| srf.scalar.used_columns())
@@ -395,8 +193,7 @@ impl SubqueryRewriter {
                 acc.extend(v);
                 acc
             })
-            .iter()
-            .any(|index| correlated_columns.contains(index))
+            .is_disjoint(correlated_columns)
         {
             need_cross_join = true;
         }
@@ -415,25 +212,12 @@ impl SubqueryRewriter {
             };
             srfs.push(new_item);
         }
-        let mut scalar_items = vec![];
         let metadata = self.metadata.read();
-        for derived_column in self.derived_columns.values() {
-            let column_entry = metadata.column(*derived_column);
-            let column_binding = ColumnBindingBuilder::new(
-                format!("correlated_{}", column_entry.name()),
-                *derived_column,
-                Box::from(column_entry.data_type()),
-                Visibility::Visible,
-            )
-            .build();
-            scalar_items.push(ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: column_binding,
-                }),
-                index: *derived_column,
-            });
-        }
+        let scalar_items = self
+            .derived_columns
+            .values()
+            .map(|index| self.scalar_item_from_index(*index, "correlated.", &metadata))
+            .collect();
         Ok(SExpr::create_unary(
             Arc::new(ProjectSet { srfs }.into()),
             Arc::new(SExpr::create_unary(
@@ -448,7 +232,7 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_filter(
+    fn flatten_right_filter(
         &mut self,
         left: Option<&SExpr>,
         filter: &Filter,
@@ -482,7 +266,7 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_join(
+    fn flatten_right_join(
         &mut self,
         left: Option<&SExpr>,
         join: &Join,
@@ -502,10 +286,7 @@ impl SubqueryRewriter {
                 } else {
                     &condition.right
                 };
-                condition
-                    .used_columns()
-                    .iter()
-                    .any(|col| correlated_columns.contains(col))
+                !condition.used_columns().is_disjoint(correlated_columns)
             })
         }
 
@@ -626,7 +407,7 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_aggregate(
+    fn flatten_right_aggregate(
         &mut self,
         left: Option<&SExpr>,
         aggregate: &Aggregate,
@@ -635,11 +416,7 @@ impl SubqueryRewriter {
         flatten_info: &mut FlattenInfo,
         mut need_cross_join: bool,
     ) -> Result<SExpr> {
-        if aggregate
-            .used_columns()?
-            .iter()
-            .any(|index| correlated_columns.contains(index))
-        {
+        if !aggregate.used_columns()?.is_disjoint(correlated_columns) {
             need_cross_join = true;
         }
         let flatten_plan = self.flatten_plan(
@@ -660,22 +437,9 @@ impl SubqueryRewriter {
         }
 
         let metadata = self.metadata.read();
-        group_items.extend(correlated_columns.iter().map(|old| {
-            let index = *self.derived_columns.get(old).unwrap();
-            let column_entry = metadata.column(index);
-            ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: ColumnBindingBuilder::new(
-                        format!("correlated_{}", column_entry.name()),
-                        index,
-                        Box::from(column_entry.data_type()),
-                        Visibility::Visible,
-                    )
-                    .build(),
-                }),
-                index,
-            }
+        group_items.extend(sortd_iter(correlated_columns).map(|old| {
+            let index = *self.derived_columns.get(&old).unwrap();
+            self.scalar_item_from_index(index, "correlated.", &metadata)
         }));
         drop(metadata);
 
@@ -713,7 +477,7 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_sort(
+    fn flatten_right_sort(
         &mut self,
         left: Option<&SExpr>,
         plan: &SExpr,
@@ -749,7 +513,7 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_limit(
+    fn flatten_right_limit(
         &mut self,
         left: Option<&SExpr>,
         plan: &SExpr,
@@ -771,58 +535,40 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_window(
+    fn flatten_right_window(
         &mut self,
         left: Option<&SExpr>,
         plan: &SExpr,
-        op: &Window,
+        window: &Window,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
     ) -> Result<SExpr> {
-        if op
-            .used_columns()?
-            .iter()
-            .any(|index| correlated_columns.contains(index))
-        {
+        if !window.used_columns()?.is_disjoint(correlated_columns) {
             return Err(ErrorCode::SemanticError(
                 "correlated columns in window functions not supported",
             ));
         }
         let flatten_plan =
             self.flatten_plan(left, plan.child(0)?, correlated_columns, flatten_info, true)?;
-        let mut partition_by = op.partition_by.clone();
-        for derived_column in self.derived_columns.values() {
-            let column_binding = {
-                let metadata = self.metadata.read();
-                let column_entry = metadata.column(*derived_column);
-                let data_type = column_entry.data_type();
-                ColumnBindingBuilder::new(
-                    format!("correlated_{}", column_entry.name()),
-                    *derived_column,
-                    Box::from(data_type),
-                    Visibility::Visible,
-                )
-                .build()
-            };
-            partition_by.push(ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: column_binding,
-                }),
-                index: *derived_column,
-            });
-        }
+        let mut partition_by = window.partition_by.clone();
+        let metadata = self.metadata.read();
+        partition_by.extend(sortd_iter(correlated_columns).map(|old| {
+            let index = *self.derived_columns.get(&old).unwrap();
+            self.scalar_item_from_index(index, "correlated.", &metadata)
+        }));
+        drop(metadata);
+
         Ok(SExpr::create_unary(
             Arc::new(
                 Window {
-                    span: op.span,
-                    index: op.index,
-                    function: op.function.clone(),
-                    arguments: op.arguments.clone(),
+                    span: window.span,
+                    index: window.index,
+                    function: window.function.clone(),
+                    arguments: window.arguments.clone(),
                     partition_by,
-                    order_by: op.order_by.clone(),
-                    frame: op.frame.clone(),
-                    limit: op.limit,
+                    order_by: window.order_by.clone(),
+                    frame: window.frame.clone(),
+                    limit: window.limit,
                 }
                 .into(),
             ),
@@ -830,7 +576,7 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_union_all(
+    fn flatten_right_union_all(
         &mut self,
         left: Option<&SExpr>,
         op: &UnionAll,
@@ -839,11 +585,7 @@ impl SubqueryRewriter {
         flatten_info: &mut FlattenInfo,
         mut need_cross_join: bool,
     ) -> Result<SExpr> {
-        if op
-            .used_columns()?
-            .iter()
-            .any(|index| correlated_columns.contains(index))
-        {
+        if !op.used_columns()?.is_disjoint(correlated_columns) {
             need_cross_join = true;
         }
         let left_flatten_plan = self.flatten_plan(
@@ -870,7 +612,7 @@ impl SubqueryRewriter {
         ))
     }
 
-    fn flatten_expression_scan(
+    fn flatten_right_expression_scan(
         &mut self,
         plan: &SExpr,
         scan: &ExpressionScan,
@@ -886,45 +628,64 @@ impl SubqueryRewriter {
         }
         Ok(plan.clone())
     }
-}
 
-pub trait ModifyPlan {
-    fn modify(&mut self, plan: &RelOperator) -> RelOperator;
-}
+    fn flatten_left(
+        &mut self,
+        left: Option<&SExpr>,
+        plan: &SExpr,
+        correlated_columns: &ColumnSet,
+    ) -> Result<SExpr> {
+        let left = self.flatten_left_recursive(left.unwrap())?;
 
-struct Modify {
-    derived_columns: HashMap<IndexType, IndexType>,
-    metadata: MetadataRef,
-}
+        // Wrap logical get with distinct to eliminate duplicates rows.
+        let metadata = self.metadata.read();
+        let group_items = sortd_iter(correlated_columns)
+            .map(|old| {
+                let index = *self.derived_columns.get(&old).unwrap();
+                self.scalar_item_from_index(index, "correlated.", &metadata)
+            })
+            .collect();
 
-impl ModifyPlan for Modify {
-    fn modify(&mut self, plan: &RelOperator) -> RelOperator {
-        match plan {
-            RelOperator::Scan(scan) => {
-                let mut metadata = self.metadata.write();
-                let columns = scan
-                    .columns
-                    .iter()
-                    .copied()
-                    .map(|col| {
-                        let column_entry = metadata.column(col).clone();
-                        let derived_index = metadata.add_derived_column(
-                            column_entry.name(),
-                            column_entry.data_type(),
-                            None,
-                        );
-                        self.derived_columns.insert(col, derived_index);
-                        derived_index
-                    })
-                    .collect();
-                Scan {
-                    table_index: scan.table_index,
-                    columns,
-                    scan_id: metadata.next_scan_id(),
+        let aggr = SExpr::create_unary(
+            Arc::new(
+                Aggregate {
+                    mode: AggregateMode::Initial,
+                    group_items,
                     ..Default::default()
                 }
-                .into()
-            }
+                .into(),
+            ),
+            Arc::new(left),
+        );
+
+        Ok(SExpr::create_binary(
+            Arc::new(Join::default().into()),
+            Arc::new(aggr),
+            Arc::new(plan.clone()),
+        ))
+    }
+
+    fn flatten_left_recursive(&mut self, expr: &SExpr) -> Result<SExpr> {
+        let children = expr
+            .children
+            .iter()
+            .map(|child| Ok(self.flatten_left_recursive(child)?.into()))
+            .collect::<Result<_>>()?;
+
+        Ok(SExpr {
+            plan: Arc::new(self.flatten_left_plan(&expr.plan)?),
+            children,
+            original_group: None,
+            rel_prop: Default::default(),
+            stat_info: Default::default(),
+            applied_rules: Default::default(),
+        })
+    }
+
+    fn flatten_left_plan(&mut self, plan: &RelOperator) -> Result<RelOperator> {
+        let op = match plan {
+            RelOperator::DummyTableScan(_) => DummyTableScan.into(),
+            RelOperator::Scan(scan) => self.flatten_left_scan(scan),
             RelOperator::EvalScalar(eval) => {
                 let mut metadata = self.metadata.write();
                 let items = eval
@@ -982,25 +743,60 @@ impl ModifyPlan for Modify {
                 }
                 join.into()
             }
-            _ => unimplemented!("unimplemented {:?}", plan.rel_op()),
+            _ => return Err(ErrorCode::Unimplemented(format!("{:?}", plan.rel_op()))),
+        };
+        Ok(op)
+    }
+
+    fn flatten_left_scan(&mut self, scan: &Scan) -> RelOperator {
+        let mut metadata = self.metadata.write();
+        let columns = scan
+            .columns
+            .iter()
+            .copied()
+            .map(|col| {
+                let column_entry = metadata.column(col).clone();
+                let derived_index = metadata.add_derived_column(
+                    column_entry.name(),
+                    column_entry.data_type(),
+                    None,
+                );
+                self.derived_columns.insert(col, derived_index);
+                derived_index
+            })
+            .collect();
+        Scan {
+            table_index: scan.table_index,
+            columns,
+            scan_id: metadata.next_scan_id(),
+            ..Default::default()
+        }
+        .into()
+    }
+
+    fn scalar_item_from_index(
+        &self,
+        index: IndexType,
+        name_prefix: &str,
+        metadata: &Metadata,
+    ) -> ScalarItem {
+        let column_entry = metadata.column(index);
+        let column = ColumnBindingBuilder::new(
+            format!("{name_prefix}{}", column_entry.name()),
+            index,
+            Box::from(column_entry.data_type()),
+            Visibility::Visible,
+        )
+        .build();
+        ScalarItem {
+            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
+            index,
         }
     }
 }
 
-pub fn clone_and_modify<M>(expr: &SExpr, modifier: &mut M) -> SExpr
-where M: ModifyPlan {
-    let children = expr
-        .children
-        .iter()
-        .map(|child| clone_and_modify(child, modifier).into())
-        .collect();
-
-    SExpr {
-        plan: Arc::new(modifier.modify(&expr.plan)),
-        children,
-        original_group: None,
-        rel_prop: Default::default(),
-        stat_info: Default::default(),
-        applied_rules: Default::default(),
-    }
+fn sortd_iter(columns: &ColumnSet) -> impl Iterator<Item = IndexType> {
+    let mut v = Vec::from_iter(columns.iter().copied());
+    v.sort();
+    v.into_iter()
 }
