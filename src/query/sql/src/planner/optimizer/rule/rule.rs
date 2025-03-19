@@ -58,6 +58,8 @@ pub static DEFAULT_REWRITE_RULES: LazyLock<Vec<RuleID>> = LazyLock::new(|| {
         RuleID::PushDownFilterScan,
         RuleID::PushDownPrewhere, /* PushDownPrwhere should be after all rules except PushDownFilterScan */
         RuleID::PushDownSortScan, // PushDownSortScan should be after PushDownPrewhere
+        // Subquery
+        RuleID::EliminateSubquery,
     ]
 });
 
@@ -106,6 +108,7 @@ pub enum RuleID {
     EliminateEvalScalar,
     EliminateFilter,
     EliminateSort,
+    EliminateSubquery,
     MergeEvalScalar,
     MergeFilter,
     SplitAggregate,
@@ -165,6 +168,7 @@ impl Display for RuleID {
             RuleID::EliminateUnion => write!(f, "EliminateUnion"),
 
             RuleID::MergeFilterIntoMutation => write!(f, "MergeFilterIntoMutation"),
+            RuleID::EliminateSubquery => write!(f, "SubqueryEliminateLeftScan"),
         }
     }
 }

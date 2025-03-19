@@ -132,7 +132,7 @@ impl Binder {
             None
         };
 
-        let table_index = self.metadata.write().add_table(
+        let (table_index, source_table_index) = self.metadata.write().add_table(
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
             table.clone(),
@@ -143,8 +143,14 @@ impl Binder {
             None,
         );
 
-        let (s_expr, mut bind_context) =
-            self.bind_base_table(bind_context, "system", table_index, None, &None)?;
+        let (s_expr, mut bind_context) = self.bind_base_table(
+            bind_context,
+            "system",
+            table_index,
+            source_table_index,
+            None,
+            &None,
+        )?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -353,6 +359,7 @@ impl Binder {
         bind_context: &BindContext,
         database_name: &str,
         table_index: IndexType,
+        source_table_index: Option<IndexType>,
         change_type: Option<ChangeType>,
         sample: &Option<SampleConfig>,
     ) -> Result<(SExpr, BindContext)> {
@@ -388,6 +395,7 @@ impl Binder {
                     .table_name(Some(table_name.to_string()))
                     .database_name(Some(database_name.to_string()))
                     .table_index(Some(*table_index))
+                    .source_table_index(source_table_index)
                     .column_position(*column_position)
                     .virtual_expr(virtual_expr.clone())
                     .build();
