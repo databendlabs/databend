@@ -95,10 +95,17 @@ impl Rule for RuleEliminateSubquery {
         let new_column_bindings = {
             let guard = self.metadata.read();
 
-            let left_columns = guard.columns_by_table_index(left_used_tables[0]);
-            let right_columns = guard.columns_by_table_index(right_used_tables[0]);
             let left_table_index = left_used_tables[0];
+            let right_table_index = right_used_tables[0];
+            let left_columns = guard.columns_by_table_index(left_table_index);
+            let right_columns = guard.columns_by_table_index(right_table_index);
             let left_table = guard.table(left_table_index);
+            // filter table function
+            if left_table.database() == "system"
+                || guard.table(right_table_index).database() == "system"
+            {
+                return Ok(());
+            }
             let left_source_table_index = guard
                 .get_source_table_index(Some(left_table.database()), left_table.table().name());
 
@@ -270,6 +277,19 @@ impl VisitorMut<'_> for ExprAsSourceVisitor {
             self.failed = true;
             return Ok(());
         };
+        if binding.source_table_index.or(binding.table_index).is_none()
+            || binding.column_position.is_none()
+        {
+            self.failed = true;
+            return Ok(());
+        }
+        // filter table function
+        if matches!(
+            binding.database_name.as_ref().map(String::as_ref),
+            Some("system")
+        ) {
+            return Ok(());
+        }
         col.column = binding;
         Ok(())
     }

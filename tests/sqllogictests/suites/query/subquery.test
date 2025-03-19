@@ -947,7 +947,13 @@ statement ok
 create or replace table t1(a int, b int, c varchar(20));
 
 statement ok
+create or replace table t2(a int, b int, c varchar(20));
+
+statement ok
 insert into t1 (a, b, c) values (1, 7, 'D'), (2, 7, 'D'), (3, 7, 'D'), (4, 8, 'D'), (5, 7, 'E'), (6, 8, 'E');
+
+statement ok
+insert into t2 (a, b, c) VALUES (10, 7, 'X'), (11, 7, 'Y'), (12, 8, 'Z'), (13, 9, 'W');
 
 query T
 select t3.* from t1 as t3 where t3.c = 'D' and t3.a in (select t4.a from t1 as t4 where t4.b = 7);
@@ -955,3 +961,13 @@ select t3.* from t1 as t3 where t3.c = 'D' and t3.a in (select t4.a from t1 as t
 1 7 D
 2 7 D
 3 7 D
+
+query T rowsort
+select * from t1 as t3 inner join t2 as t5 on t3.b = t5.b where t3.c = 'D' and t3.a in (select t4.a from t1 as t4 where t4.b = 7);
+----
+1 7 D 10 7 X
+1 7 D 11 7 Y
+2 7 D 10 7 X
+2 7 D 11 7 Y
+3 7 D 10 7 X
+3 7 D 11 7 Y
