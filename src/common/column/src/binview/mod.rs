@@ -152,7 +152,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
 
             let total = buffers
                 .iter()
-                .filter(|v| v.offset > 0)
+                .filter(|v| v.offset() > 0)
                 .map(|v| v.len())
                 .sum::<usize>();
             assert_eq!(total, total_buffer_len);
