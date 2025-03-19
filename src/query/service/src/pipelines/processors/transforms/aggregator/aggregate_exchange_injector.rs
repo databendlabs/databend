@@ -90,16 +90,17 @@ fn scatter_payload(mut payload: Payload, buckets: usize) -> Result<Vec<Payload>>
 
 pub struct FlightExchange<const MULTIWAY_SORT: bool> {
     local_id: String,
-    bucket_lookup: HashMap<String, usize>,
-    rev_bucket_lookup: Vec<String>,
+    node_list: Vec<String>,
+    node_list_lookup: HashMap<String, usize>,
+
     options: IpcWriteOptions,
-    shuffle_scatter: Arc<Box<dyn FlightScatter>>,
     global_max_partition: AtomicUsize,
+    shuffle_scatter: Arc<Box<dyn FlightScatter>>,
 }
 
 impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
     pub fn create(
-        lookup: Vec<String>,
+        node_list: Vec<String>,
         compression: Option<FlightCompression>,
         shuffle_scatter: Arc<Box<dyn FlightScatter>>,
     ) -> Arc<Self> {
@@ -111,7 +112,7 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
             },
         };
 
-        let bucket_lookup = lookup
+        let node_list_lookup = node_list
             .iter()
             .cloned()
             .enumerate()
@@ -120,8 +121,8 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
 
         Arc::new(FlightExchange {
             local_id: GlobalConfig::instance().query.node_id.clone(),
-            bucket_lookup,
-            rev_bucket_lookup: lookup,
+            node_list,
+            node_list_lookup,
             options: IpcWriteOptions::default()
                 .try_with_compression(compression)
                 .unwrap(),
@@ -133,7 +134,7 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
 
 impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
     fn default_partition(&self, data_block: DataBlock) -> Result<Vec<DataBlock>> {
-        if self.rev_bucket_lookup.is_empty() {
+        if self.node_list.is_empty() {
             let data_block = serialize_block(0, 0, data_block, &self.options)?;
             return Ok(vec![data_block]);
         }
@@ -142,7 +143,7 @@ impl<const MULTIWAY_SORT: bool> FlightExchange<MULTIWAY_SORT> {
 
         let mut blocks = Vec::with_capacity(data_blocks.len());
         for (idx, data_block) in data_blocks.into_iter().enumerate() {
-            if self.rev_bucket_lookup[idx] == self.local_id {
+            if self.node_list[idx] == self.local_id {
                 blocks.push(data_block);
                 continue;
             }
@@ -201,7 +202,7 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
         };
 
         assert!(MULTIWAY_SORT);
-        assert_eq!(self.bucket_lookup.len(), n);
+        assert_eq!(self.node_list_lookup.len(), n);
         match AggregateMeta::downcast_from(meta).unwrap() {
             AggregateMeta::Serialized(_) => unreachable!(),
             AggregateMeta::FinalPartition => unreachable!(),
@@ -210,16 +211,16 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
                 let block_num = compute_block_number(-1, v.max_partition)?;
 
                 let mut blocks = Vec::with_capacity(n);
-                for local in &self.rev_bucket_lookup {
-                    blocks.push(match *local == self.local_id {
+                for node_id in &self.node_list {
+                    blocks.push(match *node_id == self.local_id {
                         true => DataBlock::empty_with_meta(
-                            AggregateMeta::create_in_flight_payload(-1, v.max_partition),
+                            AggregateMeta::create_in_flight_payload(v.partition, v.max_partition),
                         ),
                         false => serialize_block(
                             block_num,
                             v.global_max_partition,
                             DataBlock::empty_with_meta(AggregateMeta::create_in_flight_payload(
-                                -1,
+                                v.partition,
                                 v.max_partition,
                             )),
                             &self.options,
@@ -227,7 +228,7 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
                     });
                 }
 
-                let index = *self.bucket_lookup.get(&v.destination_node).unwrap();
+                let index = *self.node_list_lookup.get(&v.destination_node).unwrap();
                 blocks[index] = match v.destination_node == self.local_id {
                     true => DataBlock::empty_with_meta(AggregateMeta::create_spilled_payload(v)),
                     false => serialize_block(
@@ -247,7 +248,7 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
 
                 let mut blocks = Vec::with_capacity(n);
                 for (idx, payload) in scatter_payload(p.payload, n)?.into_iter().enumerate() {
-                    if self.rev_bucket_lookup[idx] == self.local_id {
+                    if self.node_list[idx] == self.local_id {
                         blocks.push(DataBlock::empty_with_meta(
                             AggregateMeta::create_agg_payload(
                                 payload,
@@ -290,9 +291,8 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
 
         let (l_partition, l_max_partition) =
             match ExchangeSerializeMeta::downcast_ref_from(left_meta) {
-                Some(left_meta) => restore_block_number(left_meta.block_number),
+                Some(meta) => restore_block_number(meta.block_number),
                 None => {
-                    // to local
                     let Some(meta) = AggregateMeta::downcast_ref_from(left_meta) else {
                         return Ordering::Equal;
                     };
@@ -309,7 +309,6 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
             match ExchangeSerializeMeta::downcast_ref_from(right_meta) {
                 Some(meta) => restore_block_number(meta.block_number),
                 None => {
-                    // to local
                     let Some(meta) = AggregateMeta::downcast_ref_from(right_meta) else {
                         return Ordering::Equal;
                     };
@@ -355,27 +354,18 @@ impl<const MULTIWAY_SORT: bool> Exchange for FlightExchange<MULTIWAY_SORT> {
             }
 
             if let Some(mut block) = data_blocks[min_pos].take() {
-                let meta = block.get_meta().unwrap();
-                match ExchangeSerializeMeta::downcast_ref_from(meta) {
-                    Some(_) => {
-                        let mut meta =
-                            ExchangeSerializeMeta::downcast_from(block.take_meta().unwrap())
-                                .unwrap();
-                        meta.max_block_number = global_max_partition;
-                        data_blocks[min_pos] = Some(block.add_meta(Some(Box::new(meta))).unwrap());
-                    }
-                    None => match AggregateMeta::downcast_ref_from(meta) {
-                        Some(_) => {
-                            let mut meta =
-                                AggregateMeta::downcast_from(block.take_meta().unwrap()).unwrap();
-                            meta.set_global_max_partition(global_max_partition);
-                            data_blocks[min_pos] =
-                                Some(block.add_meta(Some(Box::new(meta))).unwrap());
-                        }
-                        None => {
-                            // do nothing
-                        }
-                    },
+                let Some(meta) = block.get_meta() else {
+                    return Some(min_pos);
+                };
+
+                if ExchangeSerializeMeta::downcast_ref_from(meta).is_some() {
+                    let mut meta = ExchangeSerializeMeta::downcast_from(block.take_meta()?)?;
+                    meta.max_block_number = global_max_partition;
+                    data_blocks[min_pos] = Some(block.add_meta(Some(Box::new(meta))).unwrap());
+                } else if AggregateMeta::downcast_ref_from(meta).is_some() {
+                    let mut meta = AggregateMeta::downcast_from(block.take_meta()?)?;
+                    meta.set_global_max_partition(global_max_partition);
+                    data_blocks[min_pos] = Some(block.add_meta(Some(Box::new(meta))).unwrap());
                 }
             }
         }
