@@ -87,7 +87,7 @@ impl GlobalPersistentLog {
         self.initialized.store(true, Ordering::SeqCst);
     }
 
-    async fn work(&self) -> Result<()> {
+    pub async fn work(&self) -> Result<()> {
         let mut prepared = false;
         let mut copy_into_count = 0;
         loop {

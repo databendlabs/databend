@@ -4576,7 +4576,7 @@ dependencies = [
  "libc",
  "log",
  "logforth",
- "opendal 0.51.2",
+ "opendal",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
