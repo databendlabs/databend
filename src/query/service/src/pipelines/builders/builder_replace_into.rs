@@ -139,6 +139,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             *block_thresholds,
+            replace.table_meta_timestamps,
         )?;
         if !*need_insert {
             if segment_partition_num == 0 {

@@ -389,7 +389,7 @@ impl ReclusterMutator {
 
         let mut parts = Vec::new();
         let mut checker = SegmentCompactChecker::<CompactSegmentReader>::new(
-            self.block_per_seg as u64,
+            self.block_thresholds.block_per_segment as u64,
             Some(self.cluster_key_id),
         );
 

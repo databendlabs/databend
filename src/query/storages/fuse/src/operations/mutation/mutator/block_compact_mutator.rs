@@ -661,6 +661,7 @@ impl CompactTaskBuilder for RowOrientedCompactTaskBuilder {
             blocks: vec![],
             total_rows: 0,
             total_size: 0,
+            total_compressed: 0,
         }
     }
 }

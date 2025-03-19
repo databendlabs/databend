@@ -780,9 +780,6 @@ impl CompactSegmentTestFixture {
                     stats_acc.add_block(block_meta).unwrap();
                 }
                 let segment_info = stats_acc.build(thresholds, cluster_key_id)?;
-                let path = location_gen.gen_segment_info_location();
-                let summary = stats_acc.summary(thresholds, cluster_key_id);
-                let segment_info = SegmentInfo::new(stats_acc.blocks_metas, summary);
                 let path = location_gen.gen_segment_info_location(Default::default());
                 segment_info.write_meta(&data_accessor, &path).await?;
                 Ok::<_, ErrorCode>(((path, SegmentInfo::VERSION), collected_blocks, segment_info))

@@ -55,8 +55,8 @@ use log::debug;
 use log::info;
 use opendal::Operator;
 
-use super::new_serialize_segment_processor;
 use super::decorate_snapshot;
+use super::new_serialize_segment_processor;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -87,7 +87,13 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            new_serialize_segment_processor(input, output, self, block_thresholds)
+            new_serialize_segment_processor(
+                input,
+                output,
+                self,
+                block_thresholds,
+                table_meta_timestamps,
+            )
         })?;
 
         pipeline.add_async_accumulating_transformer(|| {

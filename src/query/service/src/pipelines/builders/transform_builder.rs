@@ -145,7 +145,13 @@ impl PipelineBuilder {
     ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>> {
         Ok(move |input, output| {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            new_serialize_segment_processor(input, output, fuse_table, block_thresholds)
+            new_serialize_segment_processor(
+                input,
+                output,
+                fuse_table,
+                block_thresholds,
+                table_meta_timestamps,
+            )
         })
     }
 

@@ -86,10 +86,10 @@ async fn generate_column_oriented_segment(
     let operator = Operator::new(opendal::services::Memory::default())
         .unwrap()
         .finish();
-    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
+    let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     for block in data_blocks {
         let col_stats = gen_columns_statistics(&block, None, &table_schema).unwrap();
-        let block_writer = BlockWriter::new(&operator, &loc_generator);
+        let block_writer = BlockWriter::new(&operator, &loc_generator, Default::default(), true);
         let (block_meta, _index_meta) = block_writer
             .write(
                 FuseStorageFormat::Parquet,
@@ -341,8 +341,8 @@ async fn test_segment_cache() -> Result<()> {
     let operator = Operator::new(opendal::services::Memory::default())
         .unwrap()
         .finish();
-    let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
-    let location = loc_generator.gen_segment_info_location();
+    let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
+    let location = loc_generator.gen_segment_info_location(Default::default());
     let (column_oriented_segment, block_metas, table_schema) =
         generate_column_oriented_segment().await?;
     operator

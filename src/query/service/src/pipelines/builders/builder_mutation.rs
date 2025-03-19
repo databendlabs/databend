@@ -66,6 +66,7 @@ impl PipelineBuilder {
             OutputPort::create(),
             table,
             block_thresholds,
+            merge_into.table_meta_timestamps,
         )?;
 
         // For row_id port, create rowid_aggregate_mutator

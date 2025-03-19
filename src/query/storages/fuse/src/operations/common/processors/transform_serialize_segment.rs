@@ -42,8 +42,6 @@ use crate::operations::common::MutationLogs;
 use crate::statistics::RowOrientedSegmentBuilder;
 use crate::FuseSegmentFormat;
 use crate::FuseTable;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 enum State<B: SegmentBuilder> {
     None,
     GenerateSegment,
@@ -92,10 +90,6 @@ impl<B: SegmentBuilder> TransformSerializeSegment<B> {
             meta_locations: table.meta_location_generator().clone(),
             state: State::None,
             segment_builder,
-            block_per_seg: table
-                .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT)
-                as u64,
-            accumulator: Default::default(),
             thresholds,
             default_cluster_key_id,
             table_meta_timestamps,
@@ -119,8 +113,8 @@ pub fn new_serialize_segment_processor(
     output: Arc<OutputPort>,
     table: &FuseTable,
     thresholds: BlockThresholds,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<ProcessorPtr> {
-    let block_per_seg = table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
     match table.segment_format {
         FuseSegmentFormat::Row => {
             let processor = TransformSerializeSegment::new(
@@ -129,6 +123,7 @@ pub fn new_serialize_segment_processor(
                 table,
                 thresholds,
                 RowOrientedSegmentBuilder::default(),
+                table_meta_timestamps,
             );
             Ok(ProcessorPtr::create(Box::new(processor)))
         }
@@ -138,7 +133,8 @@ pub fn new_serialize_segment_processor(
                 output,
                 table,
                 thresholds,
-                ColumnOrientedSegmentBuilder::new(table.schema(), block_per_seg),
+                ColumnOrientedSegmentBuilder::new(table.schema(), thresholds.block_per_segment),
+                table_meta_timestamps,
             );
             Ok(ProcessorPtr::create(Box::new(processor)))
         }
@@ -150,8 +146,8 @@ pub fn new_serialize_segment_pipe_item(
     output: Arc<OutputPort>,
     table: &FuseTable,
     thresholds: BlockThresholds,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<PipeItem> {
-    let block_per_seg = table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
     match table.segment_format {
         FuseSegmentFormat::Row => {
             let processor = TransformSerializeSegment::new(
@@ -160,6 +156,7 @@ pub fn new_serialize_segment_pipe_item(
                 table,
                 thresholds,
                 RowOrientedSegmentBuilder::default(),
+                table_meta_timestamps,
             );
             Ok(processor.into_pipe_item())
         }
@@ -169,7 +166,8 @@ pub fn new_serialize_segment_pipe_item(
                 output,
                 table,
                 thresholds,
-                ColumnOrientedSegmentBuilder::new(table.schema(), block_per_seg),
+                ColumnOrientedSegmentBuilder::new(table.schema(), thresholds.block_per_segment),
+                table_meta_timestamps,
             );
             Ok(processor.into_pipe_item())
         }
@@ -234,7 +232,7 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
                 .clone();
 
             self.segment_builder.add_block(block_meta)?;
-            if self.segment_builder.block_count() >= self.block_per_seg as usize {
+            if self.segment_builder.block_count() >= self.thresholds.block_per_segment {
                 self.state = State::GenerateSegment;
                 return Ok(Event::Sync);
             }
@@ -253,7 +251,9 @@ impl<B: SegmentBuilder> Processor for TransformSerializeSegment<B> {
 
                 self.state = State::SerializedSegment {
                     data: segment_info.serialize()?,
-                    location: self.meta_locations.gen_segment_info_location(),
+                    location: self
+                        .meta_locations
+                        .gen_segment_info_location(self.table_meta_timestamps),
                     segment: segment_info,
                 }
             }
