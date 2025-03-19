@@ -32,6 +32,7 @@ runs:
         pip install pyspark
         python3 tests/sqllogictests/scripts/prepare_iceberg_tpch_data.py
 
+
     - name: Run sqllogic Tests with Standalone lib
       shell: bash
       env:

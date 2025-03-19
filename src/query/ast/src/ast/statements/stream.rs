@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::write_dot_separated_list;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
@@ -63,7 +64,7 @@ impl Display for CreateStreamStmt {
             write!(f, " APPEND_ONLY = false")?;
         }
         if let Some(comment) = &self.comment {
-            write!(f, " COMMENT = '{}'", comment)?;
+            write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }
         Ok(())
     }

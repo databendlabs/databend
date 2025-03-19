@@ -272,10 +272,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                     match len {
                         Some(_) => {
-                            let array_column = ArrayColumn {
-                                values: builder.build(),
-                                offsets: offsets.into(),
-                            };
+                            let array_column = ArrayColumn::new(builder.build(), offsets.into());
                             Value::Column(Column::Array(Box::new(array_column)))
                         }
                         _ => Value::Scalar(Scalar::Array(builder.build())),

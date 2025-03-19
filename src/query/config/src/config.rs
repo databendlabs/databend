@@ -1696,6 +1696,15 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "gpt-3.5-turbo")]
     pub openai_api_completion_model: String,
 
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub enable_udf_python_script: bool,
+
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub enable_udf_js_script: bool,
+
+    #[clap(long, value_name = "VALUE", default_value = "true")]
+    pub enable_udf_wasm_script: bool,
+
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_server: bool,
 
@@ -1808,6 +1817,9 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             openai_api_embedding_model: self.openai_api_embedding_model,
             openai_api_version: self.openai_api_version,
             enable_udf_server: self.enable_udf_server,
+            enable_udf_python_script: self.enable_udf_python_script,
+            enable_udf_js_script: self.enable_udf_js_script,
+            enable_udf_wasm_script: self.enable_udf_wasm_script,
             udf_server_allow_list: self.udf_server_allow_list,
             udf_server_allow_insecure: self.udf_server_allow_insecure,
             cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
@@ -1913,6 +1925,10 @@ impl From<InnerQueryConfig> for QueryConfig {
             openai_api_version: inner.openai_api_version,
             openai_api_completion_model: inner.openai_api_completion_model,
             openai_api_embedding_model: inner.openai_api_embedding_model,
+            enable_udf_python_script: inner.enable_udf_python_script,
+            enable_udf_js_script: inner.enable_udf_js_script,
+            enable_udf_wasm_script: inner.enable_udf_wasm_script,
+
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
             udf_server_allow_insecure: inner.udf_server_allow_insecure,

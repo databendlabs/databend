@@ -26,6 +26,8 @@ use databend_common_functions::is_builtin_function;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 
+use super::plans::UDFLanguage;
+
 #[derive(Default, Visitor)]
 #[visitor(ColumnRef(enter), FunctionCall(enter), Lambda(enter))]
 pub struct UDFValidator {
@@ -90,6 +92,24 @@ impl UDFValidator {
                 format!("Parameters are not used: {:?}", params_not_used)
             },
         )))
+    }
+
+    pub fn is_udf_script_allowed(lang: &UDFLanguage) -> Result<()> {
+        match lang {
+            UDFLanguage::JavaScript if GlobalConfig::instance().query.enable_udf_js_script => {
+                Ok(())
+            }
+            UDFLanguage::Python if GlobalConfig::instance().query.enable_udf_python_script => {
+                Ok(())
+            }
+            UDFLanguage::WebAssembly if GlobalConfig::instance().query.enable_udf_wasm_script => {
+                Ok(())
+            }
+            other => Err(ErrorCode::Unimplemented(format!(
+                "UDF {} script is not enabled in config",
+                other
+            ))),
+        }
     }
 
     pub fn is_udf_server_allowed(address: &str) -> Result<()> {

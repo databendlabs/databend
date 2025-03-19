@@ -46,7 +46,7 @@ use crate::ScalarExpr;
     Debug(bound = false, attrs = "#[recursive::recursive]")
 )]
 pub struct SExpr {
-    pub(crate) plan: Arc<RelOperator>,
+    pub plan: Arc<RelOperator>,
     pub(crate) children: Vec<Arc<SExpr>>,
 
     pub(crate) original_group: Option<IndexType>,

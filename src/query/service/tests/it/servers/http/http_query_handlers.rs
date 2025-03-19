@@ -870,6 +870,13 @@ async fn test_catalog_apis() -> Result<()> {
     assert_eq!(body.fields.len(), 1);
     assert_eq!(body.fields[0].name, "a");
 
+    let response = get_uri(&ep, "/v1/catalog/stats").await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().into_string().await.unwrap();
+    let body: catalog::stats::CatalogStatsResponse = serde_json::from_str(&body).unwrap();
+    assert_eq!(body.tables, 1);
+    assert_eq!(body.databases, 3);
+
     Ok(())
 }
 
@@ -917,8 +924,9 @@ async fn test_role_apis() -> Result<()> {
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.into_body().into_string().await.unwrap();
     let body: ListRolesResponse = serde_json::from_str(&body).unwrap();
-    assert_eq!(body.roles.len(), 1);
+    assert_eq!(body.roles.len(), 2);
     assert_eq!(body.roles[0].name, "account_admin");
+    assert_eq!(body.roles[1].name, "public");
     Ok(())
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,30 +20,30 @@ import "metadata.proto";
 
 // Describes the metadata of a dictionary
 message DictionaryMeta {
- uint64 ver = 100;
- uint64 min_reader_ver = 101;
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
 
- // Dictionary data source, such as MySQL, PostgreSQL, ..
- string source = 1;
+  // Dictionary data source, such as MySQL, PostgreSQL, ..
+  string source = 1;
 
- // Dictionary configuration options
- map<string, string> options = 2;
+  // Dictionary configuration options
+  map<string, string> options = 2;
 
- // The schema of a dictionary
- DataSchema schema = 3;
+  // The schema of a dictionary
+  DataSchema schema = 3;
 
- // Comments of each field
- map<uint32, string> field_comments = 4;
+  // Comments of each field
+  map<uint32, string> field_comments = 4;
 
- // ID of the primary key column
- repeated uint32 primary_column_ids = 5;
+  // ID of the primary key column
+  repeated uint32 primary_column_ids = 5;
 
- // Comment about this dictionary.
- string comment = 6;
+  // Comment about this dictionary.
+  string comment = 6;
 
- // The time dictionary created.
- string created_on = 7;
+  // The time dictionary created.
+  string created_on = 7;
 
- // The time dictionary updated.
- optional string updated_on = 8;
+  // The time dictionary updated.
+  optional string updated_on = 8;
 }

@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_string_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::Expr;
@@ -298,7 +299,7 @@ impl Display for AlterTaskOptions {
                     write!(f, " SUSPEND_TASK_AFTER_NUM_FAILURES = {num}")?;
                 }
                 if let Some(comments) = comments {
-                    write!(f, " COMMENT = '{comments}'")?;
+                    write!(f, " COMMENT = {}", QuotedString(comments, '\''))?;
                 }
                 if let Some(error_integration) = error_integration {
                     write!(f, " ERROR_INTEGRATION = '{error_integration}'")?;

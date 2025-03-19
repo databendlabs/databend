@@ -96,7 +96,7 @@ pub fn deserialize_block(
         if let DataPacket::Dictionary(data) = dict_packet {
             let message =
                 root_as_message(&data.data_header[..]).expect("Error parsing first message");
-            let buffer = Buffer::from_bytes(data.data_body.into());
+            let buffer = Buffer::from(data.data_body);
             arrow_ipc::reader::read_dictionary(
                 &buffer,
                 message
