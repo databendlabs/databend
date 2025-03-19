@@ -105,6 +105,7 @@ members = [
     "src/meta/ee",
     "src/meta/proto-conv",
     "src/meta/protos",
+    "src/meta/semaphore",
     "src/meta/service",
     "tests/sqllogictests",
     "src/tests/sqlsmith",
@@ -149,6 +150,7 @@ databend-common-meta-raft-store = { path = "src/meta/raft-store" }
 databend-common-meta-sled-store = { path = "src/meta/sled-store" }
 databend-common-meta-stoerr = { path = "src/meta/stoerr" }
 databend-common-meta-store = { path = "src/meta/store" }
+databend-common-meta-semaphore = { path = "src/meta/semaphore" }
 databend-common-meta-types = { path = "src/meta/types" }
 databend-common-metrics = { path = "src/common/metrics" }
 databend-common-native = { path = "src/common/native" }
@@ -272,6 +274,7 @@ cbordata = { version = "0.6.0" }
 cfg-if = "1.0.0"
 chrono = { version = "0.4.31", features = ["serde"] }
 chrono-tz = { version = "0.8", features = ["serde"] }
+codeq = { version = "0.5.2" }
 cidr = { version = "0.2.2" }
 clap = { version = "4.4.2", features = ["derive"] }
 comfy-table = "7"
