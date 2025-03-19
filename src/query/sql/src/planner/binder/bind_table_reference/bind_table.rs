@@ -164,7 +164,7 @@ impl Binder {
         {
             let change_type = get_change_type(&table_name_alias);
             if change_type.is_some() {
-                let table_index = self.metadata.write().add_table(
+                let (table_index, source_table_index) = self.metadata.write().add_table(
                     catalog,
                     database.clone(),
                     table_meta,
@@ -178,6 +178,7 @@ impl Binder {
                     bind_context,
                     database.as_str(),
                     table_index,
+                    source_table_index,
                     change_type,
                     sample,
                 )?;
@@ -281,7 +282,7 @@ impl Binder {
                 }
             }
             _ => {
-                let table_index = self.metadata.write().add_table(
+                let (table_index, source_table_index) = self.metadata.write().add_table(
                     catalog.clone(),
                     database.clone(),
                     table_meta.clone(),
@@ -296,6 +297,7 @@ impl Binder {
                     bind_context,
                     database.as_str(),
                     table_index,
+                    source_table_index,
                     None,
                     sample,
                 )?;
