@@ -76,7 +76,6 @@ impl IcebergInspectTable {
             },
             ..Default::default()
         };
-
         Ok(Arc::new(IcebergInspectTable {
             table_info,
             args_parsed,
