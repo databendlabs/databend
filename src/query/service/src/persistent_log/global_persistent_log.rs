@@ -115,7 +115,7 @@ impl GlobalPersistentLog {
                         error!("Persistent log copy into failed: {:?}", e);
                     }
                     copy_into_count += 1;
-                    if copy_into_count > 50 {
+                    if copy_into_count > 20 {
                         if let Err(e) = self.clean().await {
                             error!("Persistent log delete failed: {:?}", e);
                         }
@@ -197,10 +197,11 @@ impl GlobalPersistentLog {
 
         let session = create_session(&self.tenant_id, &self.cluster_id).await?;
         let context = session.create_query_context().await?;
-        if let Ok(_) = LicenseManagerSwitch::instance()
+        if LicenseManagerSwitch::instance()
             .check_enterprise_enabled(context.get_license_key(), Feature::Vacuum)
+            .is_ok()
         {
-            let vacuum = "VACUUM persistent_system.text_log";
+            let vacuum = "VACUUM TABLE persistent_system.text_log";
             self.execute_sql(vacuum).await?
         }
         Ok(())
