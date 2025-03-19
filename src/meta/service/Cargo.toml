@@ -60,6 +60,7 @@ tonic-reflection = { workspace = true }
 watcher = { workspace = true }
 
 [dev-dependencies]
+databend-common-meta-semaphore = { workspace = true }
 env_logger = { workspace = true }
 maplit = { workspace = true }
 pretty_assertions = { workspace = true }
