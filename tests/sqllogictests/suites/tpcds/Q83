@@ -1,0 +1,99 @@
+# Q83
+query I
+WITH sr_items AS
+  (SELECT i_item_id item_id,
+          sum(sr_return_quantity) sr_item_qty
+   FROM store_returns,
+        item,
+        date_dim
+   WHERE sr_item_sk = i_item_sk
+     AND d_date IN
+       (SELECT d_date
+        FROM date_dim
+        WHERE d_week_seq IN
+            (SELECT d_week_seq
+             FROM date_dim
+             WHERE d_date IN ('2000-06-30',
+                              '2000-09-27',
+                              '2000-11-17')))
+     AND sr_returned_date_sk = d_date_sk
+   GROUP BY i_item_id),
+     cr_items AS
+  (SELECT i_item_id item_id,
+          sum(cr_return_quantity) cr_item_qty
+   FROM catalog_returns,
+        item,
+        date_dim
+   WHERE cr_item_sk = i_item_sk
+     AND d_date IN
+       (SELECT d_date
+        FROM date_dim
+        WHERE d_week_seq IN
+            (SELECT d_week_seq
+             FROM date_dim
+             WHERE d_date IN ('2000-06-30',
+                              '2000-09-27',
+                              '2000-11-17')))
+     AND cr_returned_date_sk = d_date_sk
+   GROUP BY i_item_id),
+     wr_items AS
+  (SELECT i_item_id item_id,
+          sum(wr_return_quantity) wr_item_qty
+   FROM web_returns,
+        item,
+        date_dim
+   WHERE wr_item_sk = i_item_sk
+     AND d_date IN
+       (SELECT d_date
+        FROM date_dim
+        WHERE d_week_seq IN
+            (SELECT d_week_seq
+             FROM date_dim
+             WHERE d_date IN ('2000-06-30',
+                              '2000-09-27',
+                              '2000-11-17')))
+     AND wr_returned_date_sk = d_date_sk
+   GROUP BY i_item_id)
+SELECT sr_items.item_id ,
+       sr_item_qty ,
+       (sr_item_qty*1.0000)/(sr_item_qty+cr_item_qty+wr_item_qty)/3.0000 * 100 sr_dev ,
+       cr_item_qty ,
+       (cr_item_qty*1.0000)/(sr_item_qty+cr_item_qty+wr_item_qty)/3.0000 * 100 cr_dev ,
+       wr_item_qty ,
+       (wr_item_qty*1.0000)/(sr_item_qty+cr_item_qty+wr_item_qty)/3.0000 * 100 wr_dev ,
+       (sr_item_qty+cr_item_qty+wr_item_qty)/3.0 average
+FROM sr_items ,
+     cr_items ,
+     wr_items
+WHERE sr_items.item_id=cr_items.item_id
+  AND sr_items.item_id=wr_items.item_id
+ORDER BY sr_items.item_id NULLS FIRST,
+         sr_item_qty NULLS FIRST
+LIMIT 100;
+----
+AAAAAAAAAHFBAAAA 75 17.241379310000 69 15.862068966700 1 0.229885056700 48.333333
+AAAAAAAACLJBAAAA 51 25.000000000000 14 6.862745096700 3 1.470588236700 22.666667
+AAAAAAAACOPBAAAA 11 5.913978493300 25 13.440860216700 26 13.978494623300 20.666667
+AAAAAAAADJABAAAA 71 27.843137253300 5 1.960784313300 9 3.529411763300 28.333333
+AAAAAAAADLOAAAAA 94 30.420711973300 2 0.647249190000 7 2.265372166700 34.333333
+AAAAAAAAEFKAAAAA 82 18.468468470000 23 5.180180180000 43 9.684684683300 49.333333
+AAAAAAAAEINBAAAA 32 23.188405796700 7 5.072463766700 7 5.072463766700 15.333333
+AAAAAAAAFDPCAAAA 32 10.355987056700 50 16.181229773300 21 6.796116503300 34.333333
+AAAAAAAAGJMBAAAA 73 NULL NULL NULL 10 NULL NULL
+AAAAAAAAGLBBAAAA 43 9.129511676700 61 12.951167726700 53 11.252653926700 52.333333
+AAAAAAAAGLJDAAAA 14 21.212121213300 4 6.060606060000 4 6.060606060000 7.333333
+AAAAAAAAGMFAAAAA 21 11.111111110000 12 6.349206350000 30 15.873015873300 21.000000
+AAAAAAAAGNHDAAAA 36 14.814814813300 31 12.757201646700 14 5.761316873300 27.000000
+AAAAAAAAIPHCAAAA 73 22.955974843300 21 6.603773583300 12 3.773584906700 35.333333
+AAAAAAAAJECEAAAA 70 19.943019943300 37 10.541310540000 10 2.849002850000 39.000000
+AAAAAAAAJGPBAAAA 7 4.666666666700 16 10.666666666700 27 18.000000000000 16.666667
+AAAAAAAAJPHDAAAA 11 5.392156863300 39 19.117647060000 18 8.823529413300 22.666667
+AAAAAAAAKEPCAAAA 69 12.921348313300 83 15.543071160000 26 4.868913856700 59.333333
+AAAAAAAAKIMCAAAA 35 11.006289306700 57 17.924528303300 14 4.402515723300 35.333333
+AAAAAAAAKPOCAAAA 56 16.231884056700 40 11.594202900000 19 5.507246376700 38.333333
+AAAAAAAAMLFEAAAA 62 19.682539683300 23 7.301587300000 20 6.349206350000 35.000000
+AAAAAAAAOMPAAAAA 15 8.771929823300 7 4.093567250000 35 20.467836256700 19.000000
+AAAAAAAAPDEAAAAA 1 2.222222223300 12 26.666666666700 2 4.444444443300 5.000000
+AAAAAAAAPELBAAAA 28 16.969696970000 1 0.606060606700 26 15.757575756700 18.333333
+
+

@@ -76,7 +76,7 @@ impl FuseTable {
                 &self.schema_with_stream(),
                 plan.push_downs.as_ref(),
             ),
-            plan.query_internal_columns,
+            plan.internal_columns.is_some(),
             plan.update_stream_columns,
             put_cache,
         )

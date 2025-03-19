@@ -1,0 +1,151 @@
+statement ok
+CREATE DATABASE IF NOT EXISTS test_17581
+
+statement ok
+USE test_17581
+
+statement ok
+SET force_window_data_spill = 1;
+
+statement ok
+set window_partition_spilling_to_disk_bytes_limit = 1024 * 1024 * 1024;
+
+statement ok
+SET force_sort_data_spill = 1;
+
+statement ok
+set force_join_data_spill = 1;
+
+statement ok
+set spilling_file_format = 'arrow';
+
+statement ok
+DROP TABLE IF EXISTS t_17581;
+
+statement ok
+CREATE TABLE t_17581 (
+    a INT UNSIGNED NOT NULL,
+    b VARCHAR NOT NULL,
+    c INT NULL
+) row_per_block=100;
+
+query I
+INSERT INTO t_17581 (a, b, c)
+SELECT
+    number,
+    CONCAT('Customer ', (number % 20)::String),
+    IF(number % 2 = 0, 0, NULL)
+FROM numbers(10000);
+----
+10000
+
+query III
+SELECT
+    t.a,
+    t.c,
+    RANK() OVER (PARTITION BY t.b ORDER BY t.a DESC) AS rank_in_b
+FROM
+    t_17581 t
+ORDER BY
+    t.b,
+    rank_in_b,
+    t.a
+LIMIT 10;
+----
+9980 0 1
+9960 0 2
+9940 0 3
+9920 0 4
+9900 0 5
+9880 0 6
+9860 0 7
+9840 0 8
+9820 0 9
+9800 0 10
+
+query IT
+SELECT t.a, t.c FROM t_17581 t where a % 2 = 1 ORDER BY t.a offset 4996;
+----
+9993 NULL
+9995 NULL
+9997 NULL
+9999 NULL
+
+statement ok
+set join_spilling_buffer_threshold_per_proc_mb = 0;
+
+query IT
+SELECT t.a, t.c FROM t_17581 t join t_17581 tt on t.a = tt.a where t.a > 9990 order by a;
+----
+9991 NULL
+9992 0
+9993 NULL
+9994 0
+9995 NULL
+9996 0
+9997 NULL
+9998 0
+9999 NULL
+
+statement ok
+unset spilling_file_format;
+
+query III
+SELECT
+    t.a,
+    t.c,
+    RANK() OVER (PARTITION BY t.b ORDER BY t.a DESC) AS rank_in_b
+FROM
+    t_17581 t
+ORDER BY
+    t.b,
+    rank_in_b,
+    t.a
+LIMIT 10;
+----
+9980 0 1
+9960 0 2
+9940 0 3
+9920 0 4
+9900 0 5
+9880 0 6
+9860 0 7
+9840 0 8
+9820 0 9
+9800 0 10
+
+query IT
+SELECT t.a, t.c FROM t_17581 t where a % 2 = 1 ORDER BY t.a offset 4996;
+----
+9993 NULL
+9995 NULL
+9997 NULL
+9999 NULL
+
+query IT
+SELECT t.a, t.c FROM t_17581 t join t_17581 tt on t.a = tt.a where t.a > 9990 order by a;
+----
+9991 NULL
+9992 0
+9993 NULL
+9994 0
+9995 NULL
+9996 0
+9997 NULL
+9998 0
+9999 NULL
+
+statement ok
+DROP DATABASE test_17581;
+
+statement ok
+unset force_window_data_spill;
+
+statement ok
+unset join_spilling_buffer_threshold_per_proc_mb;
+
+statement ok
+unset force_sort_data_spill;
+
+statement ok
+unset force_join_data_spill;

@@ -378,10 +378,10 @@ evaluation (internal):
 ast            : CAST(-30610224000000001 AS TIMESTAMP)
 raw expr       : CAST(minus(30610224000000001) AS Timestamp)
 checked expr   : to_timestamp<Int64>(minus<UInt64>(30610224000000001_u64))
-optimized expr : -30610224000000000
+optimized expr : -30610224000000001
 output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+output domain  : {-30610224000000001..=-30610224000000001}
+output         : '0999-12-31 23:59:59.999999'
 
 
 ast            : CAST(-315360000000000 AS TIMESTAMP)
@@ -459,10 +459,10 @@ output         : '1979-12-30 00:00:00.000000'
 ast            : CAST(253402300800000000 AS TIMESTAMP)
 raw expr       : CAST(253402300800000000 AS Timestamp)
 checked expr   : to_timestamp<Int64>(to_int64<UInt64>(253402300800000000_u64))
-optimized expr : -30610224000000000
+optimized expr : -62135596800000000
 output type    : Timestamp
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+output domain  : {-62135596800000000..=-62135596800000000}
+output         : '0001-01-01 00:00:00.000000'
 
 
 ast            : CAST(a AS TIMESTAMP)
@@ -592,10 +592,10 @@ evaluation (internal):
 ast            : CAST(-354286 AS DATE)
 raw expr       : CAST(minus(354286) AS Date)
 checked expr   : to_date<Int64>(minus<UInt32>(354286_u32))
-optimized expr : -354285
+optimized expr : -354286
 output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+output domain  : {-354286..=-354286}
+output         : '0999-12-31'
 
 
 ast            : CAST(-354285 AS DATE)
@@ -655,10 +655,10 @@ output         : '9999-12-31'
 ast            : CAST(2932897 AS DATE)
 raw expr       : CAST(2932897 AS Date)
 checked expr   : to_date<Int64>(to_int64<UInt32>(2932897_u32))
-optimized expr : -354285
+optimized expr : -719162
 output type    : Date
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+output domain  : {-719162..=-719162}
+output         : '0001-01-01'
 
 
 ast            : CAST(a AS DATE)
@@ -1349,42 +1349,42 @@ evaluation (internal):
 ast            : CAST(a AS TIMESTAMP)
 raw expr       : CAST(a::Int64 AS Timestamp)
 checked expr   : to_timestamp<Int64>(a)
-optimized expr : -30610224000000000
+optimized expr : -62135596800000000
 evaluation:
 +--------+---------------------------------------------+-------------------------------------------+
 |        | a                                           | Output                                    |
 +--------+---------------------------------------------+-------------------------------------------+
 | Type   | Int64                                       | Timestamp                                 |
-| Domain | {9223372036854775807..=9223372036854775807} | {-30610224000000000..=-30610224000000000} |
-| Row 0  | 9223372036854775807                         | '1000-01-01 00:00:00.000000'              |
+| Domain | {9223372036854775807..=9223372036854775807} | {-62135596800000000..=-62135596800000000} |
+| Row 0  | 9223372036854775807                         | '0001-01-01 00:00:00.000000'              |
 +--------+---------------------------------------------+-------------------------------------------+
 evaluation (internal):
 +--------+------------------------------+
 | Column | Data                         |
 +--------+------------------------------+
 | a      | Int64([9223372036854775807]) |
-| Output | [-30610224000000000]         |
+| Output | [-62135596800000000]         |
 +--------+------------------------------+
 
 
 ast            : CAST(a AS DATE)
 raw expr       : CAST(a::Int64 AS Date)
 checked expr   : to_date<Int64>(a)
-optimized expr : -354285
+optimized expr : -719162
 evaluation:
 +--------+---------------------------------------------+---------------------+
 |        | a                                           | Output              |
 +--------+---------------------------------------------+---------------------+
 | Type   | Int64                                       | Date                |
-| Domain | {9223372036854775807..=9223372036854775807} | {-354285..=-354285} |
-| Row 0  | 9223372036854775807                         | '1000-01-01'        |
+| Domain | {9223372036854775807..=9223372036854775807} | {-719162..=-719162} |
+| Row 0  | 9223372036854775807                         | '0001-01-01'        |
 +--------+---------------------------------------------+---------------------+
 evaluation (internal):
 +--------+------------------------------+
 | Column | Data                         |
 +--------+------------------------------+
 | a      | Int64([9223372036854775807]) |
-| Output | [-354285]                    |
+| Output | [-719162]                    |
 +--------+------------------------------+
 
 
@@ -1939,15 +1939,15 @@ ast            : CAST(a AS BINARY NULL)
 raw expr       : CAST(a::String NULL AS Binary NULL)
 checked expr   : CAST(a AS Binary NULL)
 evaluation:
-+--------+----------------------------+----------------------+
-|        | a                          | Output               |
-+--------+----------------------------+----------------------+
-| Type   | String NULL                | Binary NULL          |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}   |
-| Row 0  | 'Abc'                      | 416263               |
-| Row 1  | 'Dobrý den'                | 446F6272C3BD2064656E |
-| Row 2  | NULL                       | NULL                 |
-+--------+----------------------------+----------------------+
++--------+--------------------------------+----------------------+
+|        | a                              | Output               |
++--------+--------------------------------+----------------------+
+| Type   | String NULL                    | Binary NULL          |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | Undefined ∪ {NULL}   |
+| Row 0  | 'Abc'                          | 416263               |
+| Row 1  | 'Dobrý den'                    | 446F6272C3BD2064656E |
+| Row 2  | NULL                           | NULL                 |
++--------+--------------------------------+----------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |
@@ -2035,15 +2035,15 @@ ast            : CAST(CAST(a AS BINARY NULL) AS STRING NULL)
 raw expr       : CAST(CAST(a::String NULL AS Binary NULL) AS String NULL)
 checked expr   : CAST(CAST(a AS Binary NULL) AS String NULL)
 evaluation:
-+--------+----------------------------+-------------+
-|        | a                          | Output      |
-+--------+----------------------------+-------------+
-| Type   | String NULL                | String NULL |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Unknown     |
-| Row 0  | 'Abc'                      | 'Abc'       |
-| Row 1  | 'Dobrý den'                | 'Dobrý den' |
-| Row 2  | NULL                       | NULL        |
-+--------+----------------------------+-------------+
++--------+--------------------------------+-------------+
+|        | a                              | Output      |
++--------+--------------------------------+-------------+
+| Type   | String NULL                    | String NULL |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | Unknown     |
+| Row 0  | 'Abc'                          | 'Abc'       |
+| Row 1  | 'Dobrý den'                    | 'Dobrý den' |
+| Row 2  | NULL                           | NULL        |
++--------+--------------------------------+-------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------+
 | Column | Data                                                                                   |
@@ -2527,15 +2527,15 @@ ast            : TRY_CAST(a AS VARIANT)
 raw expr       : TRY_CAST(a::String NULL AS Variant)
 checked expr   : try_parse_json<String NULL>(a)
 evaluation:
-+--------+----------------------------------------+--------------------+
-|        | a                                      | Output             |
-+--------+----------------------------------------+--------------------+
-| Type   | String NULL                            | Variant NULL       |
-| Domain | {"[1,2,3]"..="{\"k\":\"v\"}"} ∪ {NULL} | Undefined ∪ {NULL} |
-| Row 0  | 'true'                                 | 'true'             |
-| Row 1  | NULL                                   | NULL               |
-| Row 2  | '[1,2,3]'                              | '[1,2,3]'          |
-+--------+----------------------------------------+--------------------+
++--------+-------------------------------+--------------------+
+|        | a                             | Output             |
++--------+-------------------------------+--------------------+
+| Type   | String NULL                   | Variant NULL       |
+| Domain | {"[1,2,3]"..="true"} ∪ {NULL} | Undefined ∪ {NULL} |
+| Row 0  | 'true'                        | 'true'             |
+| Row 1  | NULL                          | NULL               |
+| Row 2  | '[1,2,3]'                     | '[1,2,3]'          |
++--------+-------------------------------+--------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                             |
@@ -2571,10 +2571,10 @@ evaluation (internal):
 ast            : TRY_CAST(-30610224000000001 AS TIMESTAMP)
 raw expr       : TRY_CAST(minus(30610224000000001) AS Timestamp)
 checked expr   : try_to_timestamp<Int64>(minus<UInt64>(30610224000000001_u64))
-optimized expr : -30610224000000000
+optimized expr : -30610224000000001
 output type    : Timestamp NULL
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+output domain  : {-30610224000000001..=-30610224000000001}
+output         : '0999-12-31 23:59:59.999999'
 
 
 ast            : TRY_CAST(-315360000000000 AS TIMESTAMP)
@@ -2652,10 +2652,10 @@ output         : '1979-12-30 00:00:00.000000'
 ast            : TRY_CAST(253402300800000000 AS TIMESTAMP)
 raw expr       : TRY_CAST(253402300800000000 AS Timestamp)
 checked expr   : try_to_timestamp<Int64>(to_int64<UInt64>(253402300800000000_u64))
-optimized expr : -30610224000000000
+optimized expr : -62135596800000000
 output type    : Timestamp NULL
-output domain  : {-30610224000000000..=-30610224000000000}
-output         : '1000-01-01 00:00:00.000000'
+output domain  : {-62135596800000000..=-62135596800000000}
+output         : '0001-01-01 00:00:00.000000'
 
 
 ast            : TRY_CAST(a AS TIMESTAMP)
@@ -2785,10 +2785,10 @@ evaluation (internal):
 ast            : TRY_CAST(-354286 AS DATE)
 raw expr       : TRY_CAST(minus(354286) AS Date)
 checked expr   : try_to_date<Int64>(minus<UInt32>(354286_u32))
-optimized expr : -354285
+optimized expr : -354286
 output type    : Date NULL
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+output domain  : {-354286..=-354286}
+output         : '0999-12-31'
 
 
 ast            : TRY_CAST(-354285 AS DATE)
@@ -2848,10 +2848,10 @@ output         : '9999-12-31'
 ast            : TRY_CAST(2932897 AS DATE)
 raw expr       : TRY_CAST(2932897 AS Date)
 checked expr   : try_to_date<Int64>(to_int64<UInt32>(2932897_u32))
-optimized expr : -354285
+optimized expr : -719162
 output type    : Date NULL
-output domain  : {-354285..=-354285}
-output         : '1000-01-01'
+output domain  : {-719162..=-719162}
+output         : '0001-01-01'
 
 
 ast            : TRY_CAST(a AS DATE)
@@ -3567,42 +3567,42 @@ evaluation (internal):
 ast            : TRY_CAST(a AS TIMESTAMP)
 raw expr       : TRY_CAST(a::Int64 AS Timestamp)
 checked expr   : try_to_timestamp<Int64>(a)
-optimized expr : -30610224000000000
+optimized expr : -62135596800000000
 evaluation:
 +--------+---------------------------------------------+-------------------------------------------+
 |        | a                                           | Output                                    |
 +--------+---------------------------------------------+-------------------------------------------+
 | Type   | Int64                                       | Timestamp NULL                            |
-| Domain | {9223372036854775807..=9223372036854775807} | {-30610224000000000..=-30610224000000000} |
-| Row 0  | 9223372036854775807                         | '1000-01-01 00:00:00.000000'              |
+| Domain | {9223372036854775807..=9223372036854775807} | {-62135596800000000..=-62135596800000000} |
+| Row 0  | 9223372036854775807                         | '0001-01-01 00:00:00.000000'              |
 +--------+---------------------------------------------+-------------------------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------+
 | Column | Data                                                                    |
 +--------+-------------------------------------------------------------------------+
 | a      | Int64([9223372036854775807])                                            |
-| Output | NullableColumn { column: [-30610224000000000], validity: [0b_______1] } |
+| Output | NullableColumn { column: [-62135596800000000], validity: [0b_______1] } |
 +--------+-------------------------------------------------------------------------+
 
 
 ast            : TRY_CAST(a AS DATE)
 raw expr       : TRY_CAST(a::Int64 AS Date)
 checked expr   : try_to_date<Int64>(a)
-optimized expr : -354285
+optimized expr : -719162
 evaluation:
 +--------+---------------------------------------------+---------------------+
 |        | a                                           | Output              |
 +--------+---------------------------------------------+---------------------+
 | Type   | Int64                                       | Date NULL           |
-| Domain | {9223372036854775807..=9223372036854775807} | {-354285..=-354285} |
-| Row 0  | 9223372036854775807                         | '1000-01-01'        |
+| Domain | {9223372036854775807..=9223372036854775807} | {-719162..=-719162} |
+| Row 0  | 9223372036854775807                         | '0001-01-01'        |
 +--------+---------------------------------------------+---------------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------+
 | Column | Data                                                         |
 +--------+--------------------------------------------------------------+
 | a      | Int64([9223372036854775807])                                 |
-| Output | NullableColumn { column: [-354285], validity: [0b_______1] } |
+| Output | NullableColumn { column: [-719162], validity: [0b_______1] } |
 +--------+--------------------------------------------------------------+
 
 
@@ -3695,7 +3695,7 @@ evaluation:
 |        | a                                                   | Output                                             |
 +--------+-----------------------------------------------------+----------------------------------------------------+
 | Type   | String                                              | Timestamp NULL                                     |
-| Domain | {"2022-01-02"..="2022-01-02T03:25:02.868894-07:00"} | {-30610224000000000..=253402300799999999} ∪ {NULL} |
+| Domain | {"2022-01-02"..="2022-01-02T03:25:02.868894-07:00"} | {-62135596800000000..=253402300799999999} ∪ {NULL} |
 | Row 0  | '2022-01-02'                                        | '2022-01-02 00:00:00.000000'                       |
 | Row 1  | '2022-01-02T03:25:02.868894-07:00'                  | '2022-01-02 10:25:02.868894'                       |
 | Row 2  | '2022-01-02 02:00:11'                               | '2022-01-02 02:00:11.000000'                       |
@@ -3898,7 +3898,7 @@ evaluation:
 |        | a                                                   | Output                       |
 +--------+-----------------------------------------------------+------------------------------+
 | Type   | String                                              | Date NULL                    |
-| Domain | {"2022-01-02"..="2022-01-02T03:25:02.868894-07:00"} | {-354285..=2932896} ∪ {NULL} |
+| Domain | {"2022-01-02"..="2022-01-02T03:25:02.868894-07:00"} | {-719162..=2932896} ∪ {NULL} |
 | Row 0  | '2022-01-02'                                        | '2022-01-02'                 |
 | Row 1  | '2022-01-02T03:25:02.868894-07:00'                  | '2022-01-02'                 |
 | Row 2  | '2022-01-02 02:00:11'                               | '2022-01-02'                 |
@@ -4059,7 +4059,7 @@ raw expr       : TRY_CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int
 checked expr   : TRY_CAST(array<T0=Tuple(UInt8, String)><T0, T0>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a")) AS Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL)
 optimized expr : [(1, NULL), (2, NULL)]
 output type    : Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL
-output domain  : [({1..=2}, {0..=0} ∪ {NULL})]
+output domain  : [({1..=2}, {-2147483648..=2147483647} ∪ {NULL})]
 output         : [(1, NULL), (2, NULL)]
 
 
@@ -4068,7 +4068,7 @@ raw expr       : TRY_CAST(array(tuple(1, 'a'), tuple(2, 'a')) AS Array(Tuple(Int
 checked expr   : TRY_CAST(array<T0=Tuple(UInt8, String)><T0, T0>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a")) AS Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL)
 optimized expr : [(1, NULL), (2, NULL)]
 output type    : Array(Tuple(Int32 NULL, Int32 NULL) NULL) NULL
-output domain  : [({1..=2}, {0..=0} ∪ {NULL})]
+output domain  : [({1..=2}, {-2147483648..=2147483647} ∪ {NULL})]
 output         : [(1, NULL), (2, NULL)]
 
 
@@ -4086,7 +4086,7 @@ raw expr       : TRY_CAST(array(array('a'), array('b', 'c')) AS Array(Array(Int3
 checked expr   : TRY_CAST(array<T0=Array(String)><T0, T0>(array<T0=String><T0>("a"), array<T0=String><T0, T0>("b", "c")) AS Array(Array(Int32 NULL) NULL) NULL)
 optimized expr : [[NULL], [NULL, NULL]]
 output type    : Array(Array(Int32 NULL) NULL) NULL
-output domain  : [[{0..=0} ∪ {NULL}]]
+output domain  : [[{-2147483648..=2147483647} ∪ {NULL}]]
 output         : [[NULL], [NULL, NULL]]
 
 
@@ -4161,15 +4161,15 @@ ast            : TRY_CAST(a AS BINARY)
 raw expr       : TRY_CAST(a::String NULL AS Binary)
 checked expr   : try_to_binary<String NULL>(a)
 evaluation:
-+--------+----------------------------+----------------------+
-|        | a                          | Output               |
-+--------+----------------------------+----------------------+
-| Type   | String NULL                | Binary NULL          |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}   |
-| Row 0  | 'Abc'                      | 416263               |
-| Row 1  | 'Dobrý den'                | 446F6272C3BD2064656E |
-| Row 2  | NULL                       | NULL                 |
-+--------+----------------------------+----------------------+
++--------+--------------------------------+----------------------+
+|        | a                              | Output               |
++--------+--------------------------------+----------------------+
+| Type   | String NULL                    | Binary NULL          |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | Undefined ∪ {NULL}   |
+| Row 0  | 'Abc'                          | 416263               |
+| Row 1  | 'Dobrý den'                    | 446F6272C3BD2064656E |
+| Row 2  | NULL                           | NULL                 |
++--------+--------------------------------+----------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |
@@ -4183,15 +4183,15 @@ ast            : TRY_CAST(a AS BINARY NULL)
 raw expr       : TRY_CAST(a::String NULL AS Binary NULL)
 checked expr   : TRY_CAST(a AS Binary NULL)
 evaluation:
-+--------+----------------------------+----------------------+
-|        | a                          | Output               |
-+--------+----------------------------+----------------------+
-| Type   | String NULL                | Binary NULL          |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | Undefined ∪ {NULL}   |
-| Row 0  | 'Abc'                      | 416263               |
-| Row 1  | 'Dobrý den'                | 446F6272C3BD2064656E |
-| Row 2  | NULL                       | NULL                 |
-+--------+----------------------------+----------------------+
++--------+--------------------------------+----------------------+
+|        | a                              | Output               |
++--------+--------------------------------+----------------------+
+| Type   | String NULL                    | Binary NULL          |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | Undefined ∪ {NULL}   |
+| Row 0  | 'Abc'                          | 416263               |
+| Row 1  | 'Dobrý den'                    | 446F6272C3BD2064656E |
+| Row 2  | NULL                           | NULL                 |
++--------+--------------------------------+----------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                              |
@@ -4272,15 +4272,15 @@ ast            : TRY_CAST(TRY_CAST(a AS BINARY) AS STRING)
 raw expr       : TRY_CAST(TRY_CAST(a::String NULL AS Binary) AS String)
 checked expr   : try_to_string<Binary NULL>(try_to_binary<String NULL>(a))
 evaluation:
-+--------+----------------------------+-----------------+
-|        | a                          | Output          |
-+--------+----------------------------+-----------------+
-| Type   | String NULL                | String NULL     |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | 'Abc'                      | 'Abc'           |
-| Row 1  | 'Dobrý den'                | 'Dobrý den'     |
-| Row 2  | NULL                       | NULL            |
-+--------+----------------------------+-----------------+
++--------+--------------------------------+-----------------+
+|        | a                              | Output          |
++--------+--------------------------------+-----------------+
+| Type   | String NULL                    | String NULL     |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | {""..} ∪ {NULL} |
+| Row 0  | 'Abc'                          | 'Abc'           |
+| Row 1  | 'Dobrý den'                    | 'Dobrý den'     |
+| Row 2  | NULL                           | NULL            |
++--------+--------------------------------+-----------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------+
 | Column | Data                                                                                   |
@@ -4294,15 +4294,15 @@ ast            : TRY_CAST(TRY_CAST(a AS BINARY NULL) AS STRING NULL)
 raw expr       : TRY_CAST(TRY_CAST(a::String NULL AS Binary NULL) AS String NULL)
 checked expr   : TRY_CAST(TRY_CAST(a AS Binary NULL) AS String NULL)
 evaluation:
-+--------+----------------------------+-----------------+
-|        | a                          | Output          |
-+--------+----------------------------+-----------------+
-| Type   | String NULL                | String NULL     |
-| Domain | {"Abc"..="ß😀山"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | 'Abc'                      | 'Abc'           |
-| Row 1  | 'Dobrý den'                | 'Dobrý den'     |
-| Row 2  | NULL                       | NULL            |
-+--------+----------------------------+-----------------+
++--------+--------------------------------+-----------------+
+|        | a                              | Output          |
++--------+--------------------------------+-----------------+
+| Type   | String NULL                    | String NULL     |
+| Domain | {"Abc"..="Dobrý den"} ∪ {NULL} | {""..} ∪ {NULL} |
+| Row 0  | 'Abc'                          | 'Abc'           |
+| Row 1  | 'Dobrý den'                    | 'Dobrý den'     |
+| Row 2  | NULL                           | NULL            |
++--------+--------------------------------+-----------------+
 evaluation (internal):
 +--------+----------------------------------------------------------------------------------------+
 | Column | Data                                                                                   |

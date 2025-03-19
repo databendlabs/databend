@@ -329,6 +329,16 @@ impl Value<AnyType> {
         }
     }
 
+    pub fn into_full_column(self, ty: &DataType, num_rows: usize) -> Column {
+        match self {
+            Value::Scalar(s) => {
+                let builder = ColumnBuilder::repeat(&s.as_ref(), num_rows, ty);
+                builder.build()
+            }
+            Value::Column(c) => c,
+        }
+    }
+
     pub fn try_downcast<T: ValueType>(&self) -> Option<Value<T>> {
         Some(match self {
             Value::Scalar(scalar) => Value::Scalar(T::to_owned_scalar(T::try_downcast_scalar(
@@ -1093,9 +1103,16 @@ impl Column {
     }
 
     pub fn domain(&self) -> Domain {
-        if !matches!(self, Column::Array(_) | Column::Map(_)) {
-            assert!(self.len() > 0);
+        if self.len() == 0 {
+            if matches!(self, Column::Array(_)) {
+                return Domain::Array(None);
+            }
+            if matches!(self, Column::Map(_)) {
+                return Domain::Map(None);
+            }
+            return Domain::full(&self.data_type());
         }
+
         match self {
             Column::Null { .. } => Domain::Nullable(NullableDomain {
                 has_null: true,
@@ -1103,6 +1120,7 @@ impl Column {
             }),
             Column::EmptyArray { .. } => Domain::Array(None),
             Column::EmptyMap { .. } => Domain::Map(None),
+
             Column::Number(col) => Domain::Number(col.domain()),
             Column::Decimal(col) => Domain::Decimal(col.domain()),
             Column::Boolean(col) => Domain::Boolean(BooleanDomain {
@@ -1138,23 +1156,29 @@ impl Column {
                 })
             }
             Column::Array(col) => {
-                if col.len() == 0 || col.values.len() == 0 {
+                if col.len() == 0 {
                     Domain::Array(None)
                 } else {
-                    let inner_domain = col.values.domain();
+                    let inner_domain = col.underlying_column().domain();
                     Domain::Array(Some(Box::new(inner_domain)))
                 }
             }
             Column::Map(col) => {
-                if col.len() == 0 || col.values.len() == 0 {
+                if col.len() == 0 {
                     Domain::Map(None)
                 } else {
-                    let inner_domain = col.values.domain();
+                    let inner_domain = col.underlying_column().domain();
                     Domain::Map(Some(Box::new(inner_domain)))
                 }
             }
             Column::Nullable(col) => {
-                let inner_domain = col.column.domain();
+                let inner_domain = if col.validity.null_count() > 0 {
+                    // goes into the slower path, we will create a new column without nulls
+                    let inner = col.column.clone().filter(&col.validity);
+                    inner.domain()
+                } else {
+                    col.column.domain()
+                };
                 Domain::Nullable(NullableDomain {
                     has_null: col.validity.null_count() > 0,
                     value: Some(Box::new(inner_domain)),
@@ -1191,11 +1215,11 @@ impl Column {
             Column::Date(_) => DataType::Date,
             Column::Interval(_) => DataType::Interval,
             Column::Array(array) => {
-                let inner = array.values.data_type();
+                let inner = array.values().data_type();
                 DataType::Array(Box::new(inner))
             }
             Column::Map(col) => {
-                let inner = col.values.data_type();
+                let inner = col.values().data_type();
                 DataType::Map(Box::new(inner))
             }
             Column::Bitmap(_) => DataType::Bitmap,
@@ -1363,10 +1387,8 @@ impl Column {
                     inner_len += rng.gen_range(0..=max_arr_len) as u64;
                     offsets.push(inner_len);
                 }
-                Column::Array(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize, options),
-                    offsets: offsets.into(),
-                }))
+                let inner_column = Column::random(inner_ty, inner_len as usize, options);
+                Column::Array(Box::new(ArrayColumn::new(inner_column, offsets.into())))
             }
             DataType::Map(inner_ty) => {
                 let mut inner_len = 0;
@@ -1376,10 +1398,8 @@ impl Column {
                     inner_len += rng.gen_range(0..=max_arr_len) as u64;
                     offsets.push(inner_len);
                 }
-                Column::Map(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize, options),
-                    offsets: offsets.into(),
-                }))
+                let inner_column = Column::random(inner_ty, inner_len as usize, options);
+                Column::Map(Box::new(ArrayColumn::new(inner_column, offsets.into())))
             }
             DataType::Bitmap => BitmapType::from_data(
                 (0..len)
@@ -1485,8 +1505,8 @@ impl Column {
             Column::Timestamp(col) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
             Column::Interval(col) => col.len() * 16,
-            Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
-            Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
+            Column::Array(col) => col.memory_size(),
+            Column::Map(col) => col.memory_size(),
             Column::Bitmap(col) => col.memory_size(),
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
@@ -1520,7 +1540,9 @@ impl Column {
             | Column::Variant(col)
             | Column::Geometry(col) => col.memory_size(),
             Column::String(col) => col.len() * 8 + col.total_bytes_len(),
-            Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
+            Column::Array(col) | Column::Map(col) => {
+                col.underlying_column().serialize_size() + col.len() * 8
+            }
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
         }

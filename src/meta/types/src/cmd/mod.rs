@@ -17,8 +17,8 @@ use std::fmt;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::node::Node;
 use crate::raft_types::NodeId;
-use crate::Node;
 use crate::TxnRequest;
 
 mod cmd_context;

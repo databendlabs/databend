@@ -78,16 +78,18 @@ pub struct Mutation {
     // we don't support complex expressions.
     pub can_try_update_column_only: bool,
     pub lock_guard: Option<Arc<LockGuard>>,
+    // When the filter is always false, do nothing.
+    pub no_effect: bool,
 
     // MutationStrategy::Direct related variables.
     pub predicate_column_index: Option<usize>,
+    pub direct_filter: Vec<ScalarExpr>,
     pub truncate_table: bool,
-    pub direct_filter: Option<ScalarExpr>,
 }
 
 impl std::fmt::Debug for Mutation {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("Merge Into")
+        f.debug_struct("Mutation")
             .field("catalog", &self.catalog_name)
             .field("database", &self.database_name)
             .field("table", &self.table_name)

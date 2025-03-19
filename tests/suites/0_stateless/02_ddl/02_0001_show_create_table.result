@@ -1,0 +1,107 @@
+>>>> 
+CREATE TABLE test.a (    a bigint not null, b int not null default 3, c varchar(255) not null default 'x', d smallint null, e Date not null) Engine = Null
+
+>>>> SHOW CREATE TABLE test.a
+a	CREATE TABLE a (
+  a BIGINT NOT NULL,
+  b INT NOT NULL DEFAULT 3,
+  c VARCHAR NOT NULL DEFAULT 'x',
+  d SMALLINT NULL,
+  e DATE NOT NULL
+) ENGINE=NULL
+<<<<
+>>>> SHOW CREATE TABLE test.a WITH QUOTED_IDENTIFIERS
+a	CREATE TABLE "a" (
+  "a" BIGINT NOT NULL,
+  "b" INT NOT NULL DEFAULT 3,
+  "c" VARCHAR NOT NULL DEFAULT 'x',
+  "d" SMALLINT NULL,
+  "e" DATE NOT NULL
+) ENGINE=NULL
+<<<<
+>>>> 
+CREATE TABLE test.b ( a bigint not null comment 'abc '' vs \' cde', b int null default null, c varchar(255) not null, d smallint unsigned null) Engine = Null COMMENT = 'abc '' vs \' cde'
+
+>>>> 
+select
+t.comment as table_comment,
+c.comment as column_comment
+from
+system.tables t
+join system.columns c on t.database = c.database
+and t.name = c.table and c.name = 'a'
+where
+t.database = 'test'
+and t.name = 'b'
+
+abc ' vs ' cde	abc ' vs ' cde
+<<<<
+b	CREATE TABLE b (
+  a BIGINT NOT NULL COMMENT 'abc \' vs \' cde',
+  b INT NULL DEFAULT NULL,
+  c VARCHAR NOT NULL,
+  d SMALLINT UNSIGNED NULL
+) ENGINE=NULL COMMENT = 'abc \' vs \' cde'
+>>>> create or replace view test.v_b as select * from test.b
+>>>> show create table test.v_b
+v_b	CREATE VIEW `test`.`v_b` AS SELECT * FROM test.b
+<<<<
+>>>> CREATE TABLE test.c (a int not null) CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+>>>> SHOW CREATE TABLE test.c
+c	CREATE TABLE c (
+  a INT NOT NULL
+) ENGINE=FUSE CLUSTER BY linear(a, a % 3)
+<<<<
+>>>> 
+CREATE OR REPLACE TABLE test.d (a int not null) ENGINE=FUSE 'fs:///tmp/load/files/' CONNECTION=(access_key_id='1a2b3c' aws_secret_key='4x5y6z') CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+
+>>>> SHOW CREATE TABLE test.d
+d	CREATE TABLE d (
+  a INT NOT NULL
+) ENGINE=FUSE CLUSTER BY linear(a, a % 3) 'fs | root=/tmp/load/files/' 
+<<<<
+>>>> SHOW CREATE TABLE test.c
+c	CREATE TABLE c (
+  a INT NOT NULL
+) ENGINE=FUSE CLUSTER BY linear(a, a % 3)
+<<<<
+>>>> create or replace view test.v_union as select c1 from test.t union all select c1 from test.t1;
+>>>> create or replace view test.v_subquery as select * from (select c1 from test.t union all select c1 from test.t1) as res;
+>>>> create or replace view test.v_join as select * from (select c1 from test.t union all select c1 from test.t1) as res join t1 on t1.c1=res.c1;
+>>>> show create table test.v_t
+Error: APIError: QueryFailed: [1025]Unknown table 'v_t'
+<<<<
+>>>> show create table test.v_union
+v_union	CREATE VIEW `test`.`v_union` AS SELECT c1 FROM test.t UNION ALL SELECT c1 FROM test.t1
+<<<<
+>>>> show create table test.v_subquery;
+v_subquery	CREATE VIEW `test`.`v_subquery` AS SELECT * FROM (SELECT c1 FROM test.t UNION ALL SELECT c1 FROM test.t1) AS res
+<<<<
+>>>> show create table test.v_join;
+v_join	CREATE VIEW `test`.`v_join` AS SELECT * FROM (SELECT c1 FROM test.t UNION ALL SELECT c1 FROM test.t1) AS res INNER JOIN test.t1 ON t1.c1 = res.c1
+<<<<
+>>>> 
+create or replace table test.tc(id int, Id1_ int, "id2\)" int, ID4 int, ID5 int);
+
+tc	CREATE TABLE tc (
+  id INT NULL,
+  id1_ INT NULL,
+  "id2\)" INT NULL,
+  id4 INT NULL,
+  id5 INT NULL
+) ENGINE=FUSE
+tc	CREATE TABLE tc (
+  id INT NULL,
+  id1_ INT NULL,
+  "id2\)" INT NULL,
+  id4 INT NULL,
+  id5 INT NULL
+) ENGINE=FUSE
+tc	CREATE TABLE tc (
+  id INT NULL,
+  id1_ INT NULL,
+  `id2\)` INT NULL,
+  id4 INT NULL,
+  id5 INT NULL
+) ENGINE=FUSE
+>>>> drop database test

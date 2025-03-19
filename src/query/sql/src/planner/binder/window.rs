@@ -20,6 +20,7 @@ use databend_common_ast::ast::WindowSpec;
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use itertools::Itertools;
 
 use super::select::SelectList;
 use crate::binder::ColumnBinding;
@@ -27,6 +28,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::walk_expr_mut;
 use crate::plans::AggregateFunction;
+use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::LagLeadFunction;
@@ -338,6 +340,30 @@ impl<'a> WindowRewriter<'a> {
                     });
                     replaced_args.push(replaced_arg.into());
                 }
+                // resolve aggregate function sort describe in window function.
+                let mut replaced_sort_descs: Vec<AggregateFunctionScalarSortDesc> =
+                    Vec::with_capacity(agg.sort_descs.len());
+                for (i, desc) in agg.sort_descs.iter().enumerate() {
+                    let mut expr = desc.expr.clone();
+                    let mut aggregate_rewriter = self.as_window_aggregate_rewriter();
+                    aggregate_rewriter.visit(&mut expr)?;
+
+                    let name = format!("{window_func_name}_sort_desc_{i}");
+                    let replaced_expr = self.replace_expr(&name, &expr)?;
+
+                    let index = replaced_expr.column.index;
+                    let is_reuse_index = window_args.iter().map(|item| item.index).contains(&index);
+                    window_args.push(ScalarItem {
+                        index,
+                        scalar: expr,
+                    });
+                    replaced_sort_descs.push(AggregateFunctionScalarSortDesc {
+                        expr: replaced_expr.into(),
+                        is_reuse_index,
+                        nulls_first: desc.nulls_first,
+                        asc: desc.asc,
+                    });
+                }
                 WindowFuncType::Aggregate(AggregateFunction {
                     span: agg.span,
                     display_name: agg.display_name.clone(),
@@ -346,6 +372,7 @@ impl<'a> WindowRewriter<'a> {
                     params: agg.params.clone(),
                     args: replaced_args,
                     return_type: agg.return_type.clone(),
+                    sort_descs: replaced_sort_descs,
                 })
             }
             WindowFuncType::LagLead(ll) => {

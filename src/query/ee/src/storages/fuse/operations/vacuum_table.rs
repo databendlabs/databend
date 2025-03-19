@@ -177,7 +177,7 @@ pub async fn do_gc_orphan_files(
     let location_gen = fuse_table.meta_location_generator();
     let segment_locations_to_be_purged = get_orphan_files_to_be_purged(
         fuse_table,
-        location_gen.segment_info_prefix(),
+        location_gen.segment_location_prefix(),
         referenced_files.segments,
         retention_time,
     )
@@ -298,7 +298,7 @@ pub async fn do_dry_run_orphan_files(
     // 2. Get purge orphan segment files.
     let segment_locations_to_be_purged = get_orphan_files_to_be_purged(
         fuse_table,
-        location_gen.segment_info_prefix(),
+        location_gen.segment_location_prefix(),
         referenced_files.segments,
         retention_time,
     )
@@ -356,11 +356,12 @@ pub async fn do_dry_run_orphan_files(
 
 #[async_backtrace::framed]
 pub async fn do_vacuum(
-    fuse_table: &FuseTable,
+    table: &dyn Table,
     ctx: Arc<dyn TableContext>,
     retention_time: DateTime<Utc>,
     dry_run: bool,
 ) -> Result<Option<Vec<String>>> {
+    let fuse_table = FuseTable::try_from_table(table)?;
     let start = Instant::now();
     // First, do purge
     let instant = Some(NavigationPoint::TimePoint(retention_time));

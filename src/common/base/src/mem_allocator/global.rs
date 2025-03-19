@@ -19,14 +19,26 @@ use std::alloc::Layout;
 use std::ptr::null_mut;
 use std::ptr::NonNull;
 
+use crate::mem_allocator::tracker::MetaTrackerAllocator;
 use crate::mem_allocator::DefaultAllocator;
+
+pub type DefaultGlobalAllocator = GlobalAllocator<DefaultAllocator>;
+pub type TrackingGlobalAllocator = GlobalAllocator<MetaTrackerAllocator<DefaultAllocator>>;
 
 /// Global allocator, default is JeAllocator.
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct GlobalAllocator;
+pub struct GlobalAllocator<T> {
+    inner: T,
+}
 
-impl GlobalAllocator {
+impl GlobalAllocator<MetaTrackerAllocator<DefaultAllocator>> {
+    pub const fn create() -> GlobalAllocator<MetaTrackerAllocator<DefaultAllocator>> {
+        GlobalAllocator {
+            inner: MetaTrackerAllocator::create(DefaultAllocator::create()),
+        }
+    }
+
     pub fn name() -> String {
         DefaultAllocator::name()
     }
@@ -36,20 +48,36 @@ impl GlobalAllocator {
     }
 }
 
-unsafe impl Allocator for GlobalAllocator {
+impl GlobalAllocator<DefaultAllocator> {
+    pub const fn create() -> GlobalAllocator<DefaultAllocator> {
+        GlobalAllocator {
+            inner: DefaultAllocator::create(),
+        }
+    }
+
+    pub fn name() -> String {
+        DefaultAllocator::name()
+    }
+
+    pub fn conf() -> String {
+        DefaultAllocator::conf()
+    }
+}
+
+unsafe impl<T: Allocator> Allocator for GlobalAllocator<T> {
     #[inline(always)]
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        DefaultAllocator::default().allocate(layout)
+        self.inner.allocate(layout)
     }
 
     #[inline(always)]
     fn allocate_zeroed(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
-        DefaultAllocator::default().allocate_zeroed(layout)
+        self.inner.allocate_zeroed(layout)
     }
 
     #[inline(always)]
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        DefaultAllocator::default().deallocate(ptr, layout)
+        self.inner.deallocate(ptr, layout)
     }
 
     #[inline(always)]
@@ -59,7 +87,7 @@ unsafe impl Allocator for GlobalAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        DefaultAllocator::default().grow(ptr, old_layout, new_layout)
+        self.inner.grow(ptr, old_layout, new_layout)
     }
 
     #[inline(always)]
@@ -69,7 +97,7 @@ unsafe impl Allocator for GlobalAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        DefaultAllocator::default().grow_zeroed(ptr, old_layout, new_layout)
+        self.inner.grow_zeroed(ptr, old_layout, new_layout)
     }
 
     #[inline(always)]
@@ -79,32 +107,30 @@ unsafe impl Allocator for GlobalAllocator {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<[u8]>, AllocError> {
-        DefaultAllocator::default().shrink(ptr, old_layout, new_layout)
+        self.inner.shrink(ptr, old_layout, new_layout)
     }
 }
 
-unsafe impl GlobalAlloc for GlobalAllocator {
+unsafe impl<T: Allocator> GlobalAlloc for GlobalAllocator<T> {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if let Ok(ptr) = GlobalAllocator.allocate(layout) {
-            ptr.as_ptr() as *mut u8
-        } else {
-            null_mut()
+        match self.allocate(layout) {
+            Ok(ptr) => ptr.as_ptr() as *mut u8,
+            Err(_) => null_mut(),
         }
     }
 
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         let ptr = NonNull::new(ptr).unwrap_unchecked();
-        GlobalAllocator.deallocate(ptr, layout);
+        self.deallocate(ptr, layout);
     }
 
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        if let Ok(ptr) = GlobalAllocator.allocate_zeroed(layout) {
-            ptr.as_ptr() as *mut u8
-        } else {
-            null_mut()
+        match self.allocate_zeroed(layout) {
+            Ok(ptr) => ptr.as_ptr() as *mut u8,
+            Err(_) => null_mut(),
         }
     }
 
@@ -115,21 +141,15 @@ unsafe impl GlobalAlloc for GlobalAllocator {
         let ptr = NonNull::new(ptr).unwrap_unchecked();
         let new_layout = Layout::from_size_align(new_size, layout.align()).unwrap();
         match layout.size().cmp(&new_size) {
-            Less => {
-                if let Ok(ptr) = GlobalAllocator.grow(ptr, layout, new_layout) {
-                    ptr.as_ptr() as *mut u8
-                } else {
-                    null_mut()
-                }
-            }
-            Greater => {
-                if let Ok(ptr) = GlobalAllocator.shrink(ptr, layout, new_layout) {
-                    ptr.as_ptr() as *mut u8
-                } else {
-                    null_mut()
-                }
-            }
             Equal => ptr.as_ptr(),
+            Less => match self.grow(ptr, layout, new_layout) {
+                Ok(ptr) => ptr.as_ptr() as *mut u8,
+                Err(_) => null_mut(),
+            },
+            Greater => match self.shrink(ptr, layout, new_layout) {
+                Ok(ptr) => ptr.as_ptr() as *mut u8,
+                Err(_) => null_mut(),
+            },
         }
     }
 }

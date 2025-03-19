@@ -121,7 +121,7 @@ impl<'a> HilbertClusteringInfoImpl<'a> {
 
     #[async_backtrace::framed]
     async fn get_clustering_info(&self) -> Result<DataBlock> {
-        let Some(cluster_key_str) = self.table.cluster_key_str() else {
+        let Some((cluster_key_id, cluster_key_str)) = self.table.cluster_key_meta() else {
             return Err(ErrorCode::UnclusteredTable(format!(
                 "Unclustered table {}",
                 self.table.table_info.desc
@@ -165,11 +165,16 @@ impl<'a> HilbertClusteringInfoImpl<'a> {
                     .await?;
                 for segment in segments {
                     let segment = segment?;
-                    let Some(level) = segment.summary.cluster_stats.as_ref().map(|v| v.level)
-                    else {
+                    if segment
+                        .summary
+                        .cluster_stats
+                        .as_ref()
+                        .is_none_or(|v| v.cluster_key_id != cluster_key_id)
+                    {
                         unclustered_segment_count += 1;
                         continue;
-                    };
+                    }
+                    let level = segment.summary.cluster_stats.as_ref().unwrap().level;
                     if level == -1 {
                         stable_segment_count += 1;
                     } else {

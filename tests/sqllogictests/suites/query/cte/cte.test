@@ -575,3 +575,48 @@ with t(tt) as (select number as tt from numbers(10)),  t2(tt) AS MATERIALIZED (S
 7
 8
 9
+
+# https://github.com/databendlabs/databend/issues/17295
+statement ok
+create or replace table t1(a int);
+
+statement ok
+create or replace table t2(a int);
+
+query I
+WITH RECURSIVE
+closure(x) AS (VALUES(1)
+UNION all SELECT a from t1, closure where t1.a = closure.x
+UNION all SELECT a from t2, closure where t2.a = closure.x
+) SELECT x FROM closure;
+----
+1
+
+# https://github.com/databendlabs/databend/issues/17432
+statement ok
+CREATE OR REPLACE TABLE some_table (
+	id INTEGER NOT NULL,
+	"data" VARCHAR(50),
+	parent_id INTEGER
+);
+
+statement ok
+INSERT INTO some_table (id, "data", parent_id) VALUES  (1, 'd1', NULL),(2, 'd2', 1),(3, 'd3', 1),(4, 'd4', 3),(5, 'd5', 3);
+
+query T
+WITH RECURSIVE some_cte(id, "data", parent_id) AS
+(SELECT some_table.id AS id, some_table."data" AS "data", some_table.parent_id AS parent_id
+FROM some_table
+WHERE some_table."data" IN ('d2', 'd3', 'd4') UNION ALL SELECT some_table_1.id AS id, some_table_1."data" AS "data", some_table_1.parent_id AS parent_id
+FROM some_table AS some_table_1, some_cte AS c1
+WHERE some_table_1.id = c1.parent_id)
+ SELECT some_cte."data"
+FROM some_cte
+WHERE some_cte."data" != 'd2';
+----
+d1
+d1
+d1
+d3
+d3
+d4

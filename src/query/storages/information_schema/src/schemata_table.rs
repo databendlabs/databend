@@ -35,12 +35,12 @@ impl SchemataTable {
             NULL AS default_character_set_name,
             NULL AS default_collation_name,
             NULL AS sql_path
-        FROM system.databases;";
+        FROM default.system.databases;";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'schemata'".to_string(),
+            desc: "'default'.'information_schema'.'schemata'".to_string(),
             name: "schemata".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

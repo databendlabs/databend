@@ -15,9 +15,9 @@
 use std::fmt;
 use std::fmt::Formatter;
 
+use crate::node::Node;
 use crate::protobuf::RaftReply;
 use crate::Change;
-use crate::Node;
 use crate::TxnReply;
 
 /// The state of an applied raft log.

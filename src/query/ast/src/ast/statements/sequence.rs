@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 
@@ -40,7 +41,7 @@ impl Display for CreateSequenceStmt {
         }
         write!(f, " {}", self.sequence)?;
         if let Some(comment) = &self.comment {
-            write!(f, " COMMENT = '{}'", comment)?;
+            write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }
         Ok(())
     }

@@ -31,6 +31,7 @@ CommitSink
             ├── join type: LEFT SEMI
             ├── build keys: [subquery_2 (#2)]
             ├── probe keys: [t1.a (#0)]
+            ├── keys is null equal: [false]
             ├── filters: []
             ├── estimated rows: 2.00
             ├── TableScan(Build)
@@ -59,7 +60,30 @@ query T
 explain update t1 set a = a + 1 where a > 2;
 ----
 CommitSink
-└── Mutation Source
+└── MutationSource(Update)
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1), _predicate (#2)]
+    ├── filters: [is_true(t1.a (#0) > 2)]
+    ├── read rows: 4
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    └── partitions scanned: 1
+
+query T
+explain analyze partial update t1 set a = a + 1 where a > 2;
+----
+MutationSource
+├── table: default.default.t1
+├── filters: [is_true(t1.a (#0) > 2)]
+└── output rows: 4
+
+query II
+select * from t1 order by a;
+----
+1 2
+2 3
+3 4
+8 9
 
 query T
 explain update t1 set a = a + 1 where a in (select a from t2) and b > 2;
@@ -73,6 +97,7 @@ CommitSink
         ├── join type: LEFT SEMI
         ├── build keys: [subquery_2 (#2)]
         ├── probe keys: [t1.a (#0)]
+        ├── keys is null equal: [false]
         ├── filters: []
         ├── estimated rows: 2.00
         ├── TableScan(Build)
@@ -99,6 +124,35 @@ CommitSink
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1>]
                 ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
                 └── estimated rows: 4.00
+
+query T
+explain analyze partial update t1 set a = a + 1 where a in (select a from t2) and b > 2;
+----
+HashJoin: LEFT SEMI
+├── estimated rows: 2.00
+├── output rows: 2
+├── TableScan
+│   ├── table: default.default.t2
+│   ├── estimated rows: 2.00
+│   └── output rows: 2
+└── Filter
+    ├── filters: [is_true(t1.b (#1) > 2)]
+    ├── estimated rows: 3.00
+    ├── output rows: 3
+    └── TableScan
+        ├── table: default.default.t1
+        ├── estimated rows: 4.00
+        └── output rows: 4
+
+query II
+select * from t1 order by a;
+----
+1 2
+2 3
+3 4
+8 9
+
+
 
 statement ok
 CREATE OR REPLACE TABLE t1 (
@@ -145,6 +199,7 @@ CommitSink
             ├── join type: INNER
             ├── build keys: [p.c_code (#9), p.id (#8), p.me_id (#10)]
             ├── probe keys: [c.c_code (#1), c.id (#0), c.me_id (#2)]
+            ├── keys is null equal: [false, false, false]
             ├── filters: []
             ├── estimated rows: 3.20
             ├── TableScan(Build)

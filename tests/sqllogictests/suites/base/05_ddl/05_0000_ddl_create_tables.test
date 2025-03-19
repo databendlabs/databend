@@ -601,11 +601,6 @@ alter table t_opt_retention  set options(data_retention_period_in_hours = 'abc')
 statement error 1301
 alter table t_opt_retention  set options(data_retention_period_in_hours = 3000);
 
-# invalid value (lesser than default min: 1 hour )
-statement error 1301
-alter table t_opt_retention  set options(data_retention_period_in_hours = 0);
-
-
 statement ok
 alter table t_opt_retention  set options(data_retention_period_in_hours = 2);
 

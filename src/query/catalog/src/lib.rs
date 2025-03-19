@@ -31,3 +31,6 @@ pub mod table_args;
 pub mod table_context;
 pub mod table_function;
 pub mod table_with_options;
+
+pub use statistics::BasicColumnStatistics;
+pub use table::TableStatistics;

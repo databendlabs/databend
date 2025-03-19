@@ -119,7 +119,8 @@ impl Binder {
         all: &bool,
         cte_name: Option<String>,
     ) -> Result<(SExpr, BindContext)> {
-        let (left_expr, left_bind_context) = self.bind_set_expr(bind_context, left, &[], None)?;
+        let (left_expr, left_bind_context) =
+            self.bind_set_expr(bind_context, left, &[], None, cte_name.clone())?;
         if let Some(cte_name) = cte_name.as_ref() {
             if !all {
                 return Err(ErrorCode::Internal(
@@ -147,7 +148,7 @@ impl Binder {
             .cte_context
             .merge(left_bind_context.cte_context.clone());
         let (right_expr, right_bind_context) =
-            self.bind_set_expr(bind_context, right, &[], None)?;
+            self.bind_set_expr(bind_context, right, &[], None, None)?;
 
         if left_bind_context.columns.len() != right_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(
@@ -510,6 +511,7 @@ impl Binder {
             || stmt.qualify.is_some()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || !bind_context.srf_info.srfs.is_empty()
         {
             return Ok(());
         }

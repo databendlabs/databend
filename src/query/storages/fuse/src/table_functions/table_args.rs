@@ -28,8 +28,19 @@ pub fn string_value(value: &Scalar) -> Result<String> {
     }
 }
 
+pub fn bool_value(value: &Scalar) -> Result<bool> {
+    match value {
+        Scalar::Boolean(val) => Ok(*val),
+        _ => Err(ErrorCode::BadArguments("invalid boolean.")),
+    }
+}
+
 pub fn string_literal(val: &str) -> Scalar {
     Scalar::String(val.to_string())
+}
+
+pub fn bool_literal(val: bool) -> Scalar {
+    Scalar::Boolean(val)
 }
 
 pub fn u64_literal(val: u64) -> Scalar {

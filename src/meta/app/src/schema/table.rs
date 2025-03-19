@@ -31,6 +31,7 @@ use databend_common_exception::Result;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::VirtualDataSchema;
 use databend_common_meta_types::MatchSeq;
 use databend_common_meta_types::MetaId;
 use maplit::hashmap;
@@ -271,6 +272,7 @@ pub struct TableMeta {
     pub updated_on: DateTime<Utc>,
     pub comment: String,
     pub field_comments: Vec<String>,
+    pub virtual_schema: Option<VirtualDataSchema>,
 
     // if used in CreateTableReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
@@ -432,6 +434,7 @@ impl Default for TableMeta {
             updated_on: Utc::now(),
             comment: "".to_string(),
             field_comments: vec![],
+            virtual_schema: Default::default(),
             drop_on: None,
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
@@ -601,6 +604,8 @@ pub struct DropTableByIdReq {
     pub table_name: String,
 
     pub db_id: MetaId,
+
+    pub db_name: String,
 
     pub engine: String,
 

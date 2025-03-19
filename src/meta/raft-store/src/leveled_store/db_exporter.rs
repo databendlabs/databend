@@ -23,11 +23,12 @@ use databend_common_meta_types::SeqNum;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::info;
+use map_api::map_api_ro::MapApiRO;
+use map_api::IOResultStream;
 
 use crate::key_spaces::SMEntry;
+use crate::leveled_store::db_map_api_ro_impl::MapView;
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::IOResultStream;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::state_machine::ExpireValue;
 use crate::state_machine::StateMachineMetaKey;
 use crate::state_machine::StateMachineMetaValue;
@@ -83,7 +84,7 @@ impl<'a> DBExporter<'a> {
     /// First several lines are system data,
     /// including `seq`, `last_applied_log_id`, `last_applied_membership`, and `nodes`.
     ///
-    /// The second parts are all of the key values, in alphabetical order,
+    /// The second parts are all the key values, in alphabetical order,
     /// ExpireKeys(`exp-/`) then Generic KV(`kv--/`);
     pub async fn export(&self) -> Result<IOResultStream<SMEntry>, io::Error> {
         let sys_entries = self.sys_data_sm_entries()?;
@@ -91,17 +92,17 @@ impl<'a> DBExporter<'a> {
 
         // expire index
 
-        let strm = self.db.expire_map().range(..).await?;
+        let strm = MapView(self.db).expire_map().range(..).await?;
         let expire_strm = strm.try_filter_map(|(exp_k, marked)| {
             // Tombstone will be converted to None and be ignored.
-            let exp_val: Option<ExpireValue> = marked.into();
+            let exp_val = ExpireValue::from_marked(marked);
             let ent = exp_val.map(|value| SMEntry::Expire { key: exp_k, value });
             future::ready(Ok(ent))
         });
 
         // kv
 
-        let strm = self.db.str_map().range(..).await?;
+        let strm = MapView(self.db).str_map().range(..).await?;
         let kv_strm = strm.try_filter_map(|(str_k, marked)| {
             // Tombstone will be converted to None and be ignored.
             let seqv: Option<SeqV<_>> = marked.into();

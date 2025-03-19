@@ -74,19 +74,19 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
 
     // This method is not used
     #[fastrace::trace]
-    async fn begin_receiving_snapshot(&mut self) -> Result<Box<DB>, StorageError> {
+    async fn begin_receiving_snapshot(&mut self) -> Result<DB, StorageError> {
         let ss_store = SnapshotStoreV004::new(self.inner.config.clone());
         let db = ss_store
             .new_temp()
             .map_err(|e| StorageError::write_snapshot(None, &e))?;
-        Ok(Box::new(db))
+        Ok(db)
     }
 
     #[fastrace::trace]
     async fn install_snapshot(
         &mut self,
         meta: &SnapshotMeta,
-        snapshot: Box<DB>,
+        snapshot: DB,
     ) -> Result<(), StorageError> {
         let data_size = snapshot.file_size();
 
@@ -131,7 +131,7 @@ impl RaftStateMachine<TypeConfig> for RaftStore {
 
         let snapshot = db.map(|x| Snapshot {
             meta: x.snapshot_meta().clone(),
-            snapshot: Box::new(x),
+            snapshot: x,
         });
 
         info!(

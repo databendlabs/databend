@@ -40,6 +40,7 @@ pub struct HashJoinSpiller {
     partition_buffer: PartitionBuffer,
     partition_threshold: usize,
     join_type: JoinType,
+    join_state: Arc<HashJoinState>,
     is_build_side: bool,
     func_ctx: FunctionContext,
     /// Used for partition.
@@ -95,6 +96,7 @@ impl HashJoinSpiller {
             hash_keys,
             hash_method,
             join_type,
+            join_state,
             func_ctx: ctx.get_function_context()?,
             is_build_side,
             next_restore_file: 0,
@@ -235,6 +237,7 @@ impl HashJoinSpiller {
             &self.hash_method,
             join_type,
             self.is_build_side,
+            &self.join_state.hash_join_desc.is_null_equal,
             &mut hashes,
         )?;
         Ok(hashes)

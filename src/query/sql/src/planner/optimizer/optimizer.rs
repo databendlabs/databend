@@ -47,6 +47,7 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::planner::query_executor::QueryExecutor;
+use crate::plans::ConstantTableScan;
 use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Join;
 use crate::plans::JoinType;
@@ -212,8 +213,8 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
             ExplainKind::Ast(_) | ExplainKind::Syntax(_) => {
                 Ok(Plan::Explain { config, kind, plan })
             }
-            ExplainKind::Decorrelated => {
-                if let Plan::Query {
+            ExplainKind::Plan if config.decorrelated => {
+                let Plan::Query {
                     s_expr,
                     metadata,
                     bind_context,
@@ -221,32 +222,32 @@ pub async fn optimize(mut opt_ctx: OptimizerContext, plan: Plan) -> Result<Plan>
                     formatted_ast,
                     ignore_result,
                 } = *plan
-                {
-                    let mut s_expr = s_expr;
-                    if s_expr.contain_subquery() {
-                        s_expr = Box::new(decorrelate_subquery(
-                            opt_ctx.table_ctx.clone(),
-                            opt_ctx.metadata.clone(),
-                            *s_expr.clone(),
-                        )?);
-                    }
-                    Ok(Plan::Explain {
-                        kind,
-                        config,
-                        plan: Box::new(Plan::Query {
-                            s_expr,
-                            bind_context,
-                            metadata,
-                            rewrite_kind,
-                            formatted_ast,
-                            ignore_result,
-                        }),
-                    })
-                } else {
-                    Err(ErrorCode::BadArguments(
+                else {
+                    return Err(ErrorCode::BadArguments(
                         "Cannot use EXPLAIN DECORRELATED with a non-query statement",
-                    ))
+                    ));
+                };
+
+                let mut s_expr = s_expr;
+                if s_expr.contain_subquery() {
+                    s_expr = Box::new(decorrelate_subquery(
+                        opt_ctx.table_ctx.clone(),
+                        opt_ctx.metadata.clone(),
+                        *s_expr.clone(),
+                    )?);
                 }
+                Ok(Plan::Explain {
+                    kind,
+                    config,
+                    plan: Box::new(Plan::Query {
+                        s_expr,
+                        bind_context,
+                        metadata,
+                        rewrite_kind,
+                        formatted_ast,
+                        ignore_result,
+                    }),
+                })
             }
             ExplainKind::Memo(_) => {
                 if let box Plan::Query { ref s_expr, .. } = plan {
@@ -533,6 +534,8 @@ async fn get_optimized_memo(opt_ctx: &mut OptimizerContext, mut s_expr: SExpr) -
 async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Result<Plan> {
     // Optimize the input plan.
     let mut input_s_expr = optimize_query(&mut opt_ctx, s_expr.child(0)?.clone()).await?;
+    input_s_expr =
+        RecursiveOptimizer::new(&[RuleID::MergeFilterIntoMutation], &opt_ctx).run(&input_s_expr)?;
 
     // For distributed query optimization, we need to remove the Exchange operator at the top of the plan.
     if let &RelOperator::Exchange(_) = input_s_expr.plan() {
@@ -556,24 +559,28 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
     if !mutation.matched_evaluators.is_empty() {
         match inner_rel_op {
             RelOp::ConstantTableScan => {
-                mutation.matched_evaluators = vec![MatchedEvaluator {
-                    condition: None,
-                    update: None,
-                }];
-                mutation.can_try_update_column_only = false;
+                let constant_table_scan = ConstantTableScan::try_from(input_s_expr.plan().clone())?;
+                if constant_table_scan.num_rows == 0 {
+                    mutation.no_effect = true;
+                }
             }
             RelOp::Join => {
-                let right_child = input_s_expr.child(1)?;
+                let mut right_child = input_s_expr.child(1)?;
                 let mut right_child_rel = right_child.plan.rel_op();
                 if right_child_rel == RelOp::Exchange {
                     right_child_rel = right_child.child(0)?.plan.rel_op();
+                    right_child = right_child.child(0)?;
                 }
                 if right_child_rel == RelOp::ConstantTableScan {
-                    mutation.matched_evaluators = vec![MatchedEvaluator {
-                        condition: None,
-                        update: None,
-                    }];
-                    mutation.can_try_update_column_only = false;
+                    let constant_table_scan =
+                        ConstantTableScan::try_from(right_child.plan().clone())?;
+                    if constant_table_scan.num_rows == 0 {
+                        mutation.matched_evaluators = vec![MatchedEvaluator {
+                            condition: None,
+                            update: None,
+                        }];
+                        mutation.can_try_update_column_only = false;
+                    }
                 }
             }
             _ => (),
@@ -609,7 +616,19 @@ async fn optimize_mutation(mut opt_ctx: OptimizerContext, s_expr: SExpr) -> Resu
                 input_s_expr
             }
         }
-        MutationType::Update | MutationType::Delete => input_s_expr,
+        MutationType::Update | MutationType::Delete => {
+            if let RelOperator::MutationSource(rel) = input_s_expr.plan() {
+                if rel.mutation_type == MutationType::Delete && rel.predicates.is_empty() {
+                    mutation.truncate_table = true;
+                }
+                mutation.direct_filter = rel.predicates.clone();
+                if let Some(index) = rel.predicate_column_index {
+                    mutation.required_columns.insert(index);
+                    mutation.predicate_column_index = Some(index);
+                }
+            }
+            input_s_expr
+        }
     };
 
     Ok(Plan::DataMutation {

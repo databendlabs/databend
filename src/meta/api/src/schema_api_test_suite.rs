@@ -30,6 +30,11 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
+use databend_common_expression::VariantDataType;
+use databend_common_expression::VirtualDataField;
+use databend_common_expression::VirtualDataSchema;
+use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
+use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::data_mask::CreateDatamaskReq;
 use databend_common_meta_app::data_mask::DataMaskIdIdent;
@@ -1485,6 +1490,7 @@ impl SchemaApiTestSuite {
             if_exists: false,
             tenant: tenant.clone(),
             db_id: *db_id,
+            db_name: "db".to_string(),
             table_name: table_name.to_string(),
             tb_id: table_id,
             engine: "FUSE".to_string(),
@@ -1806,6 +1812,7 @@ impl SchemaApiTestSuite {
                     if_exists: false,
                     tenant: tenant.clone(),
                     db_id: *db_id,
+                    db_name: "db1".to_string(),
                     table_name: tbl_name.to_string(),
                     tb_id,
                     engine: "FUSE".to_string(),
@@ -1863,6 +1870,7 @@ impl SchemaApiTestSuite {
                     db_id: *db_id,
                     table_name: tbl_name.to_string(),
                     tb_id,
+                    db_name: "db3".to_string(),
                     engine: "FUSE".to_string(),
                     session_id: "".to_string(),
                 };
@@ -1884,6 +1892,7 @@ impl SchemaApiTestSuite {
                     db_id: *db_id,
                     table_name: tbl_name.to_string(),
                     tb_id,
+                    db_name: "db3".to_string(),
                     engine: "FUSE".to_string(),
                     session_id: "".to_string(),
                 };
@@ -2772,6 +2781,153 @@ impl SchemaApiTestSuite {
                 let err = result.unwrap_err();
                 let err = ErrorCode::from(err);
                 assert_eq!(ErrorCode::UNRESOLVABLE_CONFLICT, err.code());
+            }
+
+            info!("--- update table meta: virtual column too many");
+            {
+                let table = mt
+                    .get_table((tenant_name, "db1", "tb2").into())
+                    .await
+                    .unwrap();
+
+                let mut virtual_schema = VirtualDataSchema {
+                    fields: vec![],
+                    metadata: Default::default(),
+                    next_column_id: 0,
+                    number_of_blocks: 0,
+                };
+                for i in 0..VIRTUAL_COLUMNS_LIMIT + 1 {
+                    virtual_schema.fields.push(VirtualDataField {
+                        name: i.to_string(),
+                        data_types: vec![VariantDataType::Jsonb],
+                        source_column_id: 0,
+                        column_id: VIRTUAL_COLUMN_ID_START + i as u32,
+                    });
+                }
+
+                let mut new_table_meta = table.meta.clone();
+                new_table_meta.virtual_schema = Some(virtual_schema);
+
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                };
+                let err = mt
+                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap_err();
+                let err = ErrorCode::from(err);
+                assert_eq!(ErrorCode::VIRTUAL_COLUMN_TOO_MANY, err.code());
+            }
+
+            info!("--- update table meta: virtual column types deduplication");
+            {
+                let table = mt
+                    .get_table((tenant_name, "db1", "tb2").into())
+                    .await
+                    .unwrap();
+
+                let mut virtual_schema = VirtualDataSchema {
+                    fields: vec![],
+                    metadata: Default::default(),
+                    next_column_id: 0,
+                    number_of_blocks: 0,
+                };
+                virtual_schema.fields.push(VirtualDataField {
+                    name: "field_0".to_string(),
+                    data_types: vec![
+                        VariantDataType::Int64,
+                        VariantDataType::Jsonb,
+                        VariantDataType::Jsonb,
+                        VariantDataType::Jsonb,
+                        VariantDataType::String,
+                    ],
+                    source_column_id: 0,
+                    column_id: VIRTUAL_COLUMN_ID_START,
+                });
+
+                let mut new_table_meta = table.meta.clone();
+                new_table_meta.virtual_schema = Some(virtual_schema);
+
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                };
+                let _ = mt
+                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap();
+                let table = mt
+                    .get_table((tenant_name, "db1", "tb2").into())
+                    .await
+                    .unwrap();
+                assert_eq!(
+                    table.meta.virtual_schema.as_ref().unwrap().fields[0].data_types,
+                    vec![
+                        VariantDataType::Int64,
+                        VariantDataType::Jsonb,
+                        VariantDataType::String
+                    ]
+                );
+            }
+
+            info!("--- update table meta: virtual column id out bound");
+            {
+                let table = mt
+                    .get_table((tenant_name, "db1", "tb2").into())
+                    .await
+                    .unwrap();
+
+                let mut virtual_schema = VirtualDataSchema {
+                    fields: vec![],
+                    metadata: Default::default(),
+                    next_column_id: 0,
+                    number_of_blocks: 0,
+                };
+                virtual_schema.fields.push(VirtualDataField {
+                    name: "field_0".to_string(),
+                    data_types: vec![
+                        VariantDataType::Int64,
+                        VariantDataType::Jsonb,
+                        VariantDataType::Jsonb,
+                        VariantDataType::Jsonb,
+                        VariantDataType::String,
+                    ],
+                    source_column_id: 0,
+                    column_id: VIRTUAL_COLUMN_ID_START - 1,
+                });
+
+                let mut new_table_meta = table.meta.clone();
+                new_table_meta.virtual_schema = Some(virtual_schema);
+
+                let table_id = table.ident.table_id;
+                let table_version = table.ident.seq;
+                let req = UpdateTableMetaReq {
+                    table_id,
+                    seq: MatchSeq::Exact(table_version),
+                    new_table_meta: new_table_meta.clone(),
+                };
+                let err = mt
+                    .update_multi_table_meta(UpdateMultiTableMetaReq {
+                        update_table_metas: vec![(req, table.as_ref().clone())],
+                        ..Default::default()
+                    })
+                    .await
+                    .unwrap_err();
+                let err = ErrorCode::from(err);
+                assert_eq!(ErrorCode::VIRTUAL_COLUMN_ID_OUT_BOUND, err.code());
             }
         }
         Ok(())
@@ -4152,6 +4308,7 @@ impl SchemaApiTestSuite {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
                     db_id: *db2_id,
+                    db_name: "db2".to_string(),
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
@@ -4174,6 +4331,7 @@ impl SchemaApiTestSuite {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
                     db_id: *db2_id,
+                    db_name: "db2".to_string(),
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
@@ -4248,6 +4406,7 @@ impl SchemaApiTestSuite {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
                     db_id: *db3_id,
+                    db_name: "db3".to_string(),
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
@@ -4271,6 +4430,7 @@ impl SchemaApiTestSuite {
                     if_exists: false,
                     tenant: req.name_ident.tenant.clone(),
                     db_id: *db3_id,
+                    db_name: "db3".to_string(),
                     table_name: req.name_ident.table_name.clone(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
@@ -4445,6 +4605,7 @@ impl SchemaApiTestSuite {
                     tenant: req.name_ident.tenant.clone(),
                     db_id,
                     table_name: req.name_ident.table_name.clone(),
+                    db_name: db.to_string(),
                     tb_id: resp.table_id,
                     engine: "FUSE".to_string(),
                     session_id: "".to_string(),
@@ -4688,6 +4849,7 @@ impl SchemaApiTestSuite {
                 tenant: tbl_name_ident.tenant.clone(),
                 db_id: old_db.database_id.db_id,
                 table_name: tbl_name_ident.table_name.clone(),
+                db_name: db_name.to_string(),
                 tb_id,
                 engine: "FUSE".to_string(),
                 session_id: "".to_string(),
@@ -4733,6 +4895,7 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 db_id: old_db.database_id.db_id,
                 table_name: tbl_name.to_string(),
+                db_name: db_name.to_string(),
                 tb_id,
                 engine: "FUSE".to_string(),
                 session_id: "".to_string(),
@@ -4784,6 +4947,7 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 db_id: old_db.database_id.db_id,
                 table_name: tbl_name.to_string(),
+                db_name: tbl_name.to_string(),
                 tb_id: tb_info.ident.table_id,
                 engine: "FUSE".to_string(),
                 session_id: "".to_string(),
@@ -4871,6 +5035,7 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 db_id: cur_db.database_id.db_id,
                 table_name: tbl_name.to_string(),
+                db_name: db_name.to_string(),
                 tb_id: new_tb_info.ident.table_id,
                 engine: "FUSE".to_string(),
                 session_id: "".to_string(),
@@ -8062,6 +8227,7 @@ where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
             if_exists: false,
             db_id: self.db_id,
             tb_id: self.table_id,
+            db_name: "".to_string(),
             engine: "FUSE".to_string(),
             session_id: "".to_string(),
         };

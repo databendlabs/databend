@@ -1884,6 +1884,7 @@ RunStatement {
                                             },
                                         ],
                                         params: [],
+                                        order_by: [],
                                         window: None,
                                         lambda: None,
                                     },

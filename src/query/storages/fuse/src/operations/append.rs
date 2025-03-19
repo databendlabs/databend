@@ -33,6 +33,7 @@ use databend_common_pipeline_transforms::processors::TransformSortPartial;
 use databend_common_sql::evaluator::BlockOperator;
 use databend_common_sql::evaluator::CompoundBlockOperator;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::ClusterType;
 
 use crate::operations::common::TransformSerializeBlock;
@@ -44,6 +45,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
         build_compact_block_pipeline(pipeline, block_thresholds)?;
@@ -59,6 +61,7 @@ impl FuseTable {
                 self,
                 cluster_stats_gen.clone(),
                 MutationKind::Insert,
+                table_meta_timestamps,
             )?;
             proc.into_processor()
         })?;

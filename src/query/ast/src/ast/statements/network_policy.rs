@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::CreateOption;
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
@@ -59,7 +60,7 @@ impl Display for CreateNetworkPolicyStmt {
             write!(f, ")")?;
         }
         if let Some(comment) = &self.comment {
-            write!(f, " COMMENT = '{}'", comment)?;
+            write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }
 
         Ok(())
@@ -104,7 +105,7 @@ impl Display for AlterNetworkPolicyStmt {
             write!(f, ")")?;
         }
         if let Some(comment) = &self.comment {
-            write!(f, " COMMENT = '{}'", comment)?;
+            write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }
 
         Ok(())

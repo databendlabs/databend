@@ -20,6 +20,7 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 
 use crate::plan::datasource::datasource_info::DataSourceInfo;
+use crate::plan::InternalColumn;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
@@ -38,7 +39,7 @@ pub struct DataSourcePlan {
 
     pub tbl_args: Option<TableArgs>,
     pub push_downs: Option<PushDownInfo>,
-    pub query_internal_columns: bool,
+    pub internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
     pub base_block_ids: Option<Scalar>,
     // used for recluster to update stream columns
     pub update_stream_columns: bool,

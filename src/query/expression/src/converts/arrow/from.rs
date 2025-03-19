@@ -36,6 +36,7 @@ use super::ARROW_EXT_TYPE_GEOMETRY;
 use super::ARROW_EXT_TYPE_INTERVAL;
 use super::ARROW_EXT_TYPE_VARIANT;
 use super::EXTENSION_KEY;
+use crate::types::AnyType;
 use crate::types::ArrayColumn;
 use crate::types::DataType;
 use crate::types::DecimalColumn;
@@ -49,9 +50,11 @@ use crate::Column;
 use crate::DataBlock;
 use crate::DataField;
 use crate::DataSchema;
+use crate::Scalar;
 use crate::TableDataType;
 use crate::TableField;
 use crate::TableSchema;
+use crate::Value;
 
 impl TryFrom<&Field> for DataField {
     type Error = ErrorCode;
@@ -150,6 +153,11 @@ impl TryFrom<&Field> for TableField {
                         fields_type,
                     }
                 }
+                ArrowDataType::Dictionary(_, b) => {
+                    let inner_f =
+                        Field::new(arrow_f.name(), b.as_ref().clone(), arrow_f.is_nullable());
+                    return Self::try_from(&inner_f);
+                }
                 arrow_type => {
                     return Err(ErrorCode::Internal(format!(
                         "Unsupported Arrow type: {:?}",
@@ -229,13 +237,26 @@ impl DataBlock {
     }
 }
 
+impl Value<AnyType> {
+    pub fn from_arrow_rs(array: ArrayRef, data_type: &DataType) -> Result<Self> {
+        if array.null_count() == array.len() {
+            return Ok(Value::Scalar(Scalar::Null));
+        }
+        Ok(Value::Column(Column::from_arrow_rs(array, data_type)?))
+    }
+}
+
 impl Column {
     pub fn arrow_field(&self) -> Field {
         let f = DataField::new("DUMMY", self.data_type());
         Field::from(&f)
     }
 
-    pub fn from_arrow_rs(array: ArrayRef, data_type: &DataType) -> Result<Self> {
+    pub fn from_arrow_rs(mut array: ArrayRef, data_type: &DataType) -> Result<Self> {
+        if let ArrowDataType::Dictionary(_, v) = array.data_type() {
+            array = arrow_cast::cast(array.as_ref(), v.as_ref())?;
+        }
+
         let column = match data_type {
             DataType::Null => Column::Null { len: array.len() },
             DataType::EmptyArray => Column::EmptyArray { len: array.len() },
@@ -294,7 +315,7 @@ impl Column {
                 let values = Column::from_arrow_rs(array.values().clone(), inner.as_ref())?;
                 let offsets: Buffer<u64> = array.offsets().inner().inner().clone().into();
 
-                let inner_col = ArrayColumn { values, offsets };
+                let inner_col = ArrayColumn::new(values, offsets);
                 Column::Array(Box::new(inner_col))
             }
             DataType::Map(inner) => {
@@ -312,7 +333,7 @@ impl Column {
                 let offsets: Buffer<i32> = array.offsets().inner().inner().clone().into();
                 let offsets = offsets.into_iter().map(|x| x as u64).collect();
 
-                let inner_col = ArrayColumn { values, offsets };
+                let inner_col = ArrayColumn::new(values, offsets);
                 Column::Map(Box::new(inner_col))
             }
             DataType::Tuple(ts) => {

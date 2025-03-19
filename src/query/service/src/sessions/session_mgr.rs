@@ -25,6 +25,7 @@ use databend_common_base::base::tokio;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::base::SignalStream;
 use databend_common_base::runtime::metrics::GLOBAL_METRICS_REGISTRY;
+use databend_common_base::runtime::LimitMemGuard;
 use databend_common_catalog::table_context::ProcessInfoState;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -179,6 +180,7 @@ impl SessionManager {
     }
 
     pub fn destroy_session(&self, session_id: &String) {
+        let _guard = LimitMemGuard::enter_unlimited();
         // NOTE: order and scope of lock are very important. It's will cause deadlock
 
         // stop tracking session

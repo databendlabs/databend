@@ -32,6 +32,7 @@ use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::aggregate_function_factory::AggregateFunctionSortDesc;
 use super::aggregate_scalar_state::ChangeIf;
 use super::aggregate_scalar_state::CmpAny;
 use super::aggregate_scalar_state::CmpMax;
@@ -340,6 +341,7 @@ pub fn try_create_aggregate_arg_minmax_function<const CMP_TYPE: u8>(
     display_name: &str,
     _params: Vec<Scalar>,
     arguments: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<AggregateFunctionRef> {
     assert_binary_arguments(display_name, arguments.len())?;
     let arg_type = arguments[0].clone();

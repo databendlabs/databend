@@ -39,11 +39,13 @@ use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;
 
 use super::ColumnMutation;
+use super::CommitType;
 use crate::binder::wrap_cast;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
@@ -63,6 +65,7 @@ use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
+use crate::plans::TruncateMode;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
@@ -90,6 +93,7 @@ pub struct Mutation {
     pub need_match: bool,
     pub distributed: bool,
     pub target_build_optimization: bool,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {
@@ -117,11 +121,15 @@ impl PhysicalPlanBuilder {
             row_id_index,
             row_id_shuffle,
             can_try_update_column_only,
+            no_effect,
+            truncate_table,
             ..
         } = mutation;
 
         let mut plan = self.build(s_expr.child(0)?, required).await?;
-        let mutation_input_schema = plan.output_schema()?;
+        if *no_effect {
+            return Ok(plan);
+        }
 
         let table = self
             .ctx
@@ -129,7 +137,29 @@ impl PhysicalPlanBuilder {
             .await?;
         let table_info = table.get_table_info();
         let table_name = table_name.clone();
+
         let mutation_build_info = self.mutation_build_info.clone().unwrap();
+        let mutation_input_schema = plan.output_schema()?;
+
+        if *truncate_table {
+            // Do truncate.
+            plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
+                input: Box::new(plan),
+                snapshot: mutation_build_info.table_snapshot,
+                table_info: table_info.clone(),
+                // let's use update first, we will do some optimizations and select exact strategy
+                commit_type: CommitType::Truncate {
+                    mode: TruncateMode::Delete,
+                },
+                update_stream_meta: vec![],
+                deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
+                plan_id: u32::MAX,
+                recluster_info: None,
+                table_meta_timestamps: mutation_build_info.table_meta_timestamps,
+            }));
+            plan.adjust_plan_id(&mut 0);
+            return Ok(plan);
+        }
 
         if *strategy == MutationStrategy::Direct {
             // MutationStrategy::Direct: If the mutation filter is a simple expression,
@@ -190,6 +220,7 @@ impl PhysicalPlanBuilder {
                 field_id_to_schema_index,
                 input_num_columns: mutation_input_schema.fields().len(),
                 has_filter_column: predicate_column_index.is_some(),
+                table_meta_timestamps: mutation_build_info.table_meta_timestamps,
             });
 
             if *distributed {
@@ -208,12 +239,15 @@ impl PhysicalPlanBuilder {
                 snapshot: mutation_build_info.table_snapshot,
                 table_info: table_info.clone(),
                 // let's use update first, we will do some optimizations and select exact strategy
-                mutation_kind,
+                commit_type: CommitType::Mutation {
+                    kind: mutation_kind,
+                    merge_meta: false,
+                },
                 update_stream_meta: vec![],
-                merge_meta: false,
                 deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
                 plan_id: u32::MAX,
                 recluster_info: None,
+                table_meta_timestamps: mutation_build_info.table_meta_timestamps,
             }));
 
             plan.adjust_plan_id(&mut 0);
@@ -414,6 +448,7 @@ impl PhysicalPlanBuilder {
             need_match: !is_not_matched_only,
             target_build_optimization: false,
             plan_id: u32::MAX,
+            table_meta_timestamps: mutation_build_info.table_meta_timestamps,
         }));
 
         let commit_input = if !distributed {
@@ -434,23 +469,21 @@ impl PhysicalPlanBuilder {
             MutationType::Delete => MutationKind::Delete,
         };
 
-        let update_stream_meta = match mutation_type {
-            MutationType::Merge => mutation_build_info.update_stream_meta,
-            MutationType::Update | MutationType::Delete => vec![],
-        };
-
         // build mutation_aggregate
         let mut physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(commit_input),
             snapshot: mutation_build_info.table_snapshot,
             table_info: table_info.clone(),
             // let's use update first, we will do some optimizations and select exact strategy
-            mutation_kind,
-            update_stream_meta,
-            merge_meta: false,
+            commit_type: CommitType::Mutation {
+                kind: mutation_kind,
+                merge_meta: false,
+            },
+            update_stream_meta: mutation_build_info.update_stream_meta,
             deduplicated_label: unsafe { self.ctx.get_settings().get_deduplicate_label()? },
             plan_id: u32::MAX,
             recluster_info: None,
+            table_meta_timestamps: mutation_build_info.table_meta_timestamps,
         }));
         physical_plan.adjust_plan_id(&mut 0);
         Ok(physical_plan)

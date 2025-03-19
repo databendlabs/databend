@@ -34,6 +34,7 @@ use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
+use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use rand::Rng;
 
 use crate::sql_gen::Column;
@@ -57,6 +58,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             func_sig.name.clone(),
             vec![],
             func_sig.args_type,
+            vec![],
             None,
             None,
         )
@@ -378,7 +380,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             }
         };
 
-        self.gen_func(name, params, args_type, None, None)
+        self.gen_func(name, params, args_type, vec![], None, None)
     }
 
     pub(crate) fn gen_agg_func(&mut self, ty: &DataType) -> Expr {
@@ -613,34 +615,37 @@ impl<R: Rng> SqlGenerator<'_, R> {
         let window = if self.rng.gen_bool(0.8) {
             None
         } else {
-            self.gen_window()
+            self.gen_window(&name)
         };
 
-        self.gen_func(name, params, args_type, window, None)
+        self.gen_func(name, params, args_type, vec![], window, None)
     }
 
     pub(crate) fn gen_window_func(&mut self, ty: &DataType) -> Expr {
         let by_ty = self.rng.gen_bool(0.6);
-        let window = self.gen_window();
         let ty = ty.clone();
         match ty {
             DataType::Number(NumberDataType::UInt64) if by_ty => {
-                let number = ["row_number", "rank", "dense_rank", "ntile"];
-                let name = number[self.rng.gen_range(0..=2)];
+                let names = ["row_number", "rank", "dense_rank", "ntile"];
+                let idx = self.rng.gen_range(0..names.len());
+                let name = names[idx];
                 let args_type = if name == "ntile" {
                     vec![DataType::Number(NumberDataType::UInt64)]
                 } else {
                     vec![]
                 };
-                self.gen_func(name.to_string(), vec![], args_type, window, None)
+                let window = self.gen_window(name);
+                self.gen_func(name.to_string(), vec![], args_type, vec![], window, None)
             }
             DataType::Number(NumberDataType::Float64) if by_ty => {
-                let float = ["percent_rank", "cume_dist"];
-                let name = float[self.rng.gen_range(0..=1)].to_string();
-                self.gen_func(name, vec![], vec![], window, None)
+                let names = ["percent_rank", "cume_dist"];
+                let idx = self.rng.gen_range(0..names.len());
+                let name = names[idx];
+                let window = self.gen_window(name);
+                self.gen_func(name.to_string(), vec![], vec![], vec![], window, None)
             }
             _ => {
-                let name = [
+                let names = [
                     "lag",
                     "lead",
                     "first_value",
@@ -649,7 +654,8 @@ impl<R: Rng> SqlGenerator<'_, R> {
                     "last",
                     "nth_value",
                 ];
-                let name = name[self.rng.gen_range(0..=6)];
+                let idx = self.rng.gen_range(0..names.len());
+                let name = names[idx];
                 let args_type = if name == "lag" || name == "lead" {
                     vec![ty; 3]
                 } else if name == "nth_value" {
@@ -657,13 +663,18 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 } else {
                     vec![ty]
                 };
-                self.gen_func(name.to_string(), vec![], args_type, window, None)
+                let window = self.gen_window(name);
+                self.gen_func(name.to_string(), vec![], args_type, vec![], window, None)
             }
         }
     }
 
-    fn gen_window(&mut self) -> Option<WindowDesc> {
-        let ignore_nulls = Some(self.rng.gen_bool(0.2));
+    fn gen_window(&mut self, func_name: &str) -> Option<WindowDesc> {
+        let ignore_nulls = if RANK_WINDOW_FUNCTIONS.contains(&func_name) {
+            Some(self.rng.gen_bool(0.2))
+        } else {
+            None
+        };
         if self.rng.gen_bool(0.2) && !self.windows_name.is_empty() {
             let len = self.windows_name.len();
             let name = if len == 1 {
@@ -764,7 +775,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
         self.bound_columns = current_bound_columns;
         self.is_join = current_is_join;
 
-        self.gen_func(name, vec![], args_type, None, Some(lambda))
+        self.gen_func(name, vec![], args_type, vec![], None, Some(lambda))
     }
 
     fn gen_func(
@@ -772,6 +783,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
         name: String,
         params: Vec<Literal>,
         args_type: Vec<DataType>,
+        order_by: Vec<OrderByExpr>,
         window: Option<WindowDesc>,
         lambda: Option<Lambda>,
     ) -> Expr {
@@ -818,6 +830,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 name,
                 args,
                 params,
+                order_by,
                 window,
                 lambda,
             },

@@ -60,7 +60,11 @@ impl PipelineBuilder {
             source_schema.clone(),
         )?;
 
-        table.append_data(self.ctx.clone(), &mut self.main_pipeline)?;
+        table.append_data(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            insert_select.table_meta_timestamps,
+        )?;
 
         Ok(())
     }

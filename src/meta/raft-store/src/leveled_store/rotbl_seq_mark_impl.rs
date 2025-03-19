@@ -19,13 +19,44 @@ use std::io;
 use databend_common_meta_types::seq_value::KVMeta;
 use rotbl::v001::SeqMarked;
 
+use crate::leveled_store::value_convert::ValueConvert;
 use crate::marked::Marked;
 
-impl TryFrom<SeqMarked> for Marked {
-    type Error = io::Error;
+impl ValueConvert<SeqMarked> for Marked {
+    fn conv_to(self) -> Result<SeqMarked, io::Error> {
+        // internal_seq() is the storage seq of the record.
+        // seq() returns seq for user, which 0 for a tombstone.
+        let seq_marked = match self {
+            Marked::TombStone { internal_seq } => SeqMarked::new_tombstone(internal_seq),
+            Marked::Normal {
+                internal_seq,
+                value,
+                meta,
+            } => {
+                let kv_meta_str = serde_json::to_string(&meta).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("fail to encode KVMeta to json: {}", e),
+                    )
+                })?;
 
-    /// Convert `rotbl::SeqMarked` to `Marked` that is used by this crate.
-    fn try_from(seq_marked: SeqMarked) -> Result<Self, Self::Error> {
+                // version, meta in json string, value
+                let packed = (1u8, kv_meta_str, value);
+
+                let d = bincode::encode_to_vec(packed, bincode_config()).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("fail to encode rotbl::SeqMarked value: {}", e),
+                    )
+                })?;
+
+                SeqMarked::new_normal(internal_seq, d)
+            }
+        };
+        Ok(seq_marked)
+    }
+
+    fn conv_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
         let seq = seq_marked.seq();
 
         let Some(data) = seq_marked.into_data() else {
@@ -71,75 +102,15 @@ impl TryFrom<SeqMarked> for Marked {
     }
 }
 
-impl TryFrom<SeqMarked> for Marked<String> {
-    type Error = io::Error;
-
-    /// Try converting `rotbl::SeqMarked` to `Marked<String>`.
-    fn try_from(value: SeqMarked) -> Result<Self, Self::Error> {
-        let marked = Marked::try_from(value)?;
-        match marked {
-            Marked::TombStone { internal_seq } => Ok(Marked::TombStone { internal_seq }),
-            Marked::Normal {
-                internal_seq,
-                value,
-                meta,
-            } => Ok(Marked::Normal {
-                internal_seq,
-                value: String::from_utf8(value).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("fail to convert Vec<u8> to String: {}", e),
-                    )
-                })?,
-                meta,
-            }),
-        }
+impl ValueConvert<SeqMarked> for Marked<String> {
+    fn conv_to(self) -> Result<SeqMarked, io::Error> {
+        let marked = Marked::<Vec<u8>>::from(self);
+        marked.conv_to()
     }
-}
 
-impl TryFrom<Marked> for SeqMarked {
-    type Error = io::Error;
-
-    fn try_from(marked: Marked) -> Result<Self, Self::Error> {
-        // internal_seq() is the storage seq of the record.
-        // seq() returns seq for user, which 0 for a tombstone.
-        let seq_marked = match marked {
-            Marked::TombStone { internal_seq } => SeqMarked::new_tombstone(internal_seq),
-            Marked::Normal {
-                internal_seq,
-                value,
-                meta,
-            } => {
-                let kv_meta_str = serde_json::to_string(&meta).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("fail to encode KVMeta to json: {}", e),
-                    )
-                })?;
-
-                // version, meta in json string, value
-                let packed = (1u8, kv_meta_str, value);
-
-                let d = bincode::encode_to_vec(packed, bincode_config()).map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("fail to encode rotbl::SeqMarked value: {}", e),
-                    )
-                })?;
-
-                SeqMarked::new_normal(internal_seq, d)
-            }
-        };
-        Ok(seq_marked)
-    }
-}
-
-impl TryFrom<Marked<String>> for SeqMarked {
-    type Error = io::Error;
-
-    fn try_from(value: Marked<String>) -> Result<Self, Self::Error> {
-        let marked = Marked::<Vec<u8>>::from(value);
-        SeqMarked::try_from(marked)
+    fn conv_from(seq_marked: SeqMarked) -> Result<Self, io::Error> {
+        let marked = Marked::<Vec<u8>>::conv_from(seq_marked)?;
+        Marked::<String>::try_from(marked)
     }
 }
 
@@ -151,9 +122,8 @@ fn bincode_config() -> impl bincode::config::Config {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
-
     use super::*;
+    use crate::leveled_store::value_convert::ValueConvert;
 
     #[test]
     fn test_marked_of_string_try_from_seq_marked() -> io::Result<()> {
@@ -175,10 +145,10 @@ mod tests {
     }
 
     fn t_string_try_from(marked: Marked<String>, seq_marked: SeqMarked) {
-        let got: SeqMarked = marked.clone().try_into().unwrap();
+        let got: SeqMarked = marked.clone().conv_to().unwrap();
         assert_eq!(seq_marked, got);
 
-        let got: Marked<String> = got.try_into().unwrap();
+        let got = Marked::<String>::conv_from(got).unwrap();
         assert_eq!(marked, got);
     }
 
@@ -202,10 +172,10 @@ mod tests {
     }
 
     fn t_try_from(marked: Marked, seq_marked: SeqMarked) {
-        let got: SeqMarked = marked.clone().try_into().unwrap();
+        let got: SeqMarked = marked.clone().conv_to().unwrap();
         assert_eq!(seq_marked, got);
 
-        let got: Marked = got.try_into().unwrap();
+        let got = Marked::conv_from(got).unwrap();
         assert_eq!(marked, got);
     }
 
@@ -233,7 +203,7 @@ mod tests {
     }
 
     fn t_invalid(seq_mark: SeqMarked, want_err: impl ToString) {
-        let res = Marked::<Vec<u8>>::try_from(seq_mark);
+        let res = Marked::<Vec<u8>>::conv_from(seq_mark);
         let err = res.unwrap_err();
         assert_eq!(want_err.to_string(), err.to_string());
     }

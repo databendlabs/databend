@@ -40,12 +40,14 @@ use databend_common_meta_app::schema::CreateIndexReply;
 use databend_common_meta_app::schema::CreateIndexReq;
 use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
+use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::CreateVirtualColumnReq;
+use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::DictionaryMeta;
 use databend_common_meta_app::schema::DropDatabaseReply;
@@ -68,10 +70,7 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::IcebergCatalogOption;
-use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListDictionaryReq;
-use databend_common_meta_app::schema::ListIndexesByIdReq;
-use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
 use databend_common_meta_app::schema::ListLocksReq;
 use databend_common_meta_app::schema::ListVirtualColumnsReq;
@@ -100,9 +99,11 @@ use databend_common_meta_app::schema::UpsertTableOptionReply;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::VirtualColumnMeta;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_types::seq_value::SeqV;
 use databend_common_meta_types::MetaId;
+use iceberg::NamespaceIdent;
 use iceberg_catalog_glue::GlueCatalog;
 use iceberg_catalog_glue::GlueCatalogConfig;
 use iceberg_catalog_hms::HmsCatalog;
@@ -246,7 +247,11 @@ impl Catalog for IcebergCatalog {
 
     #[fastrace::trace]
     #[async_backtrace::framed]
-    async fn get_database(&self, _tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
+    async fn get_database(&self, tenant: &Tenant, db_name: &str) -> Result<Arc<dyn Database>> {
+        let c = self.exists_database(tenant, db_name).await?;
+        if !c {
+            return Err(ErrorCode::UnknownDatabase(db_name.to_string()));
+        }
         Ok(Arc::new(IcebergDatabase::create(self.clone(), db_name)))
     }
 
@@ -263,25 +268,99 @@ impl Catalog for IcebergCatalog {
             .map_err(|err| {
                 ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
             })?;
-
         let mut dbs = Vec::new();
         for db_name in db_names {
-            let db = self
-                .get_database(&Tenant::new_literal("dummy"), &db_name.to_url_string())
-                .await?;
+            let db = Arc::new(IcebergDatabase::create(
+                self.clone(),
+                &db_name.to_url_string(),
+            )) as Arc<dyn Database>;
             dbs.push(db);
         }
         Ok(dbs)
     }
 
     #[async_backtrace::framed]
-    async fn create_database(&self, _req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
-        unimplemented!()
+    async fn create_database(&self, req: CreateDatabaseReq) -> Result<CreateDatabaseReply> {
+        match req.create_option {
+            CreateOption::Create => {}
+            CreateOption::CreateIfNotExists => {
+                if self
+                    .exists_database(req.name_ident.tenant(), req.name_ident.name())
+                    .await?
+                {
+                    return Ok(CreateDatabaseReply {
+                        db_id: DatabaseId::new(0),
+                    });
+                }
+            }
+            CreateOption::CreateOrReplace => {
+                self.drop_database(DropDatabaseReq {
+                    if_exists: true,
+                    name_ident: req.name_ident.clone(),
+                })
+                .await?;
+            }
+        }
+
+        let ns = NamespaceIdent::new(req.name_ident.name().to_owned());
+        let _ = self
+            .iceberg_catalog()
+            .create_namespace(&ns, Default::default())
+            .await
+            .map_err(|err| {
+                ErrorCode::Internal(format!(
+                    "Iceberg create database {} failed: {err:?}",
+                    req.name_ident.name()
+                ))
+            })?;
+
+        Ok(CreateDatabaseReply {
+            db_id: DatabaseId::new(0),
+        })
     }
 
     #[async_backtrace::framed]
-    async fn drop_database(&self, _req: DropDatabaseReq) -> Result<DropDatabaseReply> {
-        unimplemented!()
+    async fn exists_database(&self, _tenant: &Tenant, db_name: &str) -> Result<bool> {
+        // let ns = NamespaceIdent::new(db_name.to_owned());
+        // self.iceberg_catalog()
+        //     .namespace_exists(&ns)
+        //     .await
+        //     .map_err(|err| {
+        //         ErrorCode::Internal(format!("Iceberg catalog exists database failed: {err:?}"))
+        //     })
+
+        let db_names = self
+            .iceberg_catalog()
+            .list_namespaces(None)
+            .await
+            .map_err(|err| {
+                ErrorCode::Internal(format!("Iceberg catalog load database failed: {err:?}"))
+            })?;
+        Ok(db_names.iter().any(|name| name.to_url_string() == db_name))
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply> {
+        let ns = NamespaceIdent::new(req.name_ident.name().to_owned());
+        if req.if_exists
+            && !self
+                .exists_database(req.name_ident.tenant(), req.name_ident.name())
+                .await?
+        {
+            return Ok(DropDatabaseReply { db_id: 0 });
+        }
+
+        let _ = self
+            .iceberg_catalog()
+            .drop_namespace(&ns)
+            .await
+            .map_err(|err| {
+                ErrorCode::Internal(format!(
+                    "Iceberg drop database {} failed: {err:?}",
+                    req.name_ident.name()
+                ))
+            })?;
+        Ok(DropDatabaseReply { db_id: 0 })
     }
 
     #[async_backtrace::framed]
@@ -367,6 +446,12 @@ impl Catalog for IcebergCatalog {
         db.list_tables().await
     }
 
+    #[async_backtrace::framed]
+    async fn list_tables_names(&self, tenant: &Tenant, db_name: &str) -> Result<Vec<String>> {
+        let db = self.get_database(tenant, db_name).await?;
+        db.list_tables_names().await
+    }
+
     async fn get_table_history(
         &self,
         _tenant: &Tenant,
@@ -386,13 +471,17 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table(&self, _req: CreateTableReq) -> Result<CreateTableReply> {
-        unimplemented!()
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
+        let db = self
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?;
+        db.create_table(req).await
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
-        unimplemented!()
+    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
+        let db = self.get_database(&req.tenant, &req.db_name).await?;
+        db.drop_table_by_id(req).await
     }
 
     #[async_backtrace::framed]
@@ -406,8 +495,27 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn rename_table(&self, _req: RenameTableReq) -> Result<RenameTableReply> {
-        unimplemented!()
+    async fn rename_table(&self, req: RenameTableReq) -> Result<RenameTableReply> {
+        if req.if_exists
+            && !self
+                .exists_table(req.tenant(), req.db_name(), req.table_name())
+                .await?
+        {
+            return Ok(RenameTableReply { table_id: 0 });
+        }
+
+        let src = NamespaceIdent::new(req.db_name().to_owned());
+        let src_table = iceberg::TableIdent::new(src, req.table_name().to_owned());
+
+        let dst = NamespaceIdent::new(req.new_db_name.clone());
+        let dst_table = iceberg::TableIdent::new(dst, req.new_table_name.clone());
+        self.iceberg_catalog()
+            .rename_table(&src_table, &dst_table)
+            .await
+            .map_err(|err| {
+                ErrorCode::BadArguments(format!("Iceberg rename table failed: {err:?}"))
+            })?;
+        return Ok(RenameTableReply { table_id: 0 });
     }
 
     #[async_backtrace::framed]
@@ -515,24 +623,6 @@ impl Catalog for IcebergCatalog {
         unimplemented!()
     }
 
-    #[async_backtrace::framed]
-    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
-        unimplemented!()
-    }
-
-    #[async_backtrace::framed]
-    async fn list_indexes_by_table_id(
-        &self,
-        _req: ListIndexesByIdReq,
-    ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        unimplemented!()
-    }
-
     // Virtual column
     #[async_backtrace::framed]
     async fn create_virtual_column(&self, _req: CreateVirtualColumnReq) -> Result<()> {
@@ -578,7 +668,7 @@ impl Catalog for IcebergCatalog {
 
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
-        unimplemented!()
+        vec![]
     }
 
     async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {

@@ -900,16 +900,40 @@ fn pivot(i: Input) -> IResult<Pivot> {
     )(i)
 }
 
+fn unpivot_name(i: Input) -> IResult<UnpivotName> {
+    let short_alias = map(
+        rule! {
+            #literal_string
+            ~ #error_hint(
+                rule! { AS },
+                "an alias without `AS` keyword has already been defined before this one, \
+                    please remove one of them"
+            )
+        },
+        |(string, _)| string,
+    );
+    let as_alias = map(
+        rule! {
+            AS ~ #literal_string
+        },
+        |(_, string)| string,
+    );
+    map(
+        rule! {#ident ~ (#short_alias | #as_alias)?},
+        |(ident, alias)| UnpivotName { ident, alias },
+    )(i)
+}
+
 // UNPIVOT(ident for ident IN (ident, ...))
 fn unpivot(i: Input) -> IResult<Unpivot> {
     map(
         rule! {
-            UNPIVOT ~ "(" ~ #ident ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(ident) ~ ")" ~ ")"
+            UNPIVOT ~ "(" ~ #ident ~ FOR ~ #ident ~ IN ~ "(" ~ #comma_separated_list1(unpivot_name) ~ ")" ~ ")"
         },
-        |(_unpivot, _, value_column, _for, column_name, _in, _, names, _, _)| Unpivot {
+        |(_unpivot, _, value_column, _for, unpivot_column, _in, _, column_names, _, _)| Unpivot {
             value_column,
-            column_name,
-            names,
+            unpivot_column,
+            column_names,
         },
     )(i)
 }
@@ -1230,6 +1254,15 @@ pub fn window_spec_ident(i: Input) -> IResult<Window> {
             |window_name| Window::WindowReference(WindowRef { window_name }),
         ),
     ))(i)
+}
+
+pub fn within_group(i: Input) -> IResult<Vec<OrderByExpr>> {
+    map(
+        rule! {
+        WITHIN ~ GROUP ~ "(" ~ ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) ~ ")"
+        },
+        |(_, _, _, _, _, order_by, _)| order_by,
+    )(i)
 }
 
 pub fn window_function(i: Input) -> IResult<WindowDesc> {

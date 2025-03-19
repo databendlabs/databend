@@ -15,14 +15,12 @@
 #[macro_use]
 extern crate criterion;
 
-#[path = "../tests/it/scalars/parser.rs"]
-mod parser;
-
 use criterion::Criterion;
 use databend_common_expression::type_check;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
+use databend_common_functions::test_utils as parser;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 fn bench(c: &mut Criterion) {

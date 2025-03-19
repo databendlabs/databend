@@ -85,37 +85,37 @@ impl BloomPrunerCreator {
         bloom_index_cols: BloomIndexColumns,
         bloom_index_builder: Option<BloomIndexBuilder>,
     ) -> Result<Option<Arc<dyn BloomPruner + Send + Sync>>> {
-        if let Some(expr) = filter_expr {
-            let bloom_columns_map =
-                bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
-            let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
-            let point_query_cols = BloomIndex::find_eq_columns(expr, bloom_column_fields)?;
+        let Some(expr) = filter_expr else {
+            return Ok(None);
+        };
+        let bloom_columns_map =
+            bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
+        let bloom_column_fields = bloom_columns_map.values().cloned().collect::<Vec<_>>();
+        let (index_fields, scalars) =
+            BloomIndex::filter_index_field(expr.clone(), &bloom_column_fields)?;
 
-            if !point_query_cols.is_empty() {
-                // convert to filter column names
-                let mut filter_fields = Vec::with_capacity(point_query_cols.len());
-                let mut scalar_map = HashMap::<Scalar, u64>::new();
-                for (field, scalar, ty) in point_query_cols.into_iter() {
-                    filter_fields.push(field);
-                    if let Entry::Vacant(e) = scalar_map.entry(scalar.clone()) {
-                        let digest = BloomIndex::calculate_scalar_digest(&func_ctx, &scalar, &ty)?;
-                        e.insert(digest);
-                    }
-                }
+        if index_fields.is_empty() {
+            return Ok(None);
+        }
 
-                let creator = BloomPrunerCreator {
-                    func_ctx,
-                    index_fields: filter_fields,
-                    filter_expression: expr.clone(),
-                    scalar_map,
-                    dal,
-                    data_schema: schema.clone(),
-                    bloom_index_builder,
-                };
-                return Ok(Some(Arc::new(creator)));
+        // convert to filter column names
+        let mut scalar_map = HashMap::<Scalar, u64>::new();
+        for (scalar, ty) in scalars.into_iter() {
+            if let Entry::Vacant(e) = scalar_map.entry(scalar) {
+                let digest = BloomIndex::calculate_scalar_digest(&func_ctx, e.key(), &ty)?;
+                e.insert(digest);
             }
         }
-        Ok(None)
+
+        Ok(Some(Arc::new(Self {
+            func_ctx,
+            index_fields,
+            filter_expression: expr.clone(),
+            scalar_map,
+            dal,
+            data_schema: schema.clone(),
+            bloom_index_builder,
+        })))
     }
 
     // Check a location file is hit or not by bloom filter.

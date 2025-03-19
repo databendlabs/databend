@@ -21,8 +21,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableInfo;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
 use crate::executor::physical_plans::CommitSink;
+use crate::executor::physical_plans::CommitType;
 use crate::executor::physical_plans::Exchange;
 use crate::executor::physical_plans::FragmentKind;
 use crate::executor::physical_plans::MutationKind;
@@ -35,6 +37,7 @@ pub struct CompactSource {
     pub parts: Partitions,
     pub table_info: TableInfo,
     pub column_ids: HashSet<ColumnId>,
+    pub table_meta_timestamps: TableMetaTimestamps,
 }
 
 impl PhysicalPlanBuilder {
@@ -64,12 +67,17 @@ impl PhysicalPlanBuilder {
             )));
         };
 
+        let table_meta_timestamps = self
+            .ctx
+            .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
+
         let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
             plan_id: u32::MAX,
+            table_meta_timestamps,
         }));
 
         let is_distributed = (!self.ctx.get_cluster().is_empty())
@@ -89,12 +97,15 @@ impl PhysicalPlanBuilder {
             input: Box::new(root),
             table_info,
             snapshot: Some(snapshot),
-            mutation_kind: MutationKind::Compact,
+            commit_type: CommitType::Mutation {
+                kind: MutationKind::Compact,
+                merge_meta,
+            },
             update_stream_meta: vec![],
-            merge_meta,
             deduplicated_label: None,
             plan_id: u32::MAX,
             recluster_info: None,
+            table_meta_timestamps,
         }));
 
         root.adjust_plan_id(&mut 0);

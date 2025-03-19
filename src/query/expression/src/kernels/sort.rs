@@ -23,7 +23,7 @@ use crate::Scalar;
 use crate::SortCompare;
 use crate::Value;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SortColumnDescription {
     pub offset: usize,
     pub asc: bool,

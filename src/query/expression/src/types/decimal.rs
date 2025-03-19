@@ -251,7 +251,19 @@ impl<Num: Decimal> ArgType for DecimalType<Num> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+    EnumAsInner,
+)]
 pub enum DecimalDataType {
     Decimal128(DecimalSize),
     Decimal256(DecimalSize),

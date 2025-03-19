@@ -26,6 +26,7 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BitmapType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::GenericType;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
@@ -73,6 +74,17 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         });
     }
+
+    // Could be used in exchange
+    registry.register_passthrough_nullable_1_arg::<GenericType<0>, NumberType<u64>, _, _>(
+        "siphash64",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<GenericType<0>, NumberType<u64>>(|val, output, _| {
+            let mut hasher = DefaultHasher::default();
+            DFHash::hash(&val.to_owned(), &mut hasher);
+            output.push(hasher.finish());
+        }),
+    );
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "md5",

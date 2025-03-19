@@ -44,6 +44,7 @@ pub fn calc_column_distinct_of_values(column: &Column, rows: usize) -> Result<u6
         ))],
         &[column.clone()],
         rows,
+        vec![],
     )?;
     let col = NumberType::<u64>::try_downcast_column(&distinct_values.0).unwrap();
     Ok(col[0])
@@ -110,8 +111,8 @@ pub fn gen_columns_statistics(
                 let mut min = Scalar::Null;
                 let mut max = Scalar::Null;
 
-                let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows)?;
-                let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows)?;
+                let (mins, _) = eval_aggr("min", vec![], &[col.clone()], rows, vec![])?;
+                let (maxs, _) = eval_aggr("max", vec![], &[col.clone()], rows, vec![])?;
 
                 if mins.len() > 0 {
                     min = if let Some(v) = mins.index(0) {
@@ -252,7 +253,7 @@ pub mod traverse {
                 };
                 crate::statistics::traverse::traverse_column_recursive(
                     None,
-                    &array_column.values,
+                    &array_column.underlying_column(),
                     &inner_type,
                     leaves,
                 )?;
@@ -265,9 +266,10 @@ pub mod traverse {
                     } else {
                         column.as_map().unwrap()
                     };
-                    let kv_column =
-                        KvPair::<AnyType, AnyType>::try_downcast_column(&map_column.values)
-                            .unwrap();
+                    let kv_column = KvPair::<AnyType, AnyType>::try_downcast_column(
+                        &map_column.underlying_column(),
+                    )
+                    .unwrap();
                     crate::statistics::traverse::traverse_column_recursive(
                         None,
                         &kv_column.keys,

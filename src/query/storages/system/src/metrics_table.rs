@@ -138,18 +138,11 @@ impl MetricsTable {
 
     /// Custom metrics that are not collected by prometheus.
     fn custom_metric_samples(&self) -> Result<Vec<MetricSample>> {
-        let samples = vec![
-            MetricSample {
-                name: "query_memory_usage_bytes".to_string(),
-                value: MetricValue::Counter(GLOBAL_MEM_STAT.get_memory_usage() as f64),
-                labels: HashMap::new(),
-            },
-            MetricSample {
-                name: "query_memory_peak_usage_bytes".to_string(),
-                value: MetricValue::Counter(GLOBAL_MEM_STAT.get_peak_memory_usage() as f64),
-                labels: HashMap::new(),
-            },
-        ];
+        let samples = vec![MetricSample {
+            name: "query_memory_usage_bytes".to_string(),
+            value: MetricValue::Counter(GLOBAL_MEM_STAT.get_memory_usage() as f64),
+            labels: HashMap::new(),
+        }];
 
         Ok(samples)
     }

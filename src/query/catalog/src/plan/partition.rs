@@ -342,6 +342,7 @@ pub struct ReclusterTask {
     pub stats: PartStatistics,
     pub total_rows: usize,
     pub total_bytes: usize,
+    pub total_compressed: usize,
     pub level: i32,
 }
 

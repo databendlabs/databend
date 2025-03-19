@@ -148,6 +148,23 @@ impl PhysicalPlanBuilder {
                                         .clone())
                                 })
                                 .collect::<Result<_>>()?;
+                            let sort_desc_indices = agg.sort_descs
+                                .iter()
+                                .map(|desc| {
+                                    if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
+                                        Ok(col.column.index)
+                                    } else {
+                                        Err(ErrorCode::Internal(
+                                            "Aggregate function description must be a BoundColumnRef"
+                                                .to_string(),
+                                        ))
+                                    }
+                                })
+                                .collect::<Result<_>>()?;
+                            let sort_descs = agg.sort_descs
+                                .iter()
+                                .map(|desc| desc.try_into())
+                                .collect::<Result<_>>()?;
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: agg.func_name.clone(),
@@ -155,9 +172,11 @@ impl PhysicalPlanBuilder {
                                     return_type: *agg.return_type.clone(),
                                     args,
                                     params: agg.params.clone(),
+                                    sort_descs,
                                 },
                                 output_column: v.index,
                                 arg_indices,
+                                sort_desc_indices,
                                 display: v.scalar.as_expr()?.sql_display(),
                             })
                         }
@@ -193,9 +212,11 @@ impl PhysicalPlanBuilder {
                                     return_type: *udaf.return_type.clone(),
                                     args,
                                     params: vec![],
+                                    sort_descs: vec![],
                                 },
                                 output_column: v.index,
                                 arg_indices,
+                                sort_desc_indices: vec![],
                                 display: v.scalar.as_expr()?.sql_display(),
                             })
                         }
@@ -370,6 +391,19 @@ impl PhysicalPlanBuilder {
                                     }
                                 })
                                 .collect::<Result<Vec<_>>>()?;
+                            let sort_desc_indices = agg.sort_descs
+                                .iter()
+                                .map(|desc| {
+                                    if let ScalarExpr::BoundColumnRef(col) = &desc.expr {
+                                        Ok(col.column.index)
+                                    } else {
+                                        Err(ErrorCode::Internal(
+                                            "Aggregate function sort description must be a BoundColumnRef"
+                                                .to_string(),
+                                        ))
+                                    }
+                                })
+                                .collect::<Result<_>>()?;
                             let args = arg_indices
                                 .iter()
                                 .map(|i| {
@@ -379,6 +413,10 @@ impl PhysicalPlanBuilder {
                                         .clone())
                                 })
                                 .collect::<Result<_>>()?;
+                            let sort_descs = agg.sort_descs
+                                .iter()
+                                .map(|desc| desc.try_into())
+                                .collect::<Result<_>>()?;
                             Ok(AggregateFunctionDesc {
                                 sig: AggregateFunctionSignature {
                                     name: agg.func_name.clone(),
@@ -386,9 +424,11 @@ impl PhysicalPlanBuilder {
                                     return_type: *agg.return_type.clone(),
                                     args,
                                     params: agg.params.clone(),
+                                    sort_descs,
                                 },
                                 output_column: v.index,
                                 arg_indices,
+                                sort_desc_indices,
                                 display: v.scalar.as_expr()?.sql_display(),
                             })
                         }
@@ -424,9 +464,11 @@ impl PhysicalPlanBuilder {
                                     return_type: *udaf.return_type.clone(),
                                     args,
                                     params: vec![],
+                                    sort_descs: vec![],
                                 },
                                 output_column: v.index,
                                 arg_indices,
+                                sort_desc_indices: vec![],
                                 display: v.scalar.as_expr()?.sql_display(),
                             })
                         }

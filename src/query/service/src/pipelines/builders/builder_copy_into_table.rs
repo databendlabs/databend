@@ -179,6 +179,7 @@ impl PipelineBuilder {
                     main_pipeline,
                     to_table.clone(),
                     plan_required_values_schema.clone(),
+                    plan.table_meta_timestamps,
                 )?
             }
             CopyIntoTableMode::Replace => {}
@@ -187,6 +188,7 @@ impl PipelineBuilder {
                 main_pipeline,
                 to_table.clone(),
                 plan_required_values_schema.clone(),
+                plan.table_meta_timestamps,
             )?,
         }
         Ok(())
@@ -214,7 +216,7 @@ impl PipelineBuilder {
             copied_file_tree.insert(path, TableCopiedFileInfo {
                 etag: short_etag,
                 content_length: file.size,
-                last_modified: Some(file.last_modified),
+                last_modified: file.last_modified,
             });
         }
 

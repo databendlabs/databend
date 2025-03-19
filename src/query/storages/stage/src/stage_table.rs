@@ -28,6 +28,9 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
+use databend_common_expression::FILENAME_COLUMN_ID;
+use databend_common_expression::FILE_ROW_NUMBER_COLUMN_ID;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::schema::TableInfo;
@@ -37,8 +40,10 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storages_orc::OrcTableForCopy;
 use databend_common_storages_parquet::ParquetTableForCopy;
 use databend_storages_common_stage::SingleFilePartition;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use opendal::Operator;
 
+use crate::read::avro::AvroReadPipelineBuilder;
 use crate::read::row_based::RowBasedReadPipelineBuilder;
 
 /// TODO: we need to track the data metrics in stage table.
@@ -106,6 +111,7 @@ impl StageTable {
 
         let partitions = files
             .into_iter()
+            .filter(|f| f.size > 0)
             .map(|v| {
                 let part = SingleFilePartition {
                     path: v.path.clone(),
@@ -134,6 +140,10 @@ impl Table for StageTable {
         &self.table_info_placeholder
     }
 
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
+        (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
+    }
+
     fn get_data_source_info(&self) -> DataSourceInfo {
         DataSourceInfo::StageSource(self.table_info.clone())
     }
@@ -154,9 +164,10 @@ impl Table for StageTable {
             FileFormatParams::Orc(_) => {
                 OrcTableForCopy::do_read_partitions(stage_table_info, ctx, _push_downs).await
             }
-            FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Tsv(_) => {
-                self.read_partitions_simple(ctx, stage_table_info).await
-            }
+            FileFormatParams::Csv(_)
+            | FileFormatParams::NdJson(_)
+            | FileFormatParams::Tsv(_)
+            | FileFormatParams::Avro(_) => self.read_partitions_simple(ctx, stage_table_info).await,
             _ => unreachable!(
                 "unexpected format {} in StageTable::read_partition",
                 stage_table_info.stage_info.file_format_params
@@ -175,6 +186,11 @@ impl Table for StageTable {
         pipeline: &mut Pipeline,
         _put_cache: bool,
     ) -> Result<()> {
+        let internal_columns = plan
+            .internal_columns
+            .as_ref()
+            .map(|bt| bt.values().cloned().collect())
+            .unwrap_or_default();
         let stage_table_info =
             if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
                 stage_table_info
@@ -194,7 +210,15 @@ impl Table for StageTable {
                     stage_table_info,
                     compact_threshold,
                 }
-                .read_data(ctx, plan, pipeline)
+                .read_data(ctx, plan, pipeline, internal_columns)
+            }
+            FileFormatParams::Avro(_) => {
+                let compact_threshold = ctx.get_read_block_thresholds();
+                AvroReadPipelineBuilder {
+                    stage_table_info,
+                    compact_threshold,
+                }
+                .read_data(ctx, plan, pipeline, internal_columns)
             }
             _ => unreachable!(
                 "unexpected format {} in StageTable::read_partition",
@@ -203,7 +227,12 @@ impl Table for StageTable {
         }
     }
 
-    fn append_data(&self, ctx: Arc<dyn TableContext>, pipeline: &mut Pipeline) -> Result<()> {
+    fn append_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _table_meta_timestamps: TableMetaTimestamps,
+    ) -> Result<()> {
         self.do_append_data(ctx, pipeline)
     }
 

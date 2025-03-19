@@ -21,12 +21,12 @@ use databend_common_base::display::display_option::DisplayOptionExt;
 use databend_common_meta_raft_store::raft_log_v004;
 use databend_common_meta_raft_store::raft_log_v004::codec_wrapper::Cw;
 use databend_common_meta_raft_store::raft_log_v004::io_desc::IODesc;
+use databend_common_meta_sled_store::openraft::entry::RaftEntry;
 use databend_common_meta_sled_store::openraft::storage::RaftLogStorage;
 use databend_common_meta_sled_store::openraft::EntryPayload;
 use databend_common_meta_sled_store::openraft::LogIdOptionExt;
 use databend_common_meta_sled_store::openraft::LogState;
 use databend_common_meta_sled_store::openraft::OptionalSend;
-use databend_common_meta_sled_store::openraft::RaftLogId;
 use databend_common_meta_sled_store::openraft::RaftLogReader;
 use databend_common_meta_types::raft_types::Entry;
 use databend_common_meta_types::raft_types::IOFlushed;
@@ -70,7 +70,7 @@ impl RaftLogReader<TypeConfig> for RaftStore {
 
                 debug!(
                     "RaftStore::limited_get_log_entries: got log: log_id: {}, size: {}",
-                    ent.get_log_id(),
+                    ent.log_id(),
                     size
                 );
 
@@ -82,8 +82,8 @@ impl RaftLogReader<TypeConfig> for RaftStore {
                         "RaftStore::limited_get_log_entries: too many logs, early return: entries cnt: {}, total size: {}, res: [{}, {}]",
                         res.len(),
                         total_size,
-                        res.first().map(|x| x.get_log_id()).unwrap(),
-                        res.last().map(|x| x.get_log_id()).unwrap(),
+                        res.first().map(|x| x.log_id()).unwrap(),
+                        res.last().map(|x| x.log_id()).unwrap(),
                     );
 
                     return Ok(res);

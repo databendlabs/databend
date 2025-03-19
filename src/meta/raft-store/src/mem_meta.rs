@@ -86,7 +86,7 @@ impl KVApi for MemMeta {
         let sm = self.sm.lock().await;
 
         for k in keys {
-            let got = sm.get_maybe_expired_kv(k.as_str()).await?;
+            let got = sm.get_maybe_expired_kv(k).await?;
             let v = Self::non_expired(got, local_now_ms);
             items.push(Ok(StreamItem::from((k.clone(), v))));
         }

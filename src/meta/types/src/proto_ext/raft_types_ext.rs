@@ -42,7 +42,6 @@ mod log_id_impls {
 
     use crate::protobuf as pb;
     use crate::raft_types;
-    use crate::raft_types::CommittedLeaderId;
 
     impl From<raft_types::LogId> for pb::LogId {
         fn from(log_id: raft_types::LogId) -> Self {
@@ -56,10 +55,7 @@ mod log_id_impls {
 
     impl From<pb::LogId> for raft_types::LogId {
         fn from(log_id: pb::LogId) -> Self {
-            raft_types::LogId::new(
-                CommittedLeaderId::new(log_id.term, log_id.node_id),
-                log_id.index,
-            )
+            raft_types::new_log_id(log_id.term, log_id.node_id, log_id.index)
         }
     }
 }

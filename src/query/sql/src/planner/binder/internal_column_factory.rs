@@ -20,6 +20,8 @@ use databend_common_catalog::plan::InternalColumnType;
 use databend_common_expression::BASE_BLOCK_IDS_COL_NAME;
 use databend_common_expression::BASE_ROW_ID_COL_NAME;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
+use databend_common_expression::FILENAME_COLUMN_NAME;
+use databend_common_expression::FILE_ROW_NUMBER_COLUMN_NAME;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -75,6 +77,19 @@ impl InternalColumnFactory {
         internal_columns.insert(
             SEARCH_SCORE_COL_NAME.to_string(),
             InternalColumn::new(SEARCH_SCORE_COL_NAME, InternalColumnType::SearchScore),
+        );
+
+        internal_columns.insert(
+            FILENAME_COLUMN_NAME.to_string(),
+            InternalColumn::new(FILENAME_COLUMN_NAME, InternalColumnType::FileName),
+        );
+
+        internal_columns.insert(
+            FILE_ROW_NUMBER_COLUMN_NAME.to_string(),
+            InternalColumn::new(
+                FILE_ROW_NUMBER_COLUMN_NAME,
+                InternalColumnType::FileRowNumber,
+            ),
         );
 
         InternalColumnFactory { internal_columns }

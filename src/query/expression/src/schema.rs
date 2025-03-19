@@ -49,6 +49,10 @@ pub const BASE_BLOCK_IDS_COLUMN_ID: u32 = u32::MAX - 6;
 pub const SEARCH_MATCHED_COLUMN_ID: u32 = u32::MAX - 7;
 pub const SEARCH_SCORE_COLUMN_ID: u32 = u32::MAX - 8;
 
+pub const VIRTUAL_COLUMN_ID_START: u32 = 3_000_000_001;
+pub const VIRTUAL_COLUMNS_ID_UPPER: u32 = 4_294_967_295;
+pub const VIRTUAL_COLUMNS_LIMIT: usize = 1000;
+
 // internal column name.
 pub const ROW_ID_COL_NAME: &str = "_row_id";
 pub const SNAPSHOT_NAME_COL_NAME: &str = "_snapshot_name";
@@ -67,11 +71,16 @@ pub const CHANGE_ROW_ID_COL_NAME: &str = "change$row_id";
 
 pub const PREDICATE_COLUMN_NAME: &str = "_predicate";
 
+pub const FILENAME_COLUMN_NAME: &str = "metadata$filename";
+pub const FILE_ROW_NUMBER_COLUMN_NAME: &str = "metadata$file_row_number";
+
 // stream column id.
 pub const ORIGIN_BLOCK_ROW_NUM_COLUMN_ID: u32 = u32::MAX - 10;
 pub const ORIGIN_BLOCK_ID_COLUMN_ID: u32 = u32::MAX - 11;
 pub const ORIGIN_VERSION_COLUMN_ID: u32 = u32::MAX - 12;
 pub const ROW_VERSION_COLUMN_ID: u32 = u32::MAX - 13;
+pub const FILENAME_COLUMN_ID: u32 = u32::MAX - 14;
+pub const FILE_ROW_NUMBER_COLUMN_ID: u32 = u32::MAX - 15;
 // stream column name.
 pub const ORIGIN_VERSION_COL_NAME: &str = "_origin_version";
 pub const ORIGIN_BLOCK_ID_COL_NAME: &str = "_origin_block_id";
@@ -98,12 +107,15 @@ pub static INTERNAL_COLUMNS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| 
         ORIGIN_BLOCK_ID_COL_NAME,
         ORIGIN_BLOCK_ROW_NUM_COL_NAME,
         ROW_VERSION_COL_NAME,
+        FILENAME_COLUMN_NAME,
+        FILE_ROW_NUMBER_COLUMN_NAME,
     ])
 });
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
     column_id >= SEARCH_SCORE_COLUMN_ID
+        || (FILE_ROW_NUMBER_COLUMN_ID..=FILENAME_COLUMN_ID).contains(&column_id)
 }
 
 #[inline]
@@ -133,6 +145,14 @@ pub struct DataSchema {
     pub(crate) metadata: BTreeMap<String, String>,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct VirtualDataSchema {
+    pub fields: Vec<VirtualDataField>,
+    pub metadata: BTreeMap<String, String>,
+    pub next_column_id: u32,
+    pub number_of_blocks: u64,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ComputedExpr {
     Virtual(String),
@@ -155,6 +175,25 @@ pub struct DataField {
     default_expr: Option<String>,
     data_type: DataType,
     computed_expr: Option<ComputedExpr>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum VariantDataType {
+    Jsonb,
+    Boolean,
+    UInt64,
+    Int64,
+    Float64,
+    String,
+    Array(Box<VariantDataType>),
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct VirtualDataField {
+    pub name: String,
+    pub data_types: Vec<VariantDataType>,
+    pub source_column_id: u32,
+    pub column_id: u32,
 }
 
 fn uninit_column_id() -> ColumnId {

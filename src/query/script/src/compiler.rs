@@ -1149,6 +1149,7 @@ fn wrap_is_true(expr: Expr) -> Expr {
             name: Identifier::from_name(expr.span(), "is_true"),
             args: vec![expr],
             params: vec![],
+            order_by: vec![],
             window: None,
             lambda: None,
         },

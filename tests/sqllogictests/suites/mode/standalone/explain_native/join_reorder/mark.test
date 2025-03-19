@@ -6,6 +6,7 @@ HashJoin
 ├── join type: LEFT SEMI
 ├── build keys: [subquery_1 (#1)]
 ├── probe keys: [numbers.number (#0)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 10000.00
 ├── TableScan(Build)
@@ -35,6 +36,7 @@ HashJoin
 ├── join type: RIGHT SEMI
 ├── build keys: [numbers.number (#0)]
 ├── probe keys: [subquery_1 (#1)]
+├── keys is null equal: [false]
 ├── filters: []
 ├── estimated rows: 1000.00
 ├── TableScan(Build)

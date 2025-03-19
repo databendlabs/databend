@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::CreateOption;
 use crate::ast::Expr;
 use crate::ast::TypeName;
@@ -68,7 +69,7 @@ impl Display for CreateDatamaskPolicyStmt {
             self.policy.return_type, self.policy.body
         )?;
         if let Some(comment) = &self.policy.comment {
-            write!(f, " COMMENT = '{}'", comment)?;
+            write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }
 
         Ok(())

@@ -147,6 +147,7 @@ pub enum GrantObjectName {
     Table(Option<String>, String),
     UDF(String),
     Stage(String),
+    Warehouse(String),
 }
 
 impl Display for GrantObjectName {
@@ -164,6 +165,7 @@ impl Display for GrantObjectName {
             }
             GrantObjectName::UDF(udf) => write!(f, " UDF {udf}"),
             GrantObjectName::Stage(stage) => write!(f, " STAGE {stage}"),
+            GrantObjectName::Warehouse(w) => write!(f, " WAREHOUSE {w}"),
         }
     }
 }

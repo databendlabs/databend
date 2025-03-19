@@ -43,6 +43,7 @@ Exchange
     ├── join type: INNER
     ├── build keys: [table2.value (#1)]
     ├── probe keys: [table1.value (#0)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 250.00
     ├── Exchange(Build)
@@ -88,6 +89,7 @@ Exchange
     ├── join type: INNER
     ├── build keys: [table3.value (#2)]
     ├── probe keys: [table1.value (#0)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 200.00
     ├── Exchange(Build)
@@ -98,6 +100,7 @@ Exchange
     │       ├── join type: INNER
     │       ├── build keys: [table2.value (#1)]
     │       ├── probe keys: [table3.value (#2)]
+    │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── estimated rows: 250.00
     │       ├── Exchange(Build)
@@ -158,6 +161,7 @@ Exchange
     ├── join type: LEFT SEMI
     ├── build keys: [table2.value (#1)]
     ├── probe keys: [table1.value (#0)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 250.00
     ├── Exchange(Build)
@@ -203,6 +207,7 @@ Exchange
     ├── join type: RIGHT SEMI
     ├── build keys: [table2.value (#1)]
     ├── probe keys: [table1.value (#0)]
+    ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 250.00
     ├── Exchange(Build)

@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use map_api::match_seq::errors::ConflictSeq;
+use map_api::match_seq::MatchSeq;
+use map_api::match_seq::MatchSeqExt;
+
 use crate::protobuf as pb;
 use crate::seq_value::KVMeta;
 use crate::seq_value::SeqV;
@@ -52,6 +56,10 @@ impl pb::SeqV {
     pub fn with_meta(seq: u64, meta: Option<pb::KvMeta>, data: Vec<u8>) -> Self {
         Self { seq, meta, data }
     }
+
+    pub fn seq(&self) -> u64 {
+        self.seq
+    }
 }
 
 impl From<SeqV> for pb::SeqV {
@@ -72,5 +80,11 @@ impl From<pb::SeqV> for SeqV {
             data: sv.data,
             meta: sv.meta.map(KVMeta::from),
         }
+    }
+}
+
+impl MatchSeqExt<pb::SeqV> for MatchSeq {
+    fn match_seq(&self, sv: &pb::SeqV) -> Result<(), ConflictSeq> {
+        self.match_seq(&sv.seq)
     }
 }

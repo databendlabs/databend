@@ -17,7 +17,7 @@ use std::io;
 use std::ops::RangeBounds;
 
 use databend_common_meta_types::CmdContext;
-use databend_common_meta_types::EvalExpireTime;
+use databend_common_meta_types::Expirable;
 use databend_common_meta_types::MatchSeqExt;
 use databend_common_meta_types::Operation;
 use databend_common_meta_types::SeqV;
@@ -27,12 +27,12 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::debug;
 use log::warn;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
+use map_api::IOResultStream;
 
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::IOResultStream;
-use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiExt;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MarkedOf;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
@@ -51,7 +51,7 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         let prev = self.map_ref().str_map().get(&upsert_kv.key).await?.clone();
 
-        if upsert_kv.seq.match_seq(prev.seq()).is_err() {
+        if upsert_kv.seq.match_seq(&prev.seq()).is_err() {
             return Ok((prev.clone(), prev));
         }
 
@@ -69,7 +69,7 @@ pub trait StateMachineApiExt: StateMachineApi {
             }
         };
 
-        let expire_ms = kv_meta.eval_expire_at_ms();
+        let expire_ms = kv_meta.expires_at_ms();
         if expire_ms < self.get_expire_cursor().time_ms {
             // The record has expired, delete it at once.
             //
@@ -136,13 +136,13 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         // Remove previous expiration index, add a new one.
 
-        if let Some(exp_ms) = removed.get_expire_at_ms() {
+        if let Some(exp_ms) = removed.expires_at_ms_opt() {
             self.map_mut()
                 .set(ExpireKey::new(exp_ms, removed.order_key().seq()), None)
                 .await?;
         }
 
-        if let Some(exp_ms) = added.get_expire_at_ms() {
+        if let Some(exp_ms) = added.expires_at_ms_opt() {
             let k = ExpireKey::new(exp_ms, added.order_key().seq());
             let v = key.to_string();
             self.map_mut().set(k, Some((v, None))).await?;
@@ -198,7 +198,7 @@ pub trait StateMachineApiExt: StateMachineApi {
     /// Get a cloned value by key.
     ///
     /// It does not check expiration of the returned entry.
-    async fn get_maybe_expired_kv(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
+    async fn get_maybe_expired_kv(&self, key: &String) -> Result<Option<SeqV>, io::Error> {
         let got = self.map_ref().str_map().get(key).await?;
         let seqv = Into::<Option<SeqV>>::into(got);
         Ok(seqv)

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::quote::display_ident;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_exception::ErrorCode;
@@ -119,7 +120,7 @@ impl ShowCreateDictionaryInterpreter {
 
         let mut dict_create_sql = format!(
             "CREATE DICTIONARY {}\n(\n",
-            display_ident(dict_name, quoted_ident_case_sensitive, sql_dialect)
+            display_ident(dict_name, false, quoted_ident_case_sensitive, sql_dialect)
         );
 
         // Append columns and indexes.
@@ -129,10 +130,15 @@ impl ShowCreateDictionaryInterpreter {
                 // compatibility: creating table in the old planner will not have `fields_comments`
                 let comment = field_comments
                     .get(&field.column_id)
-                    .and_then(|c| format!(" COMMENT '{}'", c).into())
+                    .and_then(|c| format!(" COMMENT {}", QuotedString(c, '\'')).into())
                     .unwrap_or_default();
 
-                let ident = display_ident(field.name(), quoted_ident_case_sensitive, sql_dialect);
+                let ident = display_ident(
+                    field.name(),
+                    false,
+                    quoted_ident_case_sensitive,
+                    sql_dialect,
+                );
                 let data_type = field.data_type().sql_name_explicit_null();
                 let column_str = format!("  {ident} {data_type}{comment}",);
 

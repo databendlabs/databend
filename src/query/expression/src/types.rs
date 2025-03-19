@@ -39,6 +39,8 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::ops::Range;
 
+use borsh::BorshDeserialize;
+use borsh::BorshSerialize;
 pub use databend_common_io::deserialize_bitmap;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
@@ -74,13 +76,24 @@ pub use self::timestamp::TimestampType;
 pub use self::variant::VariantType;
 use crate::property::Domain;
 use crate::values::Column;
-use crate::values::Scalar;
+pub use crate::values::Scalar;
 use crate::ColumnBuilder;
 use crate::ScalarRef;
 
 pub type GenericMap = [DataType];
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, EnumAsInner)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    BorshSerialize,
+    BorshDeserialize,
+    EnumAsInner,
+)]
 pub enum DataType {
     Null,
     EmptyArray,

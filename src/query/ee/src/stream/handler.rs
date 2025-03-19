@@ -190,6 +190,7 @@ impl StreamHandler for RealStreamHandler {
                     table_name: stream_name.clone(),
                     tb_id: table.get_id(),
                     db_id: db.get_db_info().database_id.db_id,
+                    db_name: db.name().to_string(),
                     engine: engine.to_string(),
                     session_id: "".to_string(),
                 })

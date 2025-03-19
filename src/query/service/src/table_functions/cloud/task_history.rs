@@ -146,7 +146,7 @@ impl TaskHistorySource {
     }
     async fn build_request(&self) -> Result<ShowTaskRunsRequest> {
         let tenant = self.ctx.get_tenant();
-        let available_roles = self.ctx.get_available_roles().await?;
+        let available_roles = self.ctx.get_all_available_roles().await?;
         Ok(ShowTaskRunsRequest {
             tenant_id: tenant.tenant_name().to_string(),
             scheduled_time_start: self

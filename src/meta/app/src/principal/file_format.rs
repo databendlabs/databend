@@ -61,6 +61,7 @@ pub enum FileFormatParams {
     Xml(XmlFileFormatParams),
     Parquet(ParquetFileFormatParams),
     Orc(OrcFileFormatParams),
+    Avro(AvroFileFormatParams),
 }
 
 impl FileFormatParams {
@@ -73,6 +74,7 @@ impl FileFormatParams {
             FileFormatParams::Xml(_) => StageFileFormatType::Xml,
             FileFormatParams::Parquet(_) => StageFileFormatType::Parquet,
             FileFormatParams::Orc(_) => StageFileFormatType::Orc,
+            FileFormatParams::Avro(_) => StageFileFormatType::Avro,
         }
     }
 
@@ -90,6 +92,9 @@ impl FileFormatParams {
                 Ok(FileFormatParams::Json(JsonFileFormatParams::default()))
             }
             StageFileFormatType::Orc => Ok(FileFormatParams::Orc(OrcFileFormatParams::default())),
+            StageFileFormatType::Avro => {
+                Ok(FileFormatParams::Avro(AvroFileFormatParams::default()))
+            }
             _ => Err(ErrorCode::IllegalFileFormat(format!(
                 "Unsupported file format type: {:?}",
                 format_type
@@ -106,6 +111,7 @@ impl FileFormatParams {
             FileFormatParams::Xml(v) => v.compression,
             FileFormatParams::Parquet(_) => StageFileCompression::None,
             FileFormatParams::Orc(_) => StageFileCompression::None,
+            FileFormatParams::Avro(_) => StageFileCompression::None,
         }
     }
 
@@ -166,6 +172,16 @@ impl FileFormatParams {
                     compression,
                     missing_field_as.as_deref(),
                     null_field_as.as_deref(),
+                    null_if,
+                )?)
+            }
+            StageFileFormatType::Avro => {
+                let compression = reader.take_compression()?;
+                let missing_field_as = reader.options.remove(MISSING_FIELD_AS);
+                let null_if = parse_null_if(reader.options.remove(NULL_IF))?;
+                FileFormatParams::Avro(AvroFileFormatParams::try_create(
+                    compression,
+                    missing_field_as.as_deref(),
                     null_if,
                 )?)
             }
@@ -690,6 +706,52 @@ impl NdJsonFileFormatParams {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AvroFileFormatParams {
+    pub compression: StageFileCompression,
+    pub missing_field_as: NullAs,
+    pub null_if: Vec<String>,
+}
+
+impl AvroFileFormatParams {
+    pub fn try_create(
+        compression: StageFileCompression,
+        missing_field_as: Option<&str>,
+        null_if: Vec<String>,
+    ) -> Result<Self> {
+        let missing_field_as = NullAs::parse(missing_field_as, MISSING_FIELD_AS, NullAs::Error)?;
+        if matches!(missing_field_as, NullAs::Null) {
+            return Err(ErrorCode::InvalidArgument(
+                "Invalid option value for Avro: NULL_FIELD_AS is set to NULL. The valid values are ERROR | FIELD_DEFAULT.",
+            ));
+        }
+        Ok(Self {
+            compression,
+            missing_field_as,
+            null_if,
+        })
+    }
+}
+
+impl Default for crate::principal::AvroFileFormatParams {
+    fn default() -> Self {
+        crate::principal::AvroFileFormatParams {
+            compression: StageFileCompression::None,
+            missing_field_as: NullAs::Error,
+            null_if: vec![],
+        }
+    }
+}
+
+impl AvroFileFormatParams {
+    pub fn downcast_unchecked(params: &FileFormatParams) -> &AvroFileFormatParams {
+        match params {
+            FileFormatParams::Avro(p) => p,
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ParquetFileFormatParams {
     pub missing_field_as: NullAs,
@@ -775,6 +837,9 @@ impl Display for FileFormatParams {
                     "TYPE = NDJSON, COMPRESSION = {:?} MISSING_FIELD_AS = {} NULL_FIELDS_AS = {}",
                     params.compression, params.missing_field_as, params.null_field_as
                 )
+            }
+            FileFormatParams::Avro(params) => {
+                write!(f, "TYPE = AVRO, NULL_FIELDS_AS = {}", params.compression,)
             }
             FileFormatParams::Parquet(params) => {
                 write!(

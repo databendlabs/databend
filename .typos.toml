@@ -13,6 +13,7 @@
 "Ser" = "Ser"
 "flate" = "flate"
 "Tke" = "Tke"
+"typ" = "typ"
 
 [files]
 extend-exclude = [

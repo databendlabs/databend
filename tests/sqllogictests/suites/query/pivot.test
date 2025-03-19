@@ -1,5 +1,5 @@
 statement ok
-CREATE TABLE monthly_sales(empid INT, amount INT, month TEXT);
+CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);
 
 statement ok
 INSERT INTO monthly_sales VALUES
@@ -20,8 +20,6 @@ INSERT INTO monthly_sales VALUES
     (2, 800, 'APR'),
     (2, 4500, 'APR');
 
-
-
 query IIIII
 SELECT empid,jan,feb,mar,apr FROM (
     SELECT *
@@ -32,6 +30,17 @@ SELECT empid,jan,feb,mar,apr FROM (
 ----
 1	10400	8000	11000	18000
 2	39500	90700	12000	5300
+
+query IRRRR
+SELECT empid,jan,feb,mar,apr FROM (
+    SELECT *
+        FROM monthly_sales
+            PIVOT(AVG(amount) FOR MONTH IN ('JAN', 'FEB', 'MAR', 'APR'))
+        ORDER BY EMPID
+);
+----
+1	5200.0	4000.0	5500.0	9000.0
+2	19750.0	45350.0	6000.0	2650.0
 
 query IIIII
 SELECT EMPID,
@@ -96,4 +105,18 @@ SELECT empid,jan,feb,mar,apr FROM (
 );
 
 statement ok
-drop table if exists monthly_sales;
+CREATE OR REPLACE TABLE test_table ("DATA_TIME" timestamp, "METRIC_CODE" string, "VALUE" decimal(16,4));
+
+statement ok
+insert into test_table values ('2024-09-30 14:09:36.000', '0101', 3.5128);
+
+query TR
+SELECT * FROM test_table PIVOT(avg("VALUE") FOR "METRIC_CODE" IN ('0101'));
+----
+2024-09-30 14:09:36.000000	3.5128
+
+statement ok
+drop table monthly_sales;
+
+statement ok
+drop table test_table;

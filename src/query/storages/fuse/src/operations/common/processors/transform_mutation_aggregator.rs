@@ -34,6 +34,7 @@ use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
+use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::ClusterType;
 use itertools::Itertools;
@@ -57,8 +58,6 @@ use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
-use crate::DEFAULT_BLOCK_PER_SEGMENT;
-use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 pub struct TableMutationAggregator {
     ctx: Arc<dyn TableContext>,
@@ -67,7 +66,6 @@ pub struct TableMutationAggregator {
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
     thresholds: BlockThresholds,
-    block_per_seg: usize,
 
     default_cluster_key_id: Option<u32>,
     base_segments: Vec<Location>,
@@ -84,6 +82,7 @@ pub struct TableMutationAggregator {
     kind: MutationKind,
     start_time: Instant,
     finished_tasks: usize,
+    table_meta_timestamps: TableMetaTimestamps,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -136,6 +135,7 @@ impl TableMutationAggregator {
         removed_segment_indexes: Vec<usize>,
         removed_statistics: Statistics,
         kind: MutationKind,
+        table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
         let set_hilbert_level = table
             .cluster_type()
@@ -155,8 +155,6 @@ impl TableMutationAggregator {
             thresholds: table.get_block_thresholds(),
             default_cluster_key_id: table.cluster_key_id(),
             set_hilbert_level,
-            block_per_seg: table
-                .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT),
             mutations: HashMap::new(),
             appended_segments: vec![],
             base_segments,
@@ -168,6 +166,7 @@ impl TableMutationAggregator {
             finished_tasks: 0,
             start_time: Instant::now(),
             table_id: table.get_id(),
+            table_meta_timestamps,
         }
     }
 
@@ -268,11 +267,10 @@ impl TableMutationAggregator {
 
         let mut tasks = Vec::new();
         let merged_blocks = std::mem::take(&mut self.recluster_merged_blocks);
-        let segments_num = (merged_blocks.len() / self.block_per_seg).max(1);
+        let segments_num = (merged_blocks.len() / self.thresholds.block_per_segment).max(1);
         let chunk_size = merged_blocks.len().div_ceil(segments_num);
         let default_cluster_key = Some(default_cluster_key_id);
         let thresholds = self.thresholds;
-        let block_per_seg = self.block_per_seg;
         let set_hilbert_level = self.set_hilbert_level;
         let kind = self.kind;
         for chunk in &merged_blocks.into_iter().chunks(chunk_size) {
@@ -281,6 +279,7 @@ impl TableMutationAggregator {
 
             let location_gen = self.location_gen.clone();
             let op = self.dal.clone();
+            let table_meta_timestamps = self.table_meta_timestamps;
             tasks.push(async move {
                 write_segment(
                     op,
@@ -289,9 +288,9 @@ impl TableMutationAggregator {
                     thresholds,
                     default_cluster_key,
                     all_perfect,
-                    block_per_seg,
                     kind,
                     set_hilbert_level,
+                    table_meta_timestamps,
                 )
                 .await
             });
@@ -425,7 +424,6 @@ impl TableMutationAggregator {
     ) -> Result<Vec<SegmentLite>> {
         let thresholds = self.thresholds;
         let default_cluster_key_id = self.default_cluster_key_id;
-        let block_per_seg = self.block_per_seg;
         let kind = self.kind;
         let set_hilbert_level = self.set_hilbert_level;
         let mut tasks = Vec::with_capacity(segment_indices.len());
@@ -435,6 +433,7 @@ impl TableMutationAggregator {
             let schema = self.schema.clone();
             let op = self.dal.clone();
             let location_gen = self.location_gen.clone();
+            let table_meta_timestamps = self.table_meta_timestamps;
 
             tasks.push(async move {
                 let mut all_perfect = false;
@@ -497,9 +496,9 @@ impl TableMutationAggregator {
                     thresholds,
                     default_cluster_key_id,
                     all_perfect,
-                    block_per_seg,
                     kind,
                     set_level,
+                    table_meta_timestamps,
                 )
                 .await?;
 
@@ -571,11 +570,11 @@ async fn write_segment(
     thresholds: BlockThresholds,
     default_cluster_key: Option<u32>,
     all_perfect: bool,
-    block_per_seg: usize,
     kind: MutationKind,
     set_hilbert_level: bool,
+    table_meta_timestamps: TableMetaTimestamps,
 ) -> Result<(String, Statistics)> {
-    let location = location_gen.gen_segment_info_location();
+    let location = location_gen.gen_segment_info_location(table_meta_timestamps);
     let mut new_summary = reduce_block_metas(&blocks, thresholds, default_cluster_key);
     if all_perfect {
         // To fix issue #13217.
@@ -589,11 +588,12 @@ async fn write_segment(
     }
     if set_hilbert_level {
         debug_assert!(new_summary.cluster_stats.is_none());
-        let level = if new_summary.block_count >= block_per_seg as u64
-            && (new_summary.row_count as usize >= block_per_seg * thresholds.min_rows_per_block
-                || new_summary.uncompressed_byte_size as usize
-                    >= block_per_seg * thresholds.max_bytes_per_block)
-        {
+        let level = if thresholds.check_perfect_segment(
+            new_summary.block_count as usize,
+            new_summary.row_count as usize,
+            new_summary.uncompressed_byte_size as usize,
+            new_summary.compressed_byte_size as usize,
+        ) {
             -1
         } else {
             0

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -224,6 +225,7 @@ impl InterpreterQueryLog {
             has_profiles: false,
             txn_state,
             txn_id,
+            peek_memory_usage: HashMap::new(),
         })
     }
 
@@ -335,6 +337,8 @@ impl InterpreterQueryLog {
         let txn_id = guard.txn_id().to_string();
         drop(guard);
 
+        let peek_memory_usage = ctx.get_node_peek_memory_usage();
+
         Self::write_log(QueryLogElement {
             log_type,
             log_type_name,
@@ -398,6 +402,7 @@ impl InterpreterQueryLog {
             has_profiles,
             txn_state,
             txn_id,
+            peek_memory_usage,
         })
     }
 }

@@ -13,7 +13,7 @@ inputs:
     description: "storage backend for stage, choices: s3,fs"
     required: true
     default: ""
-  deducp:
+  dedup:
     description: "path type for dedup when copy, choices: full_path,sub_path"
     required: true
     default: ""

@@ -316,6 +316,15 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_tables_names(&self, _tenant: &Tenant, db_name: &str) -> Result<Vec<String>> {
+        let tables = self.sys_db_meta.get_all_tables(db_name)?;
+        Ok(tables
+            .into_iter()
+            .map(|table| table.name().to_string())
+            .collect())
+    }
+
+    #[async_backtrace::framed]
     async fn list_tables_history(
         &self,
         tenant: &Tenant,

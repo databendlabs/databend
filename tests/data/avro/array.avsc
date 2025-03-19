@@ -1,0 +1,10 @@
+{
+  "namespace": "example.avro",
+  "type": "record",
+  "name": "user",
+  "fields": [
+    {"name":  "tags",
+      "type": { "name": "str_array", "type": "array", "items": "string" }
+    }
+  ]
+}

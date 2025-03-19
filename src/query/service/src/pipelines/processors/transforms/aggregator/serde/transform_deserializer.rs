@@ -135,7 +135,8 @@ impl TransformDeserializer {
                             let columns_layout =
                                 ArrayType::<UInt64Type>::try_downcast_column(&columns[3]).unwrap();
 
-                            let columns_layout_data = columns_layout.values.as_slice();
+                            let columns_layout_data = columns_layout.values().as_slice();
+                            let columns_layout_offsets = columns_layout.offsets();
 
                             let mut buckets_payload = Vec::with_capacity(data_block.num_rows());
                             for index in 0..data_block.num_rows() {
@@ -145,10 +146,10 @@ impl TransformDeserializer {
                                         location: meta.location.clone().unwrap(),
                                         data_range: *data_range_start.get_unchecked(index)
                                             ..*data_range_end.get_unchecked(index),
-                                        columns_layout: columns_layout_data[columns_layout.offsets
+                                        columns_layout: columns_layout_data[columns_layout_offsets
                                             [index]
                                             as usize
-                                            ..columns_layout.offsets[index + 1] as usize]
+                                            ..columns_layout_offsets[index + 1] as usize]
                                             .to_vec(),
                                         max_partition_count: meta.max_partition_count,
                                     });

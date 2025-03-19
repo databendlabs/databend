@@ -59,12 +59,12 @@ impl ColumnsTable {
             NULL AS privileges,
             default_expression as default,
             NULL AS extra
-        FROM system.columns;";
+        FROM default.system.columns;";
 
         let mut options = BTreeMap::new();
         options.insert(QUERY.to_string(), query.to_string());
         let table_info = TableInfo {
-            desc: "'information_schema'.'columns'".to_string(),
+            desc: "'default'.'information_schema'.'columns'".to_string(),
             name: "columns".to_string(),
             ident: TableIdent::new(table_id, 0),
             meta: TableMeta {

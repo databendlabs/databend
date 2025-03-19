@@ -157,7 +157,7 @@ evaluation:
 |        | col                             | Output               |
 +--------+---------------------------------+----------------------+
 | Type   | Tuple(String NULL,) NULL        | String NULL          |
-| Domain | ({"a"..="d"} ∪ {NULL}) ∪ {NULL} | {"a"..="d"} ∪ {NULL} |
+| Domain | ({"a"..="a"} ∪ {NULL}) ∪ {NULL} | {"a"..="a"} ∪ {NULL} |
 | Row 0  | ('a',)                          | 'a'                  |
 | Row 1  | NULL                            | NULL                 |
 | Row 2  | (NULL,)                         | NULL                 |

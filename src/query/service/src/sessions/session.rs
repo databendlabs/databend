@@ -17,6 +17,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -30,6 +32,7 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline_core::PlanProfile;
+use databend_common_settings::OutofMemoryBehavior;
 use databend_common_settings::Settings;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_storages_common_session::TempTblMgrRef;
@@ -149,15 +152,31 @@ impl Session {
     pub async fn create_query_context(self: &Arc<Self>) -> Result<Arc<QueryContext>> {
         let config = GlobalConfig::instance();
         let cluster = ClusterDiscovery::instance().discover(&config).await?;
-        self.create_query_context_with_cluster(cluster)
+        let mem_stat = ThreadTracker::mem_stat().cloned();
+        self.create_query_context_with_cluster(cluster, mem_stat)
     }
 
     pub fn create_query_context_with_cluster(
         self: &Arc<Self>,
         cluster: Arc<Cluster>,
+        mem_stat: Option<Arc<MemStat>>,
     ) -> Result<Arc<QueryContext>> {
         let session = self.clone();
         let shared = QueryContextShared::try_create(session, cluster)?;
+
+        if let Some(mem_stat) = mem_stat {
+            let settings = self.get_settings();
+            let query_max_memory_usage = settings.get_max_query_memory_usage()?;
+            let out_of_memory_behavior = settings.get_query_out_of_memory_behavior()?;
+
+            if query_max_memory_usage != 0
+                && matches!(out_of_memory_behavior, OutofMemoryBehavior::Throw)
+            {
+                mem_stat.set_limit(query_max_memory_usage as i64);
+            }
+
+            shared.set_query_memory_tracking(Some(mem_stat));
+        }
 
         self.session_ctx
             .set_query_context_shared(Arc::downgrade(&shared));

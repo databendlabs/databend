@@ -19,7 +19,6 @@ use std::sync::Arc;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 
@@ -189,15 +188,7 @@ impl InputPort {
             let unset_flags = HAS_DATA | NEED_DATA;
             match self.shared.swap(std::ptr::null_mut(), 0, unset_flags) {
                 address if address.is_null() => None,
-                address => {
-                    let data_block = (*Box::from_raw(address)).0;
-
-                    if let Ok(data_block) = &data_block {
-                        ThreadTracker::movein_memory(data_block.memory_size() as i64);
-                    }
-
-                    Some(data_block)
-                }
+                address => Some((*Box::from_raw(address)).0),
             }
         }
     }
@@ -238,8 +229,6 @@ impl OutputPort {
             UpdateTrigger::update_output(&self.update_trigger);
 
             if let Ok(data_block) = &data {
-                ThreadTracker::moveout_memory(data_block.memory_size() as i64);
-
                 if *self.record_profile {
                     Profile::record_usize_profile(
                         ProfileStatisticsName::OutputRows,

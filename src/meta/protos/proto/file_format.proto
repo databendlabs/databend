@@ -85,6 +85,7 @@ message FileFormatParams {
     NdJsonFileFormatParams nd_json = 5;
     XmlFileFormatParams xml = 6;
     OrcFileFormatParams orc = 7;
+    AvroFileFormatParams avro = 8;
   }
 }
 
@@ -155,4 +156,12 @@ message OrcFileFormatParams {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
   optional string missing_field_as = 1;
+}
+
+message AvroFileFormatParams {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+  StageFileCompression compression = 1;
+  optional string missing_field_as = 2;
+  repeated string null_if = 3;
 }

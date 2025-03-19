@@ -492,7 +492,10 @@ impl<'a> Selector<'a> {
                 ..
             } => {
                 debug_assert!(
-                    matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean))
+                    matches!(return_type, DataType::Boolean | DataType::Nullable(box DataType::Boolean)),
+                    "{} return {} not boolean",
+                    expr.sql_display(),
+                    return_type
                 );
                 let mut eval_options = EvaluateOptions::new(selection)
                     .with_suppress_error(function.signature.name == "is_not_error");

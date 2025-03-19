@@ -17,14 +17,36 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Pivot;
 use derive_visitor::VisitorMut;
 
-#[derive(Debug, Clone, Default, VisitorMut)]
-#[visitor(Expr(exit))]
-pub struct AggregateRewriter;
+#[derive(Debug, Clone, VisitorMut)]
+#[visitor(Expr(exit), Pivot(enter))]
+pub struct AggregateRewriter {
+    // aggr_expr_ptr is used for skipping the rewrite of Pivot.aggregate.
+    // It only skips the aggregate itself, while the arguments of the aggregate will still be rewritten.
+    // Here, it is assumed that the arguments of the aggregate do not contain nested Pivot.
+    aggr_expr_ptr: *const Expr,
+}
+
+impl Default for AggregateRewriter {
+    fn default() -> Self {
+        Self {
+            aggr_expr_ptr: std::ptr::null(),
+        }
+    }
+}
 
 impl AggregateRewriter {
+    fn enter_pivot(&mut self, pivot: &mut Pivot) {
+        self.aggr_expr_ptr = &pivot.aggregate
+    }
+
     fn exit_expr(&mut self, expr: &mut Expr) {
+        if self.aggr_expr_ptr == expr {
+            return;
+        }
+
         let new_expr = match expr {
             Expr::FunctionCall {
                 func:
@@ -79,6 +101,7 @@ impl AggregateRewriter {
                                         name: Identifier::from_name(l.span(), "count"),
                                         args: vec![other.clone()],
                                         params: vec![],
+                                        order_by: vec![],
                                         window: None,
                                         lambda: None,
                                     },
@@ -91,6 +114,7 @@ impl AggregateRewriter {
                                     name: Identifier::from_name(other.span(), "sum"),
                                     args: vec![other.clone()],
                                     params: vec![],
+                                    order_by: vec![],
                                     window: None,
                                     lambda: None,
                                 },
@@ -110,6 +134,7 @@ impl AggregateRewriter {
                                     name: Identifier::from_name(other.span(), "sum"),
                                     args: vec![other.clone()],
                                     params: vec![],
+                                    order_by: vec![],
                                     window: None,
                                     lambda: None,
                                 },
@@ -125,6 +150,7 @@ impl AggregateRewriter {
                                         name: Identifier::from_name(l.span(), "count"),
                                         args: vec![other.clone()],
                                         params: vec![],
+                                        order_by: vec![],
                                         window: None,
                                         lambda: None,
                                     },
@@ -154,6 +180,7 @@ impl AggregateRewriter {
                     name: Identifier::from_name(args[0].span(), "sum"),
                     args: vec![args[0].clone()],
                     params: vec![],
+                    order_by: vec![],
                     window: None,
                     lambda: None,
                 },
@@ -174,6 +201,7 @@ impl AggregateRewriter {
                                     name: Identifier::from_name(args[0].span(), "count"),
                                     args: vec![args[0].clone()],
                                     params: vec![],
+                                    order_by: vec![],
                                     window: None,
                                     lambda: None,
                                 },
@@ -194,12 +222,14 @@ impl AggregateRewriter {
                                 name: Identifier::from_name(args[0].span(), "count"),
                                 args: vec![args[0].clone()],
                                 params: vec![],
+                                order_by: vec![],
                                 window: None,
                                 lambda: None,
                             },
                         },
                     ],
                     params: vec![],
+                    order_by: vec![],
                     window: None,
                     lambda: None,
                 },

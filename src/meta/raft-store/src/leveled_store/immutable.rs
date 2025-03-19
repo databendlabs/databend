@@ -20,16 +20,15 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use databend_common_meta_types::KVMeta;
+use map_api::map_api_ro::MapApiRO;
+
 use crate::leveled_store::level::Level;
 use crate::leveled_store::level_index::LevelIndex;
 use crate::leveled_store::map_api::AsMap;
 use crate::leveled_store::map_api::KVResultStream;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MapKV;
-use crate::leveled_store::map_api::MapKey;
-use crate::leveled_store::map_api::MapKeyEncode;
 use crate::leveled_store::map_api::MarkedOf;
-use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
 
 /// A single **immutable** level of state machine data.
@@ -118,13 +117,8 @@ impl Immutable {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<String> for Immutable {
-    async fn get<Q>(&self, key: &Q) -> Result<Marked<<String as MapKey>::V>, io::Error>
-    where
-        String: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: MapKeyEncode,
-    {
+impl MapApiRO<String, KVMeta> for Immutable {
+    async fn get(&self, key: &String) -> Result<MarkedOf<String>, io::Error> {
         // get() is just delegated
         self.as_ref().str_map().get(key).await
     }
@@ -137,13 +131,8 @@ impl MapApiRO<String> for Immutable {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<ExpireKey> for Immutable {
-    async fn get<Q>(&self, key: &Q) -> Result<MarkedOf<ExpireKey>, io::Error>
-    where
-        ExpireKey: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: MapKeyEncode,
-    {
+impl MapApiRO<ExpireKey, KVMeta> for Immutable {
+    async fn get(&self, key: &ExpireKey) -> Result<MarkedOf<ExpireKey>, io::Error> {
         // get() is just delegated
         self.as_ref().expire_map().get(key).await
     }

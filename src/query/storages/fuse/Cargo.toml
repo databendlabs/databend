@@ -32,6 +32,7 @@ databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-fail-safe = { workspace = true }
+databend-enterprise-vacuum-handler = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-index = { workspace = true }

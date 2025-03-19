@@ -1,0 +1,112 @@
+statement ok
+create or replace table users (name string, email string)
+
+statement ok
+INSERT INTO users (name, email) VALUES 
+('James Smith', 'james.smith@gmail.com'),
+('Mary Johnson', 'mary.johnson@yahoo.com'),
+('John Williams', 'john.williams@outlook.com'),
+('Patricia Brown', 'patricia.brown@hotmail.com'),
+('Robert Jones', 'robert.jones@example.com'),
+('Jennifer Garcia', 'jennifer.garcia@gmail.com'),
+('Michael Miller', 'michael.miller@yahoo.com'),
+('Linda Davis', 'linda.davis@outlook.com'),
+('William Rodriguez', 'william.rodriguez@hotmail.com'),
+('Elizabeth Martinez', 'elizabeth.martinez@example.com'),
+('James Johnson', 'james.johnson@gmail.com'),
+('Mary Williams', 'mary.williams@yahoo.com'),
+('John Brown', 'john.brown@outlook.com'),
+('Patricia Jones', 'patricia.jones@hotmail.com'),
+('Robert Garcia', 'robert.garcia@example.com'),
+('Jennifer Miller', 'jennifer.miller@gmail.com'),
+('Michael Davis', 'michael.davis@yahoo.com'),
+('Linda Rodriguez', 'linda.rodriguez@outlook.com'),
+('William Martinez', 'william.martinez@hotmail.com'),
+('Elizabeth Smith', 'elizabeth.smith@example.com'),
+('James Williams', 'james.williams@gmail.com'),
+('Mary Brown', 'mary.brown@yahoo.com'),
+('John Jones', 'john.jones@outlook.com'),
+('Patricia Garcia', 'patricia.garcia@hotmail.com'),
+('Robert Miller', 'robert.miller@example.com'),
+('Jennifer Davis', 'jennifer.davis@gmail.com'),
+('Michael Rodriguez', 'michael.rodriguez@yahoo.com'),
+('Linda Martinez', 'linda.martinez@outlook.com'),
+('William Smith', 'william.smith@hotmail.com'),
+('Elizabeth Johnson', 'elizabeth.johnson@example.com'),
+('James Brown', 'james.brown@gmail.com'),
+('Mary Jones', 'mary.jones@yahoo.com'),
+('John Garcia', 'john.garcia@outlook.com'),
+('Patricia Miller', 'patricia.miller@hotmail.com'),
+('Robert Davis', 'robert.davis@example.com'),
+('Jennifer Rodriguez', 'jennifer.rodriguez@gmail.com'),
+('Michael Martinez', 'michael.martinez@yahoo.com'),
+('Linda Smith', 'linda.smith@outlook.com'),
+('William Johnson', 'william.johnson@hotmail.com'),
+('Elizabeth Williams', 'elizabeth.williams@example.com'),
+('James Jones', 'james.jones@gmail.com'),
+('Mary Garcia', 'mary.garcia@yahoo.com'),
+('John Miller', 'john.miller@outlook.com'),
+('Patricia Davis', 'patricia.davis@hotmail.com'),
+('Robert Rodriguez', 'robert.rodriguez@example.com'),
+('Jennifer Martinez', 'jennifer.martinez@gmail.com'),
+('Michael Smith', 'michael.smith@yahoo.com'),
+('Linda Johnson', 'linda.johnson@outlook.com'),
+('William Williams', 'william.williams@hotmail.com'),
+('Elizabeth Brown', 'elizabeth.brown@example.com');
+
+statement ok
+create or replace table users_model as select markov_train(name) as name, markov_train(email) as email from users;
+
+query TT
+select users.name,markov_generate(users_model.name,params,0,users.name) as generate from (select name from users limit 20),users_model,(select '{"order":5,"sliding_window_size":8}' as params);
+----
+James Smith John Garcia
+Mary Johnson	Mary Johnson
+John Williams	Robert Jones
+Patricia Brown	Jennifer Martinez
+Robert Jones	Michael Martinez
+Jennifer Garcia	Patricia Brown
+Michael Miller	Linda Martinez
+Linda Davis	Mary Garcia
+William Rodriguez	Elizabeth Brown
+Elizabeth Martinez	William Martinez
+James Johnson	Jennifer Martinez
+Mary Williams	John Miller
+John Brown	Robert Davis
+Patricia Jones	Jennifer Garcia
+Robert Garcia	Elizabeth Brown
+Jennifer Miller	Patricia Brown
+Michael Davis	Linda Davis
+Linda Rodriguez	Patricia Garcia
+William Martinez	Elizabeth Smith
+Elizabeth Smith	Williams
+
+query TT
+select users.email,markov_generate(users_model.email,params,0,users.email) as generate from (select email from users limit 20),users_model,(select '{"order":5,"sliding_window_size":8}' as params);
+----
+james.smith@gmail.com	mary.johnson@example.com
+mary.johnson@yahoo.com	patricia.davis@gmail.com
+john.williams@outlook.com	jennifer.martinez@hotmail
+patricia.brown@hotmail.com	robert.davis@outlook.com
+robert.jones@example.com	elizabeth.brown@gmail.com
+jennifer.garcia@gmail.com	patricia.johnson@example.com
+michael.miller@yahoo.com	michael.martinez@gmail.com
+linda.davis@outlook.com	linda.martinez@hotmail.com
+william.rodriguez@hotmail.com	jennifer.garcia@outlook.com
+elizabeth.martinez@example.com	patricia.garcia@hotmail.com
+james.johnson@gmail.com	elizabeth.brown@gmail.com
+mary.williams@yahoo.com	robert.jones@hotmail.com
+john.brown@outlook.com	james.john.miller@gmail
+patricia.jones@hotmail.com	robert.davis@example.com
+robert.garcia@example.com	robert.davis@example.com
+jennifer.miller@gmail.com	patricia.garcia@gmail.com
+michael.davis@yahoo.com	michael.martinez@outlook
+linda.rodriguez@outlook.com	james.smith@gmail.com
+william.martinez@hotmail.com	james.johnson@outlook.com
+elizabeth.smith@example.com	patricia.johnson@example.com
+
+statement ok
+drop table users;
+
+statement ok
+drop table users_model;

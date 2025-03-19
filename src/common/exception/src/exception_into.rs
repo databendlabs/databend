@@ -20,10 +20,10 @@ use std::fmt::Formatter;
 use geozero::error::GeozeroError;
 
 use crate::exception_backtrace::capture;
+use crate::span::Span;
 use crate::ErrorCode;
 use crate::ErrorFrame;
 use crate::ParseError;
-use crate::Span;
 use crate::StackTrace;
 
 #[derive(thiserror::Error)]

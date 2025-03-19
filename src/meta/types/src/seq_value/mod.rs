@@ -13,9 +13,8 @@
 // limitations under the License.
 
 mod kv_meta;
-mod seq_value_trait;
-mod seqv;
 
 pub use kv_meta::KVMeta;
-pub use seq_value_trait::SeqValue;
-pub use seqv::SeqV;
+pub use map_api::seq_value::SeqValue;
+
+pub type SeqV<T = Vec<u8>> = map_api::seq_value::SeqV<KVMeta, T>;

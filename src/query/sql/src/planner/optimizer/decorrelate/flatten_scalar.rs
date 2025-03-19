@@ -19,6 +19,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SubqueryRewriter;
 use crate::plans::AggregateFunction;
+use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
@@ -58,6 +59,15 @@ impl SubqueryRewriter {
                 for arg in &agg.args {
                     args.push(self.flatten_scalar(arg, correlated_columns)?);
                 }
+                let mut sort_descs = Vec::with_capacity(agg.sort_descs.len());
+                for desc in &agg.sort_descs {
+                    sort_descs.push(AggregateFunctionScalarSortDesc {
+                        expr: self.flatten_scalar(&desc.expr, correlated_columns)?,
+                        is_reuse_index: desc.is_reuse_index,
+                        nulls_first: desc.nulls_first,
+                        asc: desc.asc,
+                    });
+                }
                 Ok(ScalarExpr::AggregateFunction(AggregateFunction {
                     span: agg.span,
                     display_name: agg.display_name.clone(),
@@ -66,6 +76,7 @@ impl SubqueryRewriter {
                     params: agg.params.clone(),
                     args,
                     return_type: agg.return_type.clone(),
+                    sort_descs,
                 }))
             }
             ScalarExpr::FunctionCall(func) => {

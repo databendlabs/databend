@@ -8,6 +8,15 @@ statement ok
 SHOW STAGES
 
 statement ok
+SHOW STAGES like 'test_stage'
+
+statement ok
+SHOW STAGES like 'test_stage'
+
+statement ok
+SHOW STAGES where name='test_stage'
+
+statement ok
 DESC STAGE test_stage
 
 statement ok

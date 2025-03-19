@@ -1,5 +1,5 @@
 statement ok
-CREATE or replace FUNCTION weighted_avg (INT, INT) STATE {sum INT, weight INT} RETURNS FLOAT
+CREATE or REPLACE FUNCTION weighted_avg (INT, INT) STATE {sum INT, weight INT} RETURNS FLOAT
 LANGUAGE javascript AS $$
 export function create_state() {
     return {sum: 0, weight: 0};
@@ -45,3 +45,13 @@ select number % 3, weighted_avg(number, 1) from numbers(10) group by 1 order by 
 0 4.5
 1 4.0
 2 5.0
+
+query IRR
+select number % 3, weighted_avg(number+1, 1), weighted_avg(number+2, 1) from numbers(10) group by 1 order by 1;
+----
+0 5.5 6.5
+1 5.0 6.0
+2 6.0 7.0
+
+statement ok
+drop function weighted_avg

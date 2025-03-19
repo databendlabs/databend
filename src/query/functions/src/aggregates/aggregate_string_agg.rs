@@ -27,17 +27,24 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::AggrStateRegistry;
 use databend_common_expression::AggrStateType;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::DataBlock;
+use databend_common_expression::EvaluateOptions;
+use databend_common_expression::Evaluator;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::InputColumns;
 use databend_common_expression::Scalar;
+use databend_common_expression::Value;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::borsh_deserialize_state;
 use super::borsh_serialize_state;
+use super::AggregateFunctionSortDesc;
 use super::StateAddr;
 use crate::aggregates::assert_variadic_arguments;
 use crate::aggregates::AggrState;
 use crate::aggregates::AggrStateLoc;
 use crate::aggregates::AggregateFunction;
+use crate::BUILTIN_FUNCTIONS;
 
 #[derive(BorshSerialize, BorshDeserialize, Debug)]
 pub struct StringAggState {
@@ -48,6 +55,7 @@ pub struct StringAggState {
 pub struct AggregateStringAggFunction {
     display_name: String,
     delimiter: String,
+    value_type: DataType,
 }
 
 impl AggregateFunction for AggregateStringAggFunction {
@@ -76,7 +84,22 @@ impl AggregateFunction for AggregateStringAggFunction {
         validity: Option<&Bitmap>,
         _input_rows: usize,
     ) -> Result<()> {
-        let column = StringType::try_downcast_column(&columns[0]).unwrap();
+        let column = if self.value_type != DataType::String {
+            let block = DataBlock::new_from_columns(vec![columns[0].clone()]);
+            let func_ctx = &FunctionContext::default();
+            let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+            let value = evaluator.run_cast(
+                None,
+                &self.value_type,
+                &DataType::String,
+                Value::Column(columns[0].clone()),
+                None,
+                &mut EvaluateOptions::default(),
+            )?;
+            StringType::try_downcast_column(value.as_column().unwrap()).unwrap()
+        } else {
+            StringType::try_downcast_column(&columns[0]).unwrap()
+        };
         let state = place.get::<StringAggState>();
         match validity {
             Some(validity) => {
@@ -174,10 +197,15 @@ impl fmt::Display for AggregateStringAggFunction {
 }
 
 impl AggregateStringAggFunction {
-    fn try_create(display_name: &str, delimiter: String) -> Result<Arc<dyn AggregateFunction>> {
+    fn try_create(
+        display_name: &str,
+        delimiter: String,
+        value_type: DataType,
+    ) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateStringAggFunction {
             display_name: display_name.to_string(),
             delimiter,
+            value_type,
         };
         Ok(Arc::new(func))
     }
@@ -187,13 +215,24 @@ pub fn try_create_aggregate_string_agg_function(
     display_name: &str,
     params: Vec<Scalar>,
     argument_types: Vec<DataType>,
+    _sort_descs: Vec<AggregateFunctionSortDesc>,
 ) -> Result<Arc<dyn AggregateFunction>> {
     assert_variadic_arguments(display_name, argument_types.len(), (1, 2))?;
-    // TODO:(b41sh) support other data types
-    if argument_types[0].remove_nullable() != DataType::String {
+    let value_type = argument_types[0].remove_nullable();
+    if !matches!(
+        value_type,
+        DataType::Boolean
+            | DataType::String
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Variant
+            | DataType::Interval
+    ) {
         return Err(ErrorCode::BadDataValueType(format!(
-            "The argument of aggregate function {} must be string",
-            display_name
+            "{} does not support type '{:?}'",
+            display_name, value_type
         )));
     }
     let delimiter = if params.len() == 1 {
@@ -201,7 +240,7 @@ pub fn try_create_aggregate_string_agg_function(
     } else {
         String::new()
     };
-    AggregateStringAggFunction::try_create(display_name, delimiter)
+    AggregateStringAggFunction::try_create(display_name, delimiter, value_type)
 }
 
 pub fn aggregate_string_agg_function_desc() -> AggregateFunctionDescription {

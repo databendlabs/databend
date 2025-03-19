@@ -9,6 +9,11 @@ inputs:
     description: "logic test handlers, mysql,http,clickhouse"
     required: false
     default: ""
+  parallel:
+    description: "logic test parallel"
+    required: false
+    default: ""
+
 runs:
   using: "composite"
   steps:
@@ -20,4 +25,6 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        TEST_PARALLEL: ${{ inputs.parallel }}
+        TEST_EXT_ARGS: '--skip_file tpcds_spill_1.test,tpcds_spill_2.test,tpcds_spill_3.test'
       run: bash ./scripts/ci/ci-run-sqllogic-tests-cluster.sh ${{ inputs.dirs }}

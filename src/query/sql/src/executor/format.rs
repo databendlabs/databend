@@ -26,6 +26,7 @@ use databend_common_pipeline_core::processors::PlanProfile;
 use itertools::Itertools;
 
 use super::physical_plans::AddStreamColumn;
+use crate::binder::MutationType;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_plans::AggregateExpand;
 use crate::executor::physical_plans::AggregateFinal;
@@ -300,6 +301,21 @@ pub fn format_partial_tree(
                 children,
             ))
         }
+        PhysicalPlan::MutationSource(plan) => {
+            let metadata = metadata.read().clone();
+            let table = metadata.table(plan.table_index).clone();
+            let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+            let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
+            if let Some(filters) = &plan.filters {
+                let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+                children.push(FormatTreeNode::new(format!("filters: [{filter}]")));
+            }
+            append_output_rows_info(&mut children, profs, plan.plan_id);
+            Ok(FormatTreeNode::with_children(
+                "MutationSource".to_string(),
+                children,
+            ))
+        }
         other => {
             let children = other
                 .children()
@@ -514,13 +530,45 @@ fn append_output_rows_info(
 }
 
 fn format_mutation_source(
-    _plan: &MutationSource,
-    _metadata: &Metadata,
-    _profs: &HashMap<u32, PlanProfile>,
+    plan: &MutationSource,
+    metadata: &Metadata,
+    profs: &HashMap<u32, PlanProfile>,
 ) -> Result<FormatTreeNode<String>> {
+    let table = metadata.table(plan.table_index);
+    let table_name = format!("{}.{}.{}", table.catalog(), table.database(), table.name());
+    let filters = plan
+        .filters
+        .as_ref()
+        .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .unwrap_or_default();
+    let mut children = vec![
+        FormatTreeNode::new(format!("table: {table_name}")),
+        FormatTreeNode::new(format!(
+            "output columns: [{}]",
+            format_output_columns(plan.output_schema()?, metadata, false)
+        )),
+        FormatTreeNode::new(format!("filters: [{filters}]")),
+    ];
+
+    let payload = match plan.input_type {
+        MutationType::Update => "Update",
+        MutationType::Delete => {
+            if plan.truncate_table {
+                "DeleteAll"
+            } else {
+                "Delete"
+            }
+        }
+        MutationType::Merge => "Merge",
+    };
+
+    // Part stats.
+    children.extend(part_stats_info_to_format_tree(&plan.statistics));
+    append_profile_info(&mut children, profs, plan.plan_id);
+
     Ok(FormatTreeNode::with_children(
-        format!("Mutation Source"),
-        vec![],
+        format!("MutationSource({})", payload),
+        children,
     ))
 }
 
@@ -1427,6 +1475,7 @@ fn hash_join_to_format_tree(
         .map(|scalar| scalar.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         .collect::<Vec<_>>()
         .join(", ");
+    let is_null_equal = plan.is_null_equal.iter().map(|b| format!("{b}")).join(", ");
     let filters = plan
         .non_equi_conditions
         .iter()
@@ -1448,6 +1497,7 @@ fn hash_join_to_format_tree(
         FormatTreeNode::new(format!("join type: {}", plan.join_type)),
         FormatTreeNode::new(format!("build keys: [{build_keys}]")),
         FormatTreeNode::new(format!("probe keys: [{probe_keys}]")),
+        FormatTreeNode::new(format!("keys is null equal: [{is_null_equal}]")),
         FormatTreeNode::new(format!("filters: [{filters}]")),
     ];
 

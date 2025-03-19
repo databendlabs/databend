@@ -283,7 +283,6 @@ impl Interpreter for SelectInterpreter {
 
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
-
         let query_plan = physical_plan
             .format(self.metadata.clone(), Default::default())?
             .format_pretty()?;

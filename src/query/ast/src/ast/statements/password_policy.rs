@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
+use crate::ast::quote::QuotedString;
 use crate::ast::CreateOption;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
@@ -145,7 +146,7 @@ impl Display for PasswordSetOptions {
             write!(f, " PASSWORD_HISTORY = {}", history)?;
         }
         if let Some(comment) = &self.comment {
-            write!(f, " COMMENT = '{}'", comment)?;
+            write!(f, " COMMENT = {}", QuotedString(comment, '\''))?;
         }
 
         Ok(())

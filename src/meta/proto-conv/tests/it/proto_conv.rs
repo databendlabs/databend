@@ -146,6 +146,21 @@ fn new_table_meta() -> mt::TableMeta {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
         field_comments: vec!["c".to_string(); 21],
+        virtual_schema: Some(ce::VirtualDataSchema {
+            fields: vec![ce::VirtualDataField {
+                name: "field_0".to_string(),
+                data_types: vec![
+                    ce::VariantDataType::Jsonb,
+                    ce::VariantDataType::String,
+                    ce::VariantDataType::Array(Box::new(ce::VariantDataType::Jsonb)),
+                ],
+                source_column_id: 19,
+                column_id: ce::VIRTUAL_COLUMN_ID_START,
+            }],
+            metadata: btreemap! {s("a") => s("b")},
+            next_column_id: ce::VIRTUAL_COLUMN_ID_START + 1,
+            number_of_blocks: 10,
+        }),
         drop_on: None,
         statistics: Default::default(),
         shared_by: btreeset! {1},
@@ -257,6 +272,24 @@ fn new_catalog_meta() -> databend_common_meta_app::schema::CatalogMeta {
             },
         )),
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+    }
+}
+
+fn new_virtual_data_schema() -> ce::VirtualDataSchema {
+    ce::VirtualDataSchema {
+        fields: vec![ce::VirtualDataField {
+            name: "field_0".to_string(),
+            data_types: vec![
+                ce::VariantDataType::Jsonb,
+                ce::VariantDataType::String,
+                ce::VariantDataType::Array(Box::new(ce::VariantDataType::Jsonb)),
+            ],
+            source_column_id: 19,
+            column_id: ce::VIRTUAL_COLUMN_ID_START,
+        }],
+        metadata: btreemap! {s("a") => s("b")},
+        next_column_id: ce::VIRTUAL_COLUMN_ID_START + 1,
+        number_of_blocks: 10,
     }
 }
 
@@ -457,6 +490,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         prost::Message::encode(&p, &mut buf)?;
         println!("sequence:{:?}", buf);
+    }
+
+    // virtual data schema
+    {
+        let virtual_data_schema = new_virtual_data_schema();
+        let p = virtual_data_schema.to_pb()?;
+
+        let mut buf = vec![];
+        prost::Message::encode(&p, &mut buf)?;
+        println!("virtual data schema:{:?}", buf);
     }
 
     Ok(())

@@ -53,7 +53,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
-#[clap(about, version = &**METASRV_COMMIT_VERSION, author)]
+#[clap(about, version = & * * METASRV_COMMIT_VERSION, author)]
 struct Config {
     /// The prefix of keys to write.
     #[clap(long, default_value = "0")]
@@ -92,6 +92,7 @@ async fn main() {
             dir: "./.databend/logs".to_string(),
             format: "text".to_string(),
             limit: 48,
+            max_size: 4294967296,
         },
         stderr: StderrConfig {
             on: true,
@@ -235,6 +236,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
             if_exists: false,
             tenant: tenant(),
             db_id,
+            db_name: db_name().to_string(),
             table_name: table_name(),
             tb_id: t.ident.table_id,
             engine: "FUSE".to_string(),

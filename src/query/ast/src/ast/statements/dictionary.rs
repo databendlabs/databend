@@ -20,6 +20,7 @@ use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
 use super::ShowLimit;
+use crate::ast::quote::QuotedString;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
@@ -74,7 +75,7 @@ impl Display for CreateDictionaryStmt {
         write!(f, ")")?;
         write!(f, ")")?;
         if let Some(comment) = &self.comment {
-            write!(f, "COMMENT '{comment}' ")?;
+            write!(f, "COMMENT {} ", QuotedString(comment.clone(), '\''))?;
         }
         Ok(())
     }

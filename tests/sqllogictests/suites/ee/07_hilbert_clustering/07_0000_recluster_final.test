@@ -89,6 +89,22 @@ select block_count,row_count from fuse_segment('test_hilbert','t');
 2 4
 
 statement ok
+alter table t cluster by hilbert(b, a);
+
+query TTIIII
+select * EXCLUDE(timestamp) from hilbert_clustering_information('test_hilbert','t');
+----
+(b, a) hilbert 3 0 0 3
+
+statement ok
+alter table t recluster final;
+
+query TTIIII
+select * EXCLUDE(timestamp) from hilbert_clustering_information('test_hilbert','t');
+----
+(b, a) hilbert 2 2 0 0
+
+statement ok
 drop table t all;
 
 statement ok

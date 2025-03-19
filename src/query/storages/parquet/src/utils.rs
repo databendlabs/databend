@@ -61,7 +61,7 @@ pub(crate) fn calc_parallelism(
     // 1. used by other query
     // 2. used for file metas, can be huge when there are many files.
     let used_memory = GLOBAL_MEM_STAT.get_memory_usage();
-    let available_memory = max_memory.saturating_sub(used_memory as usize);
+    let available_memory = max_memory.saturating_sub(used_memory);
 
     let max_by_memory = limit_parallelism_by_memory(available_memory, &mut sizes).max(1);
     if max_by_memory == 0 {

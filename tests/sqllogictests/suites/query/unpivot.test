@@ -7,7 +7,7 @@ INSERT INTO monthly_sales_1 VALUES
     (2, 'clothes', 100, 300, 150, 200),
     (3, 'cars', 200, 400, 100, 50);
 
-query IIII
+query ITTI
 SELECT * exclude(Jan,Feb,Mar,April), unnest(['Jan','Feb','Mar','April']) AS month, unnest([Jan,Feb,Mar,April]) AS sales
 FROM monthly_sales_1
 ORDER BY empid;
@@ -25,46 +25,45 @@ ORDER BY empid;
 3	cars	Mar	100
 3	cars	April	50
 
-query IIII
+query ITTI
 SELECT empid,dept,month,sales FROM (
     SELECT * FROM monthly_sales_1
-        UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+        UNPIVOT(sales FOR month IN (jan as 'Jan', feb As '2', mar 'MARCH', april))
         ORDER BY empid
 );
 ----
-1	electronics	jan	100
-1	electronics	feb	200
-1	electronics	mar	300
-1	electronics	april	100
-2	clothes	jan	100
-2	clothes	feb	300
-2	clothes	mar	150
-2	clothes	april	200
-3	cars	jan	200
-3	cars	feb	400
-3	cars	mar	100
-3	cars	april	50
+1 electronics Jan 100
+1 electronics 2 200
+1 electronics MARCH 300
+1 electronics april 100
+2 clothes Jan 100
+2 clothes 2 300
+2 clothes MARCH 150
+2 clothes april 200
+3 cars Jan 200
+3 cars 2 400
+3 cars MARCH 100
+3 cars april 50
 
-query IIII
+query ITTI
 SELECT empid,dept,month,sales FROM (
     SELECT * FROM (SELECT * FROM monthly_sales_1)
-        UNPIVOT(sales FOR month IN (jan, feb, mar, april))
+        UNPIVOT(sales FOR month IN (jan 'Jan', feb, mar, april))
         ORDER BY empid
 );
 ----
-1	electronics	jan	100
-1	electronics	feb	200
-1	electronics	mar	300
-1	electronics	april	100
-2	clothes	jan	100
-2	clothes	feb	300
-2	clothes	mar	150
-2	clothes	april	200
-3	cars	jan	200
-3	cars	feb	400
-3	cars	mar	100
-3	cars	april	50
+1 electronics Jan 100
+1 electronics feb 200
+1 electronics mar 300
+1 electronics april 100
+2 clothes Jan 100
+2 clothes feb 300
+2 clothes mar 150
+2 clothes april 200
+3 cars Jan 200
+3 cars feb 400
+3 cars mar 100
+3 cars april 50
 
 statement ok
 drop table monthly_sales_1;
-

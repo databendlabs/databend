@@ -125,12 +125,12 @@ impl<R: Rng> SqlGenerator<'_, R> {
             };
             let (query, select_list, col_types) = self.gen_view_query();
             let mut columns = vec![];
-            for s in select_list {
+            for (i, s) in select_list.iter().enumerate() {
                 match s {
-                    SelectTarget::AliasedExpr { expr, .. } => {
+                    SelectTarget::AliasedExpr { .. } => {
                         columns.push(Identifier::from_name_with_quoted(
                             None,
-                            expr.to_string(),
+                            format!("vc{}", i),
                             Some('`'),
                         ));
                     }

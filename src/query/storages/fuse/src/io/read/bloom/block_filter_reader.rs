@@ -35,7 +35,7 @@ use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::future::try_join_all;
 use opendal::Operator;
-use parquet::arrow::arrow_to_parquet_schema;
+use parquet::arrow::ArrowSchemaConverter;
 use parquet::schema::types::SchemaDescPtr;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
@@ -112,7 +112,8 @@ async fn load_bloom_filter_by_columns<'a>(
         .map(|col| Field::new(col.0.clone(), arrow::datatypes::DataType::Binary, false))
         .collect();
     let bloom_index_schema = Schema::new(Fields::from(bloom_index_fields));
-    let bloom_index_schema_desc = Arc::new(arrow_to_parquet_schema(&bloom_index_schema)?);
+    let bloom_index_schema_desc =
+        Arc::new(ArrowSchemaConverter::new().convert(&bloom_index_schema)?);
 
     let futs = col_metas
         .iter()

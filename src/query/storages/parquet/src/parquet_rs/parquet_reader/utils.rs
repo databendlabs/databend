@@ -24,8 +24,8 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchema;
-use parquet::arrow::arrow_to_parquet_schema;
 use parquet::arrow::parquet_to_arrow_schema_by_columns;
+use parquet::arrow::ArrowSchemaConverter;
 use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescriptor;
 
@@ -115,7 +115,8 @@ pub fn compute_output_field_paths(
     let expected_schema = DataSchema::from(expected_schema);
     let batch_schema = parquet_to_arrow_schema_by_columns(schema_desc, projection.clone(), None)?;
     let output_fields = expected_schema.fields();
-    let parquet_schema_desc = arrow_to_parquet_schema(&batch_schema)?;
+    let parquet_schema_desc = ArrowSchemaConverter::new().convert(&batch_schema)?;
+
     let parquet_schema = parquet_schema_desc.root_schema();
 
     let mut path_indices = Vec::with_capacity(output_fields.len());

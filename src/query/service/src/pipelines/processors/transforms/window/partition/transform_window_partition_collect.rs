@@ -30,12 +30,12 @@ use databend_common_pipeline_core::processors::InputPort;
 use databend_common_pipeline_core::processors::OutputPort;
 use databend_common_pipeline_core::processors::Processor;
 use databend_common_pipeline_transforms::processors::sort_merge;
+use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 
 use super::WindowPartitionBuffer;
 use super::WindowPartitionMeta;
-use super::WindowSpillSettings;
 use crate::sessions::QueryContext;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
@@ -96,7 +96,7 @@ impl TransformWindowPartitionCollect {
         processor_id: usize,
         num_processors: usize,
         num_partitions: usize,
-        spill_settings: WindowSpillSettings,
+        memory_settings: MemorySettings,
         disk_spill: Option<SpillerDiskConfig>,
         sort_desc: Vec<SortColumnDescription>,
         schema: DataSchemaRef,
@@ -127,8 +127,12 @@ impl TransformWindowPartitionCollect {
 
         // Create the window partition buffer.
         let sort_block_size = settings.get_window_partition_sort_block_size()? as usize;
-        let buffer =
-            WindowPartitionBuffer::new(spiller, partitions.len(), sort_block_size, spill_settings)?;
+        let buffer = WindowPartitionBuffer::new(
+            spiller,
+            partitions.len(),
+            sort_block_size,
+            memory_settings,
+        )?;
 
         let max_block_size = settings.get_max_block_size()? as usize;
         let enable_loser_tree = settings.get_enable_loser_tree_merge_sort()?;

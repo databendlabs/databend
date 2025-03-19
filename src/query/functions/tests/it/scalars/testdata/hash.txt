@@ -308,6 +308,24 @@ output domain  : {12447382539015599056..=12447382539015599056}
 output         : 12447382539015599056
 
 
+ast            : siphash64([1, 2, 3, null])
+raw expr       : siphash64(array(1, 2, 3, NULL))
+checked expr   : siphash64<T0=Array(UInt8 NULL)><T0>(array<T0=UInt8 NULL><T0, T0, T0, T0>(CAST(1_u8 AS UInt8 NULL), CAST(2_u8 AS UInt8 NULL), CAST(3_u8 AS UInt8 NULL), CAST(NULL AS UInt8 NULL)))
+optimized expr : 15130871412783076140_u64
+output type    : UInt64
+output domain  : {15130871412783076140..=15130871412783076140}
+output         : 15130871412783076140
+
+
+ast            : siphash64(['ab', 'cd', null, 'ef'])
+raw expr       : siphash64(array('ab', 'cd', NULL, 'ef'))
+checked expr   : siphash64<T0=Array(String NULL)><T0>(array<T0=String NULL><T0, T0, T0, T0>(CAST("ab" AS String NULL), CAST("cd" AS String NULL), CAST(NULL AS String NULL), CAST("ef" AS String NULL)))
+optimized expr : 15130871412783076140_u64
+output type    : UInt64
+output domain  : {15130871412783076140..=15130871412783076140}
+output         : 15130871412783076140
+
+
 ast            : siphash64(1.1)
 raw expr       : siphash64(1.1)
 checked expr   : siphash64<Float64>(to_float64<Decimal(2, 1)>(1.1_d128(2,1)))

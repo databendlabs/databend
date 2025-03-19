@@ -90,6 +90,7 @@ impl Binder {
                             ),
                             params: vec![],
                             args,
+                            order_by: vec![],
                             window: None,
                             lambda: None,
                         },
@@ -113,6 +114,10 @@ impl Binder {
                 srf_expr,
                 alias,
             );
+        }
+
+        if func_name.name.eq_ignore_ascii_case("obfuscate") {
+            return self.bind_obfuscate(bind_context, params, named_params);
         }
 
         let mut scalar_binder = ScalarBinder::new(
@@ -342,6 +347,7 @@ impl Binder {
                             name: func_name.clone(),
                             args,
                             params: vec![],
+                            order_by: vec![],
                             window: None,
                             lambda: None,
                         },

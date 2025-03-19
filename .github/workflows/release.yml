@@ -178,11 +178,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - category: default
-            target: x86_64-unknown-linux-gnu
-          - category: default
-            target: aarch64-unknown-linux-gnu
+        category:
+          - default
+          - dbg
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
     steps:
       - name: Checkout
         uses: actions/checkout@v4

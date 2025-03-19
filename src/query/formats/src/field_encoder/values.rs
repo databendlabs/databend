@@ -378,13 +378,13 @@ impl FieldEncoderValues {
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) {
-        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
-        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
+        let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
+        let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'[');
-        let inner = &T::upcast_column(column.values.clone());
+        let inner = &T::upcast_column(column.values().clone());
         for i in start..end {
             if i != start {
-                out_buf.extend_from_slice(b",");
+                out_buf.push(b',');
             }
             self.write_field(inner, i, out_buf, true);
         }
@@ -397,18 +397,18 @@ impl FieldEncoderValues {
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) {
-        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
-        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
+        let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
+        let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'{');
-        let inner = &T::upcast_column(column.values.clone());
+        let inner = &T::upcast_column(column.values().clone());
         match inner {
             Column::Tuple(fields) => {
                 for i in start..end {
                     if i != start {
-                        out_buf.extend_from_slice(b",");
+                        out_buf.push(b',');
                     }
                     self.write_field(&fields[0], i, out_buf, true);
-                    out_buf.extend_from_slice(b":");
+                    out_buf.push(b':');
                     self.write_field(&fields[1], i, out_buf, true);
                 }
             }
@@ -421,7 +421,7 @@ impl FieldEncoderValues {
         out_buf.push(b'(');
         for (i, inner) in columns.iter().enumerate() {
             if i > 0 {
-                out_buf.extend_from_slice(b",");
+                out_buf.push(b',');
             }
             self.write_field(inner, row_index, out_buf, true);
         }

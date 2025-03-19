@@ -18,7 +18,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::MatchSeq;
+use crate::match_seq::MatchSeq;
 use crate::MetaSpec;
 use crate::Operation;
 use crate::With;

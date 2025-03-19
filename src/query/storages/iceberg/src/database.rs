@@ -14,22 +14,37 @@
 
 //! Wrapping of the parent directory containing iceberg tables
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use arrow_schema::Field;
+use arrow_schema::Schema;
 use async_trait::async_trait;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
+use databend_common_meta_app::schema::CreateOption;
+use databend_common_meta_app::schema::CreateTableReply;
+use databend_common_meta_app::schema::CreateTableReq;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseInfo;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_meta_app::schema::DropTableByIdReq;
+use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_types::seq_value::SeqV;
+use iceberg::arrow::arrow_schema_to_schema;
+use iceberg::spec::Schema as IcebergSchema;
+use iceberg::TableCreation;
+use iceberg::TableIdent;
 
 use crate::table::IcebergTable;
 use crate::IcebergCatalog;
+
+const PARQUET_FIELD_ID_META_KEY: &str = "PARQUET:field_id";
 
 #[derive(Clone, Debug)]
 pub struct IcebergDatabase {
@@ -99,4 +114,147 @@ impl Database for IcebergDatabase {
         }
         Ok(tables)
     }
+
+    #[async_backtrace::framed]
+    async fn list_tables_names(&self) -> Result<Vec<String>> {
+        let table_names = self
+            .ctl
+            .iceberg_catalog()
+            .list_tables(&self.ident)
+            .await
+            .map_err(|err| {
+                ErrorCode::UnknownException(format!("Iceberg list tables failed: {err:?}"))
+            })?;
+
+        Ok(table_names
+            .into_iter()
+            .map(|table_name| table_name.name.to_string())
+            .collect())
+    }
+
+    // create iceberg_catalog.db.t (col_name type);
+    #[async_backtrace::framed]
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
+        let table_name = TableIdent::new(self.ident.clone(), req.table_name().to_string());
+
+        match req.create_option {
+            CreateOption::Create => {}
+            CreateOption::CreateIfNotExists => {
+                if let Ok(exists) = self.ctl.iceberg_catalog().table_exists(&table_name).await {
+                    if exists {
+                        return Ok(CreateTableReply {
+                            table_id: 0,
+                            table_id_seq: None,
+                            db_id: 0,
+                            new_table: true,
+                            spec_vec: None,
+                            prev_table_id: None,
+                            orphan_table_name: None,
+                        });
+                    }
+                }
+            }
+            CreateOption::CreateOrReplace => {
+                self.drop_table_by_id(DropTableByIdReq {
+                    if_exists: true,
+                    tenant: req.tenant().clone(),
+                    tb_id: 0,
+                    table_name: req.table_name().to_string(),
+                    db_id: 0,
+                    db_name: req.db_name().to_string(),
+                    engine: req.table_meta.engine.to_string(),
+                    session_id: "".to_string(),
+                })
+                .await?;
+            }
+        }
+
+        let table_create_option = TableCreation::builder()
+            .name(req.table_name().to_string())
+            .properties(HashMap::new())
+            .schema(convert_table_schema(
+                req.table_meta.schema.as_ref(),
+                req.db_name(),
+                req.table_name(),
+            )?)
+            .build();
+
+        let _ = self
+            .ctl
+            .iceberg_catalog()
+            .create_table(&self.ident, table_create_option)
+            .await
+            .map_err(|err| {
+                ErrorCode::Internal(format!(
+                    "Iceberg create table {}.{} failed: {err:?}",
+                    req.db_name(),
+                    req.table_name()
+                ))
+            })?;
+        Ok(CreateTableReply {
+            table_id: 0,
+            table_id_seq: None,
+            db_id: 0,
+            new_table: true,
+            spec_vec: None,
+            prev_table_id: None,
+            orphan_table_name: None,
+        })
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
+        let table_name = TableIdent::new(self.ident.clone(), req.table_name.to_string());
+        if let Err(err) = self
+            .ctl
+            .iceberg_catalog()
+            .drop_table(&table_name)
+            .await
+            .map_err(|err| {
+                ErrorCode::Internal(format!(
+                    "Iceberg drop table {}.{} failed: {err:?}",
+                    req.db_name, req.table_name
+                ))
+            })
+        {
+            if req.if_exists {
+                Ok(DropTableReply {})
+            } else {
+                Err(err)
+            }
+        } else {
+            Ok(DropTableReply {})
+        }
+    }
+}
+
+fn convert_table_schema(
+    schema: &TableSchema,
+    db_name: &str,
+    table_name: &str,
+) -> Result<IcebergSchema> {
+    let mut fields = vec![];
+    for f in schema.fields() {
+        let mut metadata = HashMap::new();
+        metadata.insert(
+            PARQUET_FIELD_ID_META_KEY.to_string(),
+            f.column_id.to_string(),
+        );
+        fields.push(Field::from(f).with_metadata(metadata));
+    }
+    let metadata = schema
+        .metadata
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+
+    let arrow_schema = Schema::new(fields).with_metadata(metadata);
+    let schema = arrow_schema_to_schema(&arrow_schema).map_err(|err| {
+        ErrorCode::Internal(format!(
+            "Iceberg create table {}.{} failed: {err:?}",
+            db_name, table_name
+        ))
+    })?;
+
+    Ok(schema) // Return the converted Iceberg schema
 }

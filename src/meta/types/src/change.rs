@@ -80,7 +80,7 @@ where
     }
 
     /// Assumes it is a state transition of an add operation and return Ok if the add operation succeed.
-    /// Otherwise it returns an error that is built by provided function.
+    /// Otherwise, it returns an error that is built by provided function.
     ///
     /// Note that a success add-operation has a None `prev`, and a maybe-Some `result`.
     /// Because the inserted value may have already expired and will be deleted at once,
