@@ -942,3 +942,16 @@ WHERE t1.i1 = (
 );
 ----
 1
+
+statement ok
+create or replace table t1(a int, b int, c varchar(20));
+
+statement ok
+insert into t1 (a, b, c) values (1, 7, 'D'), (2, 7, 'D'), (3, 7, 'D'), (4, 8, 'D'), (5, 7, 'E'), (6, 8, 'E');
+
+query T
+select t3.* from t1 as t3 where t3.c = 'D' and t3.a in (select t4.a from t1 as t4 where t4.b = 7);
+----
+1 7 D
+2 7 D
+3 7 D

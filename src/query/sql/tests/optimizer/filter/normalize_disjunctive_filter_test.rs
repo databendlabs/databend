@@ -76,6 +76,7 @@ fn create_bound_column_ref(
         table_index,
         visibility: Visibility::Visible,
         virtual_expr: None,
+        source_table_index: None,
     };
     ScalarExpr::BoundColumnRef(BoundColumnRef { column, span: None })
 }
