@@ -37,14 +37,15 @@ use databend_common_meta_sled_store::openraft;
 use databend_common_meta_sled_store::openraft::error::RaftError;
 use databend_common_meta_sled_store::openraft::ChangeMembers;
 use databend_common_meta_stoerr::MetaStorageError;
+use databend_common_meta_types::node::Node;
 use databend_common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use databend_common_meta_types::protobuf::raft_service_server::RaftServiceServer;
+use databend_common_meta_types::protobuf::watch_request::FilterType;
 use databend_common_meta_types::protobuf::WatchRequest;
 use databend_common_meta_types::protobuf::WatchResponse;
-use databend_common_meta_types::raft_types::CommittedLeaderId;
+use databend_common_meta_types::raft_types::new_log_id;
 use databend_common_meta_types::raft_types::ForwardToLeader;
 use databend_common_meta_types::raft_types::InitializeError;
-use databend_common_meta_types::raft_types::LogId;
 use databend_common_meta_types::raft_types::MembershipNode;
 use databend_common_meta_types::raft_types::NodeId;
 use databend_common_meta_types::raft_types::RaftMetrics;
@@ -61,7 +62,6 @@ use databend_common_meta_types::MetaManagementError;
 use databend_common_meta_types::MetaNetworkError;
 use databend_common_meta_types::MetaOperationError;
 use databend_common_meta_types::MetaStartupError;
-use databend_common_meta_types::Node;
 use fastrace::func_name;
 use fastrace::prelude::*;
 use itertools::Itertools;
@@ -76,6 +76,10 @@ use openraft::ServerState;
 use openraft::SnapshotPolicy;
 use tokio::sync::mpsc;
 use tonic::Status;
+use watcher::dispatch::Dispatcher;
+use watcher::key_range::build_key_range;
+use watcher::watch_stream::WatchStreamSender;
+use watcher::EventFilter;
 
 use crate::configs::Config as MetaConfig;
 use crate::message::ForwardRequest;
@@ -87,6 +91,8 @@ use crate::meta_service::errors::grpc_error_to_network_err;
 use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::meta_node_status::MetaNodeStatus;
+use crate::meta_service::watcher::DispatcherHandle;
+use crate::meta_service::watcher::WatchTypes;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
 use crate::network::NetworkFactory;
@@ -94,9 +100,6 @@ use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
 use crate::store::RaftStore;
 use crate::version::METASRV_COMMIT_VERSION;
-use crate::watcher::dispatch::Dispatcher;
-use crate::watcher::dispatch::DispatcherHandle;
-use crate::watcher::watch_stream::WatchStreamSender;
 
 pub type LogStore = RaftStore;
 pub type SMStore = RaftStore;
@@ -160,6 +163,7 @@ impl MetaNodeBuilder {
         let (tx, rx) = watch::channel::<()>(());
 
         let handle = Dispatcher::spawn();
+        let handle = DispatcherHandle::new(handle);
 
         sto.get_state_machine()
             .await
@@ -238,6 +242,9 @@ impl MetaNode {
             snapshot_policy: SnapshotPolicy::LogsSinceLast(config.snapshot_logs_since_last),
             max_in_snapshot_log_to_keep: config.max_applied_log_to_keep,
             snapshot_max_chunk_size: config.snapshot_chunk_size,
+            // Allow Leader to reset replication if a follower clears its log.
+            // Usefull in a testing environment.
+            allow_log_reversion: Some(true),
             ..Default::default()
         }
         .validate()
@@ -902,9 +909,7 @@ impl MetaNode {
             is_leader: metrics.state == openraft::ServerState::Leader,
             current_term: metrics.current_term,
             last_log_index: metrics.last_log_index.unwrap_or(0),
-            last_applied: metrics
-                .last_applied
-                .unwrap_or(LogId::new(CommittedLeaderId::new(0, 0), 0)),
+            last_applied: metrics.last_applied.unwrap_or(new_log_id(0, 0, 0)),
             snapshot_last_log_id: metrics.snapshot,
             purged: metrics.purged,
             leader,
@@ -1148,14 +1153,29 @@ impl MetaNode {
         &self,
         request: WatchRequest,
         tx: mpsc::Sender<Result<WatchResponse, Status>>,
-    ) -> Result<Arc<WatchStreamSender>, Status> {
+    ) -> Result<Arc<WatchStreamSender<WatchTypes>>, Status> {
         let stream_sender = self
             .dispatcher_handle
-            .request_blocking(|d: &mut Dispatcher| d.add_watcher(request, tx))
+            .request_blocking(move |d: &mut Dispatcher<WatchTypes>| {
+                let key_range = match build_key_range(&request.key, &request.key_end) {
+                    Ok(kr) => kr,
+                    Err(e) => return Err(Status::invalid_argument(e.to_string())),
+                };
+
+                let interested = event_filter_from_filter_type(request.filter_type());
+                Ok(d.add_watcher(key_range, interested, tx))
+            })
             .await
-            .map_err(|_e| Status::internal("watch-event-Dispatcher closed"))?
-            .map_err(Status::invalid_argument)?;
+            .map_err(|_e| Status::internal("watch-event-Dispatcher closed"))??;
 
         Ok(stream_sender)
+    }
+}
+
+pub(crate) fn event_filter_from_filter_type(filter_type: FilterType) -> EventFilter {
+    match filter_type {
+        FilterType::All => EventFilter::all(),
+        FilterType::Update => EventFilter::update(),
+        FilterType::Delete => EventFilter::delete(),
     }
 }

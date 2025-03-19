@@ -139,6 +139,7 @@ impl Binder {
                 language,
                 runtime_version,
             } => {
+                UDFValidator::is_udf_script_allowed(&language.parse()?)?;
                 let definition = create_udf_definition_script(
                     arg_types,
                     None,

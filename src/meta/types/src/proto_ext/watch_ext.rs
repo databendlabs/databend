@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::Bound;
-
 use crate::protobuf as pb;
 use crate::protobuf::watch_request::FilterType;
 use crate::protobuf::WatchRequest;
@@ -22,24 +20,6 @@ use crate::Change;
 use crate::SeqV;
 
 impl WatchRequest {
-    /// Build a key range from a `key` and an optional `key_end`.
-    pub fn build_key_range(
-        key: &String,
-        key_end: &Option<String>,
-    ) -> Result<(Bound<String>, Bound<String>), &'static str> {
-        let left = Bound::Included(key.clone());
-
-        match key_end {
-            Some(key_end) => {
-                if key >= key_end {
-                    return Err("empty range");
-                }
-                Ok((left, Bound::Excluded(key_end.to_string())))
-            }
-            None => Ok((left.clone(), left)),
-        }
-    }
-
     pub fn new(key: String, key_end: Option<String>) -> Self {
         WatchRequest {
             key,
@@ -52,10 +32,6 @@ impl WatchRequest {
     pub fn with_filter(mut self, filter_type: FilterType) -> Self {
         self.filter_type = filter_type as _;
         self
-    }
-
-    pub fn key_range(&self) -> Result<(Bound<String>, Bound<String>), &'static str> {
-        Self::build_key_range(&self.key, &self.key_end)
     }
 }
 
@@ -79,27 +55,5 @@ impl WatchResponse {
         };
 
         Some(WatchResponse { event: Some(ev) })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_build_key_range() -> Result<(), &'static str> {
-        let x = WatchRequest::build_key_range(&s("a"), &None)?;
-        assert_eq!(x, (Bound::Included(s("a")), Bound::Included(s("a"))));
-
-        let x = WatchRequest::build_key_range(&s("a"), &Some(s("b")))?;
-        assert_eq!(x, (Bound::Included(s("a")), Bound::Excluded(s("b"))));
-
-        let x = WatchRequest::build_key_range(&s("a"), &Some(s("a")));
-        assert_eq!(x, Err("empty range"));
-
-        Ok(())
-    }
-
-    fn s(x: impl ToString) -> String {
-        x.to_string()
     }
 }

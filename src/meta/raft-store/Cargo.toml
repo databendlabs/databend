@@ -37,6 +37,7 @@ futures-util = { workspace = true }
 hostname = { workspace = true }
 itertools = { workspace = true }
 log = { workspace = true }
+map-api = { workspace = true }
 maplit = { workspace = true }
 num = { workspace = true }
 openraft = { workspace = true }
@@ -50,7 +51,6 @@ serde_json = { workspace = true }
 stream-more = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tonic = { workspace = true }
 
 [dev-dependencies]
 databend-common-base = { workspace = true }

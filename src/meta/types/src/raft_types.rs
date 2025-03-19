@@ -14,14 +14,16 @@
 
 //! This mod wraps openraft types that have generics parameter with concrete types.
 
+use openraft::error::Infallible;
 use openraft::impls::OneshotResponder;
+pub use openraft::vote::leader_id_adv::CommittedLeaderId;
+use openraft::vote::RaftLeaderId;
 use openraft::RaftTypeConfig;
 use openraft::TokioRuntime;
 
 use crate::snapshot_db::DB;
 use crate::AppliedState;
 use crate::LogEntry;
-
 pub type NodeId = u64;
 pub type MembershipNode = openraft::EmptyNode;
 pub type LogIndex = u64;
@@ -34,6 +36,9 @@ impl RaftTypeConfig for TypeConfig {
     type R = AppliedState;
     type NodeId = NodeId;
     type Node = MembershipNode;
+    type Term = u64;
+    type LeaderId = openraft::impls::leader_id_adv::LeaderId<Self>;
+    type Vote = openraft::impls::Vote<Self>;
     type Entry = openraft::entry::Entry<TypeConfig>;
     type SnapshotData = DB;
     type AsyncRuntime = TokioRuntime;
@@ -42,9 +47,8 @@ impl RaftTypeConfig for TypeConfig {
 
 pub type IOFlushed = openraft::storage::IOFlushed<TypeConfig>;
 
-pub type CommittedLeaderId = openraft::CommittedLeaderId<NodeId>;
-pub type LogId = openraft::LogId<NodeId>;
-pub type Vote = openraft::Vote<NodeId>;
+pub type LogId = openraft::LogId<TypeConfig>;
+pub type Vote = openraft::Vote<TypeConfig>;
 
 pub type Membership = openraft::Membership<TypeConfig>;
 pub type StoredMembership = openraft::StoredMembership<TypeConfig>;
@@ -54,17 +58,15 @@ pub type Entry = openraft::Entry<TypeConfig>;
 
 pub type SnapshotMeta = openraft::SnapshotMeta<TypeConfig>;
 pub type Snapshot = openraft::Snapshot<TypeConfig>;
-#[allow(dead_code)]
-pub type SnapshotSegmentId = openraft::SnapshotSegmentId;
 
 pub type RaftMetrics = openraft::RaftMetrics<TypeConfig>;
 
 pub type ErrorSubject = openraft::ErrorSubject<TypeConfig>;
 pub type ErrorVerb = openraft::ErrorVerb;
 
-pub type RPCError<E = openraft::error::Infallible> = openraft::error::RPCError<TypeConfig, E>;
+pub type RPCError<E = Infallible> = openraft::error::RPCError<TypeConfig, E>;
 pub type RemoteError<E> = openraft::error::RemoteError<TypeConfig, E>;
-pub type RaftError<E = openraft::error::Infallible> = openraft::error::RaftError<TypeConfig, E>;
+pub type RaftError<E = Infallible> = openraft::error::RaftError<TypeConfig, E>;
 pub type NetworkError = openraft::error::NetworkError;
 
 pub type StorageError = openraft::StorageError<TypeConfig>;
@@ -73,8 +75,7 @@ pub type Fatal = openraft::error::Fatal<TypeConfig>;
 pub type ChangeMembershipError = openraft::error::ChangeMembershipError<TypeConfig>;
 pub type ClientWriteError = openraft::error::ClientWriteError<TypeConfig>;
 pub type InitializeError = openraft::error::InitializeError<TypeConfig>;
-pub type StreamingError<E = openraft::error::Infallible> =
-    openraft::error::StreamingError<TypeConfig, E>;
+pub type StreamingError = openraft::error::StreamingError<TypeConfig>;
 
 pub type AppendEntriesRequest = openraft::raft::AppendEntriesRequest<TypeConfig>;
 pub type AppendEntriesResponse = openraft::raft::AppendEntriesResponse<TypeConfig>;

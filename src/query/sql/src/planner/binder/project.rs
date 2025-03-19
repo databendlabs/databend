@@ -172,6 +172,7 @@ impl Binder {
         child: SExpr,
     ) -> Result<SExpr> {
         bind_context.set_expr_context(ExprContext::SelectClause);
+
         let mut scalars = scalars
             .iter()
             .map(|(_, item)| {

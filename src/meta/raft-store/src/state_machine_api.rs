@@ -14,28 +14,20 @@
 
 use std::fmt::Debug;
 
-use databend_common_meta_types::protobuf::WatchResponse;
 use databend_common_meta_types::sys_data::SysData;
+use databend_common_meta_types::KVMeta;
 use databend_common_meta_types::SeqV;
-use tokio::sync::mpsc;
-use tonic::Status;
+use futures::future::BoxFuture;
+use map_api::map_api::MapApi;
 
-use crate::leveled_store::map_api::IOResultStream;
-use crate::leveled_store::map_api::MapApi;
 use crate::state_machine::ExpireKey;
 
 /// Send a key-value change event to subscribers.
 pub trait SMEventSender: Debug + Sync + Send {
     fn send(&self, change: (String, Option<SeqV>, Option<SeqV>));
 
-    /// Inform to send all items in `strm` to `tx`.
-    ///
-    /// All event must be sent by the event dispatcher in order to keep the order.
-    fn send_batch(
-        &self,
-        tx: mpsc::Sender<Result<WatchResponse, Status>>,
-        strm: IOResultStream<(String, SeqV)>,
-    );
+    /// Send a future to the worker to let it run it in serialized order.
+    fn send_future(&self, fut: BoxFuture<'static, ()>);
 }
 
 /// The API a state machine implements.
@@ -43,7 +35,7 @@ pub trait SMEventSender: Debug + Sync + Send {
 /// The state machine is responsible for managing the application's persistent state,
 /// including application kv data and expired key data.
 pub trait StateMachineApi: Send + Sync {
-    type Map: MapApi<String> + MapApi<ExpireKey> + 'static;
+    type Map: MapApi<String, KVMeta> + MapApi<ExpireKey, KVMeta> + 'static;
 
     /// Returns the current expire key cursor position.
     ///

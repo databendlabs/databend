@@ -17,6 +17,7 @@ bstr = { workspace = true }
 bumpalo = { workspace = true }
 crc32fast = { workspace = true }
 ctor = { workspace = true }
+databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-column = { workspace = true }
 databend-common-exception = { workspace = true }

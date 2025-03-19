@@ -120,22 +120,23 @@ impl StripeDecoderForCopy {
                         .split(',')
                         .map(|s| s.parse::<i32>().unwrap())
                         .collect::<Vec<i32>>();
-                    let mut e = block.columns()[*id].clone();
-                    match e.value {
-                        Value::Column(Column::Nullable(box NullableColumn {
-                            column:
-                                Column::Array(box ArrayColumn {
-                                    values:
-                                        Column::Nullable(box NullableColumn {
-                                            column: Column::Tuple(ref mut v),
-                                            ..
-                                        }),
-                                    ..
-                                }),
-                            ..
-                        })) => {
+                    let e = block.columns()[*id].clone();
+
+                    if let Value::Column(Column::Nullable(box NullableColumn {
+                        column: Column::Array(box ref array_column),
+                        ref validity,
+                    })) = e.value
+                    {
+                        let column = array_column.underlying_column();
+                        let offsets = array_column.underlying_offsets();
+
+                        if let Column::Nullable(box NullableColumn {
+                            column: Column::Tuple(ref v),
+                            validity: inner_validity,
+                        }) = column
+                        {
                             let len = v[0].len();
-                            let mut v2 = vec![];
+                            let mut v2 = Vec::with_capacity(v.len());
                             for (i, p) in positions.iter().enumerate() {
                                 if *p < 0 {
                                     v2.push(ColumnBuilder::repeat_default(&types[i], len).build());
@@ -143,16 +144,25 @@ impl StripeDecoderForCopy {
                                     v2.push(v[*p as usize].clone());
                                 }
                             }
-                            *v = v2
-                        }
-                        _ => {
-                            log::error!("expect array of tuple, got {:?} {:?}", field, e.value);
-                            unreachable!("expect value: array of tuple")
+                            let new_tuple_column = Column::Nullable(Box::new(NullableColumn {
+                                column: Column::Tuple(v2),
+                                validity: inner_validity.clone(),
+                            }));
+
+                            let new_array_column = ArrayColumn::new(new_tuple_column, offsets);
+                            let new_value =
+                                Value::Column(Column::Nullable(Box::new(NullableColumn {
+                                    column: Column::Array(Box::new(new_array_column)),
+                                    validity: validity.clone(),
+                                })));
+
+                            let column = BlockEntry::new(field.data_type().clone(), new_value);
+                            columns.push(column);
+                            continue;
                         }
                     }
-                    let column = BlockEntry::new(field.data_type().clone(), e.value);
-                    columns.push(column);
-                    continue;
+                    log::error!("expect array of tuple, got {:?} {:?}", field, e.value);
+                    unreachable!("expect value: array of tuple")
                 }
             }
             let value = evaluator.run(expr)?;

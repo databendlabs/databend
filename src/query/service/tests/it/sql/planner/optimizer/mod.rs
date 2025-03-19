@@ -13,3 +13,5 @@
 // limitations under the License.
 
 mod agg_index_query_rewrite;
+pub mod test_utils;
+mod tpcds_test;

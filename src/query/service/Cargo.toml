@@ -72,6 +72,7 @@ databend-common-license = { workspace = true }
 databend-common-management = { workspace = true }
 databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
+databend-common-meta-app-types = { workspace = true }
 databend-common-meta-kvapi = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
@@ -190,6 +191,8 @@ mysql_async = { workspace = true }
 p256 = { workspace = true }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true }
+serde_json.workspace = true
+serde_yaml = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
 tower = { workspace = true }
