@@ -123,7 +123,7 @@ fn test_slice() {
     ];
 
     let array: Utf8ViewColumn = data.into_iter().collect();
-    assert_eq!(array.memory_size(), 132);
+    assert_eq!(array.memory_size(), 150);
 
     let a3 = array.sliced(2, 3);
     assert_eq!(a3.into_iter().collect::<Vec<_>>(), vec![
@@ -131,7 +131,7 @@ fn test_slice() {
         "yyyyyyyyyyyyyyyyyyyyy",
         "zzzzzzzzzzzzzzzzzzzzz",
     ]);
-    assert_eq!(a3.memory_size(), 57);
+    assert_eq!(a3.memory_size(), 86);
 }
 
 #[test]

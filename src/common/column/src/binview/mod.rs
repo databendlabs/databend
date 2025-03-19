@@ -150,11 +150,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
             let total = views.iter().map(|v| v.length as usize).sum::<usize>();
             assert_eq!(total, total_bytes_len);
 
-            let total = views
-                .iter()
-                .filter(|v| v.offset > 0)
-                .map(|v| v.length as usize)
-                .sum::<usize>();
+            let total = buffers.iter().map(|v| v.len()).sum::<usize>();
             assert_eq!(total, total_buffer_len);
         }
 
@@ -301,7 +297,7 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
     }
 
     pub fn memory_size(&self) -> usize {
-        self.total_buffer_len() + self.len() * 12
+        self.total_bytes_len() + self.len() * 12
     }
 
     fn total_unshared_buffer_len(&self) -> usize {
@@ -364,13 +360,6 @@ impl<T: ViewType + ?Sized> BinaryViewColumnGeneric<T> {
         debug_assert!(offset + length <= self.len());
         self.views.slice_unchecked(offset, length);
         self.total_bytes_len = self.views.iter().map(|v| v.length as usize).sum::<usize>();
-        // total buffer len only collect views has bytes in buffer
-        self.total_buffer_len = self
-            .views
-            .iter()
-            .filter(|v| v.offset > 0)
-            .map(|v| v.length as usize)
-            .sum::<usize>();
     }
 
     impl_sliced!();
