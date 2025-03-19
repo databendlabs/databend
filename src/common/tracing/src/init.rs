@@ -380,7 +380,7 @@ pub fn init_logging(
         let (remote_log, flush_guard) =
             RemoteLog::new(&labels, cfg).expect("initialize remote logger");
         let dispatch = Dispatch::new()
-            .filter(env_filter(&cfg.file.level))
+            .filter(env_filter(&cfg.persistentlog.level))
             .append(remote_log);
 
         logger = logger.dispatch(dispatch);

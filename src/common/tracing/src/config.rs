@@ -348,14 +348,15 @@ pub struct PersistentLogConfig {
     pub interval: usize,
     pub stage_name: String,
     pub retention: usize,
+    pub level: String,
 }
 
 impl Display for PersistentLogConfig {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}, interval={}, stage_name={}, retention={}",
-            self.on, self.interval, self.stage_name, self.retention
+            "enabled={}, interval={}, stage_name={}, retention={}, level={}",
+            self.on, self.interval, self.stage_name, self.retention, self.level
         )
     }
 }
@@ -366,7 +367,8 @@ impl Default for PersistentLogConfig {
             on: false,
             interval: 8,
             stage_name: "log_1f93b76af0bd4b1d8e018667865fbc65".to_string(),
-            retention: 72,
+            retention: 24,
+            level: "WARN".to_string(),
         }
     }
 }

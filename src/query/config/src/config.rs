@@ -2530,10 +2530,19 @@ pub struct PersistentLogConfig {
     #[clap(
         long = "log-persistentlog-retention",
         value_name = "VALUE",
-        default_value = "72"
+        default_value = "24"
     )]
     #[serde(rename = "retention")]
     pub log_persistentlog_retention: usize,
+
+    /// Log level <DEBUG|INFO|WARN|ERROR>
+    #[clap(
+        long = "log-persistentlog-level",
+        value_name = "VALUE",
+        default_value = "WARN"
+    )]
+    #[serde(rename = "level")]
+    pub log_persistentlog_level: String,
 }
 
 impl Default for PersistentLogConfig {
@@ -2551,6 +2560,7 @@ impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
             interval: self.log_persistentlog_interval,
             stage_name: self.log_persistentlog_stage_name,
             retention: self.log_persistentlog_retention,
+            level: self.log_persistentlog_level,
         })
     }
 }
@@ -2562,6 +2572,7 @@ impl From<InnerPersistentLogConfig> for PersistentLogConfig {
             log_persistentlog_interval: inner.interval,
             log_persistentlog_stage_name: inner.stage_name,
             log_persistentlog_retention: inner.retention,
+            log_persistentlog_level: inner.level,
         }
     }
 }
