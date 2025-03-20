@@ -37,6 +37,7 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
+use crate::plans::Exchange;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
@@ -51,8 +52,11 @@ use crate::plans::SubqueryType;
 use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
+use crate::plans::VisitorMut;
 use crate::plans::WindowFuncType;
 use crate::Binder;
+use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -270,6 +274,11 @@ impl SubqueryRewriter {
                     from_count_func: false,
                 };
                 let (s_expr, result) = if prop.outer_columns.is_empty() {
+                    if let Some((scalar_expr, s_expr)) =
+                        self.try_eliminate_in_subquery(s_expr, &subquery)?
+                    {
+                        return Ok((scalar_expr, s_expr));
+                    }
                     self.try_rewrite_uncorrelated_subquery(
                         s_expr,
                         &subquery,
@@ -450,6 +459,191 @@ impl SubqueryRewriter {
                 Ok((expr, s_expr))
             }
         }
+    }
+
+    fn try_eliminate_in_subquery(
+        &self,
+        left: &SExpr,
+        subquery: &SubqueryExpr,
+    ) -> Result<Option<(ScalarExpr, SExpr)>> {
+        #[derive(Debug)]
+        struct SubqueryBodyVisitor {
+            replacer: BindingReplacer,
+            failed: bool,
+            new_s_expr: Option<SExpr>,
+        }
+
+        impl SubqueryBodyVisitor {
+            fn new(new_column_bindings: HashMap<IndexType, ColumnBinding>, expr: SExpr) -> Self {
+                Self {
+                    replacer: BindingReplacer {
+                        new_column_bindings,
+                    },
+                    failed: false,
+                    new_s_expr: Some(expr),
+                }
+            }
+
+            fn visit(&mut self, s_expr: &SExpr) -> Result<()> {
+                for visit in s_expr.children() {
+                    self.visit(visit)?;
+                }
+                if self.failed {
+                    return Ok(());
+                }
+                if !matches!(
+                    s_expr.plan(),
+                    RelOperator::Scan(_)
+                        | RelOperator::Filter(_)
+                        | RelOperator::EvalScalar(_)
+                        | RelOperator::Sort(_)
+                        | RelOperator::Exchange(_)
+                ) {
+                    self.failed = true;
+                    return Ok(());
+                }
+                match s_expr.plan() {
+                    RelOperator::Scan(_) | RelOperator::Sort(_) => (),
+                    RelOperator::EvalScalar(eval_scalar) => {
+                        let mut eval_scalar = eval_scalar.clone();
+
+                        for scalar_item in eval_scalar.items.iter_mut() {
+                            self.replacer.visit(&mut scalar_item.scalar)?;
+                        }
+                        self.build_s_expr(RelOperator::EvalScalar(eval_scalar));
+                    }
+                    RelOperator::Filter(filter) => {
+                        let mut filter = filter.clone();
+
+                        for scalar_expr in filter.predicates.iter_mut() {
+                            self.replacer.visit(scalar_expr)?;
+                        }
+                        self.build_s_expr(RelOperator::Filter(filter));
+                    }
+                    RelOperator::Exchange(exchange) => {
+                        let mut exchange = exchange.clone();
+                        if let Exchange::Hash(scalar_exprs) = &mut exchange {
+                            for scalar_expr in scalar_exprs {
+                                self.replacer.visit(scalar_expr)?;
+                            }
+                        }
+                        self.build_s_expr(RelOperator::Exchange(exchange));
+                    }
+                    _ => {
+                        self.failed = true;
+                        return Ok(());
+                    }
+                }
+                Ok(())
+            }
+
+            fn build_s_expr(&mut self, op: RelOperator) {
+                self.new_s_expr = Some(match self.new_s_expr.take() {
+                    None => SExpr::create_leaf(Arc::new(op)),
+                    Some(child_expr) => SExpr::create_unary(Arc::new(op), Arc::new(child_expr)),
+                });
+            }
+
+            fn result(self) -> Option<SExpr> {
+                (!self.failed).then_some(self.new_s_expr).flatten()
+            }
+        }
+
+        #[derive(Debug)]
+        struct BindingReplacer {
+            new_column_bindings: HashMap<IndexType, ColumnBinding>,
+        }
+
+        impl VisitorMut<'_> for BindingReplacer {
+            fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
+                if let Some(new_binding) = self.new_column_bindings.get(&col.column.index) {
+                    col.column = new_binding.clone();
+                }
+                Ok(())
+            }
+        }
+
+        let right_expr_binding = &subquery.output_column;
+        let (SubqueryType::Any, Some(box ScalarExpr::BoundColumnRef(left_column))) =
+            (&subquery.typ, &subquery.child_expr)
+        else {
+            return Ok(None);
+        };
+        let (Some(left_table_index), Some(right_table_index)) = (
+            left_column.column.table_index,
+            right_expr_binding.table_index,
+        ) else {
+            return Ok(None);
+        };
+        // restore possible aliases or duplicate loaded tables by `source_table_id` to determine whether they are the same columns of the same table
+        let (Some(left_source_binding), Some(right_source_binding)) = (
+            left_column.column.as_source(),
+            right_expr_binding.as_source(),
+        ) else {
+            return Ok(None);
+        };
+        if left_source_binding != right_source_binding {
+            return Ok(None);
+        }
+        let new_column_bindings = {
+            let guard = self.metadata.read();
+
+            let left_columns = guard.columns_by_table_index(left_table_index);
+            let right_columns = guard.columns_by_table_index(right_table_index);
+            let left_table = guard.table(left_table_index);
+            // filter table function
+            if left_table.database() == "system"
+                || guard.table(right_table_index).database() == "system"
+            {
+                return Ok(None);
+            }
+            let left_source_table_index = guard
+                .get_source_table_index(Some(left_table.database()), left_table.table().name());
+
+            if left_columns.len() != right_columns.len() {
+                return Ok(None);
+            }
+            let mut new_column_bindings = HashMap::with_capacity(left_columns.len());
+            for (left_entry, right_entry) in left_columns.into_iter().zip(right_columns.into_iter())
+            {
+                let (
+                    ColumnEntry::BaseTableColumn(left_column),
+                    ColumnEntry::BaseTableColumn(right_column),
+                ) = (left_entry, right_entry)
+                else {
+                    return Ok(None);
+                };
+                new_column_bindings.insert(
+                    right_column.column_index,
+                    ColumnBindingBuilder::new(
+                        left_column.column_name,
+                        left_column.column_index,
+                        Box::new(DataType::from(&left_column.data_type)),
+                        Visibility::Visible,
+                    )
+                    .table_name(Some(left_table.table().name().to_string()))
+                    .database_name(Some(left_table.database().to_string()))
+                    .table_index(Some(left_table_index))
+                    .source_table_index(left_source_table_index)
+                    .column_position(left_column.column_position)
+                    .virtual_expr(left_column.virtual_expr)
+                    .build(),
+                );
+            }
+            new_column_bindings
+        };
+        // restore ColumnBinding of same table in Subquery to table in Left
+        let mut body_visitor = SubqueryBodyVisitor::new(new_column_bindings, left.clone());
+        body_visitor.visit(subquery.subquery.as_ref())?;
+        Ok(body_visitor.result().map(|s_expr| {
+            (
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: Scalar::Boolean(true),
+                }),
+                s_expr,
+            )
+        }))
     }
 
     fn try_rewrite_uncorrelated_subquery(

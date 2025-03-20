@@ -52,7 +52,6 @@ use super::transform::RuleEagerAggregation;
 use super::transform::RuleLeftExchangeJoin;
 use super::RuleID;
 use super::RulePtr;
-use crate::optimizer::rule::rewrite::RuleEliminateSubquery;
 use crate::optimizer::rule::rewrite::RuleMergeFilterIntoMutation;
 use crate::optimizer::OptimizerContext;
 
@@ -63,7 +62,6 @@ impl RuleFactory {
         match id {
             RuleID::EliminateUnion => Ok(Box::new(RuleEliminateUnion::new(ctx.metadata))),
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new(ctx.metadata))),
-            RuleID::EliminateSubquery => Ok(Box::new(RuleEliminateSubquery::new(ctx.metadata))),
             RuleID::FilterNulls => Ok(Box::new(RuleFilterNulls::new(
                 ctx.enable_distributed_optimization,
             ))),
