@@ -71,7 +71,7 @@ impl CompactTaskBuilder for ColumnOrientedCompactTaskBuilder {
         compact_segments: Vec<Arc<Self::Segment>>,
         _semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PartInfoPtr>> {
-        let mut partitions: Vec<PartInfoPtr> = Vec::new();
+        let mut tasks = Vec::new();
         let mut removed_segment_indexes = segment_indices;
         let segment_idx = removed_segment_indexes.pop().unwrap();
         let mut block_idx = 0;
@@ -128,20 +128,39 @@ impl CompactTaskBuilder for ColumnOrientedCompactTaskBuilder {
                     // N <= blocks < 2N
                     self.blocks.push(block);
                     let blocks = self.take_blocks();
-                    partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactTaskInfo(
-                        CompactTaskInfo::create(blocks, BlockMetaIndex {
-                            segment_idx,
-                            block_idx,
-                        }),
-                    ))));
+                    tasks.push((block_idx, blocks));
                     block_idx += 1;
                 } else {
                     todo!()
                 }
             }
         }
-        let blocks = self.take_blocks();
+        let mut blocks = self.take_blocks();
         if !blocks.is_empty() {
+            let last_task = tasks.pop().map_or(vec![], |(_, v)| v);
+            let total_rows = blocks.iter().map(|x| x.row_count as usize).sum::<usize>()
+                + last_task
+                    .iter()
+                    .map(|x| x.row_count as usize)
+                    .sum::<usize>();
+            let total_size = blocks.iter().map(|x| x.block_size as usize).sum::<usize>()
+                + last_task
+                    .iter()
+                    .map(|x| x.block_size as usize)
+                    .sum::<usize>();
+
+            if self.thresholds.check_for_compact(total_rows, total_size) {
+                blocks.extend(last_task);
+                tasks.push((block_idx, blocks));
+            } else {
+                // blocks >= 2N
+                tasks.push((block_idx, blocks));
+                tasks.push((block_idx + 1, last_task));
+            }
+        }
+
+        let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
+        for (block_idx, blocks) in tasks.into_iter() {
             partitions.push(Arc::new(Box::new(CompactBlockPartInfo::CompactTaskInfo(
                 CompactTaskInfo::create(blocks, BlockMetaIndex {
                     segment_idx,
