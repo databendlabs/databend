@@ -26,11 +26,11 @@ use crate::utils::DATABEND_META_BACKUP_PATH;
 
 pub async fn backup(from: &str, to: &str) -> Result<()> {
     let databend_storage = load_query_storage(from).await?;
-    let bendsave_stroage = load_bendsave_storage(to).await?;
+    let bendsave_storage = load_bendsave_storage(to).await?;
 
     // backup metadata first.
-    backup_meta(bendsave_stroage.clone()).await?;
-    storage_copy(databend_storage, bendsave_stroage).await?;
+    backup_meta(bendsave_storage.clone()).await?;
+    storage_copy(databend_storage, bendsave_storage).await?;
 
     info!("databend backup has been finished");
     Ok(())

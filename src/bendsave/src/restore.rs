@@ -27,12 +27,12 @@ use crate::utils::storage_copy;
 use crate::utils::DATABEND_META_BACKUP_PATH;
 
 pub async fn restore(from: &str, to_query: &str, to_meta: &str) -> Result<()> {
-    let bendsave_stroage = load_bendsave_storage(from).await?;
+    let bendsave_storage = load_bendsave_storage(from).await?;
     let databend_storage = load_query_storage(to_query).await?;
     let meta_config = load_meta_config(to_meta)?;
 
-    storage_copy(bendsave_stroage.clone(), databend_storage).await?;
-    restore_meta(bendsave_stroage, &meta_config).await?;
+    storage_copy(bendsave_storage.clone(), databend_storage).await?;
+    restore_meta(bendsave_storage, &meta_config).await?;
     Ok(())
 }
 
