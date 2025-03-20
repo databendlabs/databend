@@ -22,13 +22,17 @@ use tokio::io::AsyncWriteExt;
 
 use crate::storage::load_bendsave_storage;
 use crate::storage::load_meta_config;
+use crate::storage::load_query_config;
 use crate::storage::load_query_storage;
 use crate::utils::storage_copy;
 use crate::utils::DATABEND_META_BACKUP_PATH;
 
 pub async fn restore(from: &str, to_query: &str, to_meta: &str) -> Result<()> {
     let bendsave_storage = load_bendsave_storage(from).await?;
-    let databend_storage = load_query_storage(to_query).await?;
+
+    let query_cfg = load_query_config(to_query)?;
+    let databend_storage = load_query_storage(&query_cfg)?;
+
     let meta_config = load_meta_config(to_meta)?;
 
     storage_copy(bendsave_storage.clone(), databend_storage).await?;

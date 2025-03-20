@@ -45,39 +45,20 @@ use opendal::layers::LoggingLayer;
 use opendal::layers::RetryLayer;
 use opendal::Operator;
 
+/// Load the configuration file of databend query.
+///
+/// The given input is the path to databend query's configuration file.
+pub fn load_query_config(path: &str) -> Result<databend_common_config::InnerConfig> {
+    let outer_config: Config = Config::load_with_config_file(path)?;
+    let inner_config: InnerConfig = outer_config.try_into()?;
+    Ok(inner_config)
+}
+
 /// Load the configuration file and return the operator for databend.
 ///
 /// The given input is the path to databend's configuration file.
-pub async fn load_query_storage(path: &str) -> Result<Operator> {
-    GlobalInstance::init_production();
-
-    let outer_config: Config = Config::load_with_config_file(path)?;
-    let inner_config: InnerConfig = outer_config.try_into()?;
-
-    // FIXME: I really don't like this pattern, but it's how databend work.
-    GlobalConfig::init(&inner_config)?;
-    GlobalIORuntime::init(inner_config.storage.num_cpus as usize)?;
-    RealLicenseManager::init(inner_config.query.tenant_id.tenant_name().to_string())?;
-    SessionManager::init(&inner_config)?;
-    UserApiProvider::init(
-        inner_config.meta.to_meta_grpc_client_conf(),
-        BuiltIn::default(),
-        &inner_config.query.tenant_id,
-        inner_config.query.tenant_quota.clone(),
-    )
-    .await?;
-
-    let session_manager = SessionManager::create(&inner_config);
-    let session = session_manager.create_session(SessionType::Dummy).await?;
-    let session = session_manager.register_session(session)?;
-    let settings = session.get_settings();
-
-    LicenseManagerSwitch::instance().check_enterprise_enabled(
-        unsafe { settings.get_enterprise_license().unwrap_or_default() },
-        Feature::SystemManagement,
-    )?;
-
-    let op = init_operator(&inner_config.storage.params)?;
+pub fn load_query_storage(cfg: &InnerConfig) -> Result<Operator> {
+    let op = init_operator(&cfg.storage.params)?;
     debug!("databend storage loaded: {:?}", op.info());
     Ok(op)
 }
@@ -99,6 +80,42 @@ pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
 
     debug!("databend meta storage loaded: {:?}", inner_config);
     Ok(inner_config)
+}
+
+/// Init databend query instance so that we can read meta and check license
+/// for it.
+///
+/// We only need to call it while backup since we can't access metasrv while
+/// restoring.
+///
+/// FIXME: I really don't like this pattern, but it's how databend work.
+pub async fn init_databend_query(cfg: InnerConfig) -> Result<()> {
+    GlobalInstance::init_production();
+
+    GlobalConfig::init(&cfg)?;
+    GlobalIORuntime::init(cfg.storage.num_cpus as usize)?;
+    RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
+    SessionManager::init(&cfg)?;
+    UserApiProvider::init(
+        cfg.meta.to_meta_grpc_client_conf(),
+        BuiltIn::default(),
+        &cfg.query.tenant_id,
+        cfg.query.tenant_quota.clone(),
+    )
+    .await?;
+
+    let session_manager = SessionManager::create(&cfg);
+    let session = session_manager.create_session(SessionType::Dummy).await?;
+    let session = session_manager.register_session(session)?;
+    let settings = session.get_settings();
+
+    LicenseManagerSwitch::instance().check_enterprise_enabled(
+        unsafe { settings.get_enterprise_license().unwrap_or_default() },
+        Feature::SystemManagement,
+    )?;
+
+    debug!("databend license check passed");
+    Ok(())
 }
 
 /// Load the databend meta service client
