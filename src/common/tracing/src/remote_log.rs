@@ -26,7 +26,9 @@ use arrow_schema::DataType;
 use arrow_schema::Field;
 use arrow_schema::Schema;
 use arrow_schema::TimeUnit;
-use databend_common_base::base::tokio::sync::mpsc;
+use async_channel::bounded;
+use async_channel::Receiver;
+use async_channel::Sender;
 use databend_common_base::base::tokio::time::interval;
 use databend_common_base::base::uuid;
 use databend_common_base::runtime::spawn;
@@ -54,7 +56,7 @@ const MAX_BUFFER_SIZE: usize = 10000;
 
 /// An appender that sends log records to persistent storage
 pub struct RemoteLog {
-    sender: mpsc::Sender<Message>,
+    sender: Sender<Message>,
     cluster_id: String,
     node_id: String,
     tenant_id: String,
@@ -79,7 +81,7 @@ pub enum Message {
 /// Guard for `RemoteLog` to ensure the log is flushed before exiting
 pub struct RemoteLogGuard {
     _rt: Runtime,
-    sender: mpsc::Sender<Message>,
+    sender: Sender<Message>,
 }
 
 impl Drop for RemoteLogGuard {
@@ -100,7 +102,7 @@ impl RemoteLog {
         let stage_name = cfg.persistentlog.stage_name.clone();
         let node_id = labels.get("node_id").cloned().unwrap_or_default();
         let rt = Runtime::with_worker_threads(2, Some("remote-log-writer".to_string()))?;
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = bounded(1);
         let tx_cloned = tx.clone();
         let remote_log = RemoteLog {
             sender: tx.clone(),
@@ -117,7 +119,7 @@ impl RemoteLog {
         Ok((remote_log, Box::new(guard)))
     }
 
-    pub async fn interval_flush(interval_value: usize, sender: mpsc::Sender<Message>) {
+    pub async fn interval_flush(interval_value: usize, sender: Sender<Message>) {
         let mut interval = interval(Duration::from_secs(interval_value as u64));
         loop {
             interval.tick().await;
@@ -128,9 +130,9 @@ impl RemoteLog {
         }
     }
 
-    pub async fn work(mut receiver: mpsc::Receiver<Message>, stage_name: &str) {
+    pub async fn work(receiver: Receiver<Message>, stage_name: &str) {
         let mut buffer = Vec::with_capacity(MAX_BUFFER_SIZE);
-        while let Some(msg) = receiver.recv().await {
+        while let Ok(msg) = receiver.recv().await {
             match msg {
                 Message::LogElement(log_element) => {
                     if buffer.len() >= MAX_BUFFER_SIZE {
@@ -157,7 +159,7 @@ impl RemoteLog {
             }
         }
         // receiver close will trigger interval_flush exit
-        receiver.close()
+        let _ = receiver.close();
     }
 
     pub async fn flush(flush_buffer: Vec<RemoteLogElement>, stage_name: &str) {
@@ -236,7 +238,7 @@ impl Append for RemoteLog {
     fn append(&self, record: &Record) -> anyhow::Result<()> {
         let log_element = self.prepare_log_element(record);
         self.sender
-            .blocking_send(Message::LogElement(log_element))
+            .send_blocking(Message::LogElement(log_element))
             .map_err(|e| anyhow::anyhow!("Failed to send log element: {}", e))
     }
 }

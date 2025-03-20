@@ -4565,6 +4565,7 @@ dependencies = [
  "anyhow",
  "arrow-array",
  "arrow-schema",
+ "async-channel 1.9.0",
  "backtrace",
  "chrono",
  "databend-common-base",
