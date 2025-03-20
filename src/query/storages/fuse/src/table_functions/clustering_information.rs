@@ -55,71 +55,12 @@ use crate::sessions::TableContext;
 use crate::table_functions::cmp_with_null;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
-use crate::table_functions::SimpleTableFunc;
+use crate::table_functions::SimpleArgFunc;
+use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;
 use crate::Table;
 
-pub struct ClusteringInformationTable {
-    args: ClusteringInformationArgs,
-}
-
-#[async_trait::async_trait]
-impl SimpleTableFunc for ClusteringInformationTable {
-    fn get_engine_name(&self) -> String {
-        "clustering_information".to_owned()
-    }
-
-    fn table_args(&self) -> Option<TableArgs> {
-        Some((&self.args).into())
-    }
-
-    fn schema(&self) -> TableSchemaRef {
-        TableSchemaRefExt::create(vec![
-            TableField::new("cluster_key", TableDataType::String),
-            TableField::new("type", TableDataType::String),
-            TableField::new("timestamp", TableDataType::Timestamp),
-            TableField::new("info", TableDataType::Variant),
-        ])
-    }
-
-    async fn apply(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        _: &DataSourcePlan,
-    ) -> Result<Option<DataBlock>> {
-        let tenant_id = ctx.get_tenant();
-        let args = &self.args;
-        let tbl = ctx
-            .get_catalog(CATALOG_DEFAULT)
-            .await?
-            .get_table(
-                &tenant_id,
-                args.database_name.as_str(),
-                args.table_name.as_str(),
-            )
-            .await?;
-        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        let res = ClusteringInformation::new(ctx.clone(), tbl)
-            .get_clustering_info(&args.cluster_key)
-            .await?;
-        Ok(Some(res))
-    }
-
-    fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
-    where Self: Sized {
-        let (database_name, table_name, cluster_key) =
-            parse_db_tb_opt_args(&table_args, func_name)?;
-        Ok(Self {
-            args: ClusteringInformationArgs {
-                database_name,
-                table_name,
-                cluster_key,
-            },
-        })
-    }
-}
-
-struct ClusteringInformationArgs {
+pub struct ClusteringInformationArgs {
     database_name: String,
     table_name: String,
     cluster_key: Option<String>,
@@ -137,6 +78,55 @@ impl From<&ClusteringInformationArgs> for TableArgs {
     }
 }
 
+impl TryFrom<(&str, TableArgs)> for ClusteringInformationArgs {
+    type Error = ErrorCode;
+    fn try_from(
+        (func_name, table_args): (&str, TableArgs),
+    ) -> std::result::Result<Self, Self::Error> {
+        let (database_name, table_name, cluster_key) =
+            parse_db_tb_opt_args(&table_args, func_name)?;
+
+        Ok(Self {
+            database_name,
+            table_name,
+            cluster_key,
+        })
+    }
+}
+
+pub type ClusteringInformationFunc = SimpleArgFuncTemplate<ClusteringInformation>;
+pub struct ClusteringInformation;
+
+#[async_trait::async_trait]
+impl SimpleArgFunc for ClusteringInformation {
+    type Args = ClusteringInformationArgs;
+
+    fn schema() -> TableSchemaRef {
+        ClusteringInformationImpl::schema()
+    }
+
+    async fn apply(
+        ctx: &Arc<dyn TableContext>,
+        args: &Self::Args,
+        _plan: &DataSourcePlan,
+    ) -> Result<DataBlock> {
+        let tenant_id = ctx.get_tenant();
+        let tbl = ctx
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
+            .get_table(
+                &tenant_id,
+                args.database_name.as_str(),
+                args.table_name.as_str(),
+            )
+            .await?;
+        let tbl = FuseTable::try_from_table(tbl.as_ref())?;
+        ClusteringInformationImpl::new(ctx.clone(), tbl)
+            .get_clustering_info(&args.cluster_key)
+            .await
+    }
+}
+
 struct ClusteringStatisticsWrapper<T> {
     cluster_key: String,
     cluster_type: String,
@@ -144,12 +134,12 @@ struct ClusteringStatisticsWrapper<T> {
     info: T,
 }
 
-struct ClusteringInformation<'a> {
+struct ClusteringInformationImpl<'a> {
     ctx: Arc<dyn TableContext>,
     table: &'a FuseTable,
 }
 
-impl<'a> ClusteringInformation<'a> {
+impl<'a> ClusteringInformationImpl<'a> {
     fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable) -> Self {
         Self { ctx, table }
     }
@@ -383,7 +373,7 @@ impl<'a> ClusteringInformation<'a> {
             let total_count = snapshot.segments.len();
             total_segment_count = total_count as u64;
             total_block_count = snapshot.summary.block_count;
-            let chunk_size = std::cmp::min(
+            let chunk_size = cmp::min(
                 self.ctx.get_settings().get_max_threads()? as usize * 4,
                 total_count,
             )
@@ -440,6 +430,15 @@ impl<'a> ClusteringInformation<'a> {
         };
 
         build_block(stats)
+    }
+
+    fn schema() -> Arc<TableSchema> {
+        TableSchemaRefExt::create(vec![
+            TableField::new("cluster_key", TableDataType::String),
+            TableField::new("type", TableDataType::String),
+            TableField::new("timestamp", TableDataType::Timestamp),
+            TableField::new("info", TableDataType::Variant),
+        ])
     }
 }
 

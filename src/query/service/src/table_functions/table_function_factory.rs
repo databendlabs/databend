@@ -43,7 +43,7 @@ use super::ExecuteBackgroundJobTable;
 use super::LicenseInfoTable;
 use super::SuggestedBackgroundTasksTable;
 use super::TenantQuotaTable;
-use crate::storages::fuse::table_functions::ClusteringInformationTable;
+use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
@@ -195,7 +195,7 @@ impl TableFunctionFactory {
             "clustering_information".to_string(),
             (
                 next_id(),
-                Arc::new(TableFunctionTemplate::<ClusteringInformationTable>::create),
+                Arc::new(TableFunctionTemplate::<ClusteringInformationFunc>::create),
             ),
         );
 

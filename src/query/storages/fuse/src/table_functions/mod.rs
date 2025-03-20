@@ -28,7 +28,7 @@ mod fuse_vacuum_drop_inverted_index;
 mod fuse_vacuum_temporary_table;
 mod set_cache_capacity;
 
-pub use clustering_information::ClusteringInformationTable;
+pub use clustering_information::ClusteringInformationFunc;
 pub use clustering_statistics::ClusteringStatisticsFunc;
 pub use databend_common_catalog::table_args::*;
 use databend_common_catalog::table_function::TableFunction;
