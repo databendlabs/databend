@@ -2543,6 +2543,16 @@ pub struct PersistentLogConfig {
     )]
     #[serde(rename = "level")]
     pub log_persistentlog_level: String,
+
+    /// Specifies how often the persistent log retention operation should be triggered, in terms of the number of `interval`
+    /// e.g. for default value of `interval` 8 and `retention_frequency` 40, the retention operation will be triggered every 320 seconds
+    #[clap(
+        long = "log-persistentlog-retention-frequency",
+        value_name = "VALUE",
+        default_value = "40"
+    )]
+    #[serde(rename = "retention_frequency")]
+    pub log_persistentlog_retention_frequency: usize,
 }
 
 impl Default for PersistentLogConfig {
@@ -2559,8 +2569,9 @@ impl TryInto<InnerPersistentLogConfig> for PersistentLogConfig {
             on: self.log_persistentlog_on,
             interval: self.log_persistentlog_interval,
             stage_name: self.log_persistentlog_stage_name,
-            retention: self.log_persistentlog_retention,
             level: self.log_persistentlog_level,
+            retention: self.log_persistentlog_retention,
+            retention_frequency: self.log_persistentlog_retention_frequency,
         })
     }
 }
@@ -2571,8 +2582,9 @@ impl From<InnerPersistentLogConfig> for PersistentLogConfig {
             log_persistentlog_on: inner.on,
             log_persistentlog_interval: inner.interval,
             log_persistentlog_stage_name: inner.stage_name,
-            log_persistentlog_retention: inner.retention,
             log_persistentlog_level: inner.level,
+            log_persistentlog_retention: inner.retention,
+            log_persistentlog_retention_frequency: inner.retention_frequency,
         }
     }
 }
