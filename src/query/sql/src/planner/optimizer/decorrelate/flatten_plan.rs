@@ -613,6 +613,7 @@ impl SubqueryRewriter {
         if !union_all.used_columns()?.is_disjoint(correlated_columns) {
             need_cross_join = true;
         }
+
         let mut union_all = union_all.clone();
         let left_flatten_plan = self.flatten_plan(
             left,
@@ -631,6 +632,7 @@ impl SubqueryRewriter {
         }
         self.derived_columns
             .retain(|_, derived_column| union_all.output_indexes.contains(derived_column));
+
         let right_flatten_plan = self.flatten_plan(
             left,
             plan.child(1)?,

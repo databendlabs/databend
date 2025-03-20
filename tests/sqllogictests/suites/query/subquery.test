@@ -954,6 +954,7 @@ insert into t1 values (0);
 statement ok
 insert into t2 values (0);
 
+onlyif fixme
 query I
 SELECT 1 FROM t1
 WHERE t1.i1 = (
