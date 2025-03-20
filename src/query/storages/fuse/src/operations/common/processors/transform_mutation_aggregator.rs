@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::hash_map::Entry;
-use std::collections::BTreeMap;
+// use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -27,8 +27,12 @@ use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_inc_recluster_write_block_nums;
+use databend_common_pipeline_core::Pipeline;
 use databend_common_pipeline_transforms::processors::AsyncAccumulatingTransform;
+use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
+use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::Location;
@@ -43,8 +47,11 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
+use crate::io::read::ColumnOrientedSegmentReader;
+use crate::io::read::CompactSegmentReader;
+use crate::io::read::SegmentReader;
 use crate::io::CachedMetaWriter;
-use crate::io::SegmentsIO;
+// use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
@@ -59,7 +66,7 @@ use crate::statistics::reducers::reduce_block_metas;
 use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
 
-pub struct TableMutationAggregator {
+pub struct TableMutationAggregator<R: SegmentReader> {
     ctx: Arc<dyn TableContext>,
     schema: TableSchemaRef,
     table_id: u64,
@@ -83,11 +90,52 @@ pub struct TableMutationAggregator {
     start_time: Instant,
     finished_tasks: usize,
     table_meta_timestamps: TableMetaTimestamps,
+    _marker: std::marker::PhantomData<R>,
+}
+
+pub fn add_table_mutation_aggregator(
+    pipeline: &mut Pipeline,
+    table: &FuseTable,
+    ctx: Arc<dyn TableContext>,
+    base_segments: Vec<Location>,
+    recluster_merged_blocks: Vec<Arc<BlockMeta>>,
+    removed_segment_indexes: Vec<usize>,
+    removed_statistics: Statistics,
+    kind: MutationKind,
+    table_meta_timestamps: TableMetaTimestamps,
+) {
+    let is_column_oriented = table.is_column_oriented();
+    match is_column_oriented {
+        true => pipeline.add_async_accumulating_transformer(|| {
+            TableMutationAggregator::<ColumnOrientedSegmentReader>::create(
+                table,
+                ctx.clone(),
+                base_segments.clone(),
+                recluster_merged_blocks.clone(),
+                removed_segment_indexes.clone(),
+                removed_statistics.clone(),
+                kind,
+                table_meta_timestamps,
+            )
+        }),
+        false => pipeline.add_async_accumulating_transformer(|| {
+            TableMutationAggregator::<CompactSegmentReader>::create(
+                table,
+                ctx.clone(),
+                base_segments.clone(),
+                recluster_merged_blocks.clone(),
+                removed_segment_indexes.clone(),
+                removed_statistics.clone(),
+                kind,
+                table_meta_timestamps,
+            )
+        }),
+    }
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
 #[async_trait::async_trait]
-impl AsyncAccumulatingTransform for TableMutationAggregator {
+impl<R: SegmentReader> AsyncAccumulatingTransform for TableMutationAggregator<R> {
     const NAME: &'static str = "MutationAggregator";
 
     #[async_backtrace::framed]
@@ -125,7 +173,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     }
 }
 
-impl TableMutationAggregator {
+impl<R: SegmentReader> TableMutationAggregator<R> {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         table: &FuseTable,
@@ -167,6 +215,7 @@ impl TableMutationAggregator {
             start_time: Instant::now(),
             table_id: table.get_id(),
             table_meta_timestamps,
+            _marker: std::marker::PhantomData,
         }
     }
 
@@ -424,8 +473,8 @@ impl TableMutationAggregator {
     ) -> Result<Vec<SegmentLite>> {
         let thresholds = self.thresholds;
         let default_cluster_key_id = self.default_cluster_key_id;
-        let kind = self.kind;
-        let set_hilbert_level = self.set_hilbert_level;
+        // let kind = self.kind;
+        // let set_hilbert_level = self.set_hilbert_level;
         let mut tasks = Vec::with_capacity(segment_indices.len());
         for index in segment_indices {
             let segment_mutation = self.mutations.remove(&index).unwrap();
@@ -436,71 +485,82 @@ impl TableMutationAggregator {
             let table_meta_timestamps = self.table_meta_timestamps;
 
             tasks.push(async move {
-                let mut all_perfect = false;
-                let mut set_level = false;
-                let (new_blocks, origin_summary) = if let Some(loc) = location {
-                    // read the old segment
-                    let compact_segment_info =
-                        SegmentsIO::read_compact_segment(op.clone(), loc, schema, false).await?;
-                    let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
+                // let mut all_perfect = false;
+                // let mut set_level = false;
+                let mut segment_builder =
+                    R::SegmentBuilder::new(schema.clone(), thresholds.block_per_segment);
+                let (new_segment, origin_summary) = if let Some(_loc) = location {
+                    // // read the old segment
+                    // let compact_segment_info =
+                    //     SegmentsIO::read_compact_segment(op.clone(), loc, schema, false).await?;
+                    // let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
-                    // take away the blocks, they are being mutated
-                    let mut block_editor = BTreeMap::<_, _>::from_iter(
-                        std::mem::take(&mut segment_info.blocks)
-                            .into_iter()
-                            .enumerate(),
-                    );
-                    for (idx, new_meta) in segment_mutation.replaced_blocks {
-                        block_editor.insert(idx, new_meta);
-                    }
-                    for idx in segment_mutation.deleted_blocks {
-                        block_editor.remove(&idx);
-                    }
+                    // // take away the blocks, they are being mutated
+                    // let mut block_editor = BTreeMap::<_, _>::from_iter(
+                    //     std::mem::take(&mut segment_info.blocks)
+                    //         .into_iter()
+                    //         .enumerate(),
+                    // );
+                    // for (idx, new_meta) in segment_mutation.replaced_blocks {
+                    //     block_editor.insert(idx, new_meta);
+                    // }
+                    // for idx in segment_mutation.deleted_blocks {
+                    //     block_editor.remove(&idx);
+                    // }
 
-                    if block_editor.is_empty() {
-                        return Ok(SegmentLite {
-                            index,
-                            new_segment_info: None,
-                            origin_summary: Some(segment_info.summary),
-                        });
-                    }
+                    // if block_editor.is_empty() {
+                    //     return Ok(SegmentLite {
+                    //         index,
+                    //         new_segment_info: None,
+                    //         origin_summary: Some(segment_info.summary),
+                    //     });
+                    // }
 
-                    // assign back the mutated blocks to segment
-                    let new_blocks = block_editor.into_values().collect::<Vec<_>>();
-                    set_level = set_hilbert_level
-                        && segment_info
-                            .summary
-                            .cluster_stats
-                            .as_ref()
-                            .is_some_and(|v| v.cluster_key_id == default_cluster_key_id.unwrap());
-                    (new_blocks, Some(segment_info.summary))
+                    // // assign back the mutated blocks to segment
+                    // let new_blocks = block_editor.into_values().collect::<Vec<_>>();
+                    // set_level = set_hilbert_level
+                    //     && segment_info
+                    //         .summary
+                    //         .cluster_stats
+                    //         .as_ref()
+                    //         .is_some_and(|v| v.cluster_key_id == default_cluster_key_id.unwrap());
+                    // (new_blocks, Some(segment_info.summary))
+                    todo!()
                 } else {
                     // use by compact.
                     assert!(segment_mutation.deleted_blocks.is_empty());
                     // There are more than 1 blocks, means that the blocks can no longer be compacted.
                     // They can be marked as perfect blocks.
-                    all_perfect = segment_mutation.replaced_blocks.len() > 1;
+                    // all_perfect = segment_mutation.replaced_blocks.len() > 1;
                     let new_blocks = segment_mutation
                         .replaced_blocks
                         .into_iter()
                         .sorted_by(|a, b| a.0.cmp(&b.0))
                         .map(|(_, meta)| meta)
                         .collect::<Vec<_>>();
-                    (new_blocks, None)
+                    for block in new_blocks {
+                        segment_builder.add_block(block.as_ref().clone())?;
+                    }
+                    let segment = segment_builder.build(thresholds, default_cluster_key_id)?;
+
+                    (segment, None)
                 };
 
-                let new_segment_info = write_segment(
-                    op,
-                    location_gen,
-                    new_blocks,
-                    thresholds,
-                    default_cluster_key_id,
-                    all_perfect,
-                    kind,
-                    set_level,
-                    table_meta_timestamps,
-                )
-                .await?;
+                // let new_segment_info = write_segment(
+                //     op,
+                //     location_gen,
+                //     new_blocks,
+                //     thresholds,
+                //     default_cluster_key_id,
+                //     all_perfect,
+                //     kind,
+                //     set_level,
+                //     table_meta_timestamps,
+                // )
+                // .await?;
+                let location = location_gen.gen_segment_info_location(table_meta_timestamps);
+                op.write(&location, new_segment.serialize()?).await?;
+                let new_segment_info = (location, new_segment.summary().clone());
 
                 Ok(SegmentLite {
                     index,

@@ -268,10 +268,6 @@ impl FuseTable {
         matches!(self.storage_format, FuseStorageFormat::Native)
     }
 
-    pub fn is_column_oriented(&self) -> bool {
-        matches!(self.segment_format, FuseSegmentFormat::Column)
-    }
-
     pub fn meta_location_generator(&self) -> &TableMetaLocationGenerator {
         &self.meta_location_generator
     }
@@ -881,6 +877,10 @@ impl Table for FuseTable {
             }
         };
         Ok(Some(stats))
+    }
+
+    fn is_column_oriented(&self) -> bool {
+        matches!(self.segment_format, FuseSegmentFormat::Column)
     }
 
     #[async_backtrace::framed]

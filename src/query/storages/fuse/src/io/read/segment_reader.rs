@@ -22,6 +22,8 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_table_meta::meta::column_oriented_segment::deserialize_column_oriented_segment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
+use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegmentBuilder;
+use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use opendal::Operator;
@@ -34,10 +36,12 @@ use crate::operations::CompactSegmentsWithIndices;
 use crate::operations::CompactTaskBuilder;
 use crate::operations::RowOrientedCompactTaskBuilder;
 use crate::operations::SegmentsWithIndices;
+use crate::statistics::RowOrientedSegmentBuilder;
 
 #[async_trait::async_trait]
 pub trait SegmentReader: Send + Sync + 'static {
     type Segment: AbstractSegment;
+    type SegmentBuilder: SegmentBuilder;
     type SegmentsWithIndices: SegmentsWithIndices<Segment = Self::Segment> + Clone;
     type CompactTaskBuilder: CompactTaskBuilder<Segment = Self::Segment>;
     async fn read_segment_through_cache(
@@ -63,6 +67,7 @@ pub struct CompactSegmentReader;
 #[async_trait::async_trait]
 impl SegmentReader for CompactSegmentReader {
     type Segment = CompactSegmentInfo;
+    type SegmentBuilder = RowOrientedSegmentBuilder;
     type SegmentsWithIndices = CompactSegmentsWithIndices;
     type CompactTaskBuilder = RowOrientedCompactTaskBuilder;
     async fn read_segment(
@@ -81,6 +86,7 @@ pub struct ColumnOrientedSegmentReader;
 #[async_trait::async_trait]
 impl SegmentReader for ColumnOrientedSegmentReader {
     type Segment = ColumnOrientedSegment;
+    type SegmentBuilder = ColumnOrientedSegmentBuilder;
     type SegmentsWithIndices = ColumnOrientedSegmentsWithIndices;
     type CompactTaskBuilder = ColumnOrientedCompactTaskBuilder;
     async fn read_segment(

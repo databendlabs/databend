@@ -57,6 +57,7 @@ pub trait SegmentBuilder: Send + Sync + 'static {
         thresholds: BlockThresholds,
         default_cluster_key_id: Option<u32>,
     ) -> Result<Self::Segment>;
+    fn new(table_schema: TableSchemaRef, block_per_segment: usize) -> Self;
 }
 
 pub struct ColumnOrientedSegmentBuilder {
@@ -103,50 +104,6 @@ struct ColMetaBuilder {
     offset: Vec<u64>,
     length: Vec<u64>,
     num_values: Vec<u64>,
-}
-
-impl ColumnOrientedSegmentBuilder {
-    pub fn new(table_schema: TableSchemaRef, block_per_segment: usize) -> Self {
-        let segment_schema = segment_schema(&table_schema);
-
-        let mut column_stats = HashMap::new();
-        let mut column_meta = HashMap::new();
-
-        for field in table_schema.leaf_fields() {
-            if supported_stat_type(&field.data_type().into()) {
-                column_stats.insert(
-                    field.column_id(),
-                    ColStatBuilder::new(field.data_type(), block_per_segment),
-                );
-            }
-            column_meta.insert(field.column_id(), ColMetaBuilder::default());
-        }
-
-        Self {
-            row_count: Vec::with_capacity(block_per_segment),
-            block_size: Vec::with_capacity(block_per_segment),
-            file_size: Vec::with_capacity(block_per_segment),
-            cluster_stats: Vec::with_capacity(block_per_segment),
-            location: (
-                Vec::with_capacity(block_per_segment),
-                Vec::with_capacity(block_per_segment),
-            ),
-            bloom_filter_index_location: (
-                Vec::with_capacity(block_per_segment),
-                Vec::with_capacity(block_per_segment),
-                MutableBitmap::with_capacity(block_per_segment),
-            ),
-            bloom_filter_index_size: Vec::with_capacity(block_per_segment),
-            inverted_index_size: Vec::with_capacity(block_per_segment),
-            compression: Vec::with_capacity(block_per_segment),
-            create_on: Vec::with_capacity(block_per_segment),
-            column_stats,
-            column_meta,
-            segment_schema,
-            table_schema,
-            block_per_segment,
-        }
-    }
 }
 
 impl SegmentBuilder for ColumnOrientedSegmentBuilder {
@@ -271,6 +228,48 @@ impl SegmentBuilder for ColumnOrientedSegmentBuilder {
             segment_schema: this.segment_schema.clone(),
         };
         Ok(segment)
+    }
+
+    fn new(table_schema: TableSchemaRef, block_per_segment: usize) -> Self {
+        let segment_schema = segment_schema(&table_schema);
+
+        let mut column_stats = HashMap::new();
+        let mut column_meta = HashMap::new();
+
+        for field in table_schema.leaf_fields() {
+            if supported_stat_type(&field.data_type().into()) {
+                column_stats.insert(
+                    field.column_id(),
+                    ColStatBuilder::new(field.data_type(), block_per_segment),
+                );
+            }
+            column_meta.insert(field.column_id(), ColMetaBuilder::default());
+        }
+
+        Self {
+            row_count: Vec::with_capacity(block_per_segment),
+            block_size: Vec::with_capacity(block_per_segment),
+            file_size: Vec::with_capacity(block_per_segment),
+            cluster_stats: Vec::with_capacity(block_per_segment),
+            location: (
+                Vec::with_capacity(block_per_segment),
+                Vec::with_capacity(block_per_segment),
+            ),
+            bloom_filter_index_location: (
+                Vec::with_capacity(block_per_segment),
+                Vec::with_capacity(block_per_segment),
+                MutableBitmap::with_capacity(block_per_segment),
+            ),
+            bloom_filter_index_size: Vec::with_capacity(block_per_segment),
+            inverted_index_size: Vec::with_capacity(block_per_segment),
+            compression: Vec::with_capacity(block_per_segment),
+            create_on: Vec::with_capacity(block_per_segment),
+            column_stats,
+            column_meta,
+            segment_schema,
+            table_schema,
+            block_per_segment,
+        }
     }
 }
 

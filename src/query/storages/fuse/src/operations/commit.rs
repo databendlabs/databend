@@ -36,7 +36,6 @@ use databend_common_meta_app::schema::UpsertTableCopiedFileReq;
 use databend_common_meta_types::MatchSeq;
 use databend_common_metrics::storage::*;
 use databend_common_pipeline_core::Pipeline;
-use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
@@ -55,6 +54,7 @@ use log::debug;
 use log::info;
 use opendal::Operator;
 
+use super::add_table_mutation_aggregator;
 use super::decorate_snapshot;
 use super::new_serialize_segment_processor;
 use crate::io::MetaWriter;
@@ -63,7 +63,6 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
 use crate::operations::common::ConflictResolveContext;
-use crate::operations::common::TableMutationAggregator;
 use crate::operations::set_backoff;
 use crate::operations::SnapshotHintWriter;
 use crate::statistics::merge_statistics;
@@ -96,18 +95,17 @@ impl FuseTable {
             )
         })?;
 
-        pipeline.add_async_accumulating_transformer(|| {
-            TableMutationAggregator::create(
-                self,
-                ctx.clone(),
-                vec![],
-                vec![],
-                vec![],
-                Statistics::default(),
-                MutationKind::Insert,
-                table_meta_timestamps,
-            )
-        });
+        add_table_mutation_aggregator(
+            pipeline,
+            self,
+            ctx.clone(),
+            vec![],
+            vec![],
+            vec![],
+            Statistics::default(),
+            MutationKind::Insert,
+            table_meta_timestamps,
+        );
 
         let snapshot_gen = AppendGenerator::new(ctx.clone(), overwrite);
         pipeline.add_sink(|input| {

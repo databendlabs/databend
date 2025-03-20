@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::TableSchemaRef;
 use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -45,5 +46,9 @@ impl SegmentBuilder for RowOrientedSegmentBuilder {
         let stat =
             super::reduce_block_metas(&builder.blocks_metas, thresholds, default_cluster_key_id);
         Ok(SegmentInfo::new(builder.blocks_metas, stat))
+    }
+
+    fn new(_table_schema: TableSchemaRef, _block_per_segment: usize) -> Self {
+        Self::default()
     }
 }

@@ -28,12 +28,12 @@ use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::io::read::ColumnOrientedSegmentReader;
 use databend_common_storages_fuse::io::read::CompactSegmentReader;
+use databend_common_storages_fuse::operations::add_table_mutation_aggregator;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::ColumnOrientedSegmentsWithIndices;
 use databend_common_storages_fuse::operations::CompactSegmentsWithIndices;
 use databend_common_storages_fuse::operations::CompactSource;
 use databend_common_storages_fuse::operations::CompactTransform;
-use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::FuseTable;
 
@@ -179,18 +179,17 @@ impl PipelineBuilder {
 
         if is_lazy {
             self.main_pipeline.try_resize(1)?;
-            self.main_pipeline.add_async_accumulating_transformer(|| {
-                TableMutationAggregator::create(
-                    table,
-                    self.ctx.clone(),
-                    vec![],
-                    vec![],
-                    vec![],
-                    Default::default(),
-                    MutationKind::Compact,
-                    compact_block.table_meta_timestamps,
-                )
-            });
+            add_table_mutation_aggregator(
+                &mut self.main_pipeline,
+                table,
+                self.ctx.clone(),
+                vec![],
+                vec![],
+                vec![],
+                Default::default(),
+                MutationKind::Compact,
+                compact_block.table_meta_timestamps,
+            );
         }
         Ok(())
     }
