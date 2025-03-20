@@ -157,19 +157,28 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
-        let mut items = Vec::with_capacity(eval_scalar.items.len() + correlated_columns.len());
-        for item in eval_scalar.items.iter() {
-            let new_item = ScalarItem {
-                scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
-                index: item.index,
-            };
-            items.push(new_item);
-        }
-        let metadata = self.metadata.read();
-        items.extend(sortd_iter(correlated_columns).map(|old| {
-            let index = *self.derived_columns.get(&old).unwrap();
-            self.scalar_item_from_index(index, "correlated.", &metadata)
-        }));
+
+        let metadata = self.metadata.clone();
+        let metadata = metadata.read();
+        let items = eval_scalar
+            .items
+            .iter()
+            .filter(|item| !correlated_columns.contains(&item.index))
+            .map(Item::Scalar)
+            .chain(sortd_iter(correlated_columns).map(Item::Index))
+            .map(|item| match item {
+                Item::Scalar(item) => Ok(ScalarItem {
+                    scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
+                    index: item.index,
+                }),
+                Item::Index(old) => Ok(Self::scalar_item_from_index(
+                    self.get_derived(old)?,
+                    "correlated.",
+                    &metadata,
+                )),
+            })
+            .collect::<Result<_>>()?;
+
         Ok(SExpr::create_unary(
             Arc::new(EvalScalar { items }.into()),
             Arc::new(flatten_plan),
@@ -216,7 +225,7 @@ impl SubqueryRewriter {
         let scalar_items = self
             .derived_columns
             .values()
-            .map(|index| self.scalar_item_from_index(*index, "correlated.", &metadata))
+            .map(|index| Self::scalar_item_from_index(*index, "correlated.", &metadata))
             .collect();
         Ok(SExpr::create_unary(
             Arc::new(ProjectSet { srfs }.into()),
@@ -305,7 +314,7 @@ impl SubqueryRewriter {
                         for col in condition.used_columns() {
                             if correlated_columns.contains(&col) {
                                 let new_col = derived_columns.get(&col).ok_or_else(|| {
-                                    ErrorCode::Internal("Missing derived columns")
+                                    ErrorCode::Internal(format!("Missing derived column {col}"))
                                 })?;
                                 new_condition.replace_column(col, *new_col)?;
                             }
@@ -426,21 +435,29 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
-        let mut group_items =
-            Vec::with_capacity(aggregate.group_items.len() + correlated_columns.len());
-        for item in aggregate.group_items.iter() {
-            let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
-            group_items.push(ScalarItem {
-                scalar,
-                index: item.index,
-            })
-        }
 
-        let metadata = self.metadata.read();
-        group_items.extend(sortd_iter(correlated_columns).map(|old| {
-            let index = *self.derived_columns.get(&old).unwrap();
-            self.scalar_item_from_index(index, "correlated.", &metadata)
-        }));
+        let metadata = self.metadata.clone();
+        let metadata = metadata.read();
+        let group_items = aggregate
+            .group_items
+            .iter()
+            .map(Item::Scalar)
+            .chain(sortd_iter(correlated_columns).map(Item::Index))
+            .map(|item| match item {
+                Item::Scalar(item) => {
+                    let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
+                    Ok(ScalarItem {
+                        scalar,
+                        index: item.index,
+                    })
+                }
+                Item::Index(old) => Ok(Self::scalar_item_from_index(
+                    self.get_derived(old)?,
+                    "correlated.",
+                    &metadata,
+                )),
+            })
+            .collect::<Result<_>>()?;
         drop(metadata);
 
         let mut agg_items = Vec::with_capacity(aggregate.aggregate_functions.len());
@@ -550,12 +567,20 @@ impl SubqueryRewriter {
         }
         let flatten_plan =
             self.flatten_plan(left, plan.child(0)?, correlated_columns, flatten_info, true)?;
-        let mut partition_by = window.partition_by.clone();
         let metadata = self.metadata.read();
-        partition_by.extend(sortd_iter(correlated_columns).map(|old| {
-            let index = *self.derived_columns.get(&old).unwrap();
-            self.scalar_item_from_index(index, "correlated.", &metadata)
-        }));
+        let partition_by = window
+            .partition_by
+            .iter()
+            .cloned()
+            .map(Ok)
+            .chain(sortd_iter(correlated_columns).map(|old| {
+                Ok(Self::scalar_item_from_index(
+                    self.get_derived(old)?,
+                    "correlated.",
+                    &metadata,
+                ))
+            }))
+            .collect::<Result<_>>()?;
         drop(metadata);
 
         Ok(SExpr::create_unary(
@@ -579,15 +604,16 @@ impl SubqueryRewriter {
     fn flatten_right_union_all(
         &mut self,
         left: &SExpr,
-        op: &UnionAll,
+        union_all: &UnionAll,
         plan: &SExpr,
         correlated_columns: &ColumnSet,
         flatten_info: &mut FlattenInfo,
         mut need_cross_join: bool,
     ) -> Result<SExpr> {
-        if !op.used_columns()?.is_disjoint(correlated_columns) {
+        if !union_all.used_columns()?.is_disjoint(correlated_columns) {
             need_cross_join = true;
         }
+        let mut union_all = union_all.clone();
         let left_flatten_plan = self.flatten_plan(
             left,
             plan.child(0)?,
@@ -595,6 +621,16 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
+        for (old, expr) in &mut union_all.left_outputs {
+            if let Some(new) = self.derived_columns.get(old) {
+                if let Some(expr) = expr {
+                    expr.replace_column(*old, *new)?;
+                };
+                *old = *new
+            };
+        }
+        self.derived_columns
+            .retain(|_, derived_column| union_all.output_indexes.contains(derived_column));
         let right_flatten_plan = self.flatten_plan(
             left,
             plan.child(1)?,
@@ -602,11 +638,19 @@ impl SubqueryRewriter {
             flatten_info,
             need_cross_join,
         )?;
+        for (old, expr) in &mut union_all.right_outputs {
+            if let Some(new) = self.derived_columns.get(old) {
+                if let Some(expr) = expr {
+                    expr.replace_column(*old, *new)?;
+                };
+                *old = *new
+            };
+        }
         self.derived_columns
-            .retain(|_, derived_column| op.output_indexes.contains(derived_column));
+            .retain(|_, derived_column| union_all.output_indexes.contains(derived_column));
 
         Ok(SExpr::create_binary(
-            Arc::new(op.clone().into()),
+            Arc::new(union_all.clone().into()),
             Arc::new(left_flatten_plan),
             Arc::new(right_flatten_plan),
         ))
@@ -641,11 +685,11 @@ impl SubqueryRewriter {
         let metadata = self.metadata.read();
         let group_items = sortd_iter(correlated_columns)
             .map(|old| {
-                let index = *self
-                    .derived_columns
-                    .get(&old)
-                    .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
-                Ok(self.scalar_item_from_index(index, "correlated.", &metadata))
+                Ok(Self::scalar_item_from_index(
+                    self.get_derived(old)?,
+                    "correlated.",
+                    &metadata,
+                ))
             })
             .collect::<Result<_>>()?;
 
@@ -694,11 +738,7 @@ impl SubqueryRewriter {
             RelOperator::Sort(sort) => {
                 let mut sort = sort.clone();
                 for old in sort.used_columns() {
-                    let new = self
-                        .derived_columns
-                        .get(&old)
-                        .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
-                    sort.replace_column(old, *new);
+                    sort.replace_column(old, self.get_derived(old)?);
                 }
                 sort.into()
             }
@@ -706,11 +746,7 @@ impl SubqueryRewriter {
                 let mut filter = filter.clone();
                 for predicate in &mut filter.predicates {
                     for old in predicate.used_columns() {
-                        let new = self
-                            .derived_columns
-                            .get(&old)
-                            .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
-                        predicate.replace_column(old, *new)?;
+                        predicate.replace_column(old, self.get_derived(old)?)?;
                     }
                 }
                 filter.into()
@@ -718,11 +754,16 @@ impl SubqueryRewriter {
             RelOperator::Join(join) => {
                 let mut join = join.clone();
                 for old in join.used_columns()? {
-                    let new = self
-                        .derived_columns
-                        .get(&old)
-                        .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
-                    join.replace_column(old, *new)?;
+                    join.replace_column(old, self.get_derived(old)?)?;
+                }
+                if let Some(mark) = &mut join.marker_index {
+                    let mut metadata = self.metadata.write();
+                    let column_entry = metadata.column(*mark);
+                    let name = column_entry.name();
+                    let data_type = column_entry.data_type();
+                    let new_mark = metadata.add_derived_column(name, data_type, None);
+                    self.derived_columns.insert(*mark, new_mark);
+                    *mark = new_mark;
                 }
                 join.into()
             }
@@ -793,27 +834,36 @@ impl SubqueryRewriter {
 
     fn flatten_left_scalar_item(
         &mut self,
-        ScalarItem { scalar, index: old }: &ScalarItem,
+        ScalarItem { scalar, index }: &ScalarItem,
         metadata: &mut Metadata,
     ) -> Result<ScalarItem> {
         let mut scalar = scalar.clone();
-        for old in scalar.used_columns() {
-            let new = self
-                .derived_columns
-                .get(&old)
-                .ok_or_else(|| ErrorCode::Internal("Missing derived columns"))?;
-            scalar.replace_column(old, *new)?;
+        let index = *index;
+        match scalar {
+            ScalarExpr::BoundColumnRef(ref mut column_ref) if column_ref.column.index == index => {
+                let new_index = self.get_derived(index)?;
+                column_ref.column.index = new_index;
+                Ok(ScalarItem {
+                    scalar,
+                    index: new_index,
+                })
+            }
+            _ => {
+                for old in scalar.used_columns() {
+                    scalar.replace_column(old, self.get_derived(old)?)?;
+                }
+                let column_entry = metadata.column(index);
+                let name = column_entry.name();
+                let data_type = column_entry.data_type();
+                let old = index;
+                let index = metadata.add_derived_column(name, data_type, Some(scalar.clone()));
+                self.derived_columns.insert(old, index);
+                Ok(ScalarItem { scalar, index })
+            }
         }
-        let column_entry = metadata.column(*old);
-        let name = column_entry.name();
-        let data_type = column_entry.data_type();
-        let index = metadata.add_derived_column(name, data_type, Some(scalar.clone()));
-        self.derived_columns.insert(*old, index);
-        Ok(ScalarItem { scalar, index })
     }
 
     fn scalar_item_from_index(
-        &self,
         index: IndexType,
         name_prefix: &str,
         metadata: &Metadata,
@@ -831,10 +881,20 @@ impl SubqueryRewriter {
             index,
         }
     }
+
+    pub fn get_derived(&self, old: IndexType) -> Result<IndexType> {
+        Ok(self.derived_columns.get(&old).copied().unwrap_or(old))
+        //            .ok_or_else(|| ErrorCode::Internal(format!("Missing derived column {old}")))
+    }
 }
 
 fn sortd_iter(columns: &ColumnSet) -> impl Iterator<Item = IndexType> {
     let mut v = Vec::from_iter(columns.iter().copied());
     v.sort();
     v.into_iter()
+}
+
+enum Item<'a> {
+    Scalar(&'a ScalarItem),
+    Index(IndexType),
 }
