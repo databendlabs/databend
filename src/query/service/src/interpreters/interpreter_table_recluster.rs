@@ -286,6 +286,13 @@ impl ReclusterTableInterpreter {
         Ok(false)
     }
 
+    /// Builds physical plan for Hilbert clustering.
+    /// # Arguments
+    /// * `tbl` - Reference to the table being reclustered
+    /// * `push_downs` - Optional filter conditions to push down to storage
+    /// * `hilbert_info` - Cached Hilbert mapping information (built if None)
+    /// # Returns
+    /// * `Result<Option<PhysicalPlan>>` - The physical plan if reclustering is needed, None otherwise
     async fn build_hilbert_plan(
         &self,
         tbl: &Arc<dyn Table>,
@@ -299,6 +306,7 @@ impl ReclusterTableInterpreter {
             .do_hilbert_clustering(tbl.clone(), self.ctx.clone(), push_downs.clone())
             .await?
         else {
+            // No reclustering needed (e.g., table already optimally clustered)
             return Ok(None);
         };
 
@@ -311,12 +319,17 @@ impl ReclusterTableInterpreter {
         let total_rows = recluster_info.removed_statistics.row_count as usize;
         let total_compressed = recluster_info.removed_statistics.compressed_byte_size as usize;
 
+        // Determine rows per block based on data size and compression ratio
         let rows_per_block =
             block_thresholds.calc_rows_per_block(total_bytes, total_rows, total_compressed);
+
+        // Calculate initial partition count based on data volume and block size
         let mut total_partitions = std::cmp::max(total_rows / rows_per_block, 1);
+
+        // Adjust number of partitions according to the block size thresholds
         if total_partitions < block_thresholds.block_per_segment
             && block_thresholds.check_perfect_segment(
-                block_thresholds.block_per_segment,
+                block_thresholds.block_per_segment, // this effectively by-pass the total_blocks criteria
                 total_rows,
                 total_bytes,
                 total_compressed,
@@ -324,16 +337,20 @@ impl ReclusterTableInterpreter {
         {
             total_partitions = block_thresholds.block_per_segment;
         }
+
         warn!(
             "Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}",
             total_bytes, total_rows, total_partitions
         );
 
+        // Create a subquery executor for running Hilbert mapping calculations
         let subquery_executor = Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
             self.ctx.as_ref(),
         )));
+
         let partitions = settings.get_hilbert_num_range_ids()? as usize;
 
+        // Ensure Hilbert mapping information is built (if not already)
         self.build_hilbert_info(tbl, hilbert_info).await?;
         let HilbertBuildInfo {
             keys_bound,
@@ -341,8 +358,10 @@ impl ReclusterTableInterpreter {
             query,
         } = hilbert_info.as_ref().unwrap();
 
+        // Variables will store the calculated bounds for Hilbert mapping
         let mut variables = VecDeque::new();
 
+        // Execute the `kyes_bound` plan to calculate bounds for each clustering key
         let keys_bounds = self
             .execute_hilbert_plan(
                 &subquery_executor,
@@ -352,11 +371,15 @@ impl ReclusterTableInterpreter {
                 tbl,
             )
             .await?;
+
+        // Store each clustering key's bounds in the variables collection
         for entry in keys_bounds.columns().iter() {
             let v = entry.value.index(0).unwrap().to_owned();
             variables.push_back(v);
         }
 
+        // Execute the `index_bound` plan to calculate the Hilbert index bounds
+        // i.e. `range_bound(..)(hilbert_range_index(..))`
         let index_bounds = self
             .execute_hilbert_plan(
                 &subquery_executor,
@@ -366,11 +389,14 @@ impl ReclusterTableInterpreter {
                 tbl,
             )
             .await?;
+
+        // Add the Hilbert index bound to the front of variables
         let val = index_bounds.value_at(0, 0).unwrap().to_owned();
         variables.push_front(val);
 
-        // reset the scan progress.
+        // Reset the scan progress to its original value
         self.ctx.get_scan_progress().set(&scan_progress_value);
+
         let Plan::Query {
             s_expr,
             metadata,
@@ -378,16 +404,23 @@ impl ReclusterTableInterpreter {
             ..
         } = query
         else {
-            unreachable!()
+            unreachable!("Expected a Query plan, but got {:?}", query.kind());
         };
+
+        // Replace placeholders in the expression
+        //  `range_partition_id(hilbert_range_index(cluster_key, [$key_range_bound], ..), [$hilbert_index_range_bound])`
+        // with calculated constants.
         let mut s_expr = replace_with_constant(s_expr, &variables, total_partitions as u16);
+
         if tbl.change_tracking_enabled() {
             s_expr = set_update_stream_columns(&s_expr)?;
         }
+
         metadata.write().replace_all_tables(tbl.clone());
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
         let mut plan = Box::new(builder.build(&s_expr, bind_context.column_set()).await?);
 
+        // Check if the plan already has an exchange operator
         let mut is_exchange = false;
         if let PhysicalPlan::Exchange(Exchange {
             input,
@@ -399,9 +432,14 @@ impl ReclusterTableInterpreter {
             plan = input.clone();
         }
 
+        // Determine if we need distributed execution
         let cluster = self.ctx.get_cluster();
         let is_distributed = is_exchange || !cluster.is_empty();
+
+        // For distributed execution, add an exchange operator to distribute work
         if is_distributed {
+            // Create an expression for the partition column,
+            // i.e.`range_partition_id(hilbert_range_index({hilbert_keys_str}), [...]) AS _predicate`
             let expr = scalar_expr_to_remote_expr(
                 &ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,
@@ -409,6 +447,9 @@ impl ReclusterTableInterpreter {
                 }),
                 plan.output_schema()?.as_ref(),
             )?;
+
+            // Add exchange operator for data distribution,
+            // shuffling data based on the hash of range partition IDs derived from the Hilbert index.
             plan = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
                 input: plan,
@@ -422,6 +463,9 @@ impl ReclusterTableInterpreter {
         let table_meta_timestamps = self
             .ctx
             .get_table_meta_timestamps(tbl.as_ref(), Some(snapshot.clone()))?;
+
+        // Create the Hilbert partition physical plan,
+        // collecting data into partitions and persist them
         let plan = PhysicalPlan::HilbertPartition(Box::new(HilbertPartition {
             plan_id: 0,
             input: plan,
@@ -429,6 +473,8 @@ impl ReclusterTableInterpreter {
             num_partitions: total_partitions,
             table_meta_timestamps,
         }));
+
+        // Finally, commit the newly clustered table
         Ok(Some(Self::add_commit_sink(
             plan,
             is_distributed,
