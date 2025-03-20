@@ -55,6 +55,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
+use jsonb::RawJsonb;
 use parquet::format::FileMetaData;
 
 use crate::filters::BlockBloomFilterIndexVersion;
@@ -225,7 +226,7 @@ impl BloomIndex {
                     } else {
                         MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap()
                     };
-                    let column = map_column.values.values;
+                    let column = map_column.underlying_column().values;
 
                     let val_type = match inner_ty {
                         DataType::Tuple(kv_tys) => kv_tys[1].clone(),
@@ -240,7 +241,8 @@ impl BloomIndex {
                         );
                         for val in column.iter() {
                             if let ScalarRef::Variant(v) = val {
-                                if let Ok(str_val) = jsonb::to_str(v) {
+                                let raw_jsonb = RawJsonb::new(v);
+                                if let Ok(str_val) = raw_jsonb.to_str() {
                                     builder.push(ScalarRef::String(str_val.as_str()));
                                     continue;
                                 }

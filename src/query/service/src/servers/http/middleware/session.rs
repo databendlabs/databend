@@ -41,6 +41,7 @@ use headers::authorization::Credentials;
 use http::header::AUTHORIZATION;
 use http::HeaderMap;
 use http::HeaderValue;
+use http::Method;
 use http::StatusCode;
 use log::error;
 use log::info;
@@ -462,6 +463,26 @@ impl<E> HTTPSessionEndpoint<E> {
 }
 
 async fn forward_request(mut req: Request, node: Arc<NodeInfo>) -> PoemResult<Response> {
+    let body = req.take_body().into_bytes().await?;
+    let mut headers = req.headers().clone();
+    headers.remove(http::header::HOST);
+    forward_request_with_body(
+        node,
+        &req.uri().to_string(),
+        body,
+        req.method().to_owned(),
+        headers,
+    )
+    .await
+}
+
+pub async fn forward_request_with_body<T: Into<reqwest::Body>>(
+    node: Arc<NodeInfo>,
+    uri: &str,
+    body: T,
+    method: Method,
+    headers: HeaderMap,
+) -> PoemResult<Response> {
     let addr = node.http_address.clone();
     let config = GlobalConfig::instance();
     let scheme = if config.query.http_handler_tls_server_key.is_empty()
@@ -471,13 +492,13 @@ async fn forward_request(mut req: Request, node: Arc<NodeInfo>) -> PoemResult<Re
     } else {
         "https"
     };
-    let url = format!("{scheme}://{addr}/v1{}", req.uri());
+    let url = format!("{scheme}://{addr}/v1{}", uri);
 
     let client = reqwest::Client::new();
     let reqwest_request = client
-        .request(req.method().clone(), &url)
-        .headers(req.headers().clone())
-        .body(req.take_body().into_bytes().await?)
+        .request(method, &url)
+        .headers(headers)
+        .body(body)
         .build()
         .map_err(|e| {
             HttpErrorCode::bad_request(ErrorCode::BadArguments(format!(

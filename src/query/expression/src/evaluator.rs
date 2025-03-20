@@ -39,7 +39,6 @@ use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::string::StringColumnBuilder;
 use crate::types::ArgType;
-use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
@@ -516,7 +515,7 @@ impl<'a> Evaluator<'a> {
                 Value::Column(Column::Array(col)) => {
                     let validity = validity.map(|validity| {
                         let mut inner_validity = MutableBitmap::with_capacity(col.len());
-                        for (index, offsets) in col.offsets.windows(2).enumerate() {
+                        for (index, offsets) in col.offsets().windows(2).enumerate() {
                             inner_validity.extend_constant(
                                 (offsets[1] - offsets[0]) as usize,
                                 validity.get_bit(index),
@@ -529,16 +528,16 @@ impl<'a> Evaluator<'a> {
                             span,
                             inner_src_ty,
                             inner_dest_ty,
-                            Value::Column(col.values),
+                            Value::Column(col.underlying_column()),
                             validity,
                             options,
                         )?
                         .into_column()
                         .unwrap();
-                    Ok(Value::Column(Column::Array(Box::new(ArrayColumn {
-                        values: new_col,
-                        offsets: col.offsets,
-                    }))))
+                    Ok(Value::Column(Column::Array(Box::new(ArrayColumn::new(
+                        new_col,
+                        col.underlying_offsets(),
+                    )))))
                 }
                 other => unreachable!("source: {}", other),
             },
@@ -575,9 +574,9 @@ impl<'a> Evaluator<'a> {
                         Ok(Value::Scalar(Scalar::Array(new_array)))
                     }
                     Value::Column(Column::Variant(col)) => {
-                        let mut array_builder =
-                            ArrayType::<VariantType>::create_builder(col.len(), &[]);
-
+                        let mut offsets = Vec::with_capacity(col.len() + 1);
+                        offsets.push(0);
+                        let mut builder = VariantType::create_builder(col.len(), &[]);
                         for (idx, x) in col.iter().enumerate() {
                             let array = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true)
                             {
@@ -590,39 +589,30 @@ impl<'a> Evaluator<'a> {
                             } else {
                                 &empty_vec
                             };
-
                             for v in array.iter() {
-                                v.write_to_vec(&mut array_builder.builder.data);
-                                array_builder.builder.commit_row();
+                                v.write_to_vec(&mut builder.data);
+                                builder.commit_row();
                             }
-                            array_builder.commit_row();
+                            offsets.push(builder.len() as u64);
                         }
-                        let col = array_builder.build();
-                        let validity = validity.map(|validity| {
-                            let mut inner_validity = MutableBitmap::with_capacity(col.len());
-                            for (index, offsets) in col.offsets.windows(2).enumerate() {
-                                inner_validity.extend_constant(
-                                    (offsets[1] - offsets[0]) as usize,
-                                    validity.get_bit(index),
-                                );
-                            }
-                            inner_validity.into()
-                        });
+                        let value_col = Column::Variant(builder.build());
+
                         let new_col = self
                             .run_cast(
                                 span,
                                 &DataType::Variant,
                                 inner_dest_ty,
-                                Value::Column(Column::Variant(col.values)),
-                                validity,
+                                Value::Column(value_col),
+                                None,
                                 options,
                             )?
                             .into_column()
                             .unwrap();
-                        Ok(Value::Column(Column::Array(Box::new(ArrayColumn {
-                            values: new_col,
-                            offsets: col.offsets,
-                        }))))
+
+                        Ok(Value::Column(Column::Array(Box::new(ArrayColumn::new(
+                            new_col,
+                            offsets.into(),
+                        )))))
                     }
                     other => unreachable!("source: {}", other),
                 }
@@ -674,9 +664,10 @@ impl<'a> Evaluator<'a> {
                         ]))))
                     }
                     Value::Column(Column::Variant(col)) => {
+                        let mut offsets = Vec::with_capacity(col.len() + 1);
+                        offsets.push(0);
                         let mut key_builder = StringType::create_builder(col.len(), &[]);
-                        let mut value_builder =
-                            ArrayType::<VariantType>::create_builder(col.len(), &[]);
+                        let mut value_builder = VariantType::create_builder(col.len(), &[]);
 
                         for (idx, x) in col.iter().enumerate() {
                             let obj = if validity.as_ref().map(|v| v.get_bit(idx)).unwrap_or(true) {
@@ -692,36 +683,32 @@ impl<'a> Evaluator<'a> {
 
                             for (k, v) in obj.iter() {
                                 key_builder.put_and_commit(k.as_str());
-                                v.write_to_vec(&mut value_builder.builder.data);
-                                value_builder.builder.commit_row();
+                                v.write_to_vec(&mut value_builder.data);
+                                value_builder.commit_row();
                             }
-
-                            value_builder.commit_row();
+                            offsets.push(key_builder.len() as u64);
                         }
 
                         let key_col = Column::String(key_builder.build());
-                        let value_col = Column::Array(Box::new(value_builder.build().upcast()));
+                        let value_col = Column::Variant(value_builder.build());
 
-                        let value_col = self
+                        let new_value_col = self
                             .run_cast(
                                 span,
-                                &DataType::Array(Box::new(DataType::Variant)),
-                                &DataType::Array(Box::new(fields_dest_ty[1].clone())),
+                                &DataType::Variant,
+                                &fields_dest_ty[1],
                                 Value::Column(value_col),
-                                validity,
+                                None,
                                 options,
                             )?
                             .into_column()
-                            .unwrap()
-                            .into_array()
                             .unwrap();
 
-                        let kv_col = Column::Tuple(vec![key_col, value_col.values]);
-
-                        Ok(Value::Column(Column::Map(Box::new(ArrayColumn {
-                            values: kv_col,
-                            offsets: value_col.offsets,
-                        }))))
+                        let kv_col = Column::Tuple(vec![key_col, new_value_col]);
+                        Ok(Value::Column(Column::Map(Box::new(ArrayColumn::new(
+                            kv_col,
+                            offsets.into(),
+                        )))))
                     }
                     other => unreachable!("source: {}", other),
                 }
@@ -761,7 +748,7 @@ impl<'a> Evaluator<'a> {
                 Value::Column(Column::Map(col)) => {
                     let validity = validity.map(|validity| {
                         let mut inner_validity = MutableBitmap::with_capacity(col.len());
-                        for (index, offsets) in col.offsets.windows(2).enumerate() {
+                        for (index, offsets) in col.offsets().windows(2).enumerate() {
                             inner_validity.extend_constant(
                                 (offsets[1] - offsets[0]) as usize,
                                 validity.get_bit(index),
@@ -774,16 +761,16 @@ impl<'a> Evaluator<'a> {
                             span,
                             inner_src_ty,
                             inner_dest_ty,
-                            Value::Column(col.values),
+                            Value::Column(col.underlying_column()),
                             validity,
                             options,
                         )?
                         .into_column()
                         .unwrap();
-                    Ok(Value::Column(Column::Map(Box::new(ArrayColumn {
-                        values: new_col,
-                        offsets: col.offsets,
-                    }))))
+                    Ok(Value::Column(Column::Map(Box::new(ArrayColumn::new(
+                        new_col,
+                        col.underlying_offsets(),
+                    )))))
                 }
                 other => unreachable!("source: {}", other),
             },
@@ -931,13 +918,18 @@ impl<'a> Evaluator<'a> {
                 }
                 Value::Column(Column::Array(col)) => {
                     let new_values = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .run_try_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.underlying_column()),
+                        )?
                         .into_column()
                         .unwrap();
-                    let new_col = Column::Array(Box::new(ArrayColumn {
-                        values: new_values,
-                        offsets: col.offsets,
-                    }));
+                    let new_col = Column::Array(Box::new(ArrayColumn::new(
+                        new_values,
+                        col.underlying_offsets(),
+                    )));
                     let validity = Bitmap::new_constant(true, new_col.len());
 
                     Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
@@ -968,13 +960,18 @@ impl<'a> Evaluator<'a> {
                 }
                 Value::Column(Column::Map(col)) => {
                     let new_values = self
-                        .run_try_cast(span, inner_src_ty, inner_dest_ty, Value::Column(col.values))?
+                        .run_try_cast(
+                            span,
+                            inner_src_ty,
+                            inner_dest_ty,
+                            Value::Column(col.underlying_column()),
+                        )?
                         .into_column()
                         .unwrap();
-                    let new_col = Column::Map(Box::new(ArrayColumn {
-                        values: new_values,
-                        offsets: col.offsets,
-                    }));
+                    let new_col = Column::Map(Box::new(ArrayColumn::new(
+                        new_values,
+                        col.underlying_offsets(),
+                    )));
                     let validity = Bitmap::new_constant(true, new_col.len());
 
                     Ok(Value::Column(NullableColumn::new_column(new_col, validity)))
@@ -1345,36 +1342,33 @@ impl<'a> Evaluator<'a> {
 
         // If there is only one column, we can extract the inner column and execute on all rows at once
         if args.len() == 1 && matches!(args[0], Value::Column(_)) {
-            let (inner_col, inner_ty, offsets, validity) = match &args[0] {
+            let (inner_col, offsets, validity) = match &args[0] {
                 Value::Column(Column::Array(box array_col)) => (
-                    array_col.values.clone(),
-                    array_col.values.data_type(),
-                    array_col.offsets.clone(),
+                    array_col.underlying_column(),
+                    array_col.underlying_offsets(),
                     None,
                 ),
                 Value::Column(Column::Map(box map_col)) => (
-                    map_col.values.clone(),
-                    map_col.values.data_type(),
-                    map_col.offsets.clone(),
+                    map_col.underlying_column(),
+                    map_col.underlying_offsets(),
                     None,
                 ),
                 Value::Column(Column::Nullable(box nullable_col)) => match &nullable_col.column {
                     Column::Array(box array_col) => (
-                        array_col.values.clone(),
-                        array_col.values.data_type(),
-                        array_col.offsets.clone(),
+                        array_col.underlying_column(),
+                        array_col.underlying_offsets(),
                         Some(nullable_col.validity.clone()),
                     ),
                     Column::Map(box map_col) => (
-                        map_col.values.clone(),
-                        map_col.values.data_type(),
-                        map_col.offsets.clone(),
+                        map_col.underlying_column(),
+                        map_col.underlying_offsets(),
                         Some(nullable_col.validity.clone()),
                     ),
                     _ => unreachable!(),
                 },
                 _ => unreachable!(),
             };
+            let inner_ty = inner_col.data_type();
 
             if func_name == "map_filter"
                 || func_name == "map_transform_keys"
@@ -1415,13 +1409,12 @@ impl<'a> Evaluator<'a> {
                             filtered_offsets.push(new_offset);
                         }
 
-                        Column::Map(Box::new(ArrayColumn {
-                            values: Column::Tuple(vec![
-                                filtered_key_col.clone(),
-                                filtered_value_col.clone(),
-                            ]),
-                            offsets: filtered_offsets.into(),
-                        }))
+                        let inner_column = Column::Tuple(vec![
+                            filtered_key_col.clone(),
+                            filtered_value_col.clone(),
+                        ]);
+                        let offsets = filtered_offsets.into();
+                        Column::Map(Box::new(ArrayColumn::new(inner_column, offsets)))
                     }
                     "map_transform_keys" => {
                         // Check whether the key is duplicate.
@@ -1443,15 +1436,13 @@ impl<'a> Evaluator<'a> {
                                 key_set.insert(key);
                             }
                         }
-                        Column::Map(Box::new(ArrayColumn {
-                            values: Column::Tuple(vec![result_col, value_col]),
-                            offsets,
-                        }))
+                        let inner_column = Column::Tuple(vec![result_col, value_col]);
+                        Column::Map(Box::new(ArrayColumn::new(inner_column, offsets)))
                     }
-                    "map_transform_values" => Column::Map(Box::new(ArrayColumn {
-                        values: Column::Tuple(vec![key_col, result_col]),
-                        offsets,
-                    })),
+                    "map_transform_values" => {
+                        let inner_column = Column::Tuple(vec![key_col, result_col]);
+                        Column::Map(Box::new(ArrayColumn::new(inner_column, offsets)))
+                    }
                     _ => unreachable!(),
                 };
                 let col = match validity {
@@ -1482,15 +1473,12 @@ impl<'a> Evaluator<'a> {
                         filtered_offsets.push(new_offset);
                     }
 
-                    Column::Array(Box::new(ArrayColumn {
-                        values: filtered_inner_col,
-                        offsets: filtered_offsets.into(),
-                    }))
+                    Column::Array(Box::new(ArrayColumn::new(
+                        filtered_inner_col,
+                        filtered_offsets.into(),
+                    )))
                 } else {
-                    Column::Array(Box::new(ArrayColumn {
-                        values: result_col,
-                        offsets,
-                    }))
+                    Column::Array(Box::new(ArrayColumn::new(result_col, offsets)))
                 };
                 let col = match validity {
                     Some(validity) => {

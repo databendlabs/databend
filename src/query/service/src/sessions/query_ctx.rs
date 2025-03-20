@@ -159,8 +159,6 @@ pub struct QueryContext {
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
     written_segment_locs: Arc<RwLock<HashSet<Location>>>,
-    // Used by hilbert clustering when do recluster.
-    selected_segment_locs: Arc<RwLock<HashSet<Location>>>,
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
@@ -190,7 +188,6 @@ impl QueryContext {
             written_segment_locs: Default::default(),
             block_threshold: Default::default(),
             m_cte_temp_table: Default::default(),
-            selected_segment_locs: Default::default(),
         })
     }
 
@@ -1289,16 +1286,21 @@ impl TableContext for QueryContext {
     }
 
     fn add_selected_segment_location(&self, segment_loc: Location) {
-        let mut segment_locations = self.selected_segment_locs.write();
+        let mut segment_locations = self.shared.selected_segment_locs.write();
         segment_locations.insert(segment_loc);
     }
 
     fn get_selected_segment_locations(&self) -> Vec<Location> {
-        self.selected_segment_locs.read().iter().cloned().collect()
+        self.shared
+            .selected_segment_locs
+            .read()
+            .iter()
+            .cloned()
+            .collect()
     }
 
     fn clear_selected_segment_locations(&self) {
-        let mut segment_locations = self.selected_segment_locs.write();
+        let mut segment_locations = self.shared.selected_segment_locs.write();
         segment_locations.clear();
     }
 
@@ -1773,6 +1775,7 @@ impl TableContext for QueryContext {
                 tb_id: table.get_table_info().ident.table_id,
                 table_name: table_name.to_string(),
                 db_id: db.get_db_info().database_id.db_id,
+                db_name: db.name().to_string(),
                 engine: table.engine().to_string(),
                 session_id: table
                     .options()

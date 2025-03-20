@@ -113,14 +113,25 @@ fn from_iter() {
 
 #[test]
 fn test_slice() {
-    let data = vec!["hello", "world", "databend", "y", "z", "abc"];
+    let data = vec![
+        "hello",
+        "world",
+        "databend",
+        "yyyyyyyyyyyyyyyyyyyyy",
+        "zzzzzzzzzzzzzzzzzzzzz",
+        "abcabcabcabcabcabc",
+    ];
 
     let array: Utf8ViewColumn = data.into_iter().collect();
+    assert_eq!(array.memory_size(), 150);
 
     let a3 = array.sliced(2, 3);
     assert_eq!(a3.into_iter().collect::<Vec<_>>(), vec![
-        "databend", "y", "z"
+        "databend",
+        "yyyyyyyyyyyyyyyyyyyyy",
+        "zzzzzzzzzzzzzzzzzzzzz",
     ]);
+    assert_eq!(a3.memory_size(), 86);
 }
 
 #[test]

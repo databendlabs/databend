@@ -39,6 +39,7 @@ use geo::Point;
 use geozero::CoordDimensions;
 use geozero::ToWkb;
 use itertools::Itertools;
+use jsonb::RawJsonb;
 use roaring::RoaringTreemap;
 use serde::de::Visitor;
 use serde::Deserialize;
@@ -776,7 +777,9 @@ impl PartialOrd for Scalar {
             (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.partial_cmp(b2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
-                jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
+                let left_jsonb = RawJsonb::new(v1);
+                let right_jsonb = RawJsonb::new(v2);
+                left_jsonb.partial_cmp(&right_jsonb)
             }
             (Scalar::Geometry(g1), Scalar::Geometry(g2)) => compare_geometry(g1, g2),
             (Scalar::Geography(g1), Scalar::Geography(g2)) => g1.partial_cmp(g2),
@@ -814,7 +817,11 @@ impl<'b> PartialOrd<ScalarRef<'b>> for ScalarRef<'_> {
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
             (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.partial_cmp(b2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
-            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
+            (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => {
+                let left_jsonb = RawJsonb::new(v1);
+                let right_jsonb = RawJsonb::new(v2);
+                left_jsonb.partial_cmp(&right_jsonb)
+            }
             (ScalarRef::Geometry(g1), ScalarRef::Geometry(g2)) => compare_geometry(g1, g2),
             (ScalarRef::Geography(g1), ScalarRef::Geography(g2)) => g1.partial_cmp(g2),
             (ScalarRef::Interval(i1), ScalarRef::Interval(i2)) => i1.partial_cmp(i2),
@@ -913,9 +920,13 @@ impl PartialOrd for Column {
                 col1.iter().partial_cmp(col2.iter())
             }
             (Column::Tuple(fields1), Column::Tuple(fields2)) => fields1.partial_cmp(fields2),
-            (Column::Variant(col1), Column::Variant(col2)) => col1
-                .iter()
-                .partial_cmp_by(col2.iter(), |v1, v2| jsonb::compare(v1, v2).ok()),
+            (Column::Variant(col1), Column::Variant(col2)) => {
+                col1.iter().partial_cmp_by(col2.iter(), |v1, v2| {
+                    let left_jsonb = RawJsonb::new(v1);
+                    let right_jsonb = RawJsonb::new(v2);
+                    left_jsonb.partial_cmp(&right_jsonb)
+                })
+            }
             (Column::Geometry(col1), Column::Geometry(col2)) => {
                 col1.iter().partial_cmp_by(col2.iter(), compare_geometry)
             }
@@ -1156,18 +1167,18 @@ impl Column {
                 })
             }
             Column::Array(col) => {
-                if col.len() == 0 || col.values.len() == 0 {
+                if col.len() == 0 {
                     Domain::Array(None)
                 } else {
-                    let inner_domain = col.values.domain();
+                    let inner_domain = col.underlying_column().domain();
                     Domain::Array(Some(Box::new(inner_domain)))
                 }
             }
             Column::Map(col) => {
-                if col.len() == 0 || col.values.len() == 0 {
+                if col.len() == 0 {
                     Domain::Map(None)
                 } else {
-                    let inner_domain = col.values.domain();
+                    let inner_domain = col.underlying_column().domain();
                     Domain::Map(Some(Box::new(inner_domain)))
                 }
             }
@@ -1215,11 +1226,11 @@ impl Column {
             Column::Date(_) => DataType::Date,
             Column::Interval(_) => DataType::Interval,
             Column::Array(array) => {
-                let inner = array.values.data_type();
+                let inner = array.values().data_type();
                 DataType::Array(Box::new(inner))
             }
             Column::Map(col) => {
-                let inner = col.values.data_type();
+                let inner = col.values().data_type();
                 DataType::Map(Box::new(inner))
             }
             Column::Bitmap(_) => DataType::Bitmap,
@@ -1387,10 +1398,8 @@ impl Column {
                     inner_len += rng.gen_range(0..=max_arr_len) as u64;
                     offsets.push(inner_len);
                 }
-                Column::Array(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize, options),
-                    offsets: offsets.into(),
-                }))
+                let inner_column = Column::random(inner_ty, inner_len as usize, options);
+                Column::Array(Box::new(ArrayColumn::new(inner_column, offsets.into())))
             }
             DataType::Map(inner_ty) => {
                 let mut inner_len = 0;
@@ -1400,10 +1409,8 @@ impl Column {
                     inner_len += rng.gen_range(0..=max_arr_len) as u64;
                     offsets.push(inner_len);
                 }
-                Column::Map(Box::new(ArrayColumn {
-                    values: Column::random(inner_ty, inner_len as usize, options),
-                    offsets: offsets.into(),
-                }))
+                let inner_column = Column::random(inner_ty, inner_len as usize, options);
+                Column::Map(Box::new(ArrayColumn::new(inner_column, offsets.into())))
             }
             DataType::Bitmap => BitmapType::from_data(
                 (0..len)
@@ -1427,7 +1434,7 @@ impl Column {
             DataType::Variant => {
                 let mut data = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let val = jsonb::rand_value();
+                    let val = jsonb::Value::rand_value();
                     data.push(val.to_vec());
                 }
                 VariantType::from_data(data)
@@ -1509,8 +1516,8 @@ impl Column {
             Column::Timestamp(col) => col.len() * 8,
             Column::Date(col) => col.len() * 4,
             Column::Interval(col) => col.len() * 16,
-            Column::Array(col) => col.values.memory_size() + col.offsets.len() * 8,
-            Column::Map(col) => col.values.memory_size() + col.offsets.len() * 8,
+            Column::Array(col) => col.memory_size(),
+            Column::Map(col) => col.memory_size(),
             Column::Bitmap(col) => col.memory_size(),
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
@@ -1544,7 +1551,9 @@ impl Column {
             | Column::Variant(col)
             | Column::Geometry(col) => col.memory_size(),
             Column::String(col) => col.len() * 8 + col.total_bytes_len(),
-            Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
+            Column::Array(col) | Column::Map(col) => {
+                col.underlying_column().serialize_size() + col.len() * 8
+            }
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
         }

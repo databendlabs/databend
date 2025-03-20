@@ -4022,7 +4022,6 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
- "databend-enterprise-hilbert-clustering",
  "databend-storages-common-cache",
  "databend-storages-common-io",
  "databend-storages-common-session",
@@ -4243,6 +4242,7 @@ dependencies = [
 name = "databend-common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
+ "arrow-schema",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -4255,6 +4255,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-pipeline-core",
+ "databend-common-pipeline-sources",
  "databend-common-storage",
  "databend-common-storages-parquet",
  "databend-storages-common-table-meta",
@@ -5109,6 +5110,7 @@ dependencies = [
  "databend-enterprise-attach-table",
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-hilbert-clustering",
  "databend-enterprise-inverted-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-stream-handler",
@@ -6504,9 +6506,9 @@ dependencies = [
 
 [[package]]
 name = "fs-err"
-version = "2.11.0"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a41f105fe1d5b6b34b2055e3dc59bb79b46b48b2040b9e6c7b4b5de097aa41"
+checksum = "1f89bda4c2a21204059a977ed3bfe746677dfd137b83c339e702b0ac91d482aa"
 dependencies = [
  "autocfg",
 ]
@@ -9139,16 +9141,17 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acd7dc2490b13d09367f5dc4bf202a5d70958dd5b9b2758e2708ee062752a824"
+source = "git+https://github.com/databendlabs/jsonb?rev=37d07f0#37d07f05bb2db05c47840a5429958db981177cde"
 dependencies = [
  "byteorder",
  "fast-float2",
  "itoa",
  "nom",
+ "num-traits",
  "ordered-float 4.5.0",
  "rand 0.8.5",
  "ryu",
+ "serde",
  "serde_json",
 ]
 
@@ -9459,14 +9462,14 @@ dependencies = [
 
 [[package]]
 name = "libtest-mimic"
-version = "0.7.3"
+version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc0bda45ed5b3a2904262c1bb91e526127aa70e7ef3758aba2ef93cf896b9b58"
+checksum = "5297962ef19edda4ce33aaa484386e0a5b3d7f2f4e037cbeee00503ef6b29d33"
 dependencies = [
+ "anstream",
+ "anstyle",
  "clap",
  "escape8259",
- "termcolor",
- "threadpool",
 ]
 
 [[package]]
@@ -10577,7 +10580,7 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.10.0"
-source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.7#e99cfebbc7a485fe55efe476c083d9decc888ef7"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.9#a529931e633e641cac09d078ed815a0d7c15a3c3"
 dependencies = [
  "anyerror",
  "byte-unit",
@@ -10587,7 +10590,7 @@ dependencies = [
  "futures",
  "maplit",
  "openraft-macros",
- "rand 0.8.5",
+ "rand 0.9.0",
  "serde",
  "thiserror 1.0.65",
  "tokio",
@@ -10599,7 +10602,7 @@ dependencies = [
 [[package]]
 name = "openraft-macros"
 version = "0.10.0"
-source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.7#e99cfebbc7a485fe55efe476c083d9decc888ef7"
+source = "git+https://github.com/databendlabs/openraft?tag=v0.10.0-alpha.9#a529931e633e641cac09d078ed815a0d7c15a3c3"
 dependencies = [
  "chrono",
  "proc-macro2",
@@ -13639,9 +13642,9 @@ dependencies = [
 
 [[package]]
 name = "sqllogictest"
-version = "0.21.0"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1106ff933150aa8b8af71ee57631cd3ac2feeccd230d122ad833e7f0cd5e8fe1"
+checksum = "17b2f0b80fc250ed3fdd82fc88c0ada5ad62ee1ed5314ac5474acfa52082f518"
 dependencies = [
  "async-trait",
  "educe",
@@ -13653,11 +13656,12 @@ dependencies = [
  "libtest-mimic",
  "md-5",
  "owo-colors",
+ "rand 0.8.5",
  "regex",
  "similar",
  "subst",
  "tempfile",
- "thiserror 1.0.65",
+ "thiserror 2.0.12",
  "tracing",
 ]
 

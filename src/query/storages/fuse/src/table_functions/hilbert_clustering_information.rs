@@ -18,6 +18,7 @@ use chrono::Utc;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_args::string_literal;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -40,7 +41,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 
 use crate::io::SegmentsIO;
 use crate::table_functions::parse_db_tb_args;
-use crate::table_functions::string_literal;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
 use crate::FuseTable;

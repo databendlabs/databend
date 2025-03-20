@@ -21,6 +21,7 @@ use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use geozero::wkb::Ewkb;
 use geozero::ToJson;
+use jsonb::RawJsonb;
 
 use crate::field_encoder::helpers::write_json_string;
 use crate::field_encoder::FieldEncoderValues;
@@ -81,7 +82,7 @@ impl FieldEncoderJSON {
 
             Column::Variant(c) => {
                 let v = unsafe { c.index_unchecked(row_index) };
-                out_buf.extend_from_slice(jsonb::to_string(v).as_bytes());
+                out_buf.extend_from_slice(RawJsonb::new(v).to_string().as_bytes());
             }
             Column::Geometry(c) => {
                 let v = unsafe { c.index_unchecked(row_index) };
@@ -135,13 +136,13 @@ impl FieldEncoderJSON {
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) {
-        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
-        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
+        let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
+        let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'[');
-        let inner = &T::upcast_column(column.values.clone());
+        let inner = &T::upcast_column(column.values().clone());
         for i in start..end {
             if i != start {
-                out_buf.extend_from_slice(b",");
+                out_buf.push(b',');
             }
             self.write_field(inner, i, out_buf);
         }
@@ -154,18 +155,18 @@ impl FieldEncoderJSON {
         row_index: usize,
         out_buf: &mut Vec<u8>,
     ) {
-        let start = unsafe { *column.offsets.get_unchecked(row_index) as usize };
-        let end = unsafe { *column.offsets.get_unchecked(row_index + 1) as usize };
+        let start = unsafe { *column.offsets().get_unchecked(row_index) as usize };
+        let end = unsafe { *column.offsets().get_unchecked(row_index + 1) as usize };
         out_buf.push(b'{');
-        let inner = &T::upcast_column(column.values.clone());
+        let inner = &T::upcast_column(column.values().clone());
         match inner {
             Column::Tuple(fields) => {
                 for i in start..end {
                     if i != start {
-                        out_buf.extend_from_slice(b",");
+                        out_buf.push(b',');
                     }
                     self.write_field(&fields[0], i, out_buf);
-                    out_buf.extend_from_slice(b":");
+                    out_buf.push(b':');
                     self.write_field(&fields[1], i, out_buf);
                 }
             }
@@ -179,11 +180,11 @@ impl FieldEncoderJSON {
         out_buf.push(b'{');
         for (i, inner) in columns.iter().enumerate() {
             if i > 0 {
-                out_buf.extend_from_slice(b",");
+                out_buf.push(b',');
             }
             let key = format!("{}", i + 1);
             self.write_string(key.as_bytes(), out_buf);
-            out_buf.extend_from_slice(b":");
+            out_buf.push(b':');
             self.write_field(inner, row_index, out_buf);
         }
         out_buf.push(b'}');

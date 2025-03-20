@@ -7,6 +7,7 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
+arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
@@ -19,6 +20,7 @@ databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-common-meta-types = { workspace = true }
 databend-common-pipeline-core = { workspace = true }
+databend-common-pipeline-sources = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }

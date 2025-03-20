@@ -171,18 +171,18 @@ fn to_nested_recursive(
         Column::Array(inner) => {
             parents.push(Nested::LargeList(ListNested {
                 is_nullable: nullable,
-                offsets: inner.offsets.clone(),
+                offsets: inner.underlying_offsets(),
                 validity,
             }));
-            to_nested_recursive(&inner.values, nested, parents)?;
+            to_nested_recursive(&inner.underlying_column(), nested, parents)?;
         }
         Column::Map(inner) => {
             parents.push(Nested::LargeList(ListNested {
                 is_nullable: nullable,
-                offsets: inner.offsets.clone(),
+                offsets: inner.underlying_offsets(),
                 validity,
             }));
-            to_nested_recursive(&inner.values, nested, parents)?;
+            to_nested_recursive(&inner.underlying_column(), nested, parents)?;
         }
         _ => {
             parents.push(Nested::Primitive(column.len(), nullable, validity));
@@ -206,10 +206,10 @@ fn to_leaves_recursive(column: &Column, leaves: &mut Vec<Column>) {
             cs.iter().for_each(|a| to_leaves_recursive(a, leaves));
         }
         Column::Array(col) => {
-            to_leaves_recursive(&col.values, leaves);
+            to_leaves_recursive(&col.underlying_column(), leaves);
         }
         Column::Map(col) => {
-            to_leaves_recursive(&col.values, leaves);
+            to_leaves_recursive(&col.underlying_column(), leaves);
         }
         // Handle nullable columns by recursing into their inner value
         Column::Nullable(inner) => to_leaves_recursive(&inner.column, leaves),
@@ -243,7 +243,7 @@ impl InitNested {
 pub fn create_list(data_type: TableDataType, nested: &mut NestedState, values: Column) -> Column {
     let n = nested.pop().unwrap();
     let (offsets, validity) = n.inner();
-    let col = Column::Array(Box::new(ArrayColumn::<AnyType> { values, offsets }));
+    let col = Column::Array(Box::new(ArrayColumn::<AnyType>::new(values, offsets)));
 
     if data_type.is_nullable() {
         col.wrap_nullable(validity.clone())
@@ -256,7 +256,7 @@ pub fn create_list(data_type: TableDataType, nested: &mut NestedState, values: C
 pub fn create_map(data_type: TableDataType, nested: &mut NestedState, values: Column) -> Column {
     let n = nested.pop().unwrap();
     let (offsets, validity) = n.inner();
-    let col = Column::Map(Box::new(ArrayColumn::<AnyType> { values, offsets }));
+    let col = Column::Map(Box::new(ArrayColumn::<AnyType>::new(values, offsets)));
     if data_type.is_nullable() {
         col.wrap_nullable(validity.clone())
     } else {
