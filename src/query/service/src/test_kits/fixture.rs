@@ -145,6 +145,14 @@ impl TestFixture {
         Self::setup_with_custom(OSSSetup { config }).await
     }
 
+    pub async fn setup_with_segment_cache_bytes(segment_bytes: u64) -> Result<TestFixture> {
+        let config = ConfigBuilder::create()
+            .enable_table_meta_cache()
+            .table_meta_segment_bytes(segment_bytes)
+            .config();
+        Self::setup_with_custom(OSSSetup { config }).await
+    }
+
     /// Create a new TestFixture with setup impl.
     pub async fn setup_with_custom(setup: impl Setup) -> Result<TestFixture> {
         let conf = setup.setup().await?;

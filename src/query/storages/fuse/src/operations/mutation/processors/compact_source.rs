@@ -92,7 +92,7 @@ impl PrefetchAsyncSource for CompactSource {
                             block_reader
                                 .read_columns_data_by_merge_io(
                                     &settings,
-                                    &block.location.0,
+                                    &block.location,
                                     &block.col_metas,
                                     &None,
                                 )
@@ -174,7 +174,7 @@ impl BlockMetaTransform<CompactSourceMeta> for CompactTransform {
                             bytes: block.memory_size(),
                         });
                         if let Some(stream_ctx) = &self.stream_ctx {
-                            let stream_meta = gen_mutation_stream_meta(None, &meta.location.0)?;
+                            let stream_meta = gen_mutation_stream_meta(None, &meta.location)?;
                             block = stream_ctx.apply(block, &stream_meta)?;
                         }
                         Ok(block)

@@ -43,6 +43,7 @@ use databend_common_pipeline_core::ExecutionInfo;
 use databend_common_sql::field_default_value;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::io::MetaReaders;
+use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
@@ -52,6 +53,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use databend_storages_common_table_meta::table::OPT_KEY_COMMENT;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
+use databend_storages_common_table_meta::table::OPT_KEY_SEGMENT_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -398,6 +400,9 @@ impl CreateTableInterpreter {
         }
         if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
             FuseStorageFormat::from_str(storage_format)?;
+        }
+        if let Some(segment_format) = options.get(OPT_KEY_SEGMENT_FORMAT) {
+            FuseSegmentFormat::from_str(segment_format)?;
         }
         let comment = options.remove(OPT_KEY_COMMENT);
 

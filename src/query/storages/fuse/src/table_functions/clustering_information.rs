@@ -44,6 +44,7 @@ use databend_common_expression::Value;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::analyze_cluster_keys;
 use databend_storages_common_index::statistics_to_domain;
+// use databend_storages_common_table_meta::meta::AbstractBlockMeta;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::ClusterType;
@@ -248,14 +249,12 @@ impl<'a> ClusteringInformation<'a> {
         let total_block_count = snapshot.summary.block_count;
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in snapshot.segments.chunks(chunk_size) {
-            let segments = segments_io
-                .read_segments::<SegmentInfo>(chunk, true)
-                .await?;
+            let segments: Vec<Result<SegmentInfo>> = segments_io.read_segments(chunk, true).await?;
 
             for segment in segments.into_iter().flatten() {
-                for block in &segment.blocks {
+                for block in segment.blocks {
                     let (min, max) =
-                        get_min_max_stats(&exprs, block, schema.clone(), default_cluster_key_id);
+                        get_min_max_stats(&exprs, &block, schema.clone(), default_cluster_key_id);
                     assert_eq!(min.len(), max.len());
                     let (min, max) = match min.iter().cmp_by(max.iter(), cmp_with_null) {
                         Ordering::Equal => {
@@ -445,9 +444,9 @@ fn get_min_max_stats(
     default_key_id: Option<u32>,
 ) -> (Vec<Scalar>, Vec<Scalar>) {
     if let Some(default_key_id) = default_key_id {
-        if let Some(v) = block.cluster_stats.as_ref() {
+        if let Some(v) = &block.cluster_stats {
             if v.cluster_key_id == default_key_id {
-                return (v.min.clone(), v.max.clone());
+                return (v.min().clone(), v.max().clone());
             }
         }
     }

@@ -280,8 +280,10 @@ async fn mutation_source_partitions(
 
     let (is_lazy, is_delete) = if mutation.mutation_type == MutationType::Delete {
         let cluster = ctx.get_cluster();
-        let is_lazy =
-            !dry_run && !cluster.is_empty() && table_snapshot.segments.len() >= cluster.nodes.len();
+        let is_lazy = fuse_table.is_column_oriented()
+            || (!dry_run
+                && !cluster.is_empty()
+                && table_snapshot.segments.len() >= cluster.nodes.len());
         (is_lazy, true)
     } else {
         (false, false)

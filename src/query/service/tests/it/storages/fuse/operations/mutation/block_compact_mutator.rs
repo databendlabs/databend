@@ -27,6 +27,7 @@ use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
+use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactBlockPartInfo;
@@ -249,7 +250,7 @@ async fn test_safety() -> Result<()> {
         };
 
         eprintln!("running target select");
-        let mut block_compact_mutator = BlockCompactMutator::new(
+        let mut block_compact_mutator = BlockCompactMutator::<RowOrientedSegmentReader>::new(
             ctx.clone(),
             threshold,
             compact_params,
@@ -292,7 +293,7 @@ pub async fn verify_compact_tasks(
                 compact_segment_indices.extend(extra.removed_segment_indexes.iter());
                 actual_blocks_number += extra.unchanged_blocks.len();
                 for b in &extra.unchanged_blocks {
-                    actual_block_ids.insert(b.1.location.clone());
+                    actual_block_ids.insert(b.1.location.0.clone());
                 }
             }
             CompactBlockPartInfo::CompactTaskInfo(task) => {
@@ -323,7 +324,7 @@ pub async fn verify_compact_tasks(
         let segment = SegmentInfo::try_from(compact_segment)?;
         except_blocks_number += segment.blocks.len();
         for b in &segment.blocks {
-            except_block_ids.insert(b.location.clone());
+            except_block_ids.insert(b.location.0.clone());
         }
     }
     assert_eq!(except_blocks_number, actual_blocks_number);

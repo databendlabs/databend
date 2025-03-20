@@ -64,8 +64,11 @@ use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::pruning::SegmentPruner;
 use crate::pruning_pipeline::AsyncBlockPruneTransform;
+use crate::pruning_pipeline::ColumnOrientedBlockPruneSink;
 use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
+use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
+use crate::pruning_pipeline::PrunedCompactSegmentMeta;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
@@ -73,6 +76,7 @@ use crate::pruning_pipeline::SendPartState;
 use crate::pruning_pipeline::SyncBlockPruneTransform;
 use crate::pruning_pipeline::TopNPruneTransform;
 use crate::FuseLazyPartInfo;
+use crate::FuseSegmentFormat;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -128,7 +132,9 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if !dry_run && segment_len > nodes_num && distributed_pruning {
+                if self.is_column_oriented()
+                    || (!dry_run && segment_len > nodes_num && distributed_pruning)
+                {
                     let mut segments = Vec::with_capacity(segment_locs.len());
                     for (idx, segment_location) in segment_locs.into_iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location))
@@ -245,14 +251,28 @@ impl FuseTable {
 
         let (segment_tx, segment_rx) = async_channel::bounded(max_io_requests);
 
-        self.prune_segments_with_pipeline(
-            pruner.clone(),
-            &mut prune_pipeline,
-            ctx.clone(),
-            segment_rx,
-            part_info_tx,
-            derterministic_cache_key.clone(),
-        )?;
+        match self.segment_format {
+            FuseSegmentFormat::Row => {
+                self.prune_segments_with_pipeline(
+                    pruner.clone(),
+                    &mut prune_pipeline,
+                    ctx.clone(),
+                    segment_rx,
+                    part_info_tx,
+                    derterministic_cache_key.clone(),
+                )?;
+            }
+            FuseSegmentFormat::Column => {
+                self.prune_column_oriented_segments_with_pipeline(
+                    pruner.clone(),
+                    &mut prune_pipeline,
+                    ctx.clone(),
+                    segment_rx,
+                    part_info_tx,
+                    derterministic_cache_key.clone(),
+                )?;
+            }
+        }
         prune_pipeline.set_on_init(move || {
             // We cannot use the runtime associated with the query to avoid increasing its lifetime.
             GlobalIORuntime::instance().spawn(async move {
@@ -364,11 +384,14 @@ impl FuseTable {
             |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
             max_threads,
         )?;
-        let segment_pruner =
-            SegmentPruner::create(pruner.pruning_ctx.clone(), pruner.table_schema.clone())?;
+        let segment_pruner = SegmentPruner::create(
+            pruner.pruning_ctx.clone(),
+            pruner.table_schema.clone(),
+            Default::default(),
+        )?;
 
         prune_pipeline.add_transform(|input, output| {
-            SegmentPruneTransform::create(
+            SegmentPruneTransform::<PrunedCompactSegmentMeta>::create(
                 input,
                 output,
                 segment_pruner.clone(),
@@ -459,6 +482,70 @@ impl FuseTable {
             });
         }
 
+        Ok(())
+    }
+
+    pub fn prune_column_oriented_segments_with_pipeline(
+        &self,
+        pruner: Arc<FusePruner>,
+        prune_pipeline: &mut Pipeline,
+        ctx: Arc<dyn TableContext>,
+        segment_rx: Receiver<SegmentLocation>,
+        part_info_tx: Sender<Result<PartInfoPtr>>,
+        _derterministic_cache_key: Option<String>,
+    ) -> Result<()> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let push_down = &pruner.push_down;
+        let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+
+        // Only the columns that are used in the push down will be read, cached and passed to the next pipeline.
+        let column_ids = {
+            let arrow_schema = self.schema().as_ref().into();
+            let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&self.schema()));
+            let column_nodes = match push_down.as_ref().and_then(|p| p.projection.as_ref()) {
+                Some(projection) => {
+                    match push_down.as_ref().and_then(|p| p.output_columns.as_ref()) {
+                        Some(output_columns) => {
+                            output_columns.project_column_nodes(&column_nodes)?
+                        }
+                        None => projection.project_column_nodes(&column_nodes)?,
+                    }
+                }
+                None => column_nodes.column_nodes.iter().collect(),
+            };
+            column_nodes
+                .iter()
+                .flat_map(|c| c.leaf_column_ids.clone())
+                .collect::<Vec<_>>()
+        };
+        let segment_pruner = SegmentPruner::create(
+            pruner.pruning_ctx.clone(),
+            pruner.table_schema.clone(),
+            column_ids.clone(),
+        )?;
+
+        prune_pipeline.add_source(
+            |output| LazySegmentReceiverSource::create(ctx.clone(), segment_rx.clone(), output),
+            max_threads,
+        )?;
+        prune_pipeline.add_transform(|input, output| {
+            SegmentPruneTransform::<PrunedColumnOrientedSegmentMeta>::create(
+                input,
+                output,
+                segment_pruner.clone(),
+                pruner.pruning_ctx.clone(),
+            )
+        })?;
+        // TODO(Sky): deal with sample
+        prune_pipeline.add_sink(|input| {
+            ColumnOrientedBlockPruneSink::create(
+                input,
+                block_pruner.clone(),
+                part_info_tx.clone(),
+                column_ids.clone(),
+            )
+        })?;
+        // TODO(Sky): populate prune cache , deal with topn prune
         Ok(())
     }
 

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use databend_common_expression::local_block_meta_serde;
 use databend_common_expression::BlockMetaInfo;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BlockReadInfo;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::operations::common::BlockMetaIndex;
@@ -64,7 +64,7 @@ impl SerializeBlock {
 pub enum CompactSourceMeta {
     Concat {
         read_res: Vec<BlockReadResult>,
-        metas: Vec<Arc<BlockMeta>>,
+        metas: Vec<Arc<BlockReadInfo>>,
         index: BlockMetaIndex,
     },
     Extras(CompactExtraInfo),

@@ -1,0 +1,875 @@
+statement ok
+DROP DATABASE IF EXISTS optimize_table
+
+statement ok
+CREATE DATABASE optimize_table
+
+statement ok
+USE optimize_table
+
+statement ok
+create table t(a uint64 not null) segment_format = 'column_oriented'
+
+statement ok
+insert into t values (5)
+
+statement ok
+insert into t values (6)
+
+statement ok
+insert into t values (7)
+
+query I
+select * from t order by a
+----
+5
+6
+7
+
+statement ok
+optimize table t compact limit 2
+
+query II
+select segment_count,block_count from fuse_snapshot('optimize_table', 't') limit 1
+----
+2 2
+
+
+statement ok
+optimize table t compact limit 2
+
+query II
+select segment_count,block_count from fuse_snapshot('optimize_table', 't') limit 1
+----
+1 1
+
+
+query II
+select  column_name, column_type, row_count from fuse_column('optimize_table', 't') limit 1
+----
+a UInt64 3
+
+statement ok
+optimize table `t` purge
+
+query B
+select count(*) from fuse_snapshot('optimize_table', 't')
+----
+5
+
+statement ok
+set data_retention_time_in_days = 0
+
+statement ok
+optimize table `t` purge
+
+# Flaky Tests
+# query B
+# select count(*)<5 from fuse_snapshot('optimize_table', 't')
+# ----
+# 1
+
+query I
+select * from t order by a
+----
+5
+6
+7
+
+statement ok
+insert into t values (8)
+
+statement ok
+insert into t values (9)
+
+statement ok
+insert into t values (10)
+
+query I
+select * from t order by a
+----
+5
+6
+7
+8
+9
+10
+
+statement ok
+optimize table `t` all
+
+query II
+select segment_count,block_count from fuse_snapshot('optimize_table', 't') limit 2
+----
+1 1
+
+
+query I
+select * from t order by a
+----
+5
+6
+7
+8
+9
+10
+
+statement ok
+create table m(a uint64 not null) Engine = Fuse segment_format = 'column_oriented'
+
+statement ok
+optimize table m all
+
+statement ok
+optimize table m purge
+
+statement ok
+optimize table m compact
+
+statement ok
+drop table m
+
+statement ok
+create table m(a uint64 not null) engine=Fuse segment_format = 'column_oriented'
+
+statement ok
+insert into m values(1)
+
+statement ok
+insert into m values(2)
+
+statement ok
+optimize table m all
+
+statement ok
+optimize table m purge
+
+statement ok
+optimize table m compact
+
+
+statement ok
+create table t1(a uint64) segment_format = 'column_oriented'
+
+statement ok
+insert into t1 values (5)
+
+statement ok
+insert into t1 values (6)
+
+statement ok
+insert into t1 values (7)
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't1') limit 1
+----
+3 3
+
+statement ok
+optimize table t1 compact segment
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't1') limit 1
+----
+1 3
+
+
+statement ok
+create table t2(a uint64 not null) block_per_segment=2 segment_format = 'column_oriented'
+
+statement ok
+insert into t2 values (5)
+
+statement ok
+insert into t2 values (6)
+
+statement ok
+insert into t2 values (7)
+
+statement ok
+insert into t2 values (8)
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't2') limit 1
+----
+4 4
+
+statement ok
+optimize table t2 compact /* two compact task because of the block_per_segment is 2 */
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't2') limit 1
+----
+2 2
+
+statement ok
+insert into t2 values (9)
+
+statement ok
+insert into t2 values (10)
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't2') limit 1
+----
+4 4
+
+statement ok
+optimize table t2 compact segment limit 2
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't2') limit 1
+----
+3 4
+
+statement ok
+optimize table t2 compact segment limit 2
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't2') limit 1
+----
+2 4
+
+statement ok
+optimize table t2 compact segment limit 2 /* right-assoc can not be compact further*/ /*+ test hint */
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't2') limit 1 /* can not be compacted further */ /*+ test hint */
+----
+2 4
+
+
+
+statement ok
+create table t3(c int not null) block_per_segment=4 row_per_block=5 segment_format = 'column_oriented'
+
+statement ok
+insert into t3 values (1), (2), (3)
+
+statement ok
+insert into t3 values (4), (5), (6)
+
+statement ok
+insert into t3 values (7), (8), (9)
+
+statement ok
+optimize table t3 compact
+
+query I
+select * from t3 order by c
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't3') limit 1
+----
+1 2
+
+
+
+statement ok
+create table t4(a int not null) row_per_block=2 segment_format = 'column_oriented'
+
+statement ok
+insert into t4 values (1),(2)
+
+statement ok
+insert into t4 values (3)
+
+statement ok
+alter table t4 add column b int not null
+
+statement ok
+insert into t4 values (4, 4)
+
+statement ok
+optimize table t4 compact
+
+query II
+select * from t4 order by a
+----
+1 0
+2 0
+3 0
+4 4
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't4') limit 1
+----
+1 2
+
+
+
+# for issue which addressed in PR #10620 (https://github.com/datafuselabs/databend/pull/10620)
+statement ok
+create table t5(c int not null)  block_per_segment=3 row_per_block=3 segment_format = 'column_oriented'
+
+statement ok
+insert into t5 select number from numbers(7)
+
+statement ok
+insert into t5 values(7)
+
+statement ok
+insert into t5 values(8)
+
+statement ok
+optimize table t5 compact
+
+query I
+select count() from t5
+----
+9
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't5') limit 2
+----
+1 3
+3 4
+
+
+
+statement ok
+create table t6(c int not null)  block_per_segment=4 row_per_block=3 segment_format = 'column_oriented'
+
+statement ok
+insert into t6 select number from numbers(9)
+
+statement ok
+insert into t6 select number from numbers(18) where number>8
+
+statement ok
+optimize table t6 compact segment
+
+statement ok
+insert into t6 select number from numbers(27) where number>17
+
+statement ok
+insert into t6 values(27)
+
+statement ok
+insert into t6 values(28)
+
+statement ok
+insert into t6 values(29)
+
+statement ok
+insert into t6 values(30)
+
+statement ok
+optimize table t6 compact
+
+query I
+select count() from t6
+----
+31
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't6') limit 2
+----
+3 10
+6 13
+
+
+
+# for issue which addressed in PR #10743 (https://github.com/datafuselabs/databend/pull/10743)
+statement ok
+create table t7(c int not null) block_per_segment=3 row_per_block=3 segment_format = 'column_oriented'
+
+statement ok
+insert into t7 values(1)
+
+statement ok
+insert into t7 values(2)
+
+statement ok
+insert into t7 values(3)
+
+statement ok
+insert into t7 values(4)
+
+statement ok
+insert into t7 values(5)
+
+statement ok
+insert into t7 values(6)
+
+statement ok
+insert into t7 values(7)
+
+statement ok
+insert into t7 values(8)
+
+statement ok
+optimize table t7 compact limit 2
+
+query I
+select c from t7 order by c
+----
+1
+2
+3
+4
+5
+6
+7
+8
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't7') limit 2
+----
+7 7
+8 8
+
+
+
+statement ok
+create table t8(a int not null) block_per_segment=2 row_per_block=3 segment_format = 'column_oriented'
+
+statement ok
+insert into t8 values(1),(2),(3)
+
+statement ok
+alter table t8 add column b int not null
+
+statement ok
+insert into t8 values(4,4),(5,5),(6,6)
+
+query IIII
+select segment_count, block_count, row_count, bytes_uncompressed from fuse_snapshot('optimize_table', 't8') limit 1
+----
+2 2 6 36
+
+statement ok
+optimize table t8 compact
+
+query IIII
+select segment_count, block_count, row_count, bytes_uncompressed from fuse_snapshot('optimize_table', 't8') limit 1
+----
+1 2 6 48
+
+query II
+select * from t8 order by a
+----
+1 0
+2 0
+3 0
+4 4
+5 5
+6 6
+
+
+
+statement ok
+create table t9(a int not null) cluster by(abs(a)) segment_format = 'column_oriented'
+
+statement ok
+insert into t9 values(-5)
+
+statement ok
+insert into t9 values(2)
+
+statement ok
+insert into t9 values(4)
+
+statement ok
+optimize table t9 compact
+
+query I
+select a from t9
+----
+2
+4
+-5
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't9') limit 2
+----
+1 1
+3 3
+
+statement ok
+insert into t9 values(1)
+
+statement ok
+alter table t9 recluster
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't9') limit 2
+----
+1 1
+2 2
+
+query I
+select a from t9
+----
+1
+2
+4
+-5
+
+statement ok
+insert into t9 values(-3)
+
+statement ok
+optimize table t9 compact
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't9') limit 2
+----
+1 2
+2 2
+
+statement ok
+insert into t9 values(6)
+
+statement ok
+optimize table t9 compact
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't9') limit 2
+----
+1 2
+2 3
+
+query I
+select a from t9 order by a
+----
+-5
+-3
+1
+2
+4
+6
+
+
+
+statement ok
+create table t10(a int not null) row_per_block=3 segment_format = 'column_oriented'
+
+statement ok
+insert into t10 values(0),(1),(4)
+
+statement ok
+ALTER TABLE t10 cluster by(abs(a))
+
+statement ok
+insert into t10 values(3)
+
+statement ok
+insert into t10 values(-6),(-8)
+
+statement ok
+insert into t10 values(2),(5),(-7)
+
+query TTIIFFT
+select * exclude(timestamp) from clustering_information('optimize_table','t10')
+----
+(abs(a)) linear 4 1 2.0 2.75 {"00002":1,"00003":3}
+
+# recluster the unclustered block.
+statement ok
+alter table t10 recluster
+
+query F
+select average_depth from clustering_information('optimize_table','t10')
+----
+2.75
+
+# compact
+statement ok
+optimize table t10 compact
+
+query TTIIFFT
+select * exclude(timestamp) from clustering_information('optimize_table','t10')
+----
+(abs(a)) linear 3 0 2.0 3.0 {"00003":3}
+
+statement ok
+alter table t10 recluster
+
+query F
+select average_depth from clustering_information('optimize_table','t10')
+----
+1.0
+
+query I
+select count() from fuse_snapshot('optimize_table', 't10')
+----
+7
+
+statement ok
+optimize table t10 purge limit 2
+
+query I
+select count() from fuse_snapshot('optimize_table', 't10')
+----
+5
+
+
+
+# test for compact limit, compare with t10.
+statement ok
+create table t11(a int not null) cluster by(abs(a)) row_per_block=3 block_per_segment=2 segment_format = 'column_oriented'
+
+statement ok
+insert into t11 values(0),(1),(4)
+
+statement ok
+insert into t11 values(2),(5),(-7)
+
+statement ok
+insert into t11 values(3)
+
+statement ok
+insert into t11 values(-6),(-8)
+
+query TTIIFFT
+select * exclude(timestamp) from clustering_information('optimize_table','t11')
+----
+(abs(a)) linear 4 1 2.0 2.75 {"00002":1,"00003":3}
+
+statement ok
+optimize table t11 compact limit 2
+
+query B
+select average_depth > 1.0 from clustering_information('optimize_table','t11')
+----
+1
+
+query I
+select * from t11 order by a
+----
+-8
+-7
+-6
+0
+1
+2
+3
+4
+5
+
+
+
+statement ok
+create table t12(a int not null) cluster by (a) segment_format = 'column_oriented'
+
+statement ok
+insert into t12 values(1)
+
+statement ok
+insert into t12 values(2)
+
+statement ok
+insert into t12 values(3)
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't12') limit 1
+----
+3 3
+
+statement ok
+optimize table t12 compact segment
+
+query II
+select segment_count, block_count from fuse_snapshot('optimize_table', 't12') limit 1
+----
+1 3
+
+
+
+# For PR#13210
+statement ok
+create table t13(a int) row_per_block=10 block_per_segment=2 segment_format = 'column_oriented'
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+optimize table t13 compact limit 2
+
+query II
+select block_count, row_count from fuse_segment('optimize_table', 't13')
+----
+1 14
+1 7
+1 7
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+optimize table t13 compact limit 2
+
+query II
+select block_count, row_count from fuse_segment('optimize_table', 't13')
+----
+2 21
+1 7
+1 7
+
+statement ok
+optimize table t13 compact limit 2
+
+query II
+select block_count, row_count from fuse_segment('optimize_table', 't13')
+----
+2 21
+1 14
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+optimize table t13 compact
+
+query I
+select row_count from fuse_block('optimize_table', 't13')
+----
+14
+14
+14
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+optimize table t13 compact
+
+query I
+select row_count from fuse_block('optimize_table', 't13')
+----
+14
+14
+7
+14
+
+
+statement ok
+create table test_abc(a string, b string, c string) cluster by ( substr(a, 1, 2), substr(b, 1, 3) ) segment_format = 'column_oriented'
+
+statement ok
+create table test_abc_random(a string, b string, c string) engine = random segment_format = 'column_oriented'
+
+statement ok
+insert into test_abc select * from test_abc_random limit 1000;
+
+statement ok
+insert into test_abc select * from test_abc_random limit 1000;
+
+statement ok
+insert into test_abc select * from test_abc_random limit 1000;
+
+statement ok
+alter table test_abc recluster final;
+
+
+statement ok
+create table t14(a string, b string) cluster by(a,b) segment_format = 'column_oriented'
+
+statement ok
+insert into t14 values('123456789', 'abc');
+
+statement ok
+insert into t14 values('12345678', 'efg');
+
+statement ok
+alter table t14 recluster
+
+query TTIIFFT
+select * exclude(timestamp) from clustering_information('optimize_table','t14')
+----
+(a, b) linear 1 0 0.0 1.0 {"00001":1}
+
+
+statement ok
+create table t15(a int not null) row_per_block=3 segment_format = 'column_oriented'
+
+statement ok
+insert into t15 values(0),(1),(4)
+
+statement ok
+insert into t15 values(3)
+
+statement ok
+insert into t15 values(-6),(-8)
+
+statement ok
+ALTER TABLE t15 cluster by(abs(a))
+
+statement ok
+insert into t15 values(2),(5),(-7)
+
+query TTIIFFT
+select * exclude(timestamp) from clustering_information('optimize_table','t15')
+----
+(abs(a)) linear 4 1 2.0 2.75 {"00002":1,"00003":3}
+
+statement ok
+alter table t15 recluster
+
+query TTIIFFT
+select * exclude(timestamp) from clustering_information('optimize_table','t15')
+----
+(abs(a)) linear 3 0 2.0 3.0 {"00003":3}
+
+statement ok
+alter table t15 recluster
+
+query TTFF
+select cluster_key, type, average_overlaps, average_depth from clustering_information('optimize_table','t15')
+----
+(abs(a)) linear 0.0 1.0
+
+statement ok
+create table t16(a int, b int) file_size = 100 segment_format = 'column_oriented'
+
+statement ok
+insert into t16 values(1, 1), (3, 3);
+
+statement ok
+insert into t16 values(2, 2), (4, 4);
+
+statement ok
+optimize table t16 compact;
+
+statement ok
+alter table t16 set options(file_size = 10485760);
+
+statement ok
+insert into t16 values(5, 5);
+
+statement ok
+optimize table t16 compact;
+
+query III
+select segment_count, block_count, row_count from fuse_snapshot('optimize_table','t16');
+----
+1 1 5
+2 3 5
+1 2 4
+2 2 4
+1 1 2
+
+statement ok
+drop table t16 all;
+
+statement ok
+DROP DATABASE optimize_table
