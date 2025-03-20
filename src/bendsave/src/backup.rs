@@ -28,8 +28,8 @@ use crate::utils::DATABEND_META_BACKUP_PATH;
 
 pub async fn backup(from: &str, to: &str) -> Result<()> {
     let query_cfg = load_query_config(from)?;
-    let databend_storage = load_query_storage(&query_cfg)?;
     init_databend_query(query_cfg).await?;
+    let databend_storage = load_query_storage(&query_cfg)?;
 
     let bendsave_storage = load_bendsave_storage(to).await?;
 
