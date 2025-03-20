@@ -95,7 +95,9 @@ impl CompactTaskBuilder for ColumnOrientedCompactTaskBuilder {
                 let total_size = self.total_size + block_size_col[i] as usize;
                 let mut col_metas = HashMap::new();
                 for column_id in &self.column_ids {
-                    let meta_col = col_meta_cols.get(column_id).unwrap();
+                    let Some(meta_col) = col_meta_cols.get(column_id) else {
+                        continue;
+                    };
                     let meta = meta_col.index(i).unwrap();
                     let meta = meta.as_tuple().unwrap();
                     let offset = meta[0].as_number().unwrap().as_u_int64().unwrap();
