@@ -49,10 +49,17 @@ pub fn run_filter(file: &mut impl Write, predicate: Vec<bool>, block: &DataBlock
 }
 
 pub fn run_concat(file: &mut impl Write, blocks: &[DataBlock]) {
+    let total_block_size: usize = blocks.iter().map(|b| b.memory_size()).sum();
     let result = DataBlock::concat(blocks);
 
     match result {
         Ok(result_block) => {
+            let result_block_size = result_block.memory_size();
+            // bits could be compressed into one byte in nullable column
+            assert!(
+                total_block_size >= result_block_size
+                    && total_block_size as f64 <= result_block_size as f64 * 1.5f64
+            );
             for (i, c) in blocks.iter().enumerate() {
                 writeln!(file, "Concat-Column {i}:").unwrap();
                 writeln!(file, "{c:?}").unwrap();

@@ -4022,7 +4022,6 @@ dependencies = [
  "databend-common-storages-view",
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
- "databend-enterprise-hilbert-clustering",
  "databend-storages-common-cache",
  "databend-storages-common-io",
  "databend-storages-common-session",
@@ -5111,6 +5110,7 @@ dependencies = [
  "databend-enterprise-attach-table",
  "databend-enterprise-background-service",
  "databend-enterprise-data-mask-feature",
+ "databend-enterprise-hilbert-clustering",
  "databend-enterprise-inverted-index",
  "databend-enterprise-resources-management",
  "databend-enterprise-stream-handler",
@@ -9141,16 +9141,17 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.4.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acd7dc2490b13d09367f5dc4bf202a5d70958dd5b9b2758e2708ee062752a824"
+source = "git+https://github.com/databendlabs/jsonb?rev=37d07f0#37d07f05bb2db05c47840a5429958db981177cde"
 dependencies = [
  "byteorder",
  "fast-float2",
  "itoa",
  "nom",
+ "num-traits",
  "ordered-float 4.5.0",
  "rand 0.8.5",
  "ryu",
+ "serde",
  "serde_json",
 ]
 

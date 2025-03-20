@@ -25,7 +25,7 @@ mod builder_distributed_insert_select;
 mod builder_exchange;
 mod builder_fill_missing_columns;
 mod builder_filter;
-mod builder_hilbert_serialize;
+mod builder_hilbert_partition;
 mod builder_insert_multi_table;
 mod builder_join;
 mod builder_limit;
