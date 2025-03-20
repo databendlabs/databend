@@ -570,6 +570,10 @@ impl SubqueryRewriter {
         else {
             return Ok(None);
         };
+        // `xx in null` != `where xx = null`
+        if left_column.column.data_type.is_nullable() {
+            return Ok(None);
+        }
         let (Some(left_table_index), Some(right_table_index)) = (
             left_column.column.table_index,
             right_expr_binding.table_index,
@@ -583,6 +587,11 @@ impl SubqueryRewriter {
         ) else {
             return Ok(None);
         };
+        // when left is a join, filtering becomes complicated. If in subquery is eliminated,
+        // the filter will be pushed down to Scan before join, resulting in inaccurate data results.
+        if left.has_join() {
+            return Ok(None);
+        }
         if left_source_binding != right_source_binding {
             return Ok(None);
         }
@@ -592,10 +601,9 @@ impl SubqueryRewriter {
             let left_columns = guard.columns_by_table_index(left_table_index);
             let right_columns = guard.columns_by_table_index(right_table_index);
             let left_table = guard.table(left_table_index);
+            let right_table = guard.table(right_table_index);
             // filter table function
-            if left_table.database() == "system"
-                || guard.table(right_table_index).database() == "system"
-            {
+            if left_table.database() == "system" || right_table.database() == "system" {
                 return Ok(None);
             }
             let left_source_table_index = guard
