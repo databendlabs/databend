@@ -885,8 +885,10 @@ impl SubqueryRewriter {
     }
 
     pub fn get_derived(&self, old: IndexType) -> Result<IndexType> {
-        Ok(self.derived_columns.get(&old).copied().unwrap_or(old))
-        //            .ok_or_else(|| ErrorCode::Internal(format!("Missing derived column {old}")))
+        self.derived_columns
+            .get(&old)
+            .copied()
+            .ok_or_else(|| ErrorCode::Internal(format!("Missing derived column {old}")))
     }
 }
 

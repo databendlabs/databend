@@ -250,14 +250,14 @@ SELECT * FROM c WHERE (SELECT count(*) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY 
 4  TX
 
 
-query ??
+query IT
 SELECT * FROM c WHERE (SELECT count(ship) FROM o WHERE o.c_id=c.c_id) > 1 ORDER BY c_id
 ----
 1 CA
 2 TX
 
 
-query ??
+query IT
 SELECT *
 FROM c
 WHERE
@@ -295,6 +295,12 @@ SELECT * FROM c WHERE c_id=(SELECT c_id FROM o WHERE ship='WA' AND bill='FL')
 ----
 6  FL
 
+query IT
+SELECT * FROM ( SELECT * FROM c WHERE c_id < 6 ) c WHERE c_id in (SELECT o.c_id FROM o WHERE o.c_id = c.c_id AND c.bill!='MA');
+----
+1  CA
+2  TX
+4  TX
 
 # Subquery in SELECT clause
 
@@ -603,6 +609,25 @@ select * from numbers(5) where exists(select * from numbers(1)) order by number
 3
 4
 
+query IIT
+select *,
+(select ship from o where o.o_id = t2.o_id and o.ship != 'WA') ship 
+from (select min(o_id) o_id, count from (select count(*) count, max(o_id) o_id from o group by c_id) t group by count) t2
+order by o_id limit 2;
+----
+30 3 CA
+80 2 NULL
+
+query IIII
+select *,
+(select uniq(ship) from o where o.c_id = t.c_id)
+from (select count(*) count, max(o_id) o_id, c_id from o group by c_id) t
+order by o_id;
+----
+3 30 1 1
+3 60 2 2
+2 80 4 1
+1 90 6 1
 
 statement ok
 drop table o
