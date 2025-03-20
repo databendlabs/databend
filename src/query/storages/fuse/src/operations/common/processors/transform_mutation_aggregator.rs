@@ -48,7 +48,7 @@ use log::warn;
 use opendal::Operator;
 
 use crate::io::read::ColumnOrientedSegmentReader;
-use crate::io::read::CompactSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
 use crate::io::read::SegmentReader;
 use crate::io::CachedMetaWriter;
 // use crate::io::SegmentsIO;
@@ -119,7 +119,7 @@ pub fn add_table_mutation_aggregator(
             )
         }),
         false => pipeline.add_async_accumulating_transformer(|| {
-            TableMutationAggregator::<CompactSegmentReader>::create(
+            TableMutationAggregator::<RowOrientedSegmentReader>::create(
                 table,
                 ctx.clone(),
                 base_segments.clone(),

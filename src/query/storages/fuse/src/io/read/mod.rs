@@ -34,7 +34,7 @@ pub use meta::MetaReaders;
 pub use meta::TableSnapshotReader;
 pub use segment_reader::read_column_oriented_segment;
 pub use segment_reader::ColumnOrientedSegmentReader;
-pub use segment_reader::CompactSegmentReader;
+pub use segment_reader::RowOrientedSegmentReader;
 pub use segment_reader::SegmentReader;
 pub use snapshot_history_reader::SnapshotHistoryReader;
 pub use utils::build_columns_meta;

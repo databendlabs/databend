@@ -130,7 +130,7 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
             let mut segment_infos = segments_io
-                .read_generic_segments::<R>(chunk, false, column_ids.clone())
+                .generic_read_compact_segments::<R>(chunk, false, column_ids.clone())
                 .await?
                 .into_iter()
                 .map(|sg| {
@@ -302,7 +302,7 @@ impl<R: SegmentReader> BlockCompactMutator<R> {
 }
 
 pub struct SegmentCompactChecker<R: SegmentReader> {
-    segments: Vec<(SegmentIndex, Arc<R::Segment>)>,
+    segments: Vec<(SegmentIndex, Arc<R::CompactSegment>)>,
     total_block_count: u64,
     block_threshold: u64,
     cluster_key_id: Option<u32>,
@@ -323,7 +323,7 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
         }
     }
 
-    fn check_for_compact(&mut self, segments: &[(SegmentIndex, Arc<R::Segment>)]) -> bool {
+    fn check_for_compact(&mut self, segments: &[(SegmentIndex, Arc<R::CompactSegment>)]) -> bool {
         if segments.is_empty() {
             return false;
         }
@@ -349,8 +349,8 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
     pub fn add(
         &mut self,
         idx: SegmentIndex,
-        segment: Arc<R::Segment>,
-    ) -> Vec<Vec<(SegmentIndex, Arc<R::Segment>)>> {
+        segment: Arc<R::CompactSegment>,
+    ) -> Vec<Vec<(SegmentIndex, Arc<R::CompactSegment>)>> {
         self.total_block_count += segment.summary().block_count;
         if self.total_block_count < self.block_threshold {
             self.segments.push((idx, segment));
@@ -374,7 +374,7 @@ impl<R: SegmentReader> SegmentCompactChecker<R> {
 
     pub fn generate_part(
         &mut self,
-        segments: Vec<(SegmentIndex, Arc<R::Segment>)>,
+        segments: Vec<(SegmentIndex, Arc<R::CompactSegment>)>,
         parts: &mut Vec<PartInfoPtr>,
     ) {
         if !segments.is_empty() && self.check_for_compact(&segments) {

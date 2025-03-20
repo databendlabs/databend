@@ -61,6 +61,7 @@ impl FuseTable {
             self.meta_location_generator().clone(),
             self.operator.clone(),
             self.cluster_key_id(),
+            self.is_column_oriented(),
         )?;
 
         if !segment_mutator.target_select().await? {

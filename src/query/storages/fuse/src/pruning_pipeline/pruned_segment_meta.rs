@@ -23,7 +23,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::*;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 
 use crate::io::read::ColumnOrientedSegmentReader;
-use crate::io::read::CompactSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
 use crate::io::read::SegmentReader;
 use crate::SegmentLocation;
 
@@ -59,13 +59,13 @@ impl BlockMetaInfo for PrunedColumnOrientedSegmentMeta {}
 
 pub trait PrunedSegmentMeta: Send + Sync + 'static {
     type Segment: AbstractSegment;
-    type SegmentReader: SegmentReader<Segment = Self::Segment>;
+    type SegmentReader: SegmentReader<CompactSegment = Self::Segment>;
     fn create(segments: (SegmentLocation, Arc<Self::Segment>)) -> BlockMetaInfoPtr;
 }
 
 impl PrunedSegmentMeta for PrunedCompactSegmentMeta {
     type Segment = CompactSegmentInfo;
-    type SegmentReader = CompactSegmentReader;
+    type SegmentReader = RowOrientedSegmentReader;
     fn create(segments: (SegmentLocation, Arc<CompactSegmentInfo>)) -> BlockMetaInfoPtr {
         Box::new(PrunedCompactSegmentMeta { segments })
     }

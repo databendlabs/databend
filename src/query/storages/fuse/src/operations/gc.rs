@@ -43,7 +43,7 @@ use log::info;
 use log::warn;
 
 use crate::io::read::ColumnOrientedSegmentReader;
-use crate::io::read::CompactSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
 use crate::io::InvertedIndexReader;
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
@@ -720,7 +720,7 @@ impl FuseTable {
             let results = match self.is_column_oriented() {
                 true => {
                     let segments = fuse_segments
-                        .read_generic_segments::<ColumnOrientedSegmentReader>(
+                        .generic_read_compact_segments::<ColumnOrientedSegmentReader>(
                             chunk,
                             put_cache,
                             vec![],
@@ -740,7 +740,11 @@ impl FuseTable {
                 }
                 false => {
                     let segments = fuse_segments
-                        .read_generic_segments::<CompactSegmentReader>(chunk, put_cache, vec![])
+                        .generic_read_compact_segments::<RowOrientedSegmentReader>(
+                            chunk,
+                            put_cache,
+                            vec![],
+                        )
                         .await?;
                     let mut results = Vec::new();
                     for segment in segments {

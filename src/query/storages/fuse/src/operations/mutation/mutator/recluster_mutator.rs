@@ -47,7 +47,7 @@ use indexmap::IndexSet;
 use log::debug;
 use log::warn;
 
-use crate::io::read::CompactSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
 use crate::operations::mutation::SegmentCompactChecker;
 use crate::operations::BlockCompactMutator;
 use crate::operations::CompactSegmentsWithIndices;
@@ -388,7 +388,7 @@ impl ReclusterMutator {
         let mut recluster_blocks_count = 0;
 
         let mut parts = Vec::new();
-        let mut checker = SegmentCompactChecker::<CompactSegmentReader>::new(
+        let mut checker = SegmentCompactChecker::<RowOrientedSegmentReader>::new(
             self.block_thresholds.block_per_segment as u64,
             Some(self.cluster_key_id),
         );
@@ -425,7 +425,7 @@ impl ReclusterMutator {
                 .collect::<Vec<_>>();
             Partitions::create(
                 PartitionsShuffleKind::Mod,
-                BlockCompactMutator::<CompactSegmentReader>::build_compact_tasks(
+                BlockCompactMutator::<RowOrientedSegmentReader>::build_compact_tasks(
                     self.ctx.clone(),
                     self.column_ids.clone(),
                     Some(self.cluster_key_id),

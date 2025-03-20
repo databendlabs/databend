@@ -61,7 +61,7 @@ impl SegmentPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
 
         for segment_location in segment_locs {
-            let info = T::SegmentReader::read_segment_through_cache(
+            let info = T::SegmentReader::read_compact_segment_through_cache(
                 self.pruning_ctx.dal.clone(),
                 segment_location.location.clone(),
                 self.column_ids.clone(),

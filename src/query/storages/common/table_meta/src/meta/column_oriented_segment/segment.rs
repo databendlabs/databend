@@ -61,6 +61,7 @@ pub trait AbstractSegment: Send + Sync + 'static + Sized {
     fn block_metas(&self) -> Result<Vec<Arc<Self::BlockMeta>>>;
     fn summary(&self) -> &Statistics;
     fn serialize(&self) -> Result<Vec<u8>>;
+    fn concat(v: Vec<Self>, summary: Statistics) -> Result<Self>;
 }
 
 impl AbstractSegment for SegmentInfo {
@@ -77,6 +78,14 @@ impl AbstractSegment for SegmentInfo {
     fn summary(&self) -> &Statistics {
         &self.summary
     }
+
+    fn concat(mut v: Vec<Self>, summary: Statistics) -> Result<Self> {
+        let mut blocks = Vec::with_capacity(v.len());
+        for segment in v.iter_mut() {
+            blocks.append(&mut segment.blocks);
+        }
+        Ok(Self::new(blocks, summary))
+    }
 }
 
 impl AbstractSegment for CompactSegmentInfo {
@@ -90,6 +99,10 @@ impl AbstractSegment for CompactSegmentInfo {
     }
 
     fn serialize(&self) -> Result<Vec<u8>> {
+        unimplemented!()
+    }
+
+    fn concat(_v: Vec<Self>, _summary: Statistics) -> Result<Self> {
         unimplemented!()
     }
 }
@@ -273,6 +286,17 @@ impl AbstractSegment for ColumnOrientedSegment {
         write_buffer.extend_from_slice(&blocks_size.to_le_bytes());
         write_buffer.extend_from_slice(&summary_size.to_le_bytes());
         Ok(write_buffer)
+    }
+
+    fn concat(v: Vec<Self>, summary: Statistics) -> Result<Self> {
+        let segment_schema = v[0].segment_schema.clone();
+        let blocks = v.into_iter().map(|s| s.block_metas).collect::<Vec<_>>();
+        let block_metas = DataBlock::concat(&blocks)?;
+        Ok(Self {
+            block_metas,
+            summary,
+            segment_schema,
+        })
     }
 }
 

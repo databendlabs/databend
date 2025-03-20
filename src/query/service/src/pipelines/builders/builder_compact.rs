@@ -27,7 +27,7 @@ use databend_common_sql::executor::physical_plans::CompactSource as PhysicalComp
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::StreamContext;
 use databend_common_storages_fuse::io::read::ColumnOrientedSegmentReader;
-use databend_common_storages_fuse::io::read::CompactSegmentReader;
+use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::operations::add_table_mutation_aggregator;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::ColumnOrientedSegmentsWithIndices;
@@ -99,7 +99,7 @@ impl PipelineBuilder {
                                     .clone()
                             })
                             .collect::<Vec<_>>();
-                        BlockCompactMutator::<CompactSegmentReader>::build_compact_tasks(
+                        BlockCompactMutator::<RowOrientedSegmentReader>::build_compact_tasks(
                             ctx.clone(),
                             column_ids.clone(),
                             cluster_key_id,

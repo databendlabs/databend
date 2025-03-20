@@ -26,6 +26,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOr
 use databend_storages_common_table_meta::meta::column_oriented_segment::SegmentBuilder;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
 use opendal::Operator;
 
 use super::meta::bytes_reader;
@@ -41,16 +42,53 @@ use crate::statistics::RowOrientedSegmentBuilder;
 #[async_trait::async_trait]
 pub trait SegmentReader: Send + Sync + 'static {
     type Segment: AbstractSegment;
+    type CompactSegment: AbstractSegment;
     type SegmentBuilder: SegmentBuilder;
-    type SegmentsWithIndices: SegmentsWithIndices<Segment = Self::Segment> + Clone;
-    type CompactTaskBuilder: CompactTaskBuilder<Segment = Self::Segment>;
-    async fn read_segment_through_cache(
+    type SegmentsWithIndices: SegmentsWithIndices<Segment = Self::CompactSegment> + Clone;
+    type CompactTaskBuilder: CompactTaskBuilder<Segment = Self::CompactSegment>;
+    async fn read_compact_segment_through_cache(
         dal: Operator,
         location: Location,
         column_ids: Vec<ColumnId>,
         table_schema: TableSchemaRef,
-    ) -> Result<Arc<Self::Segment>> {
-        Self::read_segment(dal, location, column_ids, table_schema, true).await
+    ) -> Result<Arc<Self::CompactSegment>> {
+        Self::read_compact_segment(dal, location, column_ids, table_schema, true).await
+    }
+
+    async fn read_compact_segment(
+        dal: Operator,
+        location: Location,
+        column_ids: Vec<ColumnId>,
+        table_schema: TableSchemaRef,
+        put_cache: bool,
+    ) -> Result<Arc<Self::CompactSegment>>;
+
+    async fn read_segment(
+        dal: Operator,
+        location: Location,
+        column_ids: Vec<ColumnId>,
+        table_schema: TableSchemaRef,
+        put_cache: bool,
+    ) -> Result<Self::Segment>;
+}
+
+pub struct RowOrientedSegmentReader;
+
+#[async_trait::async_trait]
+impl SegmentReader for RowOrientedSegmentReader {
+    type Segment = SegmentInfo;
+    type CompactSegment = CompactSegmentInfo;
+    type SegmentBuilder = RowOrientedSegmentBuilder;
+    type SegmentsWithIndices = CompactSegmentsWithIndices;
+    type CompactTaskBuilder = RowOrientedCompactTaskBuilder;
+    async fn read_compact_segment(
+        dal: Operator,
+        location: Location,
+        _column_ids: Vec<ColumnId>,
+        table_schema: TableSchemaRef,
+        put_cache: bool,
+    ) -> Result<Arc<Self::CompactSegment>> {
+        SegmentsIO::read_compact_segment(dal, location, table_schema, put_cache).await
     }
 
     async fn read_segment(
@@ -59,25 +97,10 @@ pub trait SegmentReader: Send + Sync + 'static {
         column_ids: Vec<ColumnId>,
         table_schema: TableSchemaRef,
         put_cache: bool,
-    ) -> Result<Arc<Self::Segment>>;
-}
-
-pub struct CompactSegmentReader;
-
-#[async_trait::async_trait]
-impl SegmentReader for CompactSegmentReader {
-    type Segment = CompactSegmentInfo;
-    type SegmentBuilder = RowOrientedSegmentBuilder;
-    type SegmentsWithIndices = CompactSegmentsWithIndices;
-    type CompactTaskBuilder = RowOrientedCompactTaskBuilder;
-    async fn read_segment(
-        dal: Operator,
-        location: Location,
-        _column_ids: Vec<ColumnId>,
-        table_schema: TableSchemaRef,
-        put_cache: bool,
-    ) -> Result<Arc<Self::Segment>> {
-        SegmentsIO::read_compact_segment(dal, location, table_schema, put_cache).await
+    ) -> Result<Self::Segment> {
+        let segment =
+            Self::read_compact_segment(dal, location, column_ids, table_schema, put_cache).await?;
+        Ok(segment.try_into()?)
     }
 }
 
@@ -86,16 +109,29 @@ pub struct ColumnOrientedSegmentReader;
 #[async_trait::async_trait]
 impl SegmentReader for ColumnOrientedSegmentReader {
     type Segment = ColumnOrientedSegment;
+    type CompactSegment = ColumnOrientedSegment;
     type SegmentBuilder = ColumnOrientedSegmentBuilder;
     type SegmentsWithIndices = ColumnOrientedSegmentsWithIndices;
     type CompactTaskBuilder = ColumnOrientedCompactTaskBuilder;
+    async fn read_compact_segment(
+        dal: Operator,
+        location: Location,
+        column_ids: Vec<ColumnId>,
+        _table_schema: TableSchemaRef,
+        put_cache: bool,
+    ) -> Result<Arc<Self::CompactSegment>> {
+        read_column_oriented_segment(dal, &location.0, column_ids, put_cache)
+            .await
+            .map(Arc::new)
+    }
+
     async fn read_segment(
         dal: Operator,
         location: Location,
         column_ids: Vec<ColumnId>,
         _table_schema: TableSchemaRef,
         put_cache: bool,
-    ) -> Result<Arc<Self::Segment>> {
+    ) -> Result<Self::Segment> {
         read_column_oriented_segment(dal, &location.0, column_ids, put_cache).await
     }
 }
@@ -106,7 +142,7 @@ pub async fn read_column_oriented_segment(
     location: &str,
     column_ids: Vec<ColumnId>,
     put_cache: bool,
-) -> Result<Arc<ColumnOrientedSegment>> {
+) -> Result<ColumnOrientedSegment> {
     let cache = CacheManager::instance().get_column_oriented_segment_info_cache();
     let cached_segment = cache.get(location);
     match cached_segment {
@@ -118,7 +154,7 @@ pub async fn read_column_oriented_segment(
                 }
             }
             if missed_cols.is_empty() {
-                return Ok(segment);
+                return Ok((*segment).clone());
             }
             let reader = bytes_reader(&dal, location, None).await?;
             let (block_metas, schema, _) =
@@ -137,7 +173,7 @@ pub async fn read_column_oriented_segment(
             if put_cache {
                 cache.insert(location.to_string(), merged_segment.clone());
             }
-            Ok(Arc::new(merged_segment))
+            Ok(merged_segment)
         }
         None => {
             let reader = bytes_reader(&dal, location, None).await?;
@@ -152,7 +188,7 @@ pub async fn read_column_oriented_segment(
             if put_cache {
                 cache.insert(location.to_string(), segment.clone());
             }
-            Ok(Arc::new(segment))
+            Ok(segment)
         }
     }
 }

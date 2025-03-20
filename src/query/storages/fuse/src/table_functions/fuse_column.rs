@@ -36,7 +36,7 @@ use databend_storages_common_table_meta::meta::column_oriented_segment::Abstract
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::read::ColumnOrientedSegmentReader;
-use crate::io::read::CompactSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
 use crate::io::read::SegmentReader;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
@@ -81,7 +81,9 @@ impl TableMetaFunc for FuseColumn {
             true => {
                 Self::apply_generic::<ColumnOrientedSegmentReader>(ctx, tbl, snapshot, limit).await
             }
-            false => Self::apply_generic::<CompactSegmentReader>(ctx, tbl, snapshot, limit).await,
+            false => {
+                Self::apply_generic::<RowOrientedSegmentReader>(ctx, tbl, snapshot, limit).await
+            }
         }
     }
 }
@@ -121,7 +123,7 @@ impl FuseColumn {
 
         'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_generic_segments::<R>(chunk, true, schema.to_leaf_column_ids())
+                .generic_read_compact_segments::<R>(chunk, true, schema.to_leaf_column_ids())
                 .await?;
             for segment in segments {
                 let segment = segment?;

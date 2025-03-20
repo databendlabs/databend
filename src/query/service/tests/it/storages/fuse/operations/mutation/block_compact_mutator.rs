@@ -27,7 +27,7 @@ use databend_common_sql::executor::physical_plans::CommitType;
 use databend_common_sql::executor::physical_plans::CompactSource;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::PhysicalPlan;
-use databend_common_storages_fuse::io::read::CompactSegmentReader;
+use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::operations::BlockCompactMutator;
 use databend_common_storages_fuse::operations::CompactBlockPartInfo;
@@ -250,7 +250,7 @@ async fn test_safety() -> Result<()> {
         };
 
         eprintln!("running target select");
-        let mut block_compact_mutator = BlockCompactMutator::<CompactSegmentReader>::new(
+        let mut block_compact_mutator = BlockCompactMutator::<RowOrientedSegmentReader>::new(
             ctx.clone(),
             threshold,
             compact_params,

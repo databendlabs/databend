@@ -35,7 +35,7 @@ use databend_common_sql::executor::physical_plans::ChunkMerge;
 use databend_common_sql::executor::physical_plans::Duplicate;
 use databend_common_sql::executor::physical_plans::Shuffle;
 use databend_common_storages_fuse::io::read::ColumnOrientedSegmentReader;
-use databend_common_storages_fuse::io::read::CompactSegmentReader;
+use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::operations::CommitMultiTableInsert;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::TableContext;
@@ -300,7 +300,7 @@ impl PipelineBuilder {
                 ));
             } else {
                 mutation_aggregator_builders.push(Box::new(
-                    self.mutation_aggregator_transform_builder::<CompactSegmentReader>(
+                    self.mutation_aggregator_transform_builder::<RowOrientedSegmentReader>(
                         table.clone(),
                         target.table_meta_timestamps,
                     )?,
