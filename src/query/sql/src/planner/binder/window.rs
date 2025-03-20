@@ -47,6 +47,8 @@ use crate::plans::WindowOrderBy;
 use crate::plans::WindowPartition;
 use crate::BindContext;
 use crate::Binder;
+use crate::ColumnEntry;
+use crate::DerivedColumn;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::Visibility;
@@ -523,6 +525,32 @@ impl<'a> WindowRewriter<'a> {
         if let ScalarExpr::BoundColumnRef(col) = &arg {
             Ok(col.clone())
         } else {
+            for entry in self.metadata.read().columns() {
+                if let ColumnEntry::DerivedColumn(DerivedColumn {
+                    scalar_expr,
+                    alias,
+                    column_index,
+                    data_type,
+                    ..
+                }) = entry
+                {
+                    if scalar_expr.as_ref() == Some(arg) {
+                        // Generate a ColumnBinding for each argument of aggregates
+                        let column = ColumnBindingBuilder::new(
+                            alias.to_string(),
+                            *column_index,
+                            Box::new(data_type.clone()),
+                            Visibility::Visible,
+                        )
+                        .build();
+
+                        return Ok(BoundColumnRef {
+                            span: arg.span(),
+                            column,
+                        });
+                    }
+                }
+            }
             let ty = arg.data_type()?;
 
             let index = self.metadata.write().add_derived_column(
