@@ -235,8 +235,9 @@ impl RemoteLog {
 impl Append for RemoteLog {
     fn append(&self, record: &Record) -> anyhow::Result<()> {
         let log_element = self.prepare_log_element(record);
-        let _ = self.sender.try_send(Message::LogElement(log_element));
-        Ok(())
+        self.sender
+            .blocking_send(Message::LogElement(log_element))
+            .map_err(|e| anyhow::anyhow!("Failed to send log element: {}", e))
     }
 }
 
