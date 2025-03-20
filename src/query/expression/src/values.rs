@@ -769,22 +769,16 @@ impl ScalarRef<'_> {
     /// # Returns:
     /// The estimated memory size (in bytes) that `n` repetitions of `scalar` would occupy.
     pub fn estimated_scalar_repeat_size(&self, n: usize, data_type: &DataType) -> usize {
-        if !self.is_null() {
-            if let DataType::Nullable(ty) = data_type {
-                return self.estimated_scalar_repeat_size(n, ty) + (n + 7) / 8;
+        if let DataType::Nullable(ty) = data_type {
+            let mut memory_size = (n + 7) / 8;
+            if !self.is_null() {
+                memory_size += self.estimated_scalar_repeat_size(n, ty);
             }
+            return memory_size;
         }
 
         match self {
-            ScalarRef::Null => match data_type {
-                DataType::Null => std::mem::size_of::<usize>(),
-                DataType::Nullable(_) => {
-                    // For `Nullable` columns with no valid values,
-                    // only the size of the validity bitmap is counted.
-                    (n + 7) / 8
-                }
-                _ => unreachable!(),
-            },
+            ScalarRef::Null => std::mem::size_of::<usize>(),
             ScalarRef::EmptyArray | ScalarRef::EmptyMap => std::mem::size_of::<usize>(),
             ScalarRef::Number(_) => n * self.memory_size(),
             ScalarRef::Decimal(_) => n * self.memory_size(),

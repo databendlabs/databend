@@ -644,6 +644,15 @@ fn test_builder() {
     assert_eq!(r1, r2)
 }
 
+fn assert_estimated_scalar_repeat_size(scalar: ScalarRef, num_rows: usize, ty: DataType) {
+    let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
+    let col = builder.build();
+    assert_eq!(
+        scalar.estimated_scalar_repeat_size(num_rows, &ty),
+        col.memory_size()
+    );
+}
+
 #[test]
 fn test_estimated_scalar_repeat_size() {
     let num_rows = 108;
@@ -652,12 +661,7 @@ fn test_estimated_scalar_repeat_size() {
     {
         let scalar = ScalarRef::Null;
         let ty = DataType::Null;
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
     // nullable
@@ -677,12 +681,7 @@ fn test_estimated_scalar_repeat_size() {
     {
         let scalar = ScalarRef::Number(NumberScalar::Float32(OrderedFloat(2.33)));
         let ty = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float32)));
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
     // decimal
@@ -695,84 +694,49 @@ fn test_estimated_scalar_repeat_size() {
             precision: 46,
             scale: 6,
         }));
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
     // string
     {
         let scalar = ScalarRef::String("abc");
         let ty = DataType::String;
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
     // string
     {
         let scalar = ScalarRef::String("abcdefghijklmn123");
         let ty = DataType::String;
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
     // binary
     {
         let scalar = ScalarRef::Binary(&[1, 133, 244, 123]);
         let ty = DataType::Binary;
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
     // boolean
     {
         let scalar = ScalarRef::Boolean(true);
         let ty = DataType::Boolean;
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
     // bitmap
     {
         let scalar = ScalarRef::Bitmap(&[1, 133, 244, 123]);
         let ty = DataType::Bitmap;
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
     // array
     {
         let scalar = ScalarRef::Array(StringType::from_data(vec!["abc", "abcdefghijklmn123"]));
         let ty = DataType::Array(Box::new(DataType::String));
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
     // map
@@ -785,11 +749,6 @@ fn test_estimated_scalar_repeat_size() {
             DataType::Number(NumberDataType::UInt8),
             DataType::String,
         ])));
-        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
-        let col = builder.build();
-        assert_eq!(
-            scalar.estimated_scalar_repeat_size(num_rows, &ty),
-            col.memory_size()
-        );
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 }
