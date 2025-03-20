@@ -140,6 +140,9 @@ statement ok
 insert into t_linear values(4, 4), (7, 7);
 
 statement ok
+set enable_parallel_multi_merge_sort = 0;
+
+statement ok
 alter table t_linear recluster final;
 
 query T
@@ -155,7 +158,6 @@ create or replace table t_none(a int, b int);
 
 statement error 1118.*Unclustered table
 select * EXCLUDE(timestamp) from clustering_information('test_hilbert','t_none');
-
 
 
 
