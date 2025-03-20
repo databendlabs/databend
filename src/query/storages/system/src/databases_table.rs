@@ -27,9 +27,11 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::UInt64Type;
 use databend_common_expression::utils::FromData;
 use databend_common_expression::DataBlock;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::TableIdent;
@@ -41,6 +43,7 @@ use log::warn;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_filter;
 
 pub type DatabasesTableWithHistory = DatabasesTable<true>;
 pub type DatabasesTableWithoutHistory = DatabasesTable<false>;
@@ -98,17 +101,44 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
 
-        let catalogs = CatalogManager::instance();
-        let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs
-            .list_catalogs(&tenant, ctx.session_state())
-            .await?
-            .iter()
-            .map(|e| (e.name(), e.clone()))
-            .collect();
+        // Check filters (catalog name)
+        let mut filter_catalog_name = vec![];
+        if let Some(push_downs) = push_downs {
+            if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
+                let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                find_eq_filter(&expr, &mut |col_name, scalar| {
+                    if col_name == "catalog" {
+                        if let Scalar::String(catalog) = scalar {
+                            if !filter_catalog_name.contains(catalog) {
+                                filter_catalog_name.push(catalog.clone());
+                            }
+                        }
+                    }
+                    Ok(())
+                });
+            }
+        }
+
+        let catalogs = if !filter_catalog_name.is_empty() {
+            let mut res = vec![];
+            for name in &filter_catalog_name {
+                let ctl = ctx.get_catalog(name).await?;
+                res.push((name.to_string(), ctl));
+            }
+            res
+        } else {
+            let catalogs = CatalogManager::instance();
+            catalogs
+                .list_catalogs(&tenant, ctx.session_state())
+                .await?
+                .iter()
+                .map(|e| (e.name(), e.clone()))
+                .collect()
+        };
 
         let user_api = UserApiProvider::instance();
         let mut catalog_names = vec![];
