@@ -368,7 +368,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
 
-        let ctls: Vec<(String, Arc<dyn Catalog>)> =
+        let mut ctls: Vec<(String, Arc<dyn Catalog>)> =
             catalogs.iter().map(|e| (e.name(), e.clone())).collect();
 
         let mut catalogs = vec![];
@@ -384,6 +384,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let mut invalid_tables_ids = false;
         let mut tables_ids: Vec<u64> = Vec::new();
         let mut db_name: Vec<String> = Vec::new();
+        let mut catalog_name: Vec<String> = Vec::new();
 
         let mut get_stats = true;
         let mut get_ownership = true;
@@ -423,7 +424,13 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 invalid_optimize = find_eq_or_filter(
                     &expr,
                     &mut |col_name, scalar| {
-                        if col_name == "database" {
+                        if col_name == "catalog" {
+                            if let Scalar::String(catalog) = scalar {
+                                if !catalog_name.contains(catalog) {
+                                    catalog_name.push(catalog.clone());
+                                }
+                            }
+                        } else if col_name == "database" {
                             if let Scalar::String(database) = scalar {
                                 if !db_name.contains(database) {
                                     db_name.push(database.clone());
@@ -455,8 +462,19 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             }
         }
 
+        ctls = if !catalog_name.is_empty() && !invalid_optimize {
+            let mut res = vec![];
+            for name in &catalog_name {
+                let ctl = ctx.get_catalog(name).await?;
+                res.push((name.to_string(), ctl));
+            }
+            res
+        } else {
+            ctls
+        };
+
         let visibility_checker = ctx.get_visibility_checker(false).await?;
-        // from system.tables where database = 'db' and name = 'name'
+        // from system.tables where database = 'db' and name = 'name' and catalog_name = 'default'
         // from system.tables where database = 'db' and table_id = 123
         if db_name.len() == 1
             && !invalid_optimize
@@ -543,7 +561,6 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             }
         } else {
             let catalog_dbs = visibility_checker.get_visibility_database();
-
             for (ctl_name, ctl) in ctls.iter() {
                 if let Some(push_downs) = &push_downs {
                     if push_downs.filters.as_ref().map(|f| &f.filter).is_some() {
