@@ -277,4 +277,19 @@ impl HttpQueryManager {
         }
         Ok(())
     }
+
+    pub(crate) fn on_heartbeat(&self, query_ids: Vec<String>) -> Vec<String> {
+        let mut failed = vec![];
+        for query_id in query_ids {
+            if !self
+                .queries
+                .get(&query_id)
+                .map(|q| q.on_heartbeat())
+                .unwrap_or(false)
+            {
+                failed.push(query_id);
+            }
+        }
+        failed
+    }
 }

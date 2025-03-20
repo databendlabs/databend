@@ -411,7 +411,7 @@ impl QueryEntry {
             | Plan::VacuumTable(_)
             | Plan::VacuumTemporaryFiles(_)
             | Plan::RefreshIndex(_)
-            | Plan::ReclusterTable { .. }
+            | Plan::ReclusterTable(_)
             | Plan::TruncateTable(_) => {
                 return true;
             }
