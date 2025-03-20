@@ -218,8 +218,13 @@ impl Processor for TransformPartitionDispatch {
         self.input.set_need_data();
 
         let mut has_data = false;
+        let input_is_finished = self.input.is_finished();
         for (idx, output) in self.outputs.iter().enumerate() {
             if self.outputs_data[idx].is_empty() {
+                if input_is_finished {
+                    output.finish();
+                }
+
                 continue;
             }
 
@@ -612,12 +617,6 @@ impl Partitions {
     pub fn create_unaligned(params: Arc<AggregatorParams>) -> Partitions {
         Partitions::Unaligned(UnalignedPartitions::create(params))
     }
-
-    // pub fn is_empty(&self) -> bool {
-    //     match self {
-    //         Partitions::Aligned(c) => {}
-    //     }
-    // }
 
     fn add_data(&mut self, meta: AggregateMeta, block: DataBlock) -> (isize, usize, usize) {
         match self {

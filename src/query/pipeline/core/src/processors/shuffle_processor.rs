@@ -255,7 +255,11 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
 
         if all_output_finished {
             self.input.finish();
-            return Ok(Event::Finished);
+
+            return match self.initialized {
+                true => Ok(Event::Finished),
+                false => Ok(Event::Async),
+            };
         }
 
         if !all_data_pushed_output {
@@ -284,7 +288,10 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
                 output.finish();
             }
 
-            return Ok(Event::Finished);
+            return match self.initialized {
+                true => Ok(Event::Finished),
+                false => Ok(Event::Async),
+            };
         }
 
         self.input.set_need_data();
@@ -313,12 +320,12 @@ impl<T: Exchange> Processor for PartitionProcessor<T> {
     }
 
     async fn async_process(&mut self) -> Result<()> {
+        self.initialized = true;
         if let Some(data_block) = self.input_data.as_ref() {
-            self.initialized = true;
             self.exchange.init_way(self.index, data_block)?;
-            self.barrier.wait().await;
         }
 
+        self.barrier.wait().await;
         Ok(())
     }
 }
