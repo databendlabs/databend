@@ -105,14 +105,18 @@ impl TableArgs {
 pub fn string_value(value: &Scalar) -> Result<String> {
     match value {
         Scalar::String(val) => Ok(val.clone()),
-        _ => Err(ErrorCode::BadArguments("invalid string.")),
+        _ => Err(ErrorCode::BadArguments(format!(
+            "invalid value {value} expect to be string literal."
+        ))),
     }
 }
 
 pub fn bool_value(value: &Scalar) -> Result<bool> {
     match value {
         Scalar::Boolean(val) => Ok(*val),
-        _ => Err(ErrorCode::BadArguments("invalid boolean.")),
+        _ => Err(ErrorCode::BadArguments(format!(
+            "invalid value {value} expect to be boolean literal."
+        ))),
     }
 }
 
