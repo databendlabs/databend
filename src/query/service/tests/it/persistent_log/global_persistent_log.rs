@@ -82,6 +82,9 @@ pub async fn test_persistent_log_write() -> Result<()> {
 
     assert_eq!(cnt, Some(2 * 3));
 
+    #[cfg(debug_assertions)]
+    GlobalPersistentLog::instance().stop();
+
     Ok(())
 }
 

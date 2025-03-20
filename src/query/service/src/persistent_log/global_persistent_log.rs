@@ -208,6 +208,14 @@ impl GlobalPersistentLog {
     }
 }
 
+impl GlobalPersistentLog {
+    /// This is used for test only
+    #[cfg(debug_assertions)]
+    pub fn stop(&self) {
+        self.stopped.store(true, Ordering::SeqCst);
+    }
+}
+
 /// GlobalLogger initialization before the operator
 /// This is a workaround for the current architecture.
 pub async fn setup_operator() -> Result<()> {
