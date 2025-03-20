@@ -103,30 +103,30 @@ impl SimpleTableFunc for ClusteringInformationTable {
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
 
-        let Some(cluster_key) = tbl.cluster_key_meta() else {
-            return Err(ErrorCode::UnclusteredTable(format!(
-                "Unclustered table '{}'.'{}'",
-                args.database_name, args.table_name
-            )));
-        };
-
         let cluster_type = tbl.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
 
-        let res = match (&self.args.cluster_option, cluster_type) {
-            (ClusteringOption::EvaluateLinear(cluster_key), _) => {
-                // If cluster_key is some, user is ....
+        let res = match (
+            &self.args.cluster_option,
+            cluster_type,
+            tbl.cluster_key_meta(),
+        ) {
+            (ClusteringOption::EvaluateLinear(eval_keys), _, _) => {
+                // Enforces linear clustering evaluation of keys, allowing users to examine clustering
+                // information without defining cluster keys.
+                //
+                // Currently, only linear clustering is supported.
                 ClusteringInformation::new(
                     ctx.clone(),
                     tbl,
                     &args.database_name,
                     &args.table_name,
-                    Some(cluster_key.clone()),
+                    Some(eval_keys.clone()),
                 )
                 .get_clustering_info()
                 .await
             }
 
-            (ClusteringOption::AutoDetect, ClusterType::Linear) => {
+            (ClusteringOption::AutoDetect, ClusterType::Linear, Some(_)) => {
                 ClusteringInformation::new(
                     ctx.clone(),
                     tbl,
@@ -138,10 +138,16 @@ impl SimpleTableFunc for ClusteringInformationTable {
                 .await
             }
 
-            (ClusteringOption::AutoDetect, ClusterType::Hilbert) => {
+            (ClusteringOption::AutoDetect, ClusterType::Hilbert, Some(cluster_key)) => {
                 HilbertClusteringInfo::new(ctx.clone(), tbl, cluster_key)
                     .get_clustering_info()
                     .await
+            }
+            _ => {
+                return Err(ErrorCode::UnclusteredTable(format!(
+                    "Unclustered table '{}'.'{}'",
+                    args.database_name, args.table_name
+                )));
             }
         }?;
         Ok(Some(res))
@@ -391,20 +397,19 @@ impl<'a> ClusteringInformation<'a> {
         let average_depth = (10000.0 * sum_depth as f64 / length as f64).round() / 10000.0;
         let average_overlaps = (10000.0 * sum_overlap as f64 / length as f64).round() / 10000.0;
 
-        let objects = mp
-            .into_iter()
-            .fold(BTreeMap::new(), |mut acc, (bucket, count)| {
-                acc.insert(format!("{:05}", bucket), count);
-                acc
-            });
-        // let block_depth_histogram = JsonValue::Object(objects);
-        let block_depth_histogram = objects;
+        let block_depth_histogram =
+            mp.into_iter()
+                .fold(BTreeMap::new(), |mut acc, (bucket, count)| {
+                    acc.insert(format!("{:05}", bucket), count);
+                    acc
+                });
+
         let info = LinerClusterStatistics {
-            total_block_count: total_block_count,
-            constant_block_count: constant_block_count,
-            average_overlaps: average_overlaps,
-            average_depth: average_depth,
-            block_depth_histogram: block_depth_histogram,
+            total_block_count,
+            constant_block_count,
+            average_overlaps,
+            average_depth,
+            block_depth_histogram,
         };
         let info = ClusteringStatisticsWrapper {
             cluster_key,
