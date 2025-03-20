@@ -3332,3 +3332,28 @@ mod cache_config_converters {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::ffi::OsString;
+
+    use clap::Parser;
+    use pretty_assertions::assert_eq;
+
+    use crate::Config;
+    use crate::InnerConfig;
+
+    /// It's required to make sure setting's default value is the same with clap.
+    #[test]
+    fn test_config_default() {
+        let setting_default = InnerConfig::default();
+        let config_default: InnerConfig = Config::parse_from(Vec::<OsString>::new())
+            .try_into()
+            .expect("parse from args must succeed");
+
+        assert_eq!(
+            setting_default, config_default,
+            "default setting is different from default config, please check again"
+        )
+    }
+}

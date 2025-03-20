@@ -17,7 +17,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
-use databend_common_ast::ast::Query;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_expression::types::DataType;
 use databend_common_expression::DataField;
@@ -122,6 +121,7 @@ use crate::plans::ModifyTableCommentPlan;
 use crate::plans::OptimizeCompactSegmentPlan;
 use crate::plans::OptimizePurgePlan;
 use crate::plans::PresignPlan;
+use crate::plans::ReclusterPlan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
@@ -247,11 +247,7 @@ pub enum Plan {
     ModifyTableColumn(Box<ModifyTableColumnPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
-    ReclusterTable {
-        s_expr: Box<SExpr>,
-        hilbert_query: Option<Box<Query>>,
-        is_final: bool,
-    },
+    ReclusterTable(Box<ReclusterPlan>),
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     VacuumTable(Box<VacuumTablePlan>),

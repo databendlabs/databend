@@ -121,6 +121,7 @@ impl HttpQueryRequest {
             kill_uri: None,
             error: Some(QueryError::from_error_code(err)),
             has_result_set: None,
+            result_timeout_secs: None,
         })
     }
 }
@@ -328,6 +329,7 @@ pub struct HttpQueryResponseInternal {
     pub session: Option<HttpSessionConf>,
     pub state: ResponseState,
     pub node_id: String,
+    pub result_timeout_secs: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -337,6 +339,7 @@ pub enum ExpireState {
     Removed(RemoveReason),
 }
 
+#[derive(Debug)]
 pub enum ExpireResult {
     Expired,
     Sleep(Duration),
@@ -613,6 +616,7 @@ impl HttpQuery {
             session: Some(session),
             node_id: self.node_id.clone(),
             session_id: self.session_id.clone(),
+            result_timeout_secs: self.result_timeout_secs,
         })
     }
 
@@ -626,6 +630,7 @@ impl HttpQuery {
             node_id: self.node_id.clone(),
             state,
             session: None,
+            result_timeout_secs: self.result_timeout_secs,
         })
     }
 
@@ -816,6 +821,21 @@ impl HttpQuery {
             ExpireState::Working => {
                 ExpireResult::Sleep(Duration::from_secs(self.result_timeout_secs))
             }
+        }
+    }
+
+    #[async_backtrace::framed]
+    pub fn on_heartbeat(&self) -> bool {
+        let mut expire_state = self.expire_state.lock();
+        match *expire_state {
+            ExpireState::ExpireAt(_) => {
+                let duration = Duration::from_secs(self.result_timeout_secs);
+                let deadline = Instant::now() + duration;
+                *expire_state = ExpireState::ExpireAt(deadline);
+                true
+            }
+            ExpireState::Removed(_) => false,
+            ExpireState::Working => true,
         }
     }
 

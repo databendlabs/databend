@@ -28,8 +28,8 @@ use databend_common_expression::RowConverter;
 use databend_common_expression::SortField;
 use ethnum::i256;
 use itertools::Itertools;
-use jsonb::convert_to_comparable;
 use jsonb::parse_value;
+use jsonb::RawJsonb;
 use rand::distributions::Alphanumeric;
 use rand::distributions::Standard;
 use rand::prelude::Distribution;
@@ -375,7 +375,9 @@ fn test_variant() {
             validity.push(true);
             let val = parse_value(value.as_bytes()).unwrap();
             let buf = val.to_vec();
-            convert_to_comparable(&buf, &mut builder.data);
+            let raw_jsonb = RawJsonb::new(&buf);
+            let compare_buf = raw_jsonb.convert_to_comparable();
+            builder.put_slice(&compare_buf);
         } else {
             validity.push(false);
         }
