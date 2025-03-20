@@ -1239,7 +1239,11 @@ HashJoin: RIGHT OUTER
         └── Probe
             └── HashJoin: CROSS
                 ├── Build
-                │   └── Scan: default.default.customers (#0) (read rows: 100)
+                │   └── HashJoin: LEFT SEMI
+                │       ├── Build
+                │       │   └── Scan: default.default.sales (#3) (read rows: 500)
+                │       └── Probe
+                │           └── Scan: default.default.customers (#0) (read rows: 100)
                 └── Probe
                     └── Scan: default.default.sales (#1) (read rows: 500)
 
@@ -1409,7 +1413,7 @@ HashJoin
 │           ├── estimated rows: 0.00
 │           └── Filter
 │               ├── output columns: [t1.a (#3), t1.c (#5)]
-│               ├── filters: [is_true(a (#3) = a (#3))]
+│               ├── filters: [is_true(correlated.a (#3) = correlated.a (#3))]
 │               ├── estimated rows: 0.00
 │               └── TableScan
 │                   ├── table: default.default.t1
