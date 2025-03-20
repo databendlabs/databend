@@ -89,20 +89,20 @@ EvalScalar
 └── HashJoin
     ├── output columns: [if(EXISTS (SELECT 1 FROM t1 WHERE t1.a = t2.c), '1', '0') (#5)]
     ├── join type: LEFT SINGLE
-    ├── build keys: [c (#8)]
+    ├── build keys: [c (#9)]
     ├── probe keys: [c (#0)]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── estimated rows: 4.00
     ├── EvalScalar(Build)
-    │   ├── output columns: [c (#8), if(EXISTS (SELECT 1 FROM t1 WHERE t1.a = t2.c), '1', '0') (#5)]
+    │   ├── output columns: [c (#9), if(EXISTS (SELECT 1 FROM t1 WHERE t1.a = t2.c), '1', '0') (#5)]
     │   ├── expressions: [if(7 (#7), '1', '0')]
     │   ├── estimated rows: 4.00
     │   └── HashJoin
-    │       ├── output columns: [c (#8), marker (#7)]
+    │       ├── output columns: [c (#9), marker (#7)]
     │       ├── join type: RIGHT MARK
     │       ├── build keys: [a (#2)]
-    │       ├── probe keys: [c (#8)]
+    │       ├── probe keys: [c (#9)]
     │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── estimated rows: 4.00
@@ -121,7 +121,7 @@ EvalScalar
     │       │       ├── push downs: [filters: [is_true(t1.a (#2) = t1.a (#2))], limit: NONE]
     │       │       └── estimated rows: 3.00
     │       └── HashJoin(Probe)
-    │           ├── output columns: [c (#8)]
+    │           ├── output columns: [c (#9)]
     │           ├── join type: CROSS
     │           ├── build keys: []
     │           ├── probe keys: []
@@ -130,7 +130,7 @@ EvalScalar
     │           ├── estimated rows: 4.00
     │           ├── DummyTableScan(Build)
     │           └── AggregateFinal(Probe)
-    │               ├── output columns: [c (#8)]
+    │               ├── output columns: [c (#9)]
     │               ├── group by: [c]
     │               ├── aggregate functions: []
     │               ├── estimated rows: 4.00
@@ -140,7 +140,7 @@ EvalScalar
     │                   ├── estimated rows: 4.00
     │                   └── TableScan
     │                       ├── table: default.default.t2
-    │                       ├── output columns: [c (#8)]
+    │                       ├── output columns: [c (#9)]
     │                       ├── read rows: 4
     │                       ├── read size: < 1 KiB
     │                       ├── partitions total: 1
