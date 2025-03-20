@@ -425,6 +425,13 @@ impl SExpr {
         }
         self.children.iter().any(|child| child.has_merge_exchange())
     }
+    #[recursive::recursive]
+    pub fn has_join(&self) -> bool {
+        if let RelOperator::Join(_) = self.plan.as_ref() {
+            return true;
+        }
+        self.children.iter().any(|child| child.has_join())
+    }
 }
 
 fn find_subquery(rel_op: &RelOperator) -> bool {

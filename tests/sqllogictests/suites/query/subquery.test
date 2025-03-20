@@ -944,10 +944,10 @@ WHERE t1.i1 = (
 1
 
 statement ok
-create or replace table t1(a int, b int, c varchar(20));
+create or replace table t1(a int not null, b int, c varchar(20));
 
 statement ok
-create or replace table t2(a int, b int, c varchar(20));
+create or replace table t2(a int not null, b int, c varchar(20));
 
 statement ok
 insert into t1 (a, b, c) values (1, 7, 'D'), (2, 7, 'D'), (3, 7, 'D'), (4, 8, 'D'), (5, 7, 'E'), (6, 8, 'E');
