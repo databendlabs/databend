@@ -6,10 +6,6 @@ authors = ["Databend Authors <opensource@datafuselabs.com>"]
 license = "Apache-2.0"
 publish = false
 
-[lib]
-doctest = false
-test = true
-
 [dependencies]
 dashmap = { workspace = true }
 databend-common-catalog = { workspace = true }

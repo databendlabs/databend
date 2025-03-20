@@ -6,10 +6,6 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
-[lib]
-doctest = false
-test = true
-
 [features]
 jemalloc = ["databend-common-base/jemalloc", "tikv-jemalloc-ctl"]
 
