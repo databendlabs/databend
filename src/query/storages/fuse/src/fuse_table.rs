@@ -105,6 +105,8 @@ use parking_lot::Mutex;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
+use crate::io::read::ColumnOrientedSegmentReader;
+use crate::io::read::RowOrientedSegmentReader;
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -1101,7 +1103,16 @@ impl Table for FuseTable {
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
     ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
-        self.do_recluster(ctx, push_downs, limit).await
+        match self.is_column_oriented() {
+            true => {
+                self.do_recluster::<ColumnOrientedSegmentReader>(ctx, push_downs, limit)
+                    .await
+            }
+            false => {
+                self.do_recluster::<RowOrientedSegmentReader>(ctx, push_downs, limit)
+                    .await
+            }
+        }
     }
 
     #[async_backtrace::framed]

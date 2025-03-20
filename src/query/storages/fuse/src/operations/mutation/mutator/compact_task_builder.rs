@@ -36,7 +36,7 @@ use crate::operations::CompactTaskInfo;
 use crate::statistics::reducers::merge_statistics_mut;
 
 #[async_trait::async_trait]
-pub trait CompactTaskBuilder {
+pub trait CompactTaskBuilder: Send {
     type Segment: AbstractSegment;
     async fn build_tasks(
         &mut self,

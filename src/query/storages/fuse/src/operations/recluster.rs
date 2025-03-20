@@ -30,12 +30,13 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
 use databend_common_metrics::storage::metrics_inc_recluster_segment_nums_scheduled;
 use databend_common_sql::BloomIndexColumns;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use log::warn;
 use opendal::Operator;
 
+use crate::io::read::SegmentReader;
 use crate::operations::acquire_task_permit;
 use crate::operations::mutation::ReclusterMode;
 use crate::operations::ReclusterMutator;
@@ -48,7 +49,7 @@ use crate::SegmentLocation;
 
 impl FuseTable {
     #[async_backtrace::framed]
-    pub(crate) async fn do_recluster(
+    pub(crate) async fn do_recluster<R: SegmentReader>(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
@@ -72,7 +73,7 @@ impl FuseTable {
             return Ok(None);
         };
 
-        let mutator = Arc::new(ReclusterMutator::try_create(
+        let mutator = Arc::new(ReclusterMutator::<R>::try_create(
             self,
             ctx.clone(),
             snapshot.as_ref(),
@@ -98,7 +99,7 @@ impl FuseTable {
         for chunk in segment_locations.chunks(chunk_size) {
             let mut selected_seg_num = 0;
             // read segments.
-            let compact_segments = Self::segment_pruning(
+            let compact_segments = Self::segment_pruning::<R>(
                 &ctx,
                 self.schema_with_stream(),
                 self.get_operator(),
@@ -130,7 +131,7 @@ impl FuseTable {
             // select the blocks with the highest depth.
             if selected_segs.is_empty() {
                 let result =
-                    Self::generate_recluster_parts(mutator.clone(), compact_segments).await?;
+                    Self::generate_recluster_parts::<R>(mutator.clone(), compact_segments).await?;
                 if let Some((seg_num, block_num, recluster_parts)) = result {
                     selected_seg_num = seg_num;
                     recluster_blocks_count = block_num;
@@ -168,9 +169,9 @@ impl FuseTable {
         Ok(Some((parts, snapshot)))
     }
 
-    pub async fn generate_recluster_parts(
-        mutator: Arc<ReclusterMutator>,
-        compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+    pub async fn generate_recluster_parts<R: SegmentReader>(
+        mutator: Arc<ReclusterMutator<R>>,
+        compact_segments: Vec<(SegmentLocation, Arc<R::CompactSegment>)>,
     ) -> Result<Option<(u64, u64, ReclusterParts)>> {
         let mut selected_segs = vec![];
         let mut block_count = 0;
@@ -183,11 +184,11 @@ impl FuseTable {
 
         let latest = compact_segments.len() - 1;
         for (idx, compact_segment) in compact_segments.into_iter().enumerate() {
-            if !mutator.segment_can_recluster(&compact_segment.1.summary) {
+            if !mutator.segment_can_recluster(&compact_segment.1.summary()) {
                 continue;
             }
 
-            block_count += compact_segment.1.summary.block_count as usize;
+            block_count += compact_segment.1.summary().block_count as usize;
             selected_segs.push(compact_segment);
             if block_count >= mutator.block_thresholds.block_per_segment || idx == latest {
                 let selected_segs = std::mem::take(&mut selected_segs);
@@ -221,14 +222,14 @@ impl FuseTable {
         Ok(result)
     }
 
-    pub async fn segment_pruning(
+    pub async fn segment_pruning<R: SegmentReader>(
         ctx: &Arc<dyn TableContext>,
         schema: TableSchemaRef,
         dal: Operator,
         push_down: &Option<PushDownInfo>,
         storage_format: FuseStorageFormat,
         mut segment_locs: Vec<SegmentLocation>,
-    ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
+    ) -> Result<Vec<(SegmentLocation, Arc<R::CompactSegment>)>> {
         let max_concurrency = {
             let max_threads = ctx.get_settings().get_max_threads()? as usize;
             let v = std::cmp::max(max_threads, 10);
@@ -273,7 +274,9 @@ impl FuseTable {
                 let segment_pruner = segment_pruner.clone();
 
                 async move {
-                    let pruned_segments = segment_pruner.pruning(batch).await?;
+                    let pruned_segments = segment_pruner
+                        .pruning_generic::<R::PrunedSegmentMeta>(batch)
+                        .await?;
                     Result::<_>::Ok(pruned_segments)
                 }
             }));

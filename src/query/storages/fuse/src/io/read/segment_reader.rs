@@ -37,6 +37,9 @@ use crate::operations::CompactSegmentsWithIndices;
 use crate::operations::CompactTaskBuilder;
 use crate::operations::RowOrientedCompactTaskBuilder;
 use crate::operations::SegmentsWithIndices;
+use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
+use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+use crate::pruning_pipeline::PrunedSegmentMeta;
 use crate::statistics::RowOrientedSegmentBuilder;
 
 #[async_trait::async_trait]
@@ -46,6 +49,7 @@ pub trait SegmentReader: Send + Sync + 'static {
     type SegmentBuilder: SegmentBuilder;
     type SegmentsWithIndices: SegmentsWithIndices<Segment = Self::CompactSegment> + Clone;
     type CompactTaskBuilder: CompactTaskBuilder<Segment = Self::CompactSegment>;
+    type PrunedSegmentMeta: PrunedSegmentMeta<Segment = Self::CompactSegment>;
     async fn read_compact_segment_through_cache(
         dal: Operator,
         location: Location,
@@ -81,6 +85,7 @@ impl SegmentReader for RowOrientedSegmentReader {
     type SegmentBuilder = RowOrientedSegmentBuilder;
     type SegmentsWithIndices = CompactSegmentsWithIndices;
     type CompactTaskBuilder = RowOrientedCompactTaskBuilder;
+    type PrunedSegmentMeta = PrunedCompactSegmentMeta;
     async fn read_compact_segment(
         dal: Operator,
         location: Location,
@@ -113,6 +118,7 @@ impl SegmentReader for ColumnOrientedSegmentReader {
     type SegmentBuilder = ColumnOrientedSegmentBuilder;
     type SegmentsWithIndices = ColumnOrientedSegmentsWithIndices;
     type CompactTaskBuilder = ColumnOrientedCompactTaskBuilder;
+    type PrunedSegmentMeta = PrunedColumnOrientedSegmentMeta;
     async fn read_compact_segment(
         dal: Operator,
         location: Location,

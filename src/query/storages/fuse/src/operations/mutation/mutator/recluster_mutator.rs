@@ -36,8 +36,8 @@ use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_pruner::BlockMetaIndex;
+use databend_storages_common_table_meta::meta::column_oriented_segment::AbstractSegment;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use fastrace::func_path;
@@ -47,10 +47,9 @@ use indexmap::IndexSet;
 use log::debug;
 use log::warn;
 
-use crate::io::read::RowOrientedSegmentReader;
+use crate::io::read::SegmentReader;
 use crate::operations::mutation::SegmentCompactChecker;
 use crate::operations::BlockCompactMutator;
-use crate::operations::CompactSegmentsWithIndices;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
@@ -64,7 +63,7 @@ pub enum ReclusterMode {
 }
 
 #[derive(Clone)]
-pub struct ReclusterMutator {
+pub struct ReclusterMutator<R: SegmentReader> {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) depth_threshold: f64,
     pub(crate) block_thresholds: BlockThresholds,
@@ -73,9 +72,10 @@ pub struct ReclusterMutator {
     pub(crate) max_tasks: usize,
     pub(crate) cluster_key_types: Vec<DataType>,
     pub(crate) column_ids: HashSet<u32>,
+    _marker: std::marker::PhantomData<R>,
 }
 
-impl ReclusterMutator {
+impl<R: SegmentReader> ReclusterMutator<R> {
     pub fn try_create(
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
@@ -112,6 +112,7 @@ impl ReclusterMutator {
             max_tasks,
             cluster_key_types,
             column_ids,
+            _marker: std::marker::PhantomData,
         })
     }
 
@@ -136,13 +137,14 @@ impl ReclusterMutator {
             max_tasks,
             cluster_key_types,
             column_ids,
+            _marker: std::marker::PhantomData,
         }
     }
 
     #[async_backtrace::framed]
     pub async fn target_select(
         &self,
-        compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+        compact_segments: Vec<(SegmentLocation, Arc<R::CompactSegment>)>,
         mode: ReclusterMode,
     ) -> Result<(u64, ReclusterParts)> {
         match mode {
@@ -154,14 +156,14 @@ impl ReclusterMutator {
     #[async_backtrace::framed]
     pub async fn generate_recluster_tasks(
         &self,
-        compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+        compact_segments: Vec<(SegmentLocation, Arc<R::CompactSegment>)>,
     ) -> Result<(u64, ReclusterParts)> {
         // Sort segments by cluster statistics
         let mut compact_segments = compact_segments;
         compact_segments.sort_by(|a, b| {
             sort_by_cluster_stats(
-                &a.1.summary.cluster_stats,
-                &b.1.summary.cluster_stats,
+                &a.1.summary().cluster_stats,
+                &b.1.summary().cluster_stats,
                 self.cluster_key_id,
             )
         });
@@ -172,7 +174,7 @@ impl ReclusterMutator {
         let selected_segments = compact_segments
             .into_iter()
             .map(|(loc, info)| {
-                selected_statistics.push(info.summary.clone());
+                selected_statistics.push(info.summary().clone());
                 selected_segs_idx.push(loc.segment_idx);
                 info
             })
@@ -379,7 +381,7 @@ impl ReclusterMutator {
 
     async fn generate_compact_tasks(
         &self,
-        compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
+        compact_segments: Vec<(SegmentLocation, Arc<R::CompactSegment>)>,
     ) -> Result<(u64, ReclusterParts)> {
         debug!("recluster: generate compact tasks");
         let settings = self.ctx.get_settings();
@@ -388,13 +390,13 @@ impl ReclusterMutator {
         let mut recluster_blocks_count = 0;
 
         let mut parts = Vec::new();
-        let mut checker = SegmentCompactChecker::<RowOrientedSegmentReader>::new(
+        let mut checker = SegmentCompactChecker::<R>::new(
             self.block_thresholds.block_per_segment as u64,
             Some(self.cluster_key_id),
         );
 
         for (loc, compact_segment) in compact_segments.into_iter() {
-            recluster_blocks_count += compact_segment.summary.block_count;
+            recluster_blocks_count += compact_segment.summary().block_count;
             let segments_vec = checker.add(loc.segment_idx, compact_segment);
             for segments in segments_vec {
                 checker.generate_part(segments, &mut parts);
@@ -418,14 +420,14 @@ impl ReclusterMutator {
                 .into_iter()
                 .map(|v| {
                     v.as_any()
-                        .downcast_ref::<CompactSegmentsWithIndices>()
+                        .downcast_ref::<R::SegmentsWithIndices>()
                         .unwrap()
                         .clone()
                 })
                 .collect::<Vec<_>>();
             Partitions::create(
                 PartitionsShuffleKind::Mod,
-                BlockCompactMutator::<RowOrientedSegmentReader>::build_compact_tasks(
+                BlockCompactMutator::<R>::build_compact_tasks(
                     self.ctx.clone(),
                     self.column_ids.clone(),
                     Some(self.cluster_key_id),
@@ -475,7 +477,7 @@ impl ReclusterMutator {
 
     pub fn select_segments(
         &self,
-        compact_segments: &[(SegmentLocation, Arc<CompactSegmentInfo>)],
+        compact_segments: &[(SegmentLocation, Arc<R::CompactSegment>)],
         max_len: usize,
     ) -> Result<(ReclusterMode, IndexSet<usize>)> {
         let mut blocks_num = 0;
@@ -490,7 +492,7 @@ impl ReclusterMutator {
             let mut level = -1;
             // Check if the segment is clustered
             let is_clustered = compact_segment
-                .summary
+                .summary()
                 .cluster_stats
                 .as_ref()
                 .is_some_and(|v| {
@@ -509,13 +511,13 @@ impl ReclusterMutator {
             }
 
             // Skip if segment has more blocks than required and no reclustering is needed
-            if level < 0 && compact_segment.summary.block_count as usize >= block_per_seg {
+            if level < 0 && compact_segment.summary().block_count as usize >= block_per_seg {
                 continue;
             }
 
             // Process clustered segment
-            if let Some(stats) = &compact_segment.summary.cluster_stats {
-                blocks_num += compact_segment.summary.block_count as usize;
+            if let Some(stats) = &compact_segment.summary().cluster_stats {
+                blocks_num += compact_segment.summary().block_count as usize;
                 // Track small segments for special handling later
                 if blocks_num < block_per_seg {
                     small_segments.insert(i);
@@ -567,7 +569,7 @@ impl ReclusterMutator {
     #[async_backtrace::framed]
     async fn gather_blocks(
         &self,
-        compact_segments: Vec<Arc<CompactSegmentInfo>>,
+        compact_segments: Vec<Arc<R::CompactSegment>>,
     ) -> Result<Vec<Arc<BlockMeta>>> {
         // combine all the tasks.
         let mut iter = compact_segments.into_iter();

@@ -28,6 +28,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ReclusterMode;
@@ -135,7 +136,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = create_segment_location_vector(test_segment_locations, None);
-    let compact_segments = FuseTable::segment_pruning(
+    let compact_segments = FuseTable::segment_pruning::<RowOrientedSegmentReader>(
         &ctx,
         schema.clone(),
         data_accessor.clone(),
@@ -265,7 +266,7 @@ async fn test_safety_for_recluster() -> Result<()> {
 
         let ctx: Arc<dyn TableContext> = ctx.clone();
         let segment_locations = create_segment_location_vector(locations.clone(), None);
-        let compact_segments = FuseTable::segment_pruning(
+        let compact_segments = FuseTable::segment_pruning::<RowOrientedSegmentReader>(
             &ctx,
             schema.clone(),
             data_accessor.clone(),
