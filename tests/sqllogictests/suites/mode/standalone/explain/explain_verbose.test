@@ -271,7 +271,7 @@ EvalScalar
 ├── precise cardinality: N/A
 ├── statistics
 └── Join(RightMark)
-    ├── build keys: [b (#5)]
+    ├── build keys: [b (#4)]
     ├── probe keys: [b (#1)]
     ├── other filters: []
     ├── output columns: [derived.b, derived.mark, system.numbers.number, testdb.t.a, testdb.t.b]
@@ -292,7 +292,7 @@ EvalScalar
     │   ├── precise cardinality: N/A
     │   └── statistics
     └── EvalScalar
-        ├── scalars: [numbers.number (#2) AS (#2), correlated.b (#5) AS (#5)]
+        ├── scalars: [numbers.number (#2) AS (#2), correlated.b (#4) AS (#4)]
         ├── output columns: [derived.b, system.numbers.number]
         ├── outer columns: []
         ├── used columns: [derived.a, derived.b, system.numbers.number]
@@ -300,7 +300,7 @@ EvalScalar
         ├── precise cardinality: N/A
         ├── statistics
         └── Filter
-            ├── filters: [eq(modulo(numbers.number (#2), 10), b (#5))]
+            ├── filters: [eq(modulo(numbers.number (#2), 10), b (#4))]
             ├── output columns: [derived.b, system.numbers.number]
             ├── outer columns: []
             ├── used columns: [derived.a, derived.b, system.numbers.number]
@@ -318,7 +318,7 @@ EvalScalar
                 ├── precise cardinality: N/A
                 ├── statistics
                 ├── Aggregate(Initial)
-                │   ├── group items: [correlated.b (#5)]
+                │   ├── group items: [correlated.b (#4)]
                 │   ├── aggregate functions: []
                 │   ├── output columns: [derived.b]
                 │   ├── outer columns: []

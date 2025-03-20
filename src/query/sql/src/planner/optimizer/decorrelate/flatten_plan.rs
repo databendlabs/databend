@@ -165,7 +165,7 @@ impl SubqueryRewriter {
             .iter()
             .filter(|item| !correlated_columns.contains(&item.index))
             .map(Item::Scalar)
-            .chain(sortd_iter(correlated_columns).map(Item::Index))
+            .chain(sorted_iter(correlated_columns).map(Item::Index))
             .map(|item| match item {
                 Item::Scalar(item) => Ok(ScalarItem {
                     scalar: self.flatten_scalar(&item.scalar, correlated_columns)?,
@@ -442,7 +442,7 @@ impl SubqueryRewriter {
             .group_items
             .iter()
             .map(Item::Scalar)
-            .chain(sortd_iter(correlated_columns).map(Item::Index))
+            .chain(sorted_iter(correlated_columns).map(Item::Index))
             .map(|item| match item {
                 Item::Scalar(item) => {
                     let scalar = self.flatten_scalar(&item.scalar, correlated_columns)?;
@@ -573,7 +573,7 @@ impl SubqueryRewriter {
             .iter()
             .cloned()
             .map(Ok)
-            .chain(sortd_iter(correlated_columns).map(|old| {
+            .chain(sorted_iter(correlated_columns).map(|old| {
                 Ok(Self::scalar_item_from_index(
                     self.get_derived(old)?,
                     "correlated.",
@@ -685,7 +685,7 @@ impl SubqueryRewriter {
 
         // Wrap logical get with distinct to eliminate duplicates rows.
         let metadata = self.metadata.read();
-        let group_items = sortd_iter(correlated_columns)
+        let group_items = sorted_iter(correlated_columns)
             .map(|old| {
                 Ok(Self::scalar_item_from_index(
                     self.get_derived(old)?,
@@ -799,10 +799,7 @@ impl SubqueryRewriter {
 
     fn flatten_left_scan(&mut self, scan: &Scan) -> RelOperator {
         let mut metadata = self.metadata.write();
-        let columns = scan
-            .columns
-            .iter()
-            .copied()
+        let columns = sorted_iter(&scan.columns)
             .map(|col| {
                 let column_entry = metadata.column(col).clone();
                 let derived_index = metadata.add_derived_column(
@@ -892,7 +889,7 @@ impl SubqueryRewriter {
     }
 }
 
-fn sortd_iter(columns: &ColumnSet) -> impl Iterator<Item = IndexType> {
+fn sorted_iter(columns: &ColumnSet) -> impl Iterator<Item = IndexType> {
     let mut v = Vec::from_iter(columns.iter().copied());
     v.sort();
     v.into_iter()
