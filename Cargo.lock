@@ -4256,6 +4256,7 @@ dependencies = [
  "databend-common-meta-store",
  "databend-common-meta-types",
  "databend-common-pipeline-core",
+ "databend-common-pipeline-sources",
  "databend-common-storage",
  "databend-common-storages-parquet",
  "databend-storages-common-table-meta",
