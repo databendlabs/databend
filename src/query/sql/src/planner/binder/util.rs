@@ -63,12 +63,7 @@ impl Binder {
             RelOperator::RecursiveCteScan(plan) => {
                 cte_scan_names.push(plan.table_name.clone());
                 if cte_types.is_empty() {
-                    cte_types.extend(
-                        plan.fields
-                            .iter()
-                            .map(|f| f.data_type().clone())
-                            .collect::<Vec<DataType>>(),
-                    );
+                    cte_types.extend(plan.fields.iter().map(|f| f.data_type().clone()));
                 }
             }
 

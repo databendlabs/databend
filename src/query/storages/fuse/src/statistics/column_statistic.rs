@@ -253,7 +253,7 @@ pub mod traverse {
                 };
                 crate::statistics::traverse::traverse_column_recursive(
                     None,
-                    &array_column.values,
+                    &array_column.underlying_column(),
                     &inner_type,
                     leaves,
                 )?;
@@ -266,9 +266,10 @@ pub mod traverse {
                     } else {
                         column.as_map().unwrap()
                     };
-                    let kv_column =
-                        KvPair::<AnyType, AnyType>::try_downcast_column(&map_column.values)
-                            .unwrap();
+                    let kv_column = KvPair::<AnyType, AnyType>::try_downcast_column(
+                        &map_column.underlying_column(),
+                    )
+                    .unwrap();
                     crate::statistics::traverse::traverse_column_recursive(
                         None,
                         &kv_column.keys,

@@ -27,26 +27,26 @@ queries_dict = {}
 query_num = None
 query_text = ""
 
-# Open the queries.test file
-with open("queries.test", "r") as file:
-    for line in file:
-        if line.startswith("# Q"):
-            # This is a query number line
-            query_num = int(re.search(r"Q(\d+)", line).group(1))
-        elif line.startswith("----"):
-            queries_dict[query_num] = query_text
-            query_text = ""
-            # This is a result line, the next lines until an empty line will be the result
-            result = []
-            for result_line in file:
-                if result_line.strip() == "":
-                    break
-            # Reset the query text
-        elif line.startswith("statement") or line.startswith("query"):
-            query_text = ""
-        else:
-            # This is a part of the query
-            query_text += line
+# Full queries_dict
+for i in range(1, 100):
+    with open(f"Q{i}", "r") as file:
+        for line in file:
+            if line.startswith("# Q"):
+                # This is a query number line
+                query_num = int(re.search(r"Q(\d+)", line).group(1))
+            elif line.startswith("----"):
+                queries_dict[query_num] = query_text
+                query_text = ""
+                # This is a result line, the next lines until an empty line will be the result
+                for result_line in file:
+                    if result_line.strip() == "":
+                        break
+                # Reset the query text
+            elif line.startswith("statement") or line.startswith("query"):
+                query_text = ""
+            else:
+                # This is a part of the query
+                query_text += line
 
 
 def compare_results(result, expected_result, num):

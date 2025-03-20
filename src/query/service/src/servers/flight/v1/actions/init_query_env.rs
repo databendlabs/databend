@@ -17,7 +17,6 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_settings::OutofMemoryBehavior;
-use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryEnv;
@@ -39,7 +38,6 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
     let _guard = ThreadTracker::tracking(tracking_payload);
 
     ThreadTracker::tracking_future(async move {
-        debug!("init query env with {:?}", env);
         let ctx = match env.request_server_id == GlobalConfig::instance().query.node_id {
             true => None,
             false => Some(env.create_query_ctx(query_mem_stat).await?),

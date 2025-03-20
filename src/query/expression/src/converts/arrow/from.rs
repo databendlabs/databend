@@ -315,7 +315,7 @@ impl Column {
                 let values = Column::from_arrow_rs(array.values().clone(), inner.as_ref())?;
                 let offsets: Buffer<u64> = array.offsets().inner().inner().clone().into();
 
-                let inner_col = ArrayColumn { values, offsets };
+                let inner_col = ArrayColumn::new(values, offsets);
                 Column::Array(Box::new(inner_col))
             }
             DataType::Map(inner) => {
@@ -333,7 +333,7 @@ impl Column {
                 let offsets: Buffer<i32> = array.offsets().inner().inner().clone().into();
                 let offsets = offsets.into_iter().map(|x| x as u64).collect();
 
-                let inner_col = ArrayColumn { values, offsets };
+                let inner_col = ArrayColumn::new(values, offsets);
                 Column::Map(Box::new(inner_col))
             }
             DataType::Tuple(ts) => {

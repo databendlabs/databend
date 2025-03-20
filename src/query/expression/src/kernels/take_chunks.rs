@@ -306,7 +306,8 @@ impl Column {
             Column::Array(column) => {
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), result_size);
+                let builder =
+                    ColumnBuilder::with_capacity(&column.values().data_type(), result_size);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_value_types::<ArrayType<AnyType>>(columns, builder, indices)
             }
@@ -314,7 +315,7 @@ impl Column {
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    ColumnBuilder::with_capacity(&column.values.data_type(), result_size).build(),
+                    ColumnBuilder::with_capacity(&column.values().data_type(), result_size).build(),
                 );
                 let (key_builder, val_builder) = match builder {
                     ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),

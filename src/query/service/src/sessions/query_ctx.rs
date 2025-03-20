@@ -1773,6 +1773,7 @@ impl TableContext for QueryContext {
                 tb_id: table.get_table_info().ident.table_id,
                 table_name: table_name.to_string(),
                 db_id: db.get_db_info().database_id.db_id,
+                db_name: db.name().to_string(),
                 engine: table.engine().to_string(),
                 session_id: table
                     .options()

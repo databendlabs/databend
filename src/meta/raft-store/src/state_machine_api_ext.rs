@@ -27,12 +27,12 @@ use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use log::debug;
 use log::warn;
+use map_api::map_api::MapApi;
+use map_api::map_api_ro::MapApiRO;
+use map_api::IOResultStream;
 
 use crate::leveled_store::map_api::AsMap;
-use crate::leveled_store::map_api::IOResultStream;
-use crate::leveled_store::map_api::MapApi;
 use crate::leveled_store::map_api::MapApiExt;
-use crate::leveled_store::map_api::MapApiRO;
 use crate::leveled_store::map_api::MarkedOf;
 use crate::marked::Marked;
 use crate::state_machine::ExpireKey;
@@ -51,7 +51,7 @@ pub trait StateMachineApiExt: StateMachineApi {
 
         let prev = self.map_ref().str_map().get(&upsert_kv.key).await?.clone();
 
-        if upsert_kv.seq.match_seq(prev.seq()).is_err() {
+        if upsert_kv.seq.match_seq(&prev.seq()).is_err() {
             return Ok((prev.clone(), prev));
         }
 

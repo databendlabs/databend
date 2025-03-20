@@ -144,14 +144,14 @@ impl From<LegacyColumn> for Column {
             LegacyColumn::Timestamp(buf) => Column::Timestamp(buf),
             LegacyColumn::Date(buf) => Column::Date(buf),
             LegacyColumn::Interval(buf) => Column::Interval(buf),
-            LegacyColumn::Array(arr_col) => Column::Array(Box::new(ArrayColumn::<AnyType> {
-                values: arr_col.values.into(),
-                offsets: arr_col.offsets,
-            })),
-            LegacyColumn::Map(map_col) => Column::Map(Box::new(ArrayColumn::<AnyType> {
-                values: map_col.values.into(),
-                offsets: map_col.offsets,
-            })),
+            LegacyColumn::Array(arr_col) => Column::Array(Box::new(ArrayColumn::<AnyType>::new(
+                arr_col.values.into(),
+                arr_col.offsets,
+            ))),
+            LegacyColumn::Map(map_col) => Column::Map(Box::new(ArrayColumn::<AnyType>::new(
+                map_col.values.into(),
+                map_col.offsets,
+            ))),
             LegacyColumn::Bitmap(str_col) => Column::Bitmap(BinaryColumn::from(str_col)),
             LegacyColumn::Nullable(nullable_col) => {
                 Column::Nullable(Box::new(NullableColumn::<AnyType> {
@@ -207,12 +207,12 @@ impl From<Column> for LegacyColumn {
             Column::Date(buf) => LegacyColumn::Date(buf),
             Column::Interval(buf) => LegacyColumn::Interval(buf),
             Column::Array(arr_col) => LegacyColumn::Array(Box::new(LegacyArrayColumn {
-                values: arr_col.values.into(),
-                offsets: arr_col.offsets,
+                values: arr_col.underlying_column().into(),
+                offsets: arr_col.underlying_offsets(),
             })),
             Column::Map(map_col) => LegacyColumn::Map(Box::new(LegacyArrayColumn {
-                values: map_col.values.into(),
-                offsets: map_col.offsets,
+                values: map_col.underlying_column().into(),
+                offsets: map_col.underlying_offsets(),
             })),
             Column::Bitmap(str_col) => LegacyColumn::Bitmap(LegacyBinaryColumn::from(str_col)),
             Column::Nullable(nullable_col) => {

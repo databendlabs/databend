@@ -10,6 +10,8 @@ select value, default = value  from system.settings where name in ('max_threads'
 statement ok
 set variable (a, b) = (select 12, 55)
 
+statement ok
+set variable c = (select 32);
 
 statement ok
 SET GLOBAL (max_threads, storage_io_min_bytes_for_seek) = select $a + 1, $b + 1;

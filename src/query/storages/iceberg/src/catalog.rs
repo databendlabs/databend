@@ -471,13 +471,17 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table(&self, _req: CreateTableReq) -> Result<CreateTableReply> {
-        unimplemented!()
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
+        let db = self
+            .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
+            .await?;
+        db.create_table(req).await
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_by_id(&self, _req: DropTableByIdReq) -> Result<DropTableReply> {
-        unimplemented!()
+    async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply> {
+        let db = self.get_database(&req.tenant, &req.db_name).await?;
+        db.drop_table_by_id(req).await
     }
 
     #[async_backtrace::framed]
@@ -664,7 +668,7 @@ impl Catalog for IcebergCatalog {
 
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
-        unimplemented!()
+        vec![]
     }
 
     async fn create_sequence(&self, _req: CreateSequenceReq) -> Result<CreateSequenceReply> {
