@@ -33,10 +33,13 @@ use parquet::arrow::ProjectionMask;
 use parquet::file::metadata::ParquetMetaDataReader;
 use parquet::file::properties::WriterProperties;
 
+use super::block_meta::AbstractBlockMeta;
+use super::block_meta::ColumnOrientedBlockMeta;
 use super::meta_name;
 use super::stat_name;
 use super::BLOCK_SIZE;
 use super::COMPRESSION;
+use super::FILE_SIZE;
 use super::LOCATION_PATH;
 use super::ROW_COUNT;
 use crate::meta::column_oriented_segment::schema::META_PREFIX;
@@ -46,6 +49,7 @@ use crate::meta::format::compress;
 use crate::meta::format::decode;
 use crate::meta::format::decompress;
 use crate::meta::format::encode;
+use crate::meta::BlockMeta;
 use crate::meta::CompactSegmentInfo;
 use crate::meta::MetaCompression;
 use crate::meta::MetaEncoding;
@@ -53,11 +57,19 @@ use crate::meta::SegmentInfo;
 use crate::meta::Statistics;
 
 pub trait AbstractSegment: Send + Sync + 'static + Sized {
+    type BlockMeta: AbstractBlockMeta;
+    fn block_metas(&self) -> Result<Vec<Arc<Self::BlockMeta>>>;
     fn summary(&self) -> &Statistics;
     fn serialize(&self) -> Result<Vec<u8>>;
 }
 
 impl AbstractSegment for SegmentInfo {
+    type BlockMeta = BlockMeta;
+    fn block_metas(&self) -> Result<Vec<Arc<Self::BlockMeta>>> {
+        let blocks = self.blocks.to_vec();
+        Ok(blocks)
+    }
+
     fn serialize(&self) -> Result<Vec<u8>> {
         self.to_bytes()
     }
@@ -68,6 +80,11 @@ impl AbstractSegment for SegmentInfo {
 }
 
 impl AbstractSegment for CompactSegmentInfo {
+    type BlockMeta = BlockMeta;
+    fn block_metas(&self) -> Result<Vec<Arc<Self::BlockMeta>>> {
+        self.block_metas()
+    }
+
     fn summary(&self) -> &Statistics {
         &self.summary
     }
@@ -107,6 +124,16 @@ impl ColumnOrientedSegment {
 
     pub fn block_size_col(&self) -> Buffer<u64> {
         self.col_by_name(&[BLOCK_SIZE])
+            .unwrap()
+            .as_number()
+            .unwrap()
+            .as_u_int64()
+            .unwrap()
+            .clone()
+    }
+
+    pub fn file_size_col(&self) -> Buffer<u64> {
+        self.col_by_name(&[FILE_SIZE])
             .unwrap()
             .as_number()
             .unwrap()
@@ -193,6 +220,20 @@ impl ColumnOrientedSegment {
 }
 
 impl AbstractSegment for ColumnOrientedSegment {
+    type BlockMeta = ColumnOrientedBlockMeta;
+    fn block_metas(&self) -> Result<Vec<Arc<Self::BlockMeta>>> {
+        let block_num = self.block_metas.num_rows();
+        let mut block_metas = Vec::with_capacity(block_num);
+        for i in 0..block_num {
+            let block_meta = ColumnOrientedBlockMeta {
+                segment: self.clone(),
+                row_number: i,
+            };
+            block_metas.push(Arc::new(block_meta));
+        }
+        Ok(block_metas)
+    }
+
     fn summary(&self) -> &Statistics {
         &self.summary
     }

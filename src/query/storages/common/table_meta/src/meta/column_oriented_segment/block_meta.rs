@@ -12,60 +12,95 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::DataBlock;
-use databend_common_expression::TableSchemaRef;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
-use crate::meta::column_oriented_segment::block_read_info::BlockReadInfo;
+use databend_common_expression::ColumnId;
+
+use super::ColumnOrientedSegment;
 use crate::meta::BlockMeta;
+use crate::meta::ColumnMeta;
+use crate::meta::ColumnMetaV0;
 pub trait AbstractBlockMeta: Send + Sync + 'static + Sized {
-    fn read_info(&self) -> BlockReadInfo;
+    fn block_size(&self) -> u64;
+    fn file_size(&self) -> u64;
+    fn row_count(&self) -> u64;
+    fn location_path(&self) -> String;
+    fn col_metas(&self, col_ids: &HashSet<ColumnId>) -> HashMap<ColumnId, ColumnMeta>;
 }
 
 impl AbstractBlockMeta for BlockMeta {
-    fn read_info(&self) -> BlockReadInfo {
-        BlockReadInfo {
-            location: self.location.0.clone(),
-            row_count: self.row_count,
-            col_metas: self.col_metas.clone(),
-            compression: self.compression,
-            block_size: self.block_size,
+    fn block_size(&self) -> u64 {
+        self.block_size
+    }
+
+    fn file_size(&self) -> u64 {
+        self.file_size
+    }
+
+    fn row_count(&self) -> u64 {
+        self.row_count
+    }
+    fn col_metas(&self, col_ids: &HashSet<ColumnId>) -> HashMap<ColumnId, ColumnMeta> {
+        let mut col_metas = HashMap::new();
+        for col_id in col_ids {
+            if let Some(col_meta) = self.col_metas.get(col_id) {
+                col_metas.insert(*col_id, col_meta.clone());
+            }
         }
+        col_metas
+    }
+
+    fn location_path(&self) -> String {
+        self.location.0.to_string()
     }
 }
 
-impl AbstractBlockMeta for ColumnOrientedBlockMetaIter {
-    fn read_info(&self) -> BlockReadInfo {
-        todo!()
+impl AbstractBlockMeta for ColumnOrientedBlockMeta {
+    fn block_size(&self) -> u64 {
+        self.segment.block_size_col()[self.row_number]
     }
-}
 
-#[derive(Clone)]
-pub struct ColumnOrientedBlockMetaIter {
-    block_metas: DataBlock,
-    row_number: usize,
-    schema: TableSchemaRef, // TODO(Sky): cache field index
-}
+    fn file_size(&self) -> u64 {
+        self.segment.file_size_col()[self.row_number]
+    }
 
-impl ColumnOrientedBlockMetaIter {
-    pub fn new(block_metas: DataBlock, schema: TableSchemaRef) -> Self {
-        Self {
-            block_metas,
-            row_number: 0,
-            schema,
+    fn row_count(&self) -> u64 {
+        self.segment.row_count_col()[self.row_number]
+    }
+
+    fn col_metas(&self, col_ids: &HashSet<ColumnId>) -> HashMap<ColumnId, ColumnMeta> {
+        let col_meta_cols = self.segment.col_meta_cols(col_ids);
+        let mut col_metas = HashMap::new();
+        for column_id in col_ids {
+            let meta_col = col_meta_cols.get(column_id).unwrap();
+            let meta = meta_col.index(self.row_number).unwrap();
+            let meta = meta.as_tuple().unwrap();
+            let offset = meta[0].as_number().unwrap().as_u_int64().unwrap();
+            let length = meta[1].as_number().unwrap().as_u_int64().unwrap();
+            let num_values = meta[2].as_number().unwrap().as_u_int64().unwrap();
+            col_metas.insert(
+                *column_id,
+                ColumnMeta::Parquet(ColumnMetaV0 {
+                    offset: *offset,
+                    len: *length,
+                    num_values: *num_values,
+                }),
+            );
         }
+        col_metas
+    }
+
+    fn location_path(&self) -> String {
+        self.segment
+            .location_path_col()
+            .index(self.row_number)
+            .unwrap()
+            .to_string()
     }
 }
 
-impl Iterator for ColumnOrientedBlockMetaIter {
-    type Item = Self;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.row_number >= self.block_metas.num_rows() {
-            None
-        } else {
-            let item = self.clone();
-            self.row_number += 1;
-            Some(item)
-        }
-    }
+pub struct ColumnOrientedBlockMeta {
+    pub row_number: usize,
+    pub segment: ColumnOrientedSegment,
 }
