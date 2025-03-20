@@ -43,11 +43,9 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::analyze_cluster_keys;
 use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::BlockMeta;
-use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::ClusterType;
-use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use jsonb::Value as JsonbValue;
 use log::warn;
 use serde::Serialize;
@@ -100,87 +98,31 @@ impl SimpleTableFunc for ClusteringInformationTable {
                 args.table_name.as_str(),
             )
             .await?;
-
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-
-        let cluster_type = tbl.get_option(OPT_KEY_CLUSTER_TYPE, ClusterType::Linear);
-
-        let res = match (
-            &self.args.cluster_option,
-            cluster_type,
-            tbl.cluster_key_meta(),
-        ) {
-            (ClusteringOption::EvaluateLinear(eval_keys), _, _) => {
-                // Enforces linear clustering evaluation of keys, allowing users to examine clustering
-                // information without defining cluster keys.
-                //
-                // Currently, only linear clustering is supported.
-                ClusteringInformation::new(
-                    ctx.clone(),
-                    tbl,
-                    &args.database_name,
-                    &args.table_name,
-                    Some(eval_keys.clone()),
-                )
-                .get_clustering_info()
-                .await
-            }
-
-            (ClusteringOption::AutoDetect, ClusterType::Linear, Some(_)) => {
-                ClusteringInformation::new(
-                    ctx.clone(),
-                    tbl,
-                    &args.database_name,
-                    &args.table_name,
-                    None,
-                )
-                .get_clustering_info()
-                .await
-            }
-
-            (ClusteringOption::AutoDetect, ClusterType::Hilbert, Some(cluster_key)) => {
-                HilbertClusteringInfo::new(ctx.clone(), tbl, cluster_key)
-                    .get_clustering_info()
-                    .await
-            }
-            _ => {
-                return Err(ErrorCode::UnclusteredTable(format!(
-                    "Unclustered table '{}'.'{}'",
-                    args.database_name, args.table_name
-                )));
-            }
-        }?;
+        let res = ClusteringInformation::new(ctx.clone(), tbl)
+            .get_clustering_info(&args.cluster_key)
+            .await?;
         Ok(Some(res))
     }
 
     fn create(func_name: &str, table_args: TableArgs) -> Result<Self>
     where Self: Sized {
-        let (database_name, table_name, cluster_opt_str) =
+        let (database_name, table_name, cluster_key) =
             parse_db_tb_opt_args(&table_args, func_name)?;
-        let cluster_option = match cluster_opt_str.map(|v| v.to_lowercase()).as_deref() {
-            Some(other) => ClusteringOption::EvaluateLinear(other.to_string()),
-            None => ClusteringOption::AutoDetect,
-        };
-
         Ok(Self {
             args: ClusteringInformationArgs {
                 database_name,
                 table_name,
-                cluster_option,
+                cluster_key,
             },
         })
     }
 }
 
-enum ClusteringOption {
-    EvaluateLinear(String),
-    AutoDetect,
-}
-
 struct ClusteringInformationArgs {
     database_name: String,
     table_name: String,
-    cluster_option: ClusteringOption,
+    cluster_key: Option<String>,
 }
 
 impl From<&ClusteringInformationArgs> for TableArgs {
@@ -188,13 +130,9 @@ impl From<&ClusteringInformationArgs> for TableArgs {
         let mut tbl_args = Vec::new();
         tbl_args.push(string_literal(args.database_name.as_str()));
         tbl_args.push(string_literal(args.table_name.as_str()));
-        match &args.cluster_option {
-            ClusteringOption::EvaluateLinear(cluster_keys) => {
-                tbl_args.push(string_literal(cluster_keys));
-            }
-            ClusteringOption::AutoDetect => {}
+        if let Some(arg_cluster_key) = &args.cluster_key {
+            tbl_args.push(string_literal(arg_cluster_key));
         }
-
         TableArgs::new_positioned(tbl_args)
     }
 }
@@ -209,32 +147,35 @@ struct ClusteringStatisticsWrapper<T> {
 struct ClusteringInformation<'a> {
     ctx: Arc<dyn TableContext>,
     table: &'a FuseTable,
-    database_name: &'a str,
-    table_name: &'a str,
-    cluster_key: Option<String>,
 }
 
 impl<'a> ClusteringInformation<'a> {
-    fn new(
-        ctx: Arc<dyn TableContext>,
-        table: &'a FuseTable,
-        database_name: &'a str,
-        table_name: &'a str,
-        cluster_key: Option<String>,
-    ) -> Self {
-        Self {
-            ctx,
-            table,
-            database_name,
-            table_name,
-            cluster_key,
+    fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable) -> Self {
+        Self { ctx, table }
+    }
+
+    #[async_backtrace::framed]
+    async fn get_clustering_info(&self, cluster_key: &Option<String>) -> Result<DataBlock> {
+        match (self.table.cluster_type(), cluster_key) {
+            (Some(ClusterType::Hilbert), None) => self.get_hilbert_clustering_info().await,
+            (None, None) => Err(ErrorCode::UnclusteredTable(format!(
+                "Unclustered table {}",
+                self.table.table_info.desc
+            ))),
+            _ => {
+                // Enforces linear clustering evaluation of keys, allowing users to examine clustering
+                // information without defining cluster keys.
+                //
+                // Currently, only linear clustering is supported.
+                self.get_linear_clustering_info(cluster_key).await
+            }
         }
     }
 
     #[async_backtrace::framed]
-    async fn get_clustering_info(&self) -> Result<DataBlock> {
+    async fn get_linear_clustering_info(&self, cluster_key: &Option<String>) -> Result<DataBlock> {
         let mut default_cluster_key_id = None;
-        let (cluster_key, exprs) = match (self.table.cluster_key_str(), &self.cluster_key) {
+        let (cluster_key, exprs) = match (self.table.cluster_key_str(), cluster_key) {
             (a, Some(b)) => {
                 let (cluster_key, exprs) =
                     analyze_cluster_keys(self.ctx.clone(), Arc::new(self.table.clone()), b)?;
@@ -261,10 +202,7 @@ impl<'a> ClusteringInformation<'a> {
                 (a.clone(), exprs)
             }
             _ => {
-                return Err(ErrorCode::UnclusteredTable(format!(
-                    "Unclustered table '{}'.'{}'",
-                    self.database_name, self.table_name
-                )));
+                unreachable!("Unclustered table {}", self.table.table_info.desc);
             }
         };
 
@@ -420,6 +358,89 @@ impl<'a> ClusteringInformation<'a> {
 
         build_block(info)
     }
+
+    #[async_backtrace::framed]
+    async fn get_hilbert_clustering_info(&self) -> Result<DataBlock> {
+        let Some((cluster_key_id, cluster_key_str)) = self.table.cluster_key_meta() else {
+            unreachable!("Unclustered table {}", self.table.table_info.desc);
+        };
+
+        let snapshot = self.table.read_table_snapshot().await?;
+        let now = Utc::now();
+        let timestamp = snapshot
+            .as_ref()
+            .map_or(now, |s| s.timestamp.unwrap_or(now))
+            .timestamp_micros();
+        let mut total_segment_count = 0;
+        let mut total_block_count = 0;
+        let mut stable_segment_count = 0;
+        let mut stable_block_count = 0;
+        let mut partial_segment_count = 0;
+        let mut partial_block_count = 0;
+        let mut unclustered_segment_count = 0;
+        let mut unclustered_block_count = 0;
+        if let Some(snapshot) = snapshot {
+            let total_count = snapshot.segments.len();
+            total_segment_count = total_count as u64;
+            total_block_count = snapshot.summary.block_count;
+            let chunk_size = std::cmp::min(
+                self.ctx.get_settings().get_max_threads()? as usize * 4,
+                total_count,
+            )
+            .max(1);
+            let segments_io = SegmentsIO::create(
+                self.ctx.clone(),
+                self.table.operator.clone(),
+                self.table.schema(),
+            );
+            for chunk in snapshot.segments.chunks(chunk_size) {
+                let segments = segments_io
+                    .read_segments::<Arc<CompactSegmentInfo>>(chunk, true)
+                    .await?;
+                for segment in segments {
+                    let segment = segment?;
+                    if segment
+                        .summary
+                        .cluster_stats
+                        .as_ref()
+                        .is_none_or(|v| v.cluster_key_id != cluster_key_id)
+                    {
+                        unclustered_segment_count += 1;
+                        unclustered_block_count += segment.summary.block_count;
+                        continue;
+                    }
+                    let level = segment.summary.cluster_stats.as_ref().unwrap().level;
+                    if level == -1 {
+                        stable_block_count += segment.summary.block_count;
+                        stable_segment_count += 1;
+                    } else {
+                        partial_block_count += segment.summary.block_count;
+                        partial_segment_count += 1;
+                    }
+                }
+            }
+        }
+
+        let info = HilbertClusterStatistics {
+            total_segment_count,
+            stable_segment_count,
+            partial_segment_count,
+            unclustered_segment_count,
+            total_block_count,
+            stable_block_count,
+            partial_block_count,
+            unclustered_block_count,
+        };
+
+        let stats = ClusteringStatisticsWrapper {
+            cluster_key: cluster_key_str.to_string(),
+            cluster_type: "hilbert".to_string(),
+            timestamp,
+            info,
+        };
+
+        build_block(stats)
+    }
 }
 
 fn build_block<A: Serialize>(info: ClusteringStatisticsWrapper<A>) -> Result<DataBlock> {
@@ -467,103 +488,6 @@ struct HilbertClusterStatistics {
     stable_block_count: u64,
     partial_block_count: u64,
     unclustered_block_count: u64,
-}
-
-struct HilbertClusteringInfo<'a> {
-    ctx: Arc<dyn TableContext>,
-    table: &'a FuseTable,
-    cluster_key: ClusterKey,
-}
-
-impl<'a> HilbertClusteringInfo<'a> {
-    fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable, cluster_key: ClusterKey) -> Self {
-        Self {
-            ctx,
-            table,
-            cluster_key,
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn get_clustering_info(&self) -> Result<DataBlock> {
-        let (cluster_key_id, cluster_key_str) = &self.cluster_key;
-
-        let snapshot = self.table.read_table_snapshot().await?;
-        let now = Utc::now();
-        let timestamp = snapshot
-            .as_ref()
-            .map_or(now, |s| s.timestamp.unwrap_or(now))
-            .timestamp_micros();
-        let mut total_segment_count = 0;
-        let mut total_block_count = 0;
-        let mut stable_segment_count = 0;
-        let mut stable_block_count = 0;
-        let mut partial_segment_count = 0;
-        let mut partial_block_count = 0;
-        let mut unclustered_segment_count = 0;
-        let mut unclustered_block_count = 0;
-        if let Some(snapshot) = snapshot {
-            let total_count = snapshot.segments.len();
-            total_segment_count = total_count as u64;
-            total_block_count = snapshot.summary.block_count;
-            let chunk_size = std::cmp::min(
-                self.ctx.get_settings().get_max_threads()? as usize * 4,
-                total_count,
-            )
-            .max(1);
-            let segments_io = SegmentsIO::create(
-                self.ctx.clone(),
-                self.table.operator.clone(),
-                self.table.schema(),
-            );
-            for chunk in snapshot.segments.chunks(chunk_size) {
-                let segments = segments_io
-                    .read_segments::<Arc<CompactSegmentInfo>>(chunk, true)
-                    .await?;
-                for segment in segments {
-                    let segment = segment?;
-                    if segment
-                        .summary
-                        .cluster_stats
-                        .as_ref()
-                        .is_none_or(|v| v.cluster_key_id != *cluster_key_id)
-                    {
-                        unclustered_segment_count += 1;
-                        unclustered_block_count += segment.summary.block_count;
-                        continue;
-                    }
-                    let level = segment.summary.cluster_stats.as_ref().unwrap().level;
-                    if level == -1 {
-                        stable_block_count += segment.summary.block_count;
-                        stable_segment_count += 1;
-                    } else {
-                        partial_block_count += segment.summary.block_count;
-                        partial_segment_count += 1;
-                    }
-                }
-            }
-        }
-
-        let info = HilbertClusterStatistics {
-            total_segment_count,
-            stable_segment_count,
-            partial_segment_count,
-            unclustered_segment_count,
-            total_block_count,
-            stable_block_count,
-            partial_block_count,
-            unclustered_block_count,
-        };
-
-        let stats = ClusteringStatisticsWrapper {
-            cluster_key: cluster_key_str.to_string(),
-            cluster_type: "hilbert".to_string(),
-            timestamp,
-            info,
-        };
-
-        build_block(stats)
-    }
 }
 
 fn get_min_max_stats(
