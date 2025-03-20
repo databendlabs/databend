@@ -12,17 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use databend_common_base::base::mask_connection_info;
 use databend_common_base::headers::HEADER_QUERY_ID;
 use databend_common_base::headers::HEADER_QUERY_PAGE_ROWS;
 use databend_common_base::headers::HEADER_QUERY_STATE;
 use databend_common_base::runtime::drop_guard;
+use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_base::version::DATABEND_SEMVER;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataSchemaRef;
 use databend_common_metrics::http::metrics_incr_http_response_errors_count;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use highway::HighwayHash;
+use http::HeaderMap;
+use http::HeaderValue;
 use http::StatusCode;
 use log::error;
 use log::info;
@@ -37,6 +44,7 @@ use poem::web::Json;
 use poem::web::Path;
 use poem::EndpointExt;
 use poem::IntoResponse;
+use poem::Request;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
@@ -45,8 +53,10 @@ use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::RemoveReason;
+use crate::clusters::ClusterDiscovery;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::QueryError;
+use crate::servers::http::middleware::forward_request_with_body;
 use crate::servers::http::middleware::EndpointKind;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::MetricsMiddleware;
@@ -135,6 +145,7 @@ pub struct QueryResponse {
     pub schema: Vec<QueryResponseField>,
     pub data: Vec<Vec<Option<String>>>,
     pub affect: Option<QueryAffect>,
+    pub result_timeout_secs: Option<u64>,
 
     pub stats: QueryStats,
 
@@ -208,6 +219,7 @@ impl QueryResponse {
             kill_uri: Some(make_kill_uri(&id)),
             error: r.state.error.map(QueryError::from_error_code),
             has_result_set: r.state.has_result_set,
+            result_timeout_secs: Some(r.result_timeout_secs),
         })
         .with_header(HEADER_QUERY_ID, id.clone())
         .with_header(HEADER_QUERY_STATE, state.state.to_string())
@@ -423,11 +435,116 @@ pub(crate) async fn query_handler(
         .await
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+struct HeartBeatRequest {
+    node_to_queries: HashMap<String, Vec<String>>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct HeartBeatResponse {
+    queries_to_remove: Vec<String>,
+}
+
+/// /v1/session/heartbeat are used for 2 purpose:
+/// 1. heartbeat to avoid session token/temp table expire
+/// 2. heartbeat to avoid result timeout of queries in this session
 #[poem::handler]
 #[async_backtrace::framed]
-pub async fn heartbeat_handler() -> poem::error::Result<impl IntoResponse> {
-    // work is already done in session manager
-    Ok(())
+pub async fn heartbeat_handler(
+    ctx: &HttpQueryContext,
+    req: &Request,
+    Json(body): Json<HeartBeatRequest>,
+) -> poem::error::Result<impl IntoResponse> {
+    let local_id = GlobalConfig::instance().query.node_id.clone();
+    let mut queries_to_remove = vec![];
+    let mut nodes_to_forwards = vec![];
+    for (node_id, queries) in body.node_to_queries {
+        if node_id == local_id {
+            queries_to_remove.extend(HttpQueryManager::instance().on_heartbeat(queries));
+        } else if let Some(node) = ClusterDiscovery::instance()
+            .find_node_by_id(&node_id)
+            .await
+            .map_err(HttpErrorCode::server_error)?
+        {
+            let mut node_to_queries = HashMap::new();
+            node_to_queries.insert(node_id.to_string(), queries);
+            let body = HeartBeatRequest { node_to_queries };
+            let body = serde_json::to_vec(&body).unwrap();
+            nodes_to_forwards.push((node, body));
+        } else {
+            queries_to_remove.extend(queries)
+        }
+    }
+
+    let num_task = nodes_to_forwards.len();
+    if num_task > 0 {
+        let mut tasks = Vec::with_capacity(num_task);
+        let uri = req.uri().to_string();
+        let method = req.method();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        let agent = format!("databend-query/{}", *DATABEND_SEMVER);
+        headers.insert(
+            http::header::USER_AGENT,
+            HeaderValue::from_str(&agent).unwrap(),
+        );
+        headers.insert(
+            http::header::AUTHORIZATION,
+            req.headers()
+                .get(http::header::AUTHORIZATION)
+                .expect("heartbeat request should contain auth header")
+                .to_owned(),
+        );
+        for (node, body) in nodes_to_forwards {
+            let uri = uri.clone();
+            let method = method.clone();
+            let headers = headers.clone();
+
+            tasks.push(async move {
+                match forward_request_with_body(node, &uri, body, method, headers).await {
+                    Ok(mut resp) => {
+                        if resp.status() == StatusCode::OK {
+                            Some(
+                                resp.take_body()
+                                    .into_json::<HeartBeatResponse>()
+                                    .await
+                                    .unwrap(),
+                            )
+                        } else {
+                            warn!("heartbeat forward fail: {:?}", resp);
+                            None
+                        }
+                    }
+                    Err(e) => {
+                        warn!("heartbeat forward error: {:?}", e);
+                        None
+                    }
+                }
+            });
+        }
+        let settings = ctx.session.get_settings();
+        let num_threads = num_task.max(
+            settings
+                .get_max_threads()
+                .map_err(HttpErrorCode::server_error)? as usize,
+        );
+        let responses = execute_futures_in_parallel(
+            tasks,
+            num_threads,
+            num_threads * 2,
+            "forward_heartbeat".to_owned(),
+        )
+        .await
+        .map_err(HttpErrorCode::server_error)?;
+        for response in responses.into_iter().flatten() {
+            queries_to_remove.extend(response.queries_to_remove);
+        }
+    }
+
+    Ok(Json(HeartBeatResponse { queries_to_remove }).into_response())
 }
 
 pub fn query_route() -> Route {
