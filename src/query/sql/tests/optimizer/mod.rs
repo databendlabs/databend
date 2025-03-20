@@ -14,4 +14,3 @@
 
 mod filter;
 mod histogram;
-mod subquery;
