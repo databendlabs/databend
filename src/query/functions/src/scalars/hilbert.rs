@@ -34,12 +34,20 @@ use databend_common_expression::FunctionSignature;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 
+/// Registers Hilbert curve related functions with the function registry.
 pub fn register(registry: &mut FunctionRegistry) {
+    // Register the hilbert_range_index function that calculates Hilbert indices for multi-dimensional data
     registry.register_function_factory("hilbert_range_index", |_, args_type| {
         let args_num = args_type.len();
+        // The function supports 2, 3, 4, or 5 dimensions (each dimension requires 2 arguments)
         if ![4, 6, 8, 10].contains(&args_num) {
             return None;
         }
+        
+        // Create the function signature with appropriate argument types
+        // For each dimension, we need:
+        // 1. A value (the point coordinate in that dimension)
+        // 2. An array of boundaries (for partitioning that dimension)
         let sig_args_type = (0..args_num / 2)
             .flat_map(|idx| {
                 [
@@ -48,6 +56,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 ]
             })
             .collect();
+            
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "hilbert_range_index".to_string(),
@@ -57,33 +66,49 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(move |args, ctx| {
+                    // Determine if we're processing scalar values or columns
                     let input_all_scalars = args.iter().all(|arg| arg.as_scalar().is_some());
                     let process_rows = if input_all_scalars { 1 } else { ctx.num_rows };
                     let mut builder = BinaryType::create_builder(process_rows, &[]);
+                    
                     for index in 0..process_rows {
                         let mut points = Vec::with_capacity(args_num / 2);
+                        
+                        // Process each dimension (each dimension has a value and boundaries array)
                         for i in (0..args_num).step_by(2) {
-                            let arg1 = &args[i];
-                            let arg2 = &args[i + 1];
-
+                            let arg1 = &args[i];      // The value in this dimension
+                            let arg2 = &args[i + 1];  // The boundaries array for this dimension
+                            
+                            // Get the value and boundaries for this row
                             let val = unsafe { arg1.index_unchecked(index) };
                             let arr = unsafe { arg2.index_unchecked(index) };
+                            
+                            // Calculate the partition ID for this dimension (capped at 65535, i.e. 2 bytes or 16 bits)
+                            // This effectively discretizes the continuous dimension into buckets
                             let id = arr
                                 .as_array()
                                 .map(|arr| calc_range_partition_id(val, arr).min(65535) as u16)
                                 .unwrap_or(0);
+                                
+                            // Encode the partition ID as bytes
                             let key = id.encode();
                             points.push(key);
                         }
+                        
+                        // Convert the multi-dimensional point to a Hilbert index
+                        // This maps the n-dimensional point to a 1-dimensional value
                         let points = points
                             .iter()
                             .map(|array| array.as_slice())
                             .collect::<Vec<_>>();
                         let slice = hilbert_index(&points, 2);
+                        
+                        // Store the Hilbert index in the result
                         builder.put_slice(&slice);
                         builder.commit_row();
                     }
 
+                    // Return the appropriate result type based on input
                     if input_all_scalars {
                         Value::Scalar(BinaryType::upcast_scalar(BinaryType::build_scalar(builder)))
                     } else {
@@ -127,6 +152,21 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 }
 
+/// Calculates the partition ID for a value based on range boundaries.
+///
+/// # Arguments
+/// * `val` - The value to find the partition for
+/// * `arr` - The array of boundary values that define the partitions
+///
+/// # Returns
+/// * The partition ID as a u64 (0 to arr.len())
+///
+/// # Example
+/// For boundaries [10, 20, 30]:
+/// - Values < 10 get partition ID 0
+/// - Values >= 10 and < 20 get partition ID 1
+/// - Values >= 20 and < 30 get partition ID 2
+/// - Values >= 30 get partition ID 3
 fn calc_range_partition_id(val: ScalarRef, arr: &Column) -> u64 {
     let mut low = 0;
     let mut high = arr.len();
