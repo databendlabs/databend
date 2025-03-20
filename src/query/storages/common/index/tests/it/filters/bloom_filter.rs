@@ -127,18 +127,18 @@ fn test_base(file: &mut impl Write) {
             UInt8Type::from_data(vec![2, 3]),
             StringType::from_data(vec!["b", "c"]),
             Column::Map(Box::new(
-                ArrayColumn::<KvPair<AnyType, AnyType>> {
-                    values: KvColumn {
+                ArrayColumn::<KvPair<AnyType, AnyType>>::new(
+                    KvColumn {
                         keys: UInt8Type::from_data(vec![1, 2, 3]),
                         values: StringType::from_data(vec!["b", "c", "d"]),
                     },
-                    offsets: Buffer::<u64>::from(vec![0, 2, 3]),
-                }
+                    Buffer::<u64>::from(vec![0, 2, 3]),
+                )
                 .upcast(),
             )),
             Column::Map(Box::new(
-                ArrayColumn::<KvPair<AnyType, AnyType>> {
-                    values: KvColumn {
+                ArrayColumn::<KvPair<AnyType, AnyType>>::new(
+                    KvColumn {
                         keys: StringType::from_data(vec!["b", "c", "d"]),
                         values: VariantType::from_data(vec![
                             jsonb::parse_value(r#""def""#.as_bytes()).unwrap().to_vec(),
@@ -146,8 +146,8 @@ fn test_base(file: &mut impl Write) {
                             jsonb::parse_value(r#""xyz""#.as_bytes()).unwrap().to_vec(),
                         ]),
                     },
-                    offsets: Buffer::<u64>::from(vec![0, 2, 3]),
-                }
+                    Buffer::<u64>::from(vec![0, 2, 3]),
+                )
                 .upcast(),
             )),
         ]),

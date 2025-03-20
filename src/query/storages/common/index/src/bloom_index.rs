@@ -225,7 +225,7 @@ impl BloomIndex {
                     } else {
                         MapType::<AnyType, AnyType>::try_downcast_column(&column).unwrap()
                     };
-                    let column = map_column.values.values;
+                    let column = map_column.underlying_column().values;
 
                     let val_type = match inner_ty {
                         DataType::Tuple(kv_tys) => kv_tys[1].clone(),
