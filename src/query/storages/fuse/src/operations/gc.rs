@@ -21,6 +21,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ScalarRef;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::TableIndex;
 use databend_storages_common_cache::CacheAccessor;
@@ -30,6 +31,8 @@ use databend_storages_common_index::BloomIndexMeta;
 use databend_storages_common_index::InvertedIndexFile;
 use databend_storages_common_index::InvertedIndexMeta;
 use databend_storages_common_io::Files;
+use databend_storages_common_table_meta::meta::column_oriented_segment::ColumnOrientedSegment;
+use databend_storages_common_table_meta::meta::column_oriented_segment::BLOOM_FILTER_INDEX_LOCATION;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
@@ -39,6 +42,8 @@ use log::error;
 use log::info;
 use log::warn;
 
+use crate::io::read::ColumnOrientedSegmentReader;
+use crate::io::read::CompactSegmentReader;
 use crate::io::InvertedIndexReader;
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
@@ -712,9 +717,44 @@ impl FuseTable {
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in segment_locations.chunks(chunk_size) {
-            let results = fuse_segments
-                .read_segments::<LocationTuple>(chunk, put_cache)
-                .await?;
+            let results = match self.is_column_oriented() {
+                true => {
+                    let segments = fuse_segments
+                        .read_generic_segments::<ColumnOrientedSegmentReader>(
+                            chunk,
+                            put_cache,
+                            vec![],
+                        )
+                        .await?;
+                    let mut results = Vec::new();
+                    for segment in segments {
+                        match segment {
+                            Ok(segment) => match LocationTuple::try_from(segment) {
+                                Ok(location_tuple) => results.push(Ok(location_tuple)),
+                                Err(e) => results.push(Err(e)),
+                            },
+                            Err(e) => results.push(Err(e)),
+                        }
+                    }
+                    results
+                }
+                false => {
+                    let segments = fuse_segments
+                        .read_generic_segments::<CompactSegmentReader>(chunk, put_cache, vec![])
+                        .await?;
+                    let mut results = Vec::new();
+                    for segment in segments {
+                        match segment {
+                            Ok(segment) => match LocationTuple::try_from(segment) {
+                                Ok(location_tuple) => results.push(Ok(location_tuple)),
+                                Err(e) => results.push(Err(e)),
+                            },
+                            Err(e) => results.push(Err(e)),
+                        }
+                    }
+                    results
+                }
+            };
             for (idx, location_tuple) in results.into_iter().enumerate() {
                 let location_tuple = match location_tuple {
                     Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND && ignore_err => {
@@ -774,6 +814,43 @@ impl TryFrom<Arc<CompactSegmentInfo>> for LocationTuple {
                 bloom_location.insert(bloom_loc.0.clone());
             }
         }
+        Ok(Self {
+            block_location,
+            bloom_location,
+        })
+    }
+}
+
+impl TryFrom<Arc<ColumnOrientedSegment>> for LocationTuple {
+    type Error = ErrorCode;
+    fn try_from(value: Arc<ColumnOrientedSegment>) -> Result<Self> {
+        let mut block_location = HashSet::new();
+        let mut bloom_location = HashSet::new();
+
+        let location_path = value.location_path_col();
+        for path in location_path.iter() {
+            block_location.insert(path.to_string());
+        }
+
+        let (index, _) = value
+            .segment_schema
+            .column_with_name(BLOOM_FILTER_INDEX_LOCATION)
+            .unwrap();
+        let column = value
+            .block_metas
+            .get_by_offset(index)
+            .to_column(value.block_metas.num_rows());
+        for value in column.iter() {
+            match value {
+                ScalarRef::Null => {}
+                ScalarRef::Tuple(values) => {
+                    let path = values[0].as_string().unwrap();
+                    bloom_location.insert(path.to_string());
+                }
+                _ => unreachable!(),
+            }
+        }
+
         Ok(Self {
             block_location,
             bloom_location,
