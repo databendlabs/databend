@@ -29,6 +29,12 @@ pub struct ColumnBinding {
     /// Table index of this `ColumnBinding` in current context
     pub table_index: Option<IndexType>,
     /// Source table index of this `ColumnBinding` in current context
+    ///
+    /// Example:
+    /// `SELECT n.* FROM notes AS n WHERE n.type = 'D' AND n.id IN (SELECT m.id FROM notes AS m WHERE m.commit_id = 7)`
+    /// In this case, the table index and column index of `n.id` and `m.id` are inconsistent,
+    /// but logically they both belong to the `notes` table.
+    /// Therefore, the source table index is used to allow `n` and `m` to determine whether they are both `notes` in this case.
     pub source_table_index: Option<IndexType>,
     /// Column name of this `ColumnBinding` in current context
     pub column_name: String,
