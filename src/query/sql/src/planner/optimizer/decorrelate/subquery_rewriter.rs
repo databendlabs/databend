@@ -28,7 +28,6 @@ use databend_common_functions::aggregates::AggregateCountFunction;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
-use crate::optimizer::extract::Matcher;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
@@ -44,7 +43,6 @@ use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::Limit;
-use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -53,11 +51,8 @@ use crate::plans::SubqueryType;
 use crate::plans::UDAFCall;
 use crate::plans::UDFCall;
 use crate::plans::UDFLambdaCall;
-use crate::plans::VisitorMut;
 use crate::plans::WindowFuncType;
 use crate::Binder;
-use crate::ColumnBinding;
-use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -460,147 +455,6 @@ impl SubqueryRewriter {
                 Ok((expr, s_expr))
             }
         }
-    }
-
-    fn try_eliminate_in_subquery(
-        &self,
-        left: &SExpr,
-        subquery: &SubqueryExpr,
-        is_conjunctive_predicate: bool,
-    ) -> Result<Option<ScalarExpr>> {
-        #[derive(Debug)]
-        struct BindingReplacer {
-            new_column_bindings: HashMap<IndexType, ColumnBinding>,
-        }
-
-        impl VisitorMut<'_> for BindingReplacer {
-            fn visit_bound_column_ref(&mut self, col: &mut BoundColumnRef) -> Result<()> {
-                if let Some(new_binding) = self.new_column_bindings.get(&col.column.index) {
-                    col.column = new_binding.clone();
-                }
-                Ok(())
-            }
-        }
-
-        let matchers = [
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Scan,
-                    children: vec![],
-                }],
-            },
-            Matcher::MatchOp {
-                op_type: RelOp::EvalScalar,
-                children: vec![Matcher::MatchOp {
-                    op_type: RelOp::Filter,
-                    children: vec![Matcher::MatchOp {
-                        op_type: RelOp::Scan,
-                        children: vec![],
-                    }],
-                }],
-            },
-        ];
-        let right_expr_binding = &subquery.output_column;
-        let (SubqueryType::Any, Some(box ScalarExpr::BoundColumnRef(left_column))) =
-            (&subquery.typ, &subquery.child_expr)
-        else {
-            return Ok(None);
-        };
-        if !is_conjunctive_predicate {
-            return Ok(None);
-        }
-        let (Some(left_table_index), Some(right_table_index)) = (
-            left_column.column.table_index,
-            right_expr_binding.table_index,
-        ) else {
-            return Ok(None);
-        };
-        // restore possible aliases or duplicate loaded tables by `source_table_id` to determine whether they are the same columns of the same table
-        let (Some(left_source_binding), Some(right_source_binding)) = (
-            left_column.column.as_source(),
-            right_expr_binding.as_source(),
-        ) else {
-            return Ok(None);
-        };
-        if !matches!(left.plan(), RelOperator::Scan(_))
-            || matchers
-                .iter()
-                .all(|matcher| !matcher.matches(&subquery.subquery))
-            || left_source_binding != right_source_binding
-        {
-            return Ok(None);
-        }
-        let new_column_bindings = {
-            let guard = self.metadata.read();
-
-            let left_columns = guard.columns_by_table_index(left_table_index);
-            let right_columns = guard.columns_by_table_index(right_table_index);
-            let left_table = guard.table(left_table_index);
-            let left_source_table_index = guard
-                .get_source_table_index(Some(left_table.database()), left_table.table().name());
-
-            if left_columns.len() != right_columns.len() {
-                return Ok(None);
-            }
-            let mut new_column_bindings = HashMap::with_capacity(left_columns.len());
-            for (left_entry, right_entry) in left_columns.into_iter().zip(right_columns.into_iter())
-            {
-                let (
-                    ColumnEntry::BaseTableColumn(left_column),
-                    ColumnEntry::BaseTableColumn(right_column),
-                ) = (left_entry, right_entry)
-                else {
-                    return Ok(None);
-                };
-                new_column_bindings.insert(
-                    right_column.column_index,
-                    ColumnBindingBuilder::new(
-                        left_column.column_name,
-                        left_column.column_index,
-                        Box::new(DataType::from(&left_column.data_type)),
-                        Visibility::Visible,
-                    )
-                    .table_name(Some(left_table.table().name().to_string()))
-                    .database_name(Some(left_table.database().to_string()))
-                    .table_index(Some(left_table_index))
-                    .source_table_index(left_source_table_index)
-                    .column_position(left_column.column_position)
-                    .virtual_expr(left_column.virtual_expr)
-                    .build(),
-                );
-            }
-            new_column_bindings
-        };
-        let mut scalar_expr = if left_column.column.data_type.is_nullable() {
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "is_not_null".to_string(),
-                params: vec![],
-                arguments: vec![ScalarExpr::BoundColumnRef(left_column.clone())],
-            })
-        } else {
-            ScalarExpr::ConstantExpr(ConstantExpr {
-                span: None,
-                value: Scalar::Boolean(true),
-            })
-        };
-        if let RelOperator::Filter(filter) = subquery.subquery.child(0)?.plan() {
-            let mut replacer = BindingReplacer {
-                new_column_bindings,
-            };
-            for mut expr in filter.predicates.iter().cloned() {
-                // restore ColumnBinding of same table in Subquery to table in Left
-                replacer.visit(&mut expr)?;
-                scalar_expr = ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: "and".to_string(),
-                    params: vec![],
-                    arguments: vec![scalar_expr, expr],
-                });
-            }
-        }
-        Ok(Some(scalar_expr))
     }
 
     fn try_rewrite_uncorrelated_subquery(
