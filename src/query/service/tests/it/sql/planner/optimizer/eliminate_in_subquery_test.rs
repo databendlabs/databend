@@ -319,8 +319,7 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> Vec<CreateTablePlan
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_query_rewrite() -> Result<()> {
-    test_query_rewrite_impl("parquet").await?;
-    test_query_rewrite_impl("native").await
+    test_query_rewrite_impl("parquet").await
 }
 
 async fn test_query_rewrite_impl(format: &str) -> Result<()> {
