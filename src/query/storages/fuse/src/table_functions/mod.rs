@@ -26,8 +26,6 @@ mod fuse_time_travel_size;
 mod fuse_vacuum_drop_aggregating_index;
 mod fuse_vacuum_drop_inverted_index;
 mod fuse_vacuum_temporary_table;
-mod hilbert_clustering_information;
-
 mod set_cache_capacity;
 
 pub use clustering_information::ClusteringInformationFunc;
@@ -49,5 +47,4 @@ pub use fuse_time_travel_size::FuseTimeTravelSizeFunc;
 pub use fuse_vacuum_drop_aggregating_index::FuseVacuumDropAggregatingIndex;
 pub use fuse_vacuum_drop_inverted_index::FuseVacuumDropInvertedIndex;
 pub use fuse_vacuum_temporary_table::FuseVacuumTemporaryTable;
-pub use hilbert_clustering_information::HilbertClusteringInfoFunc;
 pub use set_cache_capacity::SetCacheCapacity;

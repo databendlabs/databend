@@ -11,7 +11,7 @@ statement ok
 set sql_dialect = 'mysql'
 
 statement ok
-CREATE TABLE `Student`(id int)
+CREATE OR REPLACE TABLE `Student`(id int)
 
 statement error (?s)1025,.*Unknown table `default`\.`default`\.Student \(unquoted\)\. Did you mean `Student` \(quoted\)\?
 INSERT INTO Student VALUES(1)
@@ -51,7 +51,7 @@ statement ok
 alter table T_17094 cluster by(City)
 
 query TTIIT
-select cluster_key, type, total_block_count, constant_block_count, block_depth_histogram  from clustering_information('default','T_17094')
+select cluster_key, type, info:total_block_count, info:constant_block_count, info:block_depth_histogram  from clustering_information('default','T_17094')
 ----
 (City) linear 0 0 {}
 
