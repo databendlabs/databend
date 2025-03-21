@@ -309,10 +309,10 @@ mod unix_read {
 
             pub fn create_test_file(&self, name: &str) -> PathBuf {
                 let path = self.temp_dir.path().join(name);
-                // We do care about the content of the file being read in this suite;
+                // We do NOT care about the content of the file being read in this suite;
                 // those cases are covered by other unit tests (in the integration test suite).
                 //
-                // But we still need to prepare a file here, since read_cache_content_with
+                // But we still need to prepare a file here, since `read_cache_content_with` will open it.
                 File::create(&path).unwrap();
                 path
             }
