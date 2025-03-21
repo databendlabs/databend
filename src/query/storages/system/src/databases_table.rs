@@ -106,16 +106,14 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
         let tenant = ctx.get_tenant();
 
         // Check filters (catalog name)
-        let mut filter_catalog_name = vec![];
+        let mut filter_catalog_name = String::new();
         if let Some(push_downs) = push_downs {
             if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                 find_eq_filter(&expr, &mut |col_name, scalar| {
                     if col_name == "catalog" {
                         if let Scalar::String(catalog) = scalar {
-                            if !filter_catalog_name.contains(catalog) {
-                                filter_catalog_name.push(catalog.clone());
-                            }
+                            filter_catalog_name = catalog.clone();
                         }
                     }
                     Ok(())
@@ -125,10 +123,8 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
 
         let catalogs = if !filter_catalog_name.is_empty() {
             let mut res = vec![];
-            for name in &filter_catalog_name {
-                let ctl = ctx.get_catalog(name).await?;
-                res.push((name.to_string(), ctl));
-            }
+            let ctl = ctx.get_catalog(&filter_catalog_name).await?;
+            res.push((filter_catalog_name, ctl));
             res
         } else {
             let catalogs = CatalogManager::instance();
