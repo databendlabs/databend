@@ -20,6 +20,7 @@ use log::info;
 use opendal::Operator;
 use tokio::io::AsyncWriteExt;
 
+use crate::storage::init_query;
 use crate::storage::load_bendsave_storage;
 use crate::storage::load_meta_config;
 use crate::storage::load_query_config;
@@ -31,6 +32,7 @@ pub async fn restore(from: &str, to_query: &str, to_meta: &str) -> Result<()> {
     let bendsave_storage = load_bendsave_storage(from).await?;
 
     let query_cfg = load_query_config(to_query)?;
+    init_query(&query_cfg)?;
     let databend_storage = load_query_storage(&query_cfg)?;
 
     let meta_config = load_meta_config(to_meta)?;

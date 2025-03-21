@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use anyhow::Ok;
 use anyhow::Result;
 use bytes::BufMut;
 use bytes::Bytes;
@@ -85,15 +86,22 @@ pub fn load_meta_config(path: &str) -> Result<databend_meta::configs::Config> {
 /// Init databend query instance so that we can read meta and check license
 /// for it.
 ///
-/// We only need to call it while backup since we can't access metasrv while
-/// restoring.
-///
 /// FIXME: I really don't like this pattern, but it's how databend work.
-pub async fn init_databend_query(cfg: InnerConfig) -> Result<()> {
+pub fn init_query(cfg: &InnerConfig) -> Result<()> {
     GlobalInstance::init_production();
 
     GlobalConfig::init(&cfg)?;
     GlobalIORuntime::init(cfg.storage.num_cpus as usize)?;
+
+    Ok(())
+}
+
+/// Verify databend query instance's license so that we can read meta and
+/// check license for it.
+///
+/// We only need to call it while backup since we can't access metasrv while
+/// restoring.
+pub async fn verify_query_license(cfg: &InnerConfig) -> Result<()> {
     RealLicenseManager::init(cfg.query.tenant_id.tenant_name().to_string())?;
     SessionManager::init(&cfg)?;
     UserApiProvider::init(
