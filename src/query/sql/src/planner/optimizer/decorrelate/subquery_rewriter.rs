@@ -537,11 +537,6 @@ impl SubqueryRewriter {
             let left_columns = guard.columns_by_table_index(left_table_index);
             let right_columns = guard.columns_by_table_index(right_table_index);
             let left_table = guard.table(left_table_index);
-            let right_table = guard.table(right_table_index);
-            // filter table function
-            if left_table.database() == "system" || right_table.database() == "system" {
-                return Ok(None);
-            }
             let left_source_table_index = guard
                 .get_source_table_index(Some(left_table.database()), left_table.table().name());
 
