@@ -134,9 +134,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             .collect::<Result<Vec<_>>>()?;
 
         // Optimization target:  Fast path for known iceberg catalog SHOW TABLES
-        let (is_external_show_tables_query, catalog_name, db_name) =
-            self.is_external_show_tables_query(&push_downs, &catalogs)?;
-        if is_external_show_tables_query {
+        if let Some((catalog_name, db_name)) =
+            self.is_external_show_tables_query(&push_downs, &catalogs)
+        {
             self.show_tables_from_external_catalog(ctx, catalog_name, db_name)
                 .await
         } else {
@@ -891,9 +891,9 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         &self,
         push_downs: &Option<PushDownInfo>,
         catalogs: &[Arc<dyn Catalog>],
-    ) -> Result<(bool, String, String)> {
+    ) -> Option<(String, String)> {
         if !WITH_HISTORY && WITHOUT_VIEW {
-            let mut database_name = String::new();
+            let mut database_name = None;
             // Check projection
             if let Some(push_downs) = push_downs {
                 if let Some(Projection::Columns(projection_indices)) = &push_downs.projection {
@@ -913,23 +913,23 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                             .iter()
                             .all(|field_index| name_fields_indexes.contains(field_index))
                     {
-                        return Ok((false, "".to_string(), "".to_string()));
+                        return None;
                     }
 
                     // Check filters (catalog name)
-                    let mut catalog_name = String::new();
+                    let mut catalog_name = None;
 
                     if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                         let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                         find_eq_filter(&expr, &mut |col_name, scalar| {
                             if col_name == "catalog" {
                                 if let Scalar::String(catalog) = scalar {
-                                    catalog_name = catalog.to_string();
+                                    catalog_name = Some(catalog.to_string());
                                 }
                             }
                             if col_name == "database" {
                                 if let Scalar::String(db) = scalar {
-                                    database_name = db.to_string();
+                                    database_name = Some(db.to_string());
                                 }
                             }
                             Ok(())
@@ -937,11 +937,13 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                     }
 
                     // Check iceberg catalog existence
-                    if !catalog_name.is_empty() && !database_name.is_empty() {
-                        for catalog in catalogs {
-                            if catalog.name() == catalog_name {
-                                if let CatalogType::Iceberg = catalog.info().catalog_type() {
-                                    return Ok((true, catalog_name, database_name));
+                    if let Some(catalog_name) = catalog_name {
+                        if let Some(database_name) = database_name {
+                            for catalog in catalogs {
+                                if catalog.name() == catalog_name {
+                                    if let CatalogType::Iceberg = catalog.info().catalog_type() {
+                                        return Some((catalog_name, database_name));
+                                    }
                                 }
                             }
                         }
@@ -949,7 +951,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 }
             }
         }
-        Ok((false, "".to_string(), "".to_string()))
+        None
     }
 
     async fn show_tables_from_external_catalog(
