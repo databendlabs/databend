@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fs::File;
-use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -39,21 +37,13 @@ impl CacheAccessor for LruDiskCacheHolder {
         let k = k.as_ref();
         {
             let mut cache = self.write();
-            cache.get_cache_path(k)
+            cache.get_cache_item_path_and_size(k)
         }
-        .and_then(|cache_file_path| {
-            // check disk cache
-            let get_cache_content = || {
-                let mut v = vec![];
-                let mut file = File::open(cache_file_path)?;
-                file.read_to_end(&mut v)?;
-                Ok::<_, Box<dyn std::error::Error>>(v)
-            };
-
-            match get_cache_content() {
+        .and_then(|(cache_file_path, file_size)| {
+            match read_cache_content(cache_file_path, file_size as usize) {
                 Ok(mut bytes) => {
                     if let Err(e) = validate_checksum(bytes.as_slice()) {
-                        error!("disk cache, of key {k},  crc validation failure: {e}");
+                        error!("disk cache item of key {k}, crc validation failure: {e}");
                         {
                             // remove the invalid cache, error of removal ignored
                             let r = {
@@ -61,7 +51,7 @@ impl CacheAccessor for LruDiskCacheHolder {
                                 cache.remove(k)
                             };
                             if let Err(e) = r {
-                                warn!("failed to remove invalid cache item, key {k}. {e}");
+                                warn!("failed to remove invalid cache item of key {k}: {e}");
                             }
                         }
                         None
@@ -75,7 +65,9 @@ impl CacheAccessor for LruDiskCacheHolder {
                     }
                 }
                 Err(e) => {
-                    error!("get disk cache item failed, cache_key {k}. {e}");
+                    // Failure of reading cache item is ignored,
+                    // maybe it should be ignored by the caller?
+                    error!("failed to read disk cache item of key {k}: {e}");
                     None
                 }
             }
@@ -156,7 +148,7 @@ fn validate_checksum(bytes: &[u8]) -> Result<()> {
             Ok(())
         } else {
             Err(ErrorCode::StorageOther(format!(
-                "crc checksum validation failure, key : crc checksum not match, crc provided {crc_provided}, crc calculated {crc_calculated}"
+                "crc checksum validation failure: provided {crc_provided}, calculated {crc_calculated}"
             )))
         }
     }
@@ -182,5 +174,278 @@ impl LruDiskCacheBuilder {
         )
         .map_err(|e| ErrorCode::StorageOther(format!("create disk cache failed, {e}")))?;
         Ok(Arc::new(RwLock::new(external_cache)))
+    }
+}
+
+#[cfg(not(unix))]
+pub fn read_cache_content(path: PathBuf, size: usize) -> std::io::Result<Vec<u8>> {
+    use std::fs::File;
+    use std::io::Read;
+
+    let mut v = Vec::with_capacity(size);
+    let mut file = File::open(path)?;
+    file.read_to_end(&mut v)?;
+    Ok(v)
+}
+
+#[cfg(unix)]
+pub fn read_cache_content(path: PathBuf, size: usize) -> std::io::Result<Vec<u8>> {
+    unix_read::read_cache_content_with_syscall(path, size, unix_read::LibcRead)
+}
+
+mod unix_read {
+
+    #[cfg(test)]
+    use mockall::automock;
+
+    use super::*;
+
+    #[cfg_attr(test, automock)]
+    pub(super) trait CallRead {
+        unsafe fn read(
+            &self,
+            fd: i32,
+            buf: *mut libc::c_void,
+            count: libc::size_t,
+        ) -> libc::ssize_t;
+    }
+
+    pub struct LibcRead;
+
+    impl CallRead for LibcRead {
+        unsafe fn read(
+            &self,
+            fd: i32,
+            buf: *mut libc::c_void,
+            count: libc::size_t,
+        ) -> libc::ssize_t {
+            libc::read(fd, buf, count)
+        }
+    }
+
+    #[cfg(unix)]
+    pub(super) fn read_cache_content_with_syscall<R: CallRead>(
+        path: PathBuf,
+        size: usize,
+        read_syscall: R,
+    ) -> std::io::Result<Vec<u8>> {
+        use std::fs::OpenOptions;
+        use std::os::unix::fs::OpenOptionsExt;
+        use std::os::unix::prelude::AsRawFd;
+
+        // Use O_NOATIME to prevent updating the file's access time (atime) during read operations.
+        // We should not assume the filesystem is mounted with the 'noatime' option.
+        let file = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOATIME)
+            .open(&path)?;
+
+        let mut vec = Vec::<u8>::with_capacity(size);
+        let vec_ptr = vec.as_mut_ptr();
+        let fd = file.as_raw_fd();
+        let mut total_read = 0;
+
+        while total_read < size {
+            let result = unsafe {
+                read_syscall.read(
+                    fd,
+                    vec_ptr.add(total_read) as *mut libc::c_void,
+                    (size - total_read) as libc::size_t,
+                )
+            };
+
+            match result {
+                n if n > 0 => total_read += n as usize,
+                0 => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        format!(
+                            "Invalid cache item, expects {} bytes, got {}, path {:?}",
+                            size, total_read, path
+                        ),
+                    ))
+                }
+                _ => {
+                    let err = std::io::Error::last_os_error();
+                    if err.raw_os_error() == Some(libc::EINTR) {
+                        continue;
+                    } else {
+                        return Err(err);
+                    }
+                }
+            }
+        }
+
+        // SAFETY:
+        // - `vec` has sufficient capacity for `size` elements (ensured by prior allocation)
+        // - All bytes in 0..size range are initialized (we've successfully read `size` bytes)
+        unsafe { vec.set_len(size) };
+        Ok(vec)
+    }
+
+    #[cfg(test)]
+    mod tests_read_content {
+        use std::fs::File;
+
+        use mockall::predicate::*;
+        use mockall::Sequence;
+        use tempfile::TempDir;
+
+        use super::*;
+
+        struct TestFixture {
+            temp_dir: TempDir,
+        }
+
+        impl TestFixture {
+            pub fn new() -> TestFixture {
+                TestFixture {
+                    temp_dir: tempfile::Builder::new()
+                        .prefix("read-cache-content-test")
+                        .tempdir()
+                        .unwrap(),
+                }
+            }
+
+            pub fn create_test_file(&self, name: &str) -> PathBuf {
+                let path = self.temp_dir.path().join(name);
+                // We do care about the content of the file being read in this suite;
+                // those cases are covered by other unit tests (in the integration test suite).
+                //
+                // But we still need to prepare a file here, since read_cache_content_with
+                File::create(&path).unwrap();
+                path
+            }
+        }
+
+        #[test]
+        fn test_read_success_in_one_go() {
+            let fixture = TestFixture::new();
+            let path = fixture.create_test_file("test.txt");
+            let size = 100;
+            let mut mock = MockCallRead::new();
+
+            mock.expect_read()
+                .with(always(), always(), eq(100))
+                .return_once(|_, _, _| 100);
+
+            let result = read_cache_content_with_syscall(path, size, mock);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().len(), size);
+        }
+
+        #[test]
+        fn test_partial_reads() {
+            let fixture = TestFixture::new();
+            let path = fixture.create_test_file("test.txt");
+            let size = 100;
+            let mut mock = MockCallRead::new();
+            let mut seq = Sequence::new();
+
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(|_, _, _| 50);
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(|_, _, _| 25);
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(|_, _, _| 25);
+
+            let result = read_cache_content_with_syscall(path, size, mock);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().len(), size);
+        }
+
+        #[test]
+        fn test_eintr_retry() {
+            let fixture = TestFixture::new();
+            let path = fixture.create_test_file("test.txt");
+            let size = 100;
+            let mut mock = MockCallRead::new();
+            let mut seq = Sequence::new();
+
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(|_, _, _| 80);
+
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(|_, _, _| {
+                    unsafe {
+                        *libc::__errno_location() = libc::EINTR;
+                    };
+                    -1
+                });
+
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .returning(|_, _, _| 20);
+
+            let result = read_cache_content_with_syscall(path, size, mock);
+            assert!(result.is_ok());
+        }
+
+        #[test]
+        fn test_unexpected_eof() {
+            let fixture = TestFixture::new();
+            let path = fixture.create_test_file("test.txt");
+            let size = 100;
+            let mut mock = MockCallRead::new();
+            let mut seq = Sequence::new();
+
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .return_once(|_, _, _| 50);
+
+            // Simulating the size of cache item is lesser than expected
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .return_once(|_, _, _| 0);
+
+            let result = read_cache_content_with_syscall(path, size, mock);
+            assert!(result.is_err());
+            assert_eq!(
+                result.unwrap_err().kind(),
+                std::io::ErrorKind::UnexpectedEof
+            );
+        }
+
+        #[test]
+        fn test_io_error() {
+            let fixture = TestFixture::new();
+            let path = fixture.create_test_file("test.txt");
+            let size = 100;
+            let mut mock = MockCallRead::new();
+
+            let mut seq = Sequence::new();
+
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .return_once(|_, _, _| 50);
+
+            mock.expect_read()
+                .times(1)
+                .in_sequence(&mut seq)
+                .return_once(|_, _, _| {
+                    unsafe {
+                        *libc::__errno_location() = libc::EIO;
+                    };
+                    -1
+                });
+
+            let result = read_cache_content_with_syscall(path, size, mock);
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().raw_os_error(), Some(libc::EIO));
+        }
     }
 }

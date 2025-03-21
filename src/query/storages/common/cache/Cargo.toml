@@ -35,7 +35,16 @@ rustix = { workspace = true }
 siphasher = { workspace = true }
 
 [dev-dependencies]
+criterion = { workspace = true }
+mockall = { workspace = true }
 tempfile = { workspace = true }
+
+[[bench]]
+name = "read_cache_content"
+harness = false
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
 
 [lints]
 workspace = true
