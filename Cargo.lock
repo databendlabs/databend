@@ -9562,8 +9562,7 @@ dependencies = [
 [[package]]
 name = "logforth"
 version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "415235aa09d81980f2049c725f3c9db3b227f263497359e8292313d023c1a6e9"
+source = "git+https://github.com/datafuse-extras/logforth?branch=global-max-files-v0.14#cedfff08d59a683ac2bf08ff54724e0b43bd218b"
 dependencies = [
  "anyhow",
  "colored",
