@@ -196,6 +196,10 @@ mod tests {
                 "bucket/root/115/122/_b/0191114d30fd78b89fae8e5c88327725_v2.parquet",
                 "0191114d30fd78b89fae8e5c88327725",
             ),
+            (
+                "bucket/root/115/122/_b/f191114d30fd78b89fae8e5c88327725_v2.parquet",
+                "f191114d30fd78b89fae8e5c88327725",
+            ),
         ];
 
         for (input, expected) in test_cases {
