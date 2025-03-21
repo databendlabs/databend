@@ -28,6 +28,7 @@ use databend_common_functions::aggregates::AggregateCountFunction;
 use crate::binder::wrap_cast;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
+use crate::optimizer::extract::Matcher;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
@@ -43,6 +44,7 @@ use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
 use crate::plans::Limit;
+use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -467,69 +469,6 @@ impl SubqueryRewriter {
         is_conjunctive_predicate: bool,
     ) -> Result<Option<ScalarExpr>> {
         #[derive(Debug)]
-        struct SubqueryBodyVisitor {
-            replacer: BindingReplacer,
-            failed: bool,
-            predicates: Vec<ScalarExpr>,
-        }
-
-        impl SubqueryBodyVisitor {
-            fn new(new_column_bindings: HashMap<IndexType, ColumnBinding>) -> Self {
-                Self {
-                    replacer: BindingReplacer {
-                        new_column_bindings,
-                    },
-                    failed: false,
-                    predicates: Vec::new(),
-                }
-            }
-
-            fn visit(&mut self, s_expr: &SExpr) -> Result<()> {
-                for visit in s_expr.children() {
-                    self.visit(visit)?;
-                }
-                if self.failed {
-                    return Ok(());
-                }
-                match s_expr.plan() {
-                    RelOperator::Scan(_) | RelOperator::Sort(_) | RelOperator::EvalScalar(_) => (),
-                    RelOperator::Filter(filter) => {
-                        let mut filter = filter.clone();
-
-                        for scalar_expr in filter.predicates.iter_mut() {
-                            self.replacer.visit(scalar_expr)?;
-                        }
-                        self.predicates.append(&mut filter.predicates);
-                    }
-                    _ => {
-                        self.failed = true;
-                        return Ok(());
-                    }
-                }
-                Ok(())
-            }
-
-            fn result(self) -> Option<ScalarExpr> {
-                (!self.failed).then(|| {
-                    self.predicates.into_iter().fold(
-                        ScalarExpr::ConstantExpr(ConstantExpr {
-                            span: None,
-                            value: Scalar::Boolean(true),
-                        }),
-                        |acc, expr| {
-                            ScalarExpr::FunctionCall(FunctionCall {
-                                span: None,
-                                func_name: "and".to_string(),
-                                params: vec![],
-                                arguments: vec![acc, expr],
-                            })
-                        },
-                    )
-                })
-            }
-        }
-
-        #[derive(Debug)]
         struct BindingReplacer {
             new_column_bindings: HashMap<IndexType, ColumnBinding>,
         }
@@ -543,14 +482,32 @@ impl SubqueryRewriter {
             }
         }
 
+        let matchers = [
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Scan,
+                    children: vec![],
+                }],
+            },
+            Matcher::MatchOp {
+                op_type: RelOp::EvalScalar,
+                children: vec![Matcher::MatchOp {
+                    op_type: RelOp::Filter,
+                    children: vec![Matcher::MatchOp {
+                        op_type: RelOp::Scan,
+                        children: vec![],
+                    }],
+                }],
+            },
+        ];
         let right_expr_binding = &subquery.output_column;
         let (SubqueryType::Any, Some(box ScalarExpr::BoundColumnRef(left_column))) =
             (&subquery.typ, &subquery.child_expr)
         else {
             return Ok(None);
         };
-        // `xx in null` != `where xx = null`
-        if left_column.column.data_type.is_nullable() || !is_conjunctive_predicate {
+        if !is_conjunctive_predicate {
             return Ok(None);
         }
         let (Some(left_table_index), Some(right_table_index)) = (
@@ -566,9 +523,12 @@ impl SubqueryRewriter {
         ) else {
             return Ok(None);
         };
-        // when left is a join, filtering becomes complicated. If in subquery is eliminated,
-        // the filter will be pushed down to Scan before join, resulting in inaccurate data results.
-        if left.has_join(Some(&JoinType::Inner)) || left_source_binding != right_source_binding {
+        if !matches!(left.plan(), RelOperator::Scan(_))
+            || matchers
+                .iter()
+                .all(|matcher| !matcher.matches(&subquery.subquery))
+            || left_source_binding != right_source_binding
+        {
             return Ok(None);
         }
         let new_column_bindings = {
@@ -617,10 +577,35 @@ impl SubqueryRewriter {
             }
             new_column_bindings
         };
-        // restore ColumnBinding of same table in Subquery to table in Left
-        let mut body_visitor = SubqueryBodyVisitor::new(new_column_bindings);
-        body_visitor.visit(subquery.subquery.as_ref())?;
-        Ok(body_visitor.result())
+        let mut scalar_expr = if left_column.column.data_type.is_nullable() {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "is_not_null".to_string(),
+                params: vec![],
+                arguments: vec![ScalarExpr::BoundColumnRef(left_column.clone())],
+            })
+        } else {
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span: None,
+                value: Scalar::Boolean(true),
+            })
+        };
+        if let RelOperator::Filter(filter) = subquery.subquery.child(0)?.plan() {
+            let mut replacer = BindingReplacer {
+                new_column_bindings,
+            };
+            for mut expr in filter.predicates.iter().cloned() {
+                // restore ColumnBinding of same table in Subquery to table in Left
+                replacer.visit(&mut expr)?;
+                scalar_expr = ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "and".to_string(),
+                    params: vec![],
+                    arguments: vec![scalar_expr, expr],
+                });
+            }
+        }
+        Ok(Some(scalar_expr))
     }
 
     fn try_rewrite_uncorrelated_subquery(

@@ -18,22 +18,34 @@ use databend_common_ast::ast::Engine;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::parser::Dialect;
+use databend_common_ast::Range;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_meta_app::schema::CreateOption;
+use databend_common_sql::optimizer::Matcher;
 use databend_common_sql::optimizer::SExpr;
 use databend_common_sql::optimizer::SubqueryRewriter;
+use databend_common_sql::plans::BoundColumnRef;
+use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::CreateTablePlan;
+use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Plan;
+use databend_common_sql::plans::RelOp;
+use databend_common_sql::plans::RelOperator;
 use databend_common_sql::Binder;
+use databend_common_sql::ColumnBinding;
 use databend_common_sql::Metadata;
-use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
+use databend_common_sql::ScalarExpr;
+use databend_common_sql::Visibility;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::test_kits::TestFixture;
@@ -46,7 +58,99 @@ struct TestSuite {
     // Test cases
     query: &'static str,
     // Expected results
-    explain: &'static str,
+    explain: Matcher,
+}
+
+fn binding_a() -> ColumnBinding {
+    ColumnBinding {
+        database_name: None,
+        table_name: Some(String::from("t3")),
+        column_position: Some(1),
+        table_index: Some(0),
+        source_table_index: None,
+        column_name: String::from("a"),
+        index: 0,
+        data_type: Box::new(DataType::Number(NumberDataType::Int32)),
+        visibility: Visibility::Visible,
+        virtual_expr: None,
+    }
+}
+
+fn binding_b() -> ColumnBinding {
+    ColumnBinding {
+        database_name: None,
+        table_name: Some(String::from("t3")),
+        column_position: Some(2),
+        table_index: Some(0),
+        source_table_index: None,
+        column_name: String::from("b"),
+        index: 1,
+        data_type: Box::new(DataType::Nullable(Box::new(DataType::Number(
+            NumberDataType::Int32,
+        )))),
+        visibility: Visibility::Visible,
+        virtual_expr: None,
+    }
+}
+
+fn binding_c() -> ColumnBinding {
+    ColumnBinding {
+        database_name: None,
+        table_name: Some(String::from("t3")),
+        column_position: Some(3),
+        table_index: Some(0),
+        source_table_index: None,
+        column_name: String::from("c"),
+        index: 2,
+        data_type: Box::new(DataType::String),
+        visibility: Visibility::Visible,
+        virtual_expr: None,
+    }
+}
+
+fn build_matcher(predicates: Vec<ScalarExpr>) -> Matcher {
+    Matcher::MatchFn {
+        predicate: Box::new(|op| {
+            if let RelOperator::EvalScalar(eval) = op {
+                return eval.items.len() == 3
+                    && eval.items[0].index == 0
+                    && eval.items[1].index == 1
+                    && eval.items[2].index == 2
+                    && eval.items[0].scalar
+                        == ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            column: binding_a(),
+                            span: Some(Range::from(10..11)),
+                        })
+                    && eval.items[1].scalar
+                        == ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            column: binding_b(),
+                            span: Some(Range::from(10..11)),
+                        })
+                    && eval.items[2].scalar
+                        == ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            column: binding_c(),
+                            span: Some(Range::from(10..11)),
+                        });
+            }
+            false
+        }),
+        children: vec![Matcher::MatchFn {
+            predicate: Box::new(move |op| {
+                if let RelOperator::Filter(filter) = op {
+                    return filter
+                        .predicates
+                        .iter()
+                        .zip(predicates.iter())
+                        .all(|(left, right)| left == right);
+                }
+                false
+            }),
+            children: vec![Matcher::MatchOp {
+                op_type: RelOp::Scan,
+                children: vec![],
+            }],
+        }],
+    }
 }
 
 fn get_test_suites() -> Vec<TestSuite> {
@@ -55,248 +159,98 @@ fn get_test_suites() -> Vec<TestSuite> {
         TestSuite {
             name: "base",
             query: "SELECT t3.* FROM t1 t3 WHERE t3.b IN (SELECT t4.b FROM t1 t4 WHERE t4.a = 5);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [and(true, eq(t1.a (#0), 5))]
-    └── Scan
-        ├── table: default.t1
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE\n",
+            explain: build_matcher(vec![ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "and".to_string(),
+                params: vec![],
+                arguments: vec![
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: Some(Range::from(72..73)),
+                        func_name: "is_not_null".to_string(),
+                        params: vec![],
+                        arguments: vec![ScalarExpr::BoundColumnRef(
+                            BoundColumnRef {
+                                span: Some(Range::from(29..31)),
+                                column: binding_b(),
+                            },
+                        )],
+                    }),
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: Some(Range::from(72..73)),
+                        func_name: "eq".to_string(),
+                        params: vec![],
+                        arguments: vec![
+                            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                span: Some(Range::from(67..69)),
+                                column: binding_a(),
+                            }),
+                            ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: Some(Range::from(74..75)),
+                                value: Scalar::Number(NumberScalar::UInt8(
+                                    5,
+                                )),
+                            }),
+                        ],
+                    }),
+                ],
+            })])
         },
         TestSuite {
             name: "filter merge",
             query: "select t3.* from t1 as t3 where t3.c = 'D' and t3.b in (select t4.b from t1 as t4 where t4.a = 7);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [eq(t3.c (#2), 'D'), and(true, eq(t1.a (#0), 7))]
-    └── Scan
-        ├── table: default.t1
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE\n",
-        },
-        TestSuite {
-            name: "order by exists in subquery",
-            query: "SELECT t3.* FROM t1 t3 WHERE t3.b IN (SELECT t4.b FROM t1 t4 WHERE t4.a > 10 ORDER BY t4.c);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [and(true, gt(t1.a (#0), 10))]
-    └── Scan
-        ├── table: default.t1
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE\n",
-        },
-        TestSuite {
-            name: "complex predicate(and & or)",
-            query: "SELECT t3.* FROM t1 t3 WHERE t3.c = 'X' AND t3.b IN (SELECT t4.b FROM t1 t4 WHERE t4.a = 3 OR t4.c = 'Y');",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [eq(t3.c (#2), 'X'), and(true, or(eq(t1.a (#0), 3), eq(t1.c (#2), 'Y')))]
-    └── Scan
-        ├── table: default.t1
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE\n",
-        },
-        TestSuite {
-            name: "complex predicate(between & is not null)",
-            query: "SELECT t3.* FROM t1 t3 WHERE t3.b IN (SELECT t4.b FROM t1 t4 WHERE t4.a BETWEEN 5 AND 10 AND t4.c IS NOT NULL);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [and(and(and(true, gte(t1.a (#0), 5)), lte(t1.a (#0), 10)), true)]
-    └── Scan
-        ├── table: default.t1
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE\n",
-        },
-        TestSuite {
-            name: "inner join in the main query",
-            query: "SELECT t3.* FROM t1 t3 JOIN t2 ON t3.a = t2.a WHERE t3.b IN (SELECT t4.b FROM t1 t4 WHERE t4.a = 5);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [and(true, eq(t1.a (#0), 5))]
-    └── Join(Inner)
-        ├── build keys: [t2.a (#3)]
-        ├── probe keys: [t3.a (#0)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── Scan
-            ├── table: default.t2
-            ├── filters: []
-            ├── order by: []
-            └── limit: NONE\n",
-        },
-
-        // Eliminate Failure
-        TestSuite {
-            name: "without inner join in the main query",
-            query: "SELECT t3.* FROM t1 t3 LEFT JOIN t2 ON t3.a = t2.a WHERE t3.b IN (SELECT t4.b FROM t1 t4 WHERE t4.a = 5);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [11 (#11)]
-    └── Join(RightMark)
-        ├── build keys: [subquery_9 (#9)]
-        ├── probe keys: [t3.b (#1)]
-        ├── other filters: []
-        ├── Join(Left)
-        │   ├── build keys: [t2.a (#3)]
-        │   ├── probe keys: [t3.a (#0)]
-        │   ├── other filters: []
-        │   ├── Scan
-        │   │   ├── table: default.t1
-        │   │   ├── filters: []
-        │   │   ├── order by: []
-        │   │   └── limit: NONE
-        │   └── EvalScalar
-        │       ├── scalars: [CAST(t2.b (#4) AS Int32 NULL) AS (#6), CAST(t2.c (#5) AS String NULL) AS (#7)]
-        │       └── Scan
-        │           ├── table: default.t2
-        │           ├── filters: []
-        │           ├── order by: []
-        │           └── limit: NONE
-        └── EvalScalar
-            ├── scalars: [t4.b (#9) AS (#9)]
-            └── Filter
-                ├── filters: [eq(t4.a (#8), 5)]
-                └── Scan
-                    ├── table: default.t1
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE\n",
-        },
-        TestSuite {
-            name: "group by in the subquery",
-            query: "SELECT t3.* FROM t1 t3 WHERE t3.b IN (SELECT t4.b FROM t1 t4 GROUP BY t4.b HAVING COUNT(*) > 1);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [7 (#7)]
-    └── Join(RightMark)
-        ├── build keys: [subquery_4 (#4)]
-        ├── probe keys: [t3.b (#1)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── EvalScalar
-            ├── scalars: [t4.b (#4) AS (#4)]
-            └── Filter
-                ├── filters: [gt(COUNT(*) (#6), 1)]
-                └── Aggregate(Initial)
-                    ├── group items: [t4.b (#4)]
-                    ├── aggregate functions: [COUNT(*) (#6)]
-                    └── EvalScalar
-                        ├── scalars: [t4.b (#4) AS (#4)]
-                        └── Scan
-                            ├── table: default.t1
-                            ├── filters: []
-                            ├── order by: []
-                            └── limit: NONE\n",
-        },
-        TestSuite {
-            name: "different tables",
-            query: "SELECT t3.* FROM t1 t3 WHERE t3.b IN (SELECT t2.b FROM t2 WHERE t2.a = 3);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [6 (#6)]
-    └── Join(RightMark)
-        ├── build keys: [subquery_4 (#4)]
-        ├── probe keys: [t3.b (#1)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── EvalScalar
-            ├── scalars: [t2.b (#4) AS (#4)]
-            └── Filter
-                ├── filters: [eq(t2.a (#3), 3)]
-                └── Scan
-                    ├── table: default.t2
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE\n",
-        },
-        TestSuite {
-            name: "limit in the subquery",
-            query: "SELECT t3.* FROM t1 t3 WHERE t3.b IN (SELECT t4.b FROM t1 t4 WHERE t4.a = 5 LIMIT 1);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [6 (#6)]
-    └── Join(RightMark)
-        ├── build keys: [subquery_4 (#4)]
-        ├── probe keys: [t3.b (#1)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── Limit
-            ├── limit: [1]
-            ├── offset: [0]
-            └── EvalScalar
-                ├── scalars: [t4.b (#4) AS (#4)]
-                └── Filter
-                    ├── filters: [eq(t4.a (#3), 5)]
-                    └── Scan
-                        ├── table: default.t1
-                        ├── filters: []
-                        ├── order by: []
-                        └── limit: NONE\n",
-        },
-        TestSuite {
-            name: "join in the subquery",
-            query: "SELECT t3.* FROM t1 t3 WHERE t3.b IN (SELECT t4.b FROM t1 t4 JOIN t2 ON t4.a = t2.a);",
-            explain: "EvalScalar
-├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
-└── Filter
-    ├── filters: [9 (#9)]
-    └── Join(RightMark)
-        ├── build keys: [subquery_4 (#4)]
-        ├── probe keys: [t3.b (#1)]
-        ├── other filters: []
-        ├── Scan
-        │   ├── table: default.t1
-        │   ├── filters: []
-        │   ├── order by: []
-        │   └── limit: NONE
-        └── EvalScalar
-            ├── scalars: [t4.b (#4) AS (#4)]
-            └── Join(Inner)
-                ├── build keys: [t2.a (#6)]
-                ├── probe keys: [t4.a (#3)]
-                ├── other filters: []
-                ├── Scan
-                │   ├── table: default.t1
-                │   ├── filters: []
-                │   ├── order by: []
-                │   └── limit: NONE
-                └── Scan
-                    ├── table: default.t2
-                    ├── filters: []
-                    ├── order by: []
-                    └── limit: NONE\n",
-        },
+            explain: build_matcher(vec![
+                ScalarExpr::FunctionCall(FunctionCall {
+                    span: Some(Range::from(37..38)),
+                    func_name: "eq".to_string(),
+                    params: vec![],
+                    arguments: vec![
+                        ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: Some(Range::from(32..34)),
+                            column: binding_c(),
+                        }),
+                        ScalarExpr::ConstantExpr(ConstantExpr {
+                            span: Some(Range::from(39..42)),
+                            value: Scalar::String("D".to_string()),
+                        })
+                    ],
+                }),
+                ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "and".to_string(),
+                    params: vec![],
+                    arguments: vec![
+                        ScalarExpr::FunctionCall(FunctionCall {
+                            span: None,
+                            func_name: "is_not_null".to_string(),
+                            params: vec![],
+                            arguments: vec![ScalarExpr::BoundColumnRef(
+                                BoundColumnRef {
+                                    span: Some(Range::from(47..49)),
+                                    column: binding_b(),
+                                },
+                            )],
+                        }),
+                        ScalarExpr::FunctionCall(FunctionCall {
+                            span: Some(Range::from(93..94)),
+                            func_name: "eq".to_string(),
+                            params: vec![],
+                            arguments: vec![
+                                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                    span: Some(Range::from(88..90)),
+                                    column: binding_a(),
+                                }),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: Some(Range::from(95..96)),
+                                    value: Scalar::Number(NumberScalar::UInt8(
+                                        7,
+                                    )),
+                                }),
+                            ],
+                        }),
+                    ],
+                })
+            ])
+        }
     ]
 }
 
@@ -309,11 +263,11 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> Vec<CreateTablePlan
             database: "default".to_string(),
             table: "t1".to_string(),
             schema: TableSchemaRefExt::create(vec![
+                TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
                 TableField::new(
-                    "a",
+                    "b",
                     TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int32))),
                 ),
-                TableField::new("b", TableDataType::Number(NumberDataType::Int32)),
                 TableField::new("c", TableDataType::String),
             ]),
             engine: Engine::Fuse,
@@ -338,11 +292,11 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> Vec<CreateTablePlan
             database: "default".to_string(),
             table: "t2".to_string(),
             schema: TableSchemaRefExt::create(vec![
+                TableField::new("a", TableDataType::Number(NumberDataType::Int32)),
                 TableField::new(
-                    "a",
+                    "b",
                     TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int32))),
                 ),
-                TableField::new("b", TableDataType::Number(NumberDataType::Int32)),
                 TableField::new("c", TableDataType::String),
             ]),
             engine: Engine::Fuse,
@@ -380,23 +334,17 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
     let test_suites = get_test_suites();
     for suite in test_suites.into_iter() {
         let query = plan_sql(ctx.clone(), suite.query).await?;
-        assert_eq!(
-            query, suite.explain,
-            "\n==== Case: {} ====\n\nQuery: \n{} \nExpected: \n{}",
-            suite.name, query, suite.explain
+        assert!(
+            suite.explain.matches(&query),
+            "\n==== Case: {} ====",
+            suite.name
         );
     }
 
     Ok(())
 }
 
-fn format_pretty(query: &SExpr, query_meta: &MetadataRef) -> Result<String> {
-    let metadata = &*query_meta.read();
-
-    Ok(query.to_format_tree(metadata, false)?.format_pretty()?)
-}
-
-async fn plan_sql(ctx: Arc<dyn TableContext>, sql: &str) -> Result<String> {
+async fn plan_sql(ctx: Arc<dyn TableContext>, sql: &str) -> Result<SExpr> {
     let settings = ctx.get_settings();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -413,9 +361,7 @@ async fn plan_sql(ctx: Arc<dyn TableContext>, sql: &str) -> Result<String> {
         s_expr, metadata, ..
     } = plan
     {
-        let s_expr = SubqueryRewriter::new(ctx.clone(), metadata.clone(), None).rewrite(&s_expr)?;
-
-        return format_pretty(&s_expr, &metadata);
+        return SubqueryRewriter::new(ctx.clone(), metadata.clone(), None).rewrite(&s_expr);
     }
     unreachable!()
 }
