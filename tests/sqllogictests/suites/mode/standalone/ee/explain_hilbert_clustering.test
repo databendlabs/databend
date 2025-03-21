@@ -21,11 +21,10 @@ INSERT INTO test_hilbert VALUES(1, 1), (1, 2);
 statement ok
 INSERT INTO test_hilbert VALUES(2, 1), (2, 2);
 
+# Clustering information after RECLUSTER FINAL will not be checked,
+# since effects of reclustering will be checked by EXPLAINs.
 statement ok
 ALTER TABLE test_hilbert RECLUSTER FINAL;
-
-statement error 4013
-select * from clustering_information('default','test_hilbert')
 
 query T
 EXPLAIN SELECT * FROM test_hilbert WHERE a = 1;
