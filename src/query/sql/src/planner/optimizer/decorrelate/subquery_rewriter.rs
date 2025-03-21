@@ -568,10 +568,7 @@ impl SubqueryRewriter {
         };
         // when left is a join, filtering becomes complicated. If in subquery is eliminated,
         // the filter will be pushed down to Scan before join, resulting in inaccurate data results.
-        if left.has_join() {
-            return Ok(None);
-        }
-        if left_source_binding != right_source_binding {
+        if left.has_join(Some(&JoinType::Inner)) || left_source_binding != right_source_binding {
             return Ok(None);
         }
         let new_column_bindings = {

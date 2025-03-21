@@ -26,6 +26,7 @@ use crate::optimizer::rule::AppliedRules;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::StatInfo;
 use crate::plans::Exchange;
+use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
@@ -426,11 +427,15 @@ impl SExpr {
         self.children.iter().any(|child| child.has_merge_exchange())
     }
     #[recursive::recursive]
-    pub fn has_join(&self) -> bool {
-        if let RelOperator::Join(_) = self.plan.as_ref() {
+    pub fn has_join(&self, without_type: Option<&JoinType>) -> bool {
+        if let RelOperator::Join(join) = self.plan.as_ref()
+            && without_type.map(|wt| wt != &join.join_type).unwrap_or(true)
+        {
             return true;
         }
-        self.children.iter().any(|child| child.has_join())
+        self.children
+            .iter()
+            .any(|child| child.has_join(without_type))
     }
 }
 

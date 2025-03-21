@@ -117,20 +117,42 @@ fn get_test_suites() -> Vec<TestSuite> {
         ├── order by: []
         └── limit: NONE\n",
         },
-
-        // Eliminate Failure
         TestSuite {
-            name: "join in the main query",
+            name: "inner join in the main query",
             query: "SELECT t3.* FROM t1 t3 JOIN t2 ON t3.a = t2.a WHERE t3.b IN (SELECT t4.b FROM t1 t4 WHERE t4.a = 5);",
             explain: "EvalScalar
 ├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
 └── Filter
-    ├── filters: [9 (#9)]
+    ├── filters: [and(true, eq(t1.a (#0), 5))]
+    └── Join(Inner)
+        ├── build keys: [t2.a (#3)]
+        ├── probe keys: [t3.a (#0)]
+        ├── other filters: []
+        ├── Scan
+        │   ├── table: default.t1
+        │   ├── filters: []
+        │   ├── order by: []
+        │   └── limit: NONE
+        └── Scan
+            ├── table: default.t2
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE\n",
+        },
+
+        // Eliminate Failure
+        TestSuite {
+            name: "without inner join in the main query",
+            query: "SELECT t3.* FROM t1 t3 LEFT JOIN t2 ON t3.a = t2.a WHERE t3.b IN (SELECT t4.b FROM t1 t4 WHERE t4.a = 5);",
+            explain: "EvalScalar
+├── scalars: [t3.a (#0) AS (#0), t3.b (#1) AS (#1), t3.c (#2) AS (#2)]
+└── Filter
+    ├── filters: [11 (#11)]
     └── Join(RightMark)
-        ├── build keys: [subquery_7 (#7)]
+        ├── build keys: [subquery_9 (#9)]
         ├── probe keys: [t3.b (#1)]
         ├── other filters: []
-        ├── Join(Inner)
+        ├── Join(Left)
         │   ├── build keys: [t2.a (#3)]
         │   ├── probe keys: [t3.a (#0)]
         │   ├── other filters: []
@@ -139,15 +161,17 @@ fn get_test_suites() -> Vec<TestSuite> {
         │   │   ├── filters: []
         │   │   ├── order by: []
         │   │   └── limit: NONE
-        │   └── Scan
-        │       ├── table: default.t2
-        │       ├── filters: []
-        │       ├── order by: []
-        │       └── limit: NONE
+        │   └── EvalScalar
+        │       ├── scalars: [CAST(t2.b (#4) AS Int32 NULL) AS (#6), CAST(t2.c (#5) AS String NULL) AS (#7)]
+        │       └── Scan
+        │           ├── table: default.t2
+        │           ├── filters: []
+        │           ├── order by: []
+        │           └── limit: NONE
         └── EvalScalar
-            ├── scalars: [t4.b (#7) AS (#7)]
+            ├── scalars: [t4.b (#9) AS (#9)]
             └── Filter
-                ├── filters: [eq(t4.a (#6), 5)]
+                ├── filters: [eq(t4.a (#8), 5)]
                 └── Scan
                     ├── table: default.t1
                     ├── filters: []
