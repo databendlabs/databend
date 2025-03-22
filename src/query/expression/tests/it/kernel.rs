@@ -14,11 +14,17 @@
 
 use core::ops::Range;
 
+use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::block_debug::assert_block_value_eq;
 use databend_common_expression::types::number::*;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalDataType;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
+use databend_common_expression::types::IntervalType;
+use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::ValueType;
@@ -31,6 +37,7 @@ use databend_common_expression::FilterVisitor;
 use databend_common_expression::FromData;
 use databend_common_expression::IterationStrategy;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::Value;
 use goldenfile::Mint;
 
@@ -635,4 +642,113 @@ fn test_builder() {
     let r2 = builder2.build();
 
     assert_eq!(r1, r2)
+}
+
+fn assert_estimated_scalar_repeat_size(scalar: ScalarRef, num_rows: usize, ty: DataType) {
+    let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
+    let col = builder.build();
+    assert_eq!(
+        scalar.estimated_scalar_repeat_size(num_rows, &ty),
+        col.memory_size()
+    );
+}
+
+#[test]
+fn test_estimated_scalar_repeat_size() {
+    let num_rows = 108;
+
+    // null
+    {
+        let scalar = ScalarRef::Null;
+        let ty = DataType::Null;
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // nullable
+    {
+        let scalar = ScalarRef::Null;
+        let ty = DataType::Nullable(Box::new(DataType::Interval));
+        let builder = ColumnBuilder::repeat(&scalar, num_rows, &ty);
+        let col = builder.build();
+        let col = NullableType::<IntervalType>::try_downcast_column(&col).unwrap();
+        assert_eq!(
+            scalar.estimated_scalar_repeat_size(num_rows, &ty),
+            col.validity.as_slice().0.len()
+        );
+    }
+
+    // nullable(float32)
+    {
+        let scalar = ScalarRef::Number(NumberScalar::Float32(OrderedFloat(2.33)));
+        let ty = DataType::Nullable(Box::new(DataType::Number(NumberDataType::Float32)));
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // decimal
+    {
+        let scalar = ScalarRef::Decimal(DecimalScalar::Decimal128(233, DecimalSize {
+            precision: 46,
+            scale: 6,
+        }));
+        let ty = DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+            precision: 46,
+            scale: 6,
+        }));
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // string
+    {
+        let scalar = ScalarRef::String("abc");
+        let ty = DataType::String;
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // string
+    {
+        let scalar = ScalarRef::String("abcdefghijklmn123");
+        let ty = DataType::String;
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // binary
+    {
+        let scalar = ScalarRef::Binary(&[1, 133, 244, 123]);
+        let ty = DataType::Binary;
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // boolean
+    {
+        let scalar = ScalarRef::Boolean(true);
+        let ty = DataType::Boolean;
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // bitmap
+    {
+        let scalar = ScalarRef::Bitmap(&[1, 133, 244, 123]);
+        let ty = DataType::Bitmap;
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // array
+    {
+        let scalar = ScalarRef::Array(StringType::from_data(vec!["abc", "abcdefghijklmn123"]));
+        let ty = DataType::Array(Box::new(DataType::String));
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // map
+    {
+        let scalar = ScalarRef::Map(Column::Tuple(vec![
+            UInt8Type::from_data(vec![1, 2]),
+            StringType::from_data(vec!["a", "b"]),
+        ]));
+        let ty = DataType::Map(Box::new(DataType::Tuple(vec![
+            DataType::Number(NumberDataType::UInt8),
+            DataType::String,
+        ])));
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
 }

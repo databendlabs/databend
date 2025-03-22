@@ -207,7 +207,11 @@ impl BloomIndex {
         for (index, field) in bloom_columns_map.into_iter() {
             let column = match &block.get_by_offset(index).value {
                 Value::Scalar(_) => continue,
-                Value::Column(c) => c.clone(),
+                Value::Column(c) => match c {
+                    Column::Nullable(v) if v.validity.true_count() == 0 => continue,
+                    Column::Null { .. } => continue,
+                    _ => c.clone(),
+                },
             };
 
             let field_type = &block.get_by_offset(index).data_type;
@@ -228,10 +232,10 @@ impl BloomIndex {
                     };
                     let column = map_column.underlying_column().values;
 
-                    let val_type = match inner_ty {
-                        DataType::Tuple(kv_tys) => kv_tys[1].clone(),
-                        _ => unreachable!(),
+                    let DataType::Tuple(kv_tys) = inner_ty else {
+                        unreachable!();
                     };
+                    let val_type = kv_tys[1].clone();
                     // Extract JSON value of string type to create bloom index,
                     // other types of JSON value will be ignored.
                     if val_type.remove_nullable() == DataType::Variant {
@@ -293,11 +297,13 @@ impl BloomIndex {
             let filter = filter_builder.build()?;
 
             if let Some(len) = filter.len() {
-                match field.data_type() {
-                    TableDataType::Map(_) => {}
-                    _ => {
-                        column_distinct_count.insert(index, len);
-                    }
+                if !matches!(field.data_type(), TableDataType::Map(_)) {
+                    column_distinct_count.insert(index, len);
+                }
+                // Not need to generate bloom index,
+                // it will never be used since range index is checked first.
+                if len < 2 {
+                    continue;
                 }
             }
 

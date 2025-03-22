@@ -177,7 +177,7 @@ async fn generate_blocks(
     let mut block_metas = vec![];
 
     // does not matter in this suite
-    let rows_per_block = 1;
+    let rows_per_block = 2;
     let value_start_from = 1;
 
     let stream =
