@@ -659,7 +659,14 @@ pub fn generate_update_list(
             let data_type = scalar.data_type()?;
             let target_type = field.data_type();
             let left = if data_type != *target_type {
-                wrap_cast(scalar, target_type)
+                // change scalar's column datatype
+                let mut tmp_scalar = scalar.clone();
+                if data_type.wrap_nullable() == *target_type {
+                    if let ScalarExpr::BoundColumnRef(ref mut bound_ref) = tmp_scalar {
+                        bound_ref.column.data_type = Box::new(target_type.clone());
+                    }
+                }
+                wrap_cast(&tmp_scalar, target_type)
             } else {
                 scalar.clone()
             };
