@@ -147,6 +147,7 @@ fn convert_predicate_tree_to_scalar_expr(node: PredicateNode, data_type: &DataTy
                 table_name: None,
                 column_position: None,
                 table_index: None,
+                source_table_index: None,
                 column_name: "".to_string(),
                 index: 0,
                 data_type: Box::new(data_type.clone()),

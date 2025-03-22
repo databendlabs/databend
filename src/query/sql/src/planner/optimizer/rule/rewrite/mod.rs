@@ -47,6 +47,7 @@ mod rule_push_down_sort_expression;
 mod rule_push_down_sort_scan;
 mod rule_semi_to_inner_join;
 mod rule_split_aggregate;
+mod rule_subquery_not_in_to_in;
 mod rule_try_apply_agg_index;
 
 pub use rule_commute_join::RuleCommuteJoin;
@@ -83,4 +84,5 @@ pub use rule_push_down_sort_expression::RulePushDownSortEvalScalar;
 pub use rule_push_down_sort_scan::RulePushDownSortScan;
 pub use rule_semi_to_inner_join::RuleSemiToInnerJoin;
 pub use rule_split_aggregate::RuleSplitAggregate;
+pub use rule_subquery_not_in_to_in::RuleSubqueryNotInToIn;
 pub use rule_try_apply_agg_index::RuleTryApplyAggIndex;
